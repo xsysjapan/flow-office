@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
@@ -127,4 +128,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/audit-log', [AuditLogController::class, 'index']);
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv']);
     });
+
+    // --- システム設定 (docs/06-usecases-auth.md UC-003) ---
+    Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('role:admin');
+    Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('role:admin');
 });

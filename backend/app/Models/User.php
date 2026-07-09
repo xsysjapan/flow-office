@@ -13,9 +13,10 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * アプリ側のユーザー。認証はMicrosoft Entra ID SSOのみ(ローカルパスワードは持たない)。
  * name/email/department/job_title/employment_status はMS365同期(UC-002)で更新されるが、
- * roles (アプリ独自の権限) は同期で上書きしない。
+ * roles (アプリ独自の権限) や timezone は同期で上書きしない。timezoneは新規作成時のみ
+ * システム設定のデフォルトタイムゾーンで設定する (docs/06-usecases-auth.md UC-003)。
  */
-#[Fillable(['entra_user_id', 'name', 'email', 'department', 'job_title', 'employment_status', 'last_login_at'])]
+#[Fillable(['entra_user_id', 'name', 'email', 'department', 'job_title', 'employment_status', 'timezone', 'last_login_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */

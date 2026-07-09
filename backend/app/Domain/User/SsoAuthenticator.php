@@ -5,8 +5,9 @@ namespace App\Domain\User;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\User\Events\UserLoggedIn;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\LocalDateTime;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 
 /**
@@ -24,17 +25,20 @@ class SsoAuthenticator
         $wasFirstLogin = $user === null;
 
         if ($user === null) {
+            $timezone = SystemSetting::current()->default_timezone;
+
             $user = User::query()->create([
                 'entra_user_id' => $ssoUser->getId(),
                 'name' => $ssoUser->getName() ?? $ssoUser->getNickname() ?? $ssoUser->getEmail(),
                 'email' => $ssoUser->getEmail(),
                 'employment_status' => 'active',
-                'last_login_at' => Carbon::now(),
+                'timezone' => $timezone,
+                'last_login_at' => LocalDateTime::now($timezone),
             ]);
 
             $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
         } else {
-            $user->last_login_at = Carbon::now();
+            $user->last_login_at = LocalDateTime::now($user->timezone);
             $user->save();
         }
 

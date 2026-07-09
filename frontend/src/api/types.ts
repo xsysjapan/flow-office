@@ -5,6 +5,7 @@ export interface User {
   department: string | null
   job_title: string | null
   employment_status: string
+  timezone?: string
   roles?: string[]
   last_login_at: string | null
 }
@@ -71,11 +72,14 @@ export interface AttendanceDailyCalculation {
   legal_holiday_late_night_minutes: number
 }
 
+export type AttendanceDaySource = 'live' | 'manual' | 'punch'
+
 export interface AttendanceDay {
   id: number
   user_id: number
   work_date: string
   status: AttendanceDayStatus
+  source?: AttendanceDaySource
   actual_start_at: string | null
   actual_end_at: string | null
   work_type: string | null

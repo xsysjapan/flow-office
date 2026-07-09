@@ -22,7 +22,7 @@ class AttendanceFlowTest extends TestCase
     public function test_clock_in_break_and_clock_out_calculates_overtime_and_late_night(): void
     {
         $employee = User::factory()->create();
-        $today = Carbon::today();
+        $today = Carbon::today($employee->timezone);
 
         $calendar = WorkCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
@@ -48,12 +48,15 @@ class AttendanceFlowTest extends TestCase
 
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
+        // 社員のタイムゾーン(既定値 Asia/Tokyo)での壁時計時刻を、オフセット付きISO8601で送る
+        // (docs/06-usecases-auth.md UC-003: APIの日時は必ずオフセット付きで送受信する)。
+        $dateString = $today->toDateString();
         $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
-            'actual_start_at' => $today->copy()->setTime(9, 0)->toIso8601String(),
-            'actual_end_at' => $today->copy()->setTime(23, 0)->toIso8601String(),
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T23:00:00+09:00",
             'breaks' => [[
-                'start' => $today->copy()->setTime(12, 0)->toIso8601String(),
-                'end' => $today->copy()->setTime(13, 0)->toIso8601String(),
+                'start' => "{$dateString}T12:00:00+09:00",
+                'end' => "{$dateString}T13:00:00+09:00",
             ]],
             'reason' => 'テスト調整',
         ]);
@@ -70,7 +73,7 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $today = Carbon::today();
+        $today = Carbon::today($employee->timezone);
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in');
         $this->actingAs($employee)->postJson('/api/attendance/clock-out');

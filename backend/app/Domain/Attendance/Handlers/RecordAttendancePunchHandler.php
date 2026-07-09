@@ -16,10 +16,14 @@ use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\AttendancePunch;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\User;
+use App\Support\LocalDateTime;
 
 /**
  * UC-A012: 打刻ログを記録する。矛盾があっても記録は必ず成功させ、
  * 矛盾なく1日分の勤務として組み立てられる場合のみ attendance_days に反映する。
+ * punched_atはオフセット付きISO8601を前提に、対象社員本人のタイムゾーンに変換してから
+ * タイムゾーンなしの壁時計時刻として保存する (docs/06-usecases-auth.md UC-003)。
  *
  * @implements CommandHandler<RecordAttendancePunch>
  */
@@ -35,11 +39,14 @@ class RecordAttendancePunchHandler implements CommandHandler
     {
         assert($command instanceof RecordAttendancePunch);
 
+        $user = User::query()->findOrFail($command->userId);
+        $punchedAt = LocalDateTime::parse($command->punchedAt, $user->timezone);
+
         $punch = AttendancePunch::query()->create([
             'user_id' => $command->userId,
             'work_date' => $command->workDate,
             'punch_type' => $command->punchType,
-            'punched_at' => $command->punchedAt,
+            'punched_at' => $punchedAt,
             'source' => $command->source,
             'note' => $command->note,
         ]);
@@ -52,18 +59,19 @@ class RecordAttendancePunchHandler implements CommandHandler
                 userId: $command->userId,
                 workDate: $command->workDate,
                 punchType: $command->punchType,
-                punchedAt: $command->punchedAt,
+                punchedAt: LocalDateTime::toIso8601($punch->punched_at, $user->timezone),
                 source: $command->source,
             ),
         );
 
-        $this->syncAttendanceDayIfConsistent($command->userId, $command->workDate);
+        $this->syncAttendanceDayIfConsistent($user, $command->workDate);
 
         return $punch;
     }
 
-    private function syncAttendanceDayIfConsistent(int $userId, string $workDate): void
+    private function syncAttendanceDayIfConsistent(User $user, string $workDate): void
     {
+        $userId = $user->id;
         $punches = AttendancePunch::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
@@ -120,8 +128,8 @@ class RecordAttendancePunchHandler implements CommandHandler
             aggregateId: (string) $day->id,
             event: new AttendanceDaySyncedFromPunches(
                 attendanceDayId: $day->id,
-                actualStartAt: $day->actual_start_at->toIso8601String(),
-                actualEndAt: $day->actual_end_at->toIso8601String(),
+                actualStartAt: LocalDateTime::toIso8601($day->actual_start_at, $user->timezone),
+                actualEndAt: LocalDateTime::toIso8601($day->actual_end_at, $user->timezone),
             ),
         );
 

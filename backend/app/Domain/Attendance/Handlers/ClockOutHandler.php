@@ -12,10 +12,12 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\User;
+use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
- * UC-A004: 退勤する。
+ * UC-A004: 退勤する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする。
  *
  * @implements CommandHandler<ClockOut>
  */
@@ -30,16 +32,18 @@ class ClockOutHandler implements CommandHandler
     {
         assert($command instanceof ClockOut);
 
+        $user = User::query()->findOrFail($command->userId);
+
         $day = AttendanceDay::query()
             ->where('user_id', $command->userId)
-            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->whereDate('work_date', Carbon::today($user->timezone)->toDateString())
             ->first();
 
         if ($day === null || $day->status !== AttendanceDayStatus::WORKING) {
             throw new DomainRuleException('勤務中の場合のみ退勤できます(休憩中は休憩終了後に退勤してください)。');
         }
 
-        $day->actual_end_at = Carbon::now();
+        $day->actual_end_at = LocalDateTime::now($user->timezone);
         $day->status = AttendanceDayStatus::CLOCKED_OUT;
         $day->save();
 
@@ -48,7 +52,7 @@ class ClockOutHandler implements CommandHandler
             aggregateId: (string) $day->id,
             event: new AttendanceClockedOut(
                 attendanceDayId: $day->id,
-                actualEndAt: $day->actual_end_at->toIso8601String(),
+                actualEndAt: LocalDateTime::toIso8601($day->actual_end_at, $user->timezone),
             ),
         );
 

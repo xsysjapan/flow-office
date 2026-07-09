@@ -25,4 +25,25 @@
 
 **注意**: アプリ独自の権限(ロール)は Microsoft Graph 側の属性で上書きしない。同期は
 氏名・メール・部署・役職・在籍状態のみを対象とし、権限管理は [UC-M001](./15-usecases-admin.md#uc-m001-権限を設定する)
-で別管理する。
+で別管理する。タイムゾーン(`timezone`)も同期対象外で、既存ユーザーの値は上書きしない。
+
+## UC-003: システム設定(default_timezone)を管理する
+
+1. 管理者がシステム設定画面を開く
+2. `GET /api/system-settings` で現在のデフォルトタイムゾーンを取得する
+3. 管理者がデフォルトタイムゾーンを変更し、`PUT /api/system-settings` で更新する
+4. 変更後に新規作成されるユーザーは新しいデフォルトタイムゾーンで作成される
+   (既存ユーザーの `timezone` は変更されない)
+
+関連テーブル: `system_settings`
+
+**注意**: `system_settings` はマスタ的なシングルトン設定であり、Command/EventStoreを経由せず
+Eloquentで直接更新する(他のマスタ管理APIと同じ方針)。参照・更新はいずれも管理者ロール限定
+(`role:admin` ミドルウェア)。
+
+新規ユーザーがどのタイムゾーンで作成されるかは以下の通り([docs/03-architecture.md 3.4](./03-architecture.md#34-日時はユーザーごとのタイムゾーンで解釈しapi境界では常にオフセットを明示する)):
+
+- SSO初回ログイン([UC-001](#uc-001-microsoft-ssoでログインする))・MS365同期による新規作成
+  ([UC-002](#uc-002-ms365ユーザーを同期する))のいずれも、作成時点の `system_settings.default_timezone`
+  を初期値として使う
+- 既存ユーザーの `timezone` はSSOログインやMS365同期で上書きされない

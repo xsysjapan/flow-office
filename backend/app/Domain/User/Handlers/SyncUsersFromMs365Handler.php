@@ -9,6 +9,7 @@ use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\Graph\MicrosoftGraphUser;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
@@ -56,7 +57,12 @@ class SyncUsersFromMs365Handler implements CommandHandler
         ];
 
         if ($user === null) {
-            $user = User::query()->create($attributes);
+            // timezoneはMS365に存在する属性ではないため$attributes(イベントペイロードにも
+            // 使う)には含めず、新規作成時のみシステム設定のデフォルトを設定する。
+            $user = User::query()->create([
+                ...$attributes,
+                'timezone' => SystemSetting::current()->default_timezone,
+            ]);
         } else {
             $user->fill($attributes);
             $user->save();

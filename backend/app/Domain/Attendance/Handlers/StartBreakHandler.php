@@ -10,10 +10,12 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\User;
+use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
- * UC-A002: 休憩開始する。
+ * UC-A002: 休憩開始する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする。
  *
  * @implements CommandHandler<StartBreak>
  */
@@ -25,9 +27,10 @@ class StartBreakHandler implements CommandHandler
     {
         assert($command instanceof StartBreak);
 
-        $day = $this->findTodayWorkingDay($command->userId);
+        $user = User::query()->findOrFail($command->userId);
+        $day = $this->findTodayWorkingDay($user);
 
-        $break = $day->breaks()->create(['break_start_at' => Carbon::now()]);
+        $break = $day->breaks()->create(['break_start_at' => LocalDateTime::now($user->timezone)]);
         $day->status = AttendanceDayStatus::ON_BREAK;
         $day->save();
 
@@ -37,18 +40,18 @@ class StartBreakHandler implements CommandHandler
             event: new AttendanceBreakStarted(
                 attendanceDayId: $day->id,
                 attendanceBreakId: $break->id,
-                breakStartAt: $break->break_start_at->toIso8601String(),
+                breakStartAt: LocalDateTime::toIso8601($break->break_start_at, $user->timezone),
             ),
         );
 
         return $day;
     }
 
-    private function findTodayWorkingDay(int $userId): AttendanceDay
+    private function findTodayWorkingDay(User $user): AttendanceDay
     {
         $day = AttendanceDay::query()
-            ->where('user_id', $userId)
-            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->where('user_id', $user->id)
+            ->whereDate('work_date', Carbon::today($user->timezone)->toDateString())
             ->first();
 
         if ($day === null || $day->status !== AttendanceDayStatus::WORKING) {

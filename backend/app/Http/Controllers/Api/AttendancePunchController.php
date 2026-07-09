@@ -9,6 +9,7 @@ use App\Http\Resources\AttendancePunchResource;
 use App\Models\AttendancePunch;
 use App\Models\PunchType;
 use App\Models\Role;
+use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,7 @@ class AttendancePunchController extends Controller
         $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null);
 
         $punches = AttendancePunch::query()
+            ->with('user')
             ->where('user_id', $targetUserId)
             ->when($data['from'] ?? null, fn ($query, $from) => $query->whereDate('work_date', '>=', $from))
             ->when($data['to'] ?? null, fn ($query, $to) => $query->whereDate('work_date', '<=', $to))
@@ -48,7 +50,7 @@ class AttendancePunchController extends Controller
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'work_date' => ['required', 'date'],
             'punch_type' => ['required', Rule::in(PunchType::values())],
-            'punched_at' => ['required', 'date'],
+            'punched_at' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'source' => ['required', 'string', 'max:50'],
             'note' => ['nullable', 'string'],
         ]);
@@ -64,7 +66,7 @@ class AttendancePunchController extends Controller
             note: $data['note'] ?? null,
         ));
 
-        return new AttendancePunchResource($punch);
+        return new AttendancePunchResource($punch->load('user'));
     }
 
     /**

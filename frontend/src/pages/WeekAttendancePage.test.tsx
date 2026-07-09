@@ -86,6 +86,21 @@ describe('WeekAttendancePage', () => {
     )
   })
 
+  it('sends actual_start_at/actual_end_at with an explicit timezone offset', async () => {
+    vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue(mondayRecord)
+    renderPage([mondayRecord])
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    await userEvent.type(screen.getByLabelText('修正理由(必須)'), '確認')
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() => expect(attendanceApi.updateAttendanceDay).toHaveBeenCalled())
+    const input = vi.mocked(attendanceApi.updateAttendanceDay).mock.calls[0][1]
+    expect(input.actual_start_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+    expect(input.actual_end_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+    expect(input.breaks?.[0]?.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+  })
+
   it('disables saving until a reason is entered', async () => {
     renderPage([mondayRecord])
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,12 +13,14 @@ class AttendancePunchResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $timezone = $this->user->timezone;
+
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
             'work_date' => $this->work_date?->toDateString(),
             'punch_type' => $this->punch_type,
-            'punched_at' => $this->punched_at?->toIso8601String(),
+            'punched_at' => LocalDateTime::toIso8601($this->punched_at, $timezone),
             'source' => $this->source,
             'note' => $this->note,
             'created_at' => $this->created_at?->toIso8601String(),

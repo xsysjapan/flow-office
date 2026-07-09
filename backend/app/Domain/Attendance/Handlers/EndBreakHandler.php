@@ -10,10 +10,12 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\User;
+use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
- * UC-A003: 休憩終了する。
+ * UC-A003: 休憩終了する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする。
  *
  * @implements CommandHandler<EndBreak>
  */
@@ -25,9 +27,11 @@ class EndBreakHandler implements CommandHandler
     {
         assert($command instanceof EndBreak);
 
+        $user = User::query()->findOrFail($command->userId);
+
         $day = AttendanceDay::query()
             ->where('user_id', $command->userId)
-            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->whereDate('work_date', Carbon::today($user->timezone)->toDateString())
             ->first();
 
         if ($day === null || $day->status !== AttendanceDayStatus::ON_BREAK) {
@@ -39,7 +43,7 @@ class EndBreakHandler implements CommandHandler
             throw new DomainRuleException('開始中の休憩が見つかりません。');
         }
 
-        $break->break_end_at = Carbon::now();
+        $break->break_end_at = LocalDateTime::now($user->timezone);
         $break->save();
 
         $day->status = AttendanceDayStatus::WORKING;
@@ -51,7 +55,7 @@ class EndBreakHandler implements CommandHandler
             event: new AttendanceBreakEnded(
                 attendanceDayId: $day->id,
                 attendanceBreakId: $break->id,
-                breakEndAt: $break->break_end_at->toIso8601String(),
+                breakEndAt: LocalDateTime::toIso8601($break->break_end_at, $user->timezone),
             ),
         );
 

@@ -7,6 +7,7 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useEditableRows } from '../hooks/useEditableRows'
 import { useUpdateAttendanceDay, useWeek } from '../hooks/useAttendance'
 import type { AttendanceDay } from '../api/types'
+import { datetimeLocalToIso8601 } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
 import './WeekAttendancePage.css'
@@ -89,9 +90,14 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
       {
         id: day.id,
         input: {
-          actual_start_at: actualStartAt || null,
-          actual_end_at: actualEndAt || null,
-          breaks: breakRows.filter((b) => b.start).map((b) => ({ start: b.start, end: b.end || undefined })),
+          actual_start_at: datetimeLocalToIso8601(actualStartAt),
+          actual_end_at: datetimeLocalToIso8601(actualEndAt),
+          breaks: breakRows
+            .filter((b) => b.start)
+            .map((b) => ({
+              start: datetimeLocalToIso8601(b.start) ?? '',
+              end: datetimeLocalToIso8601(b.end) ?? undefined,
+            })),
           work_type: workType || null,
           note: note || null,
           reason,

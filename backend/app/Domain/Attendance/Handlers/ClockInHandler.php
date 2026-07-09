@@ -12,10 +12,13 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\User;
+use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
- * UC-A001: 出勤する。
+ * UC-A001: 出勤する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする
+ * (docs/06-usecases-auth.md UC-003)。
  *
  * @implements CommandHandler<ClockIn>
  */
@@ -27,7 +30,8 @@ class ClockInHandler implements CommandHandler
     {
         assert($command instanceof ClockIn);
 
-        $today = Carbon::today();
+        $user = User::query()->findOrFail($command->userId);
+        $today = Carbon::today($user->timezone);
 
         $day = AttendanceDay::query()
             ->where('user_id', $command->userId)
@@ -53,7 +57,7 @@ class ClockInHandler implements CommandHandler
             ]);
         }
 
-        $day->actual_start_at = Carbon::now();
+        $day->actual_start_at = LocalDateTime::now($user->timezone);
         $day->status = AttendanceDayStatus::WORKING;
         $day->source = AttendanceDaySource::LIVE;
         $day->save();
@@ -64,7 +68,7 @@ class ClockInHandler implements CommandHandler
             event: new AttendanceClockedIn(
                 attendanceDayId: $day->id,
                 userId: $command->userId,
-                actualStartAt: $day->actual_start_at->toIso8601String(),
+                actualStartAt: LocalDateTime::toIso8601($day->actual_start_at, $user->timezone),
             ),
         );
 

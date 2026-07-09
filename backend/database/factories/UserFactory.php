@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -25,6 +26,7 @@ class UserFactory extends Factory
             'department' => fake()->randomElement(['営業部', '総務部', '経理部', '開発部']),
             'job_title' => fake()->jobTitle(),
             'employment_status' => 'active',
+            'timezone' => SystemSetting::current()->default_timezone,
             'last_login_at' => null,
         ];
     }

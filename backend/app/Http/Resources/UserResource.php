@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,8 +20,9 @@ class UserResource extends JsonResource
             'department' => $this->department,
             'job_title' => $this->job_title,
             'employment_status' => $this->employment_status,
+            'timezone' => $this->timezone,
             'roles' => $this->whenLoaded('roles', fn () => $this->roles->pluck('code')),
-            'last_login_at' => $this->last_login_at?->toIso8601String(),
+            'last_login_at' => LocalDateTime::toIso8601($this->last_login_at, $this->timezone),
         ];
     }
 }

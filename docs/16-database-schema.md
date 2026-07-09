@@ -3,6 +3,13 @@
 このテーブル一覧はマイグレーション作成前のドラフト。列の型・NULL可否・インデックスは
 実装時のマイグレーションで確定させる。`created_at` / `updated_at` は全テーブル共通。
 
+**日時カラムの扱い**: `_at` で終わるカラム(`actual_start_at`, `punched_at` など)は
+タイムゾーン情報を持たない「その値の所有者(基本的に対象レコードの`user_id`)のローカル時刻」
+の壁時計表記で保存する。DB自体にはタイムゾーンを持たせず、`users.timezone` が「この
+ユーザーのレコードのナイーブな日時はどのタイムゾーンとして解釈するか」を決める。API境界
+(リクエスト・レスポンスの両方)では常にオフセット付きISO8601形式で日時をやり取りし、
+変換は `App\Support\LocalDateTime` に集約する(詳細は docs/03-architecture.md 3.4)。
+
 ## stored_events (EventStore / 正)
 
 全ドメインイベントの記録。Projectionはここから再生成可能。
@@ -27,8 +34,19 @@
 - department
 - job_title
 - employment_status
+- timezone (IANAタイムゾーン識別子。例: `Asia/Tokyo`。新規作成時は `system_settings.default_timezone`
+  を初期値とする。MS365同期では上書きしない)
 - last_login_at
 - created_at / updated_at
+
+## system_settings (システム全体設定。単一行)
+
+- id
+- default_timezone (新規作成ユーザーの初期タイムゾーン。既定値 `Asia/Tokyo`)
+- created_at / updated_at
+
+常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから
+直接更新する([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezoneを管理する))。
 
 ## workflow_requests
 
@@ -264,7 +282,7 @@
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps` | 管理者が設定する参照データ。 |
+| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |
