@@ -1,18 +1,19 @@
 # flow-office
 
-汎用勤怠・申請・バックオフィス処理システム。Laravel + MySQL + XSERVER。
+汎用勤怠・申請・バックオフィス処理システム。バックエンド(Laravel + MySQL + XSERVER)と
+フロントエンド(Vite + React + TypeScript)を分離したモノレポ構成。
 
-## 現在のフェーズ
+## リポジトリ構成
 
-このリポジトリはまだLaravelプロジェクトが存在しない**設計フェーズ**。実装を始める前に
-必ず `docs/` を読むこと。特に以下は全機能に共通する制約なので、実装前に必ず目を通す。
+```
+backend/   Laravel API (Sanctumトークン認証)。実装の詳細は backend/CLAUDE.md を参照
+frontend/  Vite + React + TypeScript のSPA。Storybook導入済み
+docs/      設計ドキュメント(全体の目次は docs/README.md)
+.claude/   開発でよく使うパターンをまとめたスキル
+```
 
-- `docs/03-architecture.md` — CQRS + Event Sourcing 風アーキテクチャ
-- `docs/20-implementation-notes.md` — 実装時の注意点(共通チェックリスト)
-- `docs/19-implementation-phases.md` — 実装順序 (Phase 1〜6)
-- `docs/21-mvp-scope.md` — 最小MVP範囲
-
-設計ドキュメント全体の目次は `docs/README.md` にある。
+バックエンドとフロントエンドは別々にデプロイされることを前提にする。認証はSanctumの
+Bearerトークン方式(Cookieベースではない)。
 
 ## 絶対に外してはいけない設計原則
 
@@ -32,12 +33,30 @@
 8. **法務判断が必要な値はマスタ化する**(有給付与ルール、残業計算ルールなど)。
    ハードコードしない。最終設定は社労士確認が前提。
 
+これらはバックエンドAPIの設計原則。詳細は `docs/03-architecture.md` と
+`docs/20-implementation-notes.md` を参照。
+
 ## ドキュメント構成
 
 `docs/README.md` の目次を参照。ユースケースは `docs/06`〜`docs/15` に、テーブル定義は
 `docs/16-database-schema.md`、イベント一覧は `docs/17-events.md` にある。
 
-## 開発でよく使うパターン (スキル)
+## バックエンド (backend/)
+
+Laravel API。実装を始める前に必ず `docs/02-tech-stack.md` と `docs/03-architecture.md`
+を読むこと。
+
+```
+cd backend
+composer install
+cp .env.example .env && php artisan key:generate
+touch database/database.sqlite   # ローカル開発はsqlite、本番はMySQL
+php artisan migrate --seed
+php artisan serve                # http://localhost:8000
+php artisan test
+```
+
+### 開発でよく使うパターン (スキル)
 
 `.claude/skills/` 配下に、この設計に沿った実装を素早く・一貫して行うためのスキルがある。
 該当する作業をする際は必ず参照すること。
@@ -48,8 +67,22 @@
 - `add-teams-notification` — 新しいTeams通知種別をDBキュー経由で追加する
 - `attendance-calc-review` — 勤怠集計ロジック変更時のセルフレビューチェックリスト
 
-## Laravelプロジェクトを開始する時
+### 常駐プロセスを前提にしない
 
-Phase 1着手時は `docs/02-tech-stack.md` の技術前提(DB queue, cron前提のスケジューラ、
-Entra ID SSO)に従うこと。常駐プロセス(supervisor常駐workerなど)をXSERVER上で前提に
-しない。
+XSERVER上ではDB queue + cron前提の`schedule:run`のみで運用する。supervisor常駐worker
+などを前提にしない(`docs/02-tech-stack.md`)。
+
+## フロントエンド (frontend/)
+
+Vite + React + TypeScript。UIコンポーネントはStorybookで確認できる。
+
+```
+cd frontend
+npm install
+cp .env.example .env   # VITE_API_BASE_URL をbackendのURLに合わせる
+npm run dev             # http://localhost:5173
+npm run storybook       # http://localhost:6006
+npm run build
+```
+
+`VITE_API_BASE_URL`(既定値 `http://localhost:8000/api`)経由でbackendのAPIを呼び出す。
