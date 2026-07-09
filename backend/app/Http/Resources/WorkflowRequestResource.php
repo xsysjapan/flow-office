@@ -25,6 +25,7 @@ class WorkflowRequestResource extends JsonResource
             'returned_at' => $this->returned_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
+            'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
         ];
     }
 }

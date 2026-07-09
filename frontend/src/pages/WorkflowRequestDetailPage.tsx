@@ -1,20 +1,32 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { downloadAttachment } from '../api/attachments'
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { useAttachments, useUploadAttachment } from '../hooks/useAttachments'
 import {
   useApproveWorkflowRequest,
   useCancelWorkflowRequest,
   useReturnWorkflowRequest,
   useSubmitWorkflowRequest,
   useWorkflowRequest,
+  useWorkflowRequestHistory,
 } from '../hooks/useWorkflowRequests'
-import { workflowRequestStatusLabel } from '../utils/statusLabels'
+import { workflowRequestEventTypeLabel, workflowRequestStatusLabel } from '../utils/statusLabels'
 import './WorkflowRequestDetailPage.css'
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  return `${(bytes / 1024).toFixed(1)}KB`
+}
 
 /**
  * UC-W002〜UC-W005: 申請の詳細確認・提出・承認・差戻し・取消。
@@ -29,6 +41,12 @@ export function WorkflowRequestDetailPage() {
   const approveRequest = useApproveWorkflowRequest()
   const returnRequest = useReturnWorkflowRequest()
   const cancelRequest = useCancelWorkflowRequest()
+
+  const { data: attachments, isLoading: isLoadingAttachments } = useAttachments('workflow_request', requestId)
+  const uploadAttachment = useUploadAttachment()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { data: history, isLoading: isLoadingHistory } = useWorkflowRequestHistory(requestId)
 
   const [comment, setComment] = useState('')
   const [reason, setReason] = useState('')
@@ -65,6 +83,57 @@ export function WorkflowRequestDetailPage() {
           </div>
         ))}
       </dl>
+
+      <h3>添付ファイル</h3>
+      {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+      {isLoadingAttachments ? (
+        <LoadingState />
+      ) : (
+        <ul className="workflow-request-detail__attachments">
+          {(attachments ?? []).length === 0 && <li>添付ファイルはありません。</li>}
+          {attachments?.map((attachment) => (
+            <li key={attachment.id}>
+              <span>
+                {attachment.file_name}({formatFileSize(attachment.file_size)})
+              </span>
+              <Button variant="secondary" onClick={() => void downloadAttachment(attachment.id, attachment.file_name)}>
+                ダウンロード
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="workflow-request-detail__upload">
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            uploadAttachment.mutate(
+              { ownerType: 'workflow_request', ownerId: requestId, file },
+              { onSuccess: () => {
+                if (fileInputRef.current) fileInputRef.current.value = ''
+              } },
+            )
+          }}
+        />
+        {uploadAttachment.isPending && <span>アップロード中...</span>}
+      </div>
+
+      <h3>履歴</h3>
+      {isLoadingHistory ? (
+        <LoadingState />
+      ) : (
+        <ul className="workflow-request-detail__history">
+          {history?.map((event) => (
+            <li key={event.id}>
+              <span className="workflow-request-detail__history-time">{formatDateTime(event.occurred_at)}</span>
+              <span>{workflowRequestEventTypeLabel(event.event_type)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="workflow-request-detail__actions">
         {isApplicant && (request.status === 'draft' || request.status === 'returned') && (

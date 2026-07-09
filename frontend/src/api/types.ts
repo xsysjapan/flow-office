@@ -9,18 +9,24 @@ export interface User {
   last_login_at: string | null
 }
 
+export interface Role {
+  id: number
+  code: string
+  name: string
+}
+
 export interface RequestType {
   id: number
   code: string
   name: string
   description: string | null
-  form_schema: FormField[]
+  form_schema: RequestFormFieldSchema[]
   requires_backoffice_task: boolean
   backoffice_task_type: string | null
   is_active: boolean
 }
 
-export interface FormField {
+export interface RequestFormFieldSchema {
   key: string
   label: string
   type: 'text' | 'number' | 'date'
@@ -42,6 +48,7 @@ export interface WorkflowRequest {
   returned_at: string | null
   cancelled_at: string | null
   created_at: string | null
+  attachments?: Attachment[]
 }
 
 export type AttendanceDayStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out'
@@ -129,6 +136,92 @@ export interface PaidLeaveGrant {
   used_days: number
   remaining_days: number
   grant_reason: string | null
+}
+
+export interface PaidLeaveGrantRuleStep {
+  continuous_service_months: number
+  grant_days: number
+}
+
+export interface PaidLeaveGrantRule {
+  id: number
+  name: string
+  work_style_id: number | null
+  min_attendance_rate: number
+  first_grant_after_months: number
+  grant_cycle_months: number
+  is_active: boolean
+  steps?: PaidLeaveGrantRuleStep[]
+}
+
+export interface WorkCalendarDay {
+  id: number
+  date: string
+  day_type: string
+  is_working_day: boolean
+  is_legal_holiday: boolean
+  is_company_holiday: boolean
+  note: string | null
+}
+
+export type WorkCalendarStatus = 'draft' | 'published'
+
+export interface WorkCalendar {
+  id: number
+  name: string
+  fiscal_year: number
+  starts_on: string
+  ends_on: string
+  week_starts_on: number
+  status: WorkCalendarStatus
+}
+
+export interface WorkStyle {
+  id: number
+  code: string
+  name: string
+  work_time_system: string
+  prescribed_daily_minutes: number
+  prescribed_weekly_minutes: number
+  default_start_time: string | null
+  default_end_time: string | null
+  default_break_minutes: number
+  calendar_id: number
+  is_shift_based: boolean
+}
+
+export interface EmployeeShiftAssignment {
+  id: number
+  user_id: number
+  work_date: string
+  work_style_id: number
+  day_type: string
+  is_working_day: boolean
+  is_legal_holiday: boolean
+  is_company_holiday: boolean
+  planned_start_at: string | null
+  planned_end_at: string | null
+  planned_break_minutes: number
+}
+
+export interface Attachment {
+  id: number
+  file_name: string
+  mime_type: string
+  file_size: number
+  uploaded_by: number
+  created_at: string | null
+}
+
+export interface StoredEvent {
+  id: number
+  event_id: string
+  aggregate_type: string
+  aggregate_id: string
+  version: number
+  event_type: string
+  payload: Record<string, unknown>
+  occurred_at: string
 }
 
 export interface Paginated<T> {

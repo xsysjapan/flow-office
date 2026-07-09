@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { Paginated, WorkflowRequest } from './types'
+import type { Paginated, StoredEvent, WorkflowRequest } from './types'
 
 export function fetchMyWorkflowRequests(): Promise<Paginated<WorkflowRequest>> {
   return apiFetch('/workflow-requests/mine')
@@ -41,4 +41,9 @@ export function returnWorkflowRequest(id: number, comment: string): Promise<Work
 
 export function cancelWorkflowRequest(id: number, reason: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/cancel`, { method: 'POST', body: { reason } })
+}
+
+/** UC-W003/UC-W004 コメント履歴。 */
+export function fetchWorkflowRequestHistory(id: number): Promise<StoredEvent[]> {
+  return apiFetch(`/workflow-requests/${id}/history`)
 }

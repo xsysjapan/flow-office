@@ -82,6 +82,73 @@ class WorkflowRequestFlowTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_show_includes_attachments(): void
+    {
+        $applicant = User::factory()->create();
+        $requestType = RequestType::query()->create([
+            'code' => 'general_request',
+            'name' => '一般申請',
+            'form_schema' => [],
+            'requires_backoffice_task' => false,
+            'is_active' => true,
+        ]);
+
+        $draft = $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => 'テスト申請',
+            'form_data' => [],
+        ])->json();
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('receipt.pdf', 10);
+        $this->actingAs($applicant)->postJson('/api/attachments', [
+            'owner_type' => 'workflow_request',
+            'owner_id' => $draft['id'],
+            'file' => $file,
+        ])->assertCreated();
+
+        $response = $this->actingAs($applicant)->getJson("/api/workflow-requests/{$draft['id']}");
+        $response->assertOk();
+        $this->assertCount(1, $response->json('attachments'));
+        $this->assertSame('receipt.pdf', $response->json('attachments.0.file_name'));
+    }
+
+    public function test_history_is_visible_to_applicant_and_approver_but_not_a_stranger(): void
+    {
+        $applicant = User::factory()->create();
+        $approver = User::factory()->create();
+        $stranger = User::factory()->create();
+
+        $requestType = RequestType::query()->create([
+            'code' => 'general_request',
+            'name' => '一般申請',
+            'form_schema' => [],
+            'requires_backoffice_task' => false,
+            'is_active' => true,
+        ]);
+
+        $draft = $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => 'テスト申請',
+            'form_data' => [],
+            'approver_user_id' => $approver->id,
+        ])->json();
+
+        $this->actingAs($applicant)->postJson("/api/workflow-requests/{$draft['id']}/submit");
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$draft['id']}/return", [
+            'comment' => '不備があります',
+        ]);
+
+        $history = $this->actingAs($applicant)->getJson("/api/workflow-requests/{$draft['id']}/history");
+        $history->assertOk();
+        $eventTypes = collect($history->json())->pluck('event_type');
+        $this->assertContains('workflow_request.drafted', $eventTypes);
+        $this->assertContains('workflow_request.submitted', $eventTypes);
+        $this->assertContains('workflow_request.returned', $eventTypes);
+
+        $this->actingAs($approver)->getJson("/api/workflow-requests/{$draft['id']}/history")->assertOk();
+        $this->actingAs($stranger)->getJson("/api/workflow-requests/{$draft['id']}/history")->assertForbidden();
+    }
+
     public function test_admin_can_manage_request_types_but_others_cannot(): void
     {
         $admin = User::factory()->create();

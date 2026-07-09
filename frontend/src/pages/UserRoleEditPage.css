@@ -1,0 +1,37 @@
+.user-role-edit__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.user-role-edit__meta dt {
+  font-weight: 600;
+}
+
+.user-role-edit__roles {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.user-role-edit__roles li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-role-edit__roles li:last-child {
+  border-bottom: none;
+}
+
+.user-role-edit__roles label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-role-edit__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}

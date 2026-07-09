@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
@@ -32,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware('role:admin,hr_staff');
+    Route::get('/roles', [RoleController::class, 'index']);
 
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---
     Route::get('/request-types', [RequestTypeController::class, 'index']);
@@ -49,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve']);
     Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return']);
     Route::post('/workflow-requests/{workflowRequest}/cancel', [WorkflowRequestController::class, 'cancel']);
+    Route::get('/workflow-requests/{workflowRequest}/history', [WorkflowRequestController::class, 'history']);
 
     // --- 添付ファイル (docs/12-usecases-attachment.md) ---
     Route::get('/attachments', [AttachmentController::class, 'index']);

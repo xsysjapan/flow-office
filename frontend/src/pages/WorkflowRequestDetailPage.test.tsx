@@ -3,8 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as attachmentsApi from '../api/attachments'
 import * as workflowRequestsApi from '../api/workflowRequests'
-import type { User, WorkflowRequest } from '../api/types'
+import type { Attachment, StoredEvent, User, WorkflowRequest } from '../api/types'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
@@ -47,9 +48,22 @@ const submittedRequest: WorkflowRequest = {
   created_at: '2026-07-01T00:00:00+09:00',
 }
 
-function renderPage(request: WorkflowRequest) {
+const historyEvent: StoredEvent = {
+  id: 1,
+  event_id: 'evt-1',
+  aggregate_type: 'workflow_request',
+  aggregate_id: '1',
+  version: 1,
+  event_type: 'workflow_request.drafted',
+  payload: {},
+  occurred_at: '2026-07-01T00:00:00+09:00',
+}
+
+function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(request)
+  vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEvent])
+  vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue(attachments)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -118,5 +132,45 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage(submittedRequest)
 
     expect(await screen.findByRole('button', { name: '差戻す' })).toBeDisabled()
+  })
+
+  it('shows the event history', async () => {
+    renderPage(submittedRequest)
+
+    expect(await screen.findByText('下書き作成')).toBeInTheDocument()
+  })
+
+  it('uploads a selected file as an attachment', async () => {
+    vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
+      id: 1,
+      file_name: 'receipt.pdf',
+      mime_type: 'application/pdf',
+      file_size: 100,
+      uploaded_by: 1,
+      created_at: null,
+    })
+
+    renderPage(submittedRequest)
+    await screen.findByText('タクシー代')
+
+    const file = new File(['dummy'], 'receipt.pdf', { type: 'application/pdf' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, file)
+
+    await waitFor(() =>
+      expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('workflow_request', 1, file),
+    )
+  })
+
+  it('shows existing attachments and downloads them on click', async () => {
+    vi.spyOn(attachmentsApi, 'downloadAttachment').mockResolvedValue(undefined)
+
+    renderPage(submittedRequest, [
+      { id: 9, file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 1, created_at: null },
+    ])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'ダウンロード' }))
+
+    await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith(9, 'receipt.pdf'))
   })
 })

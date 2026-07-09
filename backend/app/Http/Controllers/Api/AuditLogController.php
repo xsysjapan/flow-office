@@ -63,6 +63,7 @@ class AuditLogController extends Controller
     {
         $data = $request->validate([
             'aggregate_type' => ['nullable', 'string'],
+            'aggregate_id' => ['nullable', 'string'],
             'event_type' => ['nullable', 'string'],
             'user_id' => ['nullable', 'integer'],
             'from' => ['nullable', 'date'],
@@ -73,6 +74,10 @@ class AuditLogController extends Controller
 
         if (! empty($data['aggregate_type'])) {
             $query->where('aggregate_type', $data['aggregate_type']);
+        }
+
+        if (! empty($data['aggregate_id'])) {
+            $query->where('aggregate_id', $data['aggregate_id']);
         }
 
         if (! empty($data['event_type'])) {

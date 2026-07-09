@@ -1,0 +1,31 @@
+.user-list__search {
+  width: 100%;
+  max-width: 320px;
+  padding: 8px 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.user-list {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.user-list th,
+.user-list td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-list__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.user-list__no-roles {
+  color: var(--text);
+  font-size: 13px;
+}

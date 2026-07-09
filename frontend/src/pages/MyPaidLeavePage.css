@@ -1,0 +1,27 @@
+.my-paid-leave__summary {
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+
+.my-paid-leave__summary strong {
+  font-size: 22px;
+  margin: 0 4px;
+}
+
+.my-paid-leave__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.my-paid-leave__table th,
+.my-paid-leave__table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.my-paid-leave__table th {
+  font-weight: 600;
+  color: var(--text);
+}

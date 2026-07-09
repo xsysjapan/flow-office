@@ -23,6 +23,11 @@ const mockAuthValue: AuthContextValue = {
   logout: fn(),
 }
 
+const adminAuthValue: AuthContextValue = {
+  ...mockAuthValue,
+  user: { ...mockUser, roles: ['admin'] },
+}
+
 const meta = {
   title: 'Components/AppLayout',
   component: AppLayout,
@@ -46,3 +51,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
+
+export const AsAdmin: Story = {
+  decorators: [(Story) => <AuthContext.Provider value={adminAuthValue}>{<Story />}</AuthContext.Provider>],
+}

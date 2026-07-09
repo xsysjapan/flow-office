@@ -5,6 +5,7 @@ import {
   createWorkflowRequest,
   fetchMyWorkflowRequests,
   fetchWorkflowRequest,
+  fetchWorkflowRequestHistory,
   fetchWorkflowRequestsToApprove,
   returnWorkflowRequest,
   submitWorkflowRequest,
@@ -76,6 +77,14 @@ export function useReturnWorkflowRequest() {
   return useMutation({
     mutationFn: ({ id, comment }: { id: number; comment: string }) => returnWorkflowRequest(id, comment),
     onSuccess: (_data, { id }) => invalidate(id),
+  })
+}
+
+export function useWorkflowRequestHistory(id: number) {
+  return useQuery({
+    queryKey: ['workflow-requests', id, 'history'],
+    queryFn: () => fetchWorkflowRequestHistory(id),
+    enabled: Number.isFinite(id),
   })
 }
 

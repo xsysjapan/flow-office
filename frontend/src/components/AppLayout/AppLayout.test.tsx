@@ -16,9 +16,9 @@ const mockUser: User = {
   last_login_at: null,
 }
 
-function renderLayout(logout = vi.fn()) {
+function renderLayout(logout = vi.fn(), user: User = mockUser) {
   const authValue: AuthContextValue = {
-    user: mockUser,
+    user,
     status: 'authenticated',
     login: vi.fn(),
     completeLogin: vi.fn(),
@@ -58,5 +58,21 @@ describe('AppLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
 
     expect(logout).toHaveBeenCalledOnce()
+  })
+
+  it('hides admin-only navigation links for a user without admin roles', () => {
+    renderLayout(vi.fn(), { ...mockUser, roles: ['employee'] })
+
+    expect(screen.queryByRole('link', { name: 'ユーザー・権限' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '監査ログ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'バックオフィス' })).not.toBeInTheDocument()
+  })
+
+  it('shows admin-only navigation links for an admin user', () => {
+    renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
+
+    expect(screen.getByRole('link', { name: 'ユーザー・権限' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '申請種別' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '監査ログ' })).toBeInTheDocument()
   })
 })

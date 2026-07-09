@@ -1,10 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  approveMonth,
   clockIn,
   clockOut,
+  closeMonth,
   endBreak,
   fetchMonth,
+  fetchMonthsToApprove,
+  fetchMyMonths,
   fetchToday,
+  returnMonth,
   startBreak,
   submitMonth,
   updateAttendanceDay,
@@ -71,6 +76,54 @@ export function useSubmitMonth(yearMonth: string) {
     mutationFn: (approverUserId: number) => submitMonth(yearMonth, approverUserId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', yearMonth] })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'months', 'mine'] })
     },
+  })
+}
+
+const MY_MONTHS_KEY = ['attendance', 'months', 'mine']
+const MONTHS_TO_APPROVE_KEY = ['attendance', 'months', 'to-approve']
+
+export function useMyMonths() {
+  return useQuery({ queryKey: MY_MONTHS_KEY, queryFn: fetchMyMonths })
+}
+
+export function useMonthsToApprove() {
+  return useQuery({ queryKey: MONTHS_TO_APPROVE_KEY, queryFn: fetchMonthsToApprove })
+}
+
+function useInvalidateMonths() {
+  const queryClient = useQueryClient()
+
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: MY_MONTHS_KEY })
+    void queryClient.invalidateQueries({ queryKey: MONTHS_TO_APPROVE_KEY })
+  }
+}
+
+export function useApproveMonth() {
+  const invalidate = useInvalidateMonths()
+
+  return useMutation({
+    mutationFn: (id: number) => approveMonth(id),
+    onSuccess: () => invalidate(),
+  })
+}
+
+export function useReturnMonth() {
+  const invalidate = useInvalidateMonths()
+
+  return useMutation({
+    mutationFn: ({ id, comment }: { id: number; comment: string }) => returnMonth(id, comment),
+    onSuccess: () => invalidate(),
+  })
+}
+
+export function useCloseMonth() {
+  const invalidate = useInvalidateMonths()
+
+  return useMutation({
+    mutationFn: (id: number) => closeMonth(id),
+    onSuccess: () => invalidate(),
   })
 }

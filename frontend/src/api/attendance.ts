@@ -60,3 +60,7 @@ export function approveMonth(id: number): Promise<AttendanceMonth> {
 export function returnMonth(id: number, comment: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/return`, { method: 'POST', body: { comment } })
 }
+
+export function closeMonth(id: number): Promise<AttendanceMonth> {
+  return apiFetch(`/attendance-months/${id}/close`, { method: 'POST' })
+}

@@ -1,5 +1,10 @@
 import type { BadgeTone } from '../components/Badge/Badge'
-import type { AttendanceDayStatus, AttendanceMonthStatus, WorkflowRequestStatus } from '../api/types'
+import type {
+  AttendanceDayStatus,
+  AttendanceMonthStatus,
+  BackOfficeTaskStatus,
+  WorkflowRequestStatus,
+} from '../api/types'
 
 interface StatusMeta {
   label: string
@@ -29,6 +34,18 @@ const attendanceDayStatusMeta: Record<AttendanceDayStatus, StatusMeta> = {
   clocked_out: { label: '退勤済み', tone: 'success' },
 }
 
+const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
+  not_started: { label: '未着手', tone: 'neutral' },
+  in_review: { label: '確認中', tone: 'info' },
+  needs_fix: { label: '要修正', tone: 'warning' },
+  processing: { label: '処理中', tone: 'info' },
+  ordered: { label: '発注済み', tone: 'info' },
+  payment_scheduled: { label: '支払予定', tone: 'info' },
+  shipped: { label: '発送済み', tone: 'success' },
+  completed: { label: '完了', tone: 'success' },
+  cancelled: { label: '取消', tone: 'danger' },
+}
+
 export function workflowRequestStatusLabel(status: WorkflowRequestStatus): StatusMeta {
   return workflowRequestStatusMeta[status]
 }
@@ -39,4 +56,20 @@ export function attendanceMonthStatusLabel(status: AttendanceMonthStatus): Statu
 
 export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMeta {
   return attendanceDayStatusMeta[status]
+}
+
+export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {
+  return backOfficeTaskStatusMeta[status]
+}
+
+const workflowRequestEventTypeLabels: Record<string, string> = {
+  'workflow_request.drafted': '下書き作成',
+  'workflow_request.submitted': '提出',
+  'workflow_request.approved': '承認',
+  'workflow_request.returned': '差戻し',
+  'workflow_request.cancelled': '取消',
+}
+
+export function workflowRequestEventTypeLabel(eventType: string): string {
+  return workflowRequestEventTypeLabels[eventType] ?? eventType
 }

@@ -12,7 +12,8 @@
 
 .fo-app-layout__nav {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   flex: 1;
 }
 

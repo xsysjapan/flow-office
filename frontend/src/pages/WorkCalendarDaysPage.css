@@ -1,0 +1,33 @@
+.work-calendar-days__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.work-calendar-days__meta dt {
+  font-weight: 600;
+}
+
+.work-calendar-days__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.work-calendar-days__table th,
+.work-calendar-days__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.work-calendar-days__table input[type='text'],
+.work-calendar-days__table input:not([type]) {
+  width: 100%;
+}
+
+.work-calendar-days__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}

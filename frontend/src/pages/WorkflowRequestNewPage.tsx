@@ -5,8 +5,8 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useRequestTypes } from '../hooks/useRequestTypes'
-import { useUsers } from '../hooks/useUsers'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../hooks/useWorkflowRequests'
 import './WorkflowRequestNewPage.css'
 
@@ -20,10 +20,8 @@ export function WorkflowRequestNewPage() {
   const [requestTypeCode, setRequestTypeCode] = useState('')
   const [title, setTitle] = useState('')
   const [formValues, setFormValues] = useState<Record<string, string>>({})
-  const [approverQuery, setApproverQuery] = useState('')
   const [approverUserId, setApproverUserId] = useState<number | undefined>(undefined)
 
-  const { data: users } = useUsers(approverQuery)
   const createRequest = useCreateWorkflowRequest()
   const submitRequest = useSubmitWorkflowRequest()
 
@@ -91,32 +89,7 @@ export function WorkflowRequestNewPage() {
       ))}
 
       <FormField label="承認者" htmlFor="approver" required>
-        <input
-          id="approver"
-          placeholder="氏名またはメールアドレスで検索"
-          value={approverQuery}
-          onChange={(e) => {
-            setApproverQuery(e.target.value)
-            setApproverUserId(undefined)
-          }}
-        />
-        {approverQuery && !approverUserId && (
-          <ul className="workflow-request-new__suggestions">
-            {(users?.data ?? []).map((user) => (
-              <li key={user.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setApproverUserId(user.id)
-                    setApproverQuery(user.name)
-                  }}
-                >
-                  {user.name}({user.email})
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
       </FormField>
 
       <div className="workflow-request-new__actions">

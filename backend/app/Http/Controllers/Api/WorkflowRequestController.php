@@ -9,7 +9,9 @@ use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\StoredEventResource;
 use App\Http\Resources\WorkflowRequestResource;
+use App\Models\StoredEvent;
 use App\Models\WorkflowRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,6 +110,31 @@ class WorkflowRequestController extends Controller
         ));
 
         return new WorkflowRequestResource($workflowRequest->refresh()->load(['requestType', 'applicant', 'approver']));
+    }
+
+    /**
+     * UC-W003/UC-W004 コメント履歴: この申請に関するstored_eventsを時系列で返す。
+     * 申請者・承認者・管理者のみ閲覧可能(汎用監査ログAPIとは別に、資源に紐づけて認可する)。
+     */
+    public function history(Request $request, WorkflowRequest $workflowRequest): AnonymousResourceCollection
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $user->id === $workflowRequest->applicant_user_id
+                || $user->id === $workflowRequest->approver_user_id
+                || $user->hasRole('admin'),
+            403,
+            'この申請の履歴を閲覧する権限がありません。'
+        );
+
+        $events = StoredEvent::query()
+            ->where('aggregate_type', 'workflow_request')
+            ->where('aggregate_id', (string) $workflowRequest->id)
+            ->orderBy('occurred_at')
+            ->get();
+
+        return StoredEventResource::collection($events);
     }
 
     public function cancel(Request $request, WorkflowRequest $workflowRequest, CommandBus $commandBus): WorkflowRequestResource
