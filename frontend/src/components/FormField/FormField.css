@@ -1,0 +1,37 @@
+.fo-form-field {
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.fo-form-field__label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.fo-form-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fo-form-field__required {
+  color: #d1242f;
+}
+
+.fo-form-field input,
+.fo-form-field textarea,
+.fo-form-field select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.fo-form-field__error {
+  color: #d1242f;
+  font-size: 12px;
+  margin: 4px 0 0;
+}

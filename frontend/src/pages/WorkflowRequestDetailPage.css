@@ -1,0 +1,40 @@
+.workflow-request-detail__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.workflow-request-detail__meta dt {
+  font-weight: 600;
+}
+
+.workflow-request-detail__form-data div {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.workflow-request-detail__form-data dt {
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.workflow-request-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.workflow-request-detail__with-comment {
+  display: flex;
+  gap: 8px;
+}
+
+.workflow-request-detail__with-comment input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

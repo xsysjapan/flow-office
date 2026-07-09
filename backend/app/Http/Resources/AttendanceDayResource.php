@@ -22,6 +22,9 @@ class AttendanceDayResource extends JsonResource
             'work_type' => $this->work_type,
             'note' => $this->note,
             'is_locked' => $this->isLocked(),
+            // today()でその日の勤務予定を一時的に載せている場合のみ含める(UC-A001 手順2)。
+            'planned_start_at' => $this->planned_start_at,
+            'planned_end_at' => $this->planned_end_at,
             'breaks' => AttendanceBreakResource::collection($this->whenLoaded('breaks')),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
         ];

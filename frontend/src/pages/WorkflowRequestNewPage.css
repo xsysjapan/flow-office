@@ -1,0 +1,28 @@
+.workflow-request-new__suggestions {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.workflow-request-new__suggestions li button {
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.workflow-request-new__suggestions li button:hover {
+  background: var(--border);
+}
+
+.workflow-request-new__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}

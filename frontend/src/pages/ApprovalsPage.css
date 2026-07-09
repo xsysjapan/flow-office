@@ -1,0 +1,23 @@
+.approvals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.approvals-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.approvals-list li:last-child {
+  border-bottom: none;
+}
+
+.approvals-list__applicant {
+  margin-left: 12px;
+  color: var(--text);
+  font-size: 13px;
+}

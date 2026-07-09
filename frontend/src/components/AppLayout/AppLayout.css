@@ -1,0 +1,41 @@
+.fo-app-layout__header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fo-app-layout__brand {
+  font-weight: 700;
+}
+
+.fo-app-layout__nav {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.fo-app-layout__nav a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.fo-app-layout__nav a.is-active {
+  color: #2f6feb;
+  font-weight: 600;
+}
+
+.fo-app-layout__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.fo-app-layout__content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}

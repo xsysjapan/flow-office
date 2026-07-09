@@ -1,0 +1,30 @@
+.fo-button {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.fo-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fo-button--primary {
+  background: #2f6feb;
+  color: #fff;
+}
+
+.fo-button--secondary {
+  background: transparent;
+  color: #2f6feb;
+  border-color: #2f6feb;
+}
+
+.fo-button--danger {
+  background: #d1242f;
+  color: #fff;
+}

@@ -1,0 +1,23 @@
+.today-attendance__times,
+.today-attendance__calculation {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.today-attendance__times dt,
+.today-attendance__calculation dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.today-attendance__breaks {
+  margin: 0 0 16px;
+  padding-left: 18px;
+}
+
+.today-attendance__actions {
+  display: flex;
+  gap: 12px;
+}

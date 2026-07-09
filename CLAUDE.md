@@ -83,6 +83,19 @@ cp .env.example .env   # VITE_API_BASE_URL をbackendのURLに合わせる
 npm run dev             # http://localhost:5173
 npm run storybook       # http://localhost:6006
 npm run build
+npm run test             # Vitest単体テスト(jsdom)
+npm run test:storybook   # Storybookのstoryをブラウザで描画するテスト
+npm run build-storybook
 ```
 
 `VITE_API_BASE_URL`(既定値 `http://localhost:8000/api`)経由でbackendのAPIを呼び出す。
+認証はSanctumのBearerトークンで、`localStorage`に保存する(`frontend/src/api/client.ts`)。
+
+コンポーネントを追加する際は必ず `.stories.tsx` と `.test.tsx` を一緒に作ること。
+
+### 開発でよく使うパターン (スキル)
+
+- `add-frontend-component` — 新しいUIコンポーネント(story/test付き)を追加する
+- `add-api-hook` — 新しいbackend APIエンドポイントに対応する型・APIクライアント関数・
+  React Queryフックを追加する
+- `add-page` — 新しい画面(ルーティング込み)を追加する
