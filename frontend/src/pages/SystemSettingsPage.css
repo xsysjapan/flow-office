@@ -1,0 +1,11 @@
+.system-settings__note {
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.system-settings__saved {
+  color: var(--success, #1a7f37);
+  font-size: 13px;
+  margin-bottom: 8px;
+}

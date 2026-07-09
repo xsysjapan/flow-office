@@ -30,7 +30,9 @@ const navItems: NavItem[] = [
   { to: '/admin/work-calendars', label: 'カレンダー', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
   { to: '/admin/work-styles', label: '勤務形態・シフト', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
   { to: '/admin/paid-leave', label: '有給ルール', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
+  { to: '/admin/attendance-export', label: '勤怠CSV出力', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
   { to: '/admin/audit-log', label: '監査ログ', roles: [ROLE.ADMIN] },
+  { to: '/admin/system-settings', label: 'システム設定', roles: [ROLE.ADMIN] },
 ]
 
 export function AppLayout() {

@@ -23,6 +23,8 @@ import { WorkCalendarDaysPage } from './pages/WorkCalendarDaysPage'
 import { WorkStylesAndShiftsPage } from './pages/WorkStylesAndShiftsPage'
 import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
 import { AuditLogPage } from './pages/AuditLogPage'
+import { AttendanceExportPage } from './pages/AttendanceExportPage'
+import { SystemSettingsPage } from './pages/SystemSettingsPage'
 
 function App() {
   return (
@@ -57,6 +59,8 @@ function App() {
         <Route path="admin/work-styles" element={<WorkStylesAndShiftsPage />} />
         <Route path="admin/paid-leave" element={<PaidLeaveAdminPage />} />
         <Route path="admin/audit-log" element={<AuditLogPage />} />
+        <Route path="admin/attendance-export" element={<AttendanceExportPage />} />
+        <Route path="admin/system-settings" element={<SystemSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

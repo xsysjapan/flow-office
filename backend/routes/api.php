@@ -70,6 +70,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- CSV出力 (docs/14-usecases-export.md) ---
+    Route::get('/exports/attendance', [ExportController::class, 'attendance'])
+        ->middleware('role:admin,hr_staff');
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
         ->middleware('role:accounting_staff,admin');
 

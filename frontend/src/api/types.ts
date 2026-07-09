@@ -16,6 +16,11 @@ export interface Role {
   name: string
 }
 
+/** UC-003: 新規作成ユーザーの既定タイムゾーンなど、システム全体の設定。 */
+export interface SystemSettings {
+  default_timezone: string
+}
+
 export interface RequestType {
   id: number
   code: string
