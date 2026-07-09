@@ -144,6 +144,7 @@
 - work_date
 - shift_assignment_id
 - status
+- source (`live` / `manual` / `punch`。actual_start_at等をどの経路で最後に確定したか)
 - actual_start_at
 - actual_end_at
 - work_type
@@ -158,6 +159,21 @@
 - break_start_at
 - break_end_at
 - created_at / updated_at
+
+## attendance_punches (打刻ログ。参考情報、勤務実績の正ではない)
+
+- id
+- user_id
+- work_date (打刻元が明示的に指定する所属業務日。例: 21:00出勤〜翌6:00退勤の夜勤は両方同じwork_date)
+- punch_type (`clock_in` / `break_start` / `break_end` / `clock_out`)
+- punched_at (実際に打刻が発生した日時)
+- source (打刻元。`web` / `ic_card` / `mobile` など、将来のデバイス種別を自由に追加できる文字列)
+- note
+- created_at / updated_at
+
+同一user_id・work_dateに対して重複・矛盾した打刻が記録されることを前提とし、一意制約は
+設けない。矛盾なく1日分の勤務として組み立てられた場合のみ `attendance_days` /
+`attendance_breaks` に反映される (docs/07-usecases-attendance.md UC-A012)。
 
 ## attendance_daily_calculations (Projection: 日次集計)
 
@@ -250,4 +266,5 @@
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps` | 管理者が設定する参照データ。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
+| 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |

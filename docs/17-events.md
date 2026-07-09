@@ -41,6 +41,8 @@
 - `attendance.clocked_out`
 - `attendance.day_edited`
 - `attendance.day_calculated`
+- `attendance_punch.recorded`
+- `attendance_day.synced_from_punches`
 - `attendance.month_submitted`
 - `attendance.month_approved`
 - `attendance.month_returned`

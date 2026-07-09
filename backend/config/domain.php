@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
+use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
@@ -15,6 +16,7 @@ use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
+use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
@@ -73,6 +75,7 @@ return [
         EndBreak::class => EndBreakHandler::class,
         ClockOut::class => ClockOutHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
+        RecordAttendancePunch::class => RecordAttendancePunchHandler::class,
         SubmitAttendanceMonth::class => SubmitAttendanceMonthHandler::class,
         ApproveAttendanceMonth::class => ApproveAttendanceMonthHandler::class,
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,

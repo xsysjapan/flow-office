@@ -17,6 +17,7 @@ class AttendanceDayResource extends JsonResource
             'user_id' => $this->user_id,
             'work_date' => $this->work_date?->toDateString(),
             'status' => $this->status,
+            'source' => $this->source,
             'actual_start_at' => $this->actual_start_at?->toIso8601String(),
             'actual_end_at' => $this->actual_end_at?->toIso8601String(),
             'work_type' => $this->work_type,

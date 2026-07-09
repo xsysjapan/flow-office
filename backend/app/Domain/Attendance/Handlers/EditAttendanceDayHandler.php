@@ -11,6 +11,7 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 
 /**
@@ -39,6 +40,7 @@ class EditAttendanceDayHandler implements CommandHandler
         $day->actual_end_at = $command->actualEndAt;
         $day->work_type = $command->workType;
         $day->note = $command->note;
+        $day->source = AttendanceDaySource::MANUAL;
         if ($command->actualEndAt !== null) {
             $day->status = AttendanceDayStatus::CLOCKED_OUT;
         }

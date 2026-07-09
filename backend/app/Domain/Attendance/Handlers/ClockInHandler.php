@@ -9,6 +9,7 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
 use Illuminate\Support\Carbon;
@@ -48,11 +49,13 @@ class ClockInHandler implements CommandHandler
                 'work_date' => $today->toDateString(),
                 'shift_assignment_id' => $shiftAssignment?->id,
                 'status' => AttendanceDayStatus::NOT_STARTED,
+                'source' => AttendanceDaySource::LIVE,
             ]);
         }
 
         $day->actual_start_at = Carbon::now();
         $day->status = AttendanceDayStatus::WORKING;
+        $day->source = AttendanceDaySource::LIVE;
         $day->save();
 
         $this->eventStore->append(

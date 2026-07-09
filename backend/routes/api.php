@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
@@ -97,6 +98,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth']);
+    });
+
+    // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012) ---
+    Route::prefix('attendance-punches')->group(function () {
+        Route::get('/', [AttendancePunchController::class, 'index']);
+        Route::post('/', [AttendancePunchController::class, 'store']);
     });
 
     Route::prefix('attendance-months')->group(function () {

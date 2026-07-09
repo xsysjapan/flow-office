@@ -37,6 +37,12 @@ Projection は画面表示用の派生データであり、再生成可能なも
 
 月次勤怠はこれらの集計結果であり、直接の入力元にはしない。
 
+`attendance_punches` (打刻ログ) は正ではない。ICカード端末やモバイル端末など複数の経路から
+届く打刻を、矛盾があっても必ず記録できる参考ログであり、矛盾なく1日分の勤務として組み立て
+られた場合にのみ `attendance_days` / `attendance_breaks` に反映される
+(docs/07-usecases-attendance.md UC-A012)。日次の記録(`attendance_days`)こそが最終的な
+整合性を保証する正データであることに変わりはない。
+
 ## 実装上のポイント
 
 - CommandHandler はドメインルールを検証した上で、必ず1つ以上のイベントを `stored_events` に

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 /**
  * 勤務実績(日次) (docs/03-architecture.md 3.3: 勤怠の正)。
  */
-#[Fillable(['user_id', 'work_date', 'shift_assignment_id', 'status', 'actual_start_at', 'actual_end_at', 'work_type', 'note', 'locked_at'])]
+#[Fillable(['user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'work_type', 'note', 'locked_at'])]
 class AttendanceDay extends Model
 {
     protected function casts(): array
