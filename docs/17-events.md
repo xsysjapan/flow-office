@@ -7,6 +7,7 @@
 
 - `user.logged_in`
 - `user.synced_from_ms365`
+- `user.roles_changed` (UC-M001 権限を設定する)
 
 ## Workflow (汎用申請)
 
