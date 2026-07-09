@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
+import { hasAnyRole, ROLE, type RoleCode } from '../../utils/roles'
 import { Button } from '../Button/Button'
 import './AppLayout.css'
 
@@ -7,7 +8,7 @@ interface NavItem {
   to: string
   label: string
   /** 未指定なら全ユーザーに表示。指定時はいずれかのロールを持つユーザーにのみ表示する。 */
-  roles?: string[]
+  roles?: RoleCode[]
 }
 
 const navItems: NavItem[] = [
@@ -21,20 +22,19 @@ const navItems: NavItem[] = [
   {
     to: '/backoffice-tasks',
     label: 'バックオフィス',
-    roles: ['backoffice_staff', 'accounting_staff', 'general_affairs_staff', 'admin'],
+    roles: [ROLE.BACKOFFICE_STAFF, ROLE.ACCOUNTING_STAFF, ROLE.GENERAL_AFFAIRS_STAFF, ROLE.ADMIN],
   },
-  { to: '/admin/users', label: 'ユーザー・権限', roles: ['admin', 'hr_staff'] },
-  { to: '/admin/request-types', label: '申請種別', roles: ['admin'] },
-  { to: '/admin/work-calendars', label: 'カレンダー', roles: ['admin', 'hr_staff'] },
-  { to: '/admin/work-styles', label: '勤務形態・シフト', roles: ['admin', 'hr_staff'] },
-  { to: '/admin/paid-leave', label: '有給ルール', roles: ['admin', 'hr_staff'] },
-  { to: '/admin/audit-log', label: '監査ログ', roles: ['admin'] },
+  { to: '/admin/users', label: 'ユーザー・権限', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
+  { to: '/admin/request-types', label: '申請種別', roles: [ROLE.ADMIN] },
+  { to: '/admin/work-calendars', label: 'カレンダー', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
+  { to: '/admin/work-styles', label: '勤務形態・シフト', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
+  { to: '/admin/paid-leave', label: '有給ルール', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
+  { to: '/admin/audit-log', label: '監査ログ', roles: [ROLE.ADMIN] },
 ]
 
 export function AppLayout() {
   const { user, logout } = useAuth()
-  const userRoles = user?.roles ?? []
-  const visibleNavItems = navItems.filter((item) => !item.roles || item.roles.some((role) => userRoles.includes(role)))
+  const visibleNavItems = navItems.filter((item) => !item.roles || hasAnyRole(user?.roles, item.roles))
 
   return (
     <div className="fo-app-layout">

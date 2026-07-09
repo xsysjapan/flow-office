@@ -5,19 +5,10 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { useEditableRows } from '../hooks/useEditableRows'
 import { useCreateRequestType, useRequestTypes, useUpdateRequestType } from '../hooks/useRequestTypes'
 import type { RequestFormFieldSchema } from '../api/types'
 import './RequestTypeEditPage.css'
-
-let nextRowId = 0
-
-interface SchemaRow extends RequestFormFieldSchema {
-  rowId: number
-}
-
-function toRows(schema: RequestFormFieldSchema[]): SchemaRow[] {
-  return schema.map((field) => ({ ...field, rowId: nextRowId++ }))
-}
 
 /**
  * UC-M002 / UC-W001: 管理者が申請種別を作成・編集する。
@@ -42,7 +33,7 @@ export function RequestTypeEditPage() {
   const [requiresBackOfficeTask, setRequiresBackOfficeTask] = useState(false)
   const [backOfficeTaskType, setBackOfficeTaskType] = useState('')
   const [isActive, setIsActive] = useState(true)
-  const [rows, setRows] = useState<SchemaRow[]>([])
+  const { rows, addRow, updateRow, removeRow, reset, toData } = useEditableRows<RequestFormFieldSchema>([])
 
   useEffect(() => {
     if (!existing) return
@@ -52,8 +43,8 @@ export function RequestTypeEditPage() {
     setRequiresBackOfficeTask(existing.requires_backoffice_task)
     setBackOfficeTaskType(existing.backoffice_task_type ?? '')
     setIsActive(existing.is_active)
-    setRows(toRows(existing.form_schema))
-  }, [existing])
+    reset(existing.form_schema)
+  }, [existing, reset])
 
   if (!isCreate && isLoading) return <LoadingState />
   if (!isCreate && listError) return <ErrorMessage error={listError} fallback="申請種別の取得に失敗しました。" />
@@ -61,19 +52,12 @@ export function RequestTypeEditPage() {
   const isBusy = createType.isPending || updateType.isPending
   const error = createType.error ?? updateType.error
 
-  const updateRow = (rowId: number, patch: Partial<RequestFormFieldSchema>) => {
-    setRows((prev) => prev.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)))
-  }
-
   const handleSave = async () => {
     const input = {
       code,
       name,
       description: description || undefined,
-      form_schema: rows.map(({ rowId, ...field }) => {
-        void rowId
-        return field
-      }),
+      form_schema: toData(),
       requires_backoffice_task: requiresBackOfficeTask,
       backoffice_task_type: requiresBackOfficeTask ? backOfficeTaskType || undefined : undefined,
       is_active: isActive,
@@ -157,19 +141,13 @@ export function RequestTypeEditPage() {
               />
               必須
             </label>
-            <Button
-              variant="danger"
-              onClick={() => setRows((prev) => prev.filter((r) => r.rowId !== row.rowId))}
-            >
+            <Button variant="danger" onClick={() => removeRow(row.rowId)}>
               削除
             </Button>
           </li>
         ))}
       </ul>
-      <Button
-        variant="secondary"
-        onClick={() => setRows((prev) => [...prev, { rowId: nextRowId++, key: '', label: '', type: 'text' }])}
-      >
+      <Button variant="secondary" onClick={() => addRow({ key: '', label: '', type: 'text' })}>
         項目を追加
       </Button>
 

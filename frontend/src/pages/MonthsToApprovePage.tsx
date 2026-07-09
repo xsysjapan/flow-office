@@ -7,6 +7,7 @@ import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../hooks/useAttendance'
 import { attendanceMonthStatusLabel } from '../utils/statusLabels'
+import { hasAnyRole, ROLE } from '../utils/roles'
 import './MonthsToApprovePage.css'
 
 /**
@@ -26,7 +27,7 @@ export function MonthsToApprovePage() {
   if (error) return <ErrorMessage error={error} fallback="承認待ちの勤怠月次の取得に失敗しました。" />
 
   const months = data ?? []
-  const canClose = user?.roles?.includes('admin') || user?.roles?.includes('hr_staff')
+  const canClose = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
   const actionError = approveMonth.error ?? returnMonth.error ?? closeMonth.error
 
   return (

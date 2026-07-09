@@ -1,14 +1,13 @@
-import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { useEditableRows } from '../hooks/useEditableRows'
 import { usePutWorkCalendarDays, useWorkCalendars } from '../hooks/useWorkCalendars'
 import './WorkCalendarDaysPage.css'
 
-interface DayRow {
-  key: number
+interface DayRowData {
   date: string
   day_type: string
   is_working_day: boolean
@@ -17,16 +16,13 @@ interface DayRow {
   note: string
 }
 
-function emptyRow(key: number): DayRow {
-  return {
-    key,
-    date: '',
-    day_type: '',
-    is_working_day: true,
-    is_legal_holiday: false,
-    is_company_holiday: false,
-    note: '',
-  }
+const emptyRow: DayRowData = {
+  date: '',
+  day_type: '',
+  is_working_day: true,
+  is_legal_holiday: false,
+  is_company_holiday: false,
+  note: '',
 }
 
 /**
@@ -39,8 +35,7 @@ export function WorkCalendarDaysPage() {
   const { data: calendars, isLoading, error } = useWorkCalendars()
   const putDays = usePutWorkCalendarDays()
 
-  const nextKeyRef = useRef(1)
-  const [rows, setRows] = useState<DayRow[]>([])
+  const { rows, addRow, updateRow, toData } = useEditableRows<DayRowData>([])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
@@ -48,25 +43,10 @@ export function WorkCalendarDaysPage() {
   const calendar = calendars?.find((c) => c.id === calendarId)
   if (!calendar) return <p>カレンダーが見つかりません。</p>
 
-  const addRow = () => {
-    setRows((prev) => [...prev, emptyRow(nextKeyRef.current++)])
-  }
-
-  const updateRow = (key: number, patch: Partial<DayRow>) => {
-    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)))
-  }
-
   const handleSave = () => {
     putDays.mutate({
       id: calendarId,
-      days: rows.map((row) => ({
-        date: row.date,
-        day_type: row.day_type,
-        is_working_day: row.is_working_day,
-        is_legal_holiday: row.is_legal_holiday,
-        is_company_holiday: row.is_company_holiday,
-        note: row.note || undefined,
-      })),
+      days: toData().map((row) => ({ ...row, note: row.note || undefined })),
     })
   }
 
@@ -96,20 +76,20 @@ export function WorkCalendarDaysPage() {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.key}>
+            <tr key={row.rowId}>
               <td>
                 <input
                   aria-label="日付"
                   type="date"
                   value={row.date}
-                  onChange={(e) => updateRow(row.key, { date: e.target.value })}
+                  onChange={(e) => updateRow(row.rowId, { date: e.target.value })}
                 />
               </td>
               <td>
                 <input
                   aria-label="区分"
                   value={row.day_type}
-                  onChange={(e) => updateRow(row.key, { day_type: e.target.value })}
+                  onChange={(e) => updateRow(row.rowId, { day_type: e.target.value })}
                 />
               </td>
               <td>
@@ -117,7 +97,7 @@ export function WorkCalendarDaysPage() {
                   aria-label="稼働日"
                   type="checkbox"
                   checked={row.is_working_day}
-                  onChange={(e) => updateRow(row.key, { is_working_day: e.target.checked })}
+                  onChange={(e) => updateRow(row.rowId, { is_working_day: e.target.checked })}
                 />
               </td>
               <td>
@@ -125,7 +105,7 @@ export function WorkCalendarDaysPage() {
                   aria-label="法定休日"
                   type="checkbox"
                   checked={row.is_legal_holiday}
-                  onChange={(e) => updateRow(row.key, { is_legal_holiday: e.target.checked })}
+                  onChange={(e) => updateRow(row.rowId, { is_legal_holiday: e.target.checked })}
                 />
               </td>
               <td>
@@ -133,14 +113,14 @@ export function WorkCalendarDaysPage() {
                   aria-label="所定休日"
                   type="checkbox"
                   checked={row.is_company_holiday}
-                  onChange={(e) => updateRow(row.key, { is_company_holiday: e.target.checked })}
+                  onChange={(e) => updateRow(row.rowId, { is_company_holiday: e.target.checked })}
                 />
               </td>
               <td>
                 <input
                   aria-label="メモ"
                   value={row.note}
-                  onChange={(e) => updateRow(row.key, { note: e.target.value })}
+                  onChange={(e) => updateRow(row.rowId, { note: e.target.value })}
                 />
               </td>
             </tr>
@@ -149,7 +129,7 @@ export function WorkCalendarDaysPage() {
       </table>
 
       <div className="work-calendar-days__actions">
-        <Button variant="secondary" onClick={addRow}>
+        <Button variant="secondary" onClick={() => addRow(emptyRow)}>
           行を追加
         </Button>
         <Button isLoading={putDays.isPending} disabled={rows.length === 0} onClick={handleSave}>
