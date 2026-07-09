@@ -13,6 +13,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', label: '今日の勤怠' },
+  { to: '/attendance/week', label: '週次勤怠' },
   { to: '/requests', label: '自分の申請' },
   { to: '/requests/new', label: '新規申請' },
   { to: '/approvals', label: '承認待ち' },

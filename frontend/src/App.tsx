@@ -4,6 +4,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { LoginPage } from './pages/LoginPage'
 import { TodayAttendancePage } from './pages/TodayAttendancePage'
+import { WeekAttendancePage } from './pages/WeekAttendancePage'
 import { WorkflowRequestListPage } from './pages/WorkflowRequestListPage'
 import { WorkflowRequestNewPage } from './pages/WorkflowRequestNewPage'
 import { WorkflowRequestDetailPage } from './pages/WorkflowRequestDetailPage'
@@ -37,6 +38,7 @@ function App() {
         }
       >
         <Route index element={<TodayAttendancePage />} />
+        <Route path="attendance/week" element={<WeekAttendancePage />} />
         <Route path="requests" element={<WorkflowRequestListPage />} />
         <Route path="requests/new" element={<WorkflowRequestNewPage />} />
         <Route path="requests/:id" element={<WorkflowRequestDetailPage />} />

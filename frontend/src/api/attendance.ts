@@ -5,6 +5,11 @@ export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
 }
 
+/** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。 */
+export function fetchWeek(startDate: string): Promise<AttendanceDay[]> {
+  return apiFetch('/attendance/week', { query: { start_date: startDate } })
+}
+
 export function clockIn(): Promise<AttendanceDay> {
   return apiFetch('/attendance/clock-in', { method: 'POST' })
 }
