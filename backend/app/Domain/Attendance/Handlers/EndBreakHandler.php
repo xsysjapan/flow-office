@@ -55,7 +55,7 @@ class EndBreakHandler implements CommandHandler
             event: new AttendanceBreakEnded(
                 attendanceDayId: $day->id,
                 attendanceBreakId: $break->id,
-                breakEndAt: LocalDateTime::toIso8601($break->break_end_at, $user->timezone),
+                breakEndAt: LocalDateTime::formatWithOffsetMinutes($break->break_end_at, $day->utc_offset_minutes),
             ),
         );
 

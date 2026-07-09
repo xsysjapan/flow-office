@@ -68,6 +68,53 @@ class AttendanceFlowTest extends TestCase
         $this->assertSame(60, $calculation['late_night_minutes']);
     }
 
+    /**
+     * 海外出張中は、現地時刻(=deep-night判定に使う時刻)が社員本人の既定タイムゾーンと
+     * 異なる。編集時に送ったオフセットのまま記録・表示され、深夜時間の判定もその現地時刻を
+     * 基準に行われることを確認する (docs/03-architecture.md 3.4)。
+     */
+    public function test_editing_a_day_with_a_business_trip_offset_preserves_that_offset_and_calculates_late_night_locally(): void
+    {
+        $employee = User::factory()->create(); // timezone: Asia/Tokyo (既定値)
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        // ニューヨーク出張中(-05:00)、現地22:00〜翌05:00の勤務。
+        $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => '2026-07-09T22:00:00-05:00',
+            'actual_end_at' => '2026-07-10T05:00:00-05:00',
+            'breaks' => [],
+            'reason' => '出張のため現地時刻で記録',
+        ]);
+
+        $editResponse->assertOk();
+        $editResponse->assertJsonPath('actual_start_at', '2026-07-09T22:00:00-05:00');
+        $editResponse->assertJsonPath('actual_end_at', '2026-07-10T05:00:00-05:00');
+        $editResponse->assertJsonPath('utc_offset_minutes', -300);
+
+        $calculation = $editResponse->json('calculation');
+        $this->assertSame(420, $calculation['actual_work_minutes']);
+        $this->assertSame(420, $calculation['late_night_minutes']);
+    }
+
+    public function test_editing_a_day_with_mismatched_offsets_across_fields_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => '2026-07-09T22:00:00-05:00',
+            'actual_end_at' => '2026-07-10T05:00:00+09:00',
+            'breaks' => [],
+            'reason' => 'オフセット不一致テスト',
+        ]);
+
+        $editResponse->assertStatus(422);
+    }
+
     public function test_month_submit_approve_close_locks_days(): void
     {
         $employee = User::factory()->create();

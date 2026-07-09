@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 同一user_id・work_dateの打刻群がUC-A012の意味で整合している場合のみ
  * attendance_days / attendance_breaks に反映される。
  */
-#[Fillable(['user_id', 'work_date', 'punch_type', 'punched_at', 'source', 'note'])]
+#[Fillable(['user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note'])]
 class AttendancePunch extends Model
 {
     protected function casts(): array

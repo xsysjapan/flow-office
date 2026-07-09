@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AttendanceBreakResource extends JsonResource
 {
-    public function __construct($resource, private readonly ?string $ownerTimezone = null)
+    public function __construct($resource, private readonly ?int $utcOffsetMinutes = null)
     {
         parent::__construct($resource);
     }
@@ -18,12 +18,10 @@ class AttendanceBreakResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $timezone = $this->ownerTimezone ?? config('app.timezone');
-
         return [
             'id' => $this->id,
-            'break_start_at' => LocalDateTime::toIso8601($this->break_start_at, $timezone),
-            'break_end_at' => LocalDateTime::toIso8601($this->break_end_at, $timezone),
+            'break_start_at' => LocalDateTime::formatWithOffsetMinutes($this->break_start_at, $this->utcOffsetMinutes),
+            'break_end_at' => LocalDateTime::formatWithOffsetMinutes($this->break_end_at, $this->utcOffsetMinutes),
         ];
     }
 }

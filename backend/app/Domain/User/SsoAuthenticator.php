@@ -24,21 +24,23 @@ class SsoAuthenticator
         $user = User::query()->where('entra_user_id', $ssoUser->getId())->first();
         $wasFirstLogin = $user === null;
 
-        if ($user === null) {
-            $timezone = SystemSetting::current()->default_timezone;
+        // last_login_atのような一般的な日時はユーザー個別のタイムゾーンではなく、
+        // システムのデフォルトタイムゾーンで記録する (docs/03-architecture.md 3.4)。
+        $defaultTimezone = SystemSetting::current()->default_timezone;
 
+        if ($user === null) {
             $user = User::query()->create([
                 'entra_user_id' => $ssoUser->getId(),
                 'name' => $ssoUser->getName() ?? $ssoUser->getNickname() ?? $ssoUser->getEmail(),
                 'email' => $ssoUser->getEmail(),
                 'employment_status' => 'active',
-                'timezone' => $timezone,
-                'last_login_at' => LocalDateTime::now($timezone),
+                'timezone' => $defaultTimezone,
+                'last_login_at' => LocalDateTime::now($defaultTimezone),
             ]);
 
             $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
         } else {
-            $user->last_login_at = LocalDateTime::now($user->timezone);
+            $user->last_login_at = LocalDateTime::now($defaultTimezone);
             $user->save();
         }
 

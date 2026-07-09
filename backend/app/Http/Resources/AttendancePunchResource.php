@@ -13,14 +13,12 @@ class AttendancePunchResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $timezone = $this->user->timezone;
-
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
             'work_date' => $this->work_date?->toDateString(),
             'punch_type' => $this->punch_type,
-            'punched_at' => LocalDateTime::toIso8601($this->punched_at, $timezone),
+            'punched_at' => LocalDateTime::formatWithOffsetMinutes($this->punched_at, $this->utc_offset_minutes),
             'source' => $this->source,
             'note' => $this->note,
             'created_at' => $this->created_at?->toIso8601String(),

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
 import type { AttendanceDay } from '../api/types'
 import { addDays, formatDate, mondayOf } from '../utils/weekDates'
@@ -16,6 +16,7 @@ const mondayRecord: AttendanceDay = {
   status: 'clocked_out',
   actual_start_at: `${weekStart}T09:00:00+09:00`,
   actual_end_at: `${weekStart}T18:00:00+09:00`,
+  utc_offset_minutes: 540,
   work_type: null,
   note: null,
   is_locked: false,
@@ -45,6 +46,10 @@ function renderPage(days: AttendanceDay[] = [mondayRecord]) {
 }
 
 describe('WeekAttendancePage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('requests the current week starting on Monday', async () => {
     renderPage([])
 
@@ -86,19 +91,40 @@ describe('WeekAttendancePage', () => {
     )
   })
 
-  it('sends actual_start_at/actual_end_at with an explicit timezone offset', async () => {
+  it('sends actual_start_at/actual_end_at with the days recorded offset by default', async () => {
     vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue(mondayRecord)
     renderPage([mondayRecord])
 
     await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    expect(screen.getByLabelText('現地時刻オフセット(海外出張時などに変更)')).toHaveValue('+09:00')
+
     await userEvent.type(screen.getByLabelText('修正理由(必須)'), '確認')
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() => expect(attendanceApi.updateAttendanceDay).toHaveBeenCalled())
-    const input = vi.mocked(attendanceApi.updateAttendanceDay).mock.calls[0][1]
-    expect(input.actual_start_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
-    expect(input.actual_end_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+    const input = vi.mocked(attendanceApi.updateAttendanceDay).mock.calls.at(-1)![1]
+    expect(input.actual_start_at).toBe(`${weekStart}T09:00:00+09:00`)
+    expect(input.actual_end_at).toBe(`${weekStart}T18:00:00+09:00`)
     expect(input.breaks?.[0]?.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
+  })
+
+  it('records a day with a different offset when editing for a business trip', async () => {
+    vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue(mondayRecord)
+    renderPage([mondayRecord])
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+
+    const offsetInput = screen.getByLabelText('現地時刻オフセット(海外出張時などに変更)')
+    await userEvent.clear(offsetInput)
+    await userEvent.type(offsetInput, '-05:00')
+    expect(offsetInput).toHaveValue('-05:00')
+    await userEvent.type(screen.getByLabelText('修正理由(必須)'), '出張のため現地時刻で記録')
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() => expect(attendanceApi.updateAttendanceDay).toHaveBeenCalled())
+    const input = vi.mocked(attendanceApi.updateAttendanceDay).mock.calls.at(-1)![1]
+    expect(input.actual_start_at).toBe(`${weekStart}T09:00:00-05:00`)
+    expect(input.actual_end_at).toBe(`${weekStart}T18:00:00-05:00`)
   })
 
   it('disables saving until a reason is entered', async () => {

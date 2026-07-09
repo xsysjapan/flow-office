@@ -82,6 +82,9 @@ export interface AttendanceDay {
   source?: AttendanceDaySource
   actual_start_at: string | null
   actual_end_at: string | null
+  /** その勤務日のactual_start_at/actual_end_at/breaksに適用されたUTCオフセット(分)。
+   *  海外出張などで勤務日ごとに現地時刻が変わるため、社員本人の既定タイムゾーンとは別に持つ。 */
+  utc_offset_minutes?: number | null
   work_type: string | null
   note: string | null
   is_locked: boolean

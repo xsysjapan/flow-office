@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -22,7 +23,10 @@ class UserResource extends JsonResource
             'employment_status' => $this->employment_status,
             'timezone' => $this->timezone,
             'roles' => $this->whenLoaded('roles', fn () => $this->roles->pluck('code')),
-            'last_login_at' => LocalDateTime::toIso8601($this->last_login_at, $this->timezone),
+            // last_login_atのような一般的な日時はシステムのデフォルトタイムゾーンのオフセットで
+            // 送信し、画面表示では本人のタイムゾーン(timezone)に変換して表示する
+            // (docs/03-architecture.md 3.4)。
+            'last_login_at' => LocalDateTime::toIso8601($this->last_login_at, SystemSetting::current()->default_timezone),
         ];
     }
 }

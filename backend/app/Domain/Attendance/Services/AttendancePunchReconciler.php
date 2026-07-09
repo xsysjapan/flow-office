@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
  * 打刻ログ(参考情報)から、矛盾のない1日分の勤務(出勤・退勤・休憩)を組み立てられるか判定する。
  *
  * 「矛盾がない」とは以下をすべて満たすことを言う:
+ * - 全ての打刻が同一のUTCオフセット(分)で記録されている(異なるオフセットが混在する場合、
+ *   壁時計時刻どうしの前後比較に意味がなくなるため矛盾ありとする)
  * - clock_in がちょうど1件、clock_out がちょうど1件で、clock_out が clock_in より後
  * - clock_in/clock_out 以外(休憩)の打刻が break_start → break_end の順で偶数件並んでいる
  * - 各休憩は clock_in 〜 clock_out の範囲内に収まり、休憩どうしが重複・逆順しない
@@ -22,10 +24,16 @@ class AttendancePunchReconciler
 {
     /**
      * @param  Collection<int, AttendancePunch>  $punches  同一user_id・work_dateのpunched_at昇順の打刻一覧
-     * @return array{clock_in: Carbon, clock_out: Carbon, breaks: array<int, array{start: Carbon, end: Carbon}>}|null
+     * @return array{clock_in: Carbon, clock_out: Carbon, breaks: array<int, array{start: Carbon, end: Carbon}>, utc_offset_minutes: int}|null
      */
     public function reconcile(Collection $punches): ?array
     {
+        $distinctOffsets = $punches->pluck('utc_offset_minutes')->unique();
+        if ($distinctOffsets->count() !== 1) {
+            return null;
+        }
+        $utcOffsetMinutes = $distinctOffsets->first();
+
         $clockIns = $punches->where('punch_type', PunchType::CLOCK_IN)->values();
         $clockOuts = $punches->where('punch_type', PunchType::CLOCK_OUT)->values();
 
@@ -79,6 +87,7 @@ class AttendancePunchReconciler
             'clock_in' => $clockIn,
             'clock_out' => $clockOut,
             'breaks' => $breaks,
+            'utc_offset_minutes' => $utcOffsetMinutes,
         ];
     }
 }

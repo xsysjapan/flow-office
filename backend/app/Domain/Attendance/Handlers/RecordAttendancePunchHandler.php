@@ -22,8 +22,10 @@ use App\Support\LocalDateTime;
 /**
  * UC-A012: 打刻ログを記録する。矛盾があっても記録は必ず成功させ、
  * 矛盾なく1日分の勤務として組み立てられる場合のみ attendance_days に反映する。
- * punched_atはオフセット付きISO8601を前提に、対象社員本人のタイムゾーンに変換してから
- * タイムゾーンなしの壁時計時刻として保存する (docs/06-usecases-auth.md UC-003)。
+ * punched_atはオフセット付きISO8601を前提に、送信された通りの壁時計時刻とUTCオフセット(分)を
+ * そのまま保存する(user.timezoneへの変換はしない)。海外出張などで打刻元の現地時刻が
+ * 社員本人の既定タイムゾーンと異なる場合でも、その打刻が実際に発生した現地時刻を維持する
+ * (docs/03-architecture.md 3.4)。
  *
  * @implements CommandHandler<RecordAttendancePunch>
  */
@@ -40,13 +42,14 @@ class RecordAttendancePunchHandler implements CommandHandler
         assert($command instanceof RecordAttendancePunch);
 
         $user = User::query()->findOrFail($command->userId);
-        $punchedAt = LocalDateTime::parse($command->punchedAt, $user->timezone);
+        [$punchedAt, $utcOffsetMinutes] = LocalDateTime::splitOffset($command->punchedAt);
 
         $punch = AttendancePunch::query()->create([
             'user_id' => $command->userId,
             'work_date' => $command->workDate,
             'punch_type' => $command->punchType,
             'punched_at' => $punchedAt,
+            'utc_offset_minutes' => $utcOffsetMinutes,
             'source' => $command->source,
             'note' => $command->note,
         ]);
@@ -59,7 +62,7 @@ class RecordAttendancePunchHandler implements CommandHandler
                 userId: $command->userId,
                 workDate: $command->workDate,
                 punchType: $command->punchType,
-                punchedAt: LocalDateTime::toIso8601($punch->punched_at, $user->timezone),
+                punchedAt: LocalDateTime::formatWithOffsetMinutes($punch->punched_at, $punch->utc_offset_minutes),
                 source: $command->source,
             ),
         );
@@ -111,6 +114,7 @@ class RecordAttendancePunchHandler implements CommandHandler
 
         $day->actual_start_at = $reconciled['clock_in'];
         $day->actual_end_at = $reconciled['clock_out'];
+        $day->utc_offset_minutes = $reconciled['utc_offset_minutes'];
         $day->status = AttendanceDayStatus::CLOCKED_OUT;
         $day->source = AttendanceDaySource::PUNCH;
         $day->save();
@@ -128,8 +132,8 @@ class RecordAttendancePunchHandler implements CommandHandler
             aggregateId: (string) $day->id,
             event: new AttendanceDaySyncedFromPunches(
                 attendanceDayId: $day->id,
-                actualStartAt: LocalDateTime::toIso8601($day->actual_start_at, $user->timezone),
-                actualEndAt: LocalDateTime::toIso8601($day->actual_end_at, $user->timezone),
+                actualStartAt: LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes),
+                actualEndAt: LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes),
             ),
         );
 

@@ -33,7 +33,6 @@ class AttendancePunchController extends Controller
         $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null);
 
         $punches = AttendancePunch::query()
-            ->with('user')
             ->where('user_id', $targetUserId)
             ->when($data['from'] ?? null, fn ($query, $from) => $query->whereDate('work_date', '>=', $from))
             ->when($data['to'] ?? null, fn ($query, $to) => $query->whereDate('work_date', '<=', $to))
@@ -66,7 +65,7 @@ class AttendancePunchController extends Controller
             note: $data['note'] ?? null,
         ));
 
-        return new AttendancePunchResource($punch->load('user'));
+        return new AttendancePunchResource($punch);
     }
 
     /**

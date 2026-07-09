@@ -41,7 +41,7 @@
 Eloquentで直接更新する(他のマスタ管理APIと同じ方針)。参照・更新はいずれも管理者ロール限定
 (`role:admin` ミドルウェア)。
 
-新規ユーザーがどのタイムゾーンで作成されるかは以下の通り([docs/03-architecture.md 3.4](./03-architecture.md#34-日時はユーザーごとのタイムゾーンで解釈しapi境界では常にオフセットを明示する)):
+新規ユーザーがどのタイムゾーンで作成されるかは以下の通り(docs/03-architecture.md 3.4):
 
 - SSO初回ログイン([UC-001](#uc-001-microsoft-ssoでログインする))・MS365同期による新規作成
   ([UC-002](#uc-002-ms365ユーザーを同期する))のいずれも、作成時点の `system_settings.default_timezone`

@@ -40,7 +40,7 @@ class StartBreakHandler implements CommandHandler
             event: new AttendanceBreakStarted(
                 attendanceDayId: $day->id,
                 attendanceBreakId: $break->id,
-                breakStartAt: LocalDateTime::toIso8601($break->break_start_at, $user->timezone),
+                breakStartAt: LocalDateTime::formatWithOffsetMinutes($break->break_start_at, $day->utc_offset_minutes),
             ),
         );
 

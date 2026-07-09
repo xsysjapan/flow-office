@@ -17,8 +17,9 @@ use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
- * UC-A001: 出勤する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする
- * (docs/06-usecases-auth.md UC-003)。
+ * UC-A001: 出勤する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする。
+ * このときの現在のUTCオフセットを attendance_days.utc_offset_minutes に記録する
+ * (docs/03-architecture.md 3.4)。
  *
  * @implements CommandHandler<ClockIn>
  */
@@ -57,7 +58,9 @@ class ClockInHandler implements CommandHandler
             ]);
         }
 
-        $day->actual_start_at = LocalDateTime::now($user->timezone);
+        $now = LocalDateTime::now($user->timezone);
+        $day->actual_start_at = $now;
+        $day->utc_offset_minutes = $now->utcOffset();
         $day->status = AttendanceDayStatus::WORKING;
         $day->source = AttendanceDaySource::LIVE;
         $day->save();
@@ -68,7 +71,7 @@ class ClockInHandler implements CommandHandler
             event: new AttendanceClockedIn(
                 attendanceDayId: $day->id,
                 userId: $command->userId,
-                actualStartAt: LocalDateTime::toIso8601($day->actual_start_at, $user->timezone),
+                actualStartAt: LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes),
             ),
         );
 

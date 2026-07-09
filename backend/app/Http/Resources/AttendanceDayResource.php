@@ -14,8 +14,10 @@ class AttendanceDayResource extends JsonResource
     public function toArray(Request $request): array
     {
         // 内部ではタイムゾーンなしの壁時計時刻を保存しているため、APIへ出力する際は
-        // 対象社員本人のタイムゾーンのオフセットを付与する (docs/06-usecases-auth.md UC-003)。
-        $timezone = $this->user->timezone;
+        // その勤務日自身が保持するUTCオフセット(utc_offset_minutes)を付与する。
+        // 海外出張などで勤務日ごとに現地時刻が変わるため、社員本人の既定タイムゾーンでは
+        // なくこのオフセットを使う (docs/03-architecture.md 3.4)。
+        $utcOffsetMinutes = $this->utc_offset_minutes;
 
         return [
             'id' => $this->id,
@@ -23,8 +25,9 @@ class AttendanceDayResource extends JsonResource
             'work_date' => $this->work_date?->toDateString(),
             'status' => $this->status,
             'source' => $this->source,
-            'actual_start_at' => LocalDateTime::toIso8601($this->actual_start_at, $timezone),
-            'actual_end_at' => LocalDateTime::toIso8601($this->actual_end_at, $timezone),
+            'actual_start_at' => LocalDateTime::formatWithOffsetMinutes($this->actual_start_at, $utcOffsetMinutes),
+            'actual_end_at' => LocalDateTime::formatWithOffsetMinutes($this->actual_end_at, $utcOffsetMinutes),
+            'utc_offset_minutes' => $utcOffsetMinutes,
             'work_type' => $this->work_type,
             'note' => $this->note,
             'is_locked' => $this->isLocked(),
@@ -33,7 +36,7 @@ class AttendanceDayResource extends JsonResource
             'planned_end_at' => $this->planned_end_at,
             'breaks' => $this->whenLoaded(
                 'breaks',
-                fn () => $this->breaks->map(fn ($break) => new AttendanceBreakResource($break, $timezone)),
+                fn () => $this->breaks->map(fn ($break) => new AttendanceBreakResource($break, $utcOffsetMinutes)),
             ),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
         ];

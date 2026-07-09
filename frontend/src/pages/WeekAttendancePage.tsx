@@ -7,21 +7,25 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useEditableRows } from '../hooks/useEditableRows'
 import { useUpdateAttendanceDay, useWeek } from '../hooks/useAttendance'
 import type { AttendanceDay } from '../api/types'
-import { datetimeLocalToIso8601 } from '../utils/offsetDateTime'
+import {
+  browserOffsetString,
+  combineDatetimeLocalWithOffset,
+  isoToLocalDatetimeLiteral,
+  offsetMinutesToString,
+} from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
 import './WeekAttendancePage.css'
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
+/**
+ * 勤務時刻(出勤・退勤・休憩)は、社員本人の既定タイムゾーンではなく、その勤務日自身が
+ * 保持するUTCオフセットで表示・編集する(docs/03-architecture.md 3.4)。ブラウザのローカル
+ * タイムゾーンには変換しない。
+ */
 function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return isoToLocalDatetimeLiteral(iso)
 }
 
 function dayWarnings(date: string, day: AttendanceDay | undefined, today: string): string[] {
@@ -66,6 +70,7 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [actualStartAt, setActualStartAt] = useState('')
   const [actualEndAt, setActualEndAt] = useState('')
+  const [offset, setOffset] = useState('')
   const [workType, setWorkType] = useState('')
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
@@ -77,6 +82,7 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
     if (!day) return
     setActualStartAt(toDatetimeLocal(day.actual_start_at))
     setActualEndAt(toDatetimeLocal(day.actual_end_at))
+    setOffset(typeof day.utc_offset_minutes === 'number' ? offsetMinutesToString(day.utc_offset_minutes) : browserOffsetString())
     setWorkType(day.work_type ?? '')
     setNote(day.note ?? '')
     setReason('')
@@ -90,13 +96,13 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
       {
         id: day.id,
         input: {
-          actual_start_at: datetimeLocalToIso8601(actualStartAt),
-          actual_end_at: datetimeLocalToIso8601(actualEndAt),
+          actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
+          actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
           breaks: breakRows
             .filter((b) => b.start)
             .map((b) => ({
-              start: datetimeLocalToIso8601(b.start) ?? '',
-              end: datetimeLocalToIso8601(b.end) ?? undefined,
+              start: combineDatetimeLocalWithOffset(b.start, offset) ?? '',
+              end: combineDatetimeLocalWithOffset(b.end, offset) ?? undefined,
             })),
           work_type: workType || null,
           note: note || null,
@@ -136,6 +142,12 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
           <dd>{day.actual_start_at ? toDatetimeLocal(day.actual_start_at).replace('T', ' ') : '--'}</dd>
           <dt>退勤</dt>
           <dd>{day.actual_end_at ? toDatetimeLocal(day.actual_end_at).replace('T', ' ') : '--'}</dd>
+          {typeof day.utc_offset_minutes === 'number' && (day.actual_start_at || day.actual_end_at) && (
+            <>
+              <dt>現地時刻オフセット</dt>
+              <dd>UTC{offsetMinutesToString(day.utc_offset_minutes)}</dd>
+            </>
+          )}
           {day.calculation && (
             <>
               <dt>実働</dt>
@@ -156,6 +168,15 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
           <label>
             退勤
             <input type="datetime-local" value={actualEndAt} onChange={(e) => setActualEndAt(e.target.value)} />
+          </label>
+          <label>
+            現地時刻オフセット(海外出張時などに変更)
+            <input
+              value={offset}
+              placeholder="+09:00"
+              pattern="^[+-]\d{2}:\d{2}$"
+              onChange={(e) => setOffset(e.target.value)}
+            />
           </label>
           <label>
             作業内容

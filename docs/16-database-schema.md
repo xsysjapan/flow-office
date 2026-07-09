@@ -3,12 +3,18 @@
 このテーブル一覧はマイグレーション作成前のドラフト。列の型・NULL可否・インデックスは
 実装時のマイグレーションで確定させる。`created_at` / `updated_at` は全テーブル共通。
 
-**日時カラムの扱い**: `_at` で終わるカラム(`actual_start_at`, `punched_at` など)は
-タイムゾーン情報を持たない「その値の所有者(基本的に対象レコードの`user_id`)のローカル時刻」
-の壁時計表記で保存する。DB自体にはタイムゾーンを持たせず、`users.timezone` が「この
-ユーザーのレコードのナイーブな日時はどのタイムゾーンとして解釈するか」を決める。API境界
-(リクエスト・レスポンスの両方)では常にオフセット付きISO8601形式で日時をやり取りし、
+**日時カラムの扱い**: `_at` で終わるカラムはタイムゾーン情報を持たない壁時計表記で保存する。
+API境界(リクエスト・レスポンスの両方)では常にオフセット付きISO8601形式で日時をやり取りし、
 変換は `App\Support\LocalDateTime` に集約する(詳細は docs/03-architecture.md 3.4)。
+どのオフセットで解釈するかは2系統ある。
+
+- 一般的な日時(`users.last_login_at`, `workflow_requests.submitted_at` 等): システムの
+  デフォルトタイムゾーン(`system_settings.default_timezone`)で解釈する。画面表示は
+  `users.timezone`(ユーザーごとの表示用タイムゾーン設定)に変換して見せる。
+- 勤怠の勤務実績(`attendance_days` / `attendance_breaks` / `attendance_punches`): 固定の
+  タイムゾーン名ではなく、その勤務日・打刻自身が保持するUTCオフセット(`utc_offset_minutes`、
+  分単位の整数)で解釈する。海外出張などで勤務日ごとに現地時刻(オフセット)が変わるため。
+  画面表示もこのオフセットのまま(ユーザーの既定タイムゾーンには変換しない)。
 
 ## stored_events (EventStore / 正)
 
@@ -165,6 +171,9 @@
 - source (`live` / `manual` / `punch`。actual_start_at等をどの経路で最後に確定したか)
 - actual_start_at
 - actual_end_at
+- utc_offset_minutes (actual_start_at/actual_end_at/breaksに適用されたUTCオフセット(分)。
+  例: `+09:00` なら540、`-05:00` なら-300。社員本人の既定タイムゾーン(users.timezone)とは
+  別に、勤務日ごとに保持する。海外出張などで現地時刻が変わるため(docs/03-architecture.md 3.4))
 - work_type
 - note
 - locked_at
@@ -185,13 +194,17 @@
 - work_date (打刻元が明示的に指定する所属業務日。例: 21:00出勤〜翌6:00退勤の夜勤は両方同じwork_date)
 - punch_type (`clock_in` / `break_start` / `break_end` / `clock_out`)
 - punched_at (実際に打刻が発生した日時)
+- utc_offset_minutes (punched_atに適用されたUTCオフセット(分)。打刻元から送信された通りの
+  値をタイムゾーン変換せずそのまま保持する (docs/03-architecture.md 3.4))
 - source (打刻元。`web` / `ic_card` / `mobile` など、将来のデバイス種別を自由に追加できる文字列)
 - note
 - created_at / updated_at
 
 同一user_id・work_dateに対して重複・矛盾した打刻が記録されることを前提とし、一意制約は
-設けない。矛盾なく1日分の勤務として組み立てられた場合のみ `attendance_days` /
-`attendance_breaks` に反映される (docs/07-usecases-attendance.md UC-A012)。
+設けない。全ての打刻が同一のutc_offset_minutesであることも「矛盾がない」ことの条件の1つと
+する(オフセットが混在すると壁時計時刻どうしの前後比較に意味がなくなるため)。矛盾なく1日分
+の勤務として組み立てられた場合のみ `attendance_days` / `attendance_breaks` に反映される
+(docs/07-usecases-attendance.md UC-A012)。
 
 ## attendance_daily_calculations (Projection: 日次集計)
 

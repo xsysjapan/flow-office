@@ -18,6 +18,7 @@ use App\Http\Resources\AttendanceMonthResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -35,7 +36,7 @@ class AttendanceController extends Controller
         $today = Carbon::today($user->timezone)->toDateString();
 
         $day = AttendanceDay::query()
-            ->with(['breaks', 'calculation', 'user'])
+            ->with(['breaks', 'calculation'])
             ->where('user_id', $user->id)
             ->whereDate('work_date', $today)
             ->first();
@@ -52,11 +53,13 @@ class AttendanceController extends Controller
                 'status' => 'not_started',
             ]);
             $day->setRelation('breaks', collect());
-            $day->setRelation('user', $user);
         }
 
-        $day->setAttribute('planned_start_at', LocalDateTime::toIso8601($shift?->planned_start_at, $user->timezone));
-        $day->setAttribute('planned_end_at', LocalDateTime::toIso8601($shift?->planned_end_at, $user->timezone));
+        // 勤務予定(shift)は勤務実績とは異なり出張先の現地時刻を持たないため、一般の日時と
+        // 同様にシステムのデフォルトタイムゾーンのオフセットを付与する (docs/03-architecture.md 3.4)。
+        $defaultTimezone = SystemSetting::current()->default_timezone;
+        $day->setAttribute('planned_start_at', LocalDateTime::toIso8601($shift?->planned_start_at, $defaultTimezone));
+        $day->setAttribute('planned_end_at', LocalDateTime::toIso8601($shift?->planned_end_at, $defaultTimezone));
 
         return new AttendanceDayResource($day);
     }
@@ -65,28 +68,28 @@ class AttendanceController extends Controller
     {
         $day = $commandBus->dispatch(new ClockIn($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
     public function startBreak(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new StartBreak($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
     public function endBreak(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new EndBreak($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
     public function clockOut(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new ClockOut($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
     /**
@@ -100,7 +103,7 @@ class AttendanceController extends Controller
         $end = $start->copy()->addDays(6);
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'calculation', 'user'])
+            ->with(['breaks', 'calculation'])
             ->where('user_id', $request->user()->id)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
@@ -112,7 +115,7 @@ class AttendanceController extends Controller
 
     public function showDay(AttendanceDay $attendanceDay): AttendanceDayResource
     {
-        return new AttendanceDayResource($attendanceDay->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($attendanceDay->load(['breaks', 'calculation']));
     }
 
     public function updateDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
@@ -139,7 +142,7 @@ class AttendanceController extends Controller
             editedByUserId: $request->user()->id,
         ));
 
-        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation', 'user']));
+        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));
     }
 
     /**
@@ -150,7 +153,7 @@ class AttendanceController extends Controller
         $userId = $request->user()->id;
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'calculation', 'user'])
+            ->with(['breaks', 'calculation'])
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
             ->orderBy('work_date')

@@ -10,8 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * 勤務実績(日次) (docs/03-architecture.md 3.3: 勤怠の正)。
+ *
+ * `utc_offset_minutes` はその勤務日の actual_start_at/actual_end_at/breaks に適用された
+ * UTCオフセット(分)。海外出張などで勤務日ごとに現地時刻が変わるため、users.timezone とは
+ * 独立して勤務日単位で保持する (docs/03-architecture.md 3.4)。
  */
-#[Fillable(['user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'work_type', 'note', 'locked_at'])]
+#[Fillable(['user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'utc_offset_minutes', 'work_type', 'note', 'locked_at'])]
 class AttendanceDay extends Model
 {
     protected function casts(): array

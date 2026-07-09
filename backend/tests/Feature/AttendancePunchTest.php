@@ -15,9 +15,10 @@ use Tests\TestCase;
  * UC-A012: 打刻ログ。矛盾があっても記録は成功し、矛盾なく組み立てられた場合のみ
  * 日次勤怠(attendance_days)に反映されることを確認する。
  *
- * APIの日時は必ずオフセット付きISO8601で送る (docs/06-usecases-auth.md UC-003)。
- * 内部では対象社員のタイムゾーン(既定値 Asia/Tokyo)での壁時計時刻に変換して
- * タイムゾーンなしで保存する。
+ * APIの日時は必ずオフセット付きISO8601で送る。内部では入力された通りの壁時計時刻を
+ * タイムゾーン変換せずに保存し、そのオフセット(分)を別途 utc_offset_minutes に記録する
+ * (docs/03-architecture.md 3.4)。社員本人の既定タイムゾーン(users.timezone)には
+ * 変換しない。
  */
 class AttendancePunchTest extends TestCase
 {
@@ -43,19 +44,39 @@ class AttendancePunchTest extends TestCase
         $this->assertSame(480, $day->calculation->actual_work_minutes);
     }
 
-    public function test_a_punch_sent_with_a_different_offset_is_normalized_to_the_owners_timezone(): void
+    public function test_a_punch_offset_different_from_the_owners_timezone_is_preserved_on_the_day(): void
     {
         $employee = User::factory()->create(); // timezone: Asia/Tokyo (既定値)
         $workDate = '2026-07-09';
 
-        // UTC 00:00 は Asia/Tokyo では同日09:00。オフセットが違っても正しく解釈されることを確認する。
+        // 出張先の現地時刻(UTC+00:00)で打刻された場合、本人の既定タイムゾーン(+09:00)には
+        // 変換せず、打刻された通りのオフセットを勤務日に記録する(docs/03-architecture.md 3.4)。
         $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T00:00:00+00:00')->assertSuccessful();
         $this->recordPunch($employee, $workDate, 'clock_out', '2026-07-09T09:00:00+00:00')->assertSuccessful();
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
 
-        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::toIso8601($day->actual_start_at, $employee->timezone));
-        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::toIso8601($day->actual_end_at, $employee->timezone));
+        $this->assertSame(0, $day->utc_offset_minutes);
+        $this->assertSame('2026-07-09T00:00:00+00:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T09:00:00+00:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
+
+        $response = $this->actingAs($employee)->getJson("/api/attendance/days/{$day->id}");
+        $response->assertJsonPath('actual_start_at', '2026-07-09T00:00:00+00:00');
+        $response->assertJsonPath('actual_end_at', '2026-07-09T09:00:00+00:00');
+        $response->assertJsonPath('utc_offset_minutes', 0);
+    }
+
+    public function test_punches_with_mismatched_offsets_are_treated_as_inconsistent(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+
+        // 出勤と退勤で異なるオフセットが混在する場合、壁時計時刻どうしの前後比較に意味がなく
+        // なるため矛盾ありとし、日次勤怠には反映しない。
+        $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T09:00:00+09:00')->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'clock_out', '2026-07-09T09:00:00-05:00')->assertSuccessful();
+
+        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first());
     }
 
     public function test_overnight_shift_punches_belong_to_the_explicit_work_date(): void
@@ -70,8 +91,8 @@ class AttendancePunchTest extends TestCase
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
 
         $this->assertNotNull($day);
-        $this->assertSame('2026-07-09T21:00:00+09:00', LocalDateTime::toIso8601($day->actual_start_at, $employee->timezone));
-        $this->assertSame('2026-07-10T06:00:00+09:00', LocalDateTime::toIso8601($day->actual_end_at, $employee->timezone));
+        $this->assertSame('2026-07-09T21:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-10T06:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
         $this->assertSame(540, $day->calculation->actual_work_minutes);
     }
 
@@ -128,8 +149,8 @@ class AttendancePunchTest extends TestCase
         $this->recordPunch($employee, $workDate, 'clock_out', '2026-07-09T20:00:00+09:00')->assertSuccessful();
 
         $day->refresh();
-        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::toIso8601($day->actual_start_at, $employee->timezone));
-        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::toIso8601($day->actual_end_at, $employee->timezone));
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
     }
 
     public function test_recording_a_punch_for_another_user_requires_admin_role(): void

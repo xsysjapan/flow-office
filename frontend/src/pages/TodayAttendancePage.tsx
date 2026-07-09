@@ -4,12 +4,17 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useClockIn, useClockOut, useEndBreak, useStartBreak, useTodayAttendance } from '../hooks/useAttendance'
+import { isoToTimeLiteral } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
 import './TodayAttendancePage.css'
 
+/**
+ * 勤務時刻はその勤務日自身のUTCオフセットで記録された値であり、ブラウザのローカル
+ * タイムゾーンに変換せず記録された通りの時刻を表示する(docs/03-architecture.md 3.4)。
+ */
 function formatTime(value: string | null | undefined): string {
-  if (!value) return '--:--'
-  return new Date(value).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+  const literal = isoToTimeLiteral(value)
+  return literal || '--:--'
 }
 
 /**

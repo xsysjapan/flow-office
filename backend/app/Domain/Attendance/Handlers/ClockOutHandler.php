@@ -52,7 +52,7 @@ class ClockOutHandler implements CommandHandler
             aggregateId: (string) $day->id,
             event: new AttendanceClockedOut(
                 attendanceDayId: $day->id,
-                actualEndAt: LocalDateTime::toIso8601($day->actual_end_at, $user->timezone),
+                actualEndAt: LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes),
             ),
         );
 
