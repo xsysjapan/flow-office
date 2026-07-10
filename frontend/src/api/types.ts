@@ -6,6 +6,8 @@ export interface User {
   job_title: string | null
   employment_status: string
   timezone?: string
+  /** 継続勤務期間の計算に使う入社日(docs/09-usecases-paid-leave.md UC-P002)。未設定ならnull。 */
+  hire_date?: string | null
   roles?: string[]
   last_login_at: string | null
 }

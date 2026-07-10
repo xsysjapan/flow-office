@@ -30,16 +30,24 @@ use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
+use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
+use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
+use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\GrantPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\GrantScheduledPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
+use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
 use App\Domain\User\Commands\AssignUserRoles;
+use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
+use App\Domain\User\Handlers\SetUserHireDateHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
@@ -66,6 +74,7 @@ return [
     */
     'command_handlers' => [
         AssignUserRoles::class => AssignUserRolesHandler::class,
+        SetUserHireDate::class => SetUserHireDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
 
         DraftWorkflowRequest::class => DraftWorkflowRequestHandler::class,
@@ -90,6 +99,9 @@ return [
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,
+        GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,
+        WarnExpiringPaidLeave::class => WarnExpiringPaidLeaveHandler::class,
+        WarnFiveDayObligation::class => WarnFiveDayObligationHandler::class,
         RequestPaidLeave::class => RequestPaidLeaveHandler::class,
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,

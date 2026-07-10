@@ -83,4 +83,23 @@ describe('UserRoleEditPage', () => {
       expect(usersApi.updateUserRoles).toHaveBeenCalledWith(1, ['general_affairs_staff']),
     )
   })
+
+  it('prefills the hire date when the user already has one', async () => {
+    renderPage({ ...targetUser, hire_date: '2024-04-01' })
+
+    expect(await screen.findByLabelText('入社日(有給の自動付与に使用)')).toHaveValue('2024-04-01')
+  })
+
+  it('saves the entered hire date', async () => {
+    vi.spyOn(usersApi, 'updateUserHireDate').mockResolvedValue({ ...targetUser, hire_date: '2024-04-01' })
+
+    renderPage(targetUser)
+
+    await userEvent.type(await screen.findByLabelText('入社日(有給の自動付与に使用)'), '2024-04-01')
+    await userEvent.click(screen.getByRole('button', { name: '入社日を保存する' }))
+
+    await waitFor(() =>
+      expect(usersApi.updateUserHireDate).toHaveBeenCalledWith(1, '2024-04-01'),
+    )
+  })
 })

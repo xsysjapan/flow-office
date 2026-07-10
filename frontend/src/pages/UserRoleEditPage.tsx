@@ -4,13 +4,15 @@ import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useRoles } from '../hooks/useRoles'
-import { useUpdateUserRoles, useUser } from '../hooks/useUsers'
+import { useUpdateUserHireDate, useUpdateUserRoles, useUser } from '../hooks/useUsers'
 import './UserRoleEditPage.css'
 
 /**
  * UC-M001: ユーザーに付与する権限(ロール)を編集する。
+ * UC-P002: 有給の自動付与に使う入社日を設定する。
  */
 export function UserRoleEditPage() {
   const { id } = useParams<{ id: string }>()
@@ -19,13 +21,16 @@ export function UserRoleEditPage() {
   const { data: roles, isLoading: isLoadingRoles, error: rolesError } = useRoles()
 
   const updateRoles = useUpdateUserRoles()
+  const updateHireDate = useUpdateUserHireDate()
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
+  const [hireDate, setHireDate] = useState('')
   const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
     if (user && !isInitialized) {
       setSelectedCodes(user.roles ?? [])
+      setHireDate(user.hire_date ?? '')
       setIsInitialized(true)
     }
   }, [user, isInitialized])
@@ -74,6 +79,29 @@ export function UserRoleEditPage() {
           onClick={() => updateRoles.mutate({ id: userId, roleCodes: selectedCodes })}
         >
           保存する
+        </Button>
+      </div>
+
+      <div className="user-role-edit__hire-date">
+        {updateHireDate.error && <ErrorMessage error={updateHireDate.error} />}
+        {updateHireDate.isSuccess && <Badge tone="success">保存しました</Badge>}
+
+        <FormField label="入社日(有給の自動付与に使用)" htmlFor="user-role-edit-hire-date">
+          <input
+            id="user-role-edit-hire-date"
+            type="date"
+            value={hireDate}
+            onChange={(e) => setHireDate(e.target.value)}
+          />
+        </FormField>
+
+        <Button
+          variant="secondary"
+          isLoading={updateHireDate.isPending}
+          disabled={!hireDate}
+          onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
+        >
+          入社日を保存する
         </Button>
       </div>
     </Card>

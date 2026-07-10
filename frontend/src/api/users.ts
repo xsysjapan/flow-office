@@ -13,3 +13,8 @@ export function fetchUser(id: number): Promise<User> {
 export function updateUserRoles(id: number, roleCodes: string[]): Promise<User> {
   return apiFetch(`/users/${id}/roles`, { method: 'PUT', body: { role_codes: roleCodes } })
 }
+
+/** UC-P002: 有給の自動付与に使う継続勤務期間の基準日として入社日を設定する。 */
+export function updateUserHireDate(id: number, hireDate: string): Promise<User> {
+  return apiFetch(`/users/${id}/hire-date`, { method: 'PUT', body: { hire_date: hireDate } })
+}

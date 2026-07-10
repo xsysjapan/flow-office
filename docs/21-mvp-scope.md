@@ -24,3 +24,7 @@
 MVPは概ね [Phase 1〜4](./19-implementation-phases.md) の主要部分 + Phase 5 の
 「有給残数管理の土台」のみを含む。Phase 5 の自動付与・期限警告・年5日警告、および
 Phase 6 の3交代制はMVP後の後続フェーズとする。
+
+(追記) Phase 5 の残りの範囲(有給申請・承認・消化、自動付与、消滅警告、年5日取得義務警告)
+はMVP後に実装済み(docs/09-usecases-paid-leave.md UC-P002〜UC-P006)。Phase 6(3交代制)は
+未実装。

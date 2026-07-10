@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchUser, fetchUsers, updateUserRoles } from '../api/users'
+import { fetchUser, fetchUsers, updateUserHireDate, updateUserRoles } from '../api/users'
 
 export function useUsers(query?: string) {
   return useQuery({
@@ -22,6 +22,18 @@ export function useUpdateUserRoles() {
 
   return useMutation({
     mutationFn: ({ id, roleCodes }: { id: number; roleCodes: string[] }) => updateUserRoles(id, roleCodes),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['users'] })
+      void queryClient.invalidateQueries({ queryKey: ['users', 'detail', id] })
+    },
+  })
+}
+
+export function useUpdateUserHireDate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, hireDate }: { id: number; hireDate: string }) => updateUserHireDate(id, hireDate),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] })
       void queryClient.invalidateQueries({ queryKey: ['users', 'detail', id] })

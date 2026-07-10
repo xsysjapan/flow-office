@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\User\Commands\AssignUserRoles;
+use App\Domain\User\Commands\SetUserHireDate;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -43,6 +44,22 @@ class UserController extends Controller
         $commandBus->dispatch(new AssignUserRoles(
             userId: $user->id,
             roleCodes: $data['role_codes'],
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new UserResource($user->refresh()->load('roles'));
+    }
+
+    /**
+     * 入社日を設定する (docs/09-usecases-paid-leave.md UC-P002)。
+     */
+    public function updateHireDate(Request $request, User $user, CommandBus $commandBus): UserResource
+    {
+        $data = $request->validate(['hire_date' => ['required', 'date']]);
+
+        $commandBus->dispatch(new SetUserHireDate(
+            userId: $user->id,
+            hireDate: $data['hire_date'],
             changedByUserId: $request->user()->id,
         ));
 

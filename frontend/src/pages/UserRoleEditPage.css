@@ -35,3 +35,9 @@
   gap: 12px;
   margin-top: 8px;
 }
+
+.user-role-edit__hire-date {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}

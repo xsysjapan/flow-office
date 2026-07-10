@@ -42,6 +42,8 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - employment_status
 - timezone (IANAタイムゾーン識別子。例: `Asia/Tokyo`。新規作成時は `system_settings.default_timezone`
   を初期値とする。MS365同期では上書きしない)
+- hire_date (入社日。MS365に対応する属性がないため同期対象外で、管理者が個別に設定する。
+  有給の自動付与(docs/09-usecases-paid-leave.md UC-P002)の継続勤務期間の基準日に使う)
 - last_login_at
 - created_at / updated_at
 
@@ -264,6 +266,8 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - used_days
 - remaining_days
 - grant_reason
+- expiry_warned_at (UC-P005: 消滅警告を通知済みの日時。重複通知防止用)
+- five_day_obligation_warned_at (UC-P006: 年5日取得義務警告を通知済みの日時。重複通知防止用)
 - created_at / updated_at
 
 ## paid_leave_requests (有給申請の正)
