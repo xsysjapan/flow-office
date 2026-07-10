@@ -3,6 +3,8 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
+  PaidLeaveRequestStatus,
+  PaidLeaveType,
   WorkflowRequestStatus,
 } from '../api/types'
 
@@ -34,6 +36,20 @@ const attendanceDayStatusMeta: Record<AttendanceDayStatus, StatusMeta> = {
   clocked_out: { label: '退勤済み', tone: 'success' },
 }
 
+const paidLeaveRequestStatusMeta: Record<PaidLeaveRequestStatus, StatusMeta> = {
+  submitted: { label: '申請中', tone: 'info' },
+  approved: { label: '承認済み', tone: 'success' },
+  returned: { label: '差戻し', tone: 'warning' },
+  cancelled: { label: '取消', tone: 'danger' },
+}
+
+const paidLeaveTypeLabels: Record<PaidLeaveType, string> = {
+  full: '全休',
+  am_half: '午前半休',
+  pm_half: '午後半休',
+  hourly: '時間休',
+}
+
 const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
   not_started: { label: '未着手', tone: 'neutral' },
   in_review: { label: '確認中', tone: 'info' },
@@ -60,6 +76,14 @@ export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMet
 
 export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {
   return backOfficeTaskStatusMeta[status]
+}
+
+export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): StatusMeta {
+  return paidLeaveRequestStatusMeta[status]
+}
+
+export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {
+  return paidLeaveTypeLabels[leaveType]
 }
 
 const workflowRequestEventTypeLabels: Record<string, string> = {

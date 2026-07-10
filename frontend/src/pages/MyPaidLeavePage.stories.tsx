@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { PaidLeaveGrant } from '../api/types'
+import type { Paginated, PaidLeaveGrant, PaidLeaveRequest, User } from '../api/types'
 import { MyPaidLeavePage } from './MyPaidLeavePage'
 
 const grants: PaidLeaveGrant[] = [
@@ -26,9 +26,48 @@ const grants: PaidLeaveGrant[] = [
   },
 ]
 
-function withSeeded(data: PaidLeaveGrant[]) {
+const requests: PaidLeaveRequest[] = [
+  {
+    id: 1,
+    user_id: 1,
+    status: 'submitted',
+    leave_type: 'full',
+    target_date: '2026-08-10',
+    hours: null,
+    requested_days: 1,
+    reason: '私用のため',
+    submitted_at: '2026-08-01T00:00:00+09:00',
+    approved_at: null,
+    returned_at: null,
+    cancelled_at: null,
+  },
+  {
+    id: 2,
+    user_id: 1,
+    status: 'approved',
+    leave_type: 'am_half',
+    target_date: '2026-07-20',
+    hours: null,
+    requested_days: 0.5,
+    reason: null,
+    submitted_at: '2026-07-01T00:00:00+09:00',
+    approved_at: '2026-07-02T00:00:00+09:00',
+    returned_at: null,
+    cancelled_at: null,
+  },
+]
+
+const emptyUsers: Paginated<User> = {
+  data: [],
+  meta: { current_page: 1, last_page: 1, total: 0 },
+  links: { next: null, prev: null },
+}
+
+function withSeeded(grantData: PaidLeaveGrant[], requestData: PaidLeaveRequest[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['paid-leave', 'grants', 'mine'], data)
+  queryClient.setQueryData(['paid-leave', 'grants', 'mine'], grantData)
+  queryClient.setQueryData(['paid-leave', 'requests', 'mine'], requestData)
+  queryClient.setQueryData(['users', ''], emptyUsers)
 
   return function Decorator() {
     return (
@@ -47,10 +86,10 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const WithGrants: Story = {
-  render: withSeeded(grants),
+export const WithGrantsAndRequests: Story = {
+  render: withSeeded(grants, requests),
 }
 
 export const Empty: Story = {
-  render: withSeeded([]),
+  render: withSeeded([], []),
 }

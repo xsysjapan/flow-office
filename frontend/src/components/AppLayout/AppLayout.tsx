@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { to: '/attendance/months', label: '勤怠月次' },
   { to: '/attendance/months/to-approve', label: '勤怠月次承認' },
   { to: '/paid-leave', label: '有給' },
+  { to: '/paid-leave/to-approve', label: '有給申請承認' },
   {
     to: '/backoffice-tasks',
     label: 'バックオフィス',

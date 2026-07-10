@@ -1,0 +1,57 @@
+.paid-leave-to-approve-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.paid-leave-to-approve-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.paid-leave-to-approve-list li:last-child {
+  border-bottom: none;
+}
+
+.paid-leave-to-approve-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paid-leave-to-approve-list__date {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.paid-leave-to-approve-list__user,
+.paid-leave-to-approve-list__type {
+  margin-left: 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.paid-leave-to-approve-list__reason {
+  color: var(--text);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.paid-leave-to-approve-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.paid-leave-to-approve-list__with-comment {
+  display: flex;
+  gap: 8px;
+}
+
+.paid-leave-to-approve-list__with-comment input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

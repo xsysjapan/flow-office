@@ -116,9 +116,15 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('role:admin,hr_staff');
     });
 
-    // --- 有給残数管理の土台 (docs/09-usecases-paid-leave.md UC-P001/UC-P002) ---
+    // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants']);
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
+    Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests']);
+    Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove']);
+    Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest']);
+    Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest']);
+    Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest']);
+    Route::post('/paid-leave/requests/{paidLeaveRequest}/cancel', [PaidLeaveController::class, 'cancelRequest']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/paid-leave/grant-rules', [PaidLeaveController::class, 'storeRule']);
         Route::get('/paid-leave/grants/user/{userId}', [PaidLeaveController::class, 'grantsForUser']);

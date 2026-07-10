@@ -53,6 +53,9 @@
 - `paid_leave.rule_created`
 - `paid_leave.granted`
 - `paid_leave.requested`
+- `paid_leave.request_approved`
+- `paid_leave.request_returned`
+- `paid_leave.request_cancelled`
 - `paid_leave.used`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`

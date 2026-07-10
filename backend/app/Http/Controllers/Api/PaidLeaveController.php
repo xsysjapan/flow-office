@@ -3,19 +3,28 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
+use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
+use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
+use App\Http\Resources\PaidLeaveRequestResource;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
+use App\Models\PaidLeaveRequest;
+use App\Models\PaidLeaveRequestStatus;
+use App\Models\PaidLeaveType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 /**
- * 有給残数管理の土台 (docs/09-usecases-paid-leave.md UC-P001/UC-P002, docs/21-mvp-scope.md)。
- * 継続勤務期間・出勤率に基づく自動付与バッチは後続フェーズで実装する。
+ * 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, docs/21-mvp-scope.md)。
+ * 継続勤務期間・出勤率に基づく自動付与バッチ、消滅警告、年5日取得義務警告は後続フェーズで実装する。
  */
 class PaidLeaveController extends Controller
 {
@@ -94,5 +103,79 @@ class PaidLeaveController extends Controller
         ));
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * UC-P003: 有給を申請する。
+     */
+    public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'target_date' => ['required', 'date'],
+            'leave_type' => ['required', Rule::in(PaidLeaveType::values())],
+            'hours' => ['nullable', 'numeric', 'min:0.5'],
+            'approver_user_id' => ['required', 'integer', 'exists:users,id'],
+            'reason' => ['nullable', 'string'],
+        ]);
+
+        $paidLeaveRequest = $commandBus->dispatch(new RequestPaidLeave(
+            userId: $request->user()->id,
+            targetDate: $data['target_date'],
+            leaveType: $data['leave_type'],
+            hours: isset($data['hours']) ? (float) $data['hours'] : null,
+            approverUserId: $data['approver_user_id'],
+            reason: $data['reason'] ?? null,
+        ));
+
+        return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
+    }
+
+    public function myRequests(Request $request): AnonymousResourceCollection
+    {
+        $requests = PaidLeaveRequest::query()
+            ->with('user', 'approver')
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('target_date')
+            ->get();
+
+        return PaidLeaveRequestResource::collection($requests);
+    }
+
+    public function requestsToApprove(Request $request): AnonymousResourceCollection
+    {
+        $requests = PaidLeaveRequest::query()
+            ->with('user', 'approver')
+            ->where('approver_user_id', $request->user()->id)
+            ->where('status', PaidLeaveRequestStatus::SUBMITTED)
+            ->orderBy('target_date')
+            ->get();
+
+        return PaidLeaveRequestResource::collection($requests);
+    }
+
+    /**
+     * UC-P004: 有給を承認する。
+     */
+    public function approveRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    {
+        $commandBus->dispatch(new ApprovePaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
+
+        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    public function returnRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    {
+        $data = $request->validate(['comment' => ['required', 'string']]);
+
+        $commandBus->dispatch(new ReturnPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id, $data['comment']));
+
+        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    public function cancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    {
+        $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
+
+        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
     }
 }

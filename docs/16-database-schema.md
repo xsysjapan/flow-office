@@ -266,17 +266,38 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - grant_reason
 - created_at / updated_at
 
+## paid_leave_requests (有給申請の正)
+
+- id
+- user_id
+- approver_user_id
+- status (`submitted` / `approved` / `returned` / `cancelled`)
+- leave_type (`full` / `am_half` / `pm_half` / `hourly`)
+- target_date
+- hours (leave_type=hourlyのときのみ使用)
+- requested_days (取得日数。full=1.0、half=0.5、hourly=hours÷所定労働時間から計算)
+- reason
+- submitted_at / approved_at / returned_at / cancelled_at
+- created_at / updated_at
+
+汎用申請(workflow_requests)・バックオフィス処理(backoffice_tasks)と同様、独立した
+ステータス系列で管理する (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。
+
 ## paid_leave_usages
 
 - id
 - user_id
 - attendance_day_id
 - paid_leave_grant_id
+- paid_leave_request_id
 - used_on
 - used_days
 - used_minutes
 - usage_type
 - created_at / updated_at
+
+1件の `paid_leave_requests` の承認が、有効期限が近い複数の `paid_leave_grants` にまたがって
+消化される場合、grantごとに1行作成される。
 
 ## attachments
 
@@ -296,6 +317,6 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |

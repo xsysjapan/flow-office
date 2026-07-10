@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { PaidLeaveGrant, PaidLeaveGrantRule } from './types'
+import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType } from './types'
 
 export function fetchMyPaidLeaveGrants(): Promise<PaidLeaveGrant[]> {
   return apiFetch('/paid-leave/grants/mine')
@@ -37,4 +37,36 @@ export interface GrantPaidLeaveInput {
 
 export function grantPaidLeave(input: GrantPaidLeaveInput): Promise<PaidLeaveGrant> {
   return apiFetch('/paid-leave/grants', { method: 'POST', body: input })
+}
+
+export function fetchMyPaidLeaveRequests(): Promise<PaidLeaveRequest[]> {
+  return apiFetch('/paid-leave/requests/mine')
+}
+
+export function fetchPaidLeaveRequestsToApprove(): Promise<PaidLeaveRequest[]> {
+  return apiFetch('/paid-leave/requests/to-approve')
+}
+
+export interface CreatePaidLeaveRequestInput {
+  target_date: string
+  leave_type: PaidLeaveType
+  hours?: number
+  approver_user_id: number
+  reason?: string
+}
+
+export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Promise<PaidLeaveRequest> {
+  return apiFetch('/paid-leave/requests', { method: 'POST', body: input })
+}
+
+export function approvePaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+  return apiFetch(`/paid-leave/requests/${id}/approve`, { method: 'POST' })
+}
+
+export function returnPaidLeaveRequest(id: number, comment: string): Promise<PaidLeaveRequest> {
+  return apiFetch(`/paid-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
+}
+
+export function cancelPaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+  return apiFetch(`/paid-leave/requests/${id}/cancel`, { method: 'POST' })
 }

@@ -27,8 +27,16 @@ use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
+use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
+use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
+use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
+use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
+use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\GrantPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
@@ -82,6 +90,10 @@ return [
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,
+        RequestPaidLeave::class => RequestPaidLeaveHandler::class,
+        ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
+        ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
+        CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
     ],
 
     /*

@@ -35,6 +35,19 @@
 6. 勤務予定日であることを確認する
 7. 申請する
 
+関連イベント: `paid_leave.requested`
+関連テーブル: `paid_leave_requests`
+
+申請単位ごとの取得日数は以下のように決まる。
+
+- 全休: 1.0日
+- 午前半休・午後半休: 0.5日
+- 時間休: 取得時間 ÷ 対象日の所定労働時間(`employee_shift_assignments.work_style.prescribed_daily_minutes`)
+
+手順5(有給残数を確認する)・手順6(勤務予定日であることを確認する)は申請時にAPIで検証し、
+不足・対象外の場合は申請自体を拒否する(422)。同一社員・同一対象日への重複申請
+(提出中・承認済みが既にある場合)も拒否する。
+
 ## UC-P004: 有給を承認する
 
 1. 承認者が有給申請を確認する
@@ -42,6 +55,25 @@
 3. 対象日の勤怠に有給区分を反映する
 4. 有効期限が近い付与分から消化する
 5. `paid_leave.used` イベントを記録する
+
+関連イベント: `paid_leave.request_approved`, `paid_leave.used`
+関連テーブル: `paid_leave_requests`, `paid_leave_grants`, `paid_leave_usages`, `attendance_days`
+
+手順3(対象日の勤怠に有給区分を反映する)は `attendance_days.work_type` に
+`paid_leave_full` / `paid_leave_am_half` / `paid_leave_pm_half` / `paid_leave_hourly`
+のいずれかを設定する。全休の場合は出退勤操作が発生しないため、締め忘れ(打刻漏れ)として
+警告されないよう `attendance_days.status` を `clocked_out` 扱いにする。
+
+手順4(有効期限が近い付与分から消化する)は、承認時点で有効期限が近い `paid_leave_grants`
+から順に取得日数を消し込む。1件の承認が最も近い失効grantの残数だけでは足りない場合、
+複数のgrantにまたがって消化し、grantごとに1件の `paid_leave_usages` レコードと
+`paid_leave.used` イベントを記録する。承認済みの日次勤怠が既に締め(ロック)済みの場合は
+承認できない(修正申請ワークフローを使う)。
+
+承認・差戻し・取消は、汎用申請(workflow_requests)やバックオフィス処理と同様、独立した
+ステータス系列(`paid_leave_requests.status`: submitted → approved / returned / cancelled)
+で管理する(承認とバックオフィス処理を分ける方針と同じ考え方)。差戻しは承認者のみ、
+取消は申請者自身の提出中(未承認)の申請のみ行える。
 
 ## UC-P005: 有給消滅警告を出す
 
@@ -66,6 +98,16 @@
   継続勤務期間ごとの付与日数・出勤率条件をハードコードしない。
 - 消化は有効期限が近い付与分(先に失効するグラント)から優先的に消し込む
   (`paid_leave_usages` が `paid_leave_grant_id` を参照して紐づける)。
-- UC-P002・UC-P005・UC-P006 はバッチ(cron)実行が前提。Phase 5 で実装するが、
-  MVP (Phase 0-2相当) では有給残数管理の土台のみを用意する
+- UC-P002(自動付与)・UC-P005(消滅警告)・UC-P006(年5日警告)はバッチ(cron)実行が
+  前提であり、後続フェーズで実装する。MVPおよびその後の追加実装では、UC-P001(付与ルール
+  マスタ)・付与の手動実行・UC-P003(有給申請)・UC-P004(有給承認・消化)までを用意する
   ([21-mvp-scope.md](./21-mvp-scope.md) 参照)。
+- UC-P003/UC-P004は汎用申請(workflow_requests)とは別の独立したCommand/Event
+  (`paid_leave_requests` を正データとする専用アグリゲート)として実装する。承認時に
+  `attendance_days` / `paid_leave_grants` / `paid_leave_usages` へ副作用を及ぼす必要があり、
+  汎用申請の承認(バックオフィスタスク自動生成のみ)とは異なる業務ルールを持つため。
+- 既知の制約: `attendance_daily_calculations`(日次集計)は現時点で `work_type` を区別せず
+  `actual_start_at`/`actual_end_at` のみから計算する。全休日は実働時間が0分として集計される
+  (欠勤ではなく有給消化であることは `attendance_days.work_type` で判別できるが、給与計算上の
+  「有給分の賃金換算」は本実装のスコープ外。給与計算ソフト側で `work_type` を見て加算する、
+  または後続フェーズで日次集計に有給分を組み込む対応が必要)。

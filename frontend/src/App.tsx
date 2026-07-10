@@ -12,6 +12,7 @@ import { ApprovalsPage } from './pages/ApprovalsPage'
 import { AttendanceMonthsPage } from './pages/AttendanceMonthsPage'
 import { MonthsToApprovePage } from './pages/MonthsToApprovePage'
 import { MyPaidLeavePage } from './pages/MyPaidLeavePage'
+import { PaidLeaveRequestsToApprovePage } from './pages/PaidLeaveRequestsToApprovePage'
 import { BackOfficeTaskListPage } from './pages/BackOfficeTaskListPage'
 import { BackOfficeTaskDetailPage } from './pages/BackOfficeTaskDetailPage'
 import { UserListPage } from './pages/UserListPage'
@@ -48,6 +49,7 @@ function App() {
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
+        <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
         <Route path="admin/users" element={<UserListPage />} />

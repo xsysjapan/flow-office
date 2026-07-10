@@ -155,6 +155,27 @@ export interface PaidLeaveGrantRuleStep {
   grant_days: number
 }
 
+export type PaidLeaveType = 'full' | 'am_half' | 'pm_half' | 'hourly'
+
+export type PaidLeaveRequestStatus = 'submitted' | 'approved' | 'returned' | 'cancelled'
+
+export interface PaidLeaveRequest {
+  id: number
+  user_id: number
+  user?: User
+  approver?: User
+  status: PaidLeaveRequestStatus
+  leave_type: PaidLeaveType
+  target_date: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
 export interface PaidLeaveGrantRule {
   id: number
   name: string
