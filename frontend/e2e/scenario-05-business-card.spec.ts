@@ -32,7 +32,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
       .click()
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('heading', { name: title })).toBeVisible()
-    await expect(applicantPage.getByText('提出済み')).toBeVisible()
+    await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
 
     // 2. 渡辺直樹が承認する。承認により総務向けバックオフィスタスクが自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
@@ -41,7 +41,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('link', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
-    await expect(approverPage.getByText('承認済み')).toBeVisible()
+    await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 中村恵(総務担当者)が未担当タスクを自分に割り当て、氏名・部署等を確認したうえで
     //    processing(発注データ作成) → ordered(発注済み) → shipped(発送済み) →
@@ -76,12 +76,12 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
       await generalAffairsPage.getByLabel('状態').selectOption(step.value)
       await generalAffairsPage.getByRole('button', { name: '更新する' }).click()
       // 前段の更新が反映されてから次のステータス変更に進む(連打による競合を避ける)。
-      await expect(generalAffairsPage.locator('.fo-badge', { hasText: step.label })).toBeVisible()
+      await expect(generalAffairsPage.getByRole('status', { name: step.label })).toBeVisible()
     }
 
     // 4. 伊藤舞が自分の申請一覧で完了になっていることを確認する。
     await applicantPage.reload()
-    await expect(applicantPage.getByText('承認済み')).toBeVisible()
+    await expect(applicantPage.getByRole('status', { name: '承認済み' })).toBeVisible()
   } finally {
     await applicantContext.close()
     await approverContext.close()

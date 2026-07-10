@@ -8,6 +8,11 @@ describe('Badge', () => {
     expect(screen.getByText('承認済み')).toBeInTheDocument()
   })
 
+  it('exposes a status role so e2e/a11y tools can query it by role', () => {
+    render(<Badge tone="success">承認済み</Badge>)
+    expect(screen.getByRole('status', { name: '承認済み' })).toBeInTheDocument()
+  })
+
   it('applies the tone class', () => {
     render(<Badge tone="danger">取消</Badge>)
     expect(screen.getByText('取消')).toHaveClass('fo-badge--danger')
