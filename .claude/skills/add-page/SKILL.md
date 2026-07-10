@@ -51,6 +51,17 @@ flow-office のページは `frontend/src/pages/` に置き、`frontend/src/comp
    Vitestの単体テストだけでは検知できず壊れたまま気づかないことがある
    (例: `AppLayout`の管理系リンクを`/admin`配下に集約した際、
    `e2e/scenario-99-additional.spec.ts`が個別リンク名を直接参照していて修正が必要になった)。
+   **`npx tsc --noEmit -p e2e/tsconfig.json`は型の整合性しか見ないため、実際に
+   `npm run test:e2e`(要 backend + mock-oidc + frontend 起動、下記参照)を1回は
+   通してから完了とする。** ナビにグループ見出しやカードのラベルを追加すると、
+   ページ本文の既存テキストと同じ文字列がもう1か所増えることがあり、
+   `getByText`/`getByRole('link', ...)`のstrict modeがそこで初めて壊れる
+   (Vitestの単体テストはコンポーネント単位でナビと本文を同時に描画しないため検知できない)。
+   実際に本redesignで`getByText('承認', { exact: true })`がAppLayoutの
+   ナビグループ見出し「承認」と衝突し、`getByRole('link', { name: '有給ルール' })`が
+   AdminLayoutのサイドバーとAdminDashboardPageのカードの2箇所にヒットして
+   e2eが壊れた。対処は`page.locator('main')`や`page.locator('aside')`で
+   スコープを絞ること。
 
 5. **Storyを書く**: ページがhookでデータ取得する場合、`QueryClient`を作って
    `queryClient.setQueryData(queryKey, データ)`で該当queryKeyに値を仕込んでから
