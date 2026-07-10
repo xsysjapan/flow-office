@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout/AppLayout'
+import { AdminLayout } from './components/AdminLayout/AdminLayout'
 import { RequireAuth } from './auth/RequireAuth'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { LoginPage } from './pages/LoginPage'
@@ -26,6 +27,7 @@ import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AttendanceExportPage } from './pages/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
 
 function App() {
   return (
@@ -52,17 +54,20 @@ function App() {
         <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
-        <Route path="admin/users" element={<UserListPage />} />
-        <Route path="admin/users/:id" element={<UserRoleEditPage />} />
-        <Route path="admin/request-types" element={<RequestTypeListPage />} />
-        <Route path="admin/request-types/:id" element={<RequestTypeEditPage />} />
-        <Route path="admin/work-calendars" element={<WorkCalendarListPage />} />
-        <Route path="admin/work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
-        <Route path="admin/work-styles" element={<WorkStylesAndShiftsPage />} />
-        <Route path="admin/paid-leave" element={<PaidLeaveAdminPage />} />
-        <Route path="admin/audit-log" element={<AuditLogPage />} />
-        <Route path="admin/attendance-export" element={<AttendanceExportPage />} />
-        <Route path="admin/system-settings" element={<SystemSettingsPage />} />
+        <Route path="admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboardPage />} />
+          <Route path="users" element={<UserListPage />} />
+          <Route path="users/:id" element={<UserRoleEditPage />} />
+          <Route path="request-types" element={<RequestTypeListPage />} />
+          <Route path="request-types/:id" element={<RequestTypeEditPage />} />
+          <Route path="work-calendars" element={<WorkCalendarListPage />} />
+          <Route path="work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
+          <Route path="work-styles" element={<WorkStylesAndShiftsPage />} />
+          <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
+          <Route path="audit-log" element={<AuditLogPage />} />
+          <Route path="attendance-export" element={<AttendanceExportPage />} />
+          <Route path="system-settings" element={<SystemSettingsPage />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
