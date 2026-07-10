@@ -60,8 +60,12 @@ flow-office のページは `frontend/src/pages/` に置き、`frontend/src/comp
    実際に本redesignで`getByText('承認', { exact: true })`がAppLayoutの
    ナビグループ見出し「承認」と衝突し、`getByRole('link', { name: '有給ルール' })`が
    AdminLayoutのサイドバーとAdminDashboardPageのカードの2箇所にヒットして
-   e2eが壊れた。対処は`page.locator('main')`や`page.locator('aside')`で
-   スコープを絞ること。
+   e2eが壊れた。対処はスコープを絞ることだが、絞り込みにも`page.locator('main')`
+   のようなCSSタグセレクタではなく、`page.getByRole('main')`
+   (`<main>`)/`page.getByRole('complementary')`(`<aside>`)のように
+   ネイティブのランドマークroleを使う(可能な限り`getByRole`を優先し、
+   `locator('main')`/`locator('.fo-badge')`のようなCSS/クラスセレクタは
+   role/labelでは表現できない場合の最終手段にとどめる)。
 
 5. **Storyを書く**: ページがhookでデータ取得する場合、`QueryClient`を作って
    `queryClient.setQueryData(queryKey, データ)`で該当queryKeyに値を仕込んでから
