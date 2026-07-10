@@ -34,7 +34,7 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
       .click()
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('heading', { name: title })).toBeVisible()
-    await expect(applicantPage.getByText('提出済み')).toBeVisible()
+    await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
 
     // 2. 渡辺直樹が承認する。承認によりバックオフィスタスク(経理向け)が自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
@@ -43,7 +43,7 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('link', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
-    await expect(approverPage.getByText('承認済み')).toBeVisible()
+    await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 小林誠(経理担当者)が未担当タスクを自分に割り当て、
     //    processing → payment_scheduled → completed の順にステータス変更する。
@@ -69,7 +69,7 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
       await accountingPage.getByLabel('状態').selectOption(step.value)
       await accountingPage.getByRole('button', { name: '更新する' }).click()
       // 前段の更新が反映されてから次のステータス変更に進む(連打による競合を避ける)。
-      await expect(accountingPage.locator('.fo-badge', { hasText: step.label })).toBeVisible()
+      await expect(accountingPage.getByRole('status', { name: step.label })).toBeVisible()
     }
 
     // 4. 経費CSV(UC-E001)に今回の金額が含まれることを確認する
@@ -88,9 +88,11 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
 
     // 5. 高橋健太が申請の履歴でステータス変遷を確認する(申請詳細画面を開いたままなのでreloadのみ)。
     await applicantPage.reload()
-    await expect(applicantPage.getByText('承認済み')).toBeVisible()
-    await expect(applicantPage.getByText('提出')).toBeVisible()
-    await expect(applicantPage.getByText('承認', { exact: true })).toBeVisible()
+    const applicantMain = applicantPage.getByRole('main')
+    await expect(applicantMain.getByRole('status', { name: '承認済み' })).toBeVisible()
+    const historyList = applicantMain.getByRole('list', { name: '履歴' })
+    await expect(historyList.getByRole('listitem').filter({ hasText: '提出' })).toBeVisible()
+    await expect(historyList.getByRole('listitem').filter({ hasText: '承認' })).toBeVisible()
   } finally {
     await applicantContext.close()
     await approverContext.close()

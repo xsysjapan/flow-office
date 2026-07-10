@@ -149,4 +149,40 @@ class AttendanceFlowTest extends TestCase
         ]);
         $editAfterClose->assertStatus(422);
     }
+
+    /**
+     * UC-A011: 締め処理は承認者本人だけでなく管理部(admin・hr_staff)全体の作業のため、
+     * 「承認待ち」一覧には自分が承認者の提出済み月次に加え、承認者を問わず全社員の
+     * 承認済み(締め処理待ち)月次もadmin・hr_staffになら表示される必要がある。
+     */
+    public function test_months_to_approve_lists_own_submitted_and_all_approved_months_for_admin(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $today = Carbon::today($employee->timezone);
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in');
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out');
+
+        $yearMonth = $today->format('Y-m');
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ]);
+        $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
+
+        // 提出直後: 承認者には見えるが、承認者ではないadminにはまだ見えない。
+        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(1);
+        $this->actingAs($admin)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0);
+
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
+
+        // 承認後: 承認者(admin・hr_staffではない)の一覧からは消えるが、adminには
+        // 自分が承認者かどうかに関わらず締め処理待ちとして表示される。
+        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0);
+        $this->actingAs($admin)->getJson('/api/attendance/months/to-approve')
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.status', 'approved');
+    }
 }

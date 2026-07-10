@@ -7,53 +7,77 @@ import './AppLayout.css'
 interface NavItem {
   to: string
   label: string
-  /** 未指定なら全ユーザーに表示。指定時はいずれかのロールを持つユーザーにのみ表示する。 */
+}
+
+interface NavGroup {
+  label: string
+  items: NavItem[]
+  /** 未指定なら全ユーザーに表示。指定時はいずれかのロールを持つユーザーにのみグループごと表示する。 */
   roles?: RoleCode[]
 }
 
-const navItems: NavItem[] = [
-  { to: '/', label: '今日の勤怠' },
-  { to: '/attendance/week', label: '週次勤怠' },
-  { to: '/requests', label: '自分の申請' },
-  { to: '/requests/new', label: '新規申請' },
-  { to: '/approvals', label: '承認待ち' },
-  { to: '/attendance/months', label: '勤怠月次' },
-  { to: '/attendance/months/to-approve', label: '勤怠月次承認' },
-  { to: '/paid-leave', label: '有給' },
-  { to: '/paid-leave/to-approve', label: '有給申請承認' },
+const navGroups: NavGroup[] = [
   {
-    to: '/backoffice-tasks',
+    label: '勤怠',
+    items: [
+      { to: '/', label: '今日の勤怠' },
+      { to: '/attendance/week', label: '週次勤怠' },
+      { to: '/attendance/months', label: '勤怠月次' },
+      { to: '/paid-leave', label: '有給' },
+    ],
+  },
+  {
+    label: '申請',
+    items: [
+      { to: '/requests', label: '自分の申請' },
+      { to: '/requests/new', label: '新規申請' },
+    ],
+  },
+  {
+    label: '承認',
+    items: [
+      { to: '/approvals', label: '承認待ち' },
+      { to: '/attendance/months/to-approve', label: '勤怠月次承認' },
+      { to: '/paid-leave/to-approve', label: '有給申請承認' },
+    ],
+  },
+  {
     label: 'バックオフィス',
     roles: [ROLE.BACKOFFICE_STAFF, ROLE.ACCOUNTING_STAFF, ROLE.GENERAL_AFFAIRS_STAFF, ROLE.ADMIN],
+    items: [{ to: '/backoffice-tasks', label: 'タスク一覧' }],
   },
-  { to: '/admin/users', label: 'ユーザー・権限', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
-  { to: '/admin/request-types', label: '申請種別', roles: [ROLE.ADMIN] },
-  { to: '/admin/work-calendars', label: 'カレンダー', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
-  { to: '/admin/work-styles', label: '勤務形態・シフト', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
-  { to: '/admin/paid-leave', label: '有給ルール', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
-  { to: '/admin/attendance-export', label: '勤怠CSV出力', roles: [ROLE.ADMIN, ROLE.HR_STAFF] },
-  { to: '/admin/audit-log', label: '監査ログ', roles: [ROLE.ADMIN] },
-  { to: '/admin/system-settings', label: 'システム設定', roles: [ROLE.ADMIN] },
+  {
+    label: '管理',
+    roles: [ROLE.ADMIN, ROLE.HR_STAFF],
+    items: [{ to: '/admin', label: '管理メニュー' }],
+  },
 ]
 
 export function AppLayout() {
   const { user, logout } = useAuth()
-  const visibleNavItems = navItems.filter((item) => !item.roles || hasAnyRole(user?.roles, item.roles))
+  const visibleGroups = navGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
 
   return (
     <div className="fo-app-layout">
       <header className="fo-app-layout__header">
         <span className="fo-app-layout__brand">flow-office</span>
         <nav className="fo-app-layout__nav">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) => (isActive ? 'is-active' : undefined)}
-            >
-              {item.label}
-            </NavLink>
+          {visibleGroups.map((group) => (
+            <div className="fo-app-layout__nav-group" key={group.label}>
+              <span className="fo-app-layout__nav-group-label">{group.label}</span>
+              <div className="fo-app-layout__nav-group-links">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) => (isActive ? 'is-active' : undefined)}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="fo-app-layout__user">

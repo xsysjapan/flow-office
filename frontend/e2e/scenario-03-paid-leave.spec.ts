@@ -64,7 +64,7 @@ async function submitPaidLeaveRequest(
       await page.getByRole('button', { name: '申請する' }).click({ timeout: 5000 })
 
       const duplicateError = page.getByText('この日は既に有給を申請済みです。')
-      const submittedRow = page.locator('li', { hasText: targetDate }).getByText('申請中')
+      const submittedRow = page.locator('li', { hasText: targetDate }).getByRole('status', { name: '申請中' })
 
       const result = await Promise.race([
         duplicateError
@@ -130,7 +130,7 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
     }
     const weekRow = applicantPage.locator('li.week-attendance__day', { hasText: targetDate })
     await expect(weekRow).toBeVisible()
-    await expect(weekRow.getByText('打刻漏れ')).toHaveCount(0)
+    await expect(weekRow.getByRole('status', { name: '打刻漏れ' })).toHaveCount(0)
 
     // 有給残数が減っていることを確認する。
     await applicantPage.goto('/paid-leave')
@@ -172,7 +172,9 @@ test('半休を申請〜承認し、勤怠日に反映される', async ({ brows
     await expect(approvalRow).toHaveCount(0)
 
     await applicantPage.reload()
-    await expect(applicantPage.locator('li', { hasText: targetDate }).getByText('承認済み')).toBeVisible()
+    await expect(
+      applicantPage.locator('li', { hasText: targetDate }).getByRole('status', { name: '承認済み' }),
+    ).toBeVisible()
   } finally {
     await applicantContext.close()
     await approverContext.close()

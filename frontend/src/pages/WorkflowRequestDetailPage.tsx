@@ -89,7 +89,7 @@ export function WorkflowRequestDetailPage() {
       {isLoadingAttachments ? (
         <LoadingState />
       ) : (
-        <ul className="workflow-request-detail__attachments">
+        <ul className="workflow-request-detail__attachments" aria-label="添付ファイル">
           {(attachments ?? []).length === 0 && <li>添付ファイルはありません。</li>}
           {attachments?.map((attachment) => (
             <li key={attachment.id}>
@@ -125,7 +125,7 @@ export function WorkflowRequestDetailPage() {
       {isLoadingHistory ? (
         <LoadingState />
       ) : (
-        <ul className="workflow-request-detail__history">
+        <ul className="workflow-request-detail__history" aria-label="履歴">
           {history?.map((event) => (
             <li key={event.id}>
               <span className="workflow-request-detail__history-time">{formatDateTime(event.occurred_at)}</span>

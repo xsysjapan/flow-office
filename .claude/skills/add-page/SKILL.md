@@ -1,6 +1,6 @@
 ---
 name: add-page
-description: Use when adding a new routed screen to the flow-office frontend (e.g. a new page under frontend/src/pages/). Guides composing existing components/hooks into a page, registering the route in App.tsx, adding a nav entry in AppLayout, and writing the story + test, following the pattern in TodayAttendancePage and WorkflowRequestDetailPage.
+description: Use when adding a new routed screen to the flow-office frontend (e.g. a new page under frontend/src/pages/). Guides composing existing components/hooks into a page, registering the route in App.tsx, adding a nav entry in AppLayout or AdminLayout, updating affected e2e specs, and writing the story + test, following the pattern in TodayAttendancePage and WorkflowRequestDetailPage.
 ---
 
 # 新しいページ(画面)を追加する
@@ -34,9 +34,38 @@ flow-office のページは `frontend/src/pages/` に置き、`frontend/src/comp
    - 一覧→詳細の画面がある場合、詳細は `:id` パラメータのルートにする
      (`react-router-dom`の`useParams`で読む)。
 
-4. **ナビゲーションが必要なら`frontend/src/components/AppLayout/AppLayout.tsx`の
-   `navItems`に追加する**。承認者専用など全員に見せたくないリンクは、`useAuth()`の
-   `user.roles`を見て条件表示する。
+4. **ナビゲーションが必要なら追加する**:
+   - 一般ユーザー向け画面は`frontend/src/components/AppLayout/AppLayout.tsx`の
+     `navGroups`に、既存のカテゴリ(勤怠/申請/承認/バックオフィス等)の中に項目を追加する
+     (新しいカテゴリを増やすとナビが再び雑然とするので、まず既存カテゴリに収まらないか
+     検討する)。
+   - マスタメンテ等の管理画面は`frontend/src/components/AdminLayout/adminNavGroups.ts`に
+     追加する(トップナビには出さない。管理系はすべて`/admin`配下の
+     `AdminLayout`のサイドバーと`AdminDashboardPage`のカード一覧に集約する)。
+   - 承認者専用/管理者専用など全員に見せたくないリンクやグループは、`useAuth()`の
+     `user.roles`を見て条件表示する(`roles`プロパティ)。
+
+   **ナビゲーションのラベルや構造を変更したら、`frontend/e2e/`配下を
+   `grep -rn "リンクのラベル文字列"`で必ず検索し、影響するe2eテスト
+   (`page.getByRole('link', { name: '...' })`など)を修正する。** ナビ変更はビルドや
+   Vitestの単体テストだけでは検知できず壊れたまま気づかないことがある
+   (例: `AppLayout`の管理系リンクを`/admin`配下に集約した際、
+   `e2e/scenario-99-additional.spec.ts`が個別リンク名を直接参照していて修正が必要になった)。
+   **`npx tsc --noEmit -p e2e/tsconfig.json`は型の整合性しか見ないため、実際に
+   `npm run test:e2e`(要 backend + mock-oidc + frontend 起動、下記参照)を1回は
+   通してから完了とする。** ナビにグループ見出しやカードのラベルを追加すると、
+   ページ本文の既存テキストと同じ文字列がもう1か所増えることがあり、
+   `getByText`/`getByRole('link', ...)`のstrict modeがそこで初めて壊れる
+   (Vitestの単体テストはコンポーネント単位でナビと本文を同時に描画しないため検知できない)。
+   実際に本redesignで`getByText('承認', { exact: true })`がAppLayoutの
+   ナビグループ見出し「承認」と衝突し、`getByRole('link', { name: '有給ルール' })`が
+   AdminLayoutのサイドバーとAdminDashboardPageのカードの2箇所にヒットして
+   e2eが壊れた。対処はスコープを絞ることだが、絞り込みにも`page.locator('main')`
+   のようなCSSタグセレクタではなく、`page.getByRole('main')`
+   (`<main>`)/`page.getByRole('complementary')`(`<aside>`)のように
+   ネイティブのランドマークroleを使う(可能な限り`getByRole`を優先し、
+   `locator('main')`/`locator('.fo-badge')`のようなCSS/クラスセレクタは
+   role/labelでは表現できない場合の最終手段にとどめる)。
 
 5. **Storyを書く**: ページがhookでデータ取得する場合、`QueryClient`を作って
    `queryClient.setQueryData(queryKey, データ)`で該当queryKeyに値を仕込んでから
@@ -56,7 +85,10 @@ flow-office のページは `frontend/src/pages/` に置き、`frontend/src/comp
 - [ ] ページは`apiFetch`を直接呼ばず、hooksだけを使っている
 - [ ] ローディング/エラー表示が`LoadingState`/`ErrorMessage`で統一されている
 - [ ] `App.tsx`にルートを追加し、認証が必要なら`RequireAuth`配下に置いた
-- [ ] 必要なら`AppLayout`のナビゲーションに追加した
+- [ ] 必要なら`AppLayout`の`navGroups`または`AdminLayout`の`adminNavGroups`に追加した
+- [ ] ナビのラベル/構造を変えた場合、`frontend/e2e/`を該当ラベルでgrepし、
+      影響するe2eスペックを修正した(`npx tsc --noEmit -p e2e/tsconfig.json`で
+      型エラーがないことも確認する)
 - [ ] `.stories.tsx`でReact Queryのキャッシュを事前に仕込み、実APIを叩かずに描画できる
 - [ ] `.test.tsx`でapi層をモックし、`npm run test`が通る
 - [ ] `npm run test:storybook` と `npm run build` が通る

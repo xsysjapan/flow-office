@@ -63,16 +63,14 @@ describe('AppLayout', () => {
   it('hides admin-only navigation links for a user without admin roles', () => {
     renderLayout(vi.fn(), { ...mockUser, roles: ['employee'] })
 
-    expect(screen.queryByRole('link', { name: 'ユーザー・権限' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '監査ログ' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'バックオフィス' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'タスク一覧' })).not.toBeInTheDocument()
   })
 
-  it('shows admin-only navigation links for an admin user', () => {
+  it('shows a single admin menu entry point for an admin user', () => {
     renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
 
-    expect(screen.getByRole('link', { name: 'ユーザー・権限' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '申請種別' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '監査ログ' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
   })
 })

@@ -9,5 +9,13 @@ export interface BadgeProps {
 }
 
 export function Badge({ tone = 'neutral', children }: BadgeProps) {
-  return <span className={`fo-badge fo-badge--${tone}`}>{children}</span>
+  return (
+    <span
+      role="status"
+      aria-label={typeof children === 'string' ? children : undefined}
+      className={`fo-badge fo-badge--${tone}`}
+    >
+      {children}
+    </span>
+  )
 }
