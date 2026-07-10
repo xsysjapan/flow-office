@@ -1,8 +1,7 @@
 {
   "name": "flow-office php",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
@@ -11,7 +10,8 @@
   "workspaceFolder": "/workspaces/flow-office",
   "forwardPorts": [
     8000,
-    5173
+    5173,
+    9000
   ],
   "remoteUser": "vscode",
   "customizations": {
@@ -22,6 +22,6 @@
       ]
     }
   },
-  "postCreateCommand": "cd backend && composer install && if [ ! -f .env ]; then cp .env.example .env; fi && php artisan key:generate && if [ ! -f database/database.sqlite ]; then touch database/database.sqlite; fi && cd ../frontend && npm install",
-  "postStartCommand": "echo 'Use: cd backend && php artisan serve --host=0.0.0.0 --port=8000'"
+  "postCreateCommand": "cd backend && composer install && if [ ! -f .env ]; then cp .env.example .env && sed -i 's/^MICROSOFT_MOCK_ENABLED=.*/MICROSOFT_MOCK_ENABLED=true/' .env && sed -i 's#^MICROSOFT_MOCK_INTERNAL_BASE_URL=.*#MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000#' .env && sed -i 's/^MICROSOFT_CLIENT_ID=$/MICROSOFT_CLIENT_ID=mock-client-id/' .env && sed -i 's/^MICROSOFT_CLIENT_SECRET=$/MICROSOFT_CLIENT_SECRET=mock-client-secret/' .env && sed -i 's/^MICROSOFT_TENANT_ID=.*/MICROSOFT_TENANT_ID=mock/' .env; fi && php artisan key:generate && if [ ! -f database/database.sqlite ]; then touch database/database.sqlite; fi && cd ../frontend && npm install",
+  "postStartCommand": "echo 'Use: cd backend && php artisan serve --host=0.0.0.0 --port=8000 (別ターミナルで cd frontend && npm run dev -- --host 0.0.0.0)'; echo 'Mock Entra ID login: http://localhost:9000 (backend/.envのMICROSOFT_MOCK_ENABLED=trueで有効)'"
 }

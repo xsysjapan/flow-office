@@ -1,0 +1,10 @@
+{
+  "name": "flow-office-mock-oidc",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ローカル開発用のMicrosoft Entra ID (Azure AD) OIDCモックサーバー",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
