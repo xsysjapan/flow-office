@@ -20,6 +20,15 @@ const CODE_TTL_MS = 60 * 1000
 const TOKEN_TTL_MS = 5 * 60 * 1000
 
 const USERS = [
+  // DatabaseSeeder が作成する admin@example.com (Test Admin) をモックOIDCでも
+  // ログインできるようにするためのエントリ。ScenarioSeederがこのユーザーの
+  // entra_user_id を 'mock-entra-admin' に合わせて上書きする。
+  {
+    id: 'mock-entra-admin',
+    displayName: 'Test Admin',
+    userPrincipalName: 'admin@example.com',
+    mail: 'admin@example.com',
+  },
   {
     id: 'mock-entra-user-001',
     displayName: '山田 太郎',
@@ -37,6 +46,45 @@ const USERS = [
     displayName: '鈴木 一郎',
     userPrincipalName: 'ichiro.suzuki@example.com',
     mail: 'ichiro.suzuki@example.com',
+  },
+  // 以下はシナリオテスト用 (docs/testing/scenario-tests.md、backend/database/seeders/ScenarioSeeder.php)。
+  // ScenarioSeederが同じ mail 宛にユーザーを事前作成しロール・入社日を設定しているため、
+  // ここでログインすると初回ログインではなく既存ユーザーとして扱われる。
+  {
+    id: 'mock-entra-user-004',
+    displayName: '高橋 健太',
+    userPrincipalName: 'kenta.takahashi@example.com',
+    mail: 'kenta.takahashi@example.com',
+  },
+  {
+    id: 'mock-entra-user-005',
+    displayName: '伊藤 舞',
+    userPrincipalName: 'mai.ito@example.com',
+    mail: 'mai.ito@example.com',
+  },
+  {
+    id: 'mock-entra-user-006',
+    displayName: '渡辺 直樹',
+    userPrincipalName: 'naoki.watanabe@example.com',
+    mail: 'naoki.watanabe@example.com',
+  },
+  {
+    id: 'mock-entra-user-007',
+    displayName: '小林 誠',
+    userPrincipalName: 'makoto.kobayashi@example.com',
+    mail: 'makoto.kobayashi@example.com',
+  },
+  {
+    id: 'mock-entra-user-008',
+    displayName: '中村 恵',
+    userPrincipalName: 'megumi.nakamura@example.com',
+    mail: 'megumi.nakamura@example.com',
+  },
+  {
+    id: 'mock-entra-user-009',
+    displayName: '加藤 由美',
+    userPrincipalName: 'yumi.kato@example.com',
+    mail: 'yumi.kato@example.com',
   },
 ]
 

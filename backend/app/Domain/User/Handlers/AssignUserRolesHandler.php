@@ -18,7 +18,7 @@ class AssignUserRolesHandler implements CommandHandler
 {
     public function __construct(private readonly EventStore $eventStore) {}
 
-    public function handle(Command $command): mixed
+    public function handle(Command $command): User
     {
         assert($command instanceof AssignUserRoles);
 
@@ -42,5 +42,7 @@ class AssignUserRolesHandler implements CommandHandler
                 changedByUserId: $command->changedByUserId,
             ),
         );
+
+        return $user;
     }
 }
