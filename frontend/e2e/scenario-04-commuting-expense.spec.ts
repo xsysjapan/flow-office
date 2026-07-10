@@ -88,9 +88,10 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
 
     // 5. 高橋健太が申請の履歴でステータス変遷を確認する(申請詳細画面を開いたままなのでreloadのみ)。
     await applicantPage.reload()
-    await expect(applicantPage.getByText('承認済み')).toBeVisible()
-    await expect(applicantPage.getByText('提出')).toBeVisible()
-    await expect(applicantPage.getByText('承認', { exact: true })).toBeVisible()
+    const applicantMain = applicantPage.locator('main')
+    await expect(applicantMain.getByText('承認済み')).toBeVisible()
+    await expect(applicantMain.getByText('提出')).toBeVisible()
+    await expect(applicantMain.getByText('承認', { exact: true })).toBeVisible()
   } finally {
     await applicantContext.close()
     await approverContext.close()
