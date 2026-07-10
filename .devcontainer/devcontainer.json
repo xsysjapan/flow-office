@@ -2,11 +2,7 @@
   "name": "flow-office php",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "app",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "20"
-    }
-  },
+  "overrideCommand": false,
   "workspaceFolder": "/workspaces/flow-office",
   "forwardPorts": [
     8000,
@@ -22,6 +18,5 @@
       ]
     }
   },
-  "postCreateCommand": "cd backend && composer install && if [ ! -f .env ]; then cp .env.example .env && sed -i 's/^MICROSOFT_MOCK_ENABLED=.*/MICROSOFT_MOCK_ENABLED=true/' .env && sed -i 's#^MICROSOFT_MOCK_INTERNAL_BASE_URL=.*#MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000#' .env && sed -i 's/^MICROSOFT_CLIENT_ID=$/MICROSOFT_CLIENT_ID=mock-client-id/' .env && sed -i 's/^MICROSOFT_CLIENT_SECRET=$/MICROSOFT_CLIENT_SECRET=mock-client-secret/' .env && sed -i 's/^MICROSOFT_TENANT_ID=.*/MICROSOFT_TENANT_ID=mock/' .env; fi && php artisan key:generate && if [ ! -f database/database.sqlite ]; then touch database/database.sqlite; fi && cd ../frontend && npm install",
-  "postStartCommand": "echo 'Use: cd backend && php artisan serve --host=0.0.0.0 --port=8000 (別ターミナルで cd frontend && npm run dev -- --host 0.0.0.0)'; echo 'Mock Entra ID login: http://localhost:9000 (backend/.envのMICROSOFT_MOCK_ENABLED=trueで有効)'"
+  "postStartCommand": "echo 'backend(php artisan serve)とfrontend(npm run dev)はコンテナ起動時に自動起動済みです。'; echo 'http://localhost:8000 (backend) / http://localhost:5173 (frontend)'; echo 'Mock Entra ID login: http://localhost:9000 (backend/.envのMICROSOFT_MOCK_ENABLED=trueで有効)'"
 }

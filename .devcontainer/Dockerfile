@@ -9,3 +9,10 @@ RUN apt-get update \
     && docker-php-ext-install intl zip pdo_mysql pdo_sqlite \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js (frontend/Vite用)。VS Code devcontainer機能でも入るが、
+# `docker compose up` 単体で使う場合はここで入れておく必要がある。
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
