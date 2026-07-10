@@ -8,6 +8,7 @@ use App\Domain\Notification\Notifier;
 use App\Domain\Notification\TeamsWebhookNotifier;
 use App\Domain\User\Graph\HttpMicrosoftGraphClient;
 use App\Domain\User\Graph\MicrosoftGraphClient;
+use App\Domain\User\LocalAzureProvider;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -37,7 +38,17 @@ class AppServiceProvider extends ServiceProvider
         // ProjectStoredEvent / CreateBackOfficeTaskOnApproval は app/Listeners配下にあり、
         // handle()の型ヒットからLaravelのイベント自動検出で登録されるため、ここで
         // 明示登録すると二重登録になる。ここでは自動検出の対象外(vendor配下)のみ登録する。
-        Event::listen(SocialiteWasCalled::class, AzureExtendSocialite::class.'@handle');
+        //
+        // ローカル開発でモックOIDC(mock-oidc/)を使う場合は、実際のEntra IDドライバの代わりに
+        // LocalAzureProviderを "azure" ドライバとして登録する(docs/06-usecases-auth.md UC-001)。
+        if (config('services.azure.mock_enabled')) {
+            Event::listen(
+                SocialiteWasCalled::class,
+                fn (SocialiteWasCalled $event) => $event->extendSocialite('azure', LocalAzureProvider::class)
+            );
+        } else {
+            Event::listen(SocialiteWasCalled::class, AzureExtendSocialite::class.'@handle');
+        }
 
         // attachments.owner_type / backoffice_tasks.source_type にDBへ安定な短い別名を保存する。
         Relation::morphMap([

@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .devcontainer
+      dockerfile: Dockerfile
+    volumes:
+      - .:/workspaces/flow-office:cached
+    working_dir: /workspaces/flow-office
+    command: sleep infinity
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    environment:
+      MICROSOFT_MOCK_INTERNAL_BASE_URL: http://mock-oidc:9000
+    depends_on:
+      - mock-oidc
+
+  mock-oidc:
+    build:
+      context: ./mock-oidc
+    ports:
+      - "9000:9000"

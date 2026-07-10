@@ -41,6 +41,14 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
         'tenant' => env('MICROSOFT_TENANT_ID', 'common'),
+
+        // ローカル開発用モックOIDCサーバー (mock-oidc/)。true のときのみ本物のEntra IDの
+        // 代わりにLocalAzureProviderを使う。本番・検証環境では未設定(false)のままにする。
+        'mock_enabled' => env('MICROSOFT_MOCK_ENABLED', false),
+        // ブラウザからアクセスするURL (認可エンドポイントへのリダイレクト先)
+        'mock_public_base_url' => env('MICROSOFT_MOCK_PUBLIC_BASE_URL', 'http://localhost:9000'),
+        // backend(サーバー側)からアクセスするURL (token交換・ユーザー情報取得)
+        'mock_internal_base_url' => env('MICROSOFT_MOCK_INTERNAL_BASE_URL', 'http://localhost:9000'),
     ],
 
     // Microsoft Graph ユーザー同期 (docs/06-usecases-auth.md UC-002)
