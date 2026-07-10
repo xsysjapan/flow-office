@@ -18,6 +18,7 @@ use App\Http\Resources\AttendanceMonthResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
@@ -220,12 +221,23 @@ class AttendanceController extends Controller
         return AttendanceMonthResource::collection($months);
     }
 
+    /**
+     * UC-A010: 自分が承認者に指定された提出済み月次に加え、UC-A011: 管理部
+     * (admin・hr_staff)は承認者を問わず全社員の承認済み(締め処理待ち)月次も一覧できる。
+     */
     public function monthsToApprove(Request $request): AnonymousResourceCollection
     {
+        $user = $request->user();
+        $canClose = $user->hasRole(Role::ADMIN) || $user->hasRole(Role::HR_STAFF);
+
         $months = AttendanceMonth::query()
             ->with('approver', 'user')
-            ->where('approver_user_id', $request->user()->id)
-            ->where('status', 'submitted')
+            ->where(function ($query) use ($user, $canClose) {
+                $query->where('approver_user_id', $user->id)->where('status', 'submitted');
+                if ($canClose) {
+                    $query->orWhere('status', 'approved');
+                }
+            })
             ->orderByDesc('year_month')
             ->get();
 

@@ -3,6 +3,33 @@ import type { Page } from '@playwright/test'
 const API_BASE_URL = process.env.E2E_API_BASE_URL ?? 'http://localhost:8000/api'
 
 /**
+ * `page`にログイン済みのSanctumトークンでAPIを直接叩く共通ヘルパー。画面がまだ無い/
+ * 繰り返し実行のための前提データ調整用(このファイルの他関数と同じ用途)。
+ */
+async function apiFetch<T>(page: Page, path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  return page.evaluate(
+    async ({ apiBase, path, method, body }) => {
+      const token = localStorage.getItem('flow-office.token')
+      const response = await fetch(`${apiBase}${path}`, {
+        method: method ?? 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      })
+      const text = await response.text()
+      if (!response.ok) {
+        throw new Error(`E2E setup: ${method ?? 'GET'} ${path} failed (${response.status}): ${text}`)
+      }
+      return text ? JSON.parse(text) : null
+    },
+    { apiBase: API_BASE_URL, path, method: init?.method, body: init?.body },
+  )
+}
+
+/**
  * E2Eテストを何度も実行すると、有給消化シナリオなどでシード時点の付与日数
  * (ScenarioSeederが1回だけ付与する10日)を使い切ってしまう。テストの前提を
  * 満たすため、管理者としてログイン中の`page`を使って対象社員に有給を追加付与する。
@@ -66,4 +93,99 @@ export async function fetchExpensesCsv(page: Page, from: string, to: string): Pr
     },
     { apiBase: API_BASE_URL, from, to },
   )
+}
+
+export async function fetchOwnUserId(page: Page): Promise<number> {
+  const me = await apiFetch<{ id: number }>(page, '/auth/me')
+  return me.id
+}
+
+/**
+ * UC-A012: 打刻ログを記録する。専用の打刻端末/画面がまだ無いため、APIを直接叩く。
+ * 打刻ログは矛盾があっても常に記録される(1日分の勤務として組み立てられる場合のみ
+ * `attendance_days` に反映される)。
+ */
+export async function recordAttendancePunch(
+  page: Page,
+  input: { workDate: string; punchType: 'clock_in' | 'break_start' | 'break_end' | 'clock_out'; punchedAt: string },
+): Promise<void> {
+  await apiFetch(page, '/attendance-punches', {
+    method: 'POST',
+    body: {
+      work_date: input.workDate,
+      punch_type: input.punchType,
+      punched_at: input.punchedAt,
+      source: 'e2e_test_device',
+    },
+  })
+}
+
+export async function fetchAttendancePunches(page: Page, from: string, to: string): Promise<unknown[]> {
+  return apiFetch(page, `/attendance-punches?from=${from}&to=${to}`)
+}
+
+/**
+ * 当日の勤怠(`attendance_days`)が`clocked_out`になっていることを保証する。
+ * 打刻は同じ日に2回出勤できない設計のため(scenario-01参照)、既に出勤・退勤済みなら
+ * 何もしない冪等な実装にする。
+ */
+export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: number; workDate: string }> {
+  let today = await apiFetch<{ id: number; status: string; work_date: string }>(page, '/attendance/today')
+
+  if (today.status === 'not_started') {
+    await apiFetch(page, '/attendance/clock-in', { method: 'POST' })
+    today = await apiFetch(page, '/attendance/today')
+  }
+  if (today.status === 'working') {
+    await apiFetch(page, '/attendance/clock-out', { method: 'POST' })
+    today = await apiFetch(page, '/attendance/today')
+  }
+  if (today.status !== 'clocked_out') {
+    throw new Error(`E2E setup: unexpected attendance status ${today.status}`)
+  }
+
+  return { dayId: today.id, workDate: today.work_date }
+}
+
+/**
+ * UC-A008〜UC-A011: 当月の勤怠月次を提出〜承認〜締めまで進める。同一日に何度実行しても
+ * 冪等に動くよう、既に進んでいるステータスはスキップする(締めた月は二重に締められない
+ * ため)。呼び出し前に3つの`page`それぞれで対応するロールでログイン済みであること
+ * (社員/承認者/admin・hr_staff)。
+ */
+export async function submitApproveAndCloseCurrentMonth(
+  employeePage: Page,
+  approverPage: Page,
+  adminPage: Page,
+): Promise<{ yearMonth: string; monthId: number; dayId: number; workDate: string }> {
+  const { dayId, workDate } = await ensureTodayClockedOut(employeePage)
+  const yearMonth = workDate.slice(0, 7)
+  const approverId = await fetchOwnUserId(approverPage)
+
+  type MonthSummary = { id: number; year_month: string; status: string }
+  const findMonth = (months: MonthSummary[]) => months.find((m) => m.year_month === yearMonth)
+
+  let months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+  let month = findMonth(months)
+
+  if (!month || month.status === 'not_submitted' || month.status === 'returned') {
+    await apiFetch(employeePage, `/attendance/months/${yearMonth}/submit`, {
+      method: 'POST',
+      body: { approver_user_id: approverId },
+    })
+    months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+    month = findMonth(months)
+  }
+  if (!month) throw new Error(`E2E setup: month ${yearMonth} not found after submit`)
+
+  if (month.status === 'submitted') {
+    await apiFetch(approverPage, `/attendance-months/${month.id}/approve`, { method: 'POST' })
+    month = { ...month, status: 'approved' }
+  }
+
+  if (month.status === 'approved') {
+    await apiFetch(adminPage, `/attendance-months/${month.id}/close`, { method: 'POST' })
+  }
+
+  return { yearMonth, monthId: month.id, dayId, workDate }
 }
