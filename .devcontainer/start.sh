@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # docker-compose の app サービスから起動される開発用エントリポイント。
 # backend(Laravel)と frontend(Vite)の開発サーバーを起動し続ける。
 set -e

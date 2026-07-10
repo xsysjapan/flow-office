@@ -22,10 +22,15 @@ class DatabaseSeeder extends Seeder
             RequestTypeSeeder::class,
         ]);
 
-        $admin = User::factory()->create([
-            'name' => 'Test Admin',
-            'email' => 'admin@example.com',
-        ]);
-        $admin->roles()->attach(Role::query()->where('code', Role::ADMIN)->first());
+        $admin = User::query()->firstOrCreate(
+            ['email' => 'admin@example.com'],
+            User::factory()->make([
+                'name' => 'Test Admin',
+                'email' => 'admin@example.com',
+            ])->getAttributes(),
+        );
+
+        $adminRole = Role::query()->where('code', Role::ADMIN)->firstOrFail();
+        $admin->roles()->syncWithoutDetaching([$adminRole->id]);
     }
 }
