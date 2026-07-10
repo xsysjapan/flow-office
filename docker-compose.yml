@@ -6,7 +6,7 @@ services:
     volumes:
       - .:/workspaces/flow-office:cached
     working_dir: /workspaces/flow-office
-    command: sleep infinity
+    command: .devcontainer/start.sh
     ports:
       - "8000:8000"
       - "5173:5173"
