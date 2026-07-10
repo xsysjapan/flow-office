@@ -1,0 +1,36 @@
+.backoffice-task-detail__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.backoffice-task-detail__meta dt {
+  font-weight: 600;
+}
+
+.backoffice-task-detail__assign {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.backoffice-task-detail__status-change {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.backoffice-task-detail__status-change-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.backoffice-task-detail__status-change-row input,
+.backoffice-task-detail__status-change-row select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

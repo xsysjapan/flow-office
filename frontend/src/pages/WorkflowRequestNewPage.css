@@ -1,0 +1,5 @@
+.workflow-request-new__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}

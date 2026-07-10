@@ -1,0 +1,89 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { describe, expect, it, vi } from 'vitest'
+import * as backOfficeTasksApi from '../api/backOfficeTasks'
+import type { BackOfficeTask, Paginated } from '../api/types'
+import { BackOfficeTaskListPage } from './BackOfficeTaskListPage'
+
+function paginate<T>(data: T[]): Paginated<T> {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+}
+
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <BackOfficeTaskListPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+describe('BackOfficeTaskListPage', () => {
+  it('shows empty states when there are no tasks', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate([]))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage()
+
+    expect(await screen.findByText('未割り当てのタスクはありません。')).toBeInTheDocument()
+    expect(screen.getByText('担当中のタスクはありません。')).toBeInTheDocument()
+  })
+
+  it('lists unassigned tasks and my tasks with status and due date', async () => {
+    const unassigned: BackOfficeTask[] = [
+      {
+        id: 1,
+        source_type: 'workflow_request',
+        source_id: 10,
+        task_type: 'expense_reimbursement',
+        title: 'タクシー代の経理処理',
+        status: 'not_started',
+        assigned_department: '経理部',
+        due_on: '2026-07-15',
+        completed_at: null,
+        created_at: '2026-07-01T00:00:00+09:00',
+      },
+    ]
+    const mine: BackOfficeTask[] = [
+      {
+        id: 2,
+        source_type: 'workflow_request',
+        source_id: 11,
+        task_type: 'business_card_order',
+        title: '名刺発注',
+        status: 'processing',
+        assigned_department: '総務部',
+        assignee: {
+          id: 2,
+          name: '担当者花子',
+          email: 'hanako@example.com',
+          department: null,
+          job_title: null,
+          employment_status: 'active',
+          last_login_at: null,
+        },
+        due_on: '2026-07-20',
+        completed_at: null,
+        created_at: '2026-07-02T00:00:00+09:00',
+      },
+    ]
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate(unassigned))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate(mine))
+
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: 'タクシー代の経理処理' })).toHaveAttribute(
+      'href',
+      '/backoffice-tasks/1',
+    )
+    expect(screen.getByText('未着手')).toBeInTheDocument()
+    expect(screen.getByText('期限: 2026-07-15')).toBeInTheDocument()
+
+    expect(screen.getByRole('link', { name: '名刺発注' })).toHaveAttribute('href', '/backoffice-tasks/2')
+    expect(screen.getByText('処理中')).toBeInTheDocument()
+    expect(screen.getByText('担当者花子')).toBeInTheDocument()
+  })
+})

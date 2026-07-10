@@ -1,0 +1,33 @@
+.fo-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+  line-height: 1.6;
+}
+
+.fo-badge--neutral {
+  background: #eaeaea;
+  color: #333;
+}
+
+.fo-badge--info {
+  background: #ddeeff;
+  color: #0b4a91;
+}
+
+.fo-badge--success {
+  background: #ddf4e4;
+  color: #1a7f37;
+}
+
+.fo-badge--warning {
+  background: #fff3cd;
+  color: #7a5b00;
+}
+
+.fo-badge--danger {
+  background: #ffe0e0;
+  color: #a3181f;
+}
