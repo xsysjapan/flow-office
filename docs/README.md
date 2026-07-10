@@ -39,6 +39,9 @@ Teams通知に集中する。
 | 21 | [21-mvp-scope.md](./21-mvp-scope.md) | 最小MVP範囲 |
 | 22 | [22-glossary.md](./22-glossary.md) | 用語集 |
 
+設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
+[testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。
+
 ## 原則の要約
 
 - **EventStoreを正とする**: `stored_events` が真実の記録。Projection(画面表示用テーブル)は
