@@ -18,7 +18,7 @@ class AssignUserRolesHandler implements CommandHandler
 {
     public function __construct(private readonly EventStore $eventStore) {}
 
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof AssignUserRoles);
 
