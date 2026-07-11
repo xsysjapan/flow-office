@@ -25,6 +25,8 @@ const workStyle: WorkStyle = {
   default_break_minutes: 60,
   calendar_id: 1,
   is_shift_based: false,
+  legal_holiday_rule: 'weekly',
+  four_week_period_start_date: null,
 }
 
 const paginatedUsers: Paginated<User> = {

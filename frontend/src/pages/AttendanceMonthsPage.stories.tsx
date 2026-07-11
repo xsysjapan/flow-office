@@ -31,6 +31,7 @@ const months: AttendanceMonth[] = [
     returned_at: null,
     closed_at: '2026-06-05T00:00:00+09:00',
     snapshot: { actual_work_minutes: 9600 },
+    legal_holiday_warnings: [],
   },
   {
     id: 2,
@@ -43,6 +44,7 @@ const months: AttendanceMonth[] = [
     returned_at: '2026-07-02T00:00:00+09:00',
     closed_at: null,
     snapshot: null,
+    legal_holiday_warnings: [],
   },
   {
     id: 3,
@@ -54,6 +56,7 @@ const months: AttendanceMonth[] = [
     returned_at: null,
     closed_at: null,
     snapshot: null,
+    legal_holiday_warnings: [],
   },
 ]
 

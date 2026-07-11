@@ -11,6 +11,26 @@ import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useShiftAssignments, useGenerateShiftAssignments } from '../hooks/useEmployeeShiftAssignments'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
 import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
+import type { LegalHolidayRule, WorkStyle } from '../api/types'
+
+const WORK_TIME_SYSTEM_OPTIONS = [
+  { value: 'fixed', label: '固定時間制' },
+  { value: 'shortened', label: '時短勤務' },
+  { value: 'shift_based', label: 'シフト勤務' },
+  { value: 'discretionary', label: '裁量労働制' },
+]
+
+function workTimeSystemLabel(value: string): string {
+  return WORK_TIME_SYSTEM_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+/** UC-C005: シフト制の勤務形態にのみ適用される法定休日要件の説明。 */
+function legalHolidayRuleDescription(style: Pick<WorkStyle, 'legal_holiday_rule' | 'four_week_period_start_date'>): string {
+  if (style.legal_holiday_rule === 'four_weeks_four_days') {
+    return `法定休日: 4週4日以上(変形休日制、起算日 ${style.four_week_period_start_date ?? '未設定'})`
+  }
+  return '法定休日: 毎週1日'
+}
 
 function WorkStyleFormCard() {
   const { data: workStyles, isLoading, error } = useWorkStyles()
@@ -27,6 +47,8 @@ function WorkStyleFormCard() {
   const [defaultBreakMinutes, setDefaultBreakMinutes] = useState('')
   const [calendarId, setCalendarId] = useState('')
   const [isShiftBased, setIsShiftBased] = useState(false)
+  const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
+  const [fourWeekPeriodStartDate, setFourWeekPeriodStartDate] = useState('')
 
   const handleCreateWorkStyle = () => {
     createWorkStyle.mutate(
@@ -41,6 +63,9 @@ function WorkStyleFormCard() {
         default_break_minutes: defaultBreakMinutes ? Number(defaultBreakMinutes) : undefined,
         calendar_id: Number(calendarId),
         is_shift_based: isShiftBased,
+        legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
+        four_week_period_start_date:
+          isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
       },
       {
         onSuccess: () => {
@@ -54,6 +79,8 @@ function WorkStyleFormCard() {
           setDefaultBreakMinutes('')
           setCalendarId('')
           setIsShiftBased(false)
+          setLegalHolidayRule('weekly')
+          setFourWeekPeriodStartDate('')
         },
       },
     )
@@ -74,9 +101,12 @@ function WorkStyleFormCard() {
             <li key={style.id} className="flex flex-wrap gap-3 py-2 text-sm">
               <strong className="font-semibold text-foreground">{style.name}</strong>
               <span className="text-muted-foreground">{style.code}</span>
-              <span className="text-muted-foreground">{style.work_time_system}</span>
+              <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
               <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
               <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
+              {style.is_shift_based && (
+                <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
+              )}
             </li>
           ))}
         </ul>
@@ -94,7 +124,18 @@ function WorkStyleFormCard() {
         </FormField>
 
         <FormField label="労働時間制" htmlFor="work-style-time-system" required>
-          <Input id="work-style-time-system" value={workTimeSystem} onChange={(e) => setWorkTimeSystem(e.target.value)} />
+          <NativeSelect
+            id="work-style-time-system"
+            value={workTimeSystem}
+            onChange={(e) => setWorkTimeSystem(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {WORK_TIME_SYSTEM_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
         </FormField>
 
         <FormField label="所定労働時間(分/日)" htmlFor="work-style-daily-minutes" required>
@@ -159,10 +200,46 @@ function WorkStyleFormCard() {
         シフト制
       </label>
 
+      {isShiftBased && (
+        <div className="mb-4 grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+          <FormField label="法定休日の与え方" htmlFor="work-style-legal-holiday-rule">
+            <NativeSelect
+              id="work-style-legal-holiday-rule"
+              value={legalHolidayRule}
+              onChange={(e) => setLegalHolidayRule(e.target.value as LegalHolidayRule)}
+            >
+              <option value="weekly">毎週1日</option>
+              <option value="four_weeks_four_days">4週4日以上(変形休日制)</option>
+            </NativeSelect>
+            <p className="mt-1 text-xs text-muted-foreground">
+              月次まとめ承認時に、この要件を満たしているか警告表示される(UC-C005)。
+            </p>
+          </FormField>
+
+          {legalHolidayRule === 'four_weeks_four_days' && (
+            <FormField label="4週間の起算日" htmlFor="work-style-four-week-start" required>
+              <Input
+                id="work-style-four-week-start"
+                type="date"
+                value={fourWeekPeriodStartDate}
+                onChange={(e) => setFourWeekPeriodStartDate(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">就業規則で定めた4週間の起算日。</p>
+            </FormField>
+          )}
+        </div>
+      )}
+
       <Button
         isLoading={createWorkStyle.isPending}
         disabled={
-          !code || !name || !workTimeSystem || !prescribedDailyMinutes || !prescribedWeeklyMinutes || !calendarId
+          !code ||
+          !name ||
+          !workTimeSystem ||
+          !prescribedDailyMinutes ||
+          !prescribedWeeklyMinutes ||
+          !calendarId ||
+          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate)
         }
         onClick={handleCreateWorkStyle}
       >

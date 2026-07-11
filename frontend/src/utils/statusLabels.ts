@@ -3,6 +3,7 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
+  LegalHolidayWarning,
   PaidLeaveRequestStatus,
   PaidLeaveType,
   PunchStatus,
@@ -71,6 +72,12 @@ export function workflowRequestStatusLabel(status: WorkflowRequestStatus): Statu
 
 export function attendanceMonthStatusLabel(status: AttendanceMonthStatus): StatusMeta {
   return attendanceMonthStatusMeta[status]
+}
+
+/** UC-C005: シフト制勤務者の法定休日要件不足を1行の警告文言に整形する。 */
+export function legalHolidayWarningLabel(warning: LegalHolidayWarning): string {
+  const rule = warning.rule === 'four_weeks_four_days' ? '4週4日以上' : '毎週1日'
+  return `法定休日不足(${rule}, ${warning.period_start}〜${warning.period_end}: ${warning.legal_holiday_count}/${warning.required_count}日)`
 }
 
 export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMeta {

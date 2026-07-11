@@ -41,6 +41,7 @@ const submittedMonth: AttendanceMonth = {
   returned_at: null,
   closed_at: null,
   snapshot: null,
+  legal_holiday_warnings: [],
 }
 
 const approvedMonth: AttendanceMonth = {
