@@ -27,7 +27,6 @@ class WorkStyleController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'employment_category_id' => ['nullable', 'exists:employment_categories,id'],
             'work_time_system' => ['required', 'string', Rule::in([
-                'shortened', 'shift_based', // 後方互換のため残す。実体はis_shift_basedとの組み合わせで表現する。
                 WorkStyle::WORK_TIME_SYSTEM_FIXED,
                 WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE,
                 WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY,

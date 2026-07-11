@@ -60,12 +60,16 @@ class AttendanceCalculator
         $isLegalHoliday = (bool) ($shift?->is_legal_holiday);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
 
+        // 法定休日の労働は日8時間の判定に乗せず、全て法定休日労働として扱う。
+        // 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、1日8時間・
+        // 週40時間の判定からは除外しない(所定休日での「所定」は0分として扱う)。
         $nonStatutoryOvertimeMinutes = 0;
         $statutoryOvertimeMinutes = 0;
-        if (! $isLegalHoliday && ! $isCompanyHoliday) {
+        if (! $isLegalHoliday) {
+            $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : $prescribedWorkMinutes;
             $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
             $withinLegalMinutes = min($actualWorkMinutes, self::LEGAL_DAILY_LIMIT_MINUTES);
-            $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $prescribedWorkMinutes);
+            $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
         }
 
         return [

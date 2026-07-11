@@ -93,7 +93,7 @@ class WorkStyleControllerTest extends TestCase
         $response = $this->actingAs($user)->postJson('/api/work-styles', [
             'code' => 'shift-4w4d',
             'name' => 'シフト勤務(変形休日制)',
-            'work_time_system' => 'shift_based',
+            'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
             'calendar_id' => $calendar->id,
@@ -112,7 +112,7 @@ class WorkStyleControllerTest extends TestCase
         $response = $this->actingAs($user)->postJson('/api/work-styles', [
             'code' => 'shift-4w4d-ok',
             'name' => 'シフト勤務(変形休日制)',
-            'work_time_system' => 'shift_based',
+            'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
             'calendar_id' => $calendar->id,

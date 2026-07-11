@@ -13,6 +13,7 @@ use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\AttendanceWeeklyCalculation;
 use Illuminate\Support\Carbon;
 
 /**
@@ -75,12 +76,20 @@ class SubmitAttendanceMonthHandler implements CommandHandler
 
         $calculations = AttendanceDailyCalculation::query()->whereIn('attendance_day_id', $dayIds)->get();
 
+        // 週は暦月をまたぐことがあるため、週の起算日(week_start_date)がこの月に含まれる週を
+        // この月の集計対象とする(簡易的な割り当て。.claude/skills/attendance-calc-review 参照)。
+        $weeklyStatutoryOvertimeMinutes = AttendanceWeeklyCalculation::query()
+            ->where('user_id', $userId)
+            ->where('week_start_date', 'like', "{$yearMonth}%")
+            ->sum('weekly_statutory_overtime_minutes');
+
         return [
             'day_count' => $dayIds->count(),
             'actual_work_minutes' => $calculations->sum('actual_work_minutes'),
             'prescribed_work_minutes' => $calculations->sum('prescribed_work_minutes'),
             'non_statutory_overtime_minutes' => $calculations->sum('non_statutory_overtime_minutes'),
             'statutory_overtime_minutes' => $calculations->sum('statutory_overtime_minutes'),
+            'weekly_statutory_overtime_minutes' => (int) $weeklyStatutoryOvertimeMinutes,
             'late_night_minutes' => $calculations->sum('late_night_minutes'),
             'legal_holiday_work_minutes' => $calculations->sum('legal_holiday_work_minutes'),
             'company_holiday_work_minutes' => $calculations->sum('company_holiday_work_minutes'),
