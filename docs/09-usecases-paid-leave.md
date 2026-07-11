@@ -132,6 +132,31 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
 指定」)、通知は社員本人と管理部宛の1件として送る。`paid_leave.warning_raised` イベント
 (`warning_type: five_day_obligation`)を記録する。
 
+## UC-P007: 有給履歴を確認する
+
+1. 社員本人が自分の有給履歴を確認する、または管理者・人事担当者が対象社員を選んで
+   有給履歴を確認する
+2. 付与・申請・承認・差戻し・取消・消化のイベントを日時の新しい順に一覧表示する
+
+関連イベント: `paid_leave.granted`, `paid_leave.requested`, `paid_leave.request_approved`,
+`paid_leave.request_returned`, `paid_leave.request_cancelled`, `paid_leave.used`
+
+`paid_leave_grants`/`paid_leave_requests` の現在の残高・ステータス一覧(UC-P001〜UC-P004の
+画面)とは別に、`stored_events`(EventStore)を正の記録として直接検索し、対象社員に関する
+一連のイベントを時系列で表示する。`paid_leave_grants`/`paid_leave_requests` の現在の残高・
+ステータスは日々更新される「現在のスナップショット」であるのに対し、履歴画面は「いつ・何が
+起きたか」の記録そのものを見せるものであるため、Projectionを新設するのではなく
+`stored_events` を直接参照する(`docs/15-usecases-admin.md` UC-M003の監査ログと同様の考え方)。
+
+対象社員が持つ `paid_leave_grants`/`paid_leave_requests` の id を集約ID
+(`aggregate_type` = `paid_leave_grant` / `paid_leave_request`)として絞り込む。
+`paid_leave.request_approved`/`request_returned`/`request_cancelled` のpayloadには
+実行者(承認者等)のIDのみが含まれ申請者本人の`user_id`を含まないため、payloadの内容ではなく
+対象社員が実際に持つgrant/requestのidで絞り込む必要がある点に注意する。
+
+自分の履歴は誰でも閲覧できる。他の社員の履歴を閲覧できるのは管理者・人事担当者のみ
+(`GET /paid-leave/grants/user/{userId}` 等、他の管理者向けエンドポイントと同じロール制限)。
+
 ## 実装上のポイント
 
 - 付与ルール (`paid_leave_grant_rules` / `paid_leave_grant_rule_steps`) はマスタ化し、

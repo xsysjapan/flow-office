@@ -12,11 +12,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
 use App\Http\Resources\PaidLeaveRequestResource;
+use App\Http\Resources\StoredEventResource;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
+use App\Models\StoredEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -177,5 +179,52 @@ class PaidLeaveController extends Controller
         $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
 
         return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * UC-P007: 自分の有給履歴を確認する。EventStore(stored_events)を正の記録として
+     * 直接検索する(付与・申請・承認・差戻し・取消・消化・警告のすべてを時系列で表示するため、
+     * 現残高スナップショットのみを返す `myGrants` とは別に用意する)。
+     */
+    public function myHistory(Request $request): AnonymousResourceCollection
+    {
+        return $this->historyResponse($request->user()->id);
+    }
+
+    /**
+     * UC-P007: 管理者・人事担当者が対象社員の有給履歴を確認する。他の管理者向け
+     * エンドポイント(`grantsForUser`等)と同様、ロール制限はルート側(`role:admin,hr_staff`)
+     * で行う。
+     */
+    public function historyForUser(int $userId): AnonymousResourceCollection
+    {
+        return $this->historyResponse($userId);
+    }
+
+    /**
+     * `paid_leave_grant`/`paid_leave_request` それぞれの集約に属するイベントを時系列で返す。
+     * `paid_leave.request_approved`/`request_returned`/`request_cancelled` のpayloadには
+     * 申請者本人の `user_id` ではなく実行者(承認者等)のIDしか含まれないため、payloadの中身で
+     * 絞り込むのではなく、対象社員が実際に持つ `paid_leave_grants`/`paid_leave_requests` の
+     * id(=aggregate_id)で絞り込む。
+     */
+    private function historyResponse(int $userId): AnonymousResourceCollection
+    {
+        $grantIds = PaidLeaveGrant::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
+        $requestIds = PaidLeaveRequest::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
+
+        $events = StoredEvent::query()
+            ->where(function ($query) use ($grantIds, $requestIds) {
+                $query->where(fn ($q) => $q->where('aggregate_type', 'paid_leave_grant')->whereIn('aggregate_id', $grantIds))
+                    ->orWhere(fn ($q) => $q->where('aggregate_type', 'paid_leave_request')->whereIn('aggregate_id', $requestIds));
+            })
+            // occurred_atは秒単位までしか保持しないため、同一リクエスト内で複数イベントが
+            // 記録された場合に順序が曖昧にならないよう、idを副次的な並び順として使う
+            // (idは常に記録順に単調増加するため)。
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return StoredEventResource::collection($events);
     }
 }

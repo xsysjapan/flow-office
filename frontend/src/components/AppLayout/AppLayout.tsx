@@ -27,6 +27,7 @@ const navGroups: NavGroup[] = [
       { to: '/attendance/week', label: '週次勤怠' },
       { to: '/attendance/months', label: '勤怠月次' },
       { to: '/paid-leave', label: '有給' },
+      { to: '/paid-leave/history', label: '有給履歴' },
     ],
   },
   {

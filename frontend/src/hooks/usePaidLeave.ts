@@ -5,9 +5,11 @@ import {
   createPaidLeaveGrantRule,
   createPaidLeaveRequest,
   fetchMyPaidLeaveGrants,
+  fetchMyPaidLeaveHistory,
   fetchMyPaidLeaveRequests,
   fetchPaidLeaveGrantRules,
   fetchPaidLeaveGrantsForUser,
+  fetchPaidLeaveHistoryForUser,
   fetchPaidLeaveRequestsToApprove,
   grantPaidLeave,
   returnPaidLeaveRequest,
@@ -112,5 +114,17 @@ export function useCancelPaidLeaveRequest() {
   return useMutation({
     mutationFn: (id: number) => cancelPaidLeaveRequest(id),
     onSuccess: () => invalidate(),
+  })
+}
+
+export function useMyPaidLeaveHistory() {
+  return useQuery({ queryKey: ['paid-leave', 'history', 'mine'], queryFn: fetchMyPaidLeaveHistory })
+}
+
+export function usePaidLeaveHistoryForUser(userId: number) {
+  return useQuery({
+    queryKey: ['paid-leave', 'history', 'user', userId],
+    queryFn: () => fetchPaidLeaveHistoryForUser(userId),
+    enabled: Number.isFinite(userId),
   })
 }

@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType } from './types'
+import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType, StoredEvent } from './types'
 
 export function fetchMyPaidLeaveGrants(): Promise<PaidLeaveGrant[]> {
   return apiFetch('/paid-leave/grants/mine')
@@ -69,4 +69,14 @@ export function returnPaidLeaveRequest(id: number, comment: string): Promise<Pai
 
 export function cancelPaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/cancel`, { method: 'POST' })
+}
+
+/** UC-P007: 自分の有給履歴(付与・申請・承認・差戻し・取消・消化)を新しい順に取得する。 */
+export function fetchMyPaidLeaveHistory(): Promise<StoredEvent[]> {
+  return apiFetch('/paid-leave/history/mine')
+}
+
+/** UC-P007: 管理者・人事担当者が対象社員の有給履歴を取得する。 */
+export function fetchPaidLeaveHistoryForUser(userId: number): Promise<StoredEvent[]> {
+  return apiFetch(`/paid-leave/history/user/${userId}`)
 }
