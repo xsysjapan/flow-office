@@ -1,5 +1,6 @@
+import { CircleAlert } from 'lucide-react'
 import { ApiError } from '../../api/client'
-import './ErrorMessage.css'
+import { Alert, AlertDescription } from '../ui/alert'
 
 export interface ErrorMessageProps {
   error: unknown
@@ -11,15 +12,18 @@ export function ErrorMessage({ error, fallback = '予期しないエラーが発
   const fieldErrors = error instanceof ApiError ? error.errors : undefined
 
   return (
-    <div className="fo-error" role="alert">
-      <p>{message}</p>
-      {fieldErrors && (
-        <ul>
-          {Object.entries(fieldErrors).map(([field, messages]) => (
-            <li key={field}>{messages.join(' ')}</li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <Alert variant="destructive" className="mb-4">
+      <CircleAlert />
+      <AlertDescription>
+        <p>{message}</p>
+        {fieldErrors && (
+          <ul className="list-disc pl-4">
+            {Object.entries(fieldErrors).map(([field, messages]) => (
+              <li key={field}>{messages.join(' ')}</li>
+            ))}
+          </ul>
+        )}
+      </AlertDescription>
+    </Alert>
   )
 }

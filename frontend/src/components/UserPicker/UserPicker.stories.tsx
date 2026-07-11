@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, screen, userEvent, within } from 'storybook/test'
 import type { Paginated, User } from '../../api/types'
 import { UserPicker } from './UserPicker'
 
@@ -53,7 +53,18 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Empty: Story = {
+export const Closed: Story = {
   args: { id: 'approver', value: undefined, onChange: fn() },
   render: withSeeded(),
+}
+
+export const Open: Story = {
+  args: { id: 'approver', value: undefined, onChange: fn() },
+  render: withSeeded(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('combobox'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '花')
+    await expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
+  },
 }

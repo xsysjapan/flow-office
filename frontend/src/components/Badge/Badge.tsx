@@ -1,7 +1,15 @@
 import type { ReactNode } from 'react'
-import './Badge.css'
+import { Badge as UiBadge, type BadgeProps as UiBadgeProps } from '../ui/badge'
 
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+
+const toneMap: Record<BadgeTone, UiBadgeProps['variant']> = {
+  neutral: 'neutral',
+  info: 'info',
+  success: 'success',
+  warning: 'warning',
+  danger: 'destructive',
+}
 
 export interface BadgeProps {
   tone?: BadgeTone
@@ -10,12 +18,12 @@ export interface BadgeProps {
 
 export function Badge({ tone = 'neutral', children }: BadgeProps) {
   return (
-    <span
+    <UiBadge
       role="status"
       aria-label={typeof children === 'string' ? children : undefined}
-      className={`fo-badge fo-badge--${tone}`}
+      variant={toneMap[tone]}
     >
       {children}
-    </span>
+    </UiBadge>
   )
 }

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import { fetchExpensesCsv } from './support/api'
+import { pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md シナリオ4(交通費申請)。
@@ -28,10 +29,7 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
     await applicantPage.getByLabel('タイトル').fill(title)
     await applicantPage.getByLabel('金額').fill(amount)
     await applicantPage.getByLabel('経路').fill('自宅最寄駅→本社最寄駅')
-    await applicantPage.getByLabel('承認者').fill(SCENARIO_USERS.approver)
-    await applicantPage
-      .getByRole('button', { name: `${SCENARIO_USERS.approver}(naoki.watanabe@example.com)` })
-      .click()
+    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('heading', { name: title })).toBeVisible()
     await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
@@ -39,7 +37,7 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
     // 2. 渡辺直樹が承認する。承認によりバックオフィスタスク(経理向け)が自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await approverPage.goto('/approvals')
-    const approvalRow = approverPage.locator('li', { hasText: title })
+    const approvalRow = approverPage.getByRole('row', { name: title })
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('link', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
@@ -49,14 +47,11 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
     //    processing → payment_scheduled → completed の順にステータス変更する。
     await loginAs(accountingPage, SCENARIO_USERS.accountingStaff)
     await accountingPage.goto('/backoffice-tasks')
-    const taskRow = accountingPage.locator('li', { hasText: title })
+    const taskRow = accountingPage.getByRole('row', { name: title })
     await expect(taskRow).toBeVisible()
     await taskRow.getByRole('link', { name: title }).click()
 
-    await accountingPage.getByLabel('担当者').fill(SCENARIO_USERS.accountingStaff)
-    await accountingPage
-      .getByRole('button', { name: `${SCENARIO_USERS.accountingStaff}(makoto.kobayashi@example.com)` })
-      .click()
+    await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com')
     await accountingPage.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 

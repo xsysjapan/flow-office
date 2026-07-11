@@ -118,8 +118,9 @@ describe('WorkStylesAndShiftsPage', () => {
     renderPage()
     await screen.findByText('標準勤務', { selector: 'strong' })
 
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
-    await userEvent.click(await screen.findByRole('button', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getByLabelText('勤務形態'), '標準勤務')
     await userEvent.type(screen.getByLabelText('開始日'), '2026-08-01')
     await userEvent.type(screen.getByLabelText('終了日'), '2026-08-31')

@@ -112,8 +112,9 @@ describe('MyPaidLeavePage', () => {
     await screen.findByText('有給申請はまだありません。')
 
     await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
-    await userEvent.type(screen.getByLabelText('承認者'), '承認者')
-    await userEvent.click(await screen.findByText((content) => content.startsWith('承認者花子')))
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
@@ -135,8 +136,9 @@ describe('MyPaidLeavePage', () => {
 
     await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
     await userEvent.selectOptions(screen.getByLabelText('取得単位'), '時間休')
-    await userEvent.type(screen.getByLabelText('承認者'), '承認者')
-    await userEvent.click(await screen.findByText((content) => content.startsWith('承認者花子')))
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
 
     expect(screen.getByRole('button', { name: '申請する' })).toBeDisabled()
   })

@@ -5,6 +5,9 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
+import { NativeSelect } from '../components/ui/native-select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import type { PaidLeaveType } from '../api/types'
 import {
@@ -14,7 +17,6 @@ import {
   useMyPaidLeaveRequests,
 } from '../hooks/usePaidLeave'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../utils/statusLabels'
-import './MyPaidLeavePage.css'
 
 const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
   { value: 'full', label: '全休' },
@@ -57,54 +59,56 @@ function PaidLeaveRequestForm() {
   }
 
   return (
-    <div className="my-paid-leave__request-form">
+    <div className="flex flex-col gap-4">
       {createRequest.error && <ErrorMessage error={createRequest.error} />}
 
-      <FormField label="対象日" htmlFor="paid-leave-target-date" required>
-        <input
-          id="paid-leave-target-date"
-          type="date"
-          value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
-        />
-      </FormField>
-
-      <FormField label="取得単位" htmlFor="paid-leave-type" required>
-        <select
-          id="paid-leave-type"
-          value={leaveType}
-          onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
-        >
-          {LEAVE_TYPE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </FormField>
-
-      {leaveType === 'hourly' && (
-        <FormField label="取得時間" htmlFor="paid-leave-hours" required>
-          <input
-            id="paid-leave-hours"
-            type="number"
-            min="0.5"
-            step="0.5"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象日" htmlFor="paid-leave-target-date" required>
+          <Input
+            id="paid-leave-target-date"
+            type="date"
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
           />
         </FormField>
-      )}
 
-      <FormField label="承認者" htmlFor="paid-leave-approver" required>
-        <UserPicker id="paid-leave-approver" value={approverUserId} onChange={setApproverUserId} />
-      </FormField>
+        <FormField label="取得単位" htmlFor="paid-leave-type" required>
+          <NativeSelect
+            id="paid-leave-type"
+            value={leaveType}
+            onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
+          >
+            {LEAVE_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
 
-      <FormField label="理由(任意)" htmlFor="paid-leave-reason">
-        <input id="paid-leave-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-      </FormField>
+        {leaveType === 'hourly' && (
+          <FormField label="取得時間" htmlFor="paid-leave-hours" required>
+            <Input
+              id="paid-leave-hours"
+              type="number"
+              min="0.5"
+              step="0.5"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+            />
+          </FormField>
+        )}
 
-      <Button isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
+        <FormField label="承認者" htmlFor="paid-leave-approver" required>
+          <UserPicker id="paid-leave-approver" value={approverUserId} onChange={setApproverUserId} />
+        </FormField>
+
+        <FormField label="理由(任意)" htmlFor="paid-leave-reason">
+          <Input id="paid-leave-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </FormField>
+      </div>
+
+      <Button className="self-start" isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
         申請する
       </Button>
     </div>
@@ -120,27 +124,23 @@ function MyPaidLeaveRequestList() {
 
   const requests = data ?? []
 
-  if (requests.length === 0) return <p>有給申請はまだありません。</p>
+  if (requests.length === 0) return <p className="text-sm text-muted-foreground">有給申請はまだありません。</p>
 
   return (
-    <ul className="my-paid-leave__request-list">
+    <ul className="divide-y divide-border">
       {cancelRequest.error && <ErrorMessage error={cancelRequest.error} />}
       {requests.map((req) => {
         const { label, tone } = paidLeaveRequestStatusLabel(req.status)
         return (
-          <li key={req.id}>
-            <div className="my-paid-leave__request-row">
-              <span>{req.target_date}</span>
-              <span>{paidLeaveTypeLabel(req.leave_type)}</span>
-              <span>{req.requested_days}日</span>
+          <li key={req.id} className="flex items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-foreground">{req.target_date}</span>
+              <span className="text-muted-foreground">{paidLeaveTypeLabel(req.leave_type)}</span>
+              <span className="text-muted-foreground">{req.requested_days}日</span>
               <Badge tone={tone}>{label}</Badge>
             </div>
             {req.status === 'submitted' && (
-              <Button
-                variant="secondary"
-                isLoading={cancelRequest.isPending}
-                onClick={() => cancelRequest.mutate(req.id)}
-              >
+              <Button variant="secondary" isLoading={cancelRequest.isPending} onClick={() => cancelRequest.mutate(req.id)}>
                 取消
               </Button>
             )}
@@ -165,39 +165,39 @@ export function MyPaidLeavePage() {
   const totalRemaining = grants.reduce((sum, grant) => sum + grant.remaining_days, 0)
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Card title="自分の有給">
-        <p className="my-paid-leave__summary">
-          残り<strong>{totalRemaining}</strong>日
+        <p className="mb-4 text-sm text-foreground">
+          残り<strong className="mx-1 text-lg font-semibold">{totalRemaining}</strong>日
         </p>
 
         {grants.length === 0 ? (
-          <p>有給の付与はまだありません。</p>
+          <p className="text-sm text-muted-foreground">有給の付与はまだありません。</p>
         ) : (
-          <table className="my-paid-leave__table">
-            <thead>
-              <tr>
-                <th>付与日</th>
-                <th>失効日</th>
-                <th>付与日数</th>
-                <th>使用日数</th>
-                <th>残日数</th>
-                <th>付与理由</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>付与日</TableHead>
+                <TableHead>失効日</TableHead>
+                <TableHead>付与日数</TableHead>
+                <TableHead>使用日数</TableHead>
+                <TableHead>残日数</TableHead>
+                <TableHead>付与理由</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {grants.map((grant) => (
-                <tr key={grant.id}>
-                  <td>{grant.granted_on}</td>
-                  <td>{grant.expires_on}</td>
-                  <td>{grant.granted_days}</td>
-                  <td>{grant.used_days}</td>
-                  <td>{grant.remaining_days}</td>
-                  <td>{grant.grant_reason ?? '-'}</td>
-                </tr>
+                <TableRow key={grant.id}>
+                  <TableCell>{grant.granted_on}</TableCell>
+                  <TableCell>{grant.expires_on}</TableCell>
+                  <TableCell>{grant.granted_days}</TableCell>
+                  <TableCell>{grant.used_days}</TableCell>
+                  <TableCell>{grant.remaining_days}</TableCell>
+                  <TableCell className="text-muted-foreground">{grant.grant_reason ?? '-'}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </Card>
 
@@ -208,6 +208,6 @@ export function MyPaidLeavePage() {
       <Card title="自分の有給申請">
         <MyPaidLeaveRequestList />
       </Card>
-    </>
+    </div>
   )
 }

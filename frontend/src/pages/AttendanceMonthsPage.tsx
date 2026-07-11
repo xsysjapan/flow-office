@@ -8,7 +8,6 @@ import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useMyMonths, useSubmitMonth } from '../hooks/useAttendance'
 import type { AttendanceMonth } from '../api/types'
 import { attendanceMonthStatusLabel } from '../utils/statusLabels'
-import './AttendanceMonthsPage.css'
 
 interface MonthRowProps {
   month: AttendanceMonth
@@ -25,21 +24,17 @@ function MonthRow({ month }: MonthRowProps) {
   const canSubmit = month.status === 'not_submitted' || month.status === 'returned'
 
   return (
-    <li className="attendance-months-list__item">
-      <div className="attendance-months-list__row">
-        <span className="attendance-months-list__year-month">{month.year_month}</span>
+    <li className="py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
         <Badge tone={tone}>{label}</Badge>
       </div>
 
       {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
 
       {canSubmit && (
-        <div className="attendance-months-list__submit">
-          <UserPicker
-            id={`approver-${month.id}`}
-            value={approverUserId}
-            onChange={setApproverUserId}
-          />
+        <div className="mt-2 flex items-center gap-2">
+          <UserPicker id={`approver-${month.id}`} value={approverUserId} onChange={setApproverUserId} />
           <Button
             isLoading={submitMonth.isPending}
             disabled={!approverUserId}
@@ -67,9 +62,9 @@ export function AttendanceMonthsPage() {
   return (
     <Card title="自分の勤怠月次">
       {months.length === 0 ? (
-        <p>勤怠月次はまだありません。</p>
+        <p className="text-sm text-muted-foreground">勤怠月次はまだありません。</p>
       ) : (
-        <ul className="attendance-months-list">
+        <ul className="divide-y divide-border">
           {months.map((month) => (
             <MonthRow key={month.id} month={month} />
           ))}

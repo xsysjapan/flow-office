@@ -6,9 +6,10 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
 import { useRoles } from '../hooks/useRoles'
 import { useUpdateUserHireDate, useUpdateUserRoles, useUser } from '../hooks/useUsers'
-import './UserRoleEditPage.css'
 
 /**
  * UC-M001: ユーザーに付与する権限(ロール)を編集する。
@@ -49,31 +50,27 @@ export function UserRoleEditPage() {
       {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
       {updateRoles.isSuccess && <Badge tone="success">保存しました</Badge>}
 
-      <dl className="user-role-edit__meta">
-        <dt>メールアドレス</dt>
-        <dd>{user.email}</dd>
-        <dt>部署</dt>
-        <dd>{user.department ?? '-'}</dd>
-        <dt>役職</dt>
-        <dd>{user.job_title ?? '-'}</dd>
+      <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">メールアドレス</dt>
+        <dd className="text-foreground">{user.email}</dd>
+        <dt className="font-medium text-muted-foreground">部署</dt>
+        <dd className="text-foreground">{user.department ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">役職</dt>
+        <dd className="text-foreground">{user.job_title ?? '-'}</dd>
       </dl>
 
-      <ul className="user-role-edit__roles">
+      <ul className="mb-4 divide-y divide-border">
         {roles?.map((role) => (
-          <li key={role.code}>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedCodes.includes(role.code)}
-                onChange={() => toggleRole(role.code)}
-              />
+          <li key={role.code} className="py-2">
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox checked={selectedCodes.includes(role.code)} onCheckedChange={() => toggleRole(role.code)} />
               {role.name}
             </label>
           </li>
         ))}
       </ul>
 
-      <div className="user-role-edit__actions">
+      <div className="flex gap-3">
         <Button
           isLoading={updateRoles.isPending}
           onClick={() => updateRoles.mutate({ id: userId, roleCodes: selectedCodes })}
@@ -82,12 +79,12 @@ export function UserRoleEditPage() {
         </Button>
       </div>
 
-      <div className="user-role-edit__hire-date">
+      <div className="mt-6 border-t border-border pt-4">
         {updateHireDate.error && <ErrorMessage error={updateHireDate.error} />}
         {updateHireDate.isSuccess && <Badge tone="success">保存しました</Badge>}
 
         <FormField label="入社日(有給の自動付与に使用)" htmlFor="user-role-edit-hire-date">
-          <input
+          <Input
             id="user-role-edit-hire-date"
             type="date"
             value={hireDate}

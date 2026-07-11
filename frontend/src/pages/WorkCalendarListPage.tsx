@@ -6,8 +6,8 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import { useCreateWorkCalendar, usePublishWorkCalendar, useWorkCalendars } from '../hooks/useWorkCalendars'
-import './WorkCalendarListPage.css'
 
 /**
  * UC-C001: 年度カレンダーの一覧・作成・公開。
@@ -51,46 +51,43 @@ export function WorkCalendarListPage() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Card title="年度カレンダーを作成">
         {actionError && <ErrorMessage error={actionError} />}
 
-        <FormField label="カレンダー名" htmlFor="calendar-name" required>
-          <input id="calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </FormField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="カレンダー名" htmlFor="calendar-name" required>
+            <Input id="calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </FormField>
 
-        <FormField label="年度" htmlFor="calendar-fiscal-year" required>
-          <input
-            id="calendar-fiscal-year"
-            type="number"
-            value={fiscalYear}
-            onChange={(e) => setFiscalYear(e.target.value)}
-          />
-        </FormField>
+          <FormField label="年度" htmlFor="calendar-fiscal-year" required>
+            <Input
+              id="calendar-fiscal-year"
+              type="number"
+              value={fiscalYear}
+              onChange={(e) => setFiscalYear(e.target.value)}
+            />
+          </FormField>
 
-        <FormField label="開始日" htmlFor="calendar-starts-on" required>
-          <input
-            id="calendar-starts-on"
-            type="date"
-            value={startsOn}
-            onChange={(e) => setStartsOn(e.target.value)}
-          />
-        </FormField>
+          <FormField label="開始日" htmlFor="calendar-starts-on" required>
+            <Input id="calendar-starts-on" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
+          </FormField>
 
-        <FormField label="終了日" htmlFor="calendar-ends-on" required>
-          <input id="calendar-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-        </FormField>
+          <FormField label="終了日" htmlFor="calendar-ends-on" required>
+            <Input id="calendar-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
+          </FormField>
 
-        <FormField label="週の開始日(0=日曜)" htmlFor="calendar-week-starts-on">
-          <input
-            id="calendar-week-starts-on"
-            type="number"
-            min={0}
-            max={6}
-            value={weekStartsOn}
-            onChange={(e) => setWeekStartsOn(e.target.value)}
-          />
-        </FormField>
+          <FormField label="週の開始日(0=日曜)" htmlFor="calendar-week-starts-on">
+            <Input
+              id="calendar-week-starts-on"
+              type="number"
+              min={0}
+              max={6}
+              value={weekStartsOn}
+              onChange={(e) => setWeekStartsOn(e.target.value)}
+            />
+          </FormField>
+        </div>
 
         <Button
           isLoading={createCalendar.isPending}
@@ -103,14 +100,19 @@ export function WorkCalendarListPage() {
 
       <Card title="年度カレンダー一覧">
         {calendars.length === 0 ? (
-          <p>カレンダーはまだありません。</p>
+          <p className="text-sm text-muted-foreground">カレンダーはまだありません。</p>
         ) : (
-          <ul className="work-calendar-list">
+          <ul className="divide-y divide-border">
             {calendars.map((calendar) => (
-              <li key={calendar.id}>
-                <div className="work-calendar-list__main">
-                  <Link to={`/admin/work-calendars/${calendar.id}/days`}>{calendar.name}</Link>
-                  <span className="work-calendar-list__meta">
+              <li key={calendar.id} className="flex items-center gap-3 py-3">
+                <div className="flex flex-1 flex-col">
+                  <Link
+                    to={`/admin/work-calendars/${calendar.id}/days`}
+                    className="text-sm font-medium text-foreground hover:text-primary hover:underline"
+                  >
+                    {calendar.name}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">
                     {calendar.fiscal_year}年度 ({calendar.starts_on}〜{calendar.ends_on})
                   </span>
                 </div>
@@ -131,6 +133,6 @@ export function WorkCalendarListPage() {
           </ul>
         )}
       </Card>
-    </>
+    </div>
   )
 }

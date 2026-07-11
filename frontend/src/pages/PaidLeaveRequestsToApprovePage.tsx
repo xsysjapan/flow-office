@@ -4,13 +4,13 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import {
   useApprovePaidLeaveRequest,
   usePaidLeaveRequestsToApprove,
   useReturnPaidLeaveRequest,
 } from '../hooks/usePaidLeave'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../utils/statusLabels'
-import './PaidLeaveRequestsToApprovePage.css'
 
 /**
  * UC-P004: 承認者向けの有給申請の承認・差戻し。
@@ -33,33 +33,33 @@ export function PaidLeaveRequestsToApprovePage() {
       {actionError && <ErrorMessage error={actionError} />}
 
       {requests.length === 0 ? (
-        <p>承認待ちの有給申請はありません。</p>
+        <p className="text-sm text-muted-foreground">承認待ちの有給申請はありません。</p>
       ) : (
-        <ul className="paid-leave-to-approve-list">
+        <ul className="divide-y divide-border">
           {requests.map((request) => {
             const { label, tone } = paidLeaveRequestStatusLabel(request.status)
             const comment = comments[request.id] ?? ''
 
             return (
-              <li key={request.id}>
-                <div className="paid-leave-to-approve-list__row">
-                  <div>
-                    <span className="paid-leave-to-approve-list__date">{request.target_date}</span>
-                    <span className="paid-leave-to-approve-list__user">{request.user?.name}</span>
-                    <span className="paid-leave-to-approve-list__type">
+              <li key={request.id} className="py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="font-semibold text-foreground">{request.target_date}</span>
+                    <span className="text-muted-foreground">{request.user?.name}</span>
+                    <span className="text-muted-foreground">
                       {paidLeaveTypeLabel(request.leave_type)}({request.requested_days}日)
                     </span>
                   </div>
                   <Badge tone={tone}>{label}</Badge>
                 </div>
-                {request.reason && <p className="paid-leave-to-approve-list__reason">理由: {request.reason}</p>}
+                {request.reason && <p className="mt-1 text-sm text-muted-foreground">理由: {request.reason}</p>}
 
-                <div className="paid-leave-to-approve-list__actions">
+                <div className="mt-2 flex flex-wrap items-center gap-3">
                   <Button isLoading={approveRequest.isPending} onClick={() => approveRequest.mutate(request.id)}>
                     承認する
                   </Button>
-                  <div className="paid-leave-to-approve-list__with-comment">
-                    <input
+                  <div className="flex items-center gap-2">
+                    <Input
                       placeholder="差戻しコメント"
                       value={comment}
                       onChange={(e) => setComments((prev) => ({ ...prev, [request.id]: e.target.value }))}

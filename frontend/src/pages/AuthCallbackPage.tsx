@@ -31,12 +31,18 @@ export function AuthCallbackPage() {
 
   if (error) {
     return (
-      <main className="page-loading">
-        <p>{error}</p>
-        <a href="/login">ログイン画面に戻る</a>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-2 p-10 text-center">
+        <p className="text-sm text-destructive">{error}</p>
+        <a href="/login" className="text-sm text-primary underline-offset-4 hover:underline">
+          ログイン画面に戻る
+        </a>
       </main>
     )
   }
 
-  return <p className="page-loading">ログイン処理中...</p>
+  return (
+    <p className="p-10 text-center text-sm text-muted-foreground" role="status">
+      ログイン処理中...
+    </p>
+  )
 }

@@ -3,26 +3,47 @@ import { Badge } from '../components/Badge/Badge'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import type { BackOfficeTask } from '../api/types'
 import { useMyBackOfficeTasks, useUnassignedBackOfficeTasks } from '../hooks/useBackOfficeTasks'
 import { backOfficeTaskStatusLabel } from '../utils/statusLabels'
-import './BackOfficeTaskListPage.css'
 
-function BackOfficeTaskRow({ task }: { task: BackOfficeTask }) {
-  const { label, tone } = backOfficeTaskStatusLabel(task.status)
-
+function BackOfficeTaskTable({ tasks }: { tasks: BackOfficeTask[] }) {
   return (
-    <li>
-      <div>
-        <Link to={`/backoffice-tasks/${task.id}`}>{task.title}</Link>
-        <span className="backoffice-task-list__type">{task.task_type}</span>
-        {task.assignee && <span className="backoffice-task-list__assignee">{task.assignee.name}</span>}
-      </div>
-      <div className="backoffice-task-list__meta">
-        {task.due_on && <span className="backoffice-task-list__due">期限: {task.due_on}</span>}
-        <Badge tone={tone}>{label}</Badge>
-      </div>
-    </li>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>タイトル</TableHead>
+          <TableHead>種別</TableHead>
+          <TableHead>担当者</TableHead>
+          <TableHead>期限</TableHead>
+          <TableHead>ステータス</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {tasks.map((task) => {
+          const { label, tone } = backOfficeTaskStatusLabel(task.status)
+          return (
+            <TableRow key={task.id}>
+              <TableCell>
+                <Link
+                  to={`/backoffice-tasks/${task.id}`}
+                  className="font-medium text-foreground hover:text-primary hover:underline"
+                >
+                  {task.title}
+                </Link>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{task.task_type}</TableCell>
+              <TableCell className="text-muted-foreground">{task.assignee?.name ?? '-'}</TableCell>
+              <TableCell className="text-muted-foreground">{task.due_on ? `期限: ${task.due_on}` : '-'}</TableCell>
+              <TableCell>
+                <Badge tone={tone}>{label}</Badge>
+              </TableCell>
+            </TableRow>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -43,28 +64,20 @@ export function BackOfficeTaskListPage() {
   const myTasks = mine.data?.data ?? []
 
   return (
-    <div className="backoffice-task-list-page">
+    <div className="flex flex-col gap-6">
       <Card title="未割り当てタスク">
         {unassignedTasks.length === 0 ? (
-          <p>未割り当てのタスクはありません。</p>
+          <p className="text-sm text-muted-foreground">未割り当てのタスクはありません。</p>
         ) : (
-          <ul className="backoffice-task-list">
-            {unassignedTasks.map((task) => (
-              <BackOfficeTaskRow key={task.id} task={task} />
-            ))}
-          </ul>
+          <BackOfficeTaskTable tasks={unassignedTasks} />
         )}
       </Card>
 
       <Card title="自分のタスク">
         {myTasks.length === 0 ? (
-          <p>担当中のタスクはありません。</p>
+          <p className="text-sm text-muted-foreground">担当中のタスクはありません。</p>
         ) : (
-          <ul className="backoffice-task-list">
-            {myTasks.map((task) => (
-              <BackOfficeTaskRow key={task.id} task={task} />
-            ))}
-          </ul>
+          <BackOfficeTaskTable tasks={myTasks} />
         )}
       </Card>
     </div>

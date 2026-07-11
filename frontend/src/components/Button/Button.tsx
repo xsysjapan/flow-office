@@ -1,7 +1,14 @@
 import type { ButtonHTMLAttributes } from 'react'
-import './Button.css'
+import { Loader2 } from 'lucide-react'
+import { Button as UiButton, type ButtonProps as UiButtonProps } from '../ui/button'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger'
+
+const variantMap: Record<ButtonVariant, UiButtonProps['variant']> = {
+  primary: 'default',
+  secondary: 'secondary',
+  danger: 'destructive',
+}
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -10,13 +17,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = 'primary', isLoading = false, disabled, children, ...props }: ButtonProps) {
   return (
-    <button
-      type="button"
-      className={`fo-button fo-button--${variant}`}
-      disabled={disabled || isLoading}
-      {...props}
-    >
+    <UiButton variant={variantMap[variant]} disabled={disabled || isLoading} {...props}>
+      {isLoading && <Loader2 className="animate-spin" aria-hidden="true" />}
       {isLoading ? '処理中...' : children}
-    </button>
+    </UiButton>
   )
 }

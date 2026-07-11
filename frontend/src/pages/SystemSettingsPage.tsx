@@ -4,8 +4,8 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import { useSystemSettings, useUpdateSystemSettings } from '../hooks/useSystemSettings'
-import './SystemSettingsPage.css'
 
 /**
  * UC-003: システム設定(default_timezone)を管理する。
@@ -34,16 +34,16 @@ export function SystemSettingsPage() {
 
   return (
     <Card title="システム設定">
-      <p className="system-settings__note">
+      <p className="mb-4 text-sm text-muted-foreground">
         変更後に新規作成されるユーザーはこのタイムゾーンで作成されます(既存ユーザーの
         タイムゾーンは変更されません)。
       </p>
 
       {updateSettings.error && <ErrorMessage error={updateSettings.error} />}
-      {savedMessage && <p className="system-settings__saved">保存しました。</p>}
+      {savedMessage && <p className="mb-3 text-sm text-success">保存しました。</p>}
 
       <FormField label="既定タイムゾーン" htmlFor="system-settings-default-timezone" required>
-        <input
+        <Input
           id="system-settings-default-timezone"
           placeholder="Asia/Tokyo"
           value={defaultTimezone}

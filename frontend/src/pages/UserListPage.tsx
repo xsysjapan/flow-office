@@ -4,8 +4,9 @@ import { Badge } from '../components/Badge/Badge'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { useUsers } from '../hooks/useUsers'
-import './UserListPage.css'
 
 /**
  * UC-M001: ユーザーを検索し、権限編集画面へ遷移する一覧。
@@ -21,42 +22,47 @@ export function UserListPage() {
 
   return (
     <Card title="ユーザー一覧">
-      <input
-        className="user-list__search"
+      <Input
+        className="mb-4 max-w-xs"
         placeholder="氏名またはメールアドレスで検索"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
 
       {users.length === 0 ? (
-        <p>該当するユーザーはいません。</p>
+        <p className="text-sm text-muted-foreground">該当するユーザーはいません。</p>
       ) : (
-        <table className="user-list">
-          <thead>
-            <tr>
-              <th>氏名</th>
-              <th>メールアドレス</th>
-              <th>部署</th>
-              <th>役職</th>
-              <th>在籍状況</th>
-              <th>権限</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>氏名</TableHead>
+              <TableHead>メールアドレス</TableHead>
+              <TableHead>部署</TableHead>
+              <TableHead>役職</TableHead>
+              <TableHead>在籍状況</TableHead>
+              <TableHead>権限</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {users.map((user) => (
-              <tr key={user.id}>
-                <td>
-                  <Link to={`/admin/users/${user.id}`}>{user.name}</Link>
-                </td>
-                <td>{user.email}</td>
-                <td>{user.department ?? '-'}</td>
-                <td>{user.job_title ?? '-'}</td>
-                <td>{user.employment_status}</td>
-                <td>
+              <TableRow key={user.id}>
+                <TableCell>
+                  <Link
+                    to={`/admin/users/${user.id}`}
+                    className="font-medium text-foreground hover:text-primary hover:underline"
+                  >
+                    {user.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                <TableCell className="text-muted-foreground">{user.department ?? '-'}</TableCell>
+                <TableCell className="text-muted-foreground">{user.job_title ?? '-'}</TableCell>
+                <TableCell className="text-muted-foreground">{user.employment_status}</TableCell>
+                <TableCell>
                   {(user.roles ?? []).length === 0 ? (
-                    <span className="user-list__no-roles">未設定</span>
+                    <span className="text-sm text-muted-foreground">未設定</span>
                   ) : (
-                    <span className="user-list__roles">
+                    <span className="flex flex-wrap gap-1">
                       {user.roles?.map((role) => (
                         <Badge key={role} tone="info">
                           {role}
@@ -64,11 +70,11 @@ export function UserListPage() {
                       ))}
                     </span>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </Card>
   )

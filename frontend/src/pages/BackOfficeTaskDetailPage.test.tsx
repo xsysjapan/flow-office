@@ -83,8 +83,9 @@ describe('BackOfficeTaskDetailPage', () => {
 
     renderPage(baseTask)
 
+    await userEvent.click(await screen.findByRole('combobox', { name: '担当者' }))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
-    await userEvent.click(await screen.findByRole('button', { name: '担当者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('option', { name: '担当者花子(hanako@example.com)' }))
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
     await waitFor(() =>

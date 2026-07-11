@@ -5,10 +5,10 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../hooks/useAttendance'
 import { attendanceMonthStatusLabel } from '../utils/statusLabels'
 import { hasAnyRole, ROLE } from '../utils/roles'
-import './MonthsToApprovePage.css'
 
 /**
  * UC-A009: 承認者向けの勤怠月次の承認・差戻し。
@@ -35,36 +35,34 @@ export function MonthsToApprovePage() {
       {actionError && <ErrorMessage error={actionError} />}
 
       {months.length === 0 ? (
-        <p>承認待ちの勤怠月次はありません。</p>
+        <p className="text-sm text-muted-foreground">承認待ちの勤怠月次はありません。</p>
       ) : (
-        <ul className="months-to-approve-list">
+        <ul className="divide-y divide-border">
           {months.map((month) => {
             const { label, tone } = attendanceMonthStatusLabel(month.status)
             const comment = comments[month.id] ?? ''
 
             return (
-              <li key={month.id}>
-                <div className="months-to-approve-list__row">
-                  <div>
-                    <span className="months-to-approve-list__year-month">{month.year_month}</span>
-                    <span className="months-to-approve-list__user">社員ID: {month.user_id}</span>
+              <li key={month.id} className="py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
+                    <span className="text-sm text-muted-foreground">社員ID: {month.user_id}</span>
                   </div>
                   <Badge tone={tone}>{label}</Badge>
                 </div>
 
-                <div className="months-to-approve-list__actions">
+                <div className="mt-2 flex flex-wrap items-center gap-3">
                   {month.status === 'submitted' && (
                     <>
                       <Button isLoading={approveMonth.isPending} onClick={() => approveMonth.mutate(month.id)}>
                         承認する
                       </Button>
-                      <div className="months-to-approve-list__with-comment">
-                        <input
+                      <div className="flex items-center gap-2">
+                        <Input
                           placeholder="差戻しコメント"
                           value={comment}
-                          onChange={(e) =>
-                            setComments((prev) => ({ ...prev, [month.id]: e.target.value }))
-                          }
+                          onChange={(e) => setComments((prev) => ({ ...prev, [month.id]: e.target.value }))}
                         />
                         <Button
                           variant="secondary"

@@ -4,6 +4,7 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import { useEditableRows } from '../hooks/useEditableRows'
 import { useUpdateAttendanceDay, useWeek } from '../hooks/useAttendance'
 import type { AttendanceDay } from '../api/types'
@@ -15,7 +16,6 @@ import {
 } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
-import './WeekAttendancePage.css'
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -90,6 +90,10 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
     setIsEditing(true)
   }
 
+  const dow = new Date(`${date}T00:00:00`).getDay()
+  const weekday = WEEKDAY_LABELS[dow === 0 ? 6 : dow - 1]
+  const { label, tone } = day ? attendanceDayStatusLabel(day.status) : { label: '未入力', tone: 'neutral' as const }
+
   const handleSave = () => {
     if (!day) return
     updateDay.mutate(
@@ -113,14 +117,10 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
     )
   }
 
-  const dow = new Date(`${date}T00:00:00`).getDay()
-  const weekday = WEEKDAY_LABELS[dow === 0 ? 6 : dow - 1]
-  const { label, tone } = day ? attendanceDayStatusLabel(day.status) : { label: '未入力', tone: 'neutral' as const }
-
   return (
-    <li className="week-attendance__day">
-      <div className="week-attendance__day-header">
-        <span className="week-attendance__date">
+    <li className="py-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="min-w-[9rem] text-sm font-semibold text-foreground">
           {date}({weekday})
         </span>
         <Badge tone={tone}>{label}</Badge>
@@ -130,76 +130,78 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
           </Badge>
         ))}
         {day && !isEditing && (
-          <Button variant="secondary" onClick={startEditing}>
+          <Button variant="secondary" onClick={startEditing} className="ml-auto">
             編集
           </Button>
         )}
       </div>
 
       {day && !isEditing && (
-        <dl className="week-attendance__summary">
-          <dt>出勤</dt>
-          <dd>{day.actual_start_at ? toDatetimeLocal(day.actual_start_at).replace('T', ' ') : '--'}</dd>
-          <dt>退勤</dt>
-          <dd>{day.actual_end_at ? toDatetimeLocal(day.actual_end_at).replace('T', ' ') : '--'}</dd>
+        <dl className="mt-2 grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dt className="font-medium text-muted-foreground">出勤</dt>
+          <dd className="text-foreground">{day.actual_start_at ? toDatetimeLocal(day.actual_start_at).replace('T', ' ') : '--'}</dd>
+          <dt className="font-medium text-muted-foreground">退勤</dt>
+          <dd className="text-foreground">{day.actual_end_at ? toDatetimeLocal(day.actual_end_at).replace('T', ' ') : '--'}</dd>
           {typeof day.utc_offset_minutes === 'number' && (day.actual_start_at || day.actual_end_at) && (
             <>
-              <dt>現地時刻オフセット</dt>
-              <dd>UTC{offsetMinutesToString(day.utc_offset_minutes)}</dd>
+              <dt className="font-medium text-muted-foreground">現地時刻オフセット</dt>
+              <dd className="text-foreground">UTC{offsetMinutesToString(day.utc_offset_minutes)}</dd>
             </>
           )}
           {day.calculation && (
             <>
-              <dt>実働</dt>
-              <dd>{day.calculation.actual_work_minutes}分</dd>
+              <dt className="font-medium text-muted-foreground">実働</dt>
+              <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
             </>
           )}
         </dl>
       )}
 
       {isEditing && (
-        <div className="week-attendance__edit-form">
+        <div className="mt-3 flex flex-col gap-3 rounded-lg border border-border p-3">
           {updateDay.error && <ErrorMessage error={updateDay.error} />}
 
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             出勤
-            <input type="datetime-local" value={actualStartAt} onChange={(e) => setActualStartAt(e.target.value)} />
+            <Input type="datetime-local" value={actualStartAt} onChange={(e) => setActualStartAt(e.target.value)} />
           </label>
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             退勤
-            <input type="datetime-local" value={actualEndAt} onChange={(e) => setActualEndAt(e.target.value)} />
+            <Input type="datetime-local" value={actualEndAt} onChange={(e) => setActualEndAt(e.target.value)} />
           </label>
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             現地時刻オフセット(海外出張時などに変更)
-            <input
+            <Input
               value={offset}
               placeholder="+09:00"
               pattern="^[+-]\d{2}:\d{2}$"
               onChange={(e) => setOffset(e.target.value)}
             />
           </label>
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             作業内容
-            <input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+            <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
           </label>
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             備考
-            <input value={note} onChange={(e) => setNote(e.target.value)} />
+            <Input value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
 
-          <div className="week-attendance__breaks">
-            <span>休憩</span>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground">休憩</span>
             {breakRows.map((row) => (
-              <div key={row.rowId} className="week-attendance__break-row">
-                <input
+              <div key={row.rowId} className="flex flex-wrap items-center gap-2">
+                <Input
                   type="datetime-local"
                   aria-label="休憩開始"
+                  className="w-auto"
                   value={row.start}
                   onChange={(e) => updateRow(row.rowId, { start: e.target.value })}
                 />
-                <input
+                <Input
                   type="datetime-local"
                   aria-label="休憩終了"
+                  className="w-auto"
                   value={row.end}
                   onChange={(e) => updateRow(row.rowId, { end: e.target.value })}
                 />
@@ -208,17 +210,17 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
                 </Button>
               </div>
             ))}
-            <Button variant="secondary" onClick={() => addRow({ start: '', end: '' })}>
+            <Button variant="secondary" className="self-start" onClick={() => addRow({ start: '', end: '' })}>
               休憩を追加
             </Button>
           </div>
 
-          <label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             修正理由(必須)
-            <input value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
 
-          <div className="week-attendance__edit-actions">
+          <div className="flex gap-2 pt-1">
             <Button variant="secondary" onClick={() => setIsEditing(false)}>
               キャンセル
             </Button>
@@ -248,7 +250,7 @@ export function WeekAttendancePage() {
     <Card
       title="週次勤怠"
       actions={
-        <div className="week-attendance__nav">
+        <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
             前週
           </Button>
@@ -261,7 +263,7 @@ export function WeekAttendancePage() {
         </div>
       }
     >
-      <p className="week-attendance__range">
+      <p className="mb-3 text-sm text-muted-foreground">
         {dates[0]} 〜 {dates[6]}
       </p>
 
@@ -270,7 +272,7 @@ export function WeekAttendancePage() {
       ) : error ? (
         <ErrorMessage error={error} fallback="週次勤怠の取得に失敗しました。" />
       ) : (
-        <ul className="week-attendance__days">
+        <ul className="divide-y divide-border">
           {dates.map((date) => (
             <WeekDayRow key={date} date={date} day={daysByDate.get(date)} warnings={dayWarnings(date, daysByDate.get(date), today)} />
           ))}
