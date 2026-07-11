@@ -4,6 +4,7 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -33,6 +34,7 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
     public function __construct(
         private readonly EventStore $eventStore,
         private readonly AttendanceCalculator $calculator,
+        private readonly AttendanceEditGuard $guard,
     ) {}
 
     public function handle(Command $command): PaidLeaveRequest
@@ -87,9 +89,7 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
             ->whereDate('work_date', $request->target_date)
             ->first();
 
-        if ($day !== null && $day->isLocked()) {
-            throw new DomainRuleException('締め後の勤怠は修正申請から変更してください。');
-        }
+        $this->guard->assertMutable($day, $request->user_id, $request->target_date->toDateString());
 
         if ($day === null) {
             $shiftAssignment = EmployeeShiftAssignment::query()

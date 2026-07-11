@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\CorrectAttendancePunch;
+use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendancePunchResource;
 use App\Models\AttendancePunch;
 use App\Models\PunchType;
-use App\Models\Role;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -69,17 +70,58 @@ class AttendancePunchController extends Controller
     }
 
     /**
-     * 自分以外の打刻を記録・閲覧できるのはadminのみ(将来の共有デバイス連携を想定した拡張点)。
+     * UC-A013: 打刻ログを訂正する。元の打刻行は「訂正済み」として残り、訂正後の値は
+     * 新しい打刻行として追記される(打刻ログは追記のみ)。矛盾なく組み立てられる場合のみ
+     * 対象日の日次勤怠に反映し直す。
+     */
+    public function update(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
+    {
+        $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');
+
+        $data = $request->validate([
+            'punch_type' => ['required', Rule::in(PunchType::values())],
+            'punched_at' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $corrected = $commandBus->dispatch(new CorrectAttendancePunch(
+            attendancePunchId: $attendancePunch->id,
+            punchType: $data['punch_type'],
+            punchedAt: $data['punched_at'],
+            reason: $data['reason'],
+            correctedByUserId: $request->user()->id,
+        ));
+
+        return new AttendancePunchResource($corrected);
+    }
+
+    /**
+     * UC-A014: 打刻ログを削除する。行は物理削除せず「削除済み」として残す。
+     */
+    public function destroy(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
+    {
+        $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');
+
+        $data = $request->validate(['reason' => ['required', 'string']]);
+
+        $commandBus->dispatch(new DeleteAttendancePunch(
+            attendancePunchId: $attendancePunch->id,
+            reason: $data['reason'],
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return new AttendancePunchResource($attendancePunch->refresh());
+    }
+
+    /**
+     * 自分以外の打刻を記録・閲覧・訂正・削除できるのはadminのみ(将来の共有デバイス連携を
+     * 想定した拡張点)。
      */
     private function resolveTargetUserId(Request $request, ?int $requestedUserId): int
     {
         $userId = $requestedUserId ?? $request->user()->id;
 
-        abort_if(
-            $userId !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
-            403,
-            '他の社員の打刻を記録・閲覧する権限がありません。'
-        );
+        $this->abortUnlessOwnerOrAdmin($request, $userId, '他の社員の打刻を記録・閲覧する権限がありません。');
 
         return $userId;
     }

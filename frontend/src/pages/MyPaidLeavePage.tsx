@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { buttonVariants } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
@@ -166,7 +168,14 @@ export function MyPaidLeavePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="自分の有給">
+      <Card
+        title="自分の有給"
+        actions={
+          <Link to="/paid-leave/history" className={buttonVariants({ variant: 'secondary' })}>
+            履歴を見る
+          </Link>
+        }
+      >
         <p className="mb-4 text-sm text-foreground">
           残り<strong className="mx-1 text-lg font-semibold">{totalRemaining}</strong>日
         </p>

@@ -186,8 +186,9 @@ test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) =>
     punchedAt: `${futureDate}T09:05:00+09:00`,
   })
 
-  // 同一日に再実行すると前回分の打刻ログが残ったままになる(削除APIが無いため)。
-  // 矛盾の有無を見たいだけなので、正確な件数ではなく2件以上あることだけ確認する。
+  // 打刻ログの削除API(UC-A014)はあるが、このテストでは使わずに残したままにしている。
+  // 同一日に再実行すると前回分の打刻ログが残ったままになるため、矛盾の有無を見たいだけの
+  // このテストでは正確な件数ではなく2件以上あることだけ確認する。
   const punches = await fetchAttendancePunches(page, futureDate, futureDate)
   expect(punches.length).toBeGreaterThanOrEqual(2)
 

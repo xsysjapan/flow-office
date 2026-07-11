@@ -88,7 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
     });
 
-    // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011) ---
+    // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---
     Route::prefix('attendance')->group(function () {
         Route::get('/today', [AttendanceController::class, 'today']);
         Route::post('/clock-in', [AttendanceController::class, 'clockIn']);
@@ -98,16 +98,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/week', [AttendanceController::class, 'week']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
+        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth']);
     });
 
-    // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012) ---
+    // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012〜UC-A014) ---
     Route::prefix('attendance-punches')->group(function () {
         Route::get('/', [AttendancePunchController::class, 'index']);
         Route::post('/', [AttendancePunchController::class, 'store']);
+        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update']);
+        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy']);
     });
 
     Route::prefix('attendance-months')->group(function () {
@@ -117,11 +120,12 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('role:admin,hr_staff');
     });
 
-    // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004) ---
+    // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants']);
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
     Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests']);
     Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove']);
+    Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory']);
     Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest']);
     Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest']);
     Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest']);
@@ -129,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/paid-leave/grant-rules', [PaidLeaveController::class, 'storeRule']);
         Route::get('/paid-leave/grants/user/{userId}', [PaidLeaveController::class, 'grantsForUser']);
+        Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
     });
 

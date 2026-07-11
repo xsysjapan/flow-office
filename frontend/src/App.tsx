@@ -13,6 +13,7 @@ import { ApprovalsPage } from './pages/ApprovalsPage'
 import { AttendanceMonthsPage } from './pages/AttendanceMonthsPage'
 import { MonthsToApprovePage } from './pages/MonthsToApprovePage'
 import { MyPaidLeavePage } from './pages/MyPaidLeavePage'
+import { MyPaidLeaveHistoryPage } from './pages/MyPaidLeaveHistoryPage'
 import { PaidLeaveRequestsToApprovePage } from './pages/PaidLeaveRequestsToApprovePage'
 import { BackOfficeTaskListPage } from './pages/BackOfficeTaskListPage'
 import { BackOfficeTaskDetailPage } from './pages/BackOfficeTaskDetailPage'
@@ -24,6 +25,7 @@ import { WorkCalendarListPage } from './pages/WorkCalendarListPage'
 import { WorkCalendarDaysPage } from './pages/WorkCalendarDaysPage'
 import { WorkStylesAndShiftsPage } from './pages/WorkStylesAndShiftsPage'
 import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
+import { PaidLeaveHistoryAdminPage } from './pages/PaidLeaveHistoryAdminPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AttendanceExportPage } from './pages/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
@@ -51,6 +53,7 @@ function App() {
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
+        <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
         <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
@@ -64,6 +67,7 @@ function App() {
           <Route path="work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
           <Route path="work-styles" element={<WorkStylesAndShiftsPage />} />
           <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
+          <Route path="paid-leave/history" element={<PaidLeaveHistoryAdminPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

@@ -4,16 +4,21 @@ import {
   clockIn,
   clockOut,
   closeMonth,
+  correctPunch,
+  deleteAttendanceDay,
+  deletePunch,
   endBreak,
   fetchMonth,
   fetchMonthsToApprove,
   fetchMyMonths,
+  fetchPunches,
   fetchToday,
   fetchWeek,
   returnMonth,
   startBreak,
   submitMonth,
   updateAttendanceDay,
+  type CorrectAttendancePunchInput,
   type EditAttendanceDayInput,
 } from '../api/attendance'
 
@@ -67,6 +72,51 @@ export function useUpdateAttendanceDay() {
       void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
     },
   })
+}
+
+export function useDeleteAttendanceDay() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => deleteAttendanceDay(id, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+const PUNCHES_KEY = ['attendance', 'punches']
+
+export function usePunches(params: { from?: string; to?: string }) {
+  return useQuery({
+    queryKey: [...PUNCHES_KEY, params.from, params.to],
+    queryFn: () => fetchPunches(params),
+    enabled: Boolean(params.from && params.to),
+  })
+}
+
+function usePunchAction<TInput>(action: (id: number, input: TInput) => Promise<unknown>) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: TInput }) => action(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+export function useCorrectPunch() {
+  return usePunchAction<CorrectAttendancePunchInput>(correctPunch)
+}
+
+export function useDeletePunch() {
+  return usePunchAction<string>((id, reason) => deletePunch(id, reason))
 }
 
 export function useAttendanceMonth(yearMonth: string) {

@@ -41,8 +41,11 @@
 - `attendance.break_ended`
 - `attendance.clocked_out`
 - `attendance.day_edited`
+- `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
 - `attendance.day_calculated`
 - `attendance_punch.recorded`
+- `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
+- `attendance_punch.deleted` (UC-A014 打刻ログを削除する)
 - `attendance_day.synced_from_punches`
 - `attendance.month_submitted`
 - `attendance.month_approved`

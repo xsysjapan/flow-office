@@ -101,6 +101,28 @@ export interface AttendanceDay {
   planned_end_at?: string | null
 }
 
+export type PunchType = 'clock_in' | 'break_start' | 'break_end' | 'clock_out'
+
+export type PunchStatus = 'active' | 'corrected' | 'deleted'
+
+/** UC-A012〜UC-A014: 打刻ログ。参考情報であり勤怠の正ではない。訂正・削除された
+ *  打刻ログも行を保持したまま参照できる(status/correction_reason等)。 */
+export interface AttendancePunch {
+  id: number
+  user_id: number
+  work_date: string
+  punch_type: PunchType
+  punched_at: string
+  source: string
+  note: string | null
+  status: PunchStatus
+  correction_reason: string | null
+  corrected_by_user_id: number | null
+  corrected_at: string | null
+  superseded_by_punch_id: number | null
+  created_at: string | null
+}
+
 export type AttendanceMonthStatus = 'not_submitted' | 'submitted' | 'approved' | 'returned' | 'closed'
 
 export interface AttendanceMonth {

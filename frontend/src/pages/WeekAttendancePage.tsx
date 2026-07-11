@@ -4,18 +4,37 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
+import { NativeSelect } from '../components/ui/native-select'
 import { useEditableRows } from '../hooks/useEditableRows'
-import { useUpdateAttendanceDay, useWeek } from '../hooks/useAttendance'
-import type { AttendanceDay } from '../api/types'
+import {
+  useCorrectPunch,
+  useDeleteAttendanceDay,
+  useDeletePunch,
+  usePunches,
+  useUpdateAttendanceDay,
+  useWeek,
+} from '../hooks/useAttendance'
+import type { AttendanceDay, AttendancePunch, PunchType } from '../api/types'
 import {
   browserOffsetString,
   combineDatetimeLocalWithOffset,
   isoToLocalDatetimeLiteral,
+  isoToOffsetString,
   offsetMinutesToString,
 } from '../utils/offsetDateTime'
-import { attendanceDayStatusLabel } from '../utils/statusLabels'
+import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
+
+const PUNCH_TYPES: PunchType[] = ['clock_in', 'break_start', 'break_end', 'clock_out']
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -58,6 +77,223 @@ function dayWarnings(date: string, day: AttendanceDay | undefined, today: string
 interface BreakRowData {
   start: string
   end: string
+}
+
+/**
+ * UC-A013/UC-A014: 打刻ログの訂正・削除。訂正・削除後も行は残り、状態
+ * (有効・訂正済み・削除済み)付きで一覧に表示され続ける(打刻ログは追記のみ)。
+ */
+function PunchLogRow({ punch }: { punch: AttendancePunch }) {
+  const [mode, setMode] = useState<'view' | 'correct' | 'delete'>('view')
+  const [punchType, setPunchType] = useState<PunchType>(punch.punch_type)
+  const [punchedAt, setPunchedAt] = useState(isoToLocalDatetimeLiteral(punch.punched_at))
+  const [offset, setOffset] = useState(browserOffsetString())
+  const [reason, setReason] = useState('')
+  const correctPunch = useCorrectPunch()
+  const deletePunch = useDeletePunch()
+  const { label, tone } = punchStatusLabel(punch.status)
+
+  const startEditing = () => {
+    setPunchType(punch.punch_type)
+    setPunchedAt(isoToLocalDatetimeLiteral(punch.punched_at))
+    setOffset(isoToOffsetString(punch.punched_at))
+    setReason('')
+    setMode('correct')
+  }
+
+  const startDeleting = () => {
+    setReason('')
+    setMode('delete')
+  }
+
+  const handleCorrect = () => {
+    const combined = combineDatetimeLocalWithOffset(punchedAt, offset)
+    if (!combined) return
+    correctPunch.mutate(
+      { id: punch.id, input: { punch_type: punchType, punched_at: combined, reason } },
+      { onSuccess: () => setMode('view') },
+    )
+  }
+
+  const handleDelete = () => {
+    deletePunch.mutate({ id: punch.id, input: reason }, { onSuccess: () => setMode('view') })
+  }
+
+  return (
+    <li className="flex flex-col gap-1.5 py-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-foreground">{punchTypeLabel(punch.punch_type)}</span>
+        <span className="text-muted-foreground">{isoToLocalDatetimeLiteral(punch.punched_at).replace('T', ' ')}</span>
+        <Badge tone={tone}>{label}</Badge>
+        {punch.status === 'active' && mode === 'view' && (
+          <div className="ml-auto flex gap-1.5">
+            <Button variant="secondary" onClick={startEditing}>
+              訂正
+            </Button>
+            <Button variant="danger" onClick={startDeleting}>
+              削除
+            </Button>
+          </div>
+        )}
+        {punch.status !== 'active' && punch.correction_reason && (
+          <span className="text-muted-foreground">理由: {punch.correction_reason}</span>
+        )}
+      </div>
+
+      {mode === 'correct' && (
+        <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+          {correctPunch.error && <ErrorMessage error={correctPunch.error} />}
+          <div className="flex flex-wrap items-center gap-2">
+            <NativeSelect
+              aria-label="打刻種別"
+              className="w-auto"
+              value={punchType}
+              onChange={(e) => setPunchType(e.target.value as PunchType)}
+            >
+              {PUNCH_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {punchTypeLabel(type)}
+                </option>
+              ))}
+            </NativeSelect>
+            <Input
+              type="datetime-local"
+              aria-label="訂正後の日時"
+              className="w-auto"
+              value={punchedAt}
+              onChange={(e) => setPunchedAt(e.target.value)}
+            />
+            <Input
+              aria-label="訂正後のオフセット"
+              className="w-24"
+              value={offset}
+              placeholder="+09:00"
+              onChange={(e) => setOffset(e.target.value)}
+            />
+          </div>
+          <Input
+            aria-label="訂正理由"
+            placeholder="訂正理由(必須)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setMode('view')}>
+              キャンセル
+            </Button>
+            <Button isLoading={correctPunch.isPending} disabled={!reason || !punchedAt} onClick={handleCorrect}>
+              訂正を保存
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'delete' && (
+        <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+          {deletePunch.error && <ErrorMessage error={deletePunch.error} />}
+          <Input
+            aria-label="削除理由"
+            placeholder="削除理由(必須)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setMode('view')}>
+              キャンセル
+            </Button>
+            <Button variant="danger" isLoading={deletePunch.isPending} disabled={!reason} onClick={handleDelete}>
+              削除する
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+function PunchLogSection({ date }: { date: string }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const { data: punches, isLoading } = usePunches(isOpen ? { from: date, to: date } : {})
+
+  return (
+    <div className="mt-2">
+      <Button variant="secondary" onClick={() => setIsOpen((prev) => !prev)}>
+        {isOpen ? '打刻ログを閉じる' : '打刻ログを表示'}
+      </Button>
+
+      {isOpen && (
+        <div className="mt-2 rounded-lg border border-border p-2">
+          {isLoading ? (
+            <LoadingState />
+          ) : !punches || punches.length === 0 ? (
+            <p className="text-xs text-muted-foreground">この日の打刻ログはありません。</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {punches.map((punch) => (
+                <PunchLogRow key={punch.id} punch={punch} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface DeleteDayDialogProps {
+  day: AttendanceDay
+}
+
+/** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
+function DeleteDayDialog({ day }: DeleteDayDialogProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const deleteDay = useDeleteAttendanceDay()
+
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open)
+        if (open) {
+          setReason('')
+          deleteDay.reset()
+        }
+      }}
+    >
+      <Button variant="danger" onClick={() => setIsOpen(true)}>
+        削除
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>日次勤怠を削除しますか?</DialogTitle>
+          <DialogDescription>
+            {day.work_date} の日次勤怠を削除します。承認済みの月次に含まれる場合は削除できません。
+          </DialogDescription>
+        </DialogHeader>
+        {deleteDay.error && <ErrorMessage error={deleteDay.error} />}
+        <Input
+          aria-label="削除理由"
+          placeholder="削除理由(必須)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setIsOpen(false)}>
+            キャンセル
+          </Button>
+          <Button
+            variant="danger"
+            isLoading={deleteDay.isPending}
+            disabled={!reason}
+            onClick={() => deleteDay.mutate({ id: day.id, reason }, { onSuccess: () => setIsOpen(false) })}
+          >
+            削除する
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 interface WeekDayRowProps {
@@ -130,9 +366,12 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
           </Badge>
         ))}
         {day && !isEditing && (
-          <Button variant="secondary" onClick={startEditing} className="ml-auto">
-            編集
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button variant="secondary" onClick={startEditing}>
+              編集
+            </Button>
+            <DeleteDayDialog day={day} />
+          </div>
         )}
       </div>
 
@@ -230,6 +469,8 @@ function WeekDayRow({ date, day, warnings }: WeekDayRowProps) {
           </div>
         </div>
       )}
+
+      <PunchLogSection date={date} />
     </li>
   )
 }

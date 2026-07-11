@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Paginated, PaidLeaveGrant, PaidLeaveRequest, User } from '../api/types'
 import { MyPaidLeavePage } from './MyPaidLeavePage'
 
@@ -72,7 +73,9 @@ function withSeeded(grantData: PaidLeaveGrant[], requestData: PaidLeaveRequest[]
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MyPaidLeavePage />
+        <MemoryRouter>
+          <MyPaidLeavePage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }
