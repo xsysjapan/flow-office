@@ -59,7 +59,7 @@ class RecordAttendancePunchHandler implements CommandHandler
             ),
         );
 
-        $this->syncer->sync($user, $command->workDate);
+        $this->syncer->sync($user->id, $command->workDate);
 
         return $punch;
     }

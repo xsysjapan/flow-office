@@ -10,7 +10,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendancePunchResource;
 use App\Models\AttendancePunch;
 use App\Models\PunchType;
-use App\Models\Role;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -77,7 +76,7 @@ class AttendancePunchController extends Controller
      */
     public function update(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
     {
-        $this->authorizePunchOwner($request, $attendancePunch);
+        $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');
 
         $data = $request->validate([
             'punch_type' => ['required', Rule::in(PunchType::values())],
@@ -101,7 +100,7 @@ class AttendancePunchController extends Controller
      */
     public function destroy(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
     {
-        $this->authorizePunchOwner($request, $attendancePunch);
+        $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');
 
         $data = $request->validate(['reason' => ['required', 'string']]);
 
@@ -122,21 +121,8 @@ class AttendancePunchController extends Controller
     {
         $userId = $requestedUserId ?? $request->user()->id;
 
-        abort_if(
-            $userId !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
-            403,
-            '他の社員の打刻を記録・閲覧する権限がありません。'
-        );
+        $this->abortUnlessOwnerOrAdmin($request, $userId, '他の社員の打刻を記録・閲覧する権限がありません。');
 
         return $userId;
-    }
-
-    private function authorizePunchOwner(Request $request, AttendancePunch $punch): void
-    {
-        abort_if(
-            $punch->user_id !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
-            403,
-            '他の社員の打刻を訂正・削除する権限がありません。'
-        );
     }
 }

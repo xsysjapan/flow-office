@@ -185,10 +185,11 @@ class AttendancePunchCorrectionTest extends TestCase
     }
 
     /**
-     * 打刻の訂正・削除による日次勤怠への再反映は、締め・承認済み月の日次勤怠を
-     * 上書きしない(UC-A005/UC-A015と同じ制約。矛盾のない実装であることの確認)。
+     * 打刻ログの訂正・削除も、日次勤怠の編集・削除(UC-A005/UC-A015)と同じく、
+     * 月次が承認済み以降になった時点でできなくなる。打刻ログの状態が変わることで
+     * 承認済みの記録に対する監査証跡が書き換わってしまうことを防ぐため。
      */
-    public function test_punch_correction_does_not_resync_a_day_once_its_month_is_approved(): void
+    public function test_punch_correction_and_deletion_are_blocked_once_the_months_month_is_approved(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
@@ -207,12 +208,19 @@ class AttendancePunchCorrectionTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', '2026-07')->first()->id;
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
 
-        // 承認後(締め前)に打刻を訂正しても、日次勤怠は上書きされない。
+        // 承認後(締め前)は打刻の訂正・削除もできない。
         $this->actingAs($employee)->putJson("/api/attendance-punches/{$clockOutId}", [
             'punch_type' => 'clock_out',
             'punched_at' => '2026-07-09T20:00:00+09:00',
             'reason' => '承認後に訂正を試みるテスト',
-        ])->assertSuccessful();
+        ])->assertStatus(422);
+
+        $this->actingAs($employee)->deleteJson("/api/attendance-punches/{$clockOutId}", [
+            'reason' => '承認後に削除を試みるテスト',
+        ])->assertStatus(422);
+
+        $original = AttendancePunch::query()->find($clockOutId);
+        $this->assertSame('active', $original->status);
 
         $day->refresh();
         $this->assertSame(

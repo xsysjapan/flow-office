@@ -154,11 +154,7 @@ class AttendanceController extends Controller
      */
     public function destroyDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): JsonResponse
     {
-        abort_if(
-            $attendanceDay->user_id !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
-            403,
-            '他の社員の日次勤怠を削除する権限がありません。'
-        );
+        $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を削除する権限がありません。');
 
         $data = $request->validate(['reason' => ['required', 'string']]);
 

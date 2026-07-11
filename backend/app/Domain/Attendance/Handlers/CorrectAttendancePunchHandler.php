@@ -5,21 +5,22 @@ namespace App\Domain\Attendance\Handlers;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Services\AttendanceDayPunchSyncer;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\PunchStatus;
-use App\Models\User;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-A013: 打刻ログを訂正する。打刻ログは追記のみのため、元の行は書き換えず「訂正済み」
- * として残し、訂正後の値を新しい打刻行として追記する。矛盾なく組み立てられる場合のみ
- * 対象日の勤怠(attendance_days)に反映し直す(打刻以外の経路で確定済み・締め後・
- * 承認済み月に属する日は上書きしない)。
+ * として残し、訂正後の値を新しい打刻行として追記する。対象日が締め後・承認済み月に
+ * 属する場合は、打刻ログ自体の訂正もできない(AttendanceEditGuard参照。打刻ログの状態が
+ * 変わることで、承認済みの記録に対する監査証跡が書き換わってしまうため)。
  *
  * @implements CommandHandler<CorrectAttendancePunch>
  */
@@ -28,6 +29,7 @@ class CorrectAttendancePunchHandler implements CommandHandler
     public function __construct(
         private readonly EventStore $eventStore,
         private readonly AttendanceDayPunchSyncer $syncer,
+        private readonly AttendanceEditGuard $guard,
     ) {}
 
     public function handle(Command $command): AttendancePunch
@@ -40,8 +42,12 @@ class CorrectAttendancePunchHandler implements CommandHandler
             throw new DomainRuleException('既に訂正・削除済みの打刻ログは重ねて訂正できません。');
         }
 
-        $user = User::query()->findOrFail($original->user_id);
         $workDate = $original->work_date->toDateString();
+        $day = AttendanceDay::query()
+            ->where('user_id', $original->user_id)
+            ->whereDate('work_date', $workDate)
+            ->first();
+        $this->guard->assertMutable($day, $original->user_id, $workDate);
 
         [$punchedAt, $utcOffsetMinutes] = LocalDateTime::splitOffset($command->punchedAt);
 
@@ -76,7 +82,7 @@ class CorrectAttendancePunchHandler implements CommandHandler
             ),
         );
 
-        $this->syncer->sync($user, $workDate);
+        $this->syncer->sync($original->user_id, $workDate);
 
         return $corrected;
     }

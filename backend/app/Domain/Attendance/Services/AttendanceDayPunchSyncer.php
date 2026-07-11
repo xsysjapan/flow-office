@@ -11,7 +11,6 @@ use App\Models\AttendanceDayStatus;
 use App\Models\AttendancePunch;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PunchStatus;
-use App\Models\User;
 use App\Support\LocalDateTime;
 
 /**
@@ -28,9 +27,8 @@ class AttendanceDayPunchSyncer
         private readonly AttendanceEditGuard $guard,
     ) {}
 
-    public function sync(User $user, string $workDate): void
+    public function sync(int $userId, string $workDate): void
     {
-        $userId = $user->id;
         $punches = AttendancePunch::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)

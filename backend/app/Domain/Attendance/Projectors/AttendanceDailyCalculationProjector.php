@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\EventSourcing\Contracts\Projector;
 use App\Models\AttendanceDailyCalculation;
+use App\Models\AttendanceDay;
 use App\Models\StoredEvent;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,13 @@ class AttendanceDailyCalculationProjector implements Projector
     {
         $payload = $event->payload;
         $attendanceDayId = $payload['attendance_day_id'];
+
+        // UC-A015で日次勤怠(attendance_days)自体が削除されている場合、そのIDを参照する
+        // 過去のイベントは再生成時にスキップする(親行が無い状態でupdateOrCreateすると
+        // 外部キー制約違反になるため)。
+        if (! AttendanceDay::query()->whereKey($attendanceDayId)->exists()) {
+            return;
+        }
 
         AttendanceDailyCalculation::query()->updateOrCreate(
             ['attendance_day_id' => $attendanceDayId],

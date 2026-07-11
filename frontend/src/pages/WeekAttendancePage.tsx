@@ -181,7 +181,7 @@ function PunchLogRow({ punch }: { punch: AttendancePunch }) {
             <Button variant="secondary" onClick={() => setMode('view')}>
               キャンセル
             </Button>
-            <Button isLoading={correctPunch.isPending} disabled={!reason} onClick={handleCorrect}>
+            <Button isLoading={correctPunch.isPending} disabled={!reason || !punchedAt} onClick={handleCorrect}>
               訂正を保存
             </Button>
           </div>

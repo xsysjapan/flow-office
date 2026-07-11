@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { mondayOf } from '../../src/utils/weekDates'
 
 /**
  * UserPicker(氏名/メールアドレスで検索するコンボボックス)で対象社員を選択する。
@@ -14,15 +15,6 @@ export async function pickUser(
   await page.getByLabel(label).click(options)
   await page.getByPlaceholder('氏名またはメールアドレスで検索').fill(name, options)
   await page.getByRole('option', { name: `${name}(${email})` }).click(options)
-}
-
-function mondayOf(date: Date): Date {
-  const day = date.getDay()
-  const diff = (day === 0 ? -6 : 1) - day
-  const result = new Date(date)
-  result.setDate(date.getDate() + diff)
-  result.setHours(0, 0, 0, 0)
-  return result
 }
 
 /**

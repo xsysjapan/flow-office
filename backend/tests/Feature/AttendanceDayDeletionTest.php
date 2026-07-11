@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
 /**
@@ -35,6 +37,31 @@ class AttendanceDayDeletionTest extends TestCase
         $response->assertOk();
 
         $this->assertNull(AttendanceDay::query()->find($dayId));
+    }
+
+    /**
+     * 削除された日次勤怠を参照する過去の `attendance.day_calculated` イベントは
+     * `stored_events` に残り続ける(イベントは追記のみ)。`projections:rebuild` で
+     * 全件再生した際に、既に存在しない attendance_day_id への外部キー違反で
+     * 失敗しないことを確認する(docs/20-implementation-notes.md
+     * 「EventStoreを正とし、Projectionは再生成可能にする」)。
+     */
+    public function test_projections_rebuild_survives_a_deleted_day_that_still_has_calculated_events(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $this->assertNotNull(AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->first());
+
+        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", [
+            'reason' => '削除済み日のProjection再生成テスト',
+        ])->assertOk();
+
+        Artisan::call('projections:rebuild', ['projector' => 'AttendanceDailyCalculationProjector']);
+
+        $this->assertNull(AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->first());
     }
 
     public function test_deleting_a_day_frees_it_up_so_the_live_clock_flow_can_recreate_it(): void
