@@ -3,8 +3,9 @@ import { Badge } from '../components/Badge/Badge'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Button } from '../components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { useRequestTypes } from '../hooks/useRequestTypes'
-import './RequestTypeListPage.css'
 
 /**
  * UC-M002 / UC-W001: 管理者が申請種別を一覧・管理する。
@@ -21,32 +22,45 @@ export function RequestTypeListPage() {
     <Card
       title="申請種別一覧"
       actions={
-        <Link className="fo-button fo-button--primary request-type-list__new" to="/admin/request-types/new">
-          新規作成
-        </Link>
+        <Button asChild>
+          <Link to="/admin/request-types/new">新規作成</Link>
+        </Button>
       }
     >
       {types.length === 0 ? (
-        <p>申請種別はまだありません。</p>
+        <p className="text-sm text-muted-foreground">申請種別はまだありません。</p>
       ) : (
-        <ul className="request-type-list">
-          {types.map((type) => (
-            <li key={type.id}>
-              <div>
-                <Link to={`/admin/request-types/${type.id}`}>{type.name}</Link>
-                <span className="request-type-list__code">{type.code}</span>
-              </div>
-              <div className="request-type-list__meta">
-                {type.requires_backoffice_task && (
-                  <span className="request-type-list__task-type">
-                    バックオフィス: {type.backoffice_task_type ?? '未設定'}
-                  </span>
-                )}
-                <Badge tone={type.is_active ? 'success' : 'neutral'}>{type.is_active ? '有効' : '無効'}</Badge>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>名称</TableHead>
+              <TableHead>コード</TableHead>
+              <TableHead>バックオフィス</TableHead>
+              <TableHead>状態</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {types.map((type) => (
+              <TableRow key={type.id}>
+                <TableCell>
+                  <Link
+                    to={`/admin/request-types/${type.id}`}
+                    className="font-medium text-foreground hover:text-primary hover:underline"
+                  >
+                    {type.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{type.code}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {type.requires_backoffice_task ? (type.backoffice_task_type ?? '未設定') : '-'}
+                </TableCell>
+                <TableCell>
+                  <Badge tone={type.is_active ? 'success' : 'neutral'}>{type.is_active ? '有効' : '無効'}</Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </Card>
   )

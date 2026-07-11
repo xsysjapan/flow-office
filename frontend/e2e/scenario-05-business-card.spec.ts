@@ -35,7 +35,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     // 2. 渡辺直樹が承認する。承認により総務向けバックオフィスタスクが自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await approverPage.goto('/approvals')
-    const approvalRow = approverPage.locator('li', { hasText: title })
+    const approvalRow = approverPage.getByRole('row', { name: title })
     await expect(approvalRow).toBeVisible()
     await approvalRow.getByRole('link', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
@@ -46,7 +46,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     //    completed(完了)の順にステータスを進める(UC-B005)。
     await loginAs(generalAffairsPage, SCENARIO_USERS.generalAffairsStaff)
     await generalAffairsPage.goto('/backoffice-tasks')
-    const taskRow = generalAffairsPage.locator('li', { hasText: title })
+    const taskRow = generalAffairsPage.getByRole('row', { name: title })
     await expect(taskRow).toBeVisible()
     await taskRow.getByRole('link', { name: title }).click()
 

@@ -4,9 +4,9 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
 import { downloadAuditLogCsv, type AuditLogFilters } from '../api/auditLog'
 import { useAuditLog } from '../hooks/useAuditLog'
-import './AuditLogPage.css'
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
@@ -43,9 +43,9 @@ export function AuditLogPage() {
         </Button>
       }
     >
-      <div className="audit-log__filters">
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FormField label="対象タイプ" htmlFor="audit-aggregate-type">
-          <input
+          <Input
             id="audit-aggregate-type"
             placeholder="workflow_request"
             value={aggregateType}
@@ -53,19 +53,19 @@ export function AuditLogPage() {
           />
         </FormField>
         <FormField label="対象ID" htmlFor="audit-aggregate-id">
-          <input id="audit-aggregate-id" value={aggregateId} onChange={(e) => setAggregateId(e.target.value)} />
+          <Input id="audit-aggregate-id" value={aggregateId} onChange={(e) => setAggregateId(e.target.value)} />
         </FormField>
         <FormField label="イベント種別" htmlFor="audit-event-type">
-          <input id="audit-event-type" value={eventType} onChange={(e) => setEventType(e.target.value)} />
+          <Input id="audit-event-type" value={eventType} onChange={(e) => setEventType(e.target.value)} />
         </FormField>
         <FormField label="ユーザーID" htmlFor="audit-user-id">
-          <input id="audit-user-id" type="number" value={userId} onChange={(e) => setUserId(e.target.value)} />
+          <Input id="audit-user-id" type="number" value={userId} onChange={(e) => setUserId(e.target.value)} />
         </FormField>
         <FormField label="期間(開始)" htmlFor="audit-from">
-          <input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </FormField>
         <FormField label="期間(終了)" htmlFor="audit-to">
-          <input id="audit-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input id="audit-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </FormField>
       </div>
 
@@ -75,24 +75,28 @@ export function AuditLogPage() {
         <ErrorMessage error={error} fallback="監査ログの取得に失敗しました。" />
       ) : (
         <>
-          <p className="audit-log__summary">
+          <p className="mb-3 text-sm text-muted-foreground">
             全{data?.meta.total ?? 0}件 ({data?.meta.current_page ?? 1}/{data?.meta.last_page ?? 1}ページ)
           </p>
           {(data?.data ?? []).length === 0 ? (
-            <p>該当するログはありません。</p>
+            <p className="text-sm text-muted-foreground">該当するログはありません。</p>
           ) : (
-            <ul className="audit-log__list">
+            <ul className="divide-y divide-border">
               {data?.data.map((event) => (
-                <li key={event.id}>
-                  <div className="audit-log__row">
-                    <span>{formatDateTime(event.occurred_at)}</span>
-                    <span>{event.aggregate_type}</span>
-                    <span>#{event.aggregate_id}</span>
-                    <span>{event.event_type}</span>
+                <li key={event.id} className="py-2">
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <span className="text-foreground">{formatDateTime(event.occurred_at)}</span>
+                    <span className="text-muted-foreground">{event.aggregate_type}</span>
+                    <span className="text-muted-foreground">#{event.aggregate_id}</span>
+                    <span className="text-foreground">{event.event_type}</span>
                   </div>
-                  <details>
-                    <summary>詳細</summary>
-                    <pre>{JSON.stringify(event.payload, null, 2)}</pre>
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                      詳細
+                    </summary>
+                    <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-xs text-foreground">
+                      {JSON.stringify(event.payload, null, 2)}
+                    </pre>
                   </details>
                 </li>
               ))}

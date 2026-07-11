@@ -6,6 +6,8 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
+import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import type { BackOfficeTaskStatus } from '../api/types'
 import {
@@ -14,7 +16,6 @@ import {
   useChangeBackOfficeTaskStatus,
 } from '../hooks/useBackOfficeTasks'
 import { backOfficeTaskStatusLabel } from '../utils/statusLabels'
-import './BackOfficeTaskDetailPage.css'
 
 const STATUS_OPTIONS: BackOfficeTaskStatus[] = [
   'not_started',
@@ -58,26 +59,26 @@ export function BackOfficeTaskDetailPage() {
     <Card title={task.title} actions={<Badge tone={tone}>{label}</Badge>}>
       {actionError && <ErrorMessage error={actionError} />}
 
-      <dl className="backoffice-task-detail__meta">
-        <dt>種別</dt>
-        <dd>{task.task_type}</dd>
-        <dt>元データ</dt>
-        <dd>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">種別</dt>
+        <dd className="text-foreground">{task.task_type}</dd>
+        <dt className="font-medium text-muted-foreground">元データ</dt>
+        <dd className="text-foreground">
           {task.source_type} #{task.source_id}
         </dd>
-        <dt>担当部署</dt>
-        <dd>{task.assigned_department ?? '未設定'}</dd>
-        <dt>担当者</dt>
-        <dd>{task.assignee?.name ?? '未割り当て'}</dd>
-        <dt>期限</dt>
-        <dd>{task.due_on ?? '未設定'}</dd>
-        <dt>完了日時</dt>
-        <dd>{task.completed_at ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">担当部署</dt>
+        <dd className="text-foreground">{task.assigned_department ?? '未設定'}</dd>
+        <dt className="font-medium text-muted-foreground">担当者</dt>
+        <dd className="text-foreground">{task.assignee?.name ?? '未割り当て'}</dd>
+        <dt className="font-medium text-muted-foreground">期限</dt>
+        <dd className="text-foreground">{task.due_on ?? '未設定'}</dd>
+        <dt className="font-medium text-muted-foreground">完了日時</dt>
+        <dd className="text-foreground">{task.completed_at ?? '-'}</dd>
       </dl>
 
       {!task.assignee && (
-        <div className="backoffice-task-detail__assign">
-          <h3>担当者を割り当てる</h3>
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">担当者を割り当てる</h3>
           <FormField label="担当者" htmlFor="assignee">
             <UserPicker id="assignee" value={assignedUserId} onChange={setAssignedUserId} />
           </FormField>
@@ -91,30 +92,24 @@ export function BackOfficeTaskDetailPage() {
         </div>
       )}
 
-      <div className="backoffice-task-detail__status-change">
-        <h3>状態を変更する</h3>
-        <div className="backoffice-task-detail__status-change-row">
+      <div className="mt-5 border-t border-border pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">状態を変更する</h3>
+        <div className="flex flex-wrap items-end gap-3">
           <FormField label="状態" htmlFor="status">
-            <select
-              id="status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}
-            >
+            <NativeSelect id="status" value={status} onChange={(e) => setStatus(e.target.value as BackOfficeTaskStatus)}>
               {STATUS_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {backOfficeTaskStatusLabel(option).label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </FormField>
           <FormField label="コメント(任意)" htmlFor="status-comment">
-            <input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+            <Input id="status-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
           </FormField>
           <Button
             isLoading={changeStatus.isPending}
-            onClick={() =>
-              changeStatus.mutate({ id: taskId, status, comment: comment || undefined })
-            }
+            onClick={() => changeStatus.mutate({ id: taskId, status, comment: comment || undefined })}
           >
             更新する
           </Button>

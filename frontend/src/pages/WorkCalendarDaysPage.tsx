@@ -3,9 +3,11 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { useEditableRows } from '../hooks/useEditableRows'
 import { usePutWorkCalendarDays, useWorkCalendars } from '../hooks/useWorkCalendars'
-import './WorkCalendarDaysPage.css'
 
 interface DayRowData {
   date: string
@@ -41,7 +43,7 @@ export function WorkCalendarDaysPage() {
   if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
 
   const calendar = calendars?.find((c) => c.id === calendarId)
-  if (!calendar) return <p>カレンダーが見つかりません。</p>
+  if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
 
   const handleSave = () => {
     putDays.mutate({
@@ -52,83 +54,80 @@ export function WorkCalendarDaysPage() {
 
   return (
     <Card title={`${calendar.name} の日別編集`}>
-      <dl className="work-calendar-days__meta">
-        <dt>年度</dt>
-        <dd>{calendar.fiscal_year}</dd>
-        <dt>期間</dt>
-        <dd>
+      <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">年度</dt>
+        <dd className="text-foreground">{calendar.fiscal_year}</dd>
+        <dt className="font-medium text-muted-foreground">期間</dt>
+        <dd className="text-foreground">
           {calendar.starts_on}〜{calendar.ends_on}
         </dd>
       </dl>
 
       {putDays.error && <ErrorMessage error={putDays.error} />}
 
-      <table className="work-calendar-days__table">
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>区分</th>
-            <th>稼働日</th>
-            <th>法定休日</th>
-            <th>所定休日</th>
-            <th>メモ</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>日付</TableHead>
+            <TableHead>区分</TableHead>
+            <TableHead>稼働日</TableHead>
+            <TableHead>法定休日</TableHead>
+            <TableHead>所定休日</TableHead>
+            <TableHead>メモ</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => (
-            <tr key={row.rowId}>
-              <td>
-                <input
+            <TableRow key={row.rowId}>
+              <TableCell>
+                <Input
                   aria-label="日付"
                   type="date"
                   value={row.date}
                   onChange={(e) => updateRow(row.rowId, { date: e.target.value })}
                 />
-              </td>
-              <td>
-                <input
+              </TableCell>
+              <TableCell>
+                <Input
                   aria-label="区分"
                   value={row.day_type}
                   onChange={(e) => updateRow(row.rowId, { day_type: e.target.value })}
                 />
-              </td>
-              <td>
-                <input
+              </TableCell>
+              <TableCell>
+                <Checkbox
                   aria-label="稼働日"
-                  type="checkbox"
                   checked={row.is_working_day}
-                  onChange={(e) => updateRow(row.rowId, { is_working_day: e.target.checked })}
+                  onCheckedChange={(checked) => updateRow(row.rowId, { is_working_day: checked === true })}
                 />
-              </td>
-              <td>
-                <input
+              </TableCell>
+              <TableCell>
+                <Checkbox
                   aria-label="法定休日"
-                  type="checkbox"
                   checked={row.is_legal_holiday}
-                  onChange={(e) => updateRow(row.rowId, { is_legal_holiday: e.target.checked })}
+                  onCheckedChange={(checked) => updateRow(row.rowId, { is_legal_holiday: checked === true })}
                 />
-              </td>
-              <td>
-                <input
+              </TableCell>
+              <TableCell>
+                <Checkbox
                   aria-label="所定休日"
-                  type="checkbox"
                   checked={row.is_company_holiday}
-                  onChange={(e) => updateRow(row.rowId, { is_company_holiday: e.target.checked })}
+                  onCheckedChange={(checked) => updateRow(row.rowId, { is_company_holiday: checked === true })}
                 />
-              </td>
-              <td>
-                <input
+              </TableCell>
+              <TableCell>
+                <Input
                   aria-label="メモ"
                   value={row.note}
                   onChange={(e) => updateRow(row.rowId, { note: e.target.value })}
                 />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
-      <div className="work-calendar-days__actions">
+      <div className="mt-4 flex gap-3">
         <Button variant="secondary" onClick={() => addRow(emptyRow)}>
           行を追加
         </Button>

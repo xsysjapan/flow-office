@@ -3,9 +3,9 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
+import { Input } from '../components/ui/input'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { downloadAttendanceCsv } from '../api/exports'
-import './AttendanceExportPage.css'
 
 /**
  * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。
@@ -30,15 +30,15 @@ export function AttendanceExportPage() {
 
   return (
     <Card title="勤怠CSV出力">
-      <p className="attendance-export__note">
+      <p className="mb-4 text-sm text-muted-foreground">
         締め処理が完了した月次勤怠のみがCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
       </p>
 
       {error && <ErrorMessage error={error} fallback="勤怠CSVの取得に失敗しました。" />}
 
-      <div className="attendance-export__form">
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象月" htmlFor="attendance-export-year-month" required>
-          <input
+          <Input
             id="attendance-export-year-month"
             type="month"
             value={yearMonth}
