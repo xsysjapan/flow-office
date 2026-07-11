@@ -24,6 +24,8 @@ class WorkStyleResource extends JsonResource
             'default_break_minutes' => $this->default_break_minutes,
             'calendar_id' => $this->calendar_id,
             'is_shift_based' => $this->is_shift_based,
+            'legal_holiday_rule' => $this->legal_holiday_rule,
+            'four_week_period_start_date' => $this->four_week_period_start_date?->toDateString(),
         ];
     }
 }

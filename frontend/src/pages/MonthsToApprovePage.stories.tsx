@@ -35,6 +35,7 @@ const months: AttendanceMonth[] = [
     returned_at: null,
     closed_at: null,
     snapshot: null,
+    legal_holiday_warnings: [],
   },
   {
     id: 2,
@@ -47,6 +48,7 @@ const months: AttendanceMonth[] = [
     returned_at: null,
     closed_at: null,
     snapshot: null,
+    legal_holiday_warnings: [],
   },
 ]
 

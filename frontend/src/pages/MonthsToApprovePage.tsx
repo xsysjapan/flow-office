@@ -7,7 +7,7 @@ import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { Input } from '../components/ui/input'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../hooks/useAttendance'
-import { attendanceMonthStatusLabel } from '../utils/statusLabels'
+import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
 import { hasAnyRole, ROLE } from '../utils/roles'
 
 /**
@@ -51,6 +51,16 @@ export function MonthsToApprovePage() {
                   </div>
                   <Badge tone={tone}>{label}</Badge>
                 </div>
+
+                {month.legal_holiday_warnings.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {month.legal_holiday_warnings.map((warning) => (
+                      <Badge key={`${warning.rule}-${warning.period_start}`} tone="warning">
+                        {legalHolidayWarningLabel(warning)}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
 
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   {month.status === 'submitted' && (

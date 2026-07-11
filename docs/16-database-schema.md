@@ -125,7 +125,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - id
 - code
 - name
-- work_time_system
+- work_time_system (`fixed` / `shortened` / `shift_based` / `discretionary` など)
 - prescribed_daily_minutes
 - prescribed_weekly_minutes
 - default_start_time
@@ -133,6 +133,10 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - default_break_minutes
 - calendar_id
 - is_shift_based
+- legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制。
+  `is_shift_based`の勤務形態にのみ意味を持つ。UC-C005参照)
+- four_week_period_start_date (`legal_holiday_rule`が`four_weeks_four_days`の場合の
+  4週間の起算日)
 - created_at / updated_at
 
 ## shift_patterns

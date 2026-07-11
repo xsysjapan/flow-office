@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { WorkStyle } from './types'
+import type { LegalHolidayRule, WorkStyle } from './types'
 
 export function fetchWorkStyles(): Promise<WorkStyle[]> {
   return apiFetch('/work-styles')
@@ -16,6 +16,8 @@ export interface CreateWorkStyleInput {
   default_break_minutes?: number
   calendar_id: number
   is_shift_based?: boolean
+  legal_holiday_rule?: LegalHolidayRule
+  four_week_period_start_date?: string
 }
 
 export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle> {

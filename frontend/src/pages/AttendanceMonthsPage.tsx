@@ -7,7 +7,7 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useMyMonths, useSubmitMonth } from '../hooks/useAttendance'
 import type { AttendanceMonth } from '../api/types'
-import { attendanceMonthStatusLabel } from '../utils/statusLabels'
+import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
 
 interface MonthRowProps {
   month: AttendanceMonth
@@ -29,6 +29,16 @@ function MonthRow({ month }: MonthRowProps) {
         <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
         <Badge tone={tone}>{label}</Badge>
       </div>
+
+      {month.legal_holiday_warnings.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {month.legal_holiday_warnings.map((warning) => (
+            <Badge key={`${warning.rule}-${warning.period_start}`} tone="warning">
+              {legalHolidayWarningLabel(warning)}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
 

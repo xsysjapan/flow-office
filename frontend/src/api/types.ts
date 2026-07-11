@@ -125,6 +125,17 @@ export interface AttendancePunch {
 
 export type AttendanceMonthStatus = 'not_submitted' | 'submitted' | 'approved' | 'returned' | 'closed'
 
+export type LegalHolidayRule = 'weekly' | 'four_weeks_four_days'
+
+/** UC-C005: シフト制勤務者の法定休日要件(毎週1日 or 4週4日以上)を満たしていない期間。 */
+export interface LegalHolidayWarning {
+  rule: LegalHolidayRule
+  period_start: string
+  period_end: string
+  legal_holiday_count: number
+  required_count: number
+}
+
 export interface AttendanceMonth {
   id: number
   user_id: number
@@ -136,6 +147,7 @@ export interface AttendanceMonth {
   returned_at: string | null
   closed_at: string | null
   snapshot: Record<string, number> | null
+  legal_holiday_warnings: LegalHolidayWarning[]
 }
 
 export type BackOfficeTaskStatus =
@@ -245,6 +257,8 @@ export interface WorkStyle {
   default_break_minutes: number
   calendar_id: number
   is_shift_based: boolean
+  legal_holiday_rule: LegalHolidayRule
+  four_week_period_start_date: string | null
 }
 
 export interface EmployeeShiftAssignment {

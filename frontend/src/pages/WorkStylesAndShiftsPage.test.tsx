@@ -31,6 +31,8 @@ const workStyle: WorkStyle = {
   default_break_minutes: 60,
   calendar_id: 1,
   is_shift_based: false,
+  legal_holiday_rule: 'weekly',
+  four_week_period_start_date: null,
 }
 
 const targetUser: User = {
@@ -64,12 +66,12 @@ describe('WorkStylesAndShiftsPage', () => {
   })
 
   it('creates a new work style with the entered values', async () => {
-    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 2, code: 'flex' })
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 2, code: 'discretionary' })
     renderPage()
 
-    await userEvent.type(await screen.findByLabelText('コード'), 'flex')
-    await userEvent.type(screen.getByLabelText('名称'), 'フレックス勤務')
-    await userEvent.type(screen.getByLabelText('労働時間制'), 'フレックスタイム制')
+    await userEvent.type(await screen.findByLabelText('コード'), 'discretionary')
+    await userEvent.type(screen.getByLabelText('名称'), '裁量労働制勤務')
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '裁量労働制')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
@@ -77,9 +79,9 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith({
-        code: 'flex',
-        name: 'フレックス勤務',
-        work_time_system: 'フレックスタイム制',
+        code: 'discretionary',
+        name: '裁量労働制勤務',
+        work_time_system: 'discretionary',
         prescribed_daily_minutes: 480,
         prescribed_weekly_minutes: 2400,
         default_start_time: undefined,
@@ -87,7 +89,35 @@ describe('WorkStylesAndShiftsPage', () => {
         default_break_minutes: undefined,
         calendar_id: 1,
         is_shift_based: false,
+        legal_holiday_rule: undefined,
+        four_week_period_start_date: undefined,
       }),
+    )
+  })
+
+  it('creates a shift-based work style with a four-weeks-four-days legal holiday rule', async () => {
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 3, code: 'shift' })
+    renderPage()
+
+    await userEvent.type(await screen.findByLabelText('コード'), 'shift')
+    await userEvent.type(screen.getByLabelText('名称'), 'シフト勤務')
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), 'シフト勤務')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
+    await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
+    await userEvent.click(screen.getByLabelText('シフト制'))
+    await userEvent.selectOptions(screen.getByLabelText('法定休日の与え方'), '4週4日以上(変形休日制)')
+    await userEvent.type(screen.getByLabelText('4週間の起算日'), '2026-06-01')
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_shift_based: true,
+          legal_holiday_rule: 'four_weeks_four_days',
+          four_week_period_start_date: '2026-06-01',
+        }),
+      ),
     )
   })
 
