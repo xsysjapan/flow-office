@@ -6,7 +6,6 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useClockIn, useClockOut, useEndBreak, useStartBreak, useTodayAttendance } from '../hooks/useAttendance'
 import { isoToTimeLiteral } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
-import './TodayAttendancePage.css'
 
 /**
  * 勤務時刻はその勤務日自身のUTCオフセットで記録された値であり、ブラウザのローカル
@@ -35,72 +34,71 @@ export function TodayAttendancePage() {
   const { label, tone } = attendanceDayStatusLabel(day.status)
 
   return (
-    <Card
-      title="今日の勤怠"
-      actions={<Badge tone={tone}>{label}</Badge>}
-    >
+    <Card title="今日の勤怠" actions={<Badge tone={tone}>{label}</Badge>}>
       {actionError && <ErrorMessage error={actionError} />}
 
-      <dl className="today-attendance__times">
-        {day.planned_start_at && (
-          <>
-            <dt>勤務予定</dt>
-            <dd>
-              {formatTime(day.planned_start_at)} 〜 {formatTime(day.planned_end_at)}
-            </dd>
-          </>
-        )}
-        <dt>出勤</dt>
-        <dd>{formatTime(day.actual_start_at)}</dd>
-        <dt>退勤</dt>
-        <dd>{formatTime(day.actual_end_at)}</dd>
-      </dl>
-
-      {day.breaks.length > 0 && (
-        <ul className="today-attendance__breaks">
-          {day.breaks.map((b) => (
-            <li key={b.id}>
-              休憩 {formatTime(b.break_start_at)} 〜 {formatTime(b.break_end_at)}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {day.calculation && (
-        <dl className="today-attendance__calculation">
-          <dt>実働</dt>
-          <dd>{day.calculation.actual_work_minutes}分</dd>
-          <dt>残業(法定内)</dt>
-          <dd>{day.calculation.non_statutory_overtime_minutes}分</dd>
-          <dt>残業(法定外)</dt>
-          <dd>{day.calculation.statutory_overtime_minutes}分</dd>
-          <dt>深夜</dt>
-          <dd>{day.calculation.late_night_minutes}分</dd>
+      <div className="flex flex-col gap-4">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+          {day.planned_start_at && (
+            <>
+              <dt className="text-muted-foreground">勤務予定</dt>
+              <dd className="text-foreground">
+                {formatTime(day.planned_start_at)} 〜 {formatTime(day.planned_end_at)}
+              </dd>
+            </>
+          )}
+          <dt className="text-muted-foreground">出勤</dt>
+          <dd className="text-foreground">{formatTime(day.actual_start_at)}</dd>
+          <dt className="text-muted-foreground">退勤</dt>
+          <dd className="text-foreground">{formatTime(day.actual_end_at)}</dd>
         </dl>
-      )}
 
-      <div className="today-attendance__actions">
-        {day.status === 'not_started' && (
-          <Button onClick={() => clockIn.mutate()} isLoading={clockIn.isPending}>
-            出勤
-          </Button>
+        {day.breaks.length > 0 && (
+          <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+            {day.breaks.map((b) => (
+              <li key={b.id}>
+                休憩 {formatTime(b.break_start_at)} 〜 {formatTime(b.break_end_at)}
+              </li>
+            ))}
+          </ul>
         )}
-        {day.status === 'working' && (
-          <>
-            <Button variant="secondary" onClick={() => startBreak.mutate()} isLoading={startBreak.isPending}>
-              休憩開始
+
+        {day.calculation && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t border-border pt-4 text-sm">
+            <dt className="text-muted-foreground">実働</dt>
+            <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
+            <dt className="text-muted-foreground">残業(法定内)</dt>
+            <dd className="text-foreground">{day.calculation.non_statutory_overtime_minutes}分</dd>
+            <dt className="text-muted-foreground">残業(法定外)</dt>
+            <dd className="text-foreground">{day.calculation.statutory_overtime_minutes}分</dd>
+            <dt className="text-muted-foreground">深夜</dt>
+            <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
+          </dl>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          {day.status === 'not_started' && (
+            <Button onClick={() => clockIn.mutate()} isLoading={clockIn.isPending}>
+              出勤
             </Button>
-            <Button onClick={() => clockOut.mutate()} isLoading={clockOut.isPending}>
-              退勤
+          )}
+          {day.status === 'working' && (
+            <>
+              <Button variant="secondary" onClick={() => startBreak.mutate()} isLoading={startBreak.isPending}>
+                休憩開始
+              </Button>
+              <Button onClick={() => clockOut.mutate()} isLoading={clockOut.isPending}>
+                退勤
+              </Button>
+            </>
+          )}
+          {day.status === 'on_break' && (
+            <Button onClick={() => endBreak.mutate()} isLoading={endBreak.isPending}>
+              休憩終了
             </Button>
-          </>
-        )}
-        {day.status === 'on_break' && (
-          <Button onClick={() => endBreak.mutate()} isLoading={endBreak.isPending}>
-            休憩終了
-          </Button>
-        )}
-        {day.status === 'clocked_out' && <p>本日の勤怠は完了しています。</p>}
+          )}
+          {day.status === 'clocked_out' && <p className="text-sm text-muted-foreground">本日の勤怠は完了しています。</p>}
+        </div>
       </div>
     </Card>
   )

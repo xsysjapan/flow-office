@@ -75,7 +75,7 @@ describe('AttendanceMonthsPage', () => {
     renderPage()
 
     expect(await screen.findByRole('button', { name: '提出する' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('氏名またはメールアドレスで検索')).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 
   it('shows a submit control for a returned month', async () => {
@@ -119,11 +119,12 @@ describe('AttendanceMonthsPage', () => {
 
     renderPage()
 
+    await userEvent.click(await screen.findByRole('combobox'))
     await userEvent.type(
       await screen.findByPlaceholderText('氏名またはメールアドレスで検索'),
       '花子',
     )
-    await userEvent.click(await screen.findByRole('button', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await userEvent.click(screen.getByRole('button', { name: '提出する' }))
 
     await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith('2026-07', 2))

@@ -57,18 +57,21 @@ describe('UserPicker', () => {
   it('shows matching users as suggestions while typing', async () => {
     renderPicker()
 
+    await userEvent.click(screen.getByRole('combobox'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
 
-    expect(await screen.findByRole('button', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
   })
 
-  it('reports the selected user id and stops showing suggestions', async () => {
+  it('reports the selected user id and closes the popover', async () => {
     const onChange = renderPicker()
 
+    await userEvent.click(screen.getByRole('combobox'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
-    await userEvent.click(await screen.findByRole('button', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(1))
-    expect(screen.queryByRole('button', { name: '承認者花子(hanako@example.com)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '承認者花子(hanako@example.com)' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toHaveTextContent('承認者花子(hanako@example.com)')
   })
 })

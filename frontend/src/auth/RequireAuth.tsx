@@ -6,7 +6,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth()
 
   if (status === 'loading') {
-    return <p className="page-loading">読み込み中...</p>
+    return (
+      <p className="p-10 text-center text-sm text-muted-foreground" role="status">
+        読み込み中...
+      </p>
+    )
   }
 
   if (status === 'unauthenticated') {

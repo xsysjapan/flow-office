@@ -80,9 +80,10 @@ describe('WorkflowRequestNewPage', () => {
     await userEvent.selectOptions(await screen.findByLabelText('申請種別'), '経費精算')
     await userEvent.type(screen.getByLabelText('タイトル'), 'タクシー代')
     await userEvent.type(screen.getByLabelText('金額'), '1200')
-    await userEvent.type(screen.getByLabelText('承認者'), '承認者')
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
 
-    await userEvent.click(await screen.findByRole('button', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await userEvent.click(screen.getByRole('button', { name: '提出する' }))
 
     await waitFor(() =>

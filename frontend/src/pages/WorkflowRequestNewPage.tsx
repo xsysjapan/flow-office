@@ -5,10 +5,11 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
+import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useRequestTypes } from '../hooks/useRequestTypes'
 import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../hooks/useWorkflowRequests'
-import './WorkflowRequestNewPage.css'
 
 /**
  * UC-W002: 社員が申請する(下書き保存または申請)。
@@ -56,7 +57,7 @@ export function WorkflowRequestNewPage() {
       {error && <ErrorMessage error={error} />}
 
       <FormField label="申請種別" htmlFor="request-type" required>
-        <select
+        <NativeSelect
           id="request-type"
           value={requestTypeCode}
           onChange={(e) => {
@@ -70,16 +71,16 @@ export function WorkflowRequestNewPage() {
               {type.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </FormField>
 
       <FormField label="タイトル" htmlFor="title" required>
-        <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
       </FormField>
 
       {selectedType?.form_schema.map((field) => (
         <FormField key={field.key} label={field.label} htmlFor={`field-${field.key}`} required={field.required}>
-          <input
+          <Input
             id={`field-${field.key}`}
             type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
             value={formValues[field.key] ?? ''}
@@ -92,7 +93,7 @@ export function WorkflowRequestNewPage() {
         <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
       </FormField>
 
-      <div className="workflow-request-new__actions">
+      <div className="flex gap-3">
         <Button
           variant="secondary"
           isLoading={isBusy}

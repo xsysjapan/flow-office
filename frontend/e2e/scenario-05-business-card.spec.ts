@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
+import { pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md シナリオ5(名刺の申請〜作成・発行)。
@@ -26,10 +27,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await applicantPage.getByLabel('申請種別').selectOption({ label: '名刺申請' })
     await applicantPage.getByLabel('タイトル').fill(title)
     await applicantPage.getByLabel('枚数').fill(quantity)
-    await applicantPage.getByLabel('承認者').fill(SCENARIO_USERS.approver)
-    await applicantPage
-      .getByRole('button', { name: `${SCENARIO_USERS.approver}(naoki.watanabe@example.com)` })
-      .click()
+    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('heading', { name: title })).toBeVisible()
     await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
@@ -59,10 +57,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     // そのため、ここでは元データへのリンク表示のみを確認する。
     await expect(generalAffairsPage.getByText(/workflow_request/)).toBeVisible()
 
-    await generalAffairsPage.getByLabel('担当者').fill(SCENARIO_USERS.generalAffairsStaff)
-    await generalAffairsPage
-      .getByRole('button', { name: `${SCENARIO_USERS.generalAffairsStaff}(megumi.nakamura@example.com)` })
-      .click()
+    await pickUser(generalAffairsPage, '担当者', SCENARIO_USERS.generalAffairsStaff, 'megumi.nakamura@example.com')
     await generalAffairsPage.getByRole('button', { name: '割り当てる' }).click()
     await expect(generalAffairsPage.getByText('未割り当て')).toHaveCount(0)
 

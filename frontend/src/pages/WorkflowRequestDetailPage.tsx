@@ -7,6 +7,8 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Input } from '../components/ui/input'
+import { Separator } from '../components/ui/separator'
 import { useAttachments, useUploadAttachment } from '../hooks/useAttachments'
 import {
   useApproveWorkflowRequest,
@@ -17,7 +19,6 @@ import {
   useWorkflowRequestHistory,
 } from '../hooks/useWorkflowRequests'
 import { workflowRequestEventTypeLabel, workflowRequestStatusLabel } from '../utils/statusLabels'
-import './WorkflowRequestDetailPage.css'
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
@@ -26,6 +27,10 @@ function formatDateTime(value: string): string {
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   return `${(bytes / 1024).toFixed(1)}KB`
+}
+
+function SectionHeading({ children }: { children: string }) {
+  return <h3 className="text-sm font-semibold text-foreground">{children}</h3>
 }
 
 /**
@@ -65,123 +70,133 @@ export function WorkflowRequestDetailPage() {
     <Card title={request.title} actions={<Badge tone={tone}>{label}</Badge>}>
       {actionError && <ErrorMessage error={actionError} />}
 
-      <dl className="workflow-request-detail__meta">
-        <dt>申請種別</dt>
-        <dd>{request.request_type?.name}</dd>
-        <dt>申請者</dt>
-        <dd>{request.applicant?.name}</dd>
-        <dt>承認者</dt>
-        <dd>{request.approver?.name ?? '未指定'}</dd>
-      </dl>
+      <div className="flex flex-col gap-6">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+          <dt className="font-medium text-muted-foreground">申請種別</dt>
+          <dd className="text-foreground">{request.request_type?.name}</dd>
+          <dt className="font-medium text-muted-foreground">申請者</dt>
+          <dd className="text-foreground">{request.applicant?.name}</dd>
+          <dt className="font-medium text-muted-foreground">承認者</dt>
+          <dd className="text-foreground">{request.approver?.name ?? '未指定'}</dd>
+        </dl>
 
-      <h3>入力内容</h3>
-      <dl className="workflow-request-detail__form-data">
-        {Object.entries(request.form_data).map(([key, value]) => (
-          <div key={key}>
-            <dt>{key}</dt>
-            <dd>{String(value)}</dd>
-          </div>
-        ))}
-      </dl>
+        <div className="flex flex-col gap-2">
+          <SectionHeading>入力内容</SectionHeading>
+          <dl className="flex flex-col">
+            {Object.entries(request.form_data).map(([key, value]) => (
+              <div key={key} className="flex gap-2 border-b border-border py-1.5 text-sm last:border-b-0">
+                <dt className="min-w-[7.5rem] font-medium text-muted-foreground">{key}</dt>
+                <dd className="text-foreground">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
 
-      <h3>添付ファイル</h3>
-      {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
-      {isLoadingAttachments ? (
-        <LoadingState />
-      ) : (
-        <ul className="workflow-request-detail__attachments" aria-label="添付ファイル">
-          {(attachments ?? []).length === 0 && <li>添付ファイルはありません。</li>}
-          {attachments?.map((attachment) => (
-            <li key={attachment.id}>
-              <span>
-                {attachment.file_name}({formatFileSize(attachment.file_size)})
-              </span>
-              <Button variant="secondary" onClick={() => void downloadAttachment(attachment.id, attachment.file_name)}>
-                ダウンロード
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="workflow-request-detail__upload">
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (!file) return
-            uploadAttachment.mutate(
-              { ownerType: 'workflow_request', ownerId: requestId, file },
-              { onSuccess: () => {
-                if (fileInputRef.current) fileInputRef.current.value = ''
-              } },
-            )
-          }}
-        />
-        {uploadAttachment.isPending && <span>アップロード中...</span>}
-      </div>
-
-      <h3>履歴</h3>
-      {isLoadingHistory ? (
-        <LoadingState />
-      ) : (
-        <ul className="workflow-request-detail__history" aria-label="履歴">
-          {history?.map((event) => (
-            <li key={event.id}>
-              <span className="workflow-request-detail__history-time">{formatDateTime(event.occurred_at)}</span>
-              <span>{workflowRequestEventTypeLabel(event.event_type)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="workflow-request-detail__actions">
-        {isApplicant && (request.status === 'draft' || request.status === 'returned') && (
-          <Button isLoading={submitRequest.isPending} onClick={() => submitRequest.mutate({ id: requestId })}>
-            提出する
-          </Button>
-        )}
-
-        {isApplicant && ['draft', 'submitted', 'returned'].includes(request.status) && (
-          <div className="workflow-request-detail__with-comment">
+        <div className="flex flex-col gap-2">
+          <SectionHeading>添付ファイル</SectionHeading>
+          {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+          {isLoadingAttachments ? (
+            <LoadingState />
+          ) : (
+            <ul className="flex flex-col" aria-label="添付ファイル">
+              {(attachments ?? []).length === 0 && (
+                <li className="py-1.5 text-sm text-muted-foreground">添付ファイルはありません。</li>
+              )}
+              {attachments?.map((attachment) => (
+                <li
+                  key={attachment.id}
+                  className="flex items-center justify-between gap-3 border-b border-border py-1.5 text-sm last:border-b-0"
+                >
+                  <span className="text-foreground">
+                    {attachment.file_name}({formatFileSize(attachment.file_size)})
+                  </span>
+                  <Button variant="secondary" onClick={() => void downloadAttachment(attachment.id, attachment.file_name)}>
+                    ダウンロード
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-center gap-3">
             <input
-              placeholder="取消理由"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              ref={fileInputRef}
+              type="file"
+              className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-sm file:font-medium file:text-foreground"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                uploadAttachment.mutate(
+                  { ownerType: 'workflow_request', ownerId: requestId, file },
+                  {
+                    onSuccess: () => {
+                      if (fileInputRef.current) fileInputRef.current.value = ''
+                    },
+                  },
+                )
+              }}
             />
-            <Button
-              variant="danger"
-              isLoading={cancelRequest.isPending}
-              disabled={!reason}
-              onClick={() => cancelRequest.mutate({ id: requestId, reason })}
-            >
-              取り消す
-            </Button>
+            {uploadAttachment.isPending && <span className="text-sm text-muted-foreground">アップロード中...</span>}
           </div>
-        )}
+        </div>
 
-        {isApprover && request.status === 'submitted' && (
-          <>
-            <Button isLoading={approveRequest.isPending} onClick={() => approveRequest.mutate(requestId)}>
-              承認する
+        <div className="flex flex-col gap-2">
+          <SectionHeading>履歴</SectionHeading>
+          {isLoadingHistory ? (
+            <LoadingState />
+          ) : (
+            <ul className="flex flex-col gap-1" aria-label="履歴">
+              {history?.map((event) => (
+                <li key={event.id} className="flex gap-3 text-sm">
+                  <span className="min-w-[10rem] text-muted-foreground">{formatDateTime(event.occurred_at)}</span>
+                  <span className="text-foreground">{workflowRequestEventTypeLabel(event.event_type)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <Separator />
+
+        <div className="flex flex-wrap items-center gap-3">
+          {isApplicant && (request.status === 'draft' || request.status === 'returned') && (
+            <Button isLoading={submitRequest.isPending} onClick={() => submitRequest.mutate({ id: requestId })}>
+              提出する
             </Button>
-            <div className="workflow-request-detail__with-comment">
-              <input
-                placeholder="差戻しコメント"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
+          )}
+
+          {isApplicant && ['draft', 'submitted', 'returned'].includes(request.status) && (
+            <div className="flex items-center gap-2">
+              <Input placeholder="取消理由" value={reason} onChange={(e) => setReason(e.target.value)} />
               <Button
-                variant="secondary"
-                isLoading={returnRequest.isPending}
-                disabled={!comment}
-                onClick={() => returnRequest.mutate({ id: requestId, comment })}
+                variant="danger"
+                isLoading={cancelRequest.isPending}
+                disabled={!reason}
+                onClick={() => cancelRequest.mutate({ id: requestId, reason })}
               >
-                差戻す
+                取り消す
               </Button>
             </div>
-          </>
-        )}
+          )}
+
+          {isApprover && request.status === 'submitted' && (
+            <>
+              <Button isLoading={approveRequest.isPending} onClick={() => approveRequest.mutate(requestId)}>
+                承認する
+              </Button>
+              <div className="flex items-center gap-2">
+                <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
+                <Button
+                  variant="secondary"
+                  isLoading={returnRequest.isPending}
+                  disabled={!comment}
+                  onClick={() => returnRequest.mutate({ id: requestId, comment })}
+                >
+                  差戻す
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </Card>
   )

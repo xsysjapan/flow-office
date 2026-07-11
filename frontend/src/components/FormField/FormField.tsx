@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import './FormField.css'
+import { Label } from '../ui/label'
 
 export interface FormFieldProps {
   label: string
@@ -11,17 +11,17 @@ export interface FormFieldProps {
 
 export function FormField({ label, htmlFor, required, error, children }: FormFieldProps) {
   return (
-    <div className="fo-form-field">
-      <div className="fo-form-field__label-row">
-        <label htmlFor={htmlFor}>{label}</label>
+    <div className="mb-4 flex flex-col gap-1.5 text-left">
+      <div className="flex items-baseline gap-1">
+        <Label htmlFor={htmlFor}>{label}</Label>
         {required && (
-          <span className="fo-form-field__required" aria-hidden="true">
+          <span className="text-xs text-destructive" aria-hidden="true">
             *
           </span>
         )}
       </div>
       {children}
-      {error && <p className="fo-form-field__error">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

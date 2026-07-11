@@ -1,62 +1,150 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * デザイントークン。任意の色・文字サイズ・角丸・余白をコンポーネント内に直接書かず、
+ * 必ずここで定義した変数(= Tailwindユーティリティ経由)を使う。
+ * ライト/ダークは prefers-color-scheme のみで切り替える(手動トグルは持たない)。
+ */
 :root {
-  --text: #3a3640;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
+  --background: #ffffff;
+  --foreground: #18181b;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --card: #ffffff;
+  --card-foreground: #18181b;
 
-  font: 15px/1.6 var(--sans);
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+
+  --info: #0284c7;
+  --info-foreground: #ffffff;
+
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #4f46e5;
+
+  --radius: 0.5rem;
+  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #d1d0d4;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
+    --background: #16171d;
+    --foreground: #f3f4f6;
+
+    --card: #1c1d24;
+    --card-foreground: #f3f4f6;
+
+    --popover: #1c1d24;
+    --popover-foreground: #f3f4f6;
+
+    --primary: #818cf8;
+    --primary-foreground: #1e1b4b;
+
+    --secondary: #2e303a;
+    --secondary-foreground: #f3f4f6;
+
+    --muted: #2e303a;
+    --muted-foreground: #a1a1aa;
+
+    --accent: #2e303a;
+    --accent-foreground: #f3f4f6;
+
+    --destructive: #f87171;
+    --destructive-foreground: #450a0a;
+
+    --success: #4ade80;
+    --success-foreground: #052e16;
+
+    --warning: #fbbf24;
+    --warning-foreground: #451a03;
+
+    --info: #38bdf8;
+    --info-foreground: #082f49;
+
     --border: #2e303a;
+    --input: #2e303a;
+    --ring: #818cf8;
   }
 }
 
-* {
-  box-sizing: border-box;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-sans);
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-}
+@layer base {
+  * {
+    @apply border-border;
+  }
 
-#root {
-  min-height: 100vh;
-}
+  html {
+    color-scheme: light dark;
+  }
 
-h1,
-h2,
-h3 {
-  font-family: var(--sans);
-  font-weight: 600;
-  color: var(--text-h);
-  margin: 0 0 12px;
-}
+  body {
+    @apply bg-background text-foreground text-sm leading-relaxed antialiased;
+    font-family: var(--font-sans);
+  }
 
-p {
-  margin: 0;
-}
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold text-foreground;
+  }
 
-a {
-  color: inherit;
-}
-
-.page-loading {
-  padding: 40px;
-  text-align: center;
-  color: var(--text);
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
 }

@@ -6,6 +6,7 @@ import {
   recordAttendancePunch,
   submitApproveAndCloseCurrentMonth,
 } from './support/api'
+import { pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md §5(その他、用意しておくべきシナリオ)に対応する。
@@ -27,10 +28,7 @@ test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
     await applicantPage.getByLabel('申請種別').selectOption({ label: '一般申請' })
     await applicantPage.getByLabel('タイトル').fill(title)
     await applicantPage.getByLabel('内容').fill('E2Eテスト用の一般申請')
-    await applicantPage.getByLabel('承認者').fill(SCENARIO_USERS.approver)
-    await applicantPage
-      .getByRole('button', { name: `${SCENARIO_USERS.approver}(naoki.watanabe@example.com)` })
-      .click()
+    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
 
@@ -66,8 +64,7 @@ test('§5-2: 申請取消(提出後)', async ({ page }) => {
   await page.getByLabel('申請種別').selectOption({ label: '一般申請' })
   await page.getByLabel('タイトル').fill(title)
   await page.getByLabel('内容').fill('E2Eテスト用の一般申請(取消用)')
-  await page.getByLabel('承認者').fill(SCENARIO_USERS.approver)
-  await page.getByRole('button', { name: `${SCENARIO_USERS.approver}(naoki.watanabe@example.com)` }).click()
+  await pickUser(page, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
   await page.getByRole('button', { name: '提出する' }).click()
   await expect(page.getByRole('status', { name: '提出済み' })).toBeVisible()
 
@@ -152,7 +149,7 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
 
     // 締め済みの日を週次画面で編集しようとすると、保存時にブロックされる(UC-A011)。
     await applicantPage.goto('/attendance/week')
-    const targetRow = applicantPage.locator('li.week-attendance__day', { hasText: workDate })
+    const targetRow = applicantPage.getByRole('listitem').filter({ hasText: workDate })
     await targetRow.getByRole('button', { name: '編集' }).click()
     await targetRow.getByLabel('修正理由(必須)').fill('締め後編集の拒否確認(E2E)')
     await targetRow.getByRole('button', { name: '保存する' }).click()
@@ -198,7 +195,7 @@ test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) =>
   // (専用の「要確認」バッジ等のUIはまだ無いため、未入力=編集ボタンが出ないことで確認する)。
   await page.goto('/attendance/week')
   await page.getByRole('button', { name: '次週' }).click()
-  const futureRow = page.locator('li.week-attendance__day', { hasText: futureDate })
+  const futureRow = page.getByRole('listitem').filter({ hasText: futureDate })
   await expect(futureRow).toBeVisible()
   await expect(futureRow.getByRole('button', { name: '編集' })).toHaveCount(0)
 })

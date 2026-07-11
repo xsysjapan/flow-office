@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/useAuth'
-import './LoginPage.css'
+import { Button } from '../components/Button/Button'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -19,14 +19,14 @@ export function LoginPage() {
   }
 
   return (
-    <main className="login-page">
-      <div className="login-card">
-        <h1>flow-office</h1>
-        <p>社内アカウント(Microsoft)でログインしてください。</p>
-        {error && <p className="login-error">{error}</p>}
-        <button type="button" onClick={handleLogin} disabled={isRedirecting}>
-          {isRedirecting ? '遷移中...' : 'Microsoftでログイン'}
-        </button>
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-border p-8 text-center">
+        <h1 className="text-lg font-semibold">flow-office</h1>
+        <p className="text-sm text-muted-foreground">社内アカウント(Microsoft)でログインしてください。</p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button className="w-full" onClick={() => void handleLogin()} isLoading={isRedirecting}>
+          Microsoftでログイン
+        </Button>
       </div>
     </main>
   )

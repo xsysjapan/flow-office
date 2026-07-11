@@ -13,13 +13,13 @@ describe('Badge', () => {
     expect(screen.getByRole('status', { name: '承認済み' })).toBeInTheDocument()
   })
 
-  it('applies the tone class', () => {
+  it('applies the tone-specific style', () => {
     render(<Badge tone="danger">取消</Badge>)
-    expect(screen.getByText('取消')).toHaveClass('fo-badge--danger')
+    expect(screen.getByText('取消')).toHaveClass('text-destructive')
   })
 
   it('defaults to the neutral tone', () => {
     render(<Badge>下書き</Badge>)
-    expect(screen.getByText('下書き')).toHaveClass('fo-badge--neutral')
+    expect(screen.getByText('下書き')).toHaveClass('text-muted-foreground')
   })
 })

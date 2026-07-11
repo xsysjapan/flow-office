@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import './Card.css'
+import { Card as UiCard, CardAction, CardContent, CardHeader, CardTitle } from '../ui/card'
 
 export interface CardProps {
   title?: ReactNode
@@ -9,14 +9,14 @@ export interface CardProps {
 
 export function Card({ title, actions, children }: CardProps) {
   return (
-    <section className="fo-card">
+    <UiCard>
       {(title || actions) && (
-        <header className="fo-card__header">
-          {title && <h2>{title}</h2>}
-          {actions && <div className="fo-card__actions">{actions}</div>}
-        </header>
+        <CardHeader>
+          {title && <CardTitle>{title}</CardTitle>}
+          {actions && <CardAction>{actions}</CardAction>}
+        </CardHeader>
       )}
-      <div className="fo-card__body">{children}</div>
-    </section>
+      <CardContent>{children}</CardContent>
+    </UiCard>
   )
 }

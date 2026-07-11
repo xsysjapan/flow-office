@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import { grantAdditionalPaidLeave } from './support/api'
+import { pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md シナリオ3(勤怠管理中の有給消化)。
@@ -57,10 +58,7 @@ async function submitPaidLeaveRequest(
     try {
       await page.locator('#paid-leave-target-date').fill(targetDate, { timeout: 5000 })
       await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 5000 })
-      await page.getByLabel('承認者').fill(options.approverName, { timeout: 5000 })
-      await page
-        .getByRole('button', { name: `${options.approverName}(${options.approverEmail})` })
-        .click({ timeout: 5000 })
+      await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 5000 })
       await page.getByRole('button', { name: '申請する' }).click({ timeout: 5000 })
 
       const duplicateError = page.getByText('この日は既に有給を申請済みです。')
@@ -128,7 +126,7 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
     for (let i = 0; i < weeksAhead; i++) {
       await applicantPage.getByRole('button', { name: '次週' }).click()
     }
-    const weekRow = applicantPage.locator('li.week-attendance__day', { hasText: targetDate })
+    const weekRow = applicantPage.getByRole('listitem').filter({ hasText: targetDate })
     await expect(weekRow).toBeVisible()
     await expect(weekRow.getByRole('status', { name: '打刻漏れ' })).toHaveCount(0)
 
