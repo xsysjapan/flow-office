@@ -120,24 +120,44 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - note
 - created_at / updated_at
 
+## employment_categories
+
+- id
+- code (`regular` / `contract` / `part_time` / `temporary` / `commissioned` / `other`)
+- name
+- created_at / updated_at
+
+雇用区分マスタ。労働時間制度(`work_styles.work_time_system`)とは独立した軸として管理し、
+雇用区分だけで残業計算・適用除外を決定しない。
+
 ## work_styles
 
 - id
+- employment_category_id (雇用区分。nullable。「正社員・通常」「パート・シフト勤務」のように
+  雇用区分と労働時間制度の組み合わせを`work_styles`の1レコードとして表現する)
 - code
 - name
-- work_time_system (`fixed` / `shortened` / `shift_based` / `discretionary` など)
+- work_time_system (`fixed`=通常勤務 / `monthly_variable`=1か月単位変形労働時間制 /
+  `discretionary`=裁量労働制 / `manager_supervisor`=管理監督者。旧値`shortened`/`shift_based`は
+  後方互換のため引き続き受け付けるが、シフト制かどうかは`is_shift_based`で表現する)
 - prescribed_daily_minutes
 - prescribed_weekly_minutes
+- deemed_daily_minutes (裁量労働制のみなし時間。`work_time_system=discretionary`のみ使用。
+  8時間を超える設定の場合、超過分は毎稼働日の法定時間外として自動計上する)
 - default_start_time
 - default_end_time
 - default_break_minutes
-- calendar_id
+- calendar_id (nullable。シフト制などカレンダーに依存しない勤務形態を許容する)
 - is_shift_based
 - legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制。
   `is_shift_based`の勤務形態にのみ意味を持つ。UC-C005参照)
 - four_week_period_start_date (`legal_holiday_rule`が`four_weeks_four_days`の場合の
   4週間の起算日)
 - created_at / updated_at
+
+労使協定・本人同意の管理は本システムのスコープ外とする(適法性の証跡管理ではなく、勤怠を
+正しく計算することを目的とするため)。管理監督者・裁量労働制も、みなし時間・適用除外の
+計算ロジックのみを実装し、協定期限・同意状態のチェックは行わない。
 
 ## shift_patterns
 
@@ -336,7 +356,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
+| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |

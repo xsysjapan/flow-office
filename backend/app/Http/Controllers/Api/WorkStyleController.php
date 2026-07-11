@@ -17,7 +17,7 @@ class WorkStyleController extends Controller
 {
     public function index(): AnonymousResourceCollection
     {
-        return WorkStyleResource::collection(WorkStyle::query()->orderBy('name')->get());
+        return WorkStyleResource::collection(WorkStyle::query()->with('employmentCategory')->orderBy('name')->get());
     }
 
     public function store(Request $request): JsonResponse
@@ -25,13 +25,21 @@ class WorkStyleController extends Controller
         $data = $request->validate([
             'code' => ['required', 'string', 'max:50', 'unique:work_styles,code'],
             'name' => ['required', 'string', 'max:100'],
-            'work_time_system' => ['required', 'string', Rule::in(['fixed', 'shortened', 'shift_based', 'discretionary'])],
+            'employment_category_id' => ['nullable', 'exists:employment_categories,id'],
+            'work_time_system' => ['required', 'string', Rule::in([
+                'shortened', 'shift_based', // 後方互換のため残す。実体はis_shift_basedとの組み合わせで表現する。
+                WorkStyle::WORK_TIME_SYSTEM_FIXED,
+                WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE,
+                WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY,
+                WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR,
+            ])],
             'prescribed_daily_minutes' => ['required', 'integer', 'min:1'],
             'prescribed_weekly_minutes' => ['required', 'integer', 'min:1'],
+            'deemed_daily_minutes' => ['nullable', 'integer', 'min:1'],
             'default_start_time' => ['nullable', 'date_format:H:i'],
             'default_end_time' => ['nullable', 'date_format:H:i'],
             'default_break_minutes' => ['integer', 'min:0'],
-            'calendar_id' => ['required', 'exists:work_calendars,id'],
+            'calendar_id' => ['nullable', 'exists:work_calendars,id'],
             'is_shift_based' => ['boolean'],
             'legal_holiday_rule' => ['nullable', Rule::in([
                 WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,

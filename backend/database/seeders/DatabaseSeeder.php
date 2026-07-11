@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             SystemSettingSeeder::class,
             RoleSeeder::class,
             RequestTypeSeeder::class,
+            EmploymentCategorySeeder::class,
         ]);
 
         $admin = User::query()->firstOrCreate(
