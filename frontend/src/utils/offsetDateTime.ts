@@ -21,6 +21,13 @@ export function isoToTimeLiteral(iso: string | null | undefined): string {
   return literal ? literal.slice(11) : ''
 }
 
+/** オフセット付きISO8601から "+09:00" 形式のオフセット部分だけを取り出す。 */
+export function isoToOffsetString(iso: string | null | undefined): string {
+  const match = iso?.match(/(Z|[+-]\d{2}:\d{2})$/)
+  if (!match) return browserOffsetString()
+  return match[1] === 'Z' ? '+00:00' : match[1]
+}
+
 /** UTCオフセット(分)を "+09:00" 形式の文字列に変換する。 */
 export function offsetMinutesToString(minutes: number): string {
   const sign = minutes >= 0 ? '+' : '-'

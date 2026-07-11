@@ -11,7 +11,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 同一user_id・work_dateの打刻群がUC-A012の意味で整合している場合のみ
  * attendance_days / attendance_breaks に反映される。
  */
-#[Fillable(['user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note'])]
+#[Fillable([
+    'user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note',
+    'status', 'correction_reason', 'corrected_by_user_id', 'corrected_at', 'superseded_by_punch_id',
+])]
 class AttendancePunch extends Model
 {
     protected function casts(): array
@@ -19,6 +22,7 @@ class AttendancePunch extends Model
         return [
             'work_date' => 'date',
             'punched_at' => 'datetime',
+            'corrected_at' => 'datetime',
         ];
     }
 
@@ -28,5 +32,26 @@ class AttendancePunch extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function correctedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'corrected_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<AttendancePunch, $this>
+     */
+    public function supersededByPunch(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'superseded_by_punch_id');
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === PunchStatus::ACTIVE;
     }
 }

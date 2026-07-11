@@ -43,6 +43,8 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   経費CSVの取得など。画面がまだ無い/繰り返し実行のための前提データ調整に使う)
 - `scenario-00-master-data.spec.ts` 〜 `scenario-05-business-card.spec.ts` —
   `docs/testing/scenario-tests.md` の各シナリオに対応
+- `scenario-06-attendance-corrections.spec.ts` — 同ドキュメント §5-11(打刻ログの訂正・削除)・
+  §5-12(日次勤怠の削除)に対応
 - `scenario-99-additional.spec.ts` — 同ドキュメント §5(その他のシナリオ)に対応
 
 ## 実装状況
@@ -68,6 +70,11 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - その他(§5-9): Entra ID初回ログイン(新入社員オンボーディング)。mock-oidcの
   未使用ユーザーで初回ログインし、employeeロールの自動付与・その後の入社日設定と
   hr_staffロール付与までを確認
+- その他(§5-11): 打刻ログの訂正・削除。誤った出勤打刻を訂正すると日次勤怠が
+  組み立て直され、元の打刻は「訂正済み」として理由付きで参照できること、重複打刻を
+  削除すると「削除済み」として残ることを確認
+- その他(§5-12): 日次勤怠の削除。承認前は削除できるが、月次が承認済みになった時点で
+  (締めの有無によらず)削除・編集ともにできなくなることを確認
 
 §5-3の実装にあたり、`GET /attendance/months/to-approve`が「自分が承認者かつ
 `submitted`」のみを対象にしており、UC-A011が想定する「管理部(admin・hr_staff)が

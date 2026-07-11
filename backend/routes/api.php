@@ -88,7 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
     });
 
-    // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011) ---
+    // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---
     Route::prefix('attendance')->group(function () {
         Route::get('/today', [AttendanceController::class, 'today']);
         Route::post('/clock-in', [AttendanceController::class, 'clockIn']);
@@ -98,16 +98,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/week', [AttendanceController::class, 'week']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
+        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth']);
     });
 
-    // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012) ---
+    // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012〜UC-A014) ---
     Route::prefix('attendance-punches')->group(function () {
         Route::get('/', [AttendancePunchController::class, 'index']);
         Route::post('/', [AttendancePunchController::class, 'store']);
+        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update']);
+        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy']);
     });
 
     Route::prefix('attendance-months')->group(function () {

@@ -21,6 +21,11 @@ class AttendancePunchResource extends JsonResource
             'punched_at' => LocalDateTime::formatWithOffsetMinutes($this->punched_at, $this->utc_offset_minutes),
             'source' => $this->source,
             'note' => $this->note,
+            'status' => $this->status,
+            'correction_reason' => $this->correction_reason,
+            'corrected_by_user_id' => $this->corrected_by_user_id,
+            'corrected_at' => $this->corrected_at?->toIso8601String(),
+            'superseded_by_punch_id' => $this->superseded_by_punch_id,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

@@ -147,22 +147,21 @@ export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: number
   return { dayId: today.id, workDate: today.work_date }
 }
 
+type MonthSummary = { id: number; year_month: string; status: string }
+
 /**
- * UC-A008〜UC-A011: 当月の勤怠月次を提出〜承認〜締めまで進める。同一日に何度実行しても
- * 冪等に動くよう、既に進んでいるステータスはスキップする(締めた月は二重に締められない
- * ため)。呼び出し前に3つの`page`それぞれで対応するロールでログイン済みであること
- * (社員/承認者/admin・hr_staff)。
+ * UC-A008〜UC-A009: 指定した年月の勤怠月次を提出〜承認まで進める(締めまでは行わない)。
+ * 同一月に何度実行しても冪等に動くよう、既に進んでいるステータスはスキップする。
+ * 呼び出し前に`employeePage`/`approverPage`それぞれで対応するロールでログイン済みであること。
+ * `yearMonth`は"today"の月に限らず任意の年月を指定できる(対象日の`attendance_days`が
+ * 既に存在している必要がある)。
  */
-export async function submitApproveAndCloseCurrentMonth(
+export async function submitAndApproveMonth(
   employeePage: Page,
   approverPage: Page,
-  adminPage: Page,
-): Promise<{ yearMonth: string; monthId: number; dayId: number; workDate: string }> {
-  const { dayId, workDate } = await ensureTodayClockedOut(employeePage)
-  const yearMonth = workDate.slice(0, 7)
+  yearMonth: string,
+): Promise<{ monthId: number }> {
   const approverId = await fetchOwnUserId(approverPage)
-
-  type MonthSummary = { id: number; year_month: string; status: string }
   const findMonth = (months: MonthSummary[]) => months.find((m) => m.year_month === yearMonth)
 
   let months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
@@ -180,12 +179,32 @@ export async function submitApproveAndCloseCurrentMonth(
 
   if (month.status === 'submitted') {
     await apiFetch(approverPage, `/attendance-months/${month.id}/approve`, { method: 'POST' })
-    month = { ...month, status: 'approved' }
   }
 
-  if (month.status === 'approved') {
-    await apiFetch(adminPage, `/attendance-months/${month.id}/close`, { method: 'POST' })
+  return { monthId: month.id }
+}
+
+/**
+ * UC-A008〜UC-A011: 当月の勤怠月次を提出〜承認〜締めまで進める。同一日に何度実行しても
+ * 冪等に動くよう、既に進んでいるステータスはスキップする(締めた月は二重に締められない
+ * ため)。呼び出し前に3つの`page`それぞれで対応するロールでログイン済みであること
+ * (社員/承認者/admin・hr_staff)。
+ */
+export async function submitApproveAndCloseCurrentMonth(
+  employeePage: Page,
+  approverPage: Page,
+  adminPage: Page,
+): Promise<{ yearMonth: string; monthId: number; dayId: number; workDate: string }> {
+  const { dayId, workDate } = await ensureTodayClockedOut(employeePage)
+  const yearMonth = workDate.slice(0, 7)
+
+  const { monthId } = await submitAndApproveMonth(employeePage, approverPage, yearMonth)
+
+  const months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+  const month = months.find((m) => m.id === monthId)
+  if (month?.status === 'approved') {
+    await apiFetch(adminPage, `/attendance-months/${monthId}/close`, { method: 'POST' })
   }
 
-  return { yearMonth, monthId: month.id, dayId, workDate }
+  return { yearMonth, monthId, dayId, workDate }
 }

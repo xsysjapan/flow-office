@@ -5,6 +5,8 @@ import type {
   BackOfficeTaskStatus,
   PaidLeaveRequestStatus,
   PaidLeaveType,
+  PunchStatus,
+  PunchType,
   WorkflowRequestStatus,
 } from '../api/types'
 
@@ -84,6 +86,27 @@ export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): Sta
 
 export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {
   return paidLeaveTypeLabels[leaveType]
+}
+
+const punchTypeLabels: Record<PunchType, string> = {
+  clock_in: '出勤',
+  break_start: '休憩開始',
+  break_end: '休憩終了',
+  clock_out: '退勤',
+}
+
+const punchStatusMeta: Record<PunchStatus, StatusMeta> = {
+  active: { label: '有効', tone: 'neutral' },
+  corrected: { label: '訂正済み', tone: 'info' },
+  deleted: { label: '削除済み', tone: 'danger' },
+}
+
+export function punchTypeLabel(type: PunchType): string {
+  return punchTypeLabels[type]
+}
+
+export function punchStatusLabel(status: PunchStatus): StatusMeta {
+  return punchStatusMeta[status]
 }
 
 const workflowRequestEventTypeLabels: Record<string, string> = {

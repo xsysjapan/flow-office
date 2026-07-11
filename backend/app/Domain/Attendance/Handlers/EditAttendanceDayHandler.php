@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -16,7 +17,8 @@ use App\Models\AttendanceDayStatus;
 use App\Support\LocalDateTime;
 
 /**
- * UC-A005: 日次勤怠を編集する。締め後(ロック後)は修正申請ワークフローを使う。
+ * UC-A005: 日次勤怠を編集する。締め後(ロック後)、および承認済み・締め済みの月次に
+ * 属する日次勤怠は修正申請ワークフローを使う(AttendanceEditGuard参照。UC-A015)。
  *
  * 入力される日時はオフセット付きISO8601を前提に、タイムゾーン変換をせず「入力された通りの
  * 現地時刻」として保存する。海外出張などで勤務日ごとに現地時刻(オフセット)が変わることを
@@ -31,6 +33,7 @@ class EditAttendanceDayHandler implements CommandHandler
     public function __construct(
         private readonly EventStore $eventStore,
         private readonly AttendanceCalculator $calculator,
+        private readonly AttendanceEditGuard $guard,
     ) {}
 
     public function handle(Command $command): AttendanceDay
@@ -39,9 +42,7 @@ class EditAttendanceDayHandler implements CommandHandler
 
         $day = AttendanceDay::query()->findOrFail($command->attendanceDayId);
 
-        if ($day->isLocked()) {
-            throw new DomainRuleException('締め後の勤怠は修正申請から変更してください。');
-        }
+        $this->guard->assertMutable($day, $day->user_id, $day->work_date->toDateString());
 
         $day->utc_offset_minutes = $this->resolveOffsetMinutes($command, $day->utc_offset_minutes);
 

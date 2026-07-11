@@ -60,6 +60,14 @@ class AttendanceDay extends Model
         return $this->hasOne(AttendanceDailyCalculation::class);
     }
 
+    /**
+     * @return HasMany<PaidLeaveUsage, $this>
+     */
+    public function paidLeaveUsages(): HasMany
+    {
+        return $this->hasMany(PaidLeaveUsage::class);
+    }
+
     public function isLocked(): bool
     {
         return $this->locked_at !== null;

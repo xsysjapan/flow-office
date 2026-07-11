@@ -200,6 +200,13 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   値をタイムゾーン変換せずそのまま保持する (docs/03-architecture.md 3.4))
 - source (打刻元。`web` / `ic_card` / `mobile` など、将来のデバイス種別を自由に追加できる文字列)
 - note
+- status (`active` / `corrected` / `deleted`。既定値 `active`。
+  docs/07-usecases-attendance.md UC-A013/UC-A014)
+- correction_reason (訂正・削除の理由。`status` が `corrected` / `deleted` の行にのみ設定)
+- corrected_by_user_id (訂正・削除を行った社員。nullable)
+- corrected_at (訂正・削除が行われた日時。nullable)
+- superseded_by_punch_id (訂正後の打刻ログのid。`status=corrected` の行にのみ設定。
+  自己参照の nullable 外部キー)
 - created_at / updated_at
 
 同一user_id・work_dateに対して重複・矛盾した打刻が記録されることを前提とし、一意制約は
@@ -207,6 +214,11 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 する(オフセットが混在すると壁時計時刻どうしの前後比較に意味がなくなるため)。矛盾なく1日分
 の勤務として組み立てられた場合のみ `attendance_days` / `attendance_breaks` に反映される
 (docs/07-usecases-attendance.md UC-A012)。
+
+打刻ログは追記のみで、既存の行を直接書き換えない。訂正(UC-A013)は元の行を`status=corrected`
+にした上で、訂正後の値を新しい行として追記する。削除(UC-A014)は行を物理削除せず
+`status=deleted` にするだけで、どちらも理由・実行者・日時を保持したまま参照できる。
+`status=active` の行のみが日次勤怠への反映(組み立て直し)の対象になる。
 
 ## attendance_daily_calculations (Projection: 日次集計)
 

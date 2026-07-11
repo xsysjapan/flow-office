@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { AttendanceDay, AttendanceMonth } from './types'
+import type { AttendanceDay, AttendanceMonth, AttendancePunch } from './types'
 
 export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
@@ -37,6 +37,32 @@ export interface EditAttendanceDayInput {
 
 export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
+}
+
+/** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
+export function deleteAttendanceDay(id: number, reason: string): Promise<{ deleted: boolean }> {
+  return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: { reason } })
+}
+
+/** UC-A012: 指定した勤務日範囲の打刻ログ(訂正済み・削除済みも含む)を取得する。 */
+export function fetchPunches(params: { from?: string; to?: string } = {}): Promise<AttendancePunch[]> {
+  return apiFetch('/attendance-punches', { query: params })
+}
+
+export interface CorrectAttendancePunchInput {
+  punch_type: AttendancePunch['punch_type']
+  punched_at: string
+  reason: string
+}
+
+/** UC-A013: 打刻ログを訂正する。戻り値は訂正後に追記された新しい打刻ログ。 */
+export function correctPunch(id: number, input: CorrectAttendancePunchInput): Promise<AttendancePunch> {
+  return apiFetch(`/attendance-punches/${id}`, { method: 'PUT', body: input })
+}
+
+/** UC-A014: 打刻ログを削除する。戻り値は削除済み状態になった元の打刻ログ。 */
+export function deletePunch(id: number, reason: string): Promise<AttendancePunch> {
+  return apiFetch(`/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
 export function fetchMonth(yearMonth: string): Promise<{ days: AttendanceDay[]; month: AttendanceMonth | null }> {

@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
+use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
@@ -21,6 +22,7 @@ use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
@@ -144,6 +146,29 @@ class AttendanceController extends Controller
         ));
 
         return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));
+    }
+
+    /**
+     * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能で、
+     * 承認済み・締め済みの日次勤怠は削除できない。
+     */
+    public function destroyDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): JsonResponse
+    {
+        abort_if(
+            $attendanceDay->user_id !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
+            403,
+            '他の社員の日次勤怠を削除する権限がありません。'
+        );
+
+        $data = $request->validate(['reason' => ['required', 'string']]);
+
+        $commandBus->dispatch(new DeleteAttendanceDay(
+            attendanceDayId: $attendanceDay->id,
+            reason: $data['reason'],
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->json(['deleted' => true]);
     }
 
     /**
