@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
 use App\Models\User;
@@ -118,6 +119,47 @@ class MonthlyVariableWorkTimeTest extends TestCase
             'planned_end_at' => '2026-06-01T21:00:00+09:00',
             'planned_break_minutes' => 60,
             'reason' => '事後に残業を通常勤務へ振り替えようとする変更(拒否されるべき)',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_editing_a_shift_plan_is_still_rejected_after_the_punched_day_is_deleted_once_the_month_is_approved(): void
+    {
+        // 出勤日(attendance_days)は月が承認されるまで自由に削除できる(UC-A016)。
+        // 「実績のある日は予定変更不可」という判定だけに頼ると、実績のある出勤日を削除して
+        // から予定を変更し、その後同じ実績で出勤日を作り直すことで残業を消せてしまうため、
+        // 月次承認後は(出勤日の存在有無によらず)予定変更自体を禁止する。
+        $calendar = $this->makeCalendar();
+        $admin = $this->makeAdmin();
+        $workStyle = $this->makeMonthlyVariableWorkStyle($calendar);
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01', '09:00', '18:00');
+
+        $day = AttendanceDay::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'status' => AttendanceDayStatus::CLOCKED_OUT, 'source' => 'manual', 'utc_offset_minutes' => 540,
+            'actual_start_at' => '2026-06-01 09:00:00', 'actual_end_at' => '2026-06-01 18:00:00',
+        ]);
+
+        $this->actingAs($user)->postJson('/api/attendance/months/2026-06/submit', [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+        $monthId = AttendanceMonth::query()
+            ->where('user_id', $user->id)->where('year_month', '2026-06')->firstOrFail()->id;
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
+
+        // 承認済みのため出勤日自体も既に削除できない(比較のための確認)。
+        $this->actingAs($admin)->deleteJson("/api/attendance/days/{$day->id}", ['reason' => '削除を試みる'])
+            ->assertStatus(422);
+
+        $response = $this->actingAs($admin)->putJson("/api/employee-shift-assignments/{$shift->id}", [
+            'planned_start_at' => '2026-06-01T09:00:00+09:00',
+            'planned_end_at' => '2026-06-01T21:00:00+09:00',
+            'planned_break_minutes' => 60,
+            'reason' => '承認後に予定を変更しようとする(拒否されるべき)',
         ]);
 
         $response->assertStatus(422);

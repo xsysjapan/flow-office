@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -22,11 +23,19 @@ use Illuminate\Support\Carbon;
  * 通常勤務へ振り替えることを防ぐため(同5.3節「期間途中に管理者が勤務予定を事後変更して、
  * 時間外労働を通常勤務へ振り替えるような処理を許可しない」)。
  *
+ * 出勤日(attendance_days)はその月が編集不可になるまで自由に作成・削除できる(UC-A016)ため、
+ * 「実績が既にある勤務日か」の判定だけでは、出勤日を一旦削除してから予定を変更し、その後
+ * 同じ実績で出勤日を作り直すことで上記の制約を回避できてしまう。これを防ぐため、月次が
+ * 承認済み以降(AttendanceEditGuard)の場合も変更を禁止する。
+ *
  * @implements CommandHandler<EditEmployeeShiftAssignment>
  */
 class EditEmployeeShiftAssignmentHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
+    public function __construct(
+        private readonly EventStore $eventStore,
+        private readonly AttendanceEditGuard $guard,
+    ) {}
 
     public function handle(Command $command): EmployeeShiftAssignment
     {
@@ -43,6 +52,8 @@ class EditEmployeeShiftAssignmentHandler implements CommandHandler
         if ($hasActualAttendance) {
             throw new DomainRuleException('既に勤務実績がある日の勤務予定は変更できません。');
         }
+
+        $this->guard->assertMutable(null, $assignment->user_id, $assignment->work_date->toDateString());
 
         $plannedStartAt = $command->plannedStartAt !== null ? Carbon::parse($command->plannedStartAt) : null;
         $plannedEndAt = $command->plannedEndAt !== null ? Carbon::parse($command->plannedEndAt) : null;
