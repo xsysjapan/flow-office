@@ -39,7 +39,7 @@ class AssignBackOfficeTaskHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: 'タスク割当',
             summary: "「{$task->title}」が割り当てられました。",
             detailUrl: null,

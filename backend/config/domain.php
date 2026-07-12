@@ -1,37 +1,61 @@
 <?php
 
+use App\Domain\Attachment\Commands\UploadAttachment;
+use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
+use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
+use App\Domain\Attendance\Commands\CreateShiftPattern;
+use App\Domain\Attendance\Commands\CreateWorkCalendar;
+use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\EndBreak;
+use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\PublishWorkCalendar;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Commands\UpdateShiftPattern;
+use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
+use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
+use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\CreateShiftPatternHandler;
+use App\Domain\Attendance\Handlers\CreateWorkCalendarHandler;
+use App\Domain\Attendance\Handlers\CreateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
+use App\Domain\Attendance\Handlers\GenerateEmployeeShiftAssignmentsHandler;
+use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
+use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
+use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
+use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
+use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
 use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
@@ -56,9 +80,11 @@ use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
 use App\Domain\User\Commands\AssignUserRoles;
+use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
+use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -85,9 +111,12 @@ return [
     |
     */
     'command_handlers' => [
+        UploadAttachment::class => UploadAttachmentHandler::class,
+
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
+        RecordSsoLogin::class => RecordSsoLoginHandler::class,
 
         DraftWorkflowRequest::class => DraftWorkflowRequestHandler::class,
         SubmitWorkflowRequest::class => SubmitWorkflowRequestHandler::class,
@@ -107,6 +136,16 @@ return [
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         EditEmployeeShiftAssignment::class => EditEmployeeShiftAssignmentHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
+
+        CreateWorkCalendar::class => CreateWorkCalendarHandler::class,
+        PublishWorkCalendar::class => PublishWorkCalendarHandler::class,
+        UpdateWorkCalendarDays::class => UpdateWorkCalendarDaysHandler::class,
+        CreateWorkStyle::class => CreateWorkStyleHandler::class,
+        CreateShiftPattern::class => CreateShiftPatternHandler::class,
+        UpdateShiftPattern::class => UpdateShiftPatternHandler::class,
+        GenerateEmployeeShiftAssignments::class => GenerateEmployeeShiftAssignmentsHandler::class,
+        AssignShiftPatternDay::class => AssignShiftPatternDayHandler::class,
+        PublishEmployeeShiftAssignments::class => PublishEmployeeShiftAssignmentsHandler::class,
         RecordAttendancePunch::class => RecordAttendancePunchHandler::class,
         CorrectAttendancePunch::class => CorrectAttendancePunchHandler::class,
         DeleteAttendancePunch::class => DeleteAttendancePunchHandler::class,
@@ -115,6 +154,8 @@ return [
         ApproveAttendanceMonth::class => ApproveAttendanceMonthHandler::class,
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
+        WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
+        WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,
         GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,

@@ -157,6 +157,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   4週間の起算日)
 - variable_period_start_day (`work_time_system=monthly_variable`の変形期間の起算日。
   暦月の何日を起算日にするか(1〜31)。1なら暦月と一致。他の労働時間制度では未使用)
+- max_consecutive_work_days (nullable。3交代制シフト表(UC-C004)の公開前チェックで使う
+  連続勤務日数の警告しきい値。法令上の一律の上限は無いため会社の就業規則次第でマスタ化
+  する。未設定ならチェックしない)
 - created_at / updated_at
 
 労使協定・本人同意の管理は本システムのスコープ外とする(適法性の証跡管理ではなく、勤怠を
@@ -189,6 +192,8 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - planned_start_at
 - planned_end_at
 - planned_break_minutes
+- is_published (3交代制シフトパターン割当(UC-C004)の下書き/公開フラグ。カレンダー基準の
+  一括生成(UC-C003)からの行は常にtrue。シフトパターン日別割当は公開されるまでfalse)
 - created_at / updated_at
 
 `is_legal_holiday`は「決める方式」(`work_styles.legal_holiday_rule`が`weekly`/
@@ -290,7 +295,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 月次確認画面の表示のたびに `attendance_daily_calculations` から都度計算する参考情報として扱う
 (docs/07-usecases-attendance.md「週40時間判定」、UC-C005の法定休日要件チェックと同じ考え方)。
 
-## attendance_months (Projection: 月次スナップショット)
+## attendance_months (イベント駆動の状態テーブル。正データ)
 
 - id
 - user_id
@@ -303,6 +308,12 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - closed_at
 - snapshot_json
 - created_at / updated_at
+
+`attendance_daily_calculations`とは異なり、`attendance_months`は対応するProjector・
+`projections:rebuild`での再生成経路を持たない。`SubmitAttendanceMonthHandler`/
+`ApproveAttendanceMonthHandler`/`ReturnAttendanceMonthHandler`/`CloseAttendanceMonthHandler`
+が`stored_events`への追記と同一トランザクションで直接更新する「正データ」であり、
+「Projection(再生成可能)」には分類しない。
 
 ## paid_leave_grant_rules
 
@@ -388,6 +399,6 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `attendance_months`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。`attendance_months`はProjectorを持たず、CommandHandlerが直接書き込む。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |
+| Projection (再生成可能) | `attendance_daily_calculations` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |

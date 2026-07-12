@@ -7,6 +7,7 @@ use App\Models\RequestType;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
@@ -27,6 +28,7 @@ class WorkflowRequestFlowTest extends TestCase
             'form_schema' => [['key' => 'amount', 'label' => '金額', 'type' => 'number', 'required' => true]],
             'requires_backoffice_task' => true,
             'backoffice_task_type' => 'expense_reimbursement',
+            'backoffice_department' => '経理部',
             'is_active' => true,
         ]);
 
@@ -99,7 +101,7 @@ class WorkflowRequestFlowTest extends TestCase
             'form_data' => [],
         ])->json();
 
-        $file = \Illuminate\Http\UploadedFile::fake()->create('receipt.pdf', 10);
+        $file = UploadedFile::fake()->create('receipt.pdf', 10);
         $this->actingAs($applicant)->postJson('/api/attachments', [
             'owner_type' => 'workflow_request',
             'owner_id' => $draft['id'],

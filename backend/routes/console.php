@@ -36,3 +36,13 @@ Schedule::command('paid-leave:warn-expiring')
 Schedule::command('paid-leave:warn-five-day-obligation')
     ->dailyAt('02:20')
     ->withoutOverlapping();
+
+// UC-N001「勤怠未提出」: 前月分の勤怠がまだ提出されていない社員に毎日警告する。
+Schedule::command('attendance:warn-unsubmitted')
+    ->dailyAt('02:30')
+    ->withoutOverlapping();
+
+// UC-N001「月次締め前警告」: 前月分の月次勤怠の締め切りが近づいたら毎日警告する。
+Schedule::command('attendance:warn-month-close-deadline')
+    ->dailyAt('02:40')
+    ->withoutOverlapping();

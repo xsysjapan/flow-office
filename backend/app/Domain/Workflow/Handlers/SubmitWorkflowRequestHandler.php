@@ -25,7 +25,7 @@ class SubmitWorkflowRequestHandler implements CommandHandler
     {
         assert($command instanceof SubmitWorkflowRequest);
 
-        $workflowRequest = WorkflowRequest::query()->findOrFail($command->workflowRequestId);
+        $workflowRequest = WorkflowRequest::query()->with('requestType')->findOrFail($command->workflowRequestId);
 
         if ($workflowRequest->applicant_user_id !== $command->submittedByUserId) {
             throw new DomainRuleException('自分が作成した申請のみ申請できます。');
@@ -33,6 +33,10 @@ class SubmitWorkflowRequestHandler implements CommandHandler
 
         if (! in_array($workflowRequest->status, [WorkflowRequestStatus::DRAFT, WorkflowRequestStatus::RETURNED], true)) {
             throw new DomainRuleException('この申請は現在のステータスからは提出できません。');
+        }
+
+        if ($workflowRequest->requestType->requires_attachment && ! $workflowRequest->attachments()->exists()) {
+            throw new DomainRuleException('この申請種別は添付ファイルが必須です。');
         }
 
         $approverUserId = $command->approverUserId ?? $workflowRequest->approver_user_id;
@@ -55,7 +59,7 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '承認依頼',
             summary: "「{$workflowRequest->title}」の承認依頼が届いています。",
             detailUrl: null,

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkCalendarController;
@@ -83,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
+    Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
         Route::post('/work-calendars/{workCalendar}/publish', [WorkCalendarController::class, 'publish']);
@@ -91,6 +93,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
+
+        // --- 3交代制シフト表 (docs/08-usecases-calendar-shift.md UC-C004) ---
+        Route::post('/shift-patterns', [ShiftPatternController::class, 'store']);
+        Route::put('/shift-patterns/{shiftPattern}', [ShiftPatternController::class, 'update']);
+        Route::post('/employee-shift-assignments/assign-pattern', [EmployeeShiftAssignmentController::class, 'assignPattern']);
+        Route::get('/employee-shift-assignments/review', [EmployeeShiftAssignmentController::class, 'review']);
+        Route::post('/employee-shift-assignments/publish', [EmployeeShiftAssignmentController::class, 'publish']);
     });
 
     // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---

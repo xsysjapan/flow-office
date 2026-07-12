@@ -15,8 +15,11 @@
 - 承認完了
 - バックオフィスタスク割当
 - 有給期限警告
-- 勤怠未提出
-- 月次締め前警告
+- 年5日取得義務警告 (docs/09-usecases-paid-leave.md UC-P006)
+- 勤怠未提出 (`system_settings.attendance_submission_deadline_day`を過ぎても前月分が
+  未提出の在籍社員に、解消するまで毎日通知する)
+- 月次締め前警告 (`system_settings.attendance_month_close_deadline_day`の直前
+  (既定3日前)になっても前月分が締められていない場合に通知する)
 
 ## 実装上のポイント
 

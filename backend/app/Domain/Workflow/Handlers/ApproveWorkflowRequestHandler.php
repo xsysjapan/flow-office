@@ -49,7 +49,7 @@ class ApproveWorkflowRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '承認完了',
             summary: "「{$workflowRequest->title}」が承認されました。",
             detailUrl: null,

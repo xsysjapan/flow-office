@@ -17,7 +17,7 @@ export function AdminLayout() {
         </Link>
         {visibleGroups.map((group) => (
           <div key={group.label} className="flex flex-col gap-1.5">
-            <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               <group.icon className="size-3.5" aria-hidden="true" />
               {group.label}
             </span>

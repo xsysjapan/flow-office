@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\CreateWorkStyle;
+use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkStyleResource;
 use App\Models\WorkStyle;
@@ -20,7 +22,7 @@ class WorkStyleController extends Controller
         return WorkStyleResource::collection(WorkStyle::query()->with('employmentCategory')->orderBy('name')->get());
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
             'code' => ['required', 'string', 'max:50', 'unique:work_styles,code'],
@@ -50,11 +52,15 @@ class WorkStyleController extends Controller
                 'nullable', 'date',
                 Rule::requiredIf($request->input('legal_holiday_rule') === WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS),
             ],
+            'max_consecutive_work_days' => ['nullable', 'integer', 'min:1', 'max:31'],
         ]);
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
 
-        $workStyle = WorkStyle::query()->create($data);
+        $workStyle = $commandBus->dispatch(new CreateWorkStyle(
+            attributes: $data,
+            createdByUserId: $request->user()->id,
+        ));
 
         return (new WorkStyleResource($workStyle))->response()->setStatusCode(201);
     }

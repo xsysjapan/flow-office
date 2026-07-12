@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * 勤務実績(日次) (docs/03-architecture.md 3.3: 勤怠の正)。
@@ -66,6 +67,14 @@ class AttendanceDay extends Model
     public function paidLeaveUsages(): HasMany
     {
         return $this->hasMany(PaidLeaveUsage::class);
+    }
+
+    /**
+     * @return MorphMany<Attachment, $this>
+     */
+    public function attachments(): MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'owner');
     }
 
     public function isLocked(): bool

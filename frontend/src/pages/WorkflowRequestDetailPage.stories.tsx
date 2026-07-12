@@ -33,7 +33,7 @@ const submittedRequest: WorkflowRequest = {
   form_data: { amount: '1200', purpose: '客先訪問' },
   applicant,
   approver,
-  request_type: { id: 1, code: 'expense_reimbursement', name: '経費精算', description: null, form_schema: [], requires_backoffice_task: true, backoffice_task_type: 'expense_reimbursement', is_active: true },
+  request_type: { id: 1, code: 'expense_reimbursement', name: '経費精算', description: null, form_schema: [], requires_attachment: false, attachment_max_size_kb: null, attachment_allowed_extensions: null, eligible_role_codes: null, requires_backoffice_task: true, backoffice_task_type: 'expense_reimbursement', backoffice_department: null, export_amount_field: null, allowed_status_transitions: null, is_active: true },
   submitted_at: '2026-07-01T00:00:00+09:00',
   approved_at: null,
   returned_at: null,

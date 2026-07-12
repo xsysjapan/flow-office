@@ -27,6 +27,7 @@ const workStyle: WorkStyle = {
   is_shift_based: false,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
+  max_consecutive_work_days: null,
 }
 
 const paginatedUsers: Paginated<User> = {
@@ -40,6 +41,7 @@ function withSeeded() {
   queryClient.setQueryData(['work-styles'], [workStyle])
   queryClient.setQueryData(['work-calendars'], [calendar])
   queryClient.setQueryData(['users', ''], paginatedUsers)
+  queryClient.setQueryData(['shift-patterns'], [])
 
   return function Decorator() {
     return (

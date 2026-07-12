@@ -61,7 +61,7 @@ class WarnFiveDayObligationHandler implements CommandHandler
             $message = "{$grant->user->name}さんは年5日の有給取得義務(期限: ".
                 "{$obligationDeadline->toDateString()})に対し、現在{$usedDays}日しか取得していません。";
 
-            SendTeamsNotificationJob::dispatch(
+            SendTeamsNotificationJob::enqueue(
                 title: '有給休暇 年5日取得義務の警告',
                 summary: $message,
                 detailUrl: null,

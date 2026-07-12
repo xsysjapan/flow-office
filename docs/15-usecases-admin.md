@@ -25,5 +25,8 @@
 
 - 権限管理 (UC-M001) は [UC-002 MS365ユーザーを同期する](./06-usecases-auth.md#uc-002-ms365ユーザーを同期する)
   で上書きされない、アプリ独自のロールとして管理する。
-- 監査ログ (UC-M003) は `stored_events` を主な参照元とし、UIで検索しやすい形の
-  Projection (例: `audit_log_entries`) を用意する。
+- 監査ログ (UC-M003) は専用のProjectionを持たず、`stored_events` を直接検索する
+  (`AuditLogController`)。ユーザーでの絞り込みは、`payload`のJSON列に対する
+  `LIKE '%"key":<id>%'`形式の近似一致で行う簡易実装であり、値の完全一致を保証しない。
+  検索精度・パフォーマンスを重視する場合は`audit_log_entries`のような専用Projectionの
+  導入を検討する。

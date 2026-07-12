@@ -50,13 +50,16 @@
 5. 有効期限警告
 6. 年5日取得義務警告
 
-## Phase 6: 3交代制
+## Phase 6: 3交代制(実装済み)
 
-1. シフトパターン
-2. 社員別シフト割当
-3. 日跨ぎ勤務対応
-4. 深夜・休日・残業計算
-5. シフト表UI
+1. シフトパターン(`shift_patterns`マスタ、日勤/準夜勤/深夜勤/公休/明け休み等)
+2. 社員別シフト割当(シフトパターンの日別割当、下書き→公開)
+3. 日跨ぎ勤務対応(`planned_start_at`/`planned_end_at`をdatetimeで保持)
+4. 公開前チェック(法定休日不足・連続勤務・月間予定時間の警告)
+5. シフト表UI(`frontend/src/pages/WorkStylesAndShiftsPage.tsx`)
+
+深夜・休日・残業計算自体は日次実績(`AttendanceCalculator`)側で勤務形態横断的に扱うため、
+Phase 4で実装済みのロジックをそのまま利用する(シフトパターン専用の計算ロジックは持たない)。
 
 各Phaseの詳細ユースケースは対応するドキュメントを参照:
 [06](./06-usecases-auth.md) [07](./07-usecases-attendance.md) [08](./08-usecases-calendar-shift.md)

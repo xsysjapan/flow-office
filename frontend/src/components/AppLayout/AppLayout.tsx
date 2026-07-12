@@ -82,7 +82,7 @@ export function AppLayout() {
             <div key={group.label} className="flex items-center gap-2">
               <group.icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {group.label}
                 </span>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">

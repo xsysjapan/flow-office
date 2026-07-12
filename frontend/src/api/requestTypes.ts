@@ -10,8 +10,15 @@ export interface SaveRequestTypeInput {
   name: string
   description?: string
   form_schema: RequestFormFieldSchema[]
+  requires_attachment?: boolean
+  attachment_max_size_kb?: number
+  attachment_allowed_extensions?: string[]
+  eligible_role_codes?: string[]
   requires_backoffice_task?: boolean
   backoffice_task_type?: string
+  backoffice_department?: string
+  export_amount_field?: string
+  allowed_status_transitions?: Record<string, string[]>
   is_active?: boolean
 }
 

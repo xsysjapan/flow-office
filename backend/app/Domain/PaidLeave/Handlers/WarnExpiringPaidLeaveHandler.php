@@ -46,7 +46,7 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
             $message = "{$grant->user->name}さんの有給休暇 {$grant->remaining_days}日が".
                 "{$grant->expires_on->toDateString()}に失効します。";
 
-            SendTeamsNotificationJob::dispatch(
+            SendTeamsNotificationJob::enqueue(
                 title: '有給休暇の失効警告',
                 summary: $message,
                 detailUrl: null,

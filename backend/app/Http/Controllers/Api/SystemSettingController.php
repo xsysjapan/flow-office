@@ -22,6 +22,8 @@ class SystemSettingController extends Controller
     {
         $data = $request->validate([
             'default_timezone' => ['required', 'timezone'],
+            'attendance_submission_deadline_day' => ['integer', 'min:1', 'max:31'],
+            'attendance_month_close_deadline_day' => ['integer', 'min:1', 'max:31'],
         ]);
 
         $setting = SystemSetting::current();

@@ -7,5 +7,9 @@ namespace App\Domain\Notification;
  */
 interface Notifier
 {
-    public function notify(string $title, string $summary, ?string $detailUrl): void;
+    /**
+     * @return bool 送信に成功した場合true(Webhook未設定でログのみの場合もtrue)。
+     *              Webhook呼び出し自体が失敗した場合はfalse。
+     */
+    public function notify(string $title, string $summary, ?string $detailUrl): bool;
 }

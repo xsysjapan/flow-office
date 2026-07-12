@@ -103,7 +103,13 @@ class AttendanceController extends Controller
     public function week(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate(['start_date' => ['required', 'date']]);
-        $start = Carbon::parse($data['start_date'])->startOfWeek(Carbon::MONDAY);
+        $requestedDate = Carbon::parse($data['start_date']);
+        $weekStartsOn = $this->resolveWeekStartsOn($request->user()->id, $requestedDate);
+
+        $start = $requestedDate->copy();
+        while ($start->isoWeekday() !== $weekStartsOn) {
+            $start->subDay();
+        }
         $end = $start->copy()->addDays(6);
 
         $days = AttendanceDay::query()
@@ -115,6 +121,25 @@ class AttendanceController extends Controller
             ->get();
 
         return AttendanceDayResource::collection($days);
+    }
+
+    /**
+     * 週次勤怠編集画面(UC-A006)の週開始日を、法定休日判定(LegalHolidayRequirementChecker)
+     * と同じ基準(勤務形態に紐づくカレンダーの`week_starts_on`)に揃える。勤務予定が
+     * まだ無い場合はカレンダーの既定値と同じ月曜(ISO: 1)を使う。
+     */
+    private function resolveWeekStartsOn(int $userId, Carbon $referenceDate): int
+    {
+        $workStyle = EmployeeShiftAssignment::query()
+            ->where('user_id', $userId)
+            ->whereDate('work_date', '>=', $referenceDate->copy()->subDays(6)->toDateString())
+            ->whereDate('work_date', '<=', $referenceDate->copy()->addDays(6)->toDateString())
+            ->with('workStyle.calendar')
+            ->orderBy('work_date')
+            ->first()
+            ?->workStyle;
+
+        return $workStyle?->calendar?->week_starts_on ?? 1;
     }
 
     public function showDay(Request $request, AttendanceDay $attendanceDay): AttendanceDayResource

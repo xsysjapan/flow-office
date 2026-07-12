@@ -12,6 +12,33 @@ class RequestTypeSeeder extends Seeder
 {
     public function run(): void
     {
+        // UC-B004: 未着手→確認中→(不備あり↔確認中)→支払予定→完了。いつでも取消可能。
+        $expenseTransitions = [
+            'not_started' => ['in_review', 'cancelled'],
+            'in_review' => ['needs_fix', 'payment_scheduled', 'cancelled'],
+            'needs_fix' => ['in_review', 'cancelled'],
+            'payment_scheduled' => ['completed', 'cancelled'],
+        ];
+
+        // UC-B005: 未着手→確認中→発注済→発送済→完了。
+        $businessCardTransitions = [
+            'not_started' => ['in_review', 'cancelled'],
+            'in_review' => ['needs_fix', 'ordered', 'cancelled'],
+            'needs_fix' => ['in_review', 'cancelled'],
+            'ordered' => ['shipped', 'cancelled'],
+            'shipped' => ['completed'],
+        ];
+
+        // UC-B006: 未着手→確認中→(在庫引当=処理中 または 欠品=発注済)→発送済→完了。
+        $supplyTransitions = [
+            'not_started' => ['in_review', 'cancelled'],
+            'in_review' => ['needs_fix', 'processing', 'ordered', 'cancelled'],
+            'needs_fix' => ['in_review', 'cancelled'],
+            'processing' => ['shipped', 'cancelled'],
+            'ordered' => ['shipped', 'cancelled'],
+            'shipped' => ['completed'],
+        ];
+
         $types = [
             [
                 'code' => 'expense_reimbursement',
@@ -23,8 +50,14 @@ class RequestTypeSeeder extends Seeder
                     ['key' => 'purpose', 'label' => '用途', 'type' => 'text', 'required' => true],
                     ['key' => 'account_item', 'label' => '勘定科目', 'type' => 'text', 'required' => true],
                 ],
+                'requires_attachment' => true,
+                'attachment_max_size_kb' => 5120,
+                'attachment_allowed_extensions' => ['pdf', 'jpg', 'jpeg', 'png'],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'expense_reimbursement',
+                'backoffice_department' => '経理部',
+                'export_amount_field' => 'amount',
+                'allowed_status_transitions' => $expenseTransitions,
             ],
             [
                 'code' => 'commuting_expense',
@@ -36,6 +69,9 @@ class RequestTypeSeeder extends Seeder
                 ],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'expense_reimbursement',
+                'backoffice_department' => '経理部',
+                'export_amount_field' => 'amount',
+                'allowed_status_transitions' => $expenseTransitions,
             ],
             [
                 'code' => 'business_card',
@@ -46,6 +82,8 @@ class RequestTypeSeeder extends Seeder
                 ],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'business_card',
+                'backoffice_department' => '総務部',
+                'allowed_status_transitions' => $businessCardTransitions,
             ],
             [
                 'code' => 'supply_request',
@@ -57,6 +95,8 @@ class RequestTypeSeeder extends Seeder
                 ],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'supply_request',
+                'backoffice_department' => '総務部',
+                'allowed_status_transitions' => $supplyTransitions,
             ],
             [
                 'code' => 'address_change',
@@ -68,6 +108,7 @@ class RequestTypeSeeder extends Seeder
                 ],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'general_affairs',
+                'backoffice_department' => '総務部',
             ],
             [
                 'code' => 'certificate_issuance',
@@ -79,6 +120,7 @@ class RequestTypeSeeder extends Seeder
                 ],
                 'requires_backoffice_task' => true,
                 'backoffice_task_type' => 'general_affairs',
+                'backoffice_department' => '総務部',
             ],
             [
                 'code' => 'general_request',
