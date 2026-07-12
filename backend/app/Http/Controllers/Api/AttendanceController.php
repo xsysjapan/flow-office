@@ -117,8 +117,10 @@ class AttendanceController extends Controller
         return AttendanceDayResource::collection($days);
     }
 
-    public function showDay(AttendanceDay $attendanceDay): AttendanceDayResource
+    public function showDay(Request $request, AttendanceDay $attendanceDay): AttendanceDayResource
     {
+        $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を閲覧する権限がありません。');
+
         return new AttendanceDayResource($attendanceDay->load(['breaks', 'calculation']));
     }
 

@@ -1,52 +1,102 @@
 import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
+import { closeMonth, createAttendanceDay, fetchMonthStatus, fetchOwnUserId, submitAndApproveMonth } from './support/api'
 
 /**
  * docs/testing/scenario-tests.md シナリオ2(月次入力ユーザーの1か月勤怠)。
  *
- * 【確認済みの既知の欠落機能】
- * 月次入力ユーザー(伊藤舞)は打刻APIを使わず、日次編集だけで1か月分の実績を入力する
- * 想定だったが、調査の結果これは**現状のAPI/画面では不可能**であることが分かった。
- *
- * - `PUT /attendance/days/{attendanceDay}` はLaravelのroute-model bindingで
- *   既存の`attendance_days`行のIDを要求するため、まだ1度も打刻・編集していない日の
- *   行を新規作成するエンドポイントが存在しない
- *   (backend/app/Domain/Attendance/Handlers/EditAttendanceDayHandler.php:38
- *   `AttendanceDay::query()->findOrFail(...)`)。
- * - `attendance_days`行は (1) 打刻(`POST /attendance/clock-in`)、または
- *   (2) 有給申請の承認(`ApprovePaidLeaveRequestHandler::reflectOnAttendanceDay`)
- *   の2経路でしか新規作成されない。
- * - そのためフロントエンドの週次勤怠画面(`WeekAttendancePage`)でも、行がまだ存在しない
- *   日は「編集」ボタン自体が表示されない({@link WeekDayRow} は `day &&
- *   !isEditing` の場合のみ編集ボタンを出す)。
- *
- * つまり打刻を一切しない社員は、有給を取った日以外は勤怠を入力する手段がない。
- * このテストはその現状の挙動を固定して記録するものであり、`docs/10-usecases-workflow.md`
- * 等でこの運用を認める(月次のみ入力ユーザーを実際にサポートする)方針であれば、
- * 「日次実績を新規作成するAPI」を追加したうえで、本テストを本来のシナリオ
- * (日次編集→月次提出→承認→締め)に書き換える必要がある。
+ * 以前は「打刻していない日に日次実績を新規作成する手段が無い」という既知の制限のため、
+ * その現状挙動を固定するテストに差し替えていた。UC-A016(`POST /attendance/days`)の
+ * 追加によりこの制限が解消されたため、本来のシナリオ(日次実績の新規作成→月次提出→
+ * 承認→締め)に書き換える。日次実績の新規作成画面はまだ無いため、入力はAPIを直接叩く
+ * (`WeekAttendancePage`の編集フォームは既存行の編集のみに対応しており、行が無い日の
+ * 新規作成にはまだ対応していない)。
  */
-test('月次入力ユーザーは、打刻も有給申請もしていない日には勤怠編集ボタンが表示されない(既知の制限)', async ({
-  page,
-}) => {
-  await loginAs(page, SCENARIO_USERS.monthlyEmployee)
-  await page.goto('/attendance/week')
+function mondayOf(date: Date): Date {
+  const d = new Date(date)
+  const dow = d.getDay()
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
 
-  // 未入力の日が少なくとも1つあり、その行に「編集」ボタンが存在しないことを確認する
-  // (=このAPI/画面だけでは日次実績を新規作成できない)。
-  const daysWithoutRecord = page.getByRole('listitem').filter({ hasText: '未入力' })
-  await expect(daysWithoutRecord.first()).toBeVisible()
-  for (const row of await daysWithoutRecord.all()) {
-    await expect(row.getByRole('button', { name: '編集' })).toHaveCount(0)
+function formatDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+test('月次入力ユーザーが打刻せず日次実績を新規作成し、月次提出〜承認〜締めまで進む', async ({ browser }) => {
+  test.setTimeout(60000)
+
+  const employeeContext = await browser.newContext()
+  const approverContext = await browser.newContext()
+  const adminContext = await browser.newContext()
+  try {
+    const employeePage = await employeeContext.newPage()
+    const approverPage = await approverContext.newPage()
+    const adminPage = await adminContext.newPage()
+
+    await loginAs(employeePage, SCENARIO_USERS.monthlyEmployee)
+    await loginAs(approverPage, SCENARIO_USERS.approver)
+    await loginAs(adminPage, SCENARIO_USERS.admin)
+
+    const userId = await fetchOwnUserId(employeePage)
+
+    // ScenarioSeederは前月〜翌月分の勤務予定も生成済みのため、既に終わった月として
+    // 提出〜承認〜締めまで進められるよう前月を対象にする。
+    const now = new Date()
+    const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const yearMonth = `${targetMonthDate.getFullYear()}-${String(targetMonthDate.getMonth() + 1).padStart(2, '0')}`
+
+    // 対象月内の平日を1日選ぶ(1日が週末なら平日になるまで進める)。
+    const targetDate = new Date(targetMonthDate)
+    while (targetDate.getDay() === 0 || targetDate.getDay() === 6) {
+      targetDate.setDate(targetDate.getDate() + 1)
+    }
+    const workDate = formatDate(targetDate)
+
+    // 既に本テストを実行済みの場合に備え、月が編集可能な状態(未提出/差戻し)であることを
+    // 前提にする(締め済みなら再作成できないため、この行の作成は初回のみ成功する想定)。
+    const alreadyClosed = (await fetchMonthStatus(employeePage, yearMonth)) === 'closed'
+    if (!alreadyClosed) {
+      await createAttendanceDay(employeePage, {
+        userId,
+        workDate,
+        actualStartAt: `${workDate}T09:00:00+09:00`,
+        actualEndAt: `${workDate}T18:00:00+09:00`,
+        breaks: [{ start: `${workDate}T12:00:00+09:00`, end: `${workDate}T13:00:00+09:00` }],
+        reason: '月次入力ユーザーの日次実績新規作成(E2E, UC-A016)',
+      }).catch((error: Error) => {
+        // 2回目以降の実行時、既に作成済みなら「既に存在します」エラーになるため許容する。
+        if (!error.message.includes('既に存在します')) throw error
+      })
+    }
+
+    // 週次画面で、打刻を一切していないその日が「未入力」ではなく実働時間付きで表示される
+    // ことを確認する(対象日が属する週まで「前週」ボタンで移動する)。
+    const targetMonday = mondayOf(targetDate)
+    const currentMonday = mondayOf(now)
+    const weeksBack = Math.round((currentMonday.getTime() - targetMonday.getTime()) / (7 * 24 * 60 * 60 * 1000))
+
+    await employeePage.goto('/attendance/week')
+    for (let i = 0; i < weeksBack; i++) {
+      await employeePage.getByRole('button', { name: '前週' }).click()
+    }
+
+    const targetRow = employeePage.getByRole('listitem').filter({ hasText: workDate })
+    await expect(targetRow).toBeVisible()
+    await expect(targetRow.getByText('実働')).toBeVisible()
+    await expect(targetRow.getByText('480分')).toBeVisible()
+    await expect(targetRow.getByText('未入力')).toHaveCount(0)
+
+    // 月次提出→承認→締めまで進める(打刻ユーザーと同じ仕組みに乗っていることの確認)。
+    await submitAndApproveMonth(employeePage, approverPage, yearMonth)
+    await closeMonth(adminPage, employeePage, yearMonth)
+
+    expect(await fetchMonthStatus(employeePage, yearMonth)).toBe('closed')
+  } finally {
+    await employeeContext.close()
+    await approverContext.close()
+    await adminContext.close()
   }
 })
-
-test.skip(
-  '月次入力ユーザーが日次編集のみで1か月の勤怠を入力できる (TODO: 上記の既知の制限が解消されてから実装する)',
-  async () => {
-    // 1. /attendance/week で対象日をクリック
-    // 2. 出勤・退勤・休憩時刻を入力して保存 (source が manual になることを確認)
-    // 3. 月末に /attendance/months から月次提出
-    // 4. 承認者(渡辺直樹)で承認、人事担当者(加藤由美)で締め
-  },
-)

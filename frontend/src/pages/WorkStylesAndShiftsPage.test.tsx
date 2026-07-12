@@ -101,7 +101,7 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await userEvent.type(await screen.findByLabelText('コード'), 'shift')
     await userEvent.type(screen.getByLabelText('名称'), 'シフト勤務')
-    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), 'シフト勤務')
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '通常勤務')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')

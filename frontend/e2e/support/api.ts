@@ -124,6 +124,164 @@ export async function fetchAttendancePunches(page: Page, from: string, to: strin
   return apiFetch(page, `/attendance-punches?from=${from}&to=${to}`)
 }
 
+/** 日次勤怠の詳細(calculation含む)を取得する。UI未表示の内訳項目をAPIで直接確認する用途。 */
+export async function fetchAttendanceDay(
+  page: Page,
+  dayId: number,
+): Promise<{
+  id: number
+  actual_start_at: string | null
+  actual_end_at: string | null
+  calculation: {
+    actual_work_minutes: number
+    deemed_work_minutes: number | null
+    payroll_work_minutes: number
+    non_statutory_overtime_minutes: number
+    statutory_overtime_minutes: number
+    late_night_minutes: number
+    legal_holiday_work_minutes: number
+    company_holiday_work_minutes: number
+    legal_holiday_late_night_minutes: number
+  } | null
+}> {
+  return apiFetch(page, `/attendance/days/${dayId}`)
+}
+
+export async function fetchEmploymentCategories(page: Page): Promise<Array<{ id: number; code: string; name: string }>> {
+  return apiFetch(page, '/employment-categories')
+}
+
+/** UC-C003: 会社カレンダーの日区分をもとに、指定期間分の勤務予定を一括生成する。 */
+export async function generateShiftAssignments(
+  page: Page,
+  input: { userId: number; workStyleId: number; from: string; to: string },
+): Promise<void> {
+  await apiFetch(page, '/employee-shift-assignments/generate', {
+    method: 'POST',
+    body: { user_id: input.userId, work_style_id: input.workStyleId, from: input.from, to: input.to },
+  })
+}
+
+/**
+ * UC-A016: 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻していない日にも
+ * 実績を入力できるようにするAPI(2026-07-12追加)。専用の画面がまだ無いため
+ * APIを直接叩く(scenario-02参照)。
+ */
+export async function createAttendanceDay(
+  page: Page,
+  input: {
+    userId: number
+    workDate: string
+    actualStartAt?: string
+    actualEndAt?: string
+    breaks?: Array<{ start: string; end: string }>
+    reason: string
+  },
+): Promise<{ id: number }> {
+  return apiFetch(page, '/attendance/days', {
+    method: 'POST',
+    body: {
+      user_id: input.userId,
+      work_date: input.workDate,
+      actual_start_at: input.actualStartAt,
+      actual_end_at: input.actualEndAt,
+      breaks: input.breaks ?? [],
+      reason: input.reason,
+    },
+  })
+}
+
+/**
+ * UC-C002: 勤務形態を作成する。1か月単位変形労働時間制・裁量労働制・管理監督者・
+ * 法定休日「決めない方式」など、管理画面のフォームにまだ項目が無い設定
+ * (employment_category_id/deemed_daily_minutes/variable_period_start_day/
+ * legal_holiday_rule=undetermined)はAPIを直接叩いて作成する(scenario-07参照)。
+ */
+export async function createWorkStyleViaApi(
+  page: Page,
+  input: {
+    code: string
+    name: string
+    workTimeSystem: string
+    prescribedDailyMinutes: number
+    prescribedWeeklyMinutes: number
+    deemedDailyMinutes?: number
+    variablePeriodStartDay?: number
+    calendarId?: number
+    isShiftBased?: boolean
+    legalHolidayRule?: string
+    employmentCategoryId?: number
+  },
+): Promise<{ id: number }> {
+  return apiFetch(page, '/work-styles', {
+    method: 'POST',
+    body: {
+      code: input.code,
+      name: input.name,
+      work_time_system: input.workTimeSystem,
+      prescribed_daily_minutes: input.prescribedDailyMinutes,
+      prescribed_weekly_minutes: input.prescribedWeeklyMinutes,
+      deemed_daily_minutes: input.deemedDailyMinutes,
+      variable_period_start_day: input.variablePeriodStartDay,
+      calendar_id: input.calendarId,
+      is_shift_based: input.isShiftBased ?? false,
+      legal_holiday_rule: input.legalHolidayRule,
+      employment_category_id: input.employmentCategoryId,
+    },
+  })
+}
+
+/**
+ * UC-C006: 1か月単位変形労働時間制の所定労働時間を編集する。専用の画面がまだ無いため
+ * APIを直接叩く(scenario-07参照)。
+ */
+export async function editEmployeeShiftAssignment(
+  page: Page,
+  assignmentId: number,
+  input: { plannedStartAt?: string; plannedEndAt?: string; plannedBreakMinutes: number; reason: string },
+): Promise<void> {
+  await apiFetch(page, `/employee-shift-assignments/${assignmentId}`, {
+    method: 'PUT',
+    body: {
+      planned_start_at: input.plannedStartAt,
+      planned_end_at: input.plannedEndAt,
+      planned_break_minutes: input.plannedBreakMinutes,
+      reason: input.reason,
+    },
+  })
+}
+
+export async function fetchShiftAssignment(
+  page: Page,
+  userId: number,
+  workDate: string,
+): Promise<{ id: number } | undefined> {
+  const assignments = await apiFetch<Array<{ id: number; work_date: string }>>(
+    page,
+    `/employee-shift-assignments?user_id=${userId}&from=${workDate}&to=${workDate}`,
+  )
+  return assignments[0]
+}
+
+/**
+ * UC-C007: 法定休日「決めない方式」の週の法定休日を指定する。専用の画面がまだ無いため
+ * APIを直接叩く(scenario-07参照)。
+ */
+export async function designateLegalHoliday(
+  page: Page,
+  input: { userId: number; weekStartDate: string; designatedDate: string; reason: string },
+): Promise<void> {
+  await apiFetch(page, '/attendance/legal-holiday-designations', {
+    method: 'POST',
+    body: {
+      user_id: input.userId,
+      week_start_date: input.weekStartDate,
+      designated_date: input.designatedDate,
+      reason: input.reason,
+    },
+  })
+}
+
 /**
  * 当日の勤怠(`attendance_days`)が`clocked_out`になっていることを保証する。
  * 打刻は同じ日に2回出勤できない設計のため(scenario-01参照)、既に出勤・退勤済みなら
@@ -207,4 +365,24 @@ export async function submitApproveAndCloseCurrentMonth(
   }
 
   return { yearMonth, monthId, dayId, workDate }
+}
+
+export async function fetchMonthStatus(page: Page, yearMonth: string): Promise<string | undefined> {
+  const months = await apiFetch<MonthSummary[]>(page, '/attendance/months/mine')
+  return months.find((m) => m.year_month === yearMonth)?.status
+}
+
+/**
+ * UC-A011: 指定した年月の勤怠月次を締める(管理部・admin/hr_staff)。承認済みでなければ
+ * 何もしない(冪等)。
+ */
+export async function closeMonth(adminPage: Page, employeePage: Page, yearMonth: string): Promise<void> {
+  const status = await fetchMonthStatus(employeePage, yearMonth)
+  if (status !== 'approved') return
+
+  const months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+  const month = months.find((m) => m.year_month === yearMonth)
+  if (!month) throw new Error(`E2E setup: month ${yearMonth} not found`)
+
+  await apiFetch(adminPage, `/attendance-months/${month.id}/close`, { method: 'POST' })
 }
