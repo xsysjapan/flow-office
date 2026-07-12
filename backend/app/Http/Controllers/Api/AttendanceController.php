@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
+use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
@@ -121,8 +122,46 @@ class AttendanceController extends Controller
         return new AttendanceDayResource($attendanceDay->load(['breaks', 'calculation']));
     }
 
+    /**
+     * 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻(attendance_punches)とは
+     * 勤務日が同じというだけの緩い関係しかなく、打刻の有無にかかわらず作成できる。
+     */
+    public function storeDay(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'work_date' => ['required', 'date'],
+            'actual_start_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'actual_end_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'breaks' => ['array'],
+            'breaks.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'breaks.*.end' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'work_type' => ['nullable', 'string'],
+            'note' => ['nullable', 'string'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の出勤日を作成する権限がありません。');
+
+        $day = $commandBus->dispatch(new CreateAttendanceDay(
+            userId: $data['user_id'],
+            workDate: $data['work_date'],
+            actualStartAt: $data['actual_start_at'] ?? null,
+            actualEndAt: $data['actual_end_at'] ?? null,
+            breaks: $data['breaks'] ?? [],
+            workType: $data['work_type'] ?? null,
+            note: $data['note'] ?? null,
+            reason: $data['reason'],
+            createdByUserId: $request->user()->id,
+        ));
+
+        return (new AttendanceDayResource($day->load(['breaks', 'calculation'])))->response()->setStatusCode(201);
+    }
+
     public function updateDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
     {
+        $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を編集する権限がありません。');
+
         $data = $request->validate([
             'actual_start_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'actual_end_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],

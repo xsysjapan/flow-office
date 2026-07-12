@@ -5,6 +5,7 @@ use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
+use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
@@ -19,6 +20,7 @@ use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
@@ -99,6 +101,7 @@ return [
         StartBreak::class => StartBreakHandler::class,
         EndBreak::class => EndBreakHandler::class,
         ClockOut::class => ClockOutHandler::class,
+        CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         EditEmployeeShiftAssignment::class => EditEmployeeShiftAssignmentHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,

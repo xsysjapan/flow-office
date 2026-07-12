@@ -41,6 +41,7 @@
 - `attendance.break_started`
 - `attendance.break_ended`
 - `attendance.clocked_out`
+- `attendance.day_created` (UC-A016 出勤日を新規作成する)
 - `attendance.day_edited`
 - `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
 - `attendance.day_calculated`

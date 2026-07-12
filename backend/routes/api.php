@@ -100,6 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/break/end', [AttendanceController::class, 'endBreak']);
         Route::post('/clock-out', [AttendanceController::class, 'clockOut']);
         Route::get('/week', [AttendanceController::class, 'week']);
+        Route::post('/days', [AttendanceController::class, 'storeDay']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
         Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
