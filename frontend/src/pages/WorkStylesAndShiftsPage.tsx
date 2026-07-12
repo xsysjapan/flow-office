@@ -14,10 +14,10 @@ import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
 import type { LegalHolidayRule, WorkStyle } from '../api/types'
 
 const WORK_TIME_SYSTEM_OPTIONS = [
-  { value: 'fixed', label: '固定時間制' },
-  { value: 'shortened', label: '時短勤務' },
-  { value: 'shift_based', label: 'シフト勤務' },
+  { value: 'fixed', label: '通常勤務' },
+  { value: 'monthly_variable', label: '1か月単位変形労働時間制' },
   { value: 'discretionary', label: '裁量労働制' },
+  { value: 'manager_supervisor', label: '管理監督者' },
 ]
 
 function workTimeSystemLabel(value: string): string {

@@ -36,6 +36,8 @@ class AttendanceDailyCalculationProjector implements Projector
             [
                 'planned_work_minutes' => $payload['planned_work_minutes'],
                 'actual_work_minutes' => $payload['actual_work_minutes'],
+                'deemed_work_minutes' => $payload['deemed_work_minutes'],
+                'payroll_work_minutes' => $payload['payroll_work_minutes'],
                 'prescribed_work_minutes' => $payload['prescribed_work_minutes'],
                 'non_statutory_overtime_minutes' => $payload['non_statutory_overtime_minutes'],
                 'statutory_overtime_minutes' => $payload['statutory_overtime_minutes'],

@@ -78,6 +78,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
         return [
             'day_count' => $dayIds->count(),
             'actual_work_minutes' => $calculations->sum('actual_work_minutes'),
+            'payroll_work_minutes' => $calculations->sum('payroll_work_minutes'),
             'prescribed_work_minutes' => $calculations->sum('prescribed_work_minutes'),
             'non_statutory_overtime_minutes' => $calculations->sum('non_statutory_overtime_minutes'),
             'statutory_overtime_minutes' => $calculations->sum('statutory_overtime_minutes'),

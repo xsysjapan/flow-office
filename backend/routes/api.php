@@ -7,7 +7,9 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
+use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -78,14 +80,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C001〜UC-C003) ---
     Route::get('/work-calendars', [WorkCalendarController::class, 'index']);
+    Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
         Route::post('/work-calendars/{workCalendar}/publish', [WorkCalendarController::class, 'publish']);
         Route::put('/work-calendars/{workCalendar}/days', [WorkCalendarController::class, 'putDays']);
+        Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
+        Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
     });
 
     // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---
@@ -96,9 +101,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/break/end', [AttendanceController::class, 'endBreak']);
         Route::post('/clock-out', [AttendanceController::class, 'clockOut']);
         Route::get('/week', [AttendanceController::class, 'week']);
+        Route::post('/days', [AttendanceController::class, 'storeDay']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
         Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
+        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);

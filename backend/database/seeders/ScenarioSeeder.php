@@ -7,6 +7,7 @@ use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\EmploymentCategory;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\Role;
@@ -104,11 +105,17 @@ class ScenarioSeeder extends Seeder
 
     private function seedWorkStyle(string $code, string $name, WorkCalendar $calendar): WorkStyle
     {
+        $employmentCategory = EmploymentCategory::query()->firstOrCreate(
+            ['code' => EmploymentCategory::REGULAR],
+            ['name' => '正社員'],
+        );
+
         return WorkStyle::query()->firstOrCreate(
             ['code' => $code],
             [
                 'name' => $name,
-                'work_time_system' => 'fixed',
+                'employment_category_id' => $employmentCategory->id,
+                'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
                 'prescribed_daily_minutes' => 480,
                 'prescribed_weekly_minutes' => 2400,
                 'default_start_time' => '09:00',

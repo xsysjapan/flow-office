@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
+use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -12,10 +13,20 @@ use Illuminate\Support\Carbon;
  * - 1日8時間の法定労働時間・22:00〜05:00の深夜時間は労働基準法で定められた値であり、
  *   会社設定ではないためここでは定数として扱う。
  * - 所定労働時間はwork_stylesマスタから取得し、ハードコードしない。
- * - 週40時間・変形労働時間制を含む正確な週次/月次の法定外残業判定は会社ごとに運用が
- *   異なるため、MVPでは日次単位の簡易判定のみを行う(docs/21-mvp-scope.md
- *   「複雑な残業計算は初期設計に含めるが、実装は後続フェーズでよい」)。
- *   最終的な残業計算ルールの確定は社労士確認を前提とする。
+ * - 1か月単位変形労働時間制(work_time_system=monthly_variable)では、あらかじめ8時間を
+ *   超える所定労働時間を設定した日はその時間を超えた部分のみが日8時間超の法定時間外になる
+ *   (docs/08-usecases-calendar-shift.md「1か月単位変形労働時間制」参照)。
+ * - 裁量労働制(work_time_system=discretionary)は、実労働時間ではなくみなし時間
+ *   (work_styles.deemed_daily_minutes)を給与計算上の労働時間(payroll_work_minutes)とする。
+ *   実労働時間(actual_work_minutes)は健康管理のための実績として別途保持し、両者を混同しない。
+ *   深夜・法定休日・法定外休日の労働は、みなし時間ではなく実際の時刻から計算する。
+ * - 管理監督者(work_time_system=manager_supervisor)は労働時間・休憩・休日の規定の適用が
+ *   除外されるため、残業・休日の割増計算対象にはしない。ただし深夜割増は適用される。
+ * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
+ *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
+ *   指定または自動推定した日かどうかで判定する。
+ * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
+ *   (WeeklyOvertimeCalculator)として別途都度計算する。
  */
 class AttendanceCalculator
 {
@@ -24,6 +35,8 @@ class AttendanceCalculator
     private const LATE_NIGHT_START_HOUR = 22;
 
     private const LATE_NIGHT_END_HOUR = 5;
+
+    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
 
     /**
      * @return array<string, int>
@@ -52,31 +65,66 @@ class AttendanceCalculator
         $workStyle = $shift?->workStyle;
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 
-        $plannedWorkMinutes = 0;
-        if ($shift?->planned_start_at !== null && $shift?->planned_end_at !== null) {
-            $plannedWorkMinutes = max(0, $shift->planned_start_at->diffInMinutes($shift->planned_end_at) - $shift->planned_break_minutes);
-        }
+        $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
-        $isLegalHoliday = (bool) ($shift?->is_legal_holiday);
+        $isLegalHoliday = $shift !== null && $this->legalHolidayResolver->isLegalHoliday($shift);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
+        $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
+        $isDiscretionary = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY;
+        $isManagerSupervisor = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR;
 
+        // 裁量労働制の対象日(所定の稼働日かつ法定休日でない日)は、実労働時間にかかわらず
+        // みなし時間を給与計算上の労働時間とする。法定休日の実労働は別途実績で計算するため対象外。
+        $isScheduledWorkingDay = (bool) ($shift?->is_working_day ?? false);
+        $deemedWorkMinutes = ($isDiscretionary && $isScheduledWorkingDay && ! $isLegalHoliday)
+            ? ($workStyle->deemed_daily_minutes ?? 0)
+            : 0;
+
+        // あらかじめ8時間を超える所定労働時間を設定した日(1か月単位変形労働時間制)は、
+        // その時間を超えた部分のみが日8時間超の法定時間外になる。
+        $legalDailyLimitMinutes = ($isMonthlyVariable && $plannedWorkMinutes > self::LEGAL_DAILY_LIMIT_MINUTES)
+            ? $plannedWorkMinutes
+            : self::LEGAL_DAILY_LIMIT_MINUTES;
+
+        // 法定休日の労働は日8時間の判定に乗せず、全て法定休日労働として扱う。
+        // 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、1日8時間・
+        // 週40時間の判定からは除外しない(所定休日での「所定」は0分として扱う)。
         $nonStatutoryOvertimeMinutes = 0;
         $statutoryOvertimeMinutes = 0;
-        if (! $isLegalHoliday && ! $isCompanyHoliday) {
-            $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
-            $withinLegalMinutes = min($actualWorkMinutes, self::LEGAL_DAILY_LIMIT_MINUTES);
-            $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $prescribedWorkMinutes);
+        if (! $isLegalHoliday) {
+            $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : ($isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes);
+            $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - $legalDailyLimitMinutes);
+            $withinLegalMinutes = min($actualWorkMinutes, $legalDailyLimitMinutes);
+            $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
         }
+
+        // 裁量労働制のみなし時間は8時間を超えた部分のみが法定時間外になる(所定内/所定外の
+        // 区分はみなし制度上意味を持たないため0とする)。実労働時間ベースの計算を上書きする。
+        if ($deemedWorkMinutes > 0) {
+            $statutoryOvertimeMinutes = max(0, $deemedWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
+            $nonStatutoryOvertimeMinutes = 0;
+        }
+
+        // 管理監督者は労働時間・休憩・休日の規定の適用が除外されるため、残業・休日の
+        // 割増計算対象にはしない(深夜割増は対象のためlate_night_minutesはここでは変更しない)。
+        if ($isManagerSupervisor) {
+            $statutoryOvertimeMinutes = 0;
+            $nonStatutoryOvertimeMinutes = 0;
+        }
+
+        $payrollWorkMinutes = $deemedWorkMinutes > 0 ? $deemedWorkMinutes : $actualWorkMinutes;
 
         return [
             'planned_work_minutes' => $plannedWorkMinutes,
             'actual_work_minutes' => $actualWorkMinutes,
+            'deemed_work_minutes' => $deemedWorkMinutes > 0 ? $deemedWorkMinutes : null,
+            'payroll_work_minutes' => $payrollWorkMinutes,
             'prescribed_work_minutes' => $prescribedWorkMinutes,
             'non_statutory_overtime_minutes' => $nonStatutoryOvertimeMinutes,
             'statutory_overtime_minutes' => $statutoryOvertimeMinutes,
             'late_night_minutes' => $isLegalHoliday ? 0 : $lateNightMinutes,
-            'legal_holiday_work_minutes' => $isLegalHoliday ? $actualWorkMinutes : 0,
-            'company_holiday_work_minutes' => $isCompanyHoliday ? $actualWorkMinutes : 0,
+            'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
+            'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
         ];
     }

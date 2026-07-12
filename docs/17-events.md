@@ -32,6 +32,7 @@
 - `work_calendar_day.updated`
 - `work_style.created`
 - `employee_shift.assigned`
+- `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
 - `shift_pattern.created`
 
 ## Attendance
@@ -40,9 +41,11 @@
 - `attendance.break_started`
 - `attendance.break_ended`
 - `attendance.clocked_out`
+- `attendance.day_created` (UC-A016 出勤日を新規作成する)
 - `attendance.day_edited`
 - `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
 - `attendance.day_calculated`
+- `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
 - `attendance_punch.recorded`
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
 - `attendance_punch.deleted` (UC-A014 打刻ログを削除する)

@@ -5,9 +5,12 @@ use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
+use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
+use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
+use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
@@ -18,9 +21,12 @@ use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
@@ -97,11 +103,14 @@ return [
         StartBreak::class => StartBreakHandler::class,
         EndBreak::class => EndBreakHandler::class,
         ClockOut::class => ClockOutHandler::class,
+        CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
+        EditEmployeeShiftAssignment::class => EditEmployeeShiftAssignmentHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
         RecordAttendancePunch::class => RecordAttendancePunchHandler::class,
         CorrectAttendancePunch::class => CorrectAttendancePunchHandler::class,
         DeleteAttendancePunch::class => DeleteAttendancePunchHandler::class,
+        DesignateLegalHoliday::class => DesignateLegalHolidayHandler::class,
         SubmitAttendanceMonth::class => SubmitAttendanceMonthHandler::class,
         ApproveAttendanceMonth::class => ApproveAttendanceMonthHandler::class,
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,

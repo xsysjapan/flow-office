@@ -31,7 +31,7 @@ class LegalHolidayRequirementTest extends TestCase
     {
         $calendar = $this->makeCalendar();
         $workStyle = WorkStyle::query()->create([
-            'code' => 'shift-weekly', 'name' => 'シフト勤務(週1日休日)', 'work_time_system' => 'shift_based',
+            'code' => 'shift-weekly', 'name' => 'シフト勤務(週1日休日)', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
@@ -79,7 +79,7 @@ class LegalHolidayRequirementTest extends TestCase
     {
         $calendar = $this->makeCalendar();
         $workStyle = WorkStyle::query()->create([
-            'code' => 'shift-4w4d', 'name' => 'シフト勤務(変形休日制)', 'work_time_system' => 'shift_based',
+            'code' => 'shift-4w4d', 'name' => 'シフト勤務(変形休日制)', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS,

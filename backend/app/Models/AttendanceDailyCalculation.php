@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * .claude/skills/attendance-calc-review 参照。
  */
 #[Fillable([
-    'attendance_day_id', 'planned_work_minutes', 'actual_work_minutes', 'prescribed_work_minutes',
+    'attendance_day_id', 'planned_work_minutes', 'actual_work_minutes', 'deemed_work_minutes',
+    'payroll_work_minutes', 'prescribed_work_minutes',
     'non_statutory_overtime_minutes', 'statutory_overtime_minutes', 'late_night_minutes',
     'legal_holiday_work_minutes', 'company_holiday_work_minutes', 'legal_holiday_late_night_minutes',
 ])]
