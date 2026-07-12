@@ -27,7 +27,6 @@ use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
 use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
-use App\Domain\Attendance\Projectors\AttendanceWeeklyCalculationProjector;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
@@ -132,7 +131,6 @@ return [
     */
     'projectors' => [
         AttendanceDailyCalculationProjector::class,
-        AttendanceWeeklyCalculationProjector::class,
     ],
 
 ];

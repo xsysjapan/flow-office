@@ -260,21 +260,10 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - legal_holiday_late_night_minutes
 - created_at / updated_at
 
-## attendance_weekly_calculations (Projection: 週次集計)
-
-- id
-- user_id
-- week_start_date
-- week_end_date
-- actual_work_minutes (法定休日労働を除く週の実働合計)
-- daily_statutory_overtime_minutes (日8時間超で既に計上済みの時間の週合計。参照用)
-- weekly_statutory_overtime_minutes (日8時間超を除いた実働の週合計が40時間を超えた分。
-  daily_statutory_overtime_minutesと合算しても二重計上にならない)
-- legal_holiday_work_minutes
-- created_at / updated_at
-
-docs/07-usecases-attendance.md「週40時間判定」参照。`attendance.day_calculated`イベントから
-対象週全体を都度再集計するProjection。
+週40時間(労基法32条)判定は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
+月のような集計単位ではないため、`App\Domain\Attendance\Services\WeeklyOvertimeCalculator` が
+月次確認画面の表示のたびに `attendance_daily_calculations` から都度計算する参考情報として扱う
+(docs/07-usecases-attendance.md「週40時間判定」、UC-C005の法定休日要件チェックと同じ考え方)。
 
 ## attendance_months (Projection: 月次スナップショット)
 
@@ -376,4 +365,4 @@ docs/07-usecases-attendance.md「週40時間判定」参照。`attendance.day_ca
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_weekly_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |
+| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |
