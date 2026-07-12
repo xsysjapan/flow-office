@@ -5,12 +5,10 @@ import { closeMonth, createAttendanceDay, fetchMonthStatus, fetchOwnUserId, subm
 /**
  * docs/testing/scenario-tests.md シナリオ2(月次入力ユーザーの1か月勤怠)。
  *
- * 以前は「打刻していない日に日次実績を新規作成する手段が無い」という既知の制限のため、
- * その現状挙動を固定するテストに差し替えていた。UC-A016(`POST /attendance/days`)の
- * 追加によりこの制限が解消されたため、本来のシナリオ(日次実績の新規作成→月次提出→
- * 承認→締め)に書き換える。日次実績の新規作成画面はまだ無いため、入力はAPIを直接叩く
- * (`WeekAttendancePage`の編集フォームは既存行の編集のみに対応しており、行が無い日の
- * 新規作成にはまだ対応していない)。
+ * 日次実績の新規作成(UC-A016、`POST /attendance/days`)→週次画面での確認→月次提出→
+ * 承認→締め、という流れを検証する。日次実績の新規作成画面はまだ無いため、入力はAPIを
+ * 直接叩く(`WeekAttendancePage`の編集フォームは既存行の編集のみに対応しており、行が
+ * 無い日の新規作成にはまだ対応していない)。
  */
 function mondayOf(date: Date): Date {
   const d = new Date(date)
