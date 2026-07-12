@@ -22,6 +22,9 @@ use Illuminate\Support\Carbon;
  *   深夜・法定休日・法定外休日の労働は、みなし時間ではなく実際の時刻から計算する。
  * - 管理監督者(work_time_system=manager_supervisor)は労働時間・休憩・休日の規定の適用が
  *   除外されるため、残業・休日の割増計算対象にはしない。ただし深夜割増は適用される。
+ * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
+ *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
+ *   指定または自動推定した日かどうかで判定する。
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
  *   (WeeklyOvertimeCalculator)として別途都度計算する。
  */
@@ -32,6 +35,8 @@ class AttendanceCalculator
     private const LATE_NIGHT_START_HOUR = 22;
 
     private const LATE_NIGHT_END_HOUR = 5;
+
+    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
 
     /**
      * @return array<string, int>
@@ -62,7 +67,7 @@ class AttendanceCalculator
 
         $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
-        $isLegalHoliday = (bool) ($shift?->is_legal_holiday);
+        $isLegalHoliday = $shift !== null && $this->legalHolidayResolver->isLegalHoliday($shift);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
         $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
         $isDiscretionary = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY;

@@ -13,9 +13,11 @@ use Illuminate\Support\Carbon;
  * 注意 (.claude/skills/attendance-calc-review 参照):
  * - どちらの制度を採用するかは会社の就業規則次第であり、work_styles.legal_holiday_rule
  *   にマスタ化する(ハードコードしない)。
- * - 判定は `employee_shift_assignments.is_legal_holiday`(勤務予定として与えられた
- *   法定休日)を基準にする。実際に休日出勤したかどうかは別軸の集計(法定休日労働時間)で
- *   扱うため、ここでは「休日を与える予定になっているか」のみを見る。
+ * - 「決める方式」(weekly/four_weeks_four_days)の判定は `employee_shift_assignments.
+ *   is_legal_holiday`(勤務予定として与えられた法定休日)を基準にする。実際に休日出勤したか
+ *   どうかは別軸の集計(法定休日労働時間)で扱うため、ここでは「休日を与える予定になって
+ *   いるか」のみを見る。「決めない方式」(undetermined)はLegalHolidayResolverが指定または
+ *   自動推定した日が週内に解決できるかで判定する(UC-C007参照)。
  * - 週・4週の起算はカレンダーマスタ(work_calendars.week_starts_on)/勤務形態マスタ
  *   (work_styles.four_week_period_start_date)を基準にする。
  * - 結果は月次承認画面の警告表示にのみ使い、承認自体はブロックしない。最終判断は
@@ -23,6 +25,8 @@ use Illuminate\Support\Carbon;
  */
 class LegalHolidayRequirementChecker
 {
+    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
+
     /**
      * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
      */
@@ -37,9 +41,11 @@ class LegalHolidayRequirementChecker
             return [];
         }
 
-        return $workStyle->legal_holiday_rule === WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS
-            ? $this->checkFourWeeksFourDays($userId, $workStyle, $monthStart, $monthEnd)
-            : $this->checkWeekly($userId, $workStyle, $monthStart, $monthEnd);
+        return match ($workStyle->legal_holiday_rule) {
+            WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS => $this->checkFourWeeksFourDays($userId, $workStyle, $monthStart, $monthEnd),
+            WorkStyle::LEGAL_HOLIDAY_RULE_UNDETERMINED => $this->checkUndetermined($userId, $workStyle, $monthStart, $monthEnd),
+            default => $this->checkWeekly($userId, $workStyle, $monthStart, $monthEnd),
+        };
     }
 
     private function resolveWorkStyle(int $userId, Carbon $monthStart, Carbon $monthEnd): ?WorkStyle
@@ -129,5 +135,41 @@ class LegalHolidayRequirementChecker
             ->whereDate('work_date', '>=', $from->toDateString())
             ->whereDate('work_date', '<=', $to->toDateString())
             ->count();
+    }
+
+    /**
+     * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
+     */
+    private function checkUndetermined(int $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        $weekStartsOn = $workStyle->calendar?->week_starts_on ?? 1;
+
+        $windowStart = $monthStart->copy();
+        while ($windowStart->isoWeekday() !== $weekStartsOn) {
+            $windowStart->subDay();
+        }
+
+        $violations = [];
+        $cursor = $windowStart->copy();
+
+        while ($cursor->lte($monthEnd)) {
+            $periodEnd = $cursor->copy()->addDays(6);
+            $resolvedDate = $this->legalHolidayResolver->resolveDateForWeek($userId, $cursor->copy());
+            $count = $resolvedDate !== null ? 1 : 0;
+
+            if ($count < 1) {
+                $violations[] = [
+                    'rule' => WorkStyle::LEGAL_HOLIDAY_RULE_UNDETERMINED,
+                    'period_start' => $cursor->toDateString(),
+                    'period_end' => $periodEnd->toDateString(),
+                    'legal_holiday_count' => $count,
+                    'required_count' => 1,
+                ];
+            }
+
+            $cursor->addDays(7);
+        }
+
+        return $violations;
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -104,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
         Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
+        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);

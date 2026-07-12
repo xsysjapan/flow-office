@@ -44,6 +44,7 @@ class WorkStyleController extends Controller
             'legal_holiday_rule' => ['nullable', Rule::in([
                 WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
                 WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS,
+                WorkStyle::LEGAL_HOLIDAY_RULE_UNDETERMINED,
             ])],
             'four_week_period_start_date' => [
                 'nullable', 'date',

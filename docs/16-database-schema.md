@@ -150,8 +150,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - default_break_minutes
 - calendar_id (nullable。シフト制などカレンダーに依存しない勤務形態を許容する)
 - is_shift_based
-- legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制。
-  `is_shift_based`の勤務形態にのみ意味を持つ。UC-C005参照)
+- legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制 /
+  `undetermined`=決めない方式(UC-C007参照)。`is_shift_based`の勤務形態にのみ意味を持つ。
+  UC-C005参照)
 - four_week_period_start_date (`legal_holiday_rule`が`four_weeks_four_days`の場合の
   4週間の起算日)
 - variable_period_start_day (`work_time_system=monthly_variable`の変形期間の起算日。
@@ -189,6 +190,24 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - planned_end_at
 - planned_break_minutes
 - created_at / updated_at
+
+`is_legal_holiday`は「決める方式」(`work_styles.legal_holiday_rule`が`weekly`/
+`four_weeks_four_days`)でのみ意味を持つ事前設定値。「決めない方式」(`undetermined`)では
+この列を使わず、`LegalHolidayResolver`が`legal_holiday_designations`または
+`is_working_day=false`の自動推定から都度解決する(UC-C007参照)。
+
+## legal_holiday_designations (法定休日「決めない方式」の指定。正データ)
+
+- id
+- user_id
+- week_start_date (指定対象の週の起算日)
+- designated_date (その週の法定休日として指定する日。week_start_dateから7日以内)
+- reason
+- designated_by (指定した社員のuser_id)
+- created_at / updated_at
+
+同一user_id・week_start_dateへの再指定は既存の指定を置き換える(unique制約)。
+`work_styles.legal_holiday_rule=undetermined`の勤務形態にのみ意味を持つ。
 
 ## attendance_days (勤務実績の正)
 
@@ -369,6 +388,6 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months` | `stored_events` + 正データから再計算できる派生データ。 |

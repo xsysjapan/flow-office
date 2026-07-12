@@ -12,6 +12,7 @@
 | 法定休日 | 労働基準法上の休日(週1日または4週4日)。 |
 | 所定休日 | 会社が定める休日(法定休日以外の休み)。 |
 | 変形休日制 | 法定休日を「毎週1日」ではなく「4週間を通じて4日以上」与える制度。就業規則で4週間の起算日を定める必要がある(`work_styles.four_week_period_start_date`)。 |
+| 法定休日「決めない方式」 | `work_styles.legal_holiday_rule=undetermined`。どの日が法定休日かを勤務予定作成時に固定せず、`LegalHolidayResolver`が週ごとに指定(`legal_holiday_designations`)または自動推定(週内で休みとなっている最後の日)で解決する。 |
 | 雇用区分 | 正社員・契約社員・パート・アルバイト・嘱託等の分類(`employment_categories`)。労働時間制度(`work_time_system`)とは独立した軸で、雇用区分だけで残業計算・適用除外を決定しない。 |
 | 労働時間制度 | `work_styles.work_time_system`。通常勤務(`fixed`)/1か月単位変形労働時間制(`monthly_variable`)/裁量労働制(`discretionary`)/管理監督者(`manager_supervisor`)のいずれか。シフト制かどうか(`is_shift_based`)はこれとは別軸。 |
 | 1か月単位変形労働時間制 | 1か月以内の期間を平均して週40時間以内となるよう、あらかじめ各日の所定労働時間を定める制度。あらかじめ8時間/40時間を超える所定労働時間を設定した日・週は、その所定時間を超えた部分のみが法定時間外になる(`work_styles.variable_period_start_day`が変形期間の起算日)。 |

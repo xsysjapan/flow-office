@@ -45,6 +45,7 @@
 - `attendance.day_edited`
 - `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
 - `attendance.day_calculated`
+- `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
 - `attendance_punch.recorded`
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
 - `attendance_punch.deleted` (UC-A014 打刻ログを削除する)

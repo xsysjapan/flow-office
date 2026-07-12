@@ -20,6 +20,13 @@ class WorkStyle extends Model
     /** 4週間を通じて4日以上の法定休日を与える変形休日制。起算日は就業規則で定める。 */
     public const LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS = 'four_weeks_four_days';
 
+    /**
+     * 法定休日を決めない方式。どの日が法定休日かは事前に固定せず、週ごとに
+     * LegalHolidayResolverが指定(legal_holiday_designations)または自動推定
+     * (週内で休みとなっている最後の日)で解決する。
+     */
+    public const LEGAL_HOLIDAY_RULE_UNDETERMINED = 'undetermined';
+
     /** 通常勤務(固定時間制・時短勤務等)。所定労働時間との差分のみ判定が必要。 */
     public const WORK_TIME_SYSTEM_FIXED = 'fixed';
 

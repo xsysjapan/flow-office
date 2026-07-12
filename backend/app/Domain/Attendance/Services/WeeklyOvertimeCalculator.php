@@ -22,10 +22,15 @@ use Illuminate\Support\Carbon;
  * - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
  * - 1か月単位変形労働時間制(work_time_system=monthly_variable)で、あらかじめ40時間を
  *   超える所定労働時間を設定した週は、その時間を超えた部分のみが週40時間超の法定時間外になる。
+ * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
+ *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
+ *   指定または自動推定した日かどうかで判定する(AttendanceCalculatorと同じ判定基準)。
  */
 class WeeklyOvertimeCalculator
 {
     private const WEEKLY_STATUTORY_LIMIT_MINUTES = 2400; // 労基法32条: 1週40時間
+
+    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
 
     /**
      * @return list<array{week_start_date: string, week_end_date: string, actual_work_minutes: int, daily_statutory_overtime_minutes: int, weekly_statutory_overtime_minutes: int, legal_holiday_work_minutes: int}>
@@ -60,7 +65,7 @@ class WeeklyOvertimeCalculator
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $weekStartDate)
             ->whereDate('work_date', '<=', $weekEndDate)
-            ->with(['calculation', 'shiftAssignment.workStyle'])
+            ->with(['calculation', 'shiftAssignment.workStyle.calendar'])
             ->get();
 
         $actualWorkMinutes = 0;
@@ -77,7 +82,7 @@ class WeeklyOvertimeCalculator
 
             $legalHolidayWorkMinutes += $calculation->legal_holiday_work_minutes;
 
-            if ((bool) ($day->shiftAssignment?->is_legal_holiday)) {
+            if ($day->shiftAssignment !== null && $this->legalHolidayResolver->isLegalHoliday($day->shiftAssignment)) {
                 continue;
             }
 
