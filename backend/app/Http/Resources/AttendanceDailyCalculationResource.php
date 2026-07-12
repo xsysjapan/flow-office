@@ -15,6 +15,8 @@ class AttendanceDailyCalculationResource extends JsonResource
         return [
             'planned_work_minutes' => $this->planned_work_minutes,
             'actual_work_minutes' => $this->actual_work_minutes,
+            'deemed_work_minutes' => $this->deemed_work_minutes,
+            'payroll_work_minutes' => $this->payroll_work_minutes,
             'prescribed_work_minutes' => $this->prescribed_work_minutes,
             'non_statutory_overtime_minutes' => $this->non_statutory_overtime_minutes,
             'statutory_overtime_minutes' => $this->statutory_overtime_minutes,

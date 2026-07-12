@@ -16,6 +16,12 @@ use Illuminate\Support\Carbon;
  * - 1か月単位変形労働時間制(work_time_system=monthly_variable)では、あらかじめ8時間を
  *   超える所定労働時間を設定した日はその時間を超えた部分のみが日8時間超の法定時間外になる
  *   (docs/08-usecases-calendar-shift.md「1か月単位変形労働時間制」参照)。
+ * - 裁量労働制(work_time_system=discretionary)は、実労働時間ではなくみなし時間
+ *   (work_styles.deemed_daily_minutes)を給与計算上の労働時間(payroll_work_minutes)とする。
+ *   実労働時間(actual_work_minutes)は健康管理のための実績として別途保持し、両者を混同しない。
+ *   深夜・法定休日・法定外休日の労働は、みなし時間ではなく実際の時刻から計算する。
+ * - 管理監督者(work_time_system=manager_supervisor)は労働時間・休憩・休日の規定の適用が
+ *   除外されるため、残業・休日の割増計算対象にはしない。ただし深夜割増は適用される。
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
  *   (WeeklyOvertimeCalculator)として別途都度計算する。
  */
@@ -59,6 +65,15 @@ class AttendanceCalculator
         $isLegalHoliday = (bool) ($shift?->is_legal_holiday);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
         $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
+        $isDiscretionary = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY;
+        $isManagerSupervisor = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR;
+
+        // 裁量労働制の対象日(所定の稼働日かつ法定休日でない日)は、実労働時間にかかわらず
+        // みなし時間を給与計算上の労働時間とする。法定休日の実労働は別途実績で計算するため対象外。
+        $isScheduledWorkingDay = (bool) ($shift?->is_working_day ?? false);
+        $deemedWorkMinutes = ($isDiscretionary && $isScheduledWorkingDay && ! $isLegalHoliday)
+            ? ($workStyle->deemed_daily_minutes ?? 0)
+            : 0;
 
         // あらかじめ8時間を超える所定労働時間を設定した日(1か月単位変形労働時間制)は、
         // その時間を超えた部分のみが日8時間超の法定時間外になる。
@@ -78,15 +93,33 @@ class AttendanceCalculator
             $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
         }
 
+        // 裁量労働制のみなし時間は8時間を超えた部分のみが法定時間外になる(所定内/所定外の
+        // 区分はみなし制度上意味を持たないため0とする)。実労働時間ベースの計算を上書きする。
+        if ($deemedWorkMinutes > 0) {
+            $statutoryOvertimeMinutes = max(0, $deemedWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
+            $nonStatutoryOvertimeMinutes = 0;
+        }
+
+        // 管理監督者は労働時間・休憩・休日の規定の適用が除外されるため、残業・休日の
+        // 割増計算対象にはしない(深夜割増は対象のためlate_night_minutesはここでは変更しない)。
+        if ($isManagerSupervisor) {
+            $statutoryOvertimeMinutes = 0;
+            $nonStatutoryOvertimeMinutes = 0;
+        }
+
+        $payrollWorkMinutes = $deemedWorkMinutes > 0 ? $deemedWorkMinutes : $actualWorkMinutes;
+
         return [
             'planned_work_minutes' => $plannedWorkMinutes,
             'actual_work_minutes' => $actualWorkMinutes,
+            'deemed_work_minutes' => $deemedWorkMinutes > 0 ? $deemedWorkMinutes : null,
+            'payroll_work_minutes' => $payrollWorkMinutes,
             'prescribed_work_minutes' => $prescribedWorkMinutes,
             'non_statutory_overtime_minutes' => $nonStatutoryOvertimeMinutes,
             'statutory_overtime_minutes' => $statutoryOvertimeMinutes,
             'late_night_minutes' => $isLegalHoliday ? 0 : $lateNightMinutes,
-            'legal_holiday_work_minutes' => $isLegalHoliday ? $actualWorkMinutes : 0,
-            'company_holiday_work_minutes' => $isCompanyHoliday ? $actualWorkMinutes : 0,
+            'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
+            'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
         ];
     }

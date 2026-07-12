@@ -252,7 +252,11 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - id
 - attendance_day_id
 - planned_work_minutes
-- actual_work_minutes
+- actual_work_minutes (実労働時間。健康管理用。常に実際の時刻から計算する)
+- deemed_work_minutes (裁量労働制のみなし時間。対象外の日はnull。docs/07-usecases-attendance.md
+  「裁量労働制・管理監督者」参照)
+- payroll_work_minutes (給与計算上使用する労働時間。通常はactual_work_minutesと同じだが、
+  裁量労働制はdeemed_work_minutesを採用する)
 - prescribed_work_minutes
 - non_statutory_overtime_minutes
 - statutory_overtime_minutes
