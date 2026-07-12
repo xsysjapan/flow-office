@@ -35,6 +35,7 @@ class WorkStyleController extends Controller
             'prescribed_daily_minutes' => ['required', 'integer', 'min:1'],
             'prescribed_weekly_minutes' => ['required', 'integer', 'min:1'],
             'deemed_daily_minutes' => ['nullable', 'integer', 'min:1'],
+            'variable_period_start_day' => ['nullable', 'integer', 'min:1', 'max:31'],
             'default_start_time' => ['nullable', 'date_format:H:i'],
             'default_end_time' => ['nullable', 'date_format:H:i'],
             'default_break_minutes' => ['integer', 'min:0'],

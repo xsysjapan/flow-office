@@ -39,4 +39,17 @@ class EmployeeShiftAssignment extends Model
     {
         return $this->belongsTo(WorkStyle::class);
     }
+
+    /**
+     * あらかじめ設定された所定労働時間(分)。planned_start_at/planned_end_atが
+     * 未設定の日は0を返す。
+     */
+    public function plannedWorkMinutes(): int
+    {
+        if ($this->planned_start_at === null || $this->planned_end_at === null) {
+            return 0;
+        }
+
+        return max(0, $this->planned_start_at->diffInMinutes($this->planned_end_at) - $this->planned_break_minutes);
+    }
 }

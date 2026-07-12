@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -19,6 +20,8 @@ use Illuminate\Support\Carbon;
  *   を除いた「日8時間以内の実働」だけを週単位で合計し、40時間を超えた分のみを
  *   weekly_statutory_overtime_minutes とする(日8時間判定との二重計上を避けるため)。
  * - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
+ * - 1か月単位変形労働時間制(work_time_system=monthly_variable)で、あらかじめ40時間を
+ *   超える所定労働時間を設定した週は、その時間を超えた部分のみが週40時間超の法定時間外になる。
  */
 class WeeklyOvertimeCalculator
 {
@@ -57,13 +60,14 @@ class WeeklyOvertimeCalculator
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $weekStartDate)
             ->whereDate('work_date', '<=', $weekEndDate)
-            ->with(['calculation', 'shiftAssignment'])
+            ->with(['calculation', 'shiftAssignment.workStyle'])
             ->get();
 
         $actualWorkMinutes = 0;
         $dailyStatutoryOvertimeMinutes = 0;
         $legalHolidayWorkMinutes = 0;
         $withinDailyLimitMinutes = 0;
+        $plannedMinutesForMonthlyVariable = 0;
 
         foreach ($days as $day) {
             $calculation = $day->calculation;
@@ -80,14 +84,20 @@ class WeeklyOvertimeCalculator
             $actualWorkMinutes += $calculation->actual_work_minutes;
             $dailyStatutoryOvertimeMinutes += $calculation->statutory_overtime_minutes;
             $withinDailyLimitMinutes += $calculation->actual_work_minutes - $calculation->statutory_overtime_minutes;
+
+            if ($day->shiftAssignment?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
+                $plannedMinutesForMonthlyVariable += $day->shiftAssignment->plannedWorkMinutes();
+            }
         }
+
+        $weeklyLimitMinutes = max(self::WEEKLY_STATUTORY_LIMIT_MINUTES, $plannedMinutesForMonthlyVariable);
 
         return [
             'week_start_date' => $weekStartDate,
             'week_end_date' => $weekEndDate,
             'actual_work_minutes' => $actualWorkMinutes,
             'daily_statutory_overtime_minutes' => $dailyStatutoryOvertimeMinutes,
-            'weekly_statutory_overtime_minutes' => max(0, $withinDailyLimitMinutes - self::WEEKLY_STATUTORY_LIMIT_MINUTES),
+            'weekly_statutory_overtime_minutes' => max(0, $withinDailyLimitMinutes - $weeklyLimitMinutes),
             'legal_holiday_work_minutes' => $legalHolidayWorkMinutes,
         ];
     }

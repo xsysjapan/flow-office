@@ -32,6 +32,7 @@
 - `work_calendar_day.updated`
 - `work_style.created`
 - `employee_shift.assigned`
+- `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
 - `shift_pattern.created`
 
 ## Attendance

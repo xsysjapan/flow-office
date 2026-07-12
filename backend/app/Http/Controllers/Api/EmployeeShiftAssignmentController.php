@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
+use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EmployeeShiftAssignmentResource;
 use App\Models\EmployeeShiftAssignment;
@@ -47,7 +49,7 @@ class EmployeeShiftAssignmentController extends Controller
         ]);
 
         $workStyle = WorkStyle::query()->with('calendar.days')->findOrFail($data['work_style_id']);
-        $calendarDaysByDate = $workStyle->calendar->days->keyBy(fn ($day) => $day->date->toDateString());
+        $calendarDaysByDate = $workStyle->calendar?->days->keyBy(fn ($day) => $day->date->toDateString()) ?? collect();
 
         $period = Carbon::parse($data['from'])->toPeriod(Carbon::parse($data['to']));
         $assignments = [];
@@ -83,5 +85,30 @@ class EmployeeShiftAssignmentController extends Controller
         }
 
         return EmployeeShiftAssignmentResource::collection(collect($assignments));
+    }
+
+    /**
+     * 勤務予定(所定労働時間)を編集する。1か月単位変形労働時間制で、特定の日だけ
+     * あらかじめ8時間を超える所定労働時間を設定する場合などに使う。
+     */
+    public function update(Request $request, EmployeeShiftAssignment $employeeShiftAssignment, CommandBus $commandBus): EmployeeShiftAssignmentResource
+    {
+        $data = $request->validate([
+            'planned_start_at' => ['nullable', 'date'],
+            'planned_end_at' => ['nullable', 'date'],
+            'planned_break_minutes' => ['required', 'integer', 'min:0'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $commandBus->dispatch(new EditEmployeeShiftAssignment(
+            employeeShiftAssignmentId: $employeeShiftAssignment->id,
+            plannedStartAt: $data['planned_start_at'] ?? null,
+            plannedEndAt: $data['planned_end_at'] ?? null,
+            plannedBreakMinutes: $data['planned_break_minutes'],
+            reason: $data['reason'],
+            editedByUserId: $request->user()->id,
+        ));
+
+        return new EmployeeShiftAssignmentResource($employeeShiftAssignment->refresh());
     }
 }

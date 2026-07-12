@@ -89,6 +89,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
+        Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
     });
 
     // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---

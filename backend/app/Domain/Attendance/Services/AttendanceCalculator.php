@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
+use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -12,10 +13,11 @@ use Illuminate\Support\Carbon;
  * - 1日8時間の法定労働時間・22:00〜05:00の深夜時間は労働基準法で定められた値であり、
  *   会社設定ではないためここでは定数として扱う。
  * - 所定労働時間はwork_stylesマスタから取得し、ハードコードしない。
- * - 週40時間・変形労働時間制を含む正確な週次/月次の法定外残業判定は会社ごとに運用が
- *   異なるため、MVPでは日次単位の簡易判定のみを行う(docs/21-mvp-scope.md
- *   「複雑な残業計算は初期設計に含めるが、実装は後続フェーズでよい」)。
- *   最終的な残業計算ルールの確定は社労士確認を前提とする。
+ * - 1か月単位変形労働時間制(work_time_system=monthly_variable)では、あらかじめ8時間を
+ *   超える所定労働時間を設定した日はその時間を超えた部分のみが日8時間超の法定時間外になる
+ *   (docs/08-usecases-calendar-shift.md「1か月単位変形労働時間制」参照)。
+ * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
+ *   (WeeklyOvertimeCalculator)として別途都度計算する。
  */
 class AttendanceCalculator
 {
@@ -52,13 +54,17 @@ class AttendanceCalculator
         $workStyle = $shift?->workStyle;
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 
-        $plannedWorkMinutes = 0;
-        if ($shift?->planned_start_at !== null && $shift?->planned_end_at !== null) {
-            $plannedWorkMinutes = max(0, $shift->planned_start_at->diffInMinutes($shift->planned_end_at) - $shift->planned_break_minutes);
-        }
+        $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
         $isLegalHoliday = (bool) ($shift?->is_legal_holiday);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
+        $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
+
+        // あらかじめ8時間を超える所定労働時間を設定した日(1か月単位変形労働時間制)は、
+        // その時間を超えた部分のみが日8時間超の法定時間外になる。
+        $legalDailyLimitMinutes = ($isMonthlyVariable && $plannedWorkMinutes > self::LEGAL_DAILY_LIMIT_MINUTES)
+            ? $plannedWorkMinutes
+            : self::LEGAL_DAILY_LIMIT_MINUTES;
 
         // 法定休日の労働は日8時間の判定に乗せず、全て法定休日労働として扱う。
         // 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、1日8時間・
@@ -66,9 +72,9 @@ class AttendanceCalculator
         $nonStatutoryOvertimeMinutes = 0;
         $statutoryOvertimeMinutes = 0;
         if (! $isLegalHoliday) {
-            $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : $prescribedWorkMinutes;
-            $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
-            $withinLegalMinutes = min($actualWorkMinutes, self::LEGAL_DAILY_LIMIT_MINUTES);
+            $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : ($isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes);
+            $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - $legalDailyLimitMinutes);
+            $withinLegalMinutes = min($actualWorkMinutes, $legalDailyLimitMinutes);
             $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
         }
 

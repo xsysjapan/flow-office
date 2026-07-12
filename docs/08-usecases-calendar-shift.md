@@ -81,6 +81,33 @@ UC-C005のチェックは適用する。
 `docs/20-implementation-notes.md`の「Projectionは再生成可能」の考え方と同様、
 状態変更を伴わない読み取り専用の確認情報のため)。
 
+## UC-C006: 1か月単位変形労働時間制の所定労働時間を編集する
+
+1. 管理者が対象社員・対象日の勤務予定(`employee_shift_assignments`)を選ぶ
+2. あらかじめ所定労働時間(始業・終業・休憩)を設定する(特定の日に8時間を超える所定労働時間を
+   設定できる)
+3. 変更理由を入力する
+4. 保存する
+5. `employee_shift.plan_changed` イベントを記録する
+
+以下の場合は編集できない。
+
+- 対象日に既に勤務実績(`attendance_days.actual_start_at`)がある場合。既に発生した時間外労働を
+  シフトの事後変更で通常勤務へ振り替えることを防ぐため
+  (`docs/20-implementation-notes.md`「シフトの事後変更で残業時間を消去する」の禁止に対応)
+- 勤務形態が1か月単位変形労働時間制(`work_time_system=monthly_variable`)の場合、変更後の
+  所定労働時間が変形期間(`work_styles.variable_period_start_day`を起算日とする1か月間)全体で
+  法定労働時間の総枠(40時間 × 期間日数 ÷ 7)を超える場合
+
+変形期間の起算日を跨ぐ月は、起算日をその月の末日にクランプする(例: 起算日31日で2月を跨ぐ
+場合は2月末日を起算日とする)。
+
+日8時間・週40時間の判定は、あらかじめ設定した所定労働時間(`employee_shift_assignments`の
+`planned_start_at`/`planned_end_at`/`planned_break_minutes`)が8時間・40時間を超える場合、
+その所定時間を超えた部分のみを法定時間外とする(`AttendanceCalculator`の日次判定、
+`WeeklyOvertimeCalculator`の週次参考情報のいずれも対象)。所定労働時間を設定していない
+(`fixed`など)勤務形態は従来通り8時間・40時間を基準にする。
+
 ## 注意点
 
 - 法令・就業規則・36協定・変形労働時間制の運用は会社ごとに異なるため、法定休日/所定休日の

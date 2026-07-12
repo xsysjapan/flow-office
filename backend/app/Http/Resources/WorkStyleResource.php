@@ -22,6 +22,7 @@ class WorkStyleResource extends JsonResource
             'prescribed_daily_minutes' => $this->prescribed_daily_minutes,
             'prescribed_weekly_minutes' => $this->prescribed_weekly_minutes,
             'deemed_daily_minutes' => $this->deemed_daily_minutes,
+            'variable_period_start_day' => $this->variable_period_start_day,
             'default_start_time' => $this->default_start_time,
             'default_end_time' => $this->default_end_time,
             'default_break_minutes' => $this->default_break_minutes,

@@ -154,6 +154,8 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   `is_shift_based`の勤務形態にのみ意味を持つ。UC-C005参照)
 - four_week_period_start_date (`legal_holiday_rule`が`four_weeks_four_days`の場合の
   4週間の起算日)
+- variable_period_start_day (`work_time_system=monthly_variable`の変形期間の起算日。
+  暦月の何日を起算日にするか(1〜31)。1なら暦月と一致。他の労働時間制度では未使用)
 - created_at / updated_at
 
 労使協定・本人同意の管理は本システムのスコープ外とする(適法性の証跡管理ではなく、勤怠を
