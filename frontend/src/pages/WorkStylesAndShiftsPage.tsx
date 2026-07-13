@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
@@ -275,28 +276,41 @@ function WorkStyleFormCard() {
       ) : (
         <ul className="mb-4 divide-y divide-border">
           {(workStyles ?? []).map((style) => (
-            <li key={style.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-              <strong className="font-semibold text-foreground">{style.name}</strong>
-              <span className="text-muted-foreground">{style.code}</span>
-              <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
-              <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
-              <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
-              {style.is_shift_based && (
-                <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
-              )}
-              {style.is_default ? (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  デフォルト
-                </span>
-              ) : (
-                <Button
-                  variant="secondary"
-                  isLoading={setDefaultWorkStyle.isPending}
-                  onClick={() => setDefaultWorkStyle.mutate(style.id)}
-                >
-                  デフォルトに設定
-                </Button>
-              )}
+            <li key={style.id} className="py-2 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <strong className="font-semibold text-foreground">{style.name}</strong>
+                <span className="text-muted-foreground">{style.code}</span>
+                <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
+                <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
+                <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
+                {style.is_shift_based && (
+                  <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
+                )}
+                {style.is_default ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    デフォルト
+                  </span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    isLoading={setDefaultWorkStyle.isPending}
+                    onClick={() => setDefaultWorkStyle.mutate(style.id)}
+                  >
+                    デフォルトに設定
+                  </Button>
+                )}
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span>適用社員数 {style.applied_employee_count ?? '-'}名</span>
+                {style.is_shift_based && <span>使用中の勤務シフト {style.active_shift_pattern_count ?? 0}件</span>}
+                {style.updated_at && <span>最終更新 {style.updated_at.slice(0, 10)}</span>}
+                {style.configuration_warnings.map((warning) => (
+                  <Badge key={warning} tone="warning">
+                    {warning}
+                  </Badge>
+                ))}
+              </div>
             </li>
           ))}
         </ul>

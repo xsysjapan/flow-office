@@ -54,6 +54,10 @@ const defaultWorkStyle: WorkStyle = {
   core_time_end: null,
   flexible_time_start: null,
   flexible_time_end: null,
+  applied_employee_count: null,
+  active_shift_pattern_count: null,
+  configuration_warnings: [],
+  updated_at: null,
 }
 
 const flexWorkStyle: WorkStyle = { ...defaultWorkStyle, id: 2, code: 'flex', name: 'フレックスタイム制', is_default: false }

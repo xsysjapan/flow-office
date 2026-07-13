@@ -46,6 +46,10 @@ const workStyle: WorkStyle = {
   core_time_end: null,
   flexible_time_start: null,
   flexible_time_end: null,
+  applied_employee_count: 3,
+  active_shift_pattern_count: null,
+  configuration_warnings: [],
+  updated_at: '2026-07-01T09:00:00+09:00',
 }
 
 const targetUser: User = {
@@ -88,6 +92,30 @@ describe('WorkStylesAndShiftsPage', () => {
 
     expect(await screen.findByText('標準勤務', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByText('通常労働時間制')).toBeInTheDocument()
+  })
+
+  it('shows the applied employee count, last updated date, and configuration warnings', async () => {
+    const shiftWorkStyle: WorkStyle = {
+      ...workStyle,
+      id: 2,
+      code: 'shift-3',
+      name: '3交代制',
+      is_shift_based: true,
+      is_default: false,
+      applied_employee_count: 12,
+      active_shift_pattern_count: 0,
+      updated_at: '2026-07-05T09:00:00+09:00',
+      configuration_warnings: ['シフトパターンが割り当てられた勤務予定がまだありません。'],
+    }
+    renderPage({ workStyles: [workStyle, shiftWorkStyle] })
+
+    await screen.findByText('標準勤務', { selector: 'strong' })
+    expect(screen.getByText('適用社員数 3名')).toBeInTheDocument()
+    expect(screen.getByText('適用社員数 12名')).toBeInTheDocument()
+    expect(screen.getByText('最終更新 2026-07-01')).toBeInTheDocument()
+    expect(screen.getByText('最終更新 2026-07-05')).toBeInTheDocument()
+    expect(screen.getByText('使用中の勤務シフト 0件')).toBeInTheDocument()
+    expect(screen.getByText('シフトパターンが割り当てられた勤務予定がまだありません。')).toBeInTheDocument()
   })
 
   it('does not show the onboarding card once a default work style exists', async () => {

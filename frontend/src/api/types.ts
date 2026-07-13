@@ -314,6 +314,12 @@ export interface WorkStyle {
   /** 勤務可能時間帯(フレキシブルタイム)。 */
   flexible_time_start: string | null
   flexible_time_end: string | null
+  /** 指示書 16.1節: 一覧画面の管理者向け集計列。GET /work-stylesでのみ設定される。 */
+  applied_employee_count: number | null
+  /** シフト制の働き方で使用中の勤務シフト(shift_patterns)数。シフト制でない場合はnull。 */
+  active_shift_pattern_count: number | null
+  configuration_warnings: string[]
+  updated_at: string | null
 }
 
 /** ユーザーの月次働き方割当(docs/16-database-schema.md)。10月までは通常勤務、11月から

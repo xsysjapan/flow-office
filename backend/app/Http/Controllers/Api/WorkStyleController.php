@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
+use App\Domain\Attendance\Services\WorkStyleUsageSummaryCalculator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkStyleResource;
@@ -21,9 +22,21 @@ use Illuminate\Validation\ValidationException;
  */
 class WorkStyleController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    /**
+     * 指示書 16.1節: 働き方一覧に適用社員数・使用中の勤務シフト数・設定不備の集計列を含める。
+     */
+    public function index(WorkStyleUsageSummaryCalculator $summaryCalculator): AnonymousResourceCollection
     {
-        return WorkStyleResource::collection(WorkStyle::query()->with('employmentCategory')->orderBy('name')->get());
+        $workStyles = WorkStyle::query()->with('employmentCategory')->orderBy('name')->get();
+        $summaries = $summaryCalculator->calculateFor($workStyles);
+
+        foreach ($workStyles as $workStyle) {
+            foreach ($summaries[$workStyle->id] as $key => $value) {
+                $workStyle->setAttribute($key, $value);
+            }
+        }
+
+        return WorkStyleResource::collection($workStyles);
     }
 
     public function store(Request $request, CommandBus $commandBus): JsonResponse

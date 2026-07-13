@@ -39,6 +39,12 @@ class WorkStyleResource extends JsonResource
             'core_time_end' => $this->core_time_end,
             'flexible_time_start' => $this->flexible_time_start,
             'flexible_time_end' => $this->flexible_time_end,
+            // 指示書16.1節: 一覧画面の管理者向け集計列。WorkStyleController::indexでのみ
+            // 設定される(WorkStyleUsageSummaryCalculator参照)。他の経路ではnull/空配列。
+            'applied_employee_count' => $this->applied_employee_count,
+            'active_shift_pattern_count' => $this->active_shift_pattern_count,
+            'configuration_warnings' => $this->configuration_warnings ?? [],
+            'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }
 }

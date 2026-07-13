@@ -36,6 +36,10 @@ const workStyle: WorkStyle = {
   core_time_end: null,
   flexible_time_start: null,
   flexible_time_end: null,
+  applied_employee_count: 45,
+  active_shift_pattern_count: null,
+  configuration_warnings: [],
+  updated_at: '2026-07-01T09:00:00+09:00',
 }
 
 const paginatedUsers: Paginated<User> = {
