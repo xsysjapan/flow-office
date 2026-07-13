@@ -29,6 +29,15 @@ use Illuminate\Support\Carbon;
  *   指定または自動推定した日かどうかで判定する。
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
  *   (WeeklyOvertimeCalculator)として別途都度計算する。
+ * - フレックスタイム制(work_time_system=flex)は、日次の始業・終業時刻ではなく清算期間
+ *   全体で労働時間を管理するため(指示書 7.1節)、日次の残業判定(non_statutory_overtime_minutes
+ *   / statutory_overtime_minutes)は行わず常に0とする(週40時間の法定労働時間総枠に基づく
+ *   清算期間単位の過不足判定は、初期実装では簡略化しFlexSettlementSummaryCalculatorが
+ *   清算期間の必要労働時間との単純な過不足のみを算出する。参考情報であり給与計算上の
+ *   確定値ではない)。深夜・法定休日・法定外休日の労働は実際の時刻から通常通り計算する。
+ *   コアタイム設定(work_styles.core_time_enabled)がある場合、実際の勤務がコアタイムを
+ *   全てカバーしているかを`core_time_violation`として判定する(労働時間の過不足とは別枠の
+ *   警告。指示書 7.4節)。
  * - その日の勤務予定(employee_shift_assignments)に働き方が紐づいていない場合でも
  *   勤怠は記録できる。その際の働き方は、(1) その月に割り当てられた働き方
  *   (user_work_style_monthly_assignments)、(2) それも無ければシステム全体設定の
@@ -46,7 +55,7 @@ class AttendanceCalculator
     public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
 
     /**
-     * @return array<string, int>
+     * @return array<string, int|bool|null>
      */
     public function calculate(AttendanceDay $day): array
     {
@@ -79,6 +88,7 @@ class AttendanceCalculator
         $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
         $isDiscretionary = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY;
         $isManagerSupervisor = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR;
+        $isFlex = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_FLEX;
 
         // 裁量労働制の対象日(所定の稼働日かつ法定休日でない日)は、実労働時間にかかわらず
         // みなし時間を給与計算上の労働時間とする。法定休日の実労働は別途実績で計算するため対象外。
@@ -119,7 +129,16 @@ class AttendanceCalculator
             $nonStatutoryOvertimeMinutes = 0;
         }
 
+        // フレックスタイム制は清算期間全体で労働時間を管理するため、日次の残業判定は行わない
+        // (清算期間単位の過不足はFlexSettlementSummaryCalculatorが別途算出する)。
+        if ($isFlex) {
+            $statutoryOvertimeMinutes = 0;
+            $nonStatutoryOvertimeMinutes = 0;
+        }
+
         $payrollWorkMinutes = $deemedWorkMinutes > 0 ? $deemedWorkMinutes : $actualWorkMinutes;
+
+        $coreTimeViolation = $this->isCoreTimeViolated($isFlex, $workStyle, $day->work_date, $start, $end);
 
         return [
             'planned_work_minutes' => $plannedWorkMinutes,
@@ -133,7 +152,29 @@ class AttendanceCalculator
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
+            'core_time_violation' => $coreTimeViolation,
         ];
+    }
+
+    /**
+     * コアタイム違反判定(指示書 7.4節): フレックスタイム制でコアタイムが有効な場合、
+     * その日の勤務(actual_start_at〜actual_end_at)がコアタイムを全てカバーしているかを
+     * 判定する。労働時間の不足とは別枠の警告であり、当日出退勤の実績が無い日は判定しない
+     * (実績が無いこと自体は別の未出勤警告の対象であり、ここでは対象外とする)。
+     */
+    private function isCoreTimeViolated(bool $isFlex, ?WorkStyle $workStyle, Carbon $workDate, ?Carbon $start, ?Carbon $end): bool
+    {
+        if (! $isFlex || ! $workStyle?->core_time_enabled || $start === null || $end === null) {
+            return false;
+        }
+        if ($workStyle->core_time_start === null || $workStyle->core_time_end === null) {
+            return false;
+        }
+
+        $coreStart = $workDate->copy()->setTimeFromTimeString($workStyle->core_time_start);
+        $coreEnd = $workDate->copy()->setTimeFromTimeString($workStyle->core_time_end);
+
+        return ! ($start->lessThanOrEqualTo($coreStart) && $end->greaterThanOrEqualTo($coreEnd));
     }
 
     /**

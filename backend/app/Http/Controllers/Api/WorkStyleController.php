@@ -12,7 +12,9 @@ use App\Models\WorkStyle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * UC-C002: 勤務形態を作成する。
@@ -35,6 +37,7 @@ class WorkStyleController extends Controller
                 WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE,
                 WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY,
                 WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR,
+                WorkStyle::WORK_TIME_SYSTEM_FLEX,
             ])],
             'prescribed_daily_minutes' => ['required', 'integer', 'min:1'],
             'prescribed_weekly_minutes' => ['required', 'integer', 'min:1'],
@@ -55,9 +58,20 @@ class WorkStyleController extends Controller
                 Rule::requiredIf($request->input('legal_holiday_rule') === WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS),
             ],
             'max_consecutive_work_days' => ['nullable', 'integer', 'min:1', 'max:31'],
+            'settlement_start_day' => ['nullable', 'integer', 'min:1', 'max:31'],
+            'core_time_enabled' => ['boolean'],
+            'core_time_start' => ['nullable', 'date_format:H:i'],
+            'core_time_end' => ['nullable', 'date_format:H:i'],
+            'flexible_time_start' => ['nullable', 'date_format:H:i'],
+            'flexible_time_end' => ['nullable', 'date_format:H:i'],
         ]);
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
+
+        if ($data['work_time_system'] === WorkStyle::WORK_TIME_SYSTEM_FLEX) {
+            $this->validateFlexTimeFields($data);
+            $data['settlement_start_day'] ??= 1;
+        }
 
         $workStyle = $commandBus->dispatch(new CreateWorkStyle(
             attributes: $data,
@@ -65,6 +79,42 @@ class WorkStyleController extends Controller
         ));
 
         return (new WorkStyleResource($workStyle))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 指示書 7.4節・7.5節・保存前バリデーション(12.5節): コアタイムは勤務可能時間帯
+     * (フレキシブルタイム)の範囲内でなければならず、開始・終了の前後関係も矛盾しないこと。
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function validateFlexTimeFields(array $data): void
+    {
+        $coreEnabled = (bool) ($data['core_time_enabled'] ?? false);
+
+        if ($coreEnabled && ($data['core_time_start'] ?? null) === null) {
+            throw ValidationException::withMessages(['core_time_start' => 'コアタイムを有効にする場合は開始時刻を入力してください。']);
+        }
+        if ($coreEnabled && ($data['core_time_end'] ?? null) === null) {
+            throw ValidationException::withMessages(['core_time_end' => 'コアタイムを有効にする場合は終了時刻を入力してください。']);
+        }
+
+        $coreStart = isset($data['core_time_start']) ? Carbon::createFromFormat('H:i', $data['core_time_start']) : null;
+        $coreEnd = isset($data['core_time_end']) ? Carbon::createFromFormat('H:i', $data['core_time_end']) : null;
+        $flexibleStart = isset($data['flexible_time_start']) ? Carbon::createFromFormat('H:i', $data['flexible_time_start']) : null;
+        $flexibleEnd = isset($data['flexible_time_end']) ? Carbon::createFromFormat('H:i', $data['flexible_time_end']) : null;
+
+        if ($coreStart !== null && $coreEnd !== null && $coreEnd->lessThanOrEqualTo($coreStart)) {
+            throw ValidationException::withMessages(['core_time_end' => 'コアタイムの終了時刻は開始時刻より後にしてください。']);
+        }
+        if ($flexibleStart !== null && $flexibleEnd !== null && $flexibleEnd->lessThanOrEqualTo($flexibleStart)) {
+            throw ValidationException::withMessages(['flexible_time_end' => '勤務可能時間帯の終了時刻は開始時刻より後にしてください。']);
+        }
+        if ($coreStart !== null && $flexibleStart !== null && $coreStart->lessThan($flexibleStart)) {
+            throw ValidationException::withMessages(['core_time_start' => 'コアタイムは勤務可能時間帯の範囲内にしてください。']);
+        }
+        if ($coreEnd !== null && $flexibleEnd !== null && $coreEnd->greaterThan($flexibleEnd)) {
+            throw ValidationException::withMessages(['core_time_end' => 'コアタイムは勤務可能時間帯の範囲内にしてください。']);
+        }
     }
 
     /**

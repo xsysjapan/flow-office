@@ -29,6 +29,7 @@ function buildDay(offset: number, overrides: Partial<AttendanceDay>): Attendance
       legal_holiday_work_minutes: 0,
       company_holiday_work_minutes: 0,
       legal_holiday_late_night_minutes: 0,
+      core_time_violation: false,
     },
     ...overrides,
   }

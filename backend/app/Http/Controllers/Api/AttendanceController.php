@@ -13,6 +13,7 @@ use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
@@ -255,6 +256,9 @@ class AttendanceController extends Controller
         return [
             'days' => AttendanceDayResource::collection($days),
             'month' => $month ? new AttendanceMonthResource($month) : null,
+            // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
+            // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
+            'flex_settlement_summary' => app(FlexSettlementSummaryCalculator::class)->calculateForMonth($userId, $yearMonth),
         ];
     }
 

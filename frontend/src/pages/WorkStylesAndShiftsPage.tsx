@@ -154,6 +154,7 @@ const WORK_TIME_SYSTEM_OPTIONS = [
   { value: 'monthly_variable', label: '1か月単位変形労働時間制' },
   { value: 'discretionary', label: '裁量労働制' },
   { value: 'manager_supervisor', label: '管理監督者' },
+  { value: 'flex', label: 'フレックスタイム制' },
 ]
 
 function workTimeSystemLabel(value: string): string {
@@ -187,6 +188,14 @@ function WorkStyleFormCard() {
   const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
   const [fourWeekPeriodStartDate, setFourWeekPeriodStartDate] = useState('')
   const [maxConsecutiveWorkDays, setMaxConsecutiveWorkDays] = useState('')
+  const [settlementStartDay, setSettlementStartDay] = useState('')
+  const [coreTimeEnabled, setCoreTimeEnabled] = useState(false)
+  const [coreTimeStart, setCoreTimeStart] = useState('')
+  const [coreTimeEnd, setCoreTimeEnd] = useState('')
+  const [flexibleTimeStart, setFlexibleTimeStart] = useState('')
+  const [flexibleTimeEnd, setFlexibleTimeEnd] = useState('')
+
+  const isFlex = workTimeSystem === 'flex'
 
   const handleCreateWorkStyle = () => {
     createWorkStyle.mutate(
@@ -206,6 +215,12 @@ function WorkStyleFormCard() {
           isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
         max_consecutive_work_days:
           isShiftBased && maxConsecutiveWorkDays ? Number(maxConsecutiveWorkDays) : undefined,
+        settlement_start_day: isFlex && settlementStartDay ? Number(settlementStartDay) : undefined,
+        core_time_enabled: isFlex ? coreTimeEnabled : undefined,
+        core_time_start: isFlex && coreTimeEnabled ? coreTimeStart : undefined,
+        core_time_end: isFlex && coreTimeEnabled ? coreTimeEnd : undefined,
+        flexible_time_start: isFlex ? flexibleTimeStart || undefined : undefined,
+        flexible_time_end: isFlex ? flexibleTimeEnd || undefined : undefined,
       },
       {
         onSuccess: () => {
@@ -222,6 +237,12 @@ function WorkStyleFormCard() {
           setLegalHolidayRule('weekly')
           setFourWeekPeriodStartDate('')
           setMaxConsecutiveWorkDays('')
+          setSettlementStartDay('')
+          setCoreTimeEnabled(false)
+          setCoreTimeStart('')
+          setCoreTimeEnd('')
+          setFlexibleTimeStart('')
+          setFlexibleTimeEnd('')
         },
       },
     )
@@ -398,6 +419,70 @@ function WorkStyleFormCard() {
         </div>
       )}
 
+      {isFlex && (
+        <div className="mb-4 grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+          <FormField label="清算期間の起算日(任意)" htmlFor="work-style-settlement-start-day">
+            <Input
+              id="work-style-settlement-start-day"
+              type="number"
+              min={1}
+              max={31}
+              value={settlementStartDay}
+              onChange={(e) => setSettlementStartDay(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">未設定なら毎月1日を起算日とする。</p>
+          </FormField>
+
+          <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
+            <Input
+              id="work-style-flexible-start"
+              type="time"
+              value={flexibleTimeStart}
+              onChange={(e) => setFlexibleTimeStart(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
+            <Input
+              id="work-style-flexible-end"
+              type="time"
+              value={flexibleTimeEnd}
+              onChange={(e) => setFlexibleTimeEnd(e.target.value)}
+            />
+          </FormField>
+
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
+            <Checkbox checked={coreTimeEnabled} onCheckedChange={(checked) => setCoreTimeEnabled(checked === true)} />
+            コアタイムあり
+          </label>
+
+          {coreTimeEnabled && (
+            <>
+              <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
+                <Input
+                  id="work-style-core-time-start"
+                  type="time"
+                  value={coreTimeStart}
+                  onChange={(e) => setCoreTimeStart(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
+                <Input
+                  id="work-style-core-time-end"
+                  type="time"
+                  value={coreTimeEnd}
+                  onChange={(e) => setCoreTimeEnd(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  労働時間は足りていてもコアタイム中に不在の場合は別枠の警告になる(指示書7.4節)。
+                </p>
+              </FormField>
+            </>
+          )}
+        </div>
+      )}
+
       <Button
         isLoading={createWorkStyle.isPending}
         disabled={
@@ -407,7 +492,8 @@ function WorkStyleFormCard() {
           !prescribedDailyMinutes ||
           !prescribedWeeklyMinutes ||
           !calendarId ||
-          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate)
+          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate) ||
+          (isFlex && coreTimeEnabled && (!coreTimeStart || !coreTimeEnd))
         }
         onClick={handleCreateWorkStyle}
       >

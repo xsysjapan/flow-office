@@ -38,6 +38,12 @@ const workStyle: WorkStyle = {
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,
+  settlement_start_day: null,
+  core_time_enabled: false,
+  core_time_start: null,
+  core_time_end: null,
+  flexible_time_start: null,
+  flexible_time_end: null,
 }
 
 const targetUser: User = {
@@ -189,6 +195,37 @@ describe('WorkStylesAndShiftsPage', () => {
           is_shift_based: true,
           legal_holiday_rule: 'four_weeks_four_days',
           four_week_period_start_date: '2026-06-01',
+        }),
+      ),
+    )
+  })
+
+  it('creates a flex work style with core time and flexible time settings', async () => {
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 4, code: 'flex' })
+    renderPage()
+
+    await userEvent.type(await screen.findByLabelText('コード'), 'flex')
+    await userEvent.type(screen.getByLabelText('名称'), 'フレックスタイム制')
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), 'フレックスタイム制')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
+    await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
+    fireEvent.change(screen.getByLabelText('勤務可能開始時刻'), { target: { value: '05:00' } })
+    fireEvent.change(screen.getByLabelText('勤務可能終了時刻'), { target: { value: '22:00' } })
+    await userEvent.click(screen.getByLabelText('コアタイムあり'))
+    fireEvent.change(screen.getByLabelText('コアタイム開始時刻'), { target: { value: '10:00' } })
+    fireEvent.change(screen.getByLabelText('コアタイム終了時刻'), { target: { value: '15:00' } })
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          work_time_system: 'flex',
+          core_time_enabled: true,
+          core_time_start: '10:00',
+          core_time_end: '15:00',
+          flexible_time_start: '05:00',
+          flexible_time_end: '22:00',
         }),
       ),
     )

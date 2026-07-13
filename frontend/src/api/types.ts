@@ -96,6 +96,8 @@ export interface AttendanceDailyCalculation {
   legal_holiday_work_minutes: number
   company_holiday_work_minutes: number
   legal_holiday_late_night_minutes: number
+  /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
+  core_time_violation: boolean
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
@@ -167,6 +169,20 @@ export interface AttendanceMonth {
   closed_at: string | null
   snapshot: Record<string, number> | null
   legal_holiday_warnings: LegalHolidayWarning[]
+}
+
+/** フレックスタイム制の清算期間ダッシュボード(指示書 7.6節)。参考情報であり、表示のたびに都度計算する。 */
+export interface FlexSettlementSummary {
+  settlement_period_start: string
+  settlement_period_end: string
+  required_minutes: number
+  actual_minutes: number
+  remaining_minutes: number
+  remaining_working_days: number
+  per_day_required_minutes: number
+  core_time_violation_days: number
+  late_night_minutes: number
+  legal_holiday_work_minutes: number
 }
 
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
@@ -290,6 +306,14 @@ export interface WorkStyle {
   four_week_period_start_date: string | null
   /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */
   max_consecutive_work_days: number | null
+  /** フレックスタイム制(work_time_system=flex)の清算期間の起算日(1〜31)。未設定なら1日。 */
+  settlement_start_day: number | null
+  core_time_enabled: boolean
+  core_time_start: string | null
+  core_time_end: string | null
+  /** 勤務可能時間帯(フレキシブルタイム)。 */
+  flexible_time_start: string | null
+  flexible_time_end: string | null
 }
 
 /** ユーザーの月次働き方割当(docs/16-database-schema.md)。10月までは通常勤務、11月から

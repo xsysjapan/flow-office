@@ -45,6 +45,7 @@ class AttendanceDailyCalculationProjector implements Projector
                 'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
                 'company_holiday_work_minutes' => $payload['company_holiday_work_minutes'],
                 'legal_holiday_late_night_minutes' => $payload['legal_holiday_late_night_minutes'],
+                'core_time_violation' => $payload['core_time_violation'] ?? false,
             ],
         );
     }

@@ -33,6 +33,12 @@ class WorkStyleResource extends JsonResource
             'legal_holiday_rule' => $this->legal_holiday_rule,
             'four_week_period_start_date' => $this->four_week_period_start_date?->toDateString(),
             'max_consecutive_work_days' => $this->max_consecutive_work_days,
+            'settlement_start_day' => $this->settlement_start_day,
+            'core_time_enabled' => $this->core_time_enabled,
+            'core_time_start' => $this->core_time_start,
+            'core_time_end' => $this->core_time_end,
+            'flexible_time_start' => $this->flexible_time_start,
+            'flexible_time_end' => $this->flexible_time_end,
         ];
     }
 }

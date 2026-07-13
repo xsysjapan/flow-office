@@ -19,6 +19,12 @@ export interface CreateWorkStyleInput {
   legal_holiday_rule?: LegalHolidayRule
   four_week_period_start_date?: string
   max_consecutive_work_days?: number
+  settlement_start_day?: number
+  core_time_enabled?: boolean
+  core_time_start?: string
+  core_time_end?: string
+  flexible_time_start?: string
+  flexible_time_end?: string
 }
 
 export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle> {

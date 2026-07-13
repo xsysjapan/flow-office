@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { AttendanceDay } from '../api/types'
+import { formatDate } from '../utils/weekDates'
 import { TodayAttendancePage } from './TodayAttendancePage'
 
 function withSeededToday(day: AttendanceDay) {
@@ -8,6 +9,12 @@ function withSeededToday(day: AttendanceDay) {
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   })
   queryClient.setQueryData(['attendance', 'today'], day)
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
+  queryClient.setQueryData(['attendance', 'month', currentYearMonth], {
+    days: [],
+    month: null,
+    flex_settlement_summary: null,
+  })
 
   return function Decorator() {
     return (
@@ -80,6 +87,7 @@ export const ClockedOut: Story = {
       legal_holiday_work_minutes: 0,
       company_holiday_work_minutes: 0,
       legal_holiday_late_night_minutes: 0,
+      core_time_violation: false,
     },
   }),
 }

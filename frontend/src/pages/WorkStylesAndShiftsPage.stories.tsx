@@ -30,6 +30,12 @@ const workStyle: WorkStyle = {
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,
+  settlement_start_day: null,
+  core_time_enabled: false,
+  core_time_start: null,
+  core_time_end: null,
+  flexible_time_start: null,
+  flexible_time_end: null,
 }
 
 const paginatedUsers: Paginated<User> = {

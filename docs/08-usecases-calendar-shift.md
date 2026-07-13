@@ -18,9 +18,13 @@
 2. 雇用区分(正社員・契約社員・パート・アルバイト・嘱託等)を選択する(`employment_categories`。
    任意設定。労働時間制度とは独立した軸であり、雇用区分だけで残業計算・適用除外を決定しない)
 3. 労働時間制度(`work_time_system`: 通常勤務`fixed` / 1か月単位変形労働時間制
-   `monthly_variable` / 裁量労働制`discretionary` / 管理監督者`manager_supervisor`)を設定する
+   `monthly_variable` / 裁量労働制`discretionary` / 管理監督者`manager_supervisor` /
+   フレックスタイム制`flex`)を設定する
 4. 所定労働時間、所定休憩、週所定労働時間を設定する。裁量労働制の場合はみなし時間
-   (`deemed_daily_minutes`)も設定する
+   (`deemed_daily_minutes`)も設定する。フレックスタイム制の場合は清算期間の起算日
+   (`settlement_start_day`)、コアタイム(`core_time_enabled`/`core_time_start`/
+   `core_time_end`)、勤務可能時間帯(`flexible_time_start`/`flexible_time_end`)を設定する
+   (docs/07-usecases-attendance.md「フレックスタイム制」参照)
 5. 対応するカレンダーを紐づける(任意。シフト制などカレンダーに依存しない勤務形態は
    `calendar_id`を未設定にできる)
 6. 残業計算ルールを設定する

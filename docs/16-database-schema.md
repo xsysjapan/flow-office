@@ -140,9 +140,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - code
 - name
 - work_time_system (`fixed`=通常勤務 / `monthly_variable`=1か月単位変形労働時間制 /
-  `discretionary`=裁量労働制 / `manager_supervisor`=管理監督者。シフト制かどうかは
-  `work_time_system`ではなく`is_shift_based`で表現する。旧値`shortened`/`shift_based`は
-  データ移行済みで新規作成時は受け付けない)
+  `discretionary`=裁量労働制 / `manager_supervisor`=管理監督者 / `flex`=フレックスタイム制。
+  シフト制かどうかは`work_time_system`ではなく`is_shift_based`で表現する。旧値
+  `shortened`/`shift_based`はデータ移行済みで新規作成時は受け付けない)
 - prescribed_daily_minutes
 - prescribed_weekly_minutes
 - deemed_daily_minutes (裁量労働制のみなし時間。`work_time_system=discretionary`のみ使用。
@@ -169,6 +169,15 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - max_consecutive_work_days (nullable。3交代制シフト表(UC-C004)の公開前チェックで使う
   連続勤務日数の警告しきい値。法令上の一律の上限は無いため会社の就業規則次第でマスタ化
   する。未設定ならチェックしない)
+- settlement_start_day (`work_time_system=flex`の清算期間の起算日。暦月の何日を起算日に
+  するか(1〜31)。未設定なら1日。`variable_period_start_day`と同じ考え方だが、変形労働時間制
+  とフレックスタイム制は別の制度のため列を分けている)
+- core_time_enabled (フレックスタイム制でコアタイムを設定するかどうか)
+- core_time_start / core_time_end (コアタイムの開始・終了時刻。`core_time_enabled=true`の
+  場合は両方必須。勤務可能時間帯(`flexible_time_start`/`flexible_time_end`)が設定されて
+  いる場合はその範囲内でなければならない)
+- flexible_time_start / flexible_time_end (勤務可能時間帯。任意設定で、フルフレックス
+  (時間帯を限定しない)の場合は未設定のままでよい)
 - created_at / updated_at
 
 労使協定・本人同意の管理は本システムのスコープ外とする(適法性の証跡管理ではなく、勤怠を
@@ -315,12 +324,19 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - legal_holiday_work_minutes
 - company_holiday_work_minutes
 - legal_holiday_late_night_minutes
+- core_time_violation (フレックスタイム制(`work_time_system=flex`)でコアタイムを設定した日、
+  実際の勤務がコアタイムを全てカバーしていないかどうか。労働時間の不足とは別枠の警告として
+  扱う。フレックス以外の勤務形態、および出退勤の実績が無い日は常にfalse。docs/07-usecases
+  -attendance.md「フレックスタイム制」参照)
 - created_at / updated_at
 
 週40時間(労基法32条)判定は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
 月のような集計単位ではないため、`App\Domain\Attendance\Services\WeeklyOvertimeCalculator` が
 月次確認画面の表示のたびに `attendance_daily_calculations` から都度計算する参考情報として扱う
 (docs/07-usecases-attendance.md「週40時間判定」、UC-C005の法定休日要件チェックと同じ考え方)。
+同様に、フレックスタイム制の清算期間ダッシュボード(必要労働時間・残り労働時間等)も
+`App\Domain\Attendance\Services\FlexSettlementSummaryCalculator` が表示のたびに都度計算する
+参考情報であり、独立したProjectionを持たない。
 
 ## attendance_months (イベント駆動の状態テーブル。正データ)
 

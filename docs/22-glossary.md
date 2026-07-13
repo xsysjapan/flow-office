@@ -14,7 +14,10 @@
 | 変形休日制 | 法定休日を「毎週1日」ではなく「4週間を通じて4日以上」与える制度。就業規則で4週間の起算日を定める必要がある(`work_styles.four_week_period_start_date`)。 |
 | 法定休日「決めない方式」 | `work_styles.legal_holiday_rule=undetermined`。どの日が法定休日かを勤務予定作成時に固定せず、`LegalHolidayResolver`が週ごとに指定(`legal_holiday_designations`)または自動推定(週内で休みとなっている最後の日)で解決する。 |
 | 雇用区分 | 正社員・契約社員・パート・アルバイト・嘱託等の分類(`employment_categories`)。労働時間制度(`work_time_system`)とは独立した軸で、雇用区分だけで残業計算・適用除外を決定しない。 |
-| 労働時間制度 | `work_styles.work_time_system`。通常勤務(`fixed`)/1か月単位変形労働時間制(`monthly_variable`)/裁量労働制(`discretionary`)/管理監督者(`manager_supervisor`)のいずれか。シフト制かどうか(`is_shift_based`)はこれとは別軸。 |
+| 労働時間制度 | `work_styles.work_time_system`。通常勤務(`fixed`)/1か月単位変形労働時間制(`monthly_variable`)/裁量労働制(`discretionary`)/管理監督者(`manager_supervisor`)/フレックスタイム制(`flex`)のいずれか。シフト制かどうか(`is_shift_based`)はこれとは別軸。 |
+| フレックスタイム制 | 日次の始業・終業時刻ではなく清算期間全体(`work_styles.settlement_start_day`起算、初期実装では月単位)で労働時間を管理する制度。日次の残業判定は行わず、必要労働時間・実労働時間・残り時間は`FlexSettlementSummaryCalculator`が表示のたびに都度計算する参考情報として扱う。 |
+| コアタイム | フレックスタイム制で必ず勤務すべき時間帯(`work_styles.core_time_start`〜`core_time_end`)。任意設定。実際の勤務がコアタイムを全てカバーしていない場合、労働時間の不足とは別枠の警告(`attendance_daily_calculations.core_time_violation`)として扱う。 |
+| 勤務可能時間帯(フレキシブルタイム) | フレックスタイム制で勤務してよい時間帯(`work_styles.flexible_time_start`〜`flexible_time_end`)。任意設定で、未設定ならフルフレックス。 |
 | 1か月単位変形労働時間制 | 1か月以内の期間を平均して週40時間以内となるよう、あらかじめ各日の所定労働時間を定める制度。あらかじめ8時間/40時間を超える所定労働時間を設定した日・週は、その所定時間を超えた部分のみが法定時間外になる(`work_styles.variable_period_start_day`が変形期間の起算日)。 |
 | 裁量労働制 | 実際の労働時間ではなく、みなし時間(`work_styles.deemed_daily_minutes`)を給与計算上の労働時間として算定する制度。出退勤の打刻は必須にしない。ただし深夜・法定休日の労働は実際の時刻から計算する。本システムでは労使協定・本人同意の証跡管理はスコープ外とし、計算ロジックのみを対象とする。 |
 | 管理監督者 | 労働基準法上、労働時間・休憩・休日の規定の適用が除外される者。残業・休日の割増計算は行わないが、深夜割増と実労働時間の記録(健康管理)は適用される。 |
