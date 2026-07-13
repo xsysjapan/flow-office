@@ -67,7 +67,7 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:px-6">
+      <header className="flex flex-col gap-3 border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm font-semibold text-foreground">flow-office</span>
           <div className="flex items-center gap-3">
@@ -116,7 +116,7 @@ export function AppLayout() {
           ))}
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
+      <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6 lg:max-w-6xl lg:p-8">
         <Outlet />
       </main>
     </div>
