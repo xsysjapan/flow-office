@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
+use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserWorkStyleMonthlyAssignmentResource;
@@ -10,6 +11,7 @@ use App\Models\UserWorkStyleMonthlyAssignment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 /**
  * ユーザーの月次働き方割当。11月からシフト勤務、10月までは通常勤務のように、
@@ -49,5 +51,18 @@ class UserWorkStyleMonthlyAssignmentController extends Controller
 
         return (new UserWorkStyleMonthlyAssignmentResource($assignment->load('workStyle')))
             ->response()->setStatusCode(201);
+    }
+
+    /**
+     * 指示書 13章: 個別の働き方指定を取り消し、「会社のデフォルトを使用」の状態に戻す。
+     */
+    public function destroy(Request $request, UserWorkStyleMonthlyAssignment $userWorkStyleMonthlyAssignment, CommandBus $commandBus): Response
+    {
+        $commandBus->dispatch(new RemoveUserWorkStyleMonthlyAssignment(
+            assignmentId: $userWorkStyleMonthlyAssignment->id,
+            removedByUserId: $request->user()->id,
+        ));
+
+        return response()->noContent();
     }
 }

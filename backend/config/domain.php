@@ -27,6 +27,7 @@ use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
 use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
 use App\Domain\Attendance\Commands\PublishWorkCalendar;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
+use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
@@ -60,6 +61,7 @@ use App\Domain\Attendance\Handlers\GenerateRotationShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
@@ -156,6 +158,7 @@ return [
         CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,
         SetDefaultWorkStyle::class => SetDefaultWorkStyleHandler::class,
         AssignUserWorkStyleForMonth::class => AssignUserWorkStyleForMonthHandler::class,
+        RemoveUserWorkStyleMonthlyAssignment::class => RemoveUserWorkStyleMonthlyAssignmentHandler::class,
         CreateShiftPattern::class => CreateShiftPatternHandler::class,
         UpdateShiftPattern::class => UpdateShiftPatternHandler::class,
         GenerateEmployeeShiftAssignments::class => GenerateEmployeeShiftAssignmentsHandler::class,

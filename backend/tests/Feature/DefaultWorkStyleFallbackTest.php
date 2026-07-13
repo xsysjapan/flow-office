@@ -102,4 +102,41 @@ class DefaultWorkStyleFallbackTest extends TestCase
         $this->assertSame('2026-11', $history[1]['year_month']);
         $this->assertSame($shift->id, $history[1]['work_style_id']);
     }
+
+    public function test_removing_the_current_months_assignment_reverts_to_the_company_default(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create();
+        $shift = $this->createWorkStyle('shift', 420);
+        $currentYearMonth = now()->format('Y-m');
+
+        $created = $this->actingAs($admin)->postJson('/api/user-work-style-monthly-assignments', [
+            'user_id' => $employee->id, 'year_month' => $currentYearMonth, 'work_style_id' => $shift->id,
+        ])->assertCreated()->json();
+
+        $this->actingAs($admin)->deleteJson("/api/user-work-style-monthly-assignments/{$created['id']}")
+            ->assertNoContent();
+
+        $history = $this->actingAs($admin)
+            ->getJson("/api/user-work-style-monthly-assignments?user_id={$employee->id}")
+            ->assertOk()->json();
+        $this->assertCount(0, $history);
+    }
+
+    public function test_removing_a_past_months_assignment_is_rejected(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $employee = User::factory()->create();
+        $shift = $this->createWorkStyle('shift', 420);
+        $pastYearMonth = now()->subMonth()->format('Y-m');
+
+        $created = $this->actingAs($admin)->postJson('/api/user-work-style-monthly-assignments', [
+            'user_id' => $employee->id, 'year_month' => $pastYearMonth, 'work_style_id' => $shift->id,
+        ])->assertCreated()->json();
+
+        $this->actingAs($admin)->deleteJson("/api/user-work-style-monthly-assignments/{$created['id']}")
+            ->assertStatus(422);
+    }
 }

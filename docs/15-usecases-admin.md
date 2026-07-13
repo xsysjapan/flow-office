@@ -7,6 +7,14 @@
 3. ロールを設定する
 4. 権限変更イベントを記録する
 
+同じ画面(`UserRoleEditPage.tsx`)で、指示書13章の「働き方: ●会社のデフォルトを使用/
+○別の働き方を指定」の選択も行う。本システムには社員を手動で新規作成するフローが無く
+(MS365同期・SSO初回ログイン経由のみ)、既存社員の設定を編集するこの画面が「社員登録時の
+体験」に相当する。今月について、`user_work_style_monthly_assignments`に行が無ければ
+「会社のデフォルトを使用」、行があれば「別の働き方を指定」として表示し、切り替えは
+`AssignUserWorkStyleForMonth`/`RemoveUserWorkStyleMonthlyAssignment`で行う
+(docs/16-database-schema.md参照)。
+
 ## UC-M002: 申請種別を管理する
 
 1. 管理者が申請種別一覧を開く

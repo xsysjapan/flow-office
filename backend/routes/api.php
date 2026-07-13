@@ -108,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
+        Route::delete('/user-work-style-monthly-assignments/{userWorkStyleMonthlyAssignment}', [UserWorkStyleMonthlyAssignmentController::class, 'destroy']);
 
         // --- 3交代制シフト表 (docs/08-usecases-calendar-shift.md UC-C004) ---
         Route::post('/shift-patterns', [ShiftPatternController::class, 'store']);

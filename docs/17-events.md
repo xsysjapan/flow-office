@@ -45,6 +45,8 @@
   開始位置)を設定する。既存の基準を上書きした場合も同じイベントで発生する)
 - `user_work_style_monthly_assignment.assigned` (ユーザーの月次働き方割当。過去月を壊さず
   対象の年月だけを追加・更新する)
+- `user_work_style_monthly_assignment.removed` (指示書13章: 個別指定を取り消し「会社の
+  デフォルトを使用」に戻す。対象年月が今月より前の場合は取り消せない)
 
 ## Attendance
 
