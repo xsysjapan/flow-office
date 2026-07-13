@@ -10,8 +10,15 @@ const expenseType: RequestType = {
   name: '経費精算',
   description: '出張・接待などの経費を精算する',
   form_schema: [{ key: 'amount', label: '金額', type: 'number', required: true }],
+  requires_attachment: false,
+  attachment_max_size_kb: null,
+  attachment_allowed_extensions: null,
+  eligible_role_codes: null,
   requires_backoffice_task: true,
   backoffice_task_type: 'expense_reimbursement',
+  backoffice_department: null,
+  export_amount_field: null,
+  allowed_status_transitions: null,
   is_active: true,
 }
 

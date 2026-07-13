@@ -21,6 +21,10 @@ export interface Role {
 /** UC-003: 新規作成ユーザーの既定タイムゾーンなど、システム全体の設定。 */
 export interface SystemSettings {
   default_timezone: string
+  /** UC-N001「勤怠未提出」警告の基準(前月分を提出すべき当月の日)。 */
+  attendance_submission_deadline_day: number
+  /** UC-N001「月次締め前警告」の基準(前月分を締めるべき当月の日)。 */
+  attendance_month_close_deadline_day: number
 }
 
 export interface RequestType {
@@ -29,8 +33,20 @@ export interface RequestType {
   name: string
   description: string | null
   form_schema: RequestFormFieldSchema[]
+  /** UC-W001 手順2: この申請種別は添付ファイルが必須か。 */
+  requires_attachment: boolean
+  attachment_max_size_kb: number | null
+  attachment_allowed_extensions: string[] | null
+  /** UC-W001 手順4: 申請可能なロールコード。nullなら全員が申請可能。 */
+  eligible_role_codes: string[] | null
   requires_backoffice_task: boolean
   backoffice_task_type: string | null
+  /** UC-B001 手順4: バックオフィスタスクの初期処理部署。 */
+  backoffice_department: string | null
+  /** UC-B004 手順5: 会計/振込CSV出力の対象にする場合、金額として扱うform_dataのキー。 */
+  export_amount_field: string | null
+  /** UC-B003: task_typeごとのステータス遷移({from_status: [to_status, ...]})。nullなら制限なし。 */
+  allowed_status_transitions: Record<string, string[]> | null
   is_active: boolean
 }
 
@@ -150,6 +166,12 @@ export interface AttendanceMonth {
   legal_holiday_warnings: LegalHolidayWarning[]
 }
 
+/** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
+export interface AttendanceExportFilters {
+  year_month: string
+  user_id?: number
+}
+
 export type BackOfficeTaskStatus =
   | 'not_started'
   | 'in_review'
@@ -259,6 +281,8 @@ export interface WorkStyle {
   is_shift_based: boolean
   legal_holiday_rule: LegalHolidayRule
   four_week_period_start_date: string | null
+  /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */
+  max_consecutive_work_days: number | null
 }
 
 export interface EmployeeShiftAssignment {
@@ -266,6 +290,8 @@ export interface EmployeeShiftAssignment {
   user_id: number
   work_date: string
   work_style_id: number
+  /** UC-C004: 3交代制シフトパターンからの割当の場合のみ設定される。 */
+  shift_pattern_id: number | null
   day_type: string
   is_working_day: boolean
   is_legal_holiday: boolean
@@ -273,6 +299,38 @@ export interface EmployeeShiftAssignment {
   planned_start_at: string | null
   planned_end_at: string | null
   planned_break_minutes: number
+  /** UC-C004: シフトパターン割当は公開(手順6)まで下書き扱い。カレンダー一括生成は常にtrue。 */
+  is_published: boolean
+}
+
+/** UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)。 */
+export interface ShiftPattern {
+  id: number
+  code: string
+  name: string
+  start_time: string | null
+  end_time: string | null
+  crosses_midnight: boolean
+  break_minutes: number
+  prescribed_work_minutes: number
+}
+
+/** UC-C004 手順5: シフト表公開前の警告(法定休日不足・連続勤務・月間予定時間)。 */
+export interface ShiftScheduleReview {
+  legal_holiday_shortages: Array<LegalHolidayWarning & { user_id: number }>
+  consecutive_work_violations: Array<{
+    user_id: number
+    period_start: string
+    period_end: string
+    consecutive_days: number
+    max_allowed: number
+  }>
+  monthly_hours_over_cap: Array<{
+    user_id: number
+    year_month: string
+    planned_minutes: number
+    statutory_cap_minutes: number
+  }>
 }
 
 export interface Attachment {

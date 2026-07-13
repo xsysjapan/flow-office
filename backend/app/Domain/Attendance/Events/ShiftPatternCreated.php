@@ -1,0 +1,43 @@
+<?php
+
+namespace App\Domain\Attendance\Events;
+
+use App\Domain\EventSourcing\Contracts\DomainEvent;
+
+/**
+ * shift_pattern.created (UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)を登録する)。
+ */
+class ShiftPatternCreated implements DomainEvent
+{
+    public function __construct(
+        public readonly int $shiftPatternId,
+        public readonly string $code,
+        public readonly string $name,
+        public readonly ?string $startTime,
+        public readonly ?string $endTime,
+        public readonly bool $crossesMidnight,
+        public readonly int $breakMinutes,
+        public readonly int $prescribedWorkMinutes,
+        public readonly int $createdByUserId,
+    ) {}
+
+    public function eventType(): string
+    {
+        return 'shift_pattern.created';
+    }
+
+    public function payload(): array
+    {
+        return [
+            'shift_pattern_id' => $this->shiftPatternId,
+            'code' => $this->code,
+            'name' => $this->name,
+            'start_time' => $this->startTime,
+            'end_time' => $this->endTime,
+            'crosses_midnight' => $this->crossesMidnight,
+            'break_minutes' => $this->breakMinutes,
+            'prescribed_work_minutes' => $this->prescribedWorkMinutes,
+            'created_by_user_id' => $this->createdByUserId,
+        ];
+    }
+}

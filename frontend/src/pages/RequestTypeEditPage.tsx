@@ -33,8 +33,16 @@ export function RequestTypeEditPage() {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [requiresAttachment, setRequiresAttachment] = useState(false)
+  const [attachmentMaxSizeKb, setAttachmentMaxSizeKb] = useState('')
+  const [attachmentAllowedExtensions, setAttachmentAllowedExtensions] = useState('')
+  const [eligibleRoleCodes, setEligibleRoleCodes] = useState('')
   const [requiresBackOfficeTask, setRequiresBackOfficeTask] = useState(false)
   const [backOfficeTaskType, setBackOfficeTaskType] = useState('')
+  const [backOfficeDepartment, setBackOfficeDepartment] = useState('')
+  const [exportAmountField, setExportAmountField] = useState('')
+  const [allowedStatusTransitionsJson, setAllowedStatusTransitionsJson] = useState('')
+  const [allowedStatusTransitionsError, setAllowedStatusTransitionsError] = useState('')
   const [isActive, setIsActive] = useState(true)
   const { rows, addRow, updateRow, removeRow, reset, toData } = useEditableRows<RequestFormFieldSchema>([])
 
@@ -43,11 +51,25 @@ export function RequestTypeEditPage() {
     setCode(existing.code)
     setName(existing.name)
     setDescription(existing.description ?? '')
+    setRequiresAttachment(existing.requires_attachment)
+    setAttachmentMaxSizeKb(existing.attachment_max_size_kb ? String(existing.attachment_max_size_kb) : '')
+    setAttachmentAllowedExtensions((existing.attachment_allowed_extensions ?? []).join(', '))
+    setEligibleRoleCodes((existing.eligible_role_codes ?? []).join(', '))
     setRequiresBackOfficeTask(existing.requires_backoffice_task)
     setBackOfficeTaskType(existing.backoffice_task_type ?? '')
+    setBackOfficeDepartment(existing.backoffice_department ?? '')
+    setExportAmountField(existing.export_amount_field ?? '')
+    setAllowedStatusTransitionsJson(
+      existing.allowed_status_transitions ? JSON.stringify(existing.allowed_status_transitions, null, 2) : '',
+    )
     setIsActive(existing.is_active)
     reset(existing.form_schema)
   }, [existing, reset])
+
+  const parseCommaSeparated = (value: string): string[] | undefined => {
+    const items = value.split(',').map((item) => item.trim()).filter(Boolean)
+    return items.length > 0 ? items : undefined
+  }
 
   if (!isCreate && isLoading) return <LoadingState />
   if (!isCreate && listError) return <ErrorMessage error={listError} fallback="申請種別の取得に失敗しました。" />
@@ -56,13 +78,31 @@ export function RequestTypeEditPage() {
   const error = createType.error ?? updateType.error
 
   const handleSave = async () => {
+    let allowedStatusTransitions: Record<string, string[]> | undefined
+    if (allowedStatusTransitionsJson.trim()) {
+      try {
+        allowedStatusTransitions = JSON.parse(allowedStatusTransitionsJson) as Record<string, string[]>
+        setAllowedStatusTransitionsError('')
+      } catch {
+        setAllowedStatusTransitionsError('JSON形式が正しくありません。')
+        return
+      }
+    }
+
     const input = {
       code,
       name,
       description: description || undefined,
       form_schema: toData(),
+      requires_attachment: requiresAttachment,
+      attachment_max_size_kb: requiresAttachment && attachmentMaxSizeKb ? Number(attachmentMaxSizeKb) : undefined,
+      attachment_allowed_extensions: requiresAttachment ? parseCommaSeparated(attachmentAllowedExtensions) : undefined,
+      eligible_role_codes: parseCommaSeparated(eligibleRoleCodes),
       requires_backoffice_task: requiresBackOfficeTask,
       backoffice_task_type: requiresBackOfficeTask ? backOfficeTaskType || undefined : undefined,
+      backoffice_department: requiresBackOfficeTask ? backOfficeDepartment || undefined : undefined,
+      export_amount_field: requiresBackOfficeTask ? exportAmountField || undefined : undefined,
+      allowed_status_transitions: requiresBackOfficeTask ? allowedStatusTransitions : undefined,
       is_active: isActive,
     }
 
@@ -93,6 +133,49 @@ export function RequestTypeEditPage() {
         <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
       </FormField>
 
+      <FormField label="申請可能な対象者(ロールコード、カンマ区切り。空欄なら全員)" htmlFor="eligible-role-codes">
+        <Input
+          id="eligible-role-codes"
+          placeholder="admin, hr_staff"
+          value={eligibleRoleCodes}
+          onChange={(e) => setEligibleRoleCodes(e.target.value)}
+        />
+      </FormField>
+
+      <div className="mb-4 flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Checkbox
+            id="requires-attachment"
+            checked={requiresAttachment}
+            onCheckedChange={(checked) => setRequiresAttachment(checked === true)}
+          />
+          添付ファイルを必須にする
+        </label>
+
+        {requiresAttachment && (
+          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+            <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb">
+              <Input
+                id="attachment-max-size-kb"
+                type="number"
+                min={1}
+                value={attachmentMaxSizeKb}
+                onChange={(e) => setAttachmentMaxSizeKb(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="許可する拡張子(カンマ区切り)" htmlFor="attachment-allowed-extensions">
+              <Input
+                id="attachment-allowed-extensions"
+                placeholder="pdf, jpg, png"
+                value={attachmentAllowedExtensions}
+                onChange={(e) => setAttachmentAllowedExtensions(e.target.value)}
+              />
+            </FormField>
+          </div>
+        )}
+      </div>
+
       <div className="mb-4 flex flex-col gap-2">
         <label className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Checkbox
@@ -104,13 +187,44 @@ export function RequestTypeEditPage() {
         </label>
 
         {requiresBackOfficeTask && (
-          <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
-            <Input
-              id="backoffice-task-type"
-              value={backOfficeTaskType}
-              onChange={(e) => setBackOfficeTaskType(e.target.value)}
-            />
-          </FormField>
+          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+            <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
+              <Input
+                id="backoffice-task-type"
+                value={backOfficeTaskType}
+                onChange={(e) => setBackOfficeTaskType(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="初期処理部署" htmlFor="backoffice-department">
+              <Input
+                id="backoffice-department"
+                value={backOfficeDepartment}
+                onChange={(e) => setBackOfficeDepartment(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="会計/振込CSVの金額項目(form_dataのキー。空欄ならCSV対象外)" htmlFor="export-amount-field">
+              <Input
+                id="export-amount-field"
+                value={exportAmountField}
+                onChange={(e) => setExportAmountField(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="ステータス遷移(JSON、任意)" htmlFor="allowed-status-transitions">
+              <Textarea
+                id="allowed-status-transitions"
+                placeholder={'{"not_started": ["in_review"], "in_review": ["payment_scheduled"]}'}
+                value={allowedStatusTransitionsJson}
+                onChange={(e) => setAllowedStatusTransitionsJson(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。
+              </p>
+              {allowedStatusTransitionsError && <p className="mt-1 text-xs text-destructive">{allowedStatusTransitionsError}</p>}
+            </FormField>
+          </div>
         )}
 
         <label className="flex items-center gap-2 text-sm font-medium text-foreground">

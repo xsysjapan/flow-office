@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\BackOfficeTask;
+use App\Models\WorkflowRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -83,15 +84,19 @@ class ExportController extends Controller
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
+        // どのrequest_typeを会計/振込CSVの対象にするかはハードコードせず、
+        // request_types.export_amount_field(金額として扱うform_dataのキー)の設定有無で判定する。
         $tasks = BackOfficeTask::query()
             ->with(['source.applicant', 'source.requestType'])
-            ->where('task_type', 'expense_reimbursement')
             ->whereIn('status', ['payment_scheduled', 'completed'])
             ->whereBetween('created_at', [
                 Carbon::parse($data['from'])->startOfDay(),
                 Carbon::parse($data['to'])->endOfDay(),
             ])
-            ->get();
+            ->get()
+            ->filter(fn (BackOfficeTask $task) => $task->source instanceof WorkflowRequest
+                && $task->source->requestType?->export_amount_field !== null)
+            ->values();
 
         $eventStore->append(
             aggregateType: 'export',
@@ -109,11 +114,13 @@ class ExportController extends Controller
             fputcsv($handle, ['task_id', 'title', 'applicant_name', 'amount', 'status', 'created_at']);
 
             foreach ($tasks as $task) {
+                $amountField = $task->source?->requestType?->export_amount_field;
+
                 fputcsv($handle, [
                     $task->id,
                     $task->title,
                     $task->source?->applicant?->name,
-                    $task->source?->form_data['amount'] ?? '',
+                    $amountField !== null ? ($task->source?->form_data[$amountField] ?? '') : '',
                     $task->status,
                     $task->created_at->toDateString(),
                 ]);

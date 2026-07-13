@@ -49,7 +49,7 @@ class ApproveAttendanceMonthHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '月次勤怠が承認されました',
             summary: "{$month->year_month} の月次勤怠が承認されました。バックオフィス確認対象になります。",
             detailUrl: null,

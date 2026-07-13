@@ -17,6 +17,7 @@ class EmployeeShiftAssignmentResource extends JsonResource
             'user_id' => $this->user_id,
             'work_date' => $this->work_date?->toDateString(),
             'work_style_id' => $this->work_style_id,
+            'shift_pattern_id' => $this->shift_pattern_id,
             'day_type' => $this->day_type,
             'is_working_day' => $this->is_working_day,
             'is_legal_holiday' => $this->is_legal_holiday,
@@ -24,6 +25,7 @@ class EmployeeShiftAssignmentResource extends JsonResource
             'planned_start_at' => $this->planned_start_at?->toIso8601String(),
             'planned_end_at' => $this->planned_end_at?->toIso8601String(),
             'planned_break_minutes' => $this->planned_break_minutes,
+            'is_published' => $this->is_published,
         ];
     }
 }

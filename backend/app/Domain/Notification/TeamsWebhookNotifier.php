@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Log;
  */
 class TeamsWebhookNotifier implements Notifier
 {
-    public function notify(string $title, string $summary, ?string $detailUrl): void
+    public function notify(string $title, string $summary, ?string $detailUrl): bool
     {
         $webhookUrl = config('services.teams.webhook_url');
 
         if (! $webhookUrl) {
             Log::info('[Teams通知(webhook未設定のためログのみ)] '.$title.' - '.$summary.($detailUrl ? " ({$detailUrl})" : ''));
 
-            return;
+            return true;
         }
 
         $response = Http::post($webhookUrl, [
@@ -29,9 +29,11 @@ class TeamsWebhookNotifier implements Notifier
         if ($response->failed()) {
             Log::warning('Teams通知の送信に失敗しました: '.$response->status().' '.$response->body());
 
-            return;
+            return false;
         }
 
         Log::info("Teams通知を送信しました: {$title}");
+
+        return true;
     }
 }

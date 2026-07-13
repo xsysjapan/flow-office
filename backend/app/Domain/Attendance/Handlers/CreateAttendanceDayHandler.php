@@ -15,7 +15,9 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
+use Illuminate\Support\Carbon;
 
 /**
  * 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻(attendance_punches)とは
@@ -104,8 +106,8 @@ class CreateAttendanceDayHandler implements CommandHandler
     /**
      * 今回の作成で送られた日時(actual_start_at / actual_end_at / breaks[].start / breaks[].end)
      * のオフセットが全て一致することを検証し、その値を返す。1件も送られなかった場合は
-     * attendance_days.utc_offset_minutes の既定値(540 = JST)を使う
-     * (裁量労働制など、打刻を伴わない出勤日の作成を想定)。
+     * システムのデフォルトタイムゾーン(`system_settings.default_timezone`)のオフセットを使う
+     * (裁量労働制など、打刻を伴わない出勤日の作成を想定。docs/03-architecture.md 3.4)。
      */
     private function resolveOffsetMinutes(CreateAttendanceDay $command): int
     {
@@ -125,6 +127,12 @@ class CreateAttendanceDayHandler implements CommandHandler
             $resolved = $offsetMinutes;
         }
 
-        return $resolved ?? 540;
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        $defaultTimezone = SystemSetting::current()->default_timezone;
+
+        return intdiv(Carbon::parse($command->workDate, $defaultTimezone)->getOffset(), 60);
     }
 }

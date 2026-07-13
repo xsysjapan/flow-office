@@ -49,7 +49,7 @@ class CancelWorkflowRequestHandler implements CommandHandler
         );
 
         if ($workflowRequest->approver_user_id !== null) {
-            SendTeamsNotificationJob::dispatch(
+            SendTeamsNotificationJob::enqueue(
                 title: '申請取消',
                 summary: "「{$workflowRequest->title}」が取り消されました: {$command->reason}",
                 detailUrl: null,

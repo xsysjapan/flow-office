@@ -5,6 +5,11 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
+// 'stateful' と 'guard' はSanctumのデフォルト公開設定。flow-officeはCookieベースのSPA認証を
+// 使わず、Bearerトークン方式のみを採用している(`EnsureFrontendRequestsAreStateful`
+// ミドルウェアは未登録、CLAUDE.md / docs/06-usecases-auth.md参照)。そのためこの2項目は
+// 実際には有効化されず、常にBearerトークンでの認証にフォールバックする。
+
 return [
 
     /*

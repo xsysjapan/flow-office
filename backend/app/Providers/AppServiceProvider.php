@@ -9,6 +9,7 @@ use App\Domain\Notification\TeamsWebhookNotifier;
 use App\Domain\User\Graph\HttpMicrosoftGraphClient;
 use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\LocalAzureProvider;
+use App\Models\AttendanceDay;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -53,6 +54,7 @@ class AppServiceProvider extends ServiceProvider
         // attachments.owner_type / backoffice_tasks.source_type にDBへ安定な短い別名を保存する。
         Relation::morphMap([
             'workflow_request' => WorkflowRequest::class,
+            'attendance_day' => AttendanceDay::class,
         ]);
 
         // 単体リソースを "data" キーで包まない(ページネーション付きコレクションは

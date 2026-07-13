@@ -8,7 +8,14 @@ import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
-import { useShiftAssignments, useGenerateShiftAssignments } from '../hooks/useEmployeeShiftAssignments'
+import {
+  useAssignShiftPatternDay,
+  useGenerateShiftAssignments,
+  usePublishShiftSchedule,
+  useShiftAssignments,
+  useShiftScheduleReview,
+} from '../hooks/useEmployeeShiftAssignments'
+import { useCreateShiftPattern, useShiftPatterns } from '../hooks/useShiftPatterns'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
 import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
 import type { LegalHolidayRule, WorkStyle } from '../api/types'
@@ -49,6 +56,7 @@ function WorkStyleFormCard() {
   const [isShiftBased, setIsShiftBased] = useState(false)
   const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
   const [fourWeekPeriodStartDate, setFourWeekPeriodStartDate] = useState('')
+  const [maxConsecutiveWorkDays, setMaxConsecutiveWorkDays] = useState('')
 
   const handleCreateWorkStyle = () => {
     createWorkStyle.mutate(
@@ -66,6 +74,8 @@ function WorkStyleFormCard() {
         legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
         four_week_period_start_date:
           isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
+        max_consecutive_work_days:
+          isShiftBased && maxConsecutiveWorkDays ? Number(maxConsecutiveWorkDays) : undefined,
       },
       {
         onSuccess: () => {
@@ -81,6 +91,7 @@ function WorkStyleFormCard() {
           setIsShiftBased(false)
           setLegalHolidayRule('weekly')
           setFourWeekPeriodStartDate('')
+          setMaxConsecutiveWorkDays('')
         },
       },
     )
@@ -227,6 +238,19 @@ function WorkStyleFormCard() {
               <p className="mt-1 text-xs text-muted-foreground">就業規則で定めた4週間の起算日。</p>
             </FormField>
           )}
+
+          <FormField label="連続勤務日数の上限(任意)" htmlFor="work-style-max-consecutive-work-days">
+            <Input
+              id="work-style-max-consecutive-work-days"
+              type="number"
+              min={1}
+              value={maxConsecutiveWorkDays}
+              onChange={(e) => setMaxConsecutiveWorkDays(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              未設定ならチェックしない。3交代制シフト表の公開前確認(UC-C004)で警告に使う。
+            </p>
+          </FormField>
         </div>
       )}
 
@@ -323,6 +347,11 @@ function ShiftGenerationCard() {
                 <li key={assignment.id} className="py-2 text-sm text-foreground">
                   {assignment.work_date}({assignment.day_type}) {assignment.planned_start_at ?? '--:--'}〜
                   {assignment.planned_end_at ?? '--:--'}
+                  {assignment.shift_pattern_id !== null && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {assignment.is_published ? '公開済み' : '下書き'}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -333,14 +362,292 @@ function ShiftGenerationCard() {
   )
 }
 
+function ShiftPatternFormCard() {
+  const { data: patterns, isLoading, error } = useShiftPatterns()
+  const createShiftPattern = useCreateShiftPattern()
+
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [crossesMidnight, setCrossesMidnight] = useState(false)
+  const [breakMinutes, setBreakMinutes] = useState('')
+  const [prescribedWorkMinutes, setPrescribedWorkMinutes] = useState('')
+
+  const handleCreate = () => {
+    createShiftPattern.mutate(
+      {
+        code,
+        name,
+        start_time: startTime || undefined,
+        end_time: endTime || undefined,
+        crosses_midnight: crossesMidnight,
+        break_minutes: breakMinutes ? Number(breakMinutes) : undefined,
+        prescribed_work_minutes: prescribedWorkMinutes ? Number(prescribedWorkMinutes) : undefined,
+      },
+      {
+        onSuccess: () => {
+          setCode('')
+          setName('')
+          setStartTime('')
+          setEndTime('')
+          setCrossesMidnight(false)
+          setBreakMinutes('')
+          setPrescribedWorkMinutes('')
+        },
+      },
+    )
+  }
+
+  return (
+    <Card title="シフトパターン(UC-C004)">
+      {error && <ErrorMessage error={error} fallback="シフトパターンの取得に失敗しました。" />}
+      {createShiftPattern.error && <ErrorMessage error={createShiftPattern.error} />}
+
+      {isLoading ? (
+        <LoadingState />
+      ) : (patterns ?? []).length === 0 ? (
+        <p className="text-sm text-muted-foreground">シフトパターンはまだありません。</p>
+      ) : (
+        <ul className="mb-4 divide-y divide-border">
+          {(patterns ?? []).map((pattern) => (
+            <li key={pattern.id} className="flex flex-wrap gap-3 py-2 text-sm">
+              <strong className="font-semibold text-foreground">{pattern.name}</strong>
+              <span className="text-muted-foreground">{pattern.code}</span>
+              <span className="text-muted-foreground">
+                {pattern.start_time ?? '--:--'}〜{pattern.end_time ?? '--:--'}
+                {pattern.crosses_midnight ? '(翌日)' : ''}
+              </span>
+              <span className="text-muted-foreground">所定{pattern.prescribed_work_minutes}分</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="mb-3 text-sm font-semibold text-foreground">シフトパターンを作成</h3>
+      <p className="mb-3 text-xs text-muted-foreground">
+        日勤・準夜勤・深夜勤のような勤務パターンのほか、所定労働時間を0分にすると公休・明け休みのような
+        非労働日のパターンとして扱える。
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="パターンコード" htmlFor="shift-pattern-code" required>
+          <Input id="shift-pattern-code" value={code} onChange={(e) => setCode(e.target.value)} />
+        </FormField>
+
+        <FormField label="パターン名称" htmlFor="shift-pattern-name" required>
+          <Input id="shift-pattern-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </FormField>
+
+        <FormField label="開始時刻" htmlFor="shift-pattern-start-time">
+          <Input id="shift-pattern-start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+        </FormField>
+
+        <FormField label="終了時刻" htmlFor="shift-pattern-end-time">
+          <Input id="shift-pattern-end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+        </FormField>
+
+        <FormField label="休憩(分)" htmlFor="shift-pattern-break-minutes">
+          <Input
+            id="shift-pattern-break-minutes"
+            type="number"
+            min={0}
+            value={breakMinutes}
+            onChange={(e) => setBreakMinutes(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="所定労働時間(分)" htmlFor="shift-pattern-prescribed-minutes" required>
+          <Input
+            id="shift-pattern-prescribed-minutes"
+            type="number"
+            min={0}
+            value={prescribedWorkMinutes}
+            onChange={(e) => setPrescribedWorkMinutes(e.target.value)}
+          />
+        </FormField>
+      </div>
+
+      <label className="my-4 flex items-center gap-2 text-sm font-medium text-foreground">
+        <Checkbox checked={crossesMidnight} onCheckedChange={(checked) => setCrossesMidnight(checked === true)} />
+        日跨ぎ勤務(終了時刻は翌日)
+      </label>
+
+      <Button isLoading={createShiftPattern.isPending} disabled={!code || !name} onClick={handleCreate}>
+        シフトパターンを作成する
+      </Button>
+    </Card>
+  )
+}
+
+function ShiftScheduleBoardCard() {
+  const { data: workStyles } = useWorkStyles()
+  const { data: patterns } = useShiftPatterns()
+
+  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [workStyleId, setWorkStyleId] = useState('')
+  const [workDate, setWorkDate] = useState('')
+  const [shiftPatternId, setShiftPatternId] = useState('')
+  const [isLegalHoliday, setIsLegalHoliday] = useState(false)
+
+  const [department, setDepartment] = useState('')
+  const [yearMonth, setYearMonth] = useState('')
+
+  const assignPattern = useAssignShiftPatternDay()
+  const publishSchedule = usePublishShiftSchedule()
+
+  const reviewTarget = department && yearMonth ? { department, year_month: yearMonth } : undefined
+  const { data: review, isLoading: isLoadingReview } = useShiftScheduleReview(reviewTarget)
+
+  const handleAssign = () => {
+    if (!userId || !workStyleId || !workDate || !shiftPatternId) return
+    assignPattern.mutate({
+      user_id: userId,
+      work_style_id: Number(workStyleId),
+      work_date: workDate,
+      shift_pattern_id: Number(shiftPatternId),
+      is_legal_holiday: isLegalHoliday,
+    })
+  }
+
+  const handlePublish = () => {
+    if (!department || !yearMonth) return
+    publishSchedule.mutate({ department, year_month: yearMonth })
+  }
+
+  return (
+    <Card title="3交代制シフト表(UC-C004)">
+      {assignPattern.error && <ErrorMessage error={assignPattern.error} />}
+
+      <h3 className="mb-3 text-sm font-semibold text-foreground">日別にシフトパターンを割り当てる</h3>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象社員(シフト表)" htmlFor="shift-board-user" required>
+          <UserPicker id="shift-board-user" value={userId} onChange={setUserId} />
+        </FormField>
+
+        <FormField label="勤務形態(シフト表)" htmlFor="shift-board-work-style" required>
+          <NativeSelect id="shift-board-work-style" value={workStyleId} onChange={(e) => setWorkStyleId(e.target.value)}>
+            <option value="">選択してください</option>
+            {workStyles?.filter((style) => style.is_shift_based).map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="対象日" htmlFor="shift-board-date" required>
+          <Input id="shift-board-date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+        </FormField>
+
+        <FormField label="シフトパターン" htmlFor="shift-board-pattern" required>
+          <NativeSelect id="shift-board-pattern" value={shiftPatternId} onChange={(e) => setShiftPatternId(e.target.value)}>
+            <option value="">選択してください</option>
+            {patterns?.map((pattern) => (
+              <option key={pattern.id} value={pattern.id}>
+                {pattern.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </div>
+
+      <label className="my-4 flex items-center gap-2 text-sm font-medium text-foreground">
+        <Checkbox checked={isLegalHoliday} onCheckedChange={(checked) => setIsLegalHoliday(checked === true)} />
+        この日を法定休日にする
+      </label>
+
+      <Button
+        isLoading={assignPattern.isPending}
+        disabled={!userId || !workStyleId || !workDate || !shiftPatternId}
+        onClick={handleAssign}
+      >
+        割り当てる(下書き)
+      </Button>
+
+      <div className="mt-6 border-t border-border pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">公開前確認・公開</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          割り当てたシフトは下書きのままでは対象社員に見えない。部署・対象月を指定して、法定休日不足・連続勤務・
+          月間予定時間の警告を確認してから公開する(警告があっても公開はブロックされない)。
+        </p>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="対象部署" htmlFor="shift-board-department" required>
+            <Input id="shift-board-department" value={department} onChange={(e) => setDepartment(e.target.value)} />
+          </FormField>
+
+          <FormField label="対象月" htmlFor="shift-board-year-month" required>
+            <Input
+              id="shift-board-year-month"
+              type="month"
+              value={yearMonth}
+              onChange={(e) => setYearMonth(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        {isLoadingReview ? (
+          <LoadingState />
+        ) : review ? (
+          <div className="mb-4 space-y-2 text-sm">
+            {review.legal_holiday_shortages.length === 0 &&
+            review.consecutive_work_violations.length === 0 &&
+            review.monthly_hours_over_cap.length === 0 ? (
+              <p className="text-muted-foreground">警告はありません。</p>
+            ) : (
+              <>
+                {review.legal_holiday_shortages.map((warning, index) => (
+                  <p key={`legal-${index}`} className="text-amber-600">
+                    社員ID{warning.user_id}: {warning.period_start}〜{warning.period_end}
+                    に法定休日が不足しています({warning.legal_holiday_count}/{warning.required_count})。
+                  </p>
+                ))}
+                {review.consecutive_work_violations.map((warning, index) => (
+                  <p key={`consecutive-${index}`} className="text-amber-600">
+                    社員ID{warning.user_id}: {warning.period_start}〜{warning.period_end}
+                    に{warning.consecutive_days}日連続勤務(上限{warning.max_allowed}日)。
+                  </p>
+                ))}
+                {review.monthly_hours_over_cap.map((warning, index) => (
+                  <p key={`monthly-${index}`} className="text-amber-600">
+                    社員ID{warning.user_id}: {warning.year_month}
+                    の所定労働時間合計が法定労働時間の総枠を超えています({warning.planned_minutes}分/
+                    {warning.statutory_cap_minutes}分)。
+                  </p>
+                ))}
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {publishSchedule.error && <ErrorMessage error={publishSchedule.error} />}
+        {publishSchedule.isSuccess && (
+          <p className="mb-3 text-sm text-foreground">
+            {publishSchedule.data.published_count}件のシフトを公開しました。
+          </p>
+        )}
+
+        <Button isLoading={publishSchedule.isPending} disabled={!department || !yearMonth} onClick={handlePublish}>
+          公開する
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
 /**
  * UC-C002: 勤務形態の作成・一覧。UC-C003: 個別シフトの生成・確認。
+ * UC-C004: 3交代制シフトパターンの作成・日別割当・公開前確認・公開。
  */
 export function WorkStylesAndShiftsPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkStyleFormCard />
       <ShiftGenerationCard />
+      <ShiftPatternFormCard />
+      <ShiftScheduleBoardCard />
     </div>
   )
 }

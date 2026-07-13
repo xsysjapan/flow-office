@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as employeeShiftAssignmentsApi from '../api/employeeShiftAssignments'
+import * as shiftPatternsApi from '../api/shiftPatterns'
 import * as usersApi from '../api/users'
 import * as workCalendarsApi from '../api/workCalendars'
 import * as workStylesApi from '../api/workStyles'
-import type { Paginated, User, WorkCalendar, WorkStyle } from '../api/types'
+import type { Paginated, ShiftPattern, User, WorkCalendar, WorkStyle } from '../api/types'
 import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
 
 const calendar: WorkCalendar = {
@@ -33,6 +34,7 @@ const workStyle: WorkStyle = {
   is_shift_based: false,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
+  max_consecutive_work_days: null,
 }
 
 const targetUser: User = {
@@ -45,10 +47,14 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage() {
+function renderPage({
+  workStyles = [workStyle],
+  shiftPatterns = [],
+}: { workStyles?: WorkStyle[]; shiftPatterns?: ShiftPattern[] } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue([workStyle])
+  vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue(workStyles)
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
+  vi.spyOn(shiftPatternsApi, 'fetchShiftPatterns').mockResolvedValue(shiftPatterns)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -134,6 +140,7 @@ describe('WorkStylesAndShiftsPage', () => {
         user_id: 5,
         work_date: '2026-08-01',
         work_style_id: 1,
+        shift_pattern_id: null,
         day_type: 'weekday',
         is_working_day: true,
         is_legal_holiday: false,
@@ -141,6 +148,7 @@ describe('WorkStylesAndShiftsPage', () => {
         planned_start_at: '2026-08-01T09:00:00+09:00',
         planned_end_at: '2026-08-01T18:00:00+09:00',
         planned_break_minutes: 60,
+        is_published: true,
       },
     ])
     vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
@@ -162,6 +170,99 @@ describe('WorkStylesAndShiftsPage', () => {
         work_style_id: 1,
         from: '2026-08-01',
         to: '2026-08-31',
+      }),
+    )
+  })
+
+  it('creates a shift pattern with the entered values', async () => {
+    const pattern = {
+      id: 1,
+      code: 'night_shift',
+      name: '深夜勤',
+      start_time: '22:00',
+      end_time: '06:00',
+      crosses_midnight: true,
+      break_minutes: 60,
+      prescribed_work_minutes: 420,
+    }
+    vi.spyOn(shiftPatternsApi, 'createShiftPattern').mockResolvedValue(pattern)
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.type(screen.getByLabelText('パターンコード'), 'night_shift')
+    await userEvent.type(screen.getByLabelText('パターン名称'), '深夜勤')
+    fireEvent.change(screen.getByLabelText('開始時刻'), { target: { value: '22:00' } })
+    fireEvent.change(screen.getByLabelText('終了時刻'), { target: { value: '06:00' } })
+    await userEvent.type(screen.getByLabelText('休憩(分)'), '60')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分)'), '420')
+    await userEvent.click(screen.getByLabelText('日跨ぎ勤務(終了時刻は翌日)'))
+    await userEvent.click(screen.getByRole('button', { name: 'シフトパターンを作成する' }))
+
+    await waitFor(() =>
+      expect(shiftPatternsApi.createShiftPattern).toHaveBeenCalledWith({
+        code: 'night_shift',
+        name: '深夜勤',
+        start_time: '22:00',
+        end_time: '06:00',
+        crosses_midnight: true,
+        break_minutes: 60,
+        prescribed_work_minutes: 420,
+      }),
+    )
+  })
+
+  it('assigns a shift pattern to an employee day on the shift schedule board', async () => {
+    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 2, code: 'shift-3', name: '3交代制', is_shift_based: true }
+    const pattern = {
+      id: 1,
+      code: 'day_shift',
+      name: '日勤',
+      start_time: '09:00',
+      end_time: '18:00',
+      crosses_midnight: false,
+      break_minutes: 60,
+      prescribed_work_minutes: 480,
+    }
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeShiftAssignmentsApi, 'assignShiftPatternDay').mockResolvedValue({
+      id: 10,
+      user_id: 5,
+      work_date: '2026-08-10',
+      work_style_id: 2,
+      shift_pattern_id: 1,
+      day_type: 'day_shift',
+      is_working_day: true,
+      is_legal_holiday: false,
+      is_company_holiday: false,
+      planned_start_at: '2026-08-10T09:00:00+09:00',
+      planned_end_at: '2026-08-10T18:00:00+09:00',
+      planned_break_minutes: 60,
+      is_published: false,
+    })
+
+    renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [pattern] })
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(シフト表)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態(シフト表)'), '3交代制')
+    await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
+    await userEvent.selectOptions(screen.getByLabelText('シフトパターン'), '日勤')
+    await userEvent.click(screen.getByRole('button', { name: '割り当てる(下書き)' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.assignShiftPatternDay).toHaveBeenCalledWith({
+        user_id: 5,
+        work_style_id: 2,
+        work_date: '2026-08-10',
+        shift_pattern_id: 1,
+        is_legal_holiday: false,
       }),
     )
   })

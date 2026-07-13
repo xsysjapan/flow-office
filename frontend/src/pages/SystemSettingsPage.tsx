@@ -15,10 +15,15 @@ export function SystemSettingsPage() {
   const { data, isLoading, error } = useSystemSettings()
   const updateSettings = useUpdateSystemSettings()
   const [defaultTimezone, setDefaultTimezone] = useState('')
+  const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
+  const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
-    if (data) setDefaultTimezone(data.default_timezone)
+    if (!data) return
+    setDefaultTimezone(data.default_timezone)
+    setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
+    setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -27,7 +32,11 @@ export function SystemSettingsPage() {
   const handleSave = () => {
     setSavedMessage(false)
     updateSettings.mutate(
-      { default_timezone: defaultTimezone },
+      {
+        default_timezone: defaultTimezone,
+        attendance_submission_deadline_day: Number(submissionDeadlineDay),
+        attendance_month_close_deadline_day: Number(monthCloseDeadlineDay),
+      },
       { onSuccess: () => setSavedMessage(true) },
     )
   }
@@ -54,7 +63,53 @@ export function SystemSettingsPage() {
         />
       </FormField>
 
-      <Button isLoading={updateSettings.isPending} disabled={!defaultTimezone} onClick={handleSave}>
+      <FormField
+        label="勤怠未提出の警告基準日(当月の何日)"
+        htmlFor="system-settings-submission-deadline-day"
+        required
+      >
+        <Input
+          id="system-settings-submission-deadline-day"
+          type="number"
+          min={1}
+          max={31}
+          value={submissionDeadlineDay}
+          onChange={(e) => {
+            setSubmissionDeadlineDay(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          この日を過ぎても前月分の勤怠が未提出の在籍社員に、解消するまで毎日通知する。
+        </p>
+      </FormField>
+
+      <FormField
+        label="月次締め前警告の基準日(当月の何日)"
+        htmlFor="system-settings-month-close-deadline-day"
+        required
+      >
+        <Input
+          id="system-settings-month-close-deadline-day"
+          type="number"
+          min={1}
+          max={31}
+          value={monthCloseDeadlineDay}
+          onChange={(e) => {
+            setMonthCloseDeadlineDay(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。
+        </p>
+      </FormField>
+
+      <Button
+        isLoading={updateSettings.isPending}
+        disabled={!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay}
+        onClick={handleSave}
+      >
         保存する
       </Button>
     </Card>

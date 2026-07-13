@@ -54,7 +54,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '月次勤怠の承認依頼',
             summary: "{$command->yearMonth} の月次勤怠が提出されました。",
             detailUrl: null,

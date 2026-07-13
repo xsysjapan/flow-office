@@ -21,6 +21,8 @@ import {
   type CorrectAttendancePunchInput,
   type EditAttendanceDayInput,
 } from '../api/attendance'
+import { downloadAttendanceCsv } from '../api/exports'
+import type { AttendanceExportFilters } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
 const WEEK_KEY = ['attendance', 'week']
@@ -182,5 +184,15 @@ export function useCloseMonth() {
   return useMutation({
     mutationFn: (id: number) => closeMonth(id),
     onSuccess: () => invalidate(),
+  })
+}
+
+/**
+ * UC-E001: 勤怠CSVのダウンロード。キャッシュするJSONを返すわけではなく
+ * ブラウザのダウンロードを発生させる副作用のため、useQueryではなくuseMutationを使う。
+ */
+export function useDownloadAttendanceCsv() {
+  return useMutation({
+    mutationFn: (filters: AttendanceExportFilters) => downloadAttendanceCsv(filters),
   })
 }

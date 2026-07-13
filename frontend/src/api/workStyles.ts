@@ -18,6 +18,7 @@ export interface CreateWorkStyleInput {
   is_shift_based?: boolean
   legal_holiday_rule?: LegalHolidayRule
   four_week_period_start_date?: string
+  max_consecutive_work_days?: number
 }
 
 export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle> {

@@ -1,11 +1,7 @@
 import { getToken } from './client'
+import type { AttendanceExportFilters } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
-
-export interface AttendanceExportFilters {
-  year_month: string
-  user_id?: number
-}
 
 /**
  * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。

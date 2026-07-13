@@ -3,7 +3,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { SystemSettings } from '../api/types'
 import { SystemSettingsPage } from './SystemSettingsPage'
 
-const settings: SystemSettings = { default_timezone: 'Asia/Tokyo' }
+const settings: SystemSettings = {
+  default_timezone: 'Asia/Tokyo',
+  attendance_submission_deadline_day: 5,
+  attendance_month_close_deadline_day: 10,
+}
 
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })

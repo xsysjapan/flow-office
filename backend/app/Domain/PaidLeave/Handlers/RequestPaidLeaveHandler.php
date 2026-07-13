@@ -85,7 +85,7 @@ class RequestPaidLeaveHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '有給申請の承認依頼',
             summary: "{$command->targetDate} の有給申請が提出されました。",
             detailUrl: null,
@@ -109,7 +109,9 @@ class RequestPaidLeaveHandler implements CommandHandler
                 throw new DomainRuleException('時間休の場合は取得時間を指定してください。');
             }
 
-            $prescribedDailyMinutes = $shiftAssignment->workStyle?->prescribed_daily_minutes ?? 480;
+            // work_style_idは必須カラムのため、勤務予定日(is_working_day=trueを既に確認済み)であれば
+            // workStyleは必ず存在する。マスタ値をそのまま使い、ハードコードしたフォールバックは持たない。
+            $prescribedDailyMinutes = $shiftAssignment->workStyle->prescribed_daily_minutes;
             $requestedDays = round(($command->hours * 60) / $prescribedDailyMinutes, 1);
 
             if ($requestedDays <= 0 || $requestedDays >= 1) {

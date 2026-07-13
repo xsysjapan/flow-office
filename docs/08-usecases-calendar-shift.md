@@ -51,12 +51,25 @@ UC-C005のチェックは適用する。
 
 ## UC-C004: 3交代制シフトを作成する
 
-1. 管理者が対象部署・対象月を選択する
-2. 日勤、準夜勤、深夜勤、公休、明け休みなどのシフトパターンを登録する
-3. 社員ごとに日別シフトを割り当てる
-4. 日跨ぎ勤務を datetime で管理する
-5. 法定休日不足、連続勤務、月間予定時間をチェックする
-6. シフトを公開する
+1. 管理者が日勤、準夜勤、深夜勤、公休、明け休みなどのシフトパターン(`shift_patterns`:
+   `code`/`name`/`start_time`/`end_time`/`crosses_midnight`/`break_minutes`/
+   `prescribed_work_minutes`)を登録する。`prescribed_work_minutes=0`のパターンは
+   公休・明け休みなど非労働日を表す
+2. 管理者が対象社員・対象日・シフトパターン・(必要なら)法定休日指定を選び、日別に
+   シフトを割り当てる(`employee_shift_assignments.shift_pattern_id`)。日跨ぎ勤務
+   (`shift_patterns.crosses_midnight`)は`planned_start_at`/`planned_end_at`を
+   datetimeで保持することで日付境界のバグを避ける
+3. 割り当てた直後は下書き(`is_published=false`)で、対象社員にはまだ表示されない
+4. 管理者が対象部署(`users.department`)または対象社員・対象月を選び、公開前チェックを
+   確認する。法定休日不足(UC-C005のロジックを再利用)・連続勤務日数(`work_styles.
+   max_consecutive_work_days`、未設定ならチェックしない)・月間予定時間(週40時間平均の
+   法定枠)の3つを警告として表示する。警告があっても後続の操作はブロックしない
+5. 対象部署・対象月を指定して公開する。下書き中の該当シフトが`is_published=true`になり、
+   対象社員へTeams通知される(`employee_shift.published`)
+
+シフト生成そのもの(カレンダー日区分に基づく一括生成、UC-C003)と、3交代制のシフトパターン
+日別割当は別の入力経路として共存する。同じ`employee_shift_assignments`テーブルを使うが、
+`shift_pattern_id`が設定されているかどうかで区別できる。
 
 ## UC-C005: シフト制勤務者の月次まとめ承認時に法定休日要件を確認する
 
@@ -148,7 +161,6 @@ UC-C005のチェックは適用する。
   ロジックは`LegalHolidayResolver`に集約する。
 - 3交代制など日跨ぎ勤務は `planned_start_at` / `planned_end_at` を datetime で保持し、
   日付境界のバグ(深夜0時をまたぐ計算誤り)を避ける。
-- Phase 4 (通常勤務)では単純な勤務形態のみを対象とし、3交代制は Phase 6 で対応する
-  ([19-implementation-phases.md](./19-implementation-phases.md) 参照)。UC-C005の法定休日
-  要件チェックはPhase 4のシフト割当(`employee_shift_assignments`)のみを前提にしており、
-  3交代制の`shift_patterns`実装(Phase 6)とは独立して先行導入する。
+- UC-C005の法定休日要件チェックは、通常勤務のシフト割当(Phase 4)・3交代制のシフトパターン
+  割当(Phase 6、UC-C004)のどちらの`employee_shift_assignments`にも共通して適用される
+  ([19-implementation-phases.md](./19-implementation-phases.md) 参照)。

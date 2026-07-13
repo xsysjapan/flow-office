@@ -51,8 +51,17 @@ class RequestTypeController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'form_schema' => ['present', 'array'],
+            'requires_attachment' => ['boolean'],
+            'attachment_max_size_kb' => ['nullable', 'integer', 'min:1'],
+            'attachment_allowed_extensions' => ['nullable', 'array'],
+            'attachment_allowed_extensions.*' => ['string', 'max:20'],
+            'eligible_role_codes' => ['nullable', 'array'],
+            'eligible_role_codes.*' => ['string', 'max:100'],
             'requires_backoffice_task' => ['boolean'],
             'backoffice_task_type' => ['nullable', 'string', 'max:100'],
+            'backoffice_department' => ['nullable', 'string', 'max:100'],
+            'export_amount_field' => ['nullable', 'string', 'max:100'],
+            'allowed_status_transitions' => ['nullable', 'array'],
             'is_active' => ['boolean'],
         ]);
     }

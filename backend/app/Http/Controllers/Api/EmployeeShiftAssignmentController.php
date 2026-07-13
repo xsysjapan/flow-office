@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
+use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
+use App\Domain\Attendance\Services\ShiftScheduleReviewService;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EmployeeShiftAssignmentResource;
 use App\Models\EmployeeShiftAssignment;
-use App\Models\WorkStyle;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Carbon;
 
 /**
  * 社員別勤務予定 (docs/19-implementation-phases.md Phase4)。
- * 会社カレンダーの日区分をベースに、指定期間分の勤務予定を一括生成する。
+ * 会社カレンダーの日区分をベースにした一括生成(UC-C003)と、3交代制シフト表の
+ * 日別パターン割当(UC-C004)の両方をここで扱う。
  */
 class EmployeeShiftAssignmentController extends Controller
 {
@@ -37,9 +42,9 @@ class EmployeeShiftAssignmentController extends Controller
     }
 
     /**
-     * work_stylesに紐づくカレンダーの日区分をもとに、指定期間の勤務予定を一括生成する。
+     * UC-C003: work_stylesに紐づくカレンダーの日区分をもとに、指定期間の勤務予定を一括生成する。
      */
-    public function generate(Request $request): AnonymousResourceCollection
+    public function generate(Request $request, CommandBus $commandBus): AnonymousResourceCollection
     {
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
@@ -48,43 +53,82 @@ class EmployeeShiftAssignmentController extends Controller
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
-        $workStyle = WorkStyle::query()->with('calendar.days')->findOrFail($data['work_style_id']);
-        $calendarDaysByDate = $workStyle->calendar?->days->keyBy(fn ($day) => $day->date->toDateString()) ?? collect();
+        $assignments = $commandBus->dispatch(new GenerateEmployeeShiftAssignments(
+            userId: $data['user_id'],
+            workStyleId: $data['work_style_id'],
+            from: $data['from'],
+            to: $data['to'],
+            generatedByUserId: $request->user()->id,
+        ));
 
-        $period = Carbon::parse($data['from'])->toPeriod(Carbon::parse($data['to']));
-        $assignments = [];
+        return EmployeeShiftAssignmentResource::collection($assignments);
+    }
 
-        foreach ($period as $date) {
-            $calendarDay = $calendarDaysByDate->get($date->toDateString());
-            $isWorkingDay = $calendarDay?->is_working_day ?? true;
+    /**
+     * UC-C004 手順3〜4: 3交代制シフト表で、社員の特定日にシフトパターンを割り当てる。
+     */
+    public function assignPattern(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'work_style_id' => ['required', 'integer', 'exists:work_styles,id'],
+            'work_date' => ['required', 'date'],
+            'shift_pattern_id' => ['required', 'integer', 'exists:shift_patterns,id'],
+            'is_legal_holiday' => ['boolean'],
+            'is_company_holiday' => ['boolean'],
+        ]);
 
-            // 'work_date' はdateキャストのためDB上はdatetime文字列で保存される。
-            // updateOrCreateの厳密一致検索では既存行を見つけられないため、whereDateで明示的に検索する。
-            $assignment = EmployeeShiftAssignment::query()
-                ->where('user_id', $data['user_id'])
-                ->whereDate('work_date', $date->toDateString())
-                ->first() ?? new EmployeeShiftAssignment([
-                    'user_id' => $data['user_id'],
-                    'work_date' => $date->toDateString(),
-                ]);
+        $assignment = $commandBus->dispatch(new AssignShiftPatternDay(
+            userId: $data['user_id'],
+            workDate: $data['work_date'],
+            workStyleId: $data['work_style_id'],
+            shiftPatternId: $data['shift_pattern_id'],
+            isLegalHoliday: $data['is_legal_holiday'] ?? false,
+            isCompanyHoliday: $data['is_company_holiday'] ?? false,
+            assignedByUserId: $request->user()->id,
+        ));
 
-            $assignment->fill([
-                'work_style_id' => $workStyle->id,
-                'day_type' => $calendarDay?->day_type ?? 'weekday',
-                'is_working_day' => $isWorkingDay,
-                'is_legal_holiday' => $calendarDay?->is_legal_holiday ?? false,
-                'is_company_holiday' => $calendarDay?->is_company_holiday ?? false,
-                'planned_start_at' => $isWorkingDay && $workStyle->default_start_time
-                    ? $date->copy()->setTimeFromTimeString($workStyle->default_start_time) : null,
-                'planned_end_at' => $isWorkingDay && $workStyle->default_end_time
-                    ? $date->copy()->setTimeFromTimeString($workStyle->default_end_time) : null,
-                'planned_break_minutes' => $isWorkingDay ? $workStyle->default_break_minutes : 0,
-            ])->save();
+        return (new EmployeeShiftAssignmentResource($assignment))->response()->setStatusCode(201);
+    }
 
-            $assignments[] = $assignment;
-        }
+    /**
+     * UC-C004 手順5: 公開前に法定休日不足・連続勤務・月間予定時間を確認する(読み取り専用、警告のみ)。
+     */
+    public function review(Request $request, ShiftScheduleReviewService $reviewService): JsonResponse
+    {
+        $data = $request->validate([
+            'department' => ['nullable', 'string'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'year_month' => ['required', 'date_format:Y-m'],
+        ]);
 
-        return EmployeeShiftAssignmentResource::collection(collect($assignments));
+        $userIds = $this->resolveTargetUserIds($data);
+
+        return response()->json($reviewService->review($userIds, $data['year_month']));
+    }
+
+    /**
+     * UC-C004 手順6: 3交代制シフト表を公開する。
+     */
+    public function publish(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'department' => ['nullable', 'string'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'year_month' => ['required', 'date_format:Y-m'],
+        ]);
+
+        $userIds = $this->resolveTargetUserIds($data);
+
+        $result = $commandBus->dispatch(new PublishEmployeeShiftAssignments(
+            userIds: $userIds,
+            yearMonth: $data['year_month'],
+            publishedByUserId: $request->user()->id,
+        ));
+
+        return response()->json($result);
     }
 
     /**
@@ -110,5 +154,22 @@ class EmployeeShiftAssignmentController extends Controller
         ));
 
         return new EmployeeShiftAssignmentResource($employeeShiftAssignment->refresh());
+    }
+
+    /**
+     * @param  array{department?: ?string, user_ids?: ?list<int>}  $data
+     * @return list<int>
+     */
+    private function resolveTargetUserIds(array $data): array
+    {
+        $userIds = collect($data['user_ids'] ?? []);
+
+        if (! empty($data['department'])) {
+            $userIds = $userIds->merge(
+                User::query()->where('department', $data['department'])->pluck('id')
+            );
+        }
+
+        return $userIds->unique()->values()->all();
     }
 }

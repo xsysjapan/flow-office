@@ -14,6 +14,8 @@ class SystemSettingResource extends JsonResource
     {
         return [
             'default_timezone' => $this->default_timezone,
+            'attendance_submission_deadline_day' => $this->attendance_submission_deadline_day,
+            'attendance_month_close_deadline_day' => $this->attendance_month_close_deadline_day,
         ];
     }
 }

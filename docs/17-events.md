@@ -31,9 +31,12 @@
 - `work_calendar.published`
 - `work_calendar_day.updated`
 - `work_style.created`
-- `employee_shift.assigned`
+- `employee_shift.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
+  日別割当のどちらからも発生する)
 - `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
+- `employee_shift.published` (UC-C004 手順6: 3交代制シフト表を公開する)
 - `shift_pattern.created`
+- `shift_pattern.updated`
 
 ## Attendance
 
@@ -70,6 +73,7 @@
 ## Attachment / Notification / Export (横断)
 
 - `attachment.uploaded`
+- `attachment.downloaded` (UC-F002: 閲覧ログを監査ログに残す)
 - `notification.queued`
 - `notification.sent`
 - `export.created`

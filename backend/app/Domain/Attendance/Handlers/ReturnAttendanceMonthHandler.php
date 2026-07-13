@@ -50,7 +50,7 @@ class ReturnAttendanceMonthHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '月次勤怠が差戻されました',
             summary: "{$month->year_month} の月次勤怠が差し戻されました: {$command->comment}",
             detailUrl: null,

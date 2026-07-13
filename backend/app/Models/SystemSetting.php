@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * システム全体の設定 (docs/06-usecases-auth.md UC-003)。常に1行のみ存在する
  * シングルトンのマスタ。
  */
-#[Fillable(['default_timezone'])]
+#[Fillable(['default_timezone', 'attendance_submission_deadline_day', 'attendance_month_close_deadline_day'])]
 class SystemSetting extends Model
 {
     /**
@@ -17,6 +17,10 @@ class SystemSetting extends Model
      */
     public static function current(): self
     {
-        return static::query()->firstOrCreate([], ['default_timezone' => 'Asia/Tokyo']);
+        return static::query()->firstOrCreate([], [
+            'default_timezone' => 'Asia/Tokyo',
+            'attendance_submission_deadline_day' => 5,
+            'attendance_month_close_deadline_day' => 10,
+        ]);
     }
 }

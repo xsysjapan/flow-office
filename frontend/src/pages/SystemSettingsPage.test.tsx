@@ -6,7 +6,11 @@ import * as systemSettingsApi from '../api/systemSettings'
 import type { SystemSettings } from '../api/types'
 import { SystemSettingsPage } from './SystemSettingsPage'
 
-const settings: SystemSettings = { default_timezone: 'Asia/Tokyo' }
+const settings: SystemSettings = {
+  default_timezone: 'Asia/Tokyo',
+  attendance_submission_deadline_day: 5,
+  attendance_month_close_deadline_day: 10,
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -27,7 +31,10 @@ describe('SystemSettingsPage', () => {
   })
 
   it('saves the updated default timezone', async () => {
-    vi.spyOn(systemSettingsApi, 'updateSystemSettings').mockResolvedValue({ default_timezone: 'America/Los_Angeles' })
+    vi.spyOn(systemSettingsApi, 'updateSystemSettings').mockResolvedValue({
+      ...settings,
+      default_timezone: 'America/Los_Angeles',
+    })
     renderPage()
 
     const input = await screen.findByLabelText('既定タイムゾーン')
@@ -36,7 +43,11 @@ describe('SystemSettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() =>
-      expect(systemSettingsApi.updateSystemSettings).toHaveBeenCalledWith({ default_timezone: 'America/Los_Angeles' }),
+      expect(systemSettingsApi.updateSystemSettings).toHaveBeenCalledWith({
+        default_timezone: 'America/Los_Angeles',
+        attendance_submission_deadline_day: 5,
+        attendance_month_close_deadline_day: 10,
+      }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()
   })

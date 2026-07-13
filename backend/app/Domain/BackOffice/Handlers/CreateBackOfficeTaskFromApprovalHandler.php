@@ -4,7 +4,6 @@ namespace App\Domain\BackOffice\Handlers;
 
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
-use App\Domain\BackOffice\TaskTypeDepartmentMap;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -42,7 +41,7 @@ class CreateBackOfficeTaskFromApprovalHandler implements CommandHandler
             'task_type' => $taskType,
             'title' => "{$requestType->name}: {$workflowRequest->title}",
             'status' => BackOfficeTaskStatus::NOT_STARTED,
-            'assigned_department' => TaskTypeDepartmentMap::departmentFor($taskType),
+            'assigned_department' => $requestType->backoffice_department,
             'due_on' => Carbon::now()->addDays(7)->toDateString(),
         ]);
 
@@ -57,7 +56,7 @@ class CreateBackOfficeTaskFromApprovalHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: 'バックオフィスタスク作成',
             summary: "「{$task->title}」が{$task->assigned_department}の未担当タスクに追加されました。",
             detailUrl: null,

@@ -48,7 +48,7 @@ class ReturnPaidLeaveRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '有給申請の差戻し',
             summary: "{$request->target_date->toDateString()} の有給申請が差し戻されました: {$command->comment}",
             detailUrl: null,

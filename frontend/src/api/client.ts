@@ -27,7 +27,7 @@ export function clearToken(): void {
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
-  query?: Record<string, string | number | boolean | undefined>
+  query?: Record<string, string | number | boolean | undefined | Array<string | number>>
 }
 
 function buildUrl(path: string, query?: ApiFetchOptions['query']): string {
@@ -35,7 +35,12 @@ function buildUrl(path: string, query?: ApiFetchOptions['query']): string {
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) url.searchParams.set(key, String(value))
+      if (value === undefined) continue
+      if (Array.isArray(value)) {
+        for (const item of value) url.searchParams.append(`${key}[]`, String(item))
+      } else {
+        url.searchParams.set(key, String(value))
+      }
     }
   }
 

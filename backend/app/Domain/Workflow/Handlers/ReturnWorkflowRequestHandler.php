@@ -48,7 +48,7 @@ class ReturnWorkflowRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::dispatch(
+        SendTeamsNotificationJob::enqueue(
             title: '差戻し',
             summary: "「{$workflowRequest->title}」が差し戻されました: {$command->comment}",
             detailUrl: null,
