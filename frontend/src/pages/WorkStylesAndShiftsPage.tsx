@@ -9,12 +9,18 @@ import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import {
+  useAssignEmployeeRotation,
+  useEmployeeRotationAssignment,
+  useGenerateRotationShiftAssignments,
+} from '../hooks/useEmployeeRotationAssignments'
+import {
   useAssignShiftPatternDay,
   useGenerateShiftAssignments,
   usePublishShiftSchedule,
   useShiftAssignments,
   useShiftScheduleReview,
 } from '../hooks/useEmployeeShiftAssignments'
+import { useCreateRotationPattern, usePreviewRotationPattern, useRotationPatterns } from '../hooks/useRotationPatterns'
 import { useCreateShiftPattern, useShiftPatterns } from '../hooks/useShiftPatterns'
 import {
   useAssignUserWorkStyleForMonth,
@@ -28,7 +34,7 @@ import {
   useSetDefaultWorkStyle,
   useWorkStyles,
 } from '../hooks/useWorkStyles'
-import type { LegalHolidayRule, WorkStyle } from '../api/types'
+import type { LegalHolidayRule, RotationPreviewDay, WorkStyle } from '../api/types'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
 function monthBoundaries(yearMonth: string): { from: string; to: string } {
@@ -883,6 +889,321 @@ function ShiftPatternFormCard() {
   )
 }
 
+/**
+ * 指示書 8.4節: 交代制勤務のローテーションパターンを登録する。
+ * A勤・B勤・C勤・休を1つの働き方の中の繰り返し周期としてまとめる(別々の働き方にしない)。
+ */
+function RotationPatternFormCard() {
+  const { data: workStyles } = useWorkStyles()
+  const { data: patterns } = useShiftPatterns()
+  const { data: rotationPatterns } = useRotationPatterns()
+  const createRotationPattern = useCreateRotationPattern()
+
+  const shiftBasedWorkStyles = (workStyles ?? []).filter((style) => style.is_shift_based)
+
+  const [workStyleId, setWorkStyleId] = useState('')
+  const [name, setName] = useState('')
+  const [items, setItems] = useState<string[]>([''])
+
+  const handleAddItem = () => setItems((prev) => [...prev, ''])
+  const handleRemoveItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
+  const handleItemChange = (index: number, shiftPatternId: string) =>
+    setItems((prev) => prev.map((item, i) => (i === index ? shiftPatternId : item)))
+
+  const handleCreate = () => {
+    createRotationPattern.mutate(
+      {
+        work_style_id: Number(workStyleId),
+        name,
+        items: items.map((shiftPatternId, index) => ({ sequence: index, shift_pattern_id: Number(shiftPatternId) })),
+      },
+      {
+        onSuccess: () => {
+          setWorkStyleId('')
+          setName('')
+          setItems([''])
+        },
+      },
+    )
+  }
+
+  const canCreate = workStyleId !== '' && name !== '' && items.length > 0 && items.every((item) => item !== '')
+
+  return (
+    <Card title="ローテーションパターン(指示書8.4節)">
+      {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
+
+      {(rotationPatterns ?? []).length === 0 ? (
+        <p className="mb-4 text-sm text-muted-foreground">ローテーションパターンはまだありません。</p>
+      ) : (
+        <ul className="mb-4 divide-y divide-border">
+          {rotationPatterns?.map((pattern) => (
+            <li key={pattern.id} className="py-2 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <strong className="font-semibold text-foreground">{pattern.name}</strong>
+                <span className="text-muted-foreground">周期{pattern.cycle_length}日</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {pattern.items.map((item) => item.shift_pattern_name ?? item.shift_pattern_code).join(' → ')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="mb-3 text-sm font-semibold text-foreground">ローテーションパターンを作成</h3>
+      <p className="mb-3 text-xs text-muted-foreground">
+        [A][A][休][B][B][休][C][C][休]のような繰り返し周期を、上から順番に登録する。
+      </p>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象の働き方(シフト制のみ)" htmlFor="rotation-pattern-work-style" required>
+          <NativeSelect
+            id="rotation-pattern-work-style"
+            value={workStyleId}
+            onChange={(e) => setWorkStyleId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {shiftBasedWorkStyles.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="ローテーションパターン名称" htmlFor="rotation-pattern-name" required>
+          <Input id="rotation-pattern-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </FormField>
+      </div>
+
+      <div className="mb-4 flex flex-col gap-2">
+        {items.map((item, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <span className="w-6 text-xs text-muted-foreground">{index + 1}</span>
+            <NativeSelect
+              aria-label={`${index + 1}日目のシフトパターン`}
+              value={item}
+              onChange={(e) => handleItemChange(index, e.target.value)}
+            >
+              <option value="">選択してください</option>
+              {patterns?.map((pattern) => (
+                <option key={pattern.id} value={pattern.id}>
+                  {pattern.name}
+                </option>
+              ))}
+            </NativeSelect>
+            {items.length > 1 && (
+              <Button variant="secondary" onClick={() => handleRemoveItem(index)}>
+                削除
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button variant="secondary" onClick={handleAddItem}>
+          周期に追加する
+        </Button>
+      </div>
+
+      <Button isLoading={createRotationPattern.isPending} disabled={!canCreate} onClick={handleCreate}>
+        ローテーションパターンを作成する
+      </Button>
+    </Card>
+  )
+}
+
+/**
+ * 指示書 8.5節〜8.9節: 社員をローテーションパターンに割り当て、開始日・開始位置から
+ * カレンダープレビューを確認したうえで、日別の勤務予定を一括生成する。
+ */
+function RotationAssignmentCard() {
+  const { data: rotationPatterns } = useRotationPatterns()
+  const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
+  const [rotationPatternId, setRotationPatternId] = useState('')
+  const [rotationStartDate, setRotationStartDate] = useState('')
+  const [rotationStartPosition, setRotationStartPosition] = useState('0')
+  const [generateFrom, setGenerateFrom] = useState('')
+  const [generateTo, setGenerateTo] = useState('')
+  const [overwriteMode, setOverwriteMode] = useState<'skip_edited' | 'overwrite_all'>('skip_edited')
+
+  const { data: currentAssignment } = useEmployeeRotationAssignment(targetUserId)
+  const assignRotation = useAssignEmployeeRotation()
+  const previewRotation = usePreviewRotationPattern()
+  const generateShifts = useGenerateRotationShiftAssignments()
+
+  const selectedPattern = rotationPatterns?.find((pattern) => String(pattern.id) === rotationPatternId)
+
+  const handleAssign = () => {
+    if (!targetUserId || !rotationPatternId || !rotationStartDate) return
+    assignRotation.mutate({
+      user_id: targetUserId,
+      rotation_pattern_id: Number(rotationPatternId),
+      rotation_start_date: rotationStartDate,
+      rotation_start_position: Number(rotationStartPosition),
+    })
+  }
+
+  const handlePreview = () => {
+    if (!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) return
+    previewRotation.mutate({
+      rotationPatternId: Number(rotationPatternId),
+      input: {
+        rotation_start_date: rotationStartDate,
+        rotation_start_position: Number(rotationStartPosition),
+        from: generateFrom,
+        to: generateTo,
+      },
+    })
+  }
+
+  const handleGenerate = () => {
+    if (!targetUserId || !generateFrom || !generateTo) return
+    generateShifts.mutate({
+      user_id: targetUserId,
+      from: generateFrom,
+      to: generateTo,
+      overwrite_mode: overwriteMode,
+    })
+  }
+
+  return (
+    <Card title="ローテーションの割当・生成(指示書8.5節〜8.8節)">
+      {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
+      {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
+      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象社員(ローテーション)" htmlFor="rotation-assignment-user" required>
+          <UserPicker id="rotation-assignment-user" value={targetUserId} onChange={setTargetUserId} />
+        </FormField>
+
+        <FormField label="ローテーションパターン" htmlFor="rotation-assignment-pattern" required>
+          <NativeSelect
+            id="rotation-assignment-pattern"
+            value={rotationPatternId}
+            onChange={(e) => setRotationPatternId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {rotationPatterns?.map((pattern) => (
+              <option key={pattern.id} value={pattern.id}>
+                {pattern.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="ローテーション開始日" htmlFor="rotation-assignment-start-date" required>
+          <Input
+            id="rotation-assignment-start-date"
+            type="date"
+            value={rotationStartDate}
+            onChange={(e) => setRotationStartDate(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="開始位置(0始まり)" htmlFor="rotation-assignment-start-position" required>
+          <Input
+            id="rotation-assignment-start-position"
+            type="number"
+            min={0}
+            max={selectedPattern ? selectedPattern.cycle_length - 1 : undefined}
+            value={rotationStartPosition}
+            onChange={(e) => setRotationStartPosition(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">開始日にローテーションの何番目(0始まり)が来るかを指定する。</p>
+        </FormField>
+      </div>
+
+      {currentAssignment && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          現在の割当: {currentAssignment.rotation_pattern_name}({currentAssignment.rotation_start_date}を基準)
+        </p>
+      )}
+
+      <Button
+        isLoading={assignRotation.isPending}
+        disabled={!targetUserId || !rotationPatternId || !rotationStartDate}
+        onClick={handleAssign}
+      >
+        ローテーションを割り当てる
+      </Button>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <h3 className="mb-2 text-sm font-semibold text-foreground">カレンダープレビュー・生成</h3>
+
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="生成開始日" htmlFor="rotation-generate-from" required>
+            <Input
+              id="rotation-generate-from"
+              type="date"
+              value={generateFrom}
+              onChange={(e) => setGenerateFrom(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="生成終了日" htmlFor="rotation-generate-to" required>
+            <Input
+              id="rotation-generate-to"
+              type="date"
+              value={generateTo}
+              onChange={(e) => setGenerateTo(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-3">
+          <Button
+            variant="secondary"
+            isLoading={previewRotation.isPending}
+            disabled={!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo}
+            onClick={handlePreview}
+          >
+            プレビューする
+          </Button>
+        </div>
+
+        {previewRotation.data && (
+          <ul className="mb-4 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+            {previewRotation.data.days.map((day: RotationPreviewDay) => (
+              <li key={day.date} className="text-foreground">
+                {day.date}: {day.shift_pattern_name ?? day.shift_pattern_code ?? '-'}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <FormField label="再生成時の扱い" htmlFor="rotation-overwrite-mode">
+          <NativeSelect
+            id="rotation-overwrite-mode"
+            value={overwriteMode}
+            onChange={(e) => setOverwriteMode(e.target.value as 'skip_edited' | 'overwrite_all')}
+          >
+            <option value="skip_edited">未編集日のみ再生成する(安全)</option>
+            <option value="overwrite_all">個別上書きも含めてすべて再生成する</option>
+          </NativeSelect>
+          <p className="mt-1 text-xs text-muted-foreground">実績のある日・締め済みの日はどちらを選んでも上書きされない。</p>
+        </FormField>
+
+        <Button
+          isLoading={generateShifts.isPending}
+          disabled={!targetUserId || !generateFrom || !generateTo}
+          onClick={handleGenerate}
+        >
+          勤務予定を生成する
+        </Button>
+
+        {generateShifts.data && (
+          <p className="mt-3 text-sm text-foreground">
+            {generateShifts.data.generated_count}件生成しました。
+            {generateShifts.data.skipped_dates.length > 0 &&
+              `(${generateShifts.data.skipped_dates.length}件は既に実績・個別編集があるためスキップしました)`}
+          </p>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 function ShiftScheduleBoardCard() {
   const { data: workStyles } = useWorkStyles()
   const { data: patterns } = useShiftPatterns()
@@ -1053,6 +1374,8 @@ export function WorkStylesAndShiftsPage() {
       <MonthlyWorkStyleAssignmentCard />
       <ShiftGenerationCard />
       <ShiftPatternFormCard />
+      <RotationPatternFormCard />
+      <RotationAssignmentCard />
       <ShiftScheduleBoardCard />
     </div>
   )

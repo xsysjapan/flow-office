@@ -72,6 +72,20 @@ Phase 4で実装済みのロジックをそのまま利用する(シフトパタ
 基づく精密な清算期間残業計算、複数月清算は未実装(docs/07-usecases-attendance.md
 「フレックスタイム制」参照)。
 
+## Phase 8: 交代制ローテーション自動生成(実装済み)
+
+1. ローテーションパターンマスタ(`rotation_patterns`/`rotation_pattern_items`、
+   A勤・B勤・C勤・休の繰り返し周期を1つの働き方の中で管理)
+2. 社員ごとのローテーション基準割当(`employee_rotation_assignments`)
+3. カレンダープレビュー(`POST /rotation-patterns/{id}/preview`、永続化しない)
+4. ローテーションからの月間シフト自動生成(`GenerateRotationShiftAssignments`)
+5. 個別上書きと生成元の区別(`employee_shift_assignments.is_manually_overridden`)、
+   再生成時の「未編集日のみ再生成(既定)」「個別上書きも含めてすべて再生成」の選択
+6. 実績のある日・締め済みの日は両モードとも自動上書きしない安全ガード
+
+班単位管理(複数社員への一括割当、指示書8.6節)、AIによる自然言語からのローテーション設定
+補助(指示書21.2節)は未実装(将来フェーズ)。
+
 各Phaseの詳細ユースケースは対応するドキュメントを参照:
 [06](./06-usecases-auth.md) [07](./07-usecases-attendance.md) [08](./08-usecases-calendar-shift.md)
 [09](./09-usecases-paid-leave.md) [10](./10-usecases-workflow.md) [11](./11-usecases-backoffice.md)

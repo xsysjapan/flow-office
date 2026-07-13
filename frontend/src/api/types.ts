@@ -343,6 +343,8 @@ export interface EmployeeShiftAssignment {
   planned_break_minutes: number
   /** UC-C004: シフトパターン割当は公開(手順6)まで下書き扱い。カレンダー一括生成は常にtrue。 */
   is_published: boolean
+  /** 個別にシフトパターンを上書きした日かどうか。ローテーションの再生成では上書きされない。 */
+  is_manually_overridden: boolean
 }
 
 /** UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)。 */
@@ -355,6 +357,42 @@ export interface ShiftPattern {
   crosses_midnight: boolean
   break_minutes: number
   prescribed_work_minutes: number
+}
+
+/** 指示書 8.4節: ローテーションパターンを構成する1つの順序。 */
+export interface RotationPatternItem {
+  sequence: number
+  shift_pattern_id: number
+  shift_pattern_name: string | null
+  shift_pattern_code: string | null
+}
+
+/** 指示書 8.4節: 交代制勤務のローテーションパターン(A勤・B勤・C勤・休の繰り返し周期)。 */
+export interface RotationPattern {
+  id: number
+  work_style_id: number
+  name: string
+  cycle_length: number
+  items: RotationPatternItem[]
+}
+
+/** 指示書 8.9節: ローテーションプレビューの1日分。 */
+export interface RotationPreviewDay {
+  date: string
+  sequence: number
+  shift_pattern_id: number | null
+  shift_pattern_name: string | null
+  shift_pattern_code: string | null
+}
+
+/** 指示書 8.5節: 社員ごとのローテーション開始基準。 */
+export interface EmployeeRotationAssignment {
+  id: number
+  user_id: number
+  rotation_pattern_id: number
+  rotation_pattern_name: string | null
+  rotation_start_date: string
+  rotation_start_position: number
 }
 
 /** UC-C004 手順5: シフト表公開前の警告(法定休日不足・連続勤務・月間予定時間)。 */

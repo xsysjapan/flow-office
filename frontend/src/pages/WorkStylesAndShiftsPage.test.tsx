@@ -2,13 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import * as employeeRotationAssignmentsApi from '../api/employeeRotationAssignments'
 import * as employeeShiftAssignmentsApi from '../api/employeeShiftAssignments'
+import * as rotationPatternsApi from '../api/rotationPatterns'
 import * as shiftPatternsApi from '../api/shiftPatterns'
 import * as userWorkStyleMonthlyAssignmentsApi from '../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../api/users'
 import * as workCalendarsApi from '../api/workCalendars'
 import * as workStylesApi from '../api/workStyles'
-import type { Paginated, ShiftPattern, User, WorkCalendar, WorkStyle } from '../api/types'
+import type { Paginated, RotationPattern, ShiftPattern, User, WorkCalendar, WorkStyle } from '../api/types'
 import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
 
 const calendar: WorkCalendar = {
@@ -59,12 +61,19 @@ const targetUser: User = {
 function renderPage({
   workStyles = [workStyle],
   shiftPatterns = [],
-}: { workStyles?: WorkStyle[]; shiftPatterns?: ShiftPattern[] } = {}) {
+  rotationPatterns = [],
+}: {
+  workStyles?: WorkStyle[]
+  shiftPatterns?: ShiftPattern[]
+  rotationPatterns?: RotationPattern[]
+} = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue(workStyles)
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
   vi.spyOn(shiftPatternsApi, 'fetchShiftPatterns').mockResolvedValue(shiftPatterns)
   vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
+  vi.spyOn(rotationPatternsApi, 'fetchRotationPatterns').mockResolvedValue(rotationPatterns)
+  vi.spyOn(employeeRotationAssignmentsApi, 'fetchEmployeeRotationAssignment').mockResolvedValue(null)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -253,6 +262,7 @@ describe('WorkStylesAndShiftsPage', () => {
         planned_end_at: '2026-08-01T18:00:00+09:00',
         planned_break_minutes: 60,
         is_published: true,
+        is_manually_overridden: false,
       },
     ])
     vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
@@ -484,6 +494,7 @@ describe('WorkStylesAndShiftsPage', () => {
       planned_end_at: '2026-08-10T18:00:00+09:00',
       planned_break_minutes: 60,
       is_published: false,
+      is_manually_overridden: true,
     })
 
     renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [pattern] })
@@ -506,5 +517,131 @@ describe('WorkStylesAndShiftsPage', () => {
         is_legal_holiday: false,
       }),
     )
+  })
+
+  it('creates a rotation pattern from a sequence of shift patterns', async () => {
+    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 2, code: 'shift-3', name: '3交代制', is_shift_based: true }
+    const aShift: ShiftPattern = {
+      id: 1,
+      code: 'a-shift',
+      name: 'A勤',
+      start_time: '06:00',
+      end_time: '14:00',
+      crosses_midnight: false,
+      break_minutes: 45,
+      prescribed_work_minutes: 435,
+    }
+    const offShift: ShiftPattern = {
+      id: 2,
+      code: 'off',
+      name: '休日',
+      start_time: null,
+      end_time: null,
+      crosses_midnight: false,
+      break_minutes: 0,
+      prescribed_work_minutes: 0,
+    }
+    vi.spyOn(rotationPatternsApi, 'createRotationPattern').mockResolvedValue({
+      id: 1,
+      work_style_id: 2,
+      name: '2交代3班ローテーション',
+      cycle_length: 2,
+      items: [],
+    })
+    renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [aShift, offShift] })
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.selectOptions(screen.getByLabelText('対象の働き方(シフト制のみ)'), '3交代制')
+    await userEvent.type(screen.getByLabelText('ローテーションパターン名称'), '2交代3班ローテーション')
+    await userEvent.selectOptions(screen.getByLabelText('1日目のシフトパターン'), 'A勤')
+    await userEvent.click(screen.getByRole('button', { name: '周期に追加する' }))
+    await userEvent.selectOptions(screen.getByLabelText('2日目のシフトパターン'), '休日')
+    await userEvent.click(screen.getByRole('button', { name: 'ローテーションパターンを作成する' }))
+
+    await waitFor(() =>
+      expect(rotationPatternsApi.createRotationPattern).toHaveBeenCalledWith({
+        work_style_id: 2,
+        name: '2交代3班ローテーション',
+        items: [
+          { sequence: 0, shift_pattern_id: 1 },
+          { sequence: 1, shift_pattern_id: 2 },
+        ],
+      }),
+    )
+  })
+
+  it('assigns a rotation, previews it, and generates shifts for the period', async () => {
+    const pattern: RotationPattern = {
+      id: 1,
+      work_style_id: 2,
+      name: '2交代3班ローテーション',
+      cycle_length: 2,
+      items: [
+        { sequence: 0, shift_pattern_id: 1, shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
+        { sequence: 1, shift_pattern_id: 2, shift_pattern_name: '休日', shift_pattern_code: 'off' },
+      ],
+    }
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeRotationAssignmentsApi, 'assignEmployeeRotation').mockResolvedValue({
+      id: 1,
+      user_id: 5,
+      rotation_pattern_id: 1,
+      rotation_pattern_name: '2交代3班ローテーション',
+      rotation_start_date: '2026-08-01',
+      rotation_start_position: 0,
+    })
+    vi.spyOn(rotationPatternsApi, 'previewRotationPattern').mockResolvedValue({
+      days: [
+        { date: '2026-08-01', sequence: 0, shift_pattern_id: 1, shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
+        { date: '2026-08-02', sequence: 1, shift_pattern_id: 2, shift_pattern_name: '休日', shift_pattern_code: 'off' },
+      ],
+    })
+    vi.spyOn(employeeRotationAssignmentsApi, 'generateRotationShiftAssignments').mockResolvedValue({
+      generated: [],
+      generated_count: 2,
+      skipped_dates: [],
+    })
+    renderPage({ rotationPatterns: [pattern] })
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(ローテーション)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('ローテーションパターン'), '2交代3班ローテーション')
+    await userEvent.type(screen.getByLabelText('ローテーション開始日'), '2026-08-01')
+    await userEvent.click(screen.getByRole('button', { name: 'ローテーションを割り当てる' }))
+
+    await waitFor(() =>
+      expect(employeeRotationAssignmentsApi.assignEmployeeRotation).toHaveBeenCalledWith({
+        user_id: 5,
+        rotation_pattern_id: 1,
+        rotation_start_date: '2026-08-01',
+        rotation_start_position: 0,
+      }),
+    )
+
+    await userEvent.type(screen.getByLabelText('生成開始日'), '2026-08-01')
+    await userEvent.type(screen.getByLabelText('生成終了日'), '2026-08-02')
+    await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
+
+    expect(await screen.findByText('2026-08-01: A勤')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-02: 休日')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '勤務予定を生成する' }))
+
+    await waitFor(() =>
+      expect(employeeRotationAssignmentsApi.generateRotationShiftAssignments).toHaveBeenCalledWith({
+        user_id: 5,
+        from: '2026-08-01',
+        to: '2026-08-02',
+        overwrite_mode: 'skip_edited',
+      }),
+    )
+    expect(await screen.findByText('2件生成しました。')).toBeInTheDocument()
   })
 })

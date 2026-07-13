@@ -59,6 +59,9 @@ class AssignShiftPatternDayHandler implements CommandHandler
             'planned_break_minutes' => $pattern->break_minutes,
             // 公開(UC-C004手順6)までは下書き扱いにする。
             'is_published' => false,
+            // 個別上書きとして扱い、ローテーションの再生成(指示書8.8節「未編集日のみ再生成」)で
+            // 自動上書きされないようにする。
+            'is_manually_overridden' => true,
         ])->save();
 
         $this->eventStore->append(

@@ -35,11 +35,14 @@
   同一イベントの`previous_default_work_style_id`に記録する。初回オンボーディングで
   「通常勤務」を作成した際にも`previous_default_work_style_id=null`で発生する)
 - `employee_shift.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
-  日別割当のどちらからも発生する)
+  日別割当、UC-C008のローテーションからの一括生成のいずれからも発生する)
 - `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
 - `employee_shift.published` (UC-C004 手順6: 3交代制シフト表を公開する)
 - `shift_pattern.created`
 - `shift_pattern.updated`
+- `rotation_pattern.created` (UC-C008: 交代制勤務のローテーションパターンを登録する)
+- `employee_rotation.assigned` (UC-C008: 社員のローテーション開始基準(パターン・開始日・
+  開始位置)を設定する。既存の基準を上書きした場合も同じイベントで発生する)
 - `user_work_style_monthly_assignment.assigned` (ユーザーの月次働き方割当。過去月を壊さず
   対象の年月だけを追加・更新する)
 

@@ -196,6 +196,41 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - prescribed_work_minutes
 - created_at / updated_at
 
+## rotation_patterns (UC-C008: 交代制勤務のローテーションパターン)
+
+- id
+- work_style_id (シフト制の勤務形態のみ登録できる)
+- name
+- cycle_length (周期の長さ。`rotation_pattern_items`の件数と一致させる)
+- created_at / updated_at
+
+A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中でまとめて管理する
+(A勤・B勤・C勤を別々の働き方として作らない、指示書8.1節)。
+
+## rotation_pattern_items (ローテーションパターンを構成する各順序)
+
+- id
+- rotation_pattern_id
+- sequence (0始まり。`rotation_pattern_id`との組でunique)
+- shift_pattern_id
+- created_at / updated_at
+
+## employee_rotation_assignments (社員ごとのローテーション基準。正データ)
+
+- id
+- user_id (unique。1人につき現在有効な基準は1件のみ)
+- rotation_pattern_id
+- rotation_start_date (この日にrotation_start_position番目のパターンが適用される)
+- rotation_start_position (0始まり)
+- assigned_by_user_id
+- created_at / updated_at
+
+指定日がローテーション周期の何番目にあたるかは
+`(rotation_start_position + rotation_start_dateからの経過日数) % cycle_length` で機械的に
+算出する(`EmployeeRotationAssignment::sequenceIndexFor`)。将来の班単位管理(複数社員へ
+同じローテーションを一括割当てる、指示書8.6節)を妨げないよう、社員個別の基準として
+独立させている。
+
 ## employee_shift_assignments (勤務予定の正)
 
 - id
@@ -212,6 +247,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - planned_break_minutes
 - is_published (3交代制シフトパターン割当(UC-C004)の下書き/公開フラグ。カレンダー基準の
   一括生成(UC-C003)からの行は常にtrue。シフトパターン日別割当は公開されるまでfalse)
+- is_manually_overridden (UC-C004のシフトパターン個別割当を経由した日はtrue。ローテーション
+  からの一括生成(UC-C008)は、既定(`skip_edited`)ではこのフラグがtrueの日を自動上書き
+  しない。ローテーション生成自体はfalseのまま書き込む)
 - created_at / updated_at
 
 `is_legal_holiday`は「決める方式」(`work_styles.legal_holiday_rule`が`weekly`/
@@ -458,7 +496,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `attendance_days`, `attendance_breaks`, `attendance_months`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。`attendance_months`はProjectorを持たず、CommandHandlerが直接書き込む。 |
+| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings` | 管理者が設定する参照データ。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `attendance_days`, `attendance_breaks`, `attendance_months`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments` | Command経由でのみ更新。`attendance_months`はProjectorを持たず、CommandHandlerが直接書き込む。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
