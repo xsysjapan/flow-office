@@ -27,4 +27,6 @@ Phase 6 の3交代制はMVP後の後続フェーズとする。
 
 (追記) Phase 5 の残りの範囲(有給申請・承認・消化、自動付与、消滅警告、年5日取得義務警告)
 はMVP後に実装済み(docs/09-usecases-paid-leave.md UC-P002〜UC-P006)。Phase 6(3交代制)も
-MVP後に実装済み(docs/08-usecases-calendar-shift.md UC-C004)。
+MVP後に実装済み(docs/08-usecases-calendar-shift.md UC-C004)。Phase 7(フレックスタイム制)
+もMVP後に実装済み(docs/07-usecases-attendance.md「フレックスタイム制」)。Phase 8
+(交代制ローテーション自動生成)もMVP後に実装済み(docs/08-usecases-calendar-shift.md UC-C008)。

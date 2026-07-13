@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * 社員別勤務予定 (docs/03-architecture.md 3.3: 勤怠の正の一つ)。
  */
-#[Fillable(['user_id', 'work_date', 'work_style_id', 'shift_pattern_id', 'day_type', 'is_working_day', 'is_legal_holiday', 'is_company_holiday', 'planned_start_at', 'planned_end_at', 'planned_break_minutes', 'is_published'])]
+#[Fillable(['user_id', 'work_date', 'work_style_id', 'shift_pattern_id', 'day_type', 'is_working_day', 'is_legal_holiday', 'is_company_holiday', 'planned_start_at', 'planned_end_at', 'planned_break_minutes', 'is_published', 'is_manually_overridden'])]
 class EmployeeShiftAssignment extends Model
 {
     protected function casts(): array
@@ -22,6 +22,7 @@ class EmployeeShiftAssignment extends Model
             'planned_start_at' => 'datetime',
             'planned_end_at' => 'datetime',
             'is_published' => 'boolean',
+            'is_manually_overridden' => 'boolean',
         ];
     }
 

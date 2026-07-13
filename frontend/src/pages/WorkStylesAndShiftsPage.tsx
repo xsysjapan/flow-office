@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
@@ -9,26 +10,166 @@ import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import {
+  useAssignEmployeeRotation,
+  useEmployeeRotationAssignment,
+  useGenerateRotationShiftAssignments,
+} from '../hooks/useEmployeeRotationAssignments'
+import {
   useAssignShiftPatternDay,
   useGenerateShiftAssignments,
   usePublishShiftSchedule,
   useShiftAssignments,
   useShiftScheduleReview,
 } from '../hooks/useEmployeeShiftAssignments'
+import { useCreateRotationPattern, usePreviewRotationPattern, useRotationPatterns } from '../hooks/useRotationPatterns'
 import { useCreateShiftPattern, useShiftPatterns } from '../hooks/useShiftPatterns'
 import {
   useAssignUserWorkStyleForMonth,
   useUserWorkStyleMonthlyAssignments,
 } from '../hooks/useUserWorkStyleMonthlyAssignments'
+import { useUser } from '../hooks/useUsers'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
-import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
-import type { LegalHolidayRule, WorkStyle } from '../api/types'
+import {
+  useCreateDefaultWorkStyle,
+  useCreateWorkStyle,
+  useSetDefaultWorkStyle,
+  useWorkStyles,
+} from '../hooks/useWorkStyles'
+import type { LegalHolidayRule, RotationPreviewDay, WorkStyle } from '../api/types'
+
+/** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
+function monthBoundaries(yearMonth: string): { from: string; to: string } {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const lastDay = new Date(year, month, 0).getDate()
+  return { from: `${yearMonth}-01`, to: `${yearMonth}-${String(lastDay).padStart(2, '0')}` }
+}
+
+const STANDARD_WORK_STYLE_DEFAULTS = {
+  name: '通常勤務',
+  default_start_time: '09:00',
+  default_end_time: '18:00',
+  default_break_minutes: 60,
+}
+
+/**
+ * 指示書 12.1節: 初回導入時、会社のデフォルト働き方が未設定の間だけ表示するオンボーディング。
+ * 「未設定」と「デフォルト適用」を混同しないため、is_defaultの働き方が1件も無いことを
+ * 表示条件とする(指示書 2.2節)。
+ */
+function WorkStyleOnboardingCard() {
+  const { data: workStyles } = useWorkStyles()
+  const createDefault = useCreateDefaultWorkStyle()
+  const [isEditing, setIsEditing] = useState(false)
+  const [name, setName] = useState(STANDARD_WORK_STYLE_DEFAULTS.name)
+  const [startTime, setStartTime] = useState(STANDARD_WORK_STYLE_DEFAULTS.default_start_time)
+  const [endTime, setEndTime] = useState(STANDARD_WORK_STYLE_DEFAULTS.default_end_time)
+  const [breakMinutes, setBreakMinutes] = useState(String(STANDARD_WORK_STYLE_DEFAULTS.default_break_minutes))
+
+  const hasDefault = (workStyles ?? []).some((style) => style.is_default)
+  if (hasDefault) return null
+
+  const handleStart = () => {
+    createDefault.mutate({})
+  }
+
+  const handleSaveEdited = () => {
+    createDefault.mutate({
+      name,
+      default_start_time: startTime,
+      default_end_time: endTime,
+      default_break_minutes: Number(breakMinutes),
+    })
+  }
+
+  const handleAddAnother = () => {
+    createDefault.mutate({})
+    document.getElementById('work-style-create-form')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  return (
+    <Card title="一般的な勤務設定を用意しました">
+      {createDefault.error && <ErrorMessage error={createDefault.error} />}
+
+      {!isEditing ? (
+        <>
+          <ul className="mb-4 text-sm text-foreground">
+            <li>{STANDARD_WORK_STYLE_DEFAULTS.name}</li>
+            <li>月曜日〜金曜日</li>
+            <li>
+              {STANDARD_WORK_STYLE_DEFAULTS.default_start_time}〜{STANDARD_WORK_STYLE_DEFAULTS.default_end_time}
+            </li>
+            <li>休憩12:00〜13:00</li>
+            <li>土日祝休み</li>
+          </ul>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={createDefault.isPending} onClick={handleStart}>
+              この設定で始める
+            </Button>
+            <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              内容を変更する
+            </Button>
+            <Button variant="secondary" isLoading={createDefault.isPending} onClick={handleAddAnother}>
+              別の働き方を追加する
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="名称" htmlFor="onboarding-work-style-name" required>
+              <Input id="onboarding-work-style-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </FormField>
+
+            <FormField label="休憩(分)" htmlFor="onboarding-work-style-break-minutes" required>
+              <Input
+                id="onboarding-work-style-break-minutes"
+                type="number"
+                min={0}
+                value={breakMinutes}
+                onChange={(e) => setBreakMinutes(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
+              <Input
+                id="onboarding-work-style-start-time"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
+              <Input
+                id="onboarding-work-style-end-time"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </FormField>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={createDefault.isPending} onClick={handleSaveEdited}>
+              保存して開始する
+            </Button>
+            <Button variant="secondary" onClick={() => setIsEditing(false)}>
+              キャンセル
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
 
 const WORK_TIME_SYSTEM_OPTIONS = [
   { value: 'fixed', label: '通常勤務' },
   { value: 'monthly_variable', label: '1か月単位変形労働時間制' },
   { value: 'discretionary', label: '裁量労働制' },
   { value: 'manager_supervisor', label: '管理監督者' },
+  { value: 'flex', label: 'フレックスタイム制' },
 ]
 
 function workTimeSystemLabel(value: string): string {
@@ -47,6 +188,7 @@ function WorkStyleFormCard() {
   const { data: workStyles, isLoading, error } = useWorkStyles()
   const { data: workCalendars } = useWorkCalendars()
   const createWorkStyle = useCreateWorkStyle()
+  const setDefaultWorkStyle = useSetDefaultWorkStyle()
 
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
@@ -61,6 +203,14 @@ function WorkStyleFormCard() {
   const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
   const [fourWeekPeriodStartDate, setFourWeekPeriodStartDate] = useState('')
   const [maxConsecutiveWorkDays, setMaxConsecutiveWorkDays] = useState('')
+  const [settlementStartDay, setSettlementStartDay] = useState('')
+  const [coreTimeEnabled, setCoreTimeEnabled] = useState(false)
+  const [coreTimeStart, setCoreTimeStart] = useState('')
+  const [coreTimeEnd, setCoreTimeEnd] = useState('')
+  const [flexibleTimeStart, setFlexibleTimeStart] = useState('')
+  const [flexibleTimeEnd, setFlexibleTimeEnd] = useState('')
+
+  const isFlex = workTimeSystem === 'flex'
 
   const handleCreateWorkStyle = () => {
     createWorkStyle.mutate(
@@ -80,6 +230,12 @@ function WorkStyleFormCard() {
           isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
         max_consecutive_work_days:
           isShiftBased && maxConsecutiveWorkDays ? Number(maxConsecutiveWorkDays) : undefined,
+        settlement_start_day: isFlex && settlementStartDay ? Number(settlementStartDay) : undefined,
+        core_time_enabled: isFlex ? coreTimeEnabled : undefined,
+        core_time_start: isFlex && coreTimeEnabled ? coreTimeStart : undefined,
+        core_time_end: isFlex && coreTimeEnabled ? coreTimeEnd : undefined,
+        flexible_time_start: isFlex ? flexibleTimeStart || undefined : undefined,
+        flexible_time_end: isFlex ? flexibleTimeEnd || undefined : undefined,
       },
       {
         onSuccess: () => {
@@ -96,15 +252,22 @@ function WorkStyleFormCard() {
           setLegalHolidayRule('weekly')
           setFourWeekPeriodStartDate('')
           setMaxConsecutiveWorkDays('')
+          setSettlementStartDay('')
+          setCoreTimeEnabled(false)
+          setCoreTimeStart('')
+          setCoreTimeEnd('')
+          setFlexibleTimeStart('')
+          setFlexibleTimeEnd('')
         },
       },
     )
   }
 
   return (
-    <Card title="勤務形態">
+    <Card id="work-style-create-form" title="勤務形態">
       {error && <ErrorMessage error={error} fallback="勤務形態の取得に失敗しました。" />}
       {createWorkStyle.error && <ErrorMessage error={createWorkStyle.error} />}
+      {setDefaultWorkStyle.error && <ErrorMessage error={setDefaultWorkStyle.error} />}
 
       {isLoading ? (
         <LoadingState />
@@ -113,15 +276,41 @@ function WorkStyleFormCard() {
       ) : (
         <ul className="mb-4 divide-y divide-border">
           {(workStyles ?? []).map((style) => (
-            <li key={style.id} className="flex flex-wrap gap-3 py-2 text-sm">
-              <strong className="font-semibold text-foreground">{style.name}</strong>
-              <span className="text-muted-foreground">{style.code}</span>
-              <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
-              <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
-              <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
-              {style.is_shift_based && (
-                <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
-              )}
+            <li key={style.id} className="py-2 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <strong className="font-semibold text-foreground">{style.name}</strong>
+                <span className="text-muted-foreground">{style.code}</span>
+                <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
+                <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
+                <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
+                {style.is_shift_based && (
+                  <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
+                )}
+                {style.is_default ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    デフォルト
+                  </span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    isLoading={setDefaultWorkStyle.isPending}
+                    onClick={() => setDefaultWorkStyle.mutate(style.id)}
+                  >
+                    デフォルトに設定
+                  </Button>
+                )}
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span>適用社員数 {style.applied_employee_count ?? '-'}名</span>
+                {style.is_shift_based && <span>使用中の勤務シフト {style.active_shift_pattern_count ?? 0}件</span>}
+                {style.updated_at && <span>最終更新 {style.updated_at.slice(0, 10)}</span>}
+                {style.configuration_warnings.map((warning) => (
+                  <Badge key={warning} tone="warning">
+                    {warning}
+                  </Badge>
+                ))}
+              </div>
             </li>
           ))}
         </ul>
@@ -258,6 +447,70 @@ function WorkStyleFormCard() {
         </div>
       )}
 
+      {isFlex && (
+        <div className="mb-4 grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+          <FormField label="清算期間の起算日(任意)" htmlFor="work-style-settlement-start-day">
+            <Input
+              id="work-style-settlement-start-day"
+              type="number"
+              min={1}
+              max={31}
+              value={settlementStartDay}
+              onChange={(e) => setSettlementStartDay(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">未設定なら毎月1日を起算日とする。</p>
+          </FormField>
+
+          <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
+            <Input
+              id="work-style-flexible-start"
+              type="time"
+              value={flexibleTimeStart}
+              onChange={(e) => setFlexibleTimeStart(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
+            <Input
+              id="work-style-flexible-end"
+              type="time"
+              value={flexibleTimeEnd}
+              onChange={(e) => setFlexibleTimeEnd(e.target.value)}
+            />
+          </FormField>
+
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
+            <Checkbox checked={coreTimeEnabled} onCheckedChange={(checked) => setCoreTimeEnabled(checked === true)} />
+            コアタイムあり
+          </label>
+
+          {coreTimeEnabled && (
+            <>
+              <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
+                <Input
+                  id="work-style-core-time-start"
+                  type="time"
+                  value={coreTimeStart}
+                  onChange={(e) => setCoreTimeStart(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
+                <Input
+                  id="work-style-core-time-end"
+                  type="time"
+                  value={coreTimeEnd}
+                  onChange={(e) => setCoreTimeEnd(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  労働時間は足りていてもコアタイム中に不在の場合は別枠の警告になる(指示書7.4節)。
+                </p>
+              </FormField>
+            </>
+          )}
+        </div>
+      )}
+
       <Button
         isLoading={createWorkStyle.isPending}
         disabled={
@@ -267,7 +520,8 @@ function WorkStyleFormCard() {
           !prescribedDailyMinutes ||
           !prescribedWeeklyMinutes ||
           !calendarId ||
-          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate)
+          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate) ||
+          (isFlex && coreTimeEnabled && (!coreTimeStart || !coreTimeEnd))
         }
         onClick={handleCreateWorkStyle}
       >
@@ -376,15 +630,47 @@ function MonthlyWorkStyleAssignmentCard() {
   const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
   const [yearMonth, setYearMonth] = useState('')
   const [workStyleId, setWorkStyleId] = useState('')
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [autoGenerateShifts, setAutoGenerateShifts] = useState(false)
 
+  const { data: targetUser } = useUser(targetUserId ?? NaN)
   const { data: history, isLoading: isLoadingHistory } = useUserWorkStyleMonthlyAssignments(targetUserId)
   const assignForMonth = useAssignUserWorkStyleForMonth()
+  const generateShifts = useGenerateShiftAssignments()
 
-  const handleAssign = () => {
+  const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
+  const selectedWorkStyle = workStyles?.find((style) => String(style.id) === workStyleId)
+
+  const handleUserChange = (userId: number | undefined) => {
+    setTargetUserId(userId)
+    setIsConfirming(false)
+  }
+
+  const handleYearMonthChange = (value: string) => {
+    setYearMonth(value)
+    setIsConfirming(false)
+  }
+
+  const handleWorkStyleChange = (value: string) => {
+    setWorkStyleId(value)
+    setIsConfirming(false)
+  }
+
+  const handleSave = () => {
     if (!targetUserId || !yearMonth || !workStyleId) return
     assignForMonth.mutate(
       { user_id: targetUserId, year_month: yearMonth, work_style_id: Number(workStyleId) },
-      { onSuccess: () => setYearMonth('') },
+      {
+        onSuccess: () => {
+          if (autoGenerateShifts) {
+            const { from, to } = monthBoundaries(yearMonth)
+            generateShifts.mutate({ user_id: targetUserId, work_style_id: Number(workStyleId), from, to })
+          }
+          setYearMonth('')
+          setIsConfirming(false)
+          setAutoGenerateShifts(false)
+        },
+      },
     )
   }
 
@@ -394,10 +680,11 @@ function MonthlyWorkStyleAssignmentCard() {
         働き方が設定されていない月は、システムのデフォルト働き方にフォールバックする。
       </p>
       {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
+      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required>
-          <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={setTargetUserId} />
+          <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={handleUserChange} />
         </FormField>
 
         <FormField label="対象年月" htmlFor="monthly-work-style-year-month" required>
@@ -405,7 +692,7 @@ function MonthlyWorkStyleAssignmentCard() {
             id="monthly-work-style-year-month"
             type="month"
             value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
+            onChange={(e) => handleYearMonthChange(e.target.value)}
           />
         </FormField>
 
@@ -413,7 +700,7 @@ function MonthlyWorkStyleAssignmentCard() {
           <NativeSelect
             id="monthly-work-style-select"
             value={workStyleId}
-            onChange={(e) => setWorkStyleId(e.target.value)}
+            onChange={(e) => handleWorkStyleChange(e.target.value)}
           >
             <option value="">選択してください</option>
             {workStyles?.map((style) => (
@@ -425,13 +712,56 @@ function MonthlyWorkStyleAssignmentCard() {
         </FormField>
       </div>
 
-      <Button
-        isLoading={assignForMonth.isPending}
-        disabled={!targetUserId || !yearMonth || !workStyleId}
-        onClick={handleAssign}
-      >
-        割り当てる
-      </Button>
+      {!isConfirming ? (
+        <Button disabled={!targetUserId || !yearMonth || !workStyleId} onClick={() => setIsConfirming(true)}>
+          変更内容を確認する
+        </Button>
+      ) : (
+        <div className="mb-4 rounded-md border border-border p-4 text-sm">
+          <p className="mb-3 font-semibold text-foreground">変更内容の確認</p>
+
+          <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">対象社員</dt>
+            <dd className="text-foreground">{targetUser?.name ?? `社員ID ${targetUserId}`}</dd>
+            <dt className="text-muted-foreground">対象年月</dt>
+            <dd className="text-foreground">{yearMonth}</dd>
+            <dt className="text-muted-foreground">現在の働き方</dt>
+            <dd className="text-foreground">
+              {currentAssignment?.work_style?.name ?? '未設定(会社のデフォルトにフォールバック)'}
+            </dd>
+            <dt className="text-muted-foreground">変更後の働き方</dt>
+            <dd className="text-foreground">{selectedWorkStyle?.name ?? '-'}</dd>
+          </dl>
+
+          <ul className="mb-3 list-disc pl-5 text-xs text-muted-foreground">
+            <li>{yearMonth}より前の月の割当・勤怠には影響しません。</li>
+            <li>
+              {yearMonth}より後の月は自動的には引き継がれません。別途その月の働き方を割り当てる必要があります。
+            </li>
+            <li>
+              {yearMonth}内で既に打刻・日次編集済みの日の集計(残業・深夜等)は自動的には再計算されません。
+              反映するには対象日を日次編集から保存し直してください。
+            </li>
+          </ul>
+
+          <label className="mb-3 flex items-center gap-2 text-foreground">
+            <Checkbox
+              checked={autoGenerateShifts}
+              onCheckedChange={(checked) => setAutoGenerateShifts(checked === true)}
+            />
+            この働き方をもとに{yearMonth}の勤務予定を自動生成する(既存の勤務予定は上書きされます)
+          </label>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={assignForMonth.isPending || generateShifts.isPending} onClick={handleSave}>
+              この内容で保存する
+            </Button>
+            <Button variant="secondary" onClick={() => setIsConfirming(false)}>
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
 
       {targetUserId !== undefined && (
         <div className="mt-5 border-t border-border pt-4">
@@ -569,6 +899,321 @@ function ShiftPatternFormCard() {
       <Button isLoading={createShiftPattern.isPending} disabled={!code || !name} onClick={handleCreate}>
         シフトパターンを作成する
       </Button>
+    </Card>
+  )
+}
+
+/**
+ * 指示書 8.4節: 交代制勤務のローテーションパターンを登録する。
+ * A勤・B勤・C勤・休を1つの働き方の中の繰り返し周期としてまとめる(別々の働き方にしない)。
+ */
+function RotationPatternFormCard() {
+  const { data: workStyles } = useWorkStyles()
+  const { data: patterns } = useShiftPatterns()
+  const { data: rotationPatterns } = useRotationPatterns()
+  const createRotationPattern = useCreateRotationPattern()
+
+  const shiftBasedWorkStyles = (workStyles ?? []).filter((style) => style.is_shift_based)
+
+  const [workStyleId, setWorkStyleId] = useState('')
+  const [name, setName] = useState('')
+  const [items, setItems] = useState<string[]>([''])
+
+  const handleAddItem = () => setItems((prev) => [...prev, ''])
+  const handleRemoveItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
+  const handleItemChange = (index: number, shiftPatternId: string) =>
+    setItems((prev) => prev.map((item, i) => (i === index ? shiftPatternId : item)))
+
+  const handleCreate = () => {
+    createRotationPattern.mutate(
+      {
+        work_style_id: Number(workStyleId),
+        name,
+        items: items.map((shiftPatternId, index) => ({ sequence: index, shift_pattern_id: Number(shiftPatternId) })),
+      },
+      {
+        onSuccess: () => {
+          setWorkStyleId('')
+          setName('')
+          setItems([''])
+        },
+      },
+    )
+  }
+
+  const canCreate = workStyleId !== '' && name !== '' && items.length > 0 && items.every((item) => item !== '')
+
+  return (
+    <Card title="ローテーションパターン(指示書8.4節)">
+      {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
+
+      {(rotationPatterns ?? []).length === 0 ? (
+        <p className="mb-4 text-sm text-muted-foreground">ローテーションパターンはまだありません。</p>
+      ) : (
+        <ul className="mb-4 divide-y divide-border">
+          {rotationPatterns?.map((pattern) => (
+            <li key={pattern.id} className="py-2 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <strong className="font-semibold text-foreground">{pattern.name}</strong>
+                <span className="text-muted-foreground">周期{pattern.cycle_length}日</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {pattern.items.map((item) => item.shift_pattern_name ?? item.shift_pattern_code).join(' → ')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="mb-3 text-sm font-semibold text-foreground">ローテーションパターンを作成</h3>
+      <p className="mb-3 text-xs text-muted-foreground">
+        [A][A][休][B][B][休][C][C][休]のような繰り返し周期を、上から順番に登録する。
+      </p>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象の働き方(シフト制のみ)" htmlFor="rotation-pattern-work-style" required>
+          <NativeSelect
+            id="rotation-pattern-work-style"
+            value={workStyleId}
+            onChange={(e) => setWorkStyleId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {shiftBasedWorkStyles.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="ローテーションパターン名称" htmlFor="rotation-pattern-name" required>
+          <Input id="rotation-pattern-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </FormField>
+      </div>
+
+      <div className="mb-4 flex flex-col gap-2">
+        {items.map((item, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <span className="w-6 text-xs text-muted-foreground">{index + 1}</span>
+            <NativeSelect
+              aria-label={`${index + 1}日目のシフトパターン`}
+              value={item}
+              onChange={(e) => handleItemChange(index, e.target.value)}
+            >
+              <option value="">選択してください</option>
+              {patterns?.map((pattern) => (
+                <option key={pattern.id} value={pattern.id}>
+                  {pattern.name}
+                </option>
+              ))}
+            </NativeSelect>
+            {items.length > 1 && (
+              <Button variant="secondary" onClick={() => handleRemoveItem(index)}>
+                削除
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button variant="secondary" onClick={handleAddItem}>
+          周期に追加する
+        </Button>
+      </div>
+
+      <Button isLoading={createRotationPattern.isPending} disabled={!canCreate} onClick={handleCreate}>
+        ローテーションパターンを作成する
+      </Button>
+    </Card>
+  )
+}
+
+/**
+ * 指示書 8.5節〜8.9節: 社員をローテーションパターンに割り当て、開始日・開始位置から
+ * カレンダープレビューを確認したうえで、日別の勤務予定を一括生成する。
+ */
+function RotationAssignmentCard() {
+  const { data: rotationPatterns } = useRotationPatterns()
+  const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
+  const [rotationPatternId, setRotationPatternId] = useState('')
+  const [rotationStartDate, setRotationStartDate] = useState('')
+  const [rotationStartPosition, setRotationStartPosition] = useState('0')
+  const [generateFrom, setGenerateFrom] = useState('')
+  const [generateTo, setGenerateTo] = useState('')
+  const [overwriteMode, setOverwriteMode] = useState<'skip_edited' | 'overwrite_all'>('skip_edited')
+
+  const { data: currentAssignment } = useEmployeeRotationAssignment(targetUserId)
+  const assignRotation = useAssignEmployeeRotation()
+  const previewRotation = usePreviewRotationPattern()
+  const generateShifts = useGenerateRotationShiftAssignments()
+
+  const selectedPattern = rotationPatterns?.find((pattern) => String(pattern.id) === rotationPatternId)
+
+  const handleAssign = () => {
+    if (!targetUserId || !rotationPatternId || !rotationStartDate) return
+    assignRotation.mutate({
+      user_id: targetUserId,
+      rotation_pattern_id: Number(rotationPatternId),
+      rotation_start_date: rotationStartDate,
+      rotation_start_position: Number(rotationStartPosition),
+    })
+  }
+
+  const handlePreview = () => {
+    if (!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) return
+    previewRotation.mutate({
+      rotationPatternId: Number(rotationPatternId),
+      input: {
+        rotation_start_date: rotationStartDate,
+        rotation_start_position: Number(rotationStartPosition),
+        from: generateFrom,
+        to: generateTo,
+      },
+    })
+  }
+
+  const handleGenerate = () => {
+    if (!targetUserId || !generateFrom || !generateTo) return
+    generateShifts.mutate({
+      user_id: targetUserId,
+      from: generateFrom,
+      to: generateTo,
+      overwrite_mode: overwriteMode,
+    })
+  }
+
+  return (
+    <Card title="ローテーションの割当・生成(指示書8.5節〜8.8節)">
+      {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
+      {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
+      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象社員(ローテーション)" htmlFor="rotation-assignment-user" required>
+          <UserPicker id="rotation-assignment-user" value={targetUserId} onChange={setTargetUserId} />
+        </FormField>
+
+        <FormField label="ローテーションパターン" htmlFor="rotation-assignment-pattern" required>
+          <NativeSelect
+            id="rotation-assignment-pattern"
+            value={rotationPatternId}
+            onChange={(e) => setRotationPatternId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {rotationPatterns?.map((pattern) => (
+              <option key={pattern.id} value={pattern.id}>
+                {pattern.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="ローテーション開始日" htmlFor="rotation-assignment-start-date" required>
+          <Input
+            id="rotation-assignment-start-date"
+            type="date"
+            value={rotationStartDate}
+            onChange={(e) => setRotationStartDate(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="開始位置(0始まり)" htmlFor="rotation-assignment-start-position" required>
+          <Input
+            id="rotation-assignment-start-position"
+            type="number"
+            min={0}
+            max={selectedPattern ? selectedPattern.cycle_length - 1 : undefined}
+            value={rotationStartPosition}
+            onChange={(e) => setRotationStartPosition(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">開始日にローテーションの何番目(0始まり)が来るかを指定する。</p>
+        </FormField>
+      </div>
+
+      {currentAssignment && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          現在の割当: {currentAssignment.rotation_pattern_name}({currentAssignment.rotation_start_date}を基準)
+        </p>
+      )}
+
+      <Button
+        isLoading={assignRotation.isPending}
+        disabled={!targetUserId || !rotationPatternId || !rotationStartDate}
+        onClick={handleAssign}
+      >
+        ローテーションを割り当てる
+      </Button>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <h3 className="mb-2 text-sm font-semibold text-foreground">カレンダープレビュー・生成</h3>
+
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="生成開始日" htmlFor="rotation-generate-from" required>
+            <Input
+              id="rotation-generate-from"
+              type="date"
+              value={generateFrom}
+              onChange={(e) => setGenerateFrom(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="生成終了日" htmlFor="rotation-generate-to" required>
+            <Input
+              id="rotation-generate-to"
+              type="date"
+              value={generateTo}
+              onChange={(e) => setGenerateTo(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-3">
+          <Button
+            variant="secondary"
+            isLoading={previewRotation.isPending}
+            disabled={!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo}
+            onClick={handlePreview}
+          >
+            プレビューする
+          </Button>
+        </div>
+
+        {previewRotation.data && (
+          <ul className="mb-4 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+            {previewRotation.data.days.map((day: RotationPreviewDay) => (
+              <li key={day.date} className="text-foreground">
+                {day.date}: {day.shift_pattern_name ?? day.shift_pattern_code ?? '-'}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <FormField label="再生成時の扱い" htmlFor="rotation-overwrite-mode">
+          <NativeSelect
+            id="rotation-overwrite-mode"
+            value={overwriteMode}
+            onChange={(e) => setOverwriteMode(e.target.value as 'skip_edited' | 'overwrite_all')}
+          >
+            <option value="skip_edited">未編集日のみ再生成する(安全)</option>
+            <option value="overwrite_all">個別上書きも含めてすべて再生成する</option>
+          </NativeSelect>
+          <p className="mt-1 text-xs text-muted-foreground">実績のある日・締め済みの日はどちらを選んでも上書きされない。</p>
+        </FormField>
+
+        <Button
+          isLoading={generateShifts.isPending}
+          disabled={!targetUserId || !generateFrom || !generateTo}
+          onClick={handleGenerate}
+        >
+          勤務予定を生成する
+        </Button>
+
+        {generateShifts.data && (
+          <p className="mt-3 text-sm text-foreground">
+            {generateShifts.data.generated_count}件生成しました。
+            {generateShifts.data.skipped_dates.length > 0 &&
+              `(${generateShifts.data.skipped_dates.length}件は既に実績・個別編集があるためスキップしました)`}
+          </p>
+        )}
+      </div>
     </Card>
   )
 }
@@ -733,14 +1378,18 @@ function ShiftScheduleBoardCard() {
 /**
  * UC-C002: 勤務形態の作成・一覧。UC-C003: 個別シフトの生成・確認。
  * UC-C004: 3交代制シフトパターンの作成・日別割当・公開前確認・公開。
+ * デフォルト働き方が未設定の間は初回オンボーディングを表示する(指示書 12.1節)。
  */
 export function WorkStylesAndShiftsPage() {
   return (
     <div className="flex flex-col gap-6">
+      <WorkStyleOnboardingCard />
       <WorkStyleFormCard />
       <MonthlyWorkStyleAssignmentCard />
       <ShiftGenerationCard />
       <ShiftPatternFormCard />
+      <RotationPatternFormCard />
+      <RotationAssignmentCard />
       <ShiftScheduleBoardCard />
     </div>
   )

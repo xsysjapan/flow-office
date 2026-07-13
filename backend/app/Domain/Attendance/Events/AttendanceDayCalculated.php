@@ -13,7 +13,7 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class AttendanceDayCalculated implements DomainEvent
 {
     /**
-     * @param  array<string, int>  $calculation
+     * @param  array<string, int|bool|null>  $calculation
      */
     public function __construct(
         public readonly int $attendanceDayId,

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
+use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExportController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
@@ -92,6 +94,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
     Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
+    Route::get('/rotation-patterns', [RotationPatternController::class, 'index']);
+    Route::get('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'show']);
     Route::get('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'index']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
@@ -99,9 +103,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/work-calendars/{workCalendar}/days', [WorkCalendarController::class, 'putDays']);
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
+        Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
+        Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
+        Route::delete('/user-work-style-monthly-assignments/{userWorkStyleMonthlyAssignment}', [UserWorkStyleMonthlyAssignmentController::class, 'destroy']);
 
         // --- 3交代制シフト表 (docs/08-usecases-calendar-shift.md UC-C004) ---
         Route::post('/shift-patterns', [ShiftPatternController::class, 'store']);
@@ -109,6 +116,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employee-shift-assignments/assign-pattern', [EmployeeShiftAssignmentController::class, 'assignPattern']);
         Route::get('/employee-shift-assignments/review', [EmployeeShiftAssignmentController::class, 'review']);
         Route::post('/employee-shift-assignments/publish', [EmployeeShiftAssignmentController::class, 'publish']);
+
+        // --- 交代制ローテーション (指示書 8章) ---
+        Route::post('/rotation-patterns', [RotationPatternController::class, 'store']);
+        Route::post('/rotation-patterns/{rotationPattern}/preview', [RotationPatternController::class, 'preview']);
+        Route::post('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'store']);
+        Route::post('/employee-rotation-assignments/generate', [EmployeeRotationAssignmentController::class, 'generate']);
     });
 
     // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---

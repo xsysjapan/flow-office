@@ -2,14 +2,15 @@ import type { ReactNode } from 'react'
 import { Card as UiCard, CardAction, CardContent, CardHeader, CardTitle } from '../ui/card'
 
 export interface CardProps {
+  id?: string
   title?: ReactNode
   actions?: ReactNode
   children: ReactNode
 }
 
-export function Card({ title, actions, children }: CardProps) {
+export function Card({ id, title, actions, children }: CardProps) {
   return (
-    <UiCard>
+    <UiCard id={id}>
       {(title || actions) && (
         <CardHeader>
           {title && <CardTitle>{title}</CardTitle>}

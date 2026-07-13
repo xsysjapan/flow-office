@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { Role, User } from '../api/types'
+import type { Role, User, WorkStyle } from '../api/types'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
 const targetUser: User = {
@@ -24,10 +24,41 @@ const roles: Role[] = [
   { id: 6, code: 'admin', name: 'システム管理者' },
 ]
 
+const defaultWorkStyle: WorkStyle = {
+  id: 1,
+  code: 'standard',
+  name: '通常勤務',
+  work_time_system: 'fixed',
+  prescribed_daily_minutes: 480,
+  prescribed_weekly_minutes: 2400,
+  default_start_time: '09:00',
+  default_end_time: '18:00',
+  default_break_minutes: 60,
+  calendar_id: 1,
+  is_shift_based: false,
+  is_default: true,
+  system_generated: true,
+  legal_holiday_rule: 'weekly',
+  four_week_period_start_date: null,
+  max_consecutive_work_days: null,
+  settlement_start_day: null,
+  core_time_enabled: false,
+  core_time_start: null,
+  core_time_end: null,
+  flexible_time_start: null,
+  flexible_time_end: null,
+  applied_employee_count: null,
+  active_shift_pattern_count: null,
+  configuration_warnings: [],
+  updated_at: null,
+}
+
 function withSeeded(user: User) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['users', 'detail', user.id], user)
   queryClient.setQueryData(['roles'], roles)
+  queryClient.setQueryData(['work-styles'], [defaultWorkStyle])
+  queryClient.setQueryData(['user-work-style-monthly-assignments', user.id], [])
 
   return function Decorator() {
     return (

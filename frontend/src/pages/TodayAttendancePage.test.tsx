@@ -102,4 +102,40 @@ describe('TodayAttendancePage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
   })
+
+  it('shows the flex settlement summary card when the user is on a flex work style', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: {
+        settlement_period_start: '2026-07-01',
+        settlement_period_end: '2026-07-31',
+        required_minutes: 10560,
+        actual_minutes: 4800,
+        remaining_minutes: 5760,
+        remaining_working_days: 12,
+        per_day_required_minutes: 480,
+        core_time_violation_days: 1,
+        late_night_minutes: 0,
+        legal_holiday_work_minutes: 0,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('今月の清算期間(フレックスタイム制)')).toBeInTheDocument()
+    expect(screen.getByText('10560分')).toBeInTheDocument()
+    expect(screen.getByText('1日')).toBeInTheDocument()
+  })
+
+  it('does not show the flex settlement summary card for non-flex work styles', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({ days: [], month: null, flex_settlement_summary: null })
+
+    renderPage()
+
+    await screen.findByRole('button', { name: '出勤' })
+    expect(screen.queryByText('今月の清算期間(フレックスタイム制)')).not.toBeInTheDocument()
+  })
 })

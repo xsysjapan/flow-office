@@ -33,5 +33,9 @@ class DatabaseSeeder extends Seeder
 
         $adminRole = Role::query()->where('code', Role::ADMIN)->firstOrFail();
         $admin->roles()->syncWithoutDetaching([$adminRole->id]);
+
+        $this->call([
+            DefaultWorkStyleSeeder::class,
+        ]);
     }
 }

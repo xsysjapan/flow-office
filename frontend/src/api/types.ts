@@ -96,6 +96,8 @@ export interface AttendanceDailyCalculation {
   legal_holiday_work_minutes: number
   company_holiday_work_minutes: number
   legal_holiday_late_night_minutes: number
+  /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
+  core_time_violation: boolean
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
@@ -167,6 +169,20 @@ export interface AttendanceMonth {
   closed_at: string | null
   snapshot: Record<string, number> | null
   legal_holiday_warnings: LegalHolidayWarning[]
+}
+
+/** フレックスタイム制の清算期間ダッシュボード(指示書 7.6節)。参考情報であり、表示のたびに都度計算する。 */
+export interface FlexSettlementSummary {
+  settlement_period_start: string
+  settlement_period_end: string
+  required_minutes: number
+  actual_minutes: number
+  remaining_minutes: number
+  remaining_working_days: number
+  per_day_required_minutes: number
+  core_time_violation_days: number
+  late_night_minutes: number
+  legal_holiday_work_minutes: number
 }
 
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
@@ -282,10 +298,28 @@ export interface WorkStyle {
   default_break_minutes: number
   calendar_id: number
   is_shift_based: boolean
+  /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
+  is_default: boolean
+  /** 初回オンボーディングで自動生成された働き方かどうか。 */
+  system_generated: boolean
   legal_holiday_rule: LegalHolidayRule
   four_week_period_start_date: string | null
   /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */
   max_consecutive_work_days: number | null
+  /** フレックスタイム制(work_time_system=flex)の清算期間の起算日(1〜31)。未設定なら1日。 */
+  settlement_start_day: number | null
+  core_time_enabled: boolean
+  core_time_start: string | null
+  core_time_end: string | null
+  /** 勤務可能時間帯(フレキシブルタイム)。 */
+  flexible_time_start: string | null
+  flexible_time_end: string | null
+  /** 指示書 16.1節: 一覧画面の管理者向け集計列。GET /work-stylesでのみ設定される。 */
+  applied_employee_count: number | null
+  /** シフト制の働き方で使用中の勤務シフト(shift_patterns)数。シフト制でない場合はnull。 */
+  active_shift_pattern_count: number | null
+  configuration_warnings: string[]
+  updated_at: string | null
 }
 
 /** ユーザーの月次働き方割当(docs/16-database-schema.md)。10月までは通常勤務、11月から
@@ -315,6 +349,8 @@ export interface EmployeeShiftAssignment {
   planned_break_minutes: number
   /** UC-C004: シフトパターン割当は公開(手順6)まで下書き扱い。カレンダー一括生成は常にtrue。 */
   is_published: boolean
+  /** 個別にシフトパターンを上書きした日かどうか。ローテーションの再生成では上書きされない。 */
+  is_manually_overridden: boolean
 }
 
 /** UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)。 */
@@ -327,6 +363,42 @@ export interface ShiftPattern {
   crosses_midnight: boolean
   break_minutes: number
   prescribed_work_minutes: number
+}
+
+/** 指示書 8.4節: ローテーションパターンを構成する1つの順序。 */
+export interface RotationPatternItem {
+  sequence: number
+  shift_pattern_id: number
+  shift_pattern_name: string | null
+  shift_pattern_code: string | null
+}
+
+/** 指示書 8.4節: 交代制勤務のローテーションパターン(A勤・B勤・C勤・休の繰り返し周期)。 */
+export interface RotationPattern {
+  id: number
+  work_style_id: number
+  name: string
+  cycle_length: number
+  items: RotationPatternItem[]
+}
+
+/** 指示書 8.9節: ローテーションプレビューの1日分。 */
+export interface RotationPreviewDay {
+  date: string
+  sequence: number
+  shift_pattern_id: number | null
+  shift_pattern_name: string | null
+  shift_pattern_code: string | null
+}
+
+/** 指示書 8.5節: 社員ごとのローテーション開始基準。 */
+export interface EmployeeRotationAssignment {
+  id: number
+  user_id: number
+  rotation_pattern_id: number
+  rotation_pattern_name: string | null
+  rotation_start_date: string
+  rotation_start_position: number
 }
 
 /** UC-C004 手順5: シフト表公開前の警告(法定休日不足・連続勤務・月間予定時間)。 */

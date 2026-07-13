@@ -4,8 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as rolesApi from '../api/roles'
+import * as userWorkStyleMonthlyAssignmentsApi from '../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../api/users'
-import type { Role, User } from '../api/types'
+import * as workStylesApi from '../api/workStyles'
+import type { Role, User, UserWorkStyleMonthlyAssignment, WorkStyle } from '../api/types'
+import { formatDate } from '../utils/weekDates'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
 const targetUser: User = {
@@ -28,10 +31,51 @@ const roles: Role[] = [
   { id: 6, code: 'admin', name: 'システム管理者' },
 ]
 
-function renderPage(user: User) {
+const defaultWorkStyle: WorkStyle = {
+  id: 1,
+  code: 'standard',
+  name: '通常勤務',
+  work_time_system: 'fixed',
+  prescribed_daily_minutes: 480,
+  prescribed_weekly_minutes: 2400,
+  default_start_time: '09:00',
+  default_end_time: '18:00',
+  default_break_minutes: 60,
+  calendar_id: 1,
+  is_shift_based: false,
+  is_default: true,
+  system_generated: true,
+  legal_holiday_rule: 'weekly',
+  four_week_period_start_date: null,
+  max_consecutive_work_days: null,
+  settlement_start_day: null,
+  core_time_enabled: false,
+  core_time_start: null,
+  core_time_end: null,
+  flexible_time_start: null,
+  flexible_time_end: null,
+  applied_employee_count: null,
+  active_shift_pattern_count: null,
+  configuration_warnings: [],
+  updated_at: null,
+}
+
+const flexWorkStyle: WorkStyle = { ...defaultWorkStyle, id: 2, code: 'flex', name: 'フレックスタイム制', is_default: false }
+
+function renderPage(
+  user: User,
+  {
+    workStyles = [defaultWorkStyle, flexWorkStyle],
+    workStyleHistory = [],
+  }: { workStyles?: WorkStyle[]; workStyleHistory?: UserWorkStyleMonthlyAssignment[] } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(user)
   vi.spyOn(rolesApi, 'fetchRoles').mockResolvedValue(roles)
+  vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue(workStyles)
+  vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue(
+    workStyleHistory,
+  )
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -101,5 +145,61 @@ describe('UserRoleEditPage', () => {
     await waitFor(() =>
       expect(usersApi.updateUserHireDate).toHaveBeenCalledWith(1, '2024-04-01'),
     )
+  })
+
+  it('defaults to using the company default work style when no monthly assignment exists', async () => {
+    renderPage(targetUser)
+
+    expect(await screen.findByText('働き方(' + formatDate(new Date()).slice(0, 7) + ')')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /会社のデフォルトを使用/ })).toBeChecked()
+    expect(screen.getByText(/通常勤務/)).toBeInTheDocument()
+  })
+
+  it('assigns a specific work style for the current month', async () => {
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
+      id: 10,
+      user_id: 1,
+      year_month: formatDate(new Date()).slice(0, 7),
+      work_style_id: 2,
+      work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
+      assigned_by_user_id: 99,
+    })
+    renderPage(targetUser)
+
+    await userEvent.click(await screen.findByRole('radio', { name: '別の働き方を指定' }))
+    await userEvent.selectOptions(screen.getByLabelText('指定する働き方'), 'フレックスタイム制')
+    await userEvent.click(screen.getByRole('button', { name: '働き方を保存する' }))
+
+    await waitFor(() =>
+      expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
+        user_id: 1,
+        year_month: formatDate(new Date()).slice(0, 7),
+        work_style_id: 2,
+      }),
+    )
+  })
+
+  it('reverts to the company default by removing the current months assignment', async () => {
+    const currentYearMonth = formatDate(new Date()).slice(0, 7)
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'removeUserWorkStyleMonthlyAssignment').mockResolvedValue(undefined)
+    renderPage(targetUser, {
+      workStyleHistory: [
+        {
+          id: 42,
+          user_id: 1,
+          year_month: currentYearMonth,
+          work_style_id: 2,
+          work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
+          assigned_by_user_id: 99,
+        },
+      ],
+    })
+
+    expect(await screen.findByRole('radio', { name: '別の働き方を指定' })).toBeChecked()
+
+    await userEvent.click(screen.getByRole('radio', { name: /会社のデフォルトを使用/ }))
+    await userEvent.click(screen.getByRole('button', { name: '働き方を保存する' }))
+
+    await waitFor(() => expect(userWorkStyleMonthlyAssignmentsApi.removeUserWorkStyleMonthlyAssignment).toHaveBeenCalledWith(42))
   })
 })

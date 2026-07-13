@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   assignUserWorkStyleForMonth,
   fetchUserWorkStyleMonthlyAssignments,
+  removeUserWorkStyleMonthlyAssignment,
   type AssignUserWorkStyleForMonthInput,
 } from '../api/userWorkStyleMonthlyAssignments'
 
@@ -22,6 +23,17 @@ export function useAssignUserWorkStyleForMonth() {
     mutationFn: (input: AssignUserWorkStyleForMonthInput) => assignUserWorkStyleForMonth(input),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY(variables.user_id) })
+    },
+  })
+}
+
+export function useRemoveUserWorkStyleMonthlyAssignment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id }: { id: number; userId: number }) => removeUserWorkStyleMonthlyAssignment(id),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY(variables.userId) })
     },
   })
 }

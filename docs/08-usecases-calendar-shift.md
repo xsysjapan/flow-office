@@ -18,9 +18,13 @@
 2. 雇用区分(正社員・契約社員・パート・アルバイト・嘱託等)を選択する(`employment_categories`。
    任意設定。労働時間制度とは独立した軸であり、雇用区分だけで残業計算・適用除外を決定しない)
 3. 労働時間制度(`work_time_system`: 通常勤務`fixed` / 1か月単位変形労働時間制
-   `monthly_variable` / 裁量労働制`discretionary` / 管理監督者`manager_supervisor`)を設定する
+   `monthly_variable` / 裁量労働制`discretionary` / 管理監督者`manager_supervisor` /
+   フレックスタイム制`flex`)を設定する
 4. 所定労働時間、所定休憩、週所定労働時間を設定する。裁量労働制の場合はみなし時間
-   (`deemed_daily_minutes`)も設定する
+   (`deemed_daily_minutes`)も設定する。フレックスタイム制の場合は清算期間の起算日
+   (`settlement_start_day`)、コアタイム(`core_time_enabled`/`core_time_start`/
+   `core_time_end`)、勤務可能時間帯(`flexible_time_start`/`flexible_time_end`)を設定する
+   (docs/07-usecases-attendance.md「フレックスタイム制」参照)
 5. 対応するカレンダーを紐づける(任意。シフト制などカレンダーに依存しない勤務形態は
    `calendar_id`を未設定にできる)
 6. 残業計算ルールを設定する
@@ -32,6 +36,10 @@
 労働時間制度の組み合わせごとに別の`work_styles`レコードとして登録する。シフト制
 (`is_shift_based`)はそれ自体が労働時間制度ではなく、`fixed`/`monthly_variable`と組み合わせて
 使うスケジュールの与え方である(3交代制など)。
+
+一覧画面(`WorkStylesAndShiftsPage.tsx`)には、指示書16.1節の管理者向け集計列として
+適用社員数・使用中の勤務シフト数・設定不備の警告・最終更新日を表示する
+(docs/16-database-schema.md「一覧画面の集計列」参照)。
 
 裁量労働制・管理監督者は労働時間の算定方法・残業計算ルールの適用対象から外れる特殊な制度だが、
 法定休日を与える義務(UC-C005)は労働時間制と無関係に適用されるため、これらのシフト制勤務者にも
@@ -148,6 +156,36 @@ UC-C005のチェックは適用する。
 既にある出勤日(`attendance_days`)の日次計算を再実行する。ただし締め・承認済みの日は
 対象外とする(`AttendanceEditGuard`)。指定・再指定は対象週を含む月が承認済み以降になるまで
 いつでも行える。
+
+## UC-C008: 交代制勤務のローテーションパターンから勤務予定を自動生成する
+
+1. 管理者がシフト制の勤務形態を選び、ローテーションパターン(`rotation_patterns`)を作成する。
+   A勤・B勤・C勤・休のような繰り返し周期を、`shift_patterns`から順番(`sequence`、0始まり)に
+   選んで登録する(例: A・A・休・B・B・休・C・C・休の9日周期)。A勤・B勤・C勤を別々の
+   働き方として作らない(指示書 8.1節)
+2. 管理者が社員ごとにローテーション基準(`employee_rotation_assignments`: ローテーション
+   パターン・開始日・開始位置)を割り当てる。1人につき現在有効な基準は1件のみで、
+   切り替え時は上書きする
+3. 保存前に、開始日・開始位置から実際のカレンダーへ展開した結果をプレビューできる
+   (`POST /rotation-patterns/{id}/preview`。永続化しない)
+4. 管理者が対象期間(開始日〜終了日)を指定して、日別の勤務予定(`employee_shift_assignments`)
+   を一括生成する。生成された行は下書き(`is_published=false`)扱いで、UC-C004手順4〜6の
+   公開前チェック・公開フローをそのまま利用できる
+5. 生成後、個別の日をUC-C004手順3のシフトパターン割当で上書きできる
+   (`employee_shift_assignments.is_manually_overridden=true`になる)
+6. 再生成時は次のいずれかを選ぶ(指示書 8.8節)
+   - 未編集日のみ再生成する(既定・安全側): 個別上書き済みの日は変更しない
+   - 個別上書きも含めてすべて再生成する: 個別上書きも生成結果で上書きする
+   - どちらのモードでも、既に勤務実績(打刻・実績入力)がある日、および月次承認済み以降で
+     ロックされている日(`AttendanceEditGuard`)は自動上書きしない(スキップする)
+
+日跨ぎ勤務(`shift_patterns.crosses_midnight`)は`planned_start_at`/`planned_end_at`を
+datetimeで保持することでUC-C004と同じ方法で扱う。勤務日の帰属は勤務開始日を原則とする
+(生成した`employee_shift_assignments.work_date`がその勤務の所属日)。
+
+班単位管理(複数社員に同じローテーションを一括割当てる)は将来拡張とし、初期実装は
+社員個別の割当のみとする。データモデル(`employee_rotation_assignments`が社員単位で独立)は
+将来の班単位拡張を妨げない構造にしている。
 
 ## 注意点
 

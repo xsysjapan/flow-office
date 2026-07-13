@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { AttendanceDay, AttendanceMonth, AttendancePunch } from './types'
+import type { AttendanceDay, AttendanceMonth, AttendancePunch, FlexSettlementSummary } from './types'
 
 export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
@@ -65,7 +65,11 @@ export function deletePunch(id: number, reason: string): Promise<AttendancePunch
   return apiFetch(`/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
-export function fetchMonth(yearMonth: string): Promise<{ days: AttendanceDay[]; month: AttendanceMonth | null }> {
+export function fetchMonth(yearMonth: string): Promise<{
+  days: AttendanceDay[]
+  month: AttendanceMonth | null
+  flex_settlement_summary: FlexSettlementSummary | null
+}> {
   return apiFetch(`/attendance/months/${yearMonth}`)
 }
 
