@@ -38,7 +38,7 @@ class ApproveWorkflowRequestHandler implements CommandHandler
         $workflowRequest->approved_at = Carbon::now();
         $workflowRequest->save();
 
-        // このイベントを BackOfficeTaskAutoCreationProjector が購読し、
+        // このイベントを App\Listeners\CreateBackOfficeTaskOnApproval が購読し、
         // 必要な申請種別ならバックオフィスタスクを自動生成する (UC-B001)。
         $this->eventStore->append(
             aggregateType: 'workflow_request',
