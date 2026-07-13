@@ -20,3 +20,7 @@ services:
       context: ./mock-oidc
     ports:
       - "9000:9000"
+    environment:
+      # ログイン画面のユーザー選択肢をbackendのDBから取得する(mock-oidc/server.js参照)。
+      # 未設定/取得失敗時は静的な一覧にフォールバックする。
+      MOCK_USERS_API_URL: http://app:8000/api/dev/mock-users

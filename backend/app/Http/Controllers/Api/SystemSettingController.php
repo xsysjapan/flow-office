@@ -15,13 +15,14 @@ class SystemSettingController extends Controller
 {
     public function show(): SystemSettingResource
     {
-        return new SystemSettingResource(SystemSetting::current());
+        return new SystemSettingResource(SystemSetting::current()->load('defaultWorkStyle'));
     }
 
     public function update(Request $request): SystemSettingResource
     {
         $data = $request->validate([
             'default_timezone' => ['required', 'timezone'],
+            'default_work_style_id' => ['nullable', 'integer', 'exists:work_styles,id'],
             'attendance_submission_deadline_day' => ['integer', 'min:1', 'max:31'],
             'attendance_month_close_deadline_day' => ['integer', 'min:1', 'max:31'],
         ]);
@@ -29,6 +30,6 @@ class SystemSettingController extends Controller
         $setting = SystemSetting::current();
         $setting->update($data);
 
-        return new SystemSettingResource($setting);
+        return new SystemSettingResource($setting->load('defaultWorkStyle'));
     }
 }

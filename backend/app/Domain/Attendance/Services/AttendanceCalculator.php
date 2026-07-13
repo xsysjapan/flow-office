@@ -3,6 +3,8 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
+use App\Models\SystemSetting;
+use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -27,6 +29,11 @@ use Illuminate\Support\Carbon;
  *   指定または自動推定した日かどうかで判定する。
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
  *   (WeeklyOvertimeCalculator)として別途都度計算する。
+ * - その日の勤務予定(employee_shift_assignments)に働き方が紐づいていない場合でも
+ *   勤怠は記録できる。その際の働き方は、(1) その月に割り当てられた働き方
+ *   (user_work_style_monthly_assignments)、(2) それも無ければシステム全体設定の
+ *   デフォルト働き方(system_settings.default_work_style_id)、の順にフォールバックする
+ *   (docs/08-usecases-calendar-shift.md参照)。どちらも無ければ所定労働時間0扱いになる。
  */
 class AttendanceCalculator
 {
@@ -62,7 +69,7 @@ class AttendanceCalculator
         }
 
         $shift = $day->shiftAssignment;
-        $workStyle = $shift?->workStyle;
+        $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 
         $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
@@ -127,6 +134,24 @@ class AttendanceCalculator
             'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
         ];
+    }
+
+    /**
+     * その日の勤務予定に働き方が紐づいていない場合のフォールバック先を解決する。
+     * その月に割り当てられた働き方 → システム全体設定のデフォルト働き方、の順で探す。
+     */
+    private function resolveFallbackWorkStyle(AttendanceDay $day): ?WorkStyle
+    {
+        $monthlyAssignment = UserWorkStyleMonthlyAssignment::query()
+            ->where('user_id', $day->user_id)
+            ->where('year_month', $day->work_date->format('Y-m'))
+            ->first();
+
+        if ($monthlyAssignment !== null) {
+            return $monthlyAssignment->workStyle;
+        }
+
+        return SystemSetting::current()->defaultWorkStyle;
     }
 
     private function lateNightOverlapMinutes(Carbon $start, Carbon $end): int

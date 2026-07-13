@@ -10,12 +10,14 @@ use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
+use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
 use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
 use App\Http\Controllers\Api\WorkStyleController;
@@ -32,6 +34,11 @@ Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
+
+// mock-oidc(ローカル開発用OIDCモックサーバー)がログイン画面のユーザー一覧を取得するための
+// 開発専用エンドポイント。認証不要(ログイン前に呼ばれるため)。MICROSOFT_MOCK_ENABLED=false
+// では404を返す(MockOidcUserController参照)。
+Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
@@ -85,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
     Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
+    Route::get('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'index']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
         Route::post('/work-calendars/{workCalendar}/publish', [WorkCalendarController::class, 'publish']);
@@ -93,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
+        Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
 
         // --- 3交代制シフト表 (docs/08-usecases-calendar-shift.md UC-C004) ---
         Route::post('/shift-patterns', [ShiftPatternController::class, 'store']);

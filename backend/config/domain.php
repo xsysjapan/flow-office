@@ -4,6 +4,7 @@ use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
+use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
@@ -31,6 +32,7 @@ use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
+use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
@@ -141,6 +143,7 @@ return [
         PublishWorkCalendar::class => PublishWorkCalendarHandler::class,
         UpdateWorkCalendarDays::class => UpdateWorkCalendarDaysHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
+        AssignUserWorkStyleForMonth::class => AssignUserWorkStyleForMonthHandler::class,
         CreateShiftPattern::class => CreateShiftPatternHandler::class,
         UpdateShiftPattern::class => UpdateShiftPatternHandler::class,
         GenerateEmployeeShiftAssignments::class => GenerateEmployeeShiftAssignmentsHandler::class,
