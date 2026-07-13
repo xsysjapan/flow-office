@@ -233,6 +233,23 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 割当は変更されずに履歴として残る(`user_id` + `year_month`のunique制約。月次で
 `AssignUserWorkStyleForMonth`コマンドにより追加・更新する)。
 
+月次の割当は自動的には後続の月へ引き継がれない(対象の年月に行が無ければ
+`system_settings.default_work_style_id`にフォールバックする)ため、恒常的な切り替えは
+対象月以降の各月を個別に割り当てる必要がある。フロント(`WorkStylesAndShiftsPage.tsx`
+`MonthlyWorkStyleAssignmentCard`)は保存前に、対象月の現在の働き方→変更後の働き方の
+差分と、次の2点を影響範囲として表示する(指示書 14章)。
+
+- 対象月より前の月の割当・勤怠には影響しない。
+- 対象月内で既に打刻・日次編集済みの日の`attendance_daily_calculations`は、働き方の
+  割当を変更しただけでは自動的に再計算されない(`AttendanceCalculator`はClockOut/
+  EditAttendanceDay等のコマンド実行時にのみ呼ばれるため)。反映するには対象日を
+  日次編集から保存し直す必要がある。
+
+保存時に「この働き方をもとに勤務予定を自動生成する」を選択すると、対象月の1日〜末日で
+`GenerateEmployeeShiftAssignments`(UC-C003)を続けて実行する。この一括生成は既存の
+`employee_shift_assignments`を条件なく上書きするため(打刻・実績の有無を見ない)、
+既に実績のある日を含む月に対して安易に使わないよう画面上で明示する。
+
 `employee_shift_assignments`にその日の`work_style_id`が無い場合、勤怠計算
 (`AttendanceCalculator`)はまずその勤務日が属する年月の本テーブルの割当を参照し、
 それも無ければ`system_settings.default_work_style_id`にフォールバックする。

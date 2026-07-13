@@ -285,6 +285,7 @@ describe('WorkStylesAndShiftsPage', () => {
       links: { next: null, prev: null },
     }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
       id: 1,
       user_id: 5,
@@ -294,6 +295,19 @@ describe('WorkStylesAndShiftsPage', () => {
       assigned_by_user_id: 1,
     })
     renderPage()
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
+    await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
+
+    expect(await screen.findByText('変更内容の確認')).toBeInTheDocument()
+    expect(screen.getByText('未設定(会社のデフォルトにフォールバック)')).toBeInTheDocument()
+
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
       {
         id: 1,
@@ -304,14 +318,7 @@ describe('WorkStylesAndShiftsPage', () => {
         assigned_by_user_id: 1,
       },
     ])
-    await screen.findByText('標準勤務', { selector: 'strong' })
-
-    await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
-    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
-    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
-    await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
-    await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
+    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存する' }))
 
     await waitFor(() =>
       expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
@@ -322,6 +329,82 @@ describe('WorkStylesAndShiftsPage', () => {
     )
 
     expect(await screen.findByText('2026-11: 標準勤務')).toBeInTheDocument()
+  })
+
+  it('shows the current work style for the month and hides the confirmation when an input changes', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
+      {
+        id: 1,
+        user_id: 5,
+        year_month: '2026-11',
+        work_style_id: 1,
+        work_style: { id: 1, code: 'standard', name: '標準勤務' },
+        assigned_by_user_id: 1,
+      },
+    ])
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
+    await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
+
+    expect(await screen.findByText('変更内容の確認')).toBeInTheDocument()
+    expect(screen.getAllByText('標準勤務').some((el) => el.tagName === 'DD')).toBe(true)
+
+    await userEvent.type(screen.getByLabelText('対象年月'), '2026-12')
+
+    expect(screen.queryByText('変更内容の確認')).not.toBeInTheDocument()
+  })
+
+  it('auto-generates shift assignments for the month when the option is checked', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
+    vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
+      id: 2,
+      user_id: 5,
+      year_month: '2026-11',
+      work_style_id: 1,
+      work_style: { id: 1, code: 'standard', name: '標準勤務' },
+      assigned_by_user_id: 1,
+    })
+    vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockResolvedValue([])
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
+    await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
+    await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))
+    await userEvent.click(screen.getByRole('button', { name: 'この内容で保存する' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.generateShiftAssignments).toHaveBeenCalledWith({
+        user_id: 5,
+        work_style_id: 1,
+        from: '2026-11-01',
+        to: '2026-11-30',
+      }),
+    )
   })
 
   it('creates a shift pattern with the entered values', async () => {

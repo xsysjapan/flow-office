@@ -20,6 +20,7 @@ import {
   useAssignUserWorkStyleForMonth,
   useUserWorkStyleMonthlyAssignments,
 } from '../hooks/useUserWorkStyleMonthlyAssignments'
+import { useUser } from '../hooks/useUsers'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
 import {
   useCreateDefaultWorkStyle,
@@ -28,6 +29,13 @@ import {
   useWorkStyles,
 } from '../hooks/useWorkStyles'
 import type { LegalHolidayRule, WorkStyle } from '../api/types'
+
+/** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
+function monthBoundaries(yearMonth: string): { from: string; to: string } {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const lastDay = new Date(year, month, 0).getDate()
+  return { from: `${yearMonth}-01`, to: `${yearMonth}-${String(lastDay).padStart(2, '0')}` }
+}
 
 const STANDARD_WORK_STYLE_DEFAULTS = {
   name: '通常勤務',
@@ -602,15 +610,47 @@ function MonthlyWorkStyleAssignmentCard() {
   const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
   const [yearMonth, setYearMonth] = useState('')
   const [workStyleId, setWorkStyleId] = useState('')
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [autoGenerateShifts, setAutoGenerateShifts] = useState(false)
 
+  const { data: targetUser } = useUser(targetUserId ?? NaN)
   const { data: history, isLoading: isLoadingHistory } = useUserWorkStyleMonthlyAssignments(targetUserId)
   const assignForMonth = useAssignUserWorkStyleForMonth()
+  const generateShifts = useGenerateShiftAssignments()
 
-  const handleAssign = () => {
+  const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
+  const selectedWorkStyle = workStyles?.find((style) => String(style.id) === workStyleId)
+
+  const handleUserChange = (userId: number | undefined) => {
+    setTargetUserId(userId)
+    setIsConfirming(false)
+  }
+
+  const handleYearMonthChange = (value: string) => {
+    setYearMonth(value)
+    setIsConfirming(false)
+  }
+
+  const handleWorkStyleChange = (value: string) => {
+    setWorkStyleId(value)
+    setIsConfirming(false)
+  }
+
+  const handleSave = () => {
     if (!targetUserId || !yearMonth || !workStyleId) return
     assignForMonth.mutate(
       { user_id: targetUserId, year_month: yearMonth, work_style_id: Number(workStyleId) },
-      { onSuccess: () => setYearMonth('') },
+      {
+        onSuccess: () => {
+          if (autoGenerateShifts) {
+            const { from, to } = monthBoundaries(yearMonth)
+            generateShifts.mutate({ user_id: targetUserId, work_style_id: Number(workStyleId), from, to })
+          }
+          setYearMonth('')
+          setIsConfirming(false)
+          setAutoGenerateShifts(false)
+        },
+      },
     )
   }
 
@@ -620,10 +660,11 @@ function MonthlyWorkStyleAssignmentCard() {
         働き方が設定されていない月は、システムのデフォルト働き方にフォールバックする。
       </p>
       {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
+      {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required>
-          <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={setTargetUserId} />
+          <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={handleUserChange} />
         </FormField>
 
         <FormField label="対象年月" htmlFor="monthly-work-style-year-month" required>
@@ -631,7 +672,7 @@ function MonthlyWorkStyleAssignmentCard() {
             id="monthly-work-style-year-month"
             type="month"
             value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
+            onChange={(e) => handleYearMonthChange(e.target.value)}
           />
         </FormField>
 
@@ -639,7 +680,7 @@ function MonthlyWorkStyleAssignmentCard() {
           <NativeSelect
             id="monthly-work-style-select"
             value={workStyleId}
-            onChange={(e) => setWorkStyleId(e.target.value)}
+            onChange={(e) => handleWorkStyleChange(e.target.value)}
           >
             <option value="">選択してください</option>
             {workStyles?.map((style) => (
@@ -651,13 +692,56 @@ function MonthlyWorkStyleAssignmentCard() {
         </FormField>
       </div>
 
-      <Button
-        isLoading={assignForMonth.isPending}
-        disabled={!targetUserId || !yearMonth || !workStyleId}
-        onClick={handleAssign}
-      >
-        割り当てる
-      </Button>
+      {!isConfirming ? (
+        <Button disabled={!targetUserId || !yearMonth || !workStyleId} onClick={() => setIsConfirming(true)}>
+          変更内容を確認する
+        </Button>
+      ) : (
+        <div className="mb-4 rounded-md border border-border p-4 text-sm">
+          <p className="mb-3 font-semibold text-foreground">変更内容の確認</p>
+
+          <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">対象社員</dt>
+            <dd className="text-foreground">{targetUser?.name ?? `社員ID ${targetUserId}`}</dd>
+            <dt className="text-muted-foreground">対象年月</dt>
+            <dd className="text-foreground">{yearMonth}</dd>
+            <dt className="text-muted-foreground">現在の働き方</dt>
+            <dd className="text-foreground">
+              {currentAssignment?.work_style?.name ?? '未設定(会社のデフォルトにフォールバック)'}
+            </dd>
+            <dt className="text-muted-foreground">変更後の働き方</dt>
+            <dd className="text-foreground">{selectedWorkStyle?.name ?? '-'}</dd>
+          </dl>
+
+          <ul className="mb-3 list-disc pl-5 text-xs text-muted-foreground">
+            <li>{yearMonth}より前の月の割当・勤怠には影響しません。</li>
+            <li>
+              {yearMonth}より後の月は自動的には引き継がれません。別途その月の働き方を割り当てる必要があります。
+            </li>
+            <li>
+              {yearMonth}内で既に打刻・日次編集済みの日の集計(残業・深夜等)は自動的には再計算されません。
+              反映するには対象日を日次編集から保存し直してください。
+            </li>
+          </ul>
+
+          <label className="mb-3 flex items-center gap-2 text-foreground">
+            <Checkbox
+              checked={autoGenerateShifts}
+              onCheckedChange={(checked) => setAutoGenerateShifts(checked === true)}
+            />
+            この働き方をもとに{yearMonth}の勤務予定を自動生成する(既存の勤務予定は上書きされます)
+          </label>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={assignForMonth.isPending || generateShifts.isPending} onClick={handleSave}>
+              この内容で保存する
+            </Button>
+            <Button variant="secondary" onClick={() => setIsConfirming(false)}>
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      )}
 
       {targetUserId !== undefined && (
         <div className="mt-5 border-t border-border pt-4">
