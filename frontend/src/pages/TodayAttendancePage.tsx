@@ -1,12 +1,76 @@
-import { Badge } from '../components/Badge/Badge'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Clock, Coffee, LogIn, type LucideIcon } from 'lucide-react'
+import { Badge, type BadgeTone } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useAttendanceMonth, useClockIn, useClockOut, useEndBreak, useStartBreak, useTodayAttendance } from '../hooks/useAttendance'
+import { cn } from '../lib/utils'
 import { formatDate } from '../utils/weekDates'
 import { isoToTimeLiteral } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../utils/statusLabels'
+import type { AttendanceDay } from '../api/types'
+
+/** 1秒ごとに現在時刻を更新し、画面上部のライブクロックと経過時間計算に使う。 */
+function useNow(intervalMs = 1000): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+const statusIcons: Record<AttendanceDay['status'], LucideIcon> = {
+  not_started: Clock,
+  working: LogIn,
+  on_break: Coffee,
+  clocked_out: CheckCircle2,
+}
+
+const toneTextClass: Record<BadgeTone, string> = {
+  neutral: 'text-muted-foreground',
+  info: 'text-info',
+  success: 'text-success',
+  warning: 'text-warning',
+  danger: 'text-destructive',
+}
+
+function completedBreakMinutes(breaks: AttendanceDay['breaks']): number {
+  return breaks.reduce((sum, b) => {
+    if (!b.break_start_at || !b.break_end_at) return sum
+    return sum + (new Date(b.break_end_at).getTime() - new Date(b.break_start_at).getTime()) / 60000
+  }, 0)
+}
+
+/** 出勤時刻から現在までの経過時間から、完了済みの休憩時間を差し引いた実働時間(分)。 */
+function elapsedWorkedMinutes(day: AttendanceDay, now: Date): number | null {
+  if (!day.actual_start_at) return null
+  const grossMinutes = (now.getTime() - new Date(day.actual_start_at).getTime()) / 60000
+  return Math.max(0, Math.round(grossMinutes - completedBreakMinutes(day.breaks)))
+}
+
+function formatMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}時間${minutes}分` : `${minutes}分`
+}
+
+function statusDescription(day: AttendanceDay, now: Date): string {
+  switch (day.status) {
+    case 'not_started':
+      return 'まだ出勤していません'
+    case 'working': {
+      const minutes = elapsedWorkedMinutes(day, now)
+      return `${formatTime(day.actual_start_at)}から勤務中${minutes !== null ? `(実働 ${formatMinutes(minutes)})` : ''}`
+    }
+    case 'on_break':
+      return `${formatTime(day.actual_start_at)}から勤務中・現在休憩中です`
+    case 'clocked_out':
+      return `${formatTime(day.actual_start_at)}〜${formatTime(day.actual_end_at)}で退勤済みです`
+  }
+}
 
 /**
  * 勤務時刻はその勤務日自身のUTCオフセットで記録された値であり、ブラウザのローカル
@@ -66,6 +130,7 @@ export function TodayAttendancePage() {
   const startBreak = useStartBreak()
   const endBreak = useEndBreak()
   const clockOut = useClockOut()
+  const now = useNow()
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="勤怠情報の取得に失敗しました。" />
@@ -73,6 +138,7 @@ export function TodayAttendancePage() {
 
   const actionError = clockIn.error ?? startBreak.error ?? endBreak.error ?? clockOut.error
   const { label, tone } = attendanceDayStatusLabel(day.status)
+  const StatusIcon = statusIcons[day.status]
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +147,21 @@ export function TodayAttendancePage() {
         {actionError && <ErrorMessage error={actionError} />}
 
         <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+            <div className="flex items-center gap-2">
+              <StatusIcon className={cn('size-5 shrink-0', toneTextClass[tone])} aria-hidden="true" />
+              <p className="text-sm text-foreground">{statusDescription(day, now)}</p>
+            </div>
+            <div className="text-right leading-tight">
+              <p className="text-2xl font-semibold text-foreground tabular-nums">
+                {now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {now.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}
+              </p>
+            </div>
+          </div>
+
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
             {day.planned_start_at && (
               <>

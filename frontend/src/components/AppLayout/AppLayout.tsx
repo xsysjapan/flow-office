@@ -99,7 +99,7 @@ export function AppLayout() {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      end={item.to === '/'}
+                      end
                       className={({ isActive }) =>
                         cn(
                           'text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
