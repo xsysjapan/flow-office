@@ -24,3 +24,21 @@ export interface CreateWorkStyleInput {
 export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle> {
   return apiFetch('/work-styles', { method: 'POST', body: input })
 }
+
+export interface CreateDefaultWorkStyleInput {
+  name?: string
+  default_start_time?: string
+  default_end_time?: string
+  default_break_minutes?: number
+  calendar_id?: number
+}
+
+/** 初回オンボーディングで「通常勤務」をデフォルト働き方として作成する(指示書 3.1節・12.1節)。 */
+export function createDefaultWorkStyle(input: CreateDefaultWorkStyleInput = {}): Promise<WorkStyle> {
+  return apiFetch('/work-styles/default', { method: 'POST', body: input })
+}
+
+/** 既存の働き方を会社のデフォルトに切り替える(指示書 3.2節)。 */
+export function setDefaultWorkStyle(id: number): Promise<WorkStyle> {
+  return apiFetch(`/work-styles/${id}/set-default`, { method: 'POST' })
+}

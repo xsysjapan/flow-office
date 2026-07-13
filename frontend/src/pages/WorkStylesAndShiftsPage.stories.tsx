@@ -25,6 +25,8 @@ const workStyle: WorkStyle = {
   default_break_minutes: 60,
   calendar_id: 1,
   is_shift_based: false,
+  is_default: true,
+  system_generated: true,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,
@@ -36,9 +38,9 @@ const paginatedUsers: Paginated<User> = {
   links: { next: null, prev: null },
 }
 
-function withSeeded() {
+function withSeeded(workStyles: WorkStyle[] = [workStyle]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['work-styles'], [workStyle])
+  queryClient.setQueryData(['work-styles'], workStyles)
   queryClient.setQueryData(['work-calendars'], [calendar])
   queryClient.setQueryData(['users', ''], paginatedUsers)
   queryClient.setQueryData(['shift-patterns'], [])
@@ -62,4 +64,9 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
   render: withSeeded(),
+}
+
+/** 指示書 12.1節: 会社のデフォルト働き方が未設定の間に表示するオンボーディング。 */
+export const OnboardingNeeded: Story = {
+  render: withSeeded([]),
 }

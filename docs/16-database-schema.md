@@ -152,6 +152,13 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - default_break_minutes
 - calendar_id (nullable。シフト制などカレンダーに依存しない勤務形態を許容する)
 - is_shift_based
+- is_default (会社のデフォルト働き方かどうか。常に高々1件のみtrue。切り替え時は
+  `SetDefaultWorkStyle`コマンドで既存のデフォルトを解除してから設定する。
+  `system_settings.default_work_style_id`(勤怠計算のフォールバック先)と同期させる。
+  未設定(=デフォルトがどの働き方にも設定されていない)状態と、デフォルトが適用されている
+  状態は明確に区別し、未設定を暗黙的な固定時間勤務として扱わない)
+- system_generated (初回オンボーディングで自動生成された働き方であることの印。
+  編集後も通常の働き方として利用でき、この値自体が変わることはない)
 - legal_holiday_rule (`weekly`=毎週1日 / `four_weeks_four_days`=4週4日以上の変形休日制 /
   `undetermined`=決めない方式(UC-C007参照)。`is_shift_based`の勤務形態にのみ意味を持つ。
   UC-C005参照)

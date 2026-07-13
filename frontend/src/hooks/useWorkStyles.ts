@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createWorkStyle, fetchWorkStyles, type CreateWorkStyleInput } from '../api/workStyles'
+import {
+  createDefaultWorkStyle,
+  createWorkStyle,
+  fetchWorkStyles,
+  setDefaultWorkStyle,
+  type CreateDefaultWorkStyleInput,
+  type CreateWorkStyleInput,
+} from '../api/workStyles'
 
 const LIST_KEY = ['work-styles']
 
@@ -12,6 +19,28 @@ export function useCreateWorkStyle() {
 
   return useMutation({
     mutationFn: (input: CreateWorkStyleInput) => createWorkStyle(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
+}
+
+export function useCreateDefaultWorkStyle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: CreateDefaultWorkStyleInput = {}) => createDefaultWorkStyle(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
+}
+
+export function useSetDefaultWorkStyle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => setDefaultWorkStyle(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

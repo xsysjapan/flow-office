@@ -21,8 +21,133 @@ import {
   useUserWorkStyleMonthlyAssignments,
 } from '../hooks/useUserWorkStyleMonthlyAssignments'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
-import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
+import {
+  useCreateDefaultWorkStyle,
+  useCreateWorkStyle,
+  useSetDefaultWorkStyle,
+  useWorkStyles,
+} from '../hooks/useWorkStyles'
 import type { LegalHolidayRule, WorkStyle } from '../api/types'
+
+const STANDARD_WORK_STYLE_DEFAULTS = {
+  name: '通常勤務',
+  default_start_time: '09:00',
+  default_end_time: '18:00',
+  default_break_minutes: 60,
+}
+
+/**
+ * 指示書 12.1節: 初回導入時、会社のデフォルト働き方が未設定の間だけ表示するオンボーディング。
+ * 「未設定」と「デフォルト適用」を混同しないため、is_defaultの働き方が1件も無いことを
+ * 表示条件とする(指示書 2.2節)。
+ */
+function WorkStyleOnboardingCard() {
+  const { data: workStyles } = useWorkStyles()
+  const createDefault = useCreateDefaultWorkStyle()
+  const [isEditing, setIsEditing] = useState(false)
+  const [name, setName] = useState(STANDARD_WORK_STYLE_DEFAULTS.name)
+  const [startTime, setStartTime] = useState(STANDARD_WORK_STYLE_DEFAULTS.default_start_time)
+  const [endTime, setEndTime] = useState(STANDARD_WORK_STYLE_DEFAULTS.default_end_time)
+  const [breakMinutes, setBreakMinutes] = useState(String(STANDARD_WORK_STYLE_DEFAULTS.default_break_minutes))
+
+  const hasDefault = (workStyles ?? []).some((style) => style.is_default)
+  if (hasDefault) return null
+
+  const handleStart = () => {
+    createDefault.mutate({})
+  }
+
+  const handleSaveEdited = () => {
+    createDefault.mutate({
+      name,
+      default_start_time: startTime,
+      default_end_time: endTime,
+      default_break_minutes: Number(breakMinutes),
+    })
+  }
+
+  const handleAddAnother = () => {
+    createDefault.mutate({})
+    document.getElementById('work-style-create-form')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  return (
+    <Card title="一般的な勤務設定を用意しました">
+      {createDefault.error && <ErrorMessage error={createDefault.error} />}
+
+      {!isEditing ? (
+        <>
+          <ul className="mb-4 text-sm text-foreground">
+            <li>{STANDARD_WORK_STYLE_DEFAULTS.name}</li>
+            <li>月曜日〜金曜日</li>
+            <li>
+              {STANDARD_WORK_STYLE_DEFAULTS.default_start_time}〜{STANDARD_WORK_STYLE_DEFAULTS.default_end_time}
+            </li>
+            <li>休憩12:00〜13:00</li>
+            <li>土日祝休み</li>
+          </ul>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={createDefault.isPending} onClick={handleStart}>
+              この設定で始める
+            </Button>
+            <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              内容を変更する
+            </Button>
+            <Button variant="secondary" isLoading={createDefault.isPending} onClick={handleAddAnother}>
+              別の働き方を追加する
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="名称" htmlFor="onboarding-work-style-name" required>
+              <Input id="onboarding-work-style-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </FormField>
+
+            <FormField label="休憩(分)" htmlFor="onboarding-work-style-break-minutes" required>
+              <Input
+                id="onboarding-work-style-break-minutes"
+                type="number"
+                min={0}
+                value={breakMinutes}
+                onChange={(e) => setBreakMinutes(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
+              <Input
+                id="onboarding-work-style-start-time"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
+              <Input
+                id="onboarding-work-style-end-time"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </FormField>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={createDefault.isPending} onClick={handleSaveEdited}>
+              保存して開始する
+            </Button>
+            <Button variant="secondary" onClick={() => setIsEditing(false)}>
+              キャンセル
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
 
 const WORK_TIME_SYSTEM_OPTIONS = [
   { value: 'fixed', label: '通常勤務' },
@@ -47,6 +172,7 @@ function WorkStyleFormCard() {
   const { data: workStyles, isLoading, error } = useWorkStyles()
   const { data: workCalendars } = useWorkCalendars()
   const createWorkStyle = useCreateWorkStyle()
+  const setDefaultWorkStyle = useSetDefaultWorkStyle()
 
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
@@ -102,9 +228,10 @@ function WorkStyleFormCard() {
   }
 
   return (
-    <Card title="勤務形態">
+    <Card id="work-style-create-form" title="勤務形態">
       {error && <ErrorMessage error={error} fallback="勤務形態の取得に失敗しました。" />}
       {createWorkStyle.error && <ErrorMessage error={createWorkStyle.error} />}
+      {setDefaultWorkStyle.error && <ErrorMessage error={setDefaultWorkStyle.error} />}
 
       {isLoading ? (
         <LoadingState />
@@ -113,7 +240,7 @@ function WorkStyleFormCard() {
       ) : (
         <ul className="mb-4 divide-y divide-border">
           {(workStyles ?? []).map((style) => (
-            <li key={style.id} className="flex flex-wrap gap-3 py-2 text-sm">
+            <li key={style.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
               <strong className="font-semibold text-foreground">{style.name}</strong>
               <span className="text-muted-foreground">{style.code}</span>
               <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
@@ -121,6 +248,19 @@ function WorkStyleFormCard() {
               <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
               {style.is_shift_based && (
                 <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
+              )}
+              {style.is_default ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  デフォルト
+                </span>
+              ) : (
+                <Button
+                  variant="secondary"
+                  isLoading={setDefaultWorkStyle.isPending}
+                  onClick={() => setDefaultWorkStyle.mutate(style.id)}
+                >
+                  デフォルトに設定
+                </Button>
               )}
             </li>
           ))}
@@ -733,10 +873,12 @@ function ShiftScheduleBoardCard() {
 /**
  * UC-C002: 勤務形態の作成・一覧。UC-C003: 個別シフトの生成・確認。
  * UC-C004: 3交代制シフトパターンの作成・日別割当・公開前確認・公開。
+ * デフォルト働き方が未設定の間は初回オンボーディングを表示する(指示書 12.1節)。
  */
 export function WorkStylesAndShiftsPage() {
   return (
     <div className="flex flex-col gap-6">
+      <WorkStyleOnboardingCard />
       <WorkStyleFormCard />
       <MonthlyWorkStyleAssignmentCard />
       <ShiftGenerationCard />

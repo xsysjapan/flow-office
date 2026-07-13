@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
  * 勤務形態 (docs/08-usecases-calendar-shift.md UC-C002)。
  * 所定労働時間・残業計算の基準となるため、ここをマスタ化しハードコードしない。
  */
-#[Fillable(['code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'calendar_id', 'is_shift_based', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days'])]
+#[Fillable(['code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days'])]
 class WorkStyle extends Model
 {
     /** 毎週少なくとも1日の法定休日を与える(労働基準法 原則)。 */
@@ -43,6 +43,8 @@ class WorkStyle extends Model
     {
         return [
             'is_shift_based' => 'boolean',
+            'is_default' => 'boolean',
+            'system_generated' => 'boolean',
             'four_week_period_start_date' => 'date',
         ];
     }

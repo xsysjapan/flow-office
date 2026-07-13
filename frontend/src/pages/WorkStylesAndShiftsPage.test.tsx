@@ -33,6 +33,8 @@ const workStyle: WorkStyle = {
   default_break_minutes: 60,
   calendar_id: 1,
   is_shift_based: false,
+  is_default: true,
+  system_generated: true,
   legal_holiday_rule: 'weekly',
   four_week_period_start_date: null,
   max_consecutive_work_days: null,
@@ -71,6 +73,69 @@ describe('WorkStylesAndShiftsPage', () => {
 
     expect(await screen.findByText('標準勤務', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByText('通常労働時間制')).toBeInTheDocument()
+  })
+
+  it('does not show the onboarding card once a default work style exists', async () => {
+    renderPage()
+
+    await screen.findByText('標準勤務', { selector: 'strong' })
+    expect(screen.queryByText('一般的な勤務設定を用意しました')).not.toBeInTheDocument()
+  })
+
+  it('shows the onboarding card and creates the standard default work style', async () => {
+    vi.spyOn(workStylesApi, 'createDefaultWorkStyle').mockResolvedValue({
+      ...workStyle,
+      id: 9,
+      code: 'standard',
+    })
+    renderPage({ workStyles: [] })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'この設定で始める' }))
+
+    await waitFor(() => expect(workStylesApi.createDefaultWorkStyle).toHaveBeenCalledWith({}))
+  })
+
+  it('creates the default work style with edited values from the onboarding card', async () => {
+    vi.spyOn(workStylesApi, 'createDefaultWorkStyle').mockResolvedValue({
+      ...workStyle,
+      id: 9,
+      code: 'standard',
+      name: '標準勤務(編集済み)',
+    })
+    renderPage({ workStyles: [] })
+
+    await userEvent.click(await screen.findByRole('button', { name: '内容を変更する' }))
+    const nameInput = screen.getAllByLabelText('名称')[0]
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, '標準勤務(編集済み)')
+    await userEvent.click(screen.getByRole('button', { name: '保存して開始する' }))
+
+    await waitFor(() =>
+      expect(workStylesApi.createDefaultWorkStyle).toHaveBeenCalledWith({
+        name: '標準勤務(編集済み)',
+        default_start_time: '09:00',
+        default_end_time: '18:00',
+        default_break_minutes: 60,
+      }),
+    )
+  })
+
+  it('switches the default work style from the list', async () => {
+    const otherWorkStyle: WorkStyle = {
+      ...workStyle,
+      id: 2,
+      code: 'flex',
+      name: 'フレックス標準',
+      is_default: false,
+      system_generated: false,
+    }
+    vi.spyOn(workStylesApi, 'setDefaultWorkStyle').mockResolvedValue({ ...otherWorkStyle, is_default: true })
+    renderPage({ workStyles: [workStyle, otherWorkStyle] })
+
+    await screen.findByText('フレックス標準', { selector: 'strong' })
+    await userEvent.click(screen.getByRole('button', { name: 'デフォルトに設定' }))
+
+    await waitFor(() => expect(workStylesApi.setDefaultWorkStyle).toHaveBeenCalledWith(2))
   })
 
   it('creates a new work style with the entered values', async () => {
@@ -260,7 +325,15 @@ describe('WorkStylesAndShiftsPage', () => {
   })
 
   it('assigns a shift pattern to an employee day on the shift schedule board', async () => {
-    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 2, code: 'shift-3', name: '3交代制', is_shift_based: true }
+    const shiftWorkStyle: WorkStyle = {
+      ...workStyle,
+      id: 2,
+      code: 'shift-3',
+      name: '3交代制',
+      is_shift_based: true,
+      is_default: false,
+      system_generated: false,
+    }
     const pattern = {
       id: 1,
       code: 'day_shift',

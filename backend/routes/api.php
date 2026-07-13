@@ -99,6 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/work-calendars/{workCalendar}/days', [WorkCalendarController::class, 'putDays']);
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
+        Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
+        Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);

@@ -282,6 +282,10 @@ export interface WorkStyle {
   default_break_minutes: number
   calendar_id: number
   is_shift_based: boolean
+  /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
+  is_default: boolean
+  /** 初回オンボーディングで自動生成された働き方かどうか。 */
+  system_generated: boolean
   legal_holiday_rule: LegalHolidayRule
   four_week_period_start_date: string | null
   /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */

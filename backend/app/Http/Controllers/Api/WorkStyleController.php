@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
+use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkStyleResource;
@@ -63,5 +65,41 @@ class WorkStyleController extends Controller
         ));
 
         return (new WorkStyleResource($workStyle))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 指示書 3.1節・12.1節: 初回オンボーディングで「通常勤務」をデフォルト働き方として
+     * 作成する。既にデフォルトが存在する場合はエラーとする(SetDefaultWorkStyleで
+     * 切り替える)。
+     */
+    public function storeDefault(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $overrides = $request->validate([
+            'name' => ['nullable', 'string', 'max:100'],
+            'default_start_time' => ['nullable', 'date_format:H:i'],
+            'default_end_time' => ['nullable', 'date_format:H:i'],
+            'default_break_minutes' => ['nullable', 'integer', 'min:0'],
+            'calendar_id' => ['nullable', 'exists:work_calendars,id'],
+        ]);
+
+        $workStyle = $commandBus->dispatch(new CreateDefaultWorkStyle(
+            overrides: array_filter($overrides, fn ($value) => $value !== null),
+            createdByUserId: $request->user()->id,
+        ));
+
+        return (new WorkStyleResource($workStyle))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 指示書 3.2節: 既存の働き方をデフォルトに切り替える。
+     */
+    public function setDefault(Request $request, WorkStyle $workStyle, CommandBus $commandBus): WorkStyleResource
+    {
+        $updated = $commandBus->dispatch(new SetDefaultWorkStyle(
+            workStyleId: $workStyle->id,
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new WorkStyleResource($updated);
     }
 }

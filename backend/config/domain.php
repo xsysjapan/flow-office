@@ -10,6 +10,7 @@ use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
+use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
 use App\Domain\Attendance\Commands\CreateShiftPattern;
 use App\Domain\Attendance\Commands\CreateWorkCalendar;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
@@ -24,6 +25,7 @@ use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
 use App\Domain\Attendance\Commands\PublishWorkCalendar;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
+use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
@@ -38,6 +40,7 @@ use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\CreateDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\CreateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\CreateWorkCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateWorkStyleHandler;
@@ -52,6 +55,7 @@ use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
@@ -143,6 +147,8 @@ return [
         PublishWorkCalendar::class => PublishWorkCalendarHandler::class,
         UpdateWorkCalendarDays::class => UpdateWorkCalendarDaysHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
+        CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,
+        SetDefaultWorkStyle::class => SetDefaultWorkStyleHandler::class,
         AssignUserWorkStyleForMonth::class => AssignUserWorkStyleForMonthHandler::class,
         CreateShiftPattern::class => CreateShiftPatternHandler::class,
         UpdateShiftPattern::class => UpdateShiftPatternHandler::class,

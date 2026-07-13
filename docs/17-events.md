@@ -31,6 +31,9 @@
 - `work_calendar.published`
 - `work_calendar_day.updated`
 - `work_style.created`
+- `work_style.default_changed` (会社のデフォルト働き方の切り替え。既存デフォルトの解除も
+  同一イベントの`previous_default_work_style_id`に記録する。初回オンボーディングで
+  「通常勤務」を作成した際にも`previous_default_work_style_id=null`で発生する)
 - `employee_shift.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
   日別割当のどちらからも発生する)
 - `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
