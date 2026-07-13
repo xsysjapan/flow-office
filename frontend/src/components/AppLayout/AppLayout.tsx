@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Briefcase, CalendarClock, CheckCircle2, FileText, Settings, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { cn } from '../../lib/utils'
-import { hasAnyRole, ROLE, type RoleCode } from '../../utils/roles'
+import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
 import { Button } from '../Button/Button'
 
 interface NavItem {
@@ -71,7 +71,16 @@ export function AppLayout() {
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm font-semibold text-foreground">flow-office</span>
           <div className="flex items-center gap-3">
-            {user && <span className="text-sm text-muted-foreground">{user.name}</span>}
+            {user && (
+              <div className="flex flex-col items-end leading-tight">
+                <span className="text-sm text-muted-foreground">{user.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                    .filter(Boolean)
+                    .join(' ・ ')}
+                </span>
+              </div>
+            )}
             <Button variant="secondary" onClick={() => void logout()}>
               ログアウト
             </Button>

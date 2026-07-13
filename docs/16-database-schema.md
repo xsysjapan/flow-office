@@ -51,6 +51,8 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 
 - id
 - default_timezone (新規作成ユーザーの初期タイムゾーン。既定値 `Asia/Tokyo`)
+- default_work_style_id (nullable。`work_styles`への外部キー。`user_work_style_monthly_assignments`
+  にも該当月の割当が無いユーザーの勤怠計算で使うフォールバック用の働き方)
 - created_at / updated_at
 
 常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから
@@ -200,6 +202,24 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 `four_weeks_four_days`)でのみ意味を持つ事前設定値。「決めない方式」(`undetermined`)では
 この列を使わず、`LegalHolidayResolver`が`legal_holiday_designations`または
 `is_working_day=false`の自動推定から都度解決する(UC-C007参照)。
+
+## user_work_style_monthly_assignments (ユーザーの月次働き方割当。正データ)
+
+- id
+- user_id
+- year_month (`YYYY-MM`)
+- work_style_id
+- assigned_by_user_id
+- created_at / updated_at
+
+ユーザーがどの月にどの働き方(`work_styles`)に属するかを月単位で記録する正データ。
+例えば10月までは通常勤務、11月からシフト勤務のように働き方を切り替えても、過去月の
+割当は変更されずに履歴として残る(`user_id` + `year_month`のunique制約。月次で
+`AssignUserWorkStyleForMonth`コマンドにより追加・更新する)。
+
+`employee_shift_assignments`にその日の`work_style_id`が無い場合、勤怠計算
+(`AttendanceCalculator`)はまずその勤務日が属する年月の本テーブルの割当を参照し、
+それも無ければ`system_settings.default_work_style_id`にフォールバックする。
 
 ## legal_holiday_designations (法定休日「決めない方式」の指定。正データ)
 

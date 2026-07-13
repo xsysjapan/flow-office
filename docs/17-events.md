@@ -37,6 +37,8 @@
 - `employee_shift.published` (UC-C004 手順6: 3交代制シフト表を公開する)
 - `shift_pattern.created`
 - `shift_pattern.updated`
+- `user_work_style_monthly_assignment.assigned` (ユーザーの月次働き方割当。過去月を壊さず
+  対象の年月だけを追加・更新する)
 
 ## Attendance
 

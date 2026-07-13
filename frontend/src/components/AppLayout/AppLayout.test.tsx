@@ -45,6 +45,11 @@ describe('AppLayout', () => {
     expect(screen.getByText('今日の勤怠画面')).toBeInTheDocument()
   })
 
+  it('shows the current user department and role', () => {
+    renderLayout(vi.fn(), { ...mockUser, department: '開発部', roles: ['admin'] })
+    expect(screen.getByText('開発部 ・ 管理者')).toBeInTheDocument()
+  })
+
   it('shows navigation links', () => {
     renderLayout()
     expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()

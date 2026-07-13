@@ -16,6 +16,10 @@ import {
   useShiftScheduleReview,
 } from '../hooks/useEmployeeShiftAssignments'
 import { useCreateShiftPattern, useShiftPatterns } from '../hooks/useShiftPatterns'
+import {
+  useAssignUserWorkStyleForMonth,
+  useUserWorkStyleMonthlyAssignments,
+} from '../hooks/useUserWorkStyleMonthlyAssignments'
 import { useWorkCalendars } from '../hooks/useWorkCalendars'
 import { useCreateWorkStyle, useWorkStyles } from '../hooks/useWorkStyles'
 import type { LegalHolidayRule, WorkStyle } from '../api/types'
@@ -362,6 +366,95 @@ function ShiftGenerationCard() {
   )
 }
 
+/**
+ * 10月までは通常勤務、11月からシフト勤務のように、ユーザーの月次働き方を切り替える。
+ * 過去月の割当は変更されず履歴として残る(docs/16-database-schema.md
+ * user_work_style_monthly_assignments)。
+ */
+function MonthlyWorkStyleAssignmentCard() {
+  const { data: workStyles } = useWorkStyles()
+  const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
+  const [yearMonth, setYearMonth] = useState('')
+  const [workStyleId, setWorkStyleId] = useState('')
+
+  const { data: history, isLoading: isLoadingHistory } = useUserWorkStyleMonthlyAssignments(targetUserId)
+  const assignForMonth = useAssignUserWorkStyleForMonth()
+
+  const handleAssign = () => {
+    if (!targetUserId || !yearMonth || !workStyleId) return
+    assignForMonth.mutate(
+      { user_id: targetUserId, year_month: yearMonth, work_style_id: Number(workStyleId) },
+      { onSuccess: () => setYearMonth('') },
+    )
+  }
+
+  return (
+    <Card title="ユーザーの月次働き方">
+      <p className="mb-4 text-sm text-muted-foreground">
+        働き方が設定されていない月は、システムのデフォルト働き方にフォールバックする。
+      </p>
+      {assignForMonth.error && <ErrorMessage error={assignForMonth.error} />}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <FormField label="働き方の対象社員" htmlFor="monthly-work-style-user" required>
+          <UserPicker id="monthly-work-style-user" value={targetUserId} onChange={setTargetUserId} />
+        </FormField>
+
+        <FormField label="対象年月" htmlFor="monthly-work-style-year-month" required>
+          <Input
+            id="monthly-work-style-year-month"
+            type="month"
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="働き方" htmlFor="monthly-work-style-select" required>
+          <NativeSelect
+            id="monthly-work-style-select"
+            value={workStyleId}
+            onChange={(e) => setWorkStyleId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {workStyles?.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </div>
+
+      <Button
+        isLoading={assignForMonth.isPending}
+        disabled={!targetUserId || !yearMonth || !workStyleId}
+        onClick={handleAssign}
+      >
+        割り当てる
+      </Button>
+
+      {targetUserId !== undefined && (
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="mb-2 text-sm font-semibold text-foreground">割当履歴</h3>
+          {isLoadingHistory ? (
+            <LoadingState />
+          ) : (history ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">まだ割り当てられていません。</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {history?.map((assignment) => (
+                <li key={assignment.id} className="py-2 text-sm text-foreground">
+                  {`${assignment.year_month}: ${assignment.work_style?.name ?? assignment.work_style_id}`}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ShiftPatternFormCard() {
   const { data: patterns, isLoading, error } = useShiftPatterns()
   const createShiftPattern = useCreateShiftPattern()
@@ -645,6 +738,7 @@ export function WorkStylesAndShiftsPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkStyleFormCard />
+      <MonthlyWorkStyleAssignmentCard />
       <ShiftGenerationCard />
       <ShiftPatternFormCard />
       <ShiftScheduleBoardCard />

@@ -21,6 +21,9 @@ export interface Role {
 /** UC-003: 新規作成ユーザーの既定タイムゾーンなど、システム全体の設定。 */
 export interface SystemSettings {
   default_timezone: string
+  /** ユーザーにその月の働き方(UserWorkStyleMonthlyAssignment)が無い場合のフォールバック。 */
+  default_work_style_id: number | null
+  default_work_style?: Pick<WorkStyle, 'id' | 'code' | 'name'> | null
   /** UC-N001「勤怠未提出」警告の基準(前月分を提出すべき当月の日)。 */
   attendance_submission_deadline_day: number
   /** UC-N001「月次締め前警告」の基準(前月分を締めるべき当月の日)。 */
@@ -283,6 +286,17 @@ export interface WorkStyle {
   four_week_period_start_date: string | null
   /** UC-C004: 3交代制などの連続勤務日数の警告しきい値(未設定ならチェックしない)。 */
   max_consecutive_work_days: number | null
+}
+
+/** ユーザーの月次働き方割当(docs/16-database-schema.md)。10月までは通常勤務、11月から
+ *  シフト勤務のように月ごとに切り替えても過去月の履歴が残る。 */
+export interface UserWorkStyleMonthlyAssignment {
+  id: number
+  user_id: number
+  year_month: string
+  work_style_id: number
+  work_style?: Pick<WorkStyle, 'id' | 'code' | 'name'>
+  assigned_by_user_id: number
 }
 
 export interface EmployeeShiftAssignment {

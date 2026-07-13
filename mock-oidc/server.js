@@ -19,16 +19,10 @@ const PORT = process.env.MOCK_OIDC_PORT || 9000
 const CODE_TTL_MS = 60 * 1000
 const TOKEN_TTL_MS = 5 * 60 * 1000
 
-const USERS = [
-  // DatabaseSeeder が作成する admin@example.com (Test Admin) をモックOIDCでも
-  // ログインできるようにするためのエントリ。ScenarioSeederがこのユーザーの
-  // entra_user_id を 'mock-entra-admin' に合わせて上書きする。
-  {
-    id: 'mock-entra-admin',
-    displayName: 'Test Admin',
-    userPrincipalName: 'admin@example.com',
-    mail: 'admin@example.com',
-  },
+// backend(Laravel)のDB上にまだ存在しない「初回ログイン」シナリオ確認用の固定エントリ。
+// 既にDBに存在するユーザー(admin, ScenarioSeederが作成する004〜009など)は
+// MOCK_USERS_API_URL 経由でbackendから動的に取得するため、ここには含めない。
+const FALLBACK_NEW_USERS = [
   {
     id: 'mock-entra-user-001',
     displayName: '山田 太郎',
@@ -47,49 +41,47 @@ const USERS = [
     userPrincipalName: 'ichiro.suzuki@example.com',
     mail: 'ichiro.suzuki@example.com',
   },
-  // 以下はシナリオテスト用 (docs/testing/scenario-tests.md、backend/database/seeders/ScenarioSeeder.php)。
-  // ScenarioSeederが同じ mail 宛にユーザーを事前作成しロール・入社日を設定しているため、
-  // ここでログインすると初回ログインではなく既存ユーザーとして扱われる。
+]
+
+// DB接続やbackendが未起動の場合のフォールバック(MOCK_USERS_API_URL未設定時も含む)。
+// docker-compose未使用でmock-oidcだけ単体起動した場合などに、従来通りログインできるようにする。
+const STATIC_USERS = [
   {
-    id: 'mock-entra-user-004',
-    displayName: '高橋 健太',
-    userPrincipalName: 'kenta.takahashi@example.com',
-    mail: 'kenta.takahashi@example.com',
+    id: 'mock-entra-admin',
+    displayName: 'Test Admin',
+    userPrincipalName: 'admin@example.com',
+    mail: 'admin@example.com',
   },
-  {
-    id: 'mock-entra-user-005',
-    displayName: '伊藤 舞',
-    userPrincipalName: 'mai.ito@example.com',
-    mail: 'mai.ito@example.com',
-  },
-  {
-    id: 'mock-entra-user-006',
-    displayName: '渡辺 直樹',
-    userPrincipalName: 'naoki.watanabe@example.com',
-    mail: 'naoki.watanabe@example.com',
-  },
-  {
-    id: 'mock-entra-user-007',
-    displayName: '小林 誠',
-    userPrincipalName: 'makoto.kobayashi@example.com',
-    mail: 'makoto.kobayashi@example.com',
-  },
-  {
-    id: 'mock-entra-user-008',
-    displayName: '中村 恵',
-    userPrincipalName: 'megumi.nakamura@example.com',
-    mail: 'megumi.nakamura@example.com',
-  },
-  {
-    id: 'mock-entra-user-009',
-    displayName: '加藤 由美',
-    userPrincipalName: 'yumi.kato@example.com',
-    mail: 'yumi.kato@example.com',
-  },
+  ...FALLBACK_NEW_USERS,
 ]
 
 const authCodes = new Map()
 const accessTokens = new Map()
+
+/**
+ * backendのdev専用エンドポイント(MockOidcUserController)からDB上のユーザー一覧を取得する。
+ * 取得できない場合は STATIC_USERS にフォールバックする。
+ */
+async function fetchUsers() {
+  const apiUrl = process.env.MOCK_USERS_API_URL
+
+  if (!apiUrl) {
+    return STATIC_USERS
+  }
+
+  try {
+    const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) })
+    if (!response.ok) {
+      return STATIC_USERS
+    }
+    const dbUsers = await response.json()
+    const dbIds = new Set(dbUsers.map((user) => user.id))
+    return [...dbUsers, ...FALLBACK_NEW_USERS.filter((user) => !dbIds.has(user.id))]
+  } catch (error) {
+    console.error('MOCK_USERS_API_URL からのユーザー一覧取得に失敗しました。静的な一覧にフォールバックします。', error)
+    return STATIC_USERS
+  }
+}
 
 function randomToken() {
   return crypto.randomBytes(24).toString('hex')
@@ -126,10 +118,10 @@ function escapeHtml(value) {
   ))
 }
 
-function renderLoginPage(params) {
+function renderLoginPage(params, users) {
   const hidden = (name, value) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`
 
-  const userButtons = USERS.map((user) => `
+  const userButtons = users.map((user) => `
     <form method="POST" action="/oauth2/v2.0/authorize" style="margin-bottom:10px;">
       ${hidden('client_id', params.client_id)}
       ${hidden('redirect_uri', params.redirect_uri)}
@@ -140,6 +132,7 @@ function renderLoginPage(params) {
       <button type="submit" style="width:100%;padding:12px;text-align:left;cursor:pointer;">
         <strong>${escapeHtml(user.displayName)}</strong><br>
         <small>${escapeHtml(user.userPrincipalName)}</small>
+        ${(user.department || user.jobTitle) ? `<br><small>${escapeHtml([user.department, user.jobTitle].filter(Boolean).join(' / '))}</small>` : ''}
       </button>
     </form>
   `).join('')
@@ -163,20 +156,22 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/oauth2/v2.0/authorize') {
     const params = Object.fromEntries(url.searchParams)
-    return sendHtml(res, 200, renderLoginPage(params))
+    const users = await fetchUsers()
+    return sendHtml(res, 200, renderLoginPage(params, users))
   }
 
   if (req.method === 'POST' && url.pathname === '/oauth2/v2.0/authorize') {
     const body = await readBody(req)
     const params = Object.fromEntries(new URLSearchParams(body))
-    const user = USERS.find((u) => u.id === params.user_id)
+    const users = await fetchUsers()
+    const user = users.find((u) => u.id === params.user_id)
 
     if (!user || !params.redirect_uri) {
       return sendHtml(res, 400, '<h1>Bad Request</h1><p>user_id または redirect_uri がありません。</p>')
     }
 
     const code = randomToken()
-    authCodes.set(code, { userId: user.id, expiresAt: Date.now() + CODE_TTL_MS })
+    authCodes.set(code, { user, expiresAt: Date.now() + CODE_TTL_MS })
 
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('code', code)
@@ -197,7 +192,7 @@ const server = http.createServer(async (req, res) => {
     authCodes.delete(params.code)
 
     const accessToken = randomToken()
-    accessTokens.set(accessToken, { userId: entry.userId, expiresAt: Date.now() + TOKEN_TTL_MS })
+    accessTokens.set(accessToken, { user: entry.user, expiresAt: Date.now() + TOKEN_TTL_MS })
 
     return sendJson(res, 200, {
       token_type: 'Bearer',
@@ -218,7 +213,7 @@ const server = http.createServer(async (req, res) => {
       })
     }
 
-    const user = USERS.find((u) => u.id === entry.userId)
+    const user = entry.user
     return sendJson(res, 200, {
       id: user.id,
       displayName: user.displayName,
