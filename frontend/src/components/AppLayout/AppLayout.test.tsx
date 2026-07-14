@@ -50,10 +50,19 @@ describe('AppLayout', () => {
     expect(screen.getByText('開発部 ・ 管理者')).toBeInTheDocument()
   })
 
-  it('shows navigation links', () => {
+  it('shows the 申請 group links inside its dropdown menu', async () => {
     renderLayout()
-    expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '申請' }))
+    expect(await screen.findByRole('menuitem', { name: '自分の申請' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
+  })
+
+  it('shows the 承認 group links inside its dropdown menu', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: '承認' }))
+    expect(await screen.findByRole('menuitem', { name: '承認待ち' })).toBeInTheDocument()
   })
 
   it('calls logout when the logout button is clicked', async () => {
