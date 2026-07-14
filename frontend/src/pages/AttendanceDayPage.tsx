@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
@@ -39,7 +39,7 @@ import {
   offsetMinutesToString,
 } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../utils/statusLabels'
-import { formatDate, mondayOf } from '../utils/weekDates'
+import { addDays, formatDate, mondayOf } from '../utils/weekDates'
 
 const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string | null> = {
   punch: '打刻内容を初期値として反映しました(働き方の丸め単位で丸めています)。',
@@ -627,7 +627,20 @@ export function AttendanceDayPage() {
     <div className="flex flex-col gap-6">
       <Card
         title={`${date}(${weekdayLabel(date)})の勤怠`}
-        actions={statusMeta ? <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge> : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button asChild variant="secondary">
+              <Link to={`/attendance/days/${addDays(date, -1)}`}>前日</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to={`/attendance/week?start=${monday}`}>週次</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to={`/attendance/days/${addDays(date, 1)}`}>翌日</Link>
+            </Button>
+            {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+          </div>
+        }
       >
         {day && !isEditing && (
           <div className="flex flex-col gap-4">

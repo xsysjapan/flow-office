@@ -83,6 +83,17 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByText('18:00')).toBeInTheDocument()
   })
 
+  it('links to the previous day, the next day, and the containing week', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    renderPage([recordedDay])
+
+    await screen.findByText(`${date}(月)の勤怠`)
+
+    expect(screen.getByRole('link', { name: '前日' })).toHaveAttribute('href', '/attendance/days/2026-07-05')
+    expect(screen.getByRole('link', { name: '翌日' })).toHaveAttribute('href', '/attendance/days/2026-07-07')
+    expect(screen.getByRole('link', { name: '週次' })).toHaveAttribute('href', `/attendance/week?start=${date}`)
+  })
+
   it('edits the day and saves it as a decomposed daily edit', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...recordedDay, note: '修正済み' })
