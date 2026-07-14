@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRow'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
@@ -11,10 +12,15 @@ import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
 /**
  * UC-A006: 週次勤怠を編集する。日次勤怠(attendance_days)の編集ビューであり、独立データ
  * としては持たない。各日を選ぶと日次画面(実績の作成・編集・削除・打刻履歴)に遷移する
- * (オブジェクト指向UI)。
+ * (オブジェクト指向UI)。日次画面から「週次」で戻ってきた場合、その日が属する週を
+ * `?start=`(週初め)で指定できる(未指定なら今週)。
  */
 export function WeekAttendancePage() {
-  const [weekStart, setWeekStart] = useState(() => formatDate(mondayOf(new Date())))
+  const [searchParams] = useSearchParams()
+  const startParam = searchParams.get('start')
+  const [weekStart, setWeekStart] = useState(() =>
+    formatDate(mondayOf(startParam ? new Date(`${startParam}T00:00:00`) : new Date())),
+  )
   const { data, isLoading, error } = useWeek(weekStart)
 
   const today = formatDate(new Date())

@@ -16,6 +16,8 @@ class ShiftPatternUpdated implements DomainEvent
         public readonly ?string $endTime,
         public readonly bool $crossesMidnight,
         public readonly int $breakMinutes,
+        public readonly ?string $breakStartTime,
+        public readonly ?string $breakEndTime,
         public readonly int $prescribedWorkMinutes,
         public readonly int $updatedByUserId,
     ) {}
@@ -34,6 +36,8 @@ class ShiftPatternUpdated implements DomainEvent
             'end_time' => $this->endTime,
             'crosses_midnight' => $this->crossesMidnight,
             'break_minutes' => $this->breakMinutes,
+            'break_start_time' => $this->breakStartTime,
+            'break_end_time' => $this->breakEndTime,
             'prescribed_work_minutes' => $this->prescribedWorkMinutes,
             'updated_by_user_id' => $this->updatedByUserId,
         ];

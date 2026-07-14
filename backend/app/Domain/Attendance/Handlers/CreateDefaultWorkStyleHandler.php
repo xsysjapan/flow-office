@@ -85,6 +85,8 @@ class CreateDefaultWorkStyleHandler implements CommandHandler
             'default_start_time' => '09:00',
             'default_end_time' => '18:00',
             'default_break_minutes' => 60,
+            'default_break_start_time' => '12:00',
+            'default_break_end_time' => '13:00',
             'calendar_id' => null,
             'is_shift_based' => false,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,

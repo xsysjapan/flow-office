@@ -29,6 +29,8 @@ class UpdateShiftPatternHandler implements CommandHandler
             'end_time' => $command->endTime,
             'crosses_midnight' => $command->crossesMidnight,
             'break_minutes' => $command->breakMinutes,
+            'break_start_time' => $command->breakStartTime,
+            'break_end_time' => $command->breakEndTime,
             'prescribed_work_minutes' => $command->prescribedWorkMinutes,
         ]);
 
@@ -42,6 +44,8 @@ class UpdateShiftPatternHandler implements CommandHandler
                 endTime: $command->endTime,
                 crossesMidnight: $command->crossesMidnight,
                 breakMinutes: $command->breakMinutes,
+                breakStartTime: $command->breakStartTime,
+                breakEndTime: $command->breakEndTime,
                 prescribedWorkMinutes: $command->prescribedWorkMinutes,
                 updatedByUserId: $command->updatedByUserId,
             ),

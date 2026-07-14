@@ -52,6 +52,7 @@ const recordedDay: AttendanceDay = {
     company_holiday_work_minutes: 0,
     legal_holiday_late_night_minutes: 0,
     core_time_violation: false,
+    is_manually_adjusted: false,
   },
 }
 
@@ -76,6 +77,12 @@ function withSeeded(days: AttendanceDay[], punches: AttendancePunch[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['attendance', 'week', monday], days)
   queryClient.setQueryData(['attendance', 'punches', date, date], punches)
+  queryClient.setQueryData(['attendance', 'day-defaults', currentUser.id, date], {
+    source: 'none',
+    actual_start_at: null,
+    actual_end_at: null,
+    breaks: [],
+  })
 
   return function Decorator() {
     return (

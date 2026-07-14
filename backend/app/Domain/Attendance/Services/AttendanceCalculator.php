@@ -4,8 +4,6 @@ namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
-use App\Models\SystemSetting;
-use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -63,7 +61,10 @@ class AttendanceCalculator
 
     private const LATE_NIGHT_END_HOUR = 5;
 
-    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
+    public function __construct(
+        private readonly LegalHolidayResolver $legalHolidayResolver,
+        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+    ) {}
 
     /**
      * @return array<string, int|bool|null>
@@ -223,16 +224,7 @@ class AttendanceCalculator
      */
     private function resolveFallbackWorkStyle(AttendanceDay $day): ?WorkStyle
     {
-        $monthlyAssignment = UserWorkStyleMonthlyAssignment::query()
-            ->where('user_id', $day->user_id)
-            ->where('year_month', $day->work_date->format('Y-m'))
-            ->first();
-
-        if ($monthlyAssignment !== null) {
-            return $monthlyAssignment->workStyle;
-        }
-
-        return SystemSetting::current()->defaultWorkStyle;
+        return $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date->copy());
     }
 
     /**

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,6 +49,7 @@ const recordedDay: AttendanceDay = {
     company_holiday_work_minutes: 0,
     legal_holiday_late_night_minutes: 0,
     core_time_violation: false,
+    is_manually_adjusted: false,
   },
 }
 
@@ -80,6 +81,17 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByText('退勤済み')).toBeInTheDocument()
     expect(screen.getByText('09:00')).toBeInTheDocument()
     expect(screen.getByText('18:00')).toBeInTheDocument()
+  })
+
+  it('links to the previous day, the next day, and the containing week', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    renderPage([recordedDay])
+
+    await screen.findByText(`${date}(月)の勤怠`)
+
+    expect(screen.getByRole('link', { name: '前日' })).toHaveAttribute('href', '/attendance/days/2026-07-05')
+    expect(screen.getByRole('link', { name: '翌日' })).toHaveAttribute('href', '/attendance/days/2026-07-07')
+    expect(screen.getByRole('link', { name: '週次' })).toHaveAttribute('href', `/attendance/week?start=${date}`)
   })
 
   it('edits the day and saves it as a decomposed daily edit', async () => {
@@ -142,6 +154,12 @@ describe('AttendanceDayPage', () => {
   it('shows a create form and creates a day when there is no record yet (UC-A016)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
+      source: 'none',
+      actual_start_at: null,
+      actual_end_at: null,
+      breaks: [],
+    })
     renderPage([])
 
     expect(await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')).toBeInTheDocument()
@@ -154,6 +172,75 @@ describe('AttendanceDayPage', () => {
         expect.objectContaining({ user_id: 1, work_date: date, reason: '実績の入力漏れ' }),
       ),
     )
+  })
+
+  it('reflects the schedule (including its break) as initial values when there is no record yet', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
+      source: 'schedule',
+      actual_start_at: `${date}T09:00:00+09:00`,
+      actual_end_at: `${date}T18:00:00+09:00`,
+      breaks: [{ start: `${date}T12:00:00+09:00`, end: `${date}T13:00:00+09:00` }],
+    })
+    renderPage([])
+
+    expect(await screen.findByText('勤務予定(休憩を含む)を初期値として反映しました。')).toBeInTheDocument()
+    expect(screen.getByLabelText('出勤')).toHaveValue(`${date}T09:00`)
+    expect(screen.getByLabelText('退勤')).toHaveValue(`${date}T18:00`)
+    expect(screen.getByLabelText('休憩開始')).toHaveValue(`${date}T12:00`)
+    expect(screen.getByLabelText('休憩終了')).toHaveValue(`${date}T13:00`)
+  })
+
+  it('warns of insufficient break time before saving, without blocking the save (labor law article 34)', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
+      source: 'none',
+      actual_start_at: null,
+      actual_end_at: null,
+      breaks: [],
+    })
+    renderPage([])
+
+    await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
+    fireEvent.change(screen.getByLabelText('出勤'), { target: { value: `${date}T09:00` } })
+    fireEvent.change(screen.getByLabelText('退勤'), { target: { value: `${date}T18:00` } })
+
+    expect(await screen.findByText(/休憩が60分未満です/)).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('作成理由(必須)'), '休憩なしで退勤した')
+    expect(screen.getByRole('button', { name: '作成する' })).not.toBeDisabled()
+  })
+
+  it('adjusts the calculated breakdown after registering, without touching the raw punch data (manual override)', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'adjustAttendanceDailyCalculation').mockResolvedValue({
+      ...recordedDay,
+      calculation: { ...recordedDay.calculation!, non_statutory_overtime_minutes: 30, is_manually_adjusted: true },
+    })
+    renderPage([recordedDay])
+
+    await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
+    const overtimeInput = screen.getByLabelText('所定内残業(分)')
+    await userEvent.clear(overtimeInput)
+    await userEvent.type(overtimeInput, '30')
+    await userEvent.type(screen.getByLabelText('補正理由(必須)'), '休憩の取り方を考慮して補正')
+    await userEvent.click(screen.getByRole('button', { name: '補正を保存する' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.adjustAttendanceDailyCalculation).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ non_statutory_overtime_minutes: 30, reason: '休憩の取り方を考慮して補正' }),
+      ),
+    )
+  })
+
+  it('hides the late-night input when there was no late-night work', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    renderPage([recordedDay])
+
+    await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
+    expect(screen.queryByLabelText('深夜労働(分)')).not.toBeInTheDocument()
   })
 
   it('shows an error message when the week fails to load', async () => {

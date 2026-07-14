@@ -104,6 +104,30 @@ export interface AttendanceDailyCalculation {
   legal_holiday_late_night_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
+  /** 区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正したか。実績が再編集され
+   *  再計算されるとfalseに戻る。 */
+  is_manually_adjusted: boolean
+}
+
+/** 日次登録後に手動補正できる区分ごとの時間。深夜(late_night_minutes)は0分の日は
+ *  入力欄自体を表示しない。 */
+export interface AttendanceDailyCalculationAdjustment {
+  prescribed_work_minutes: number
+  non_statutory_overtime_minutes: number
+  statutory_overtime_minutes: number
+  late_night_minutes: number
+  legal_holiday_work_minutes: number
+  company_holiday_work_minutes: number
+  reason: string
+}
+
+/** 日次勤怠の入力画面(未入力の日)を開いた際の初期値。保存するまで正データは変更しない、
+ *  あくまで入力欄への提案。 */
+export interface AttendanceDayDefaults {
+  source: 'punch' | 'schedule' | 'system_default' | 'none'
+  actual_start_at: string | null
+  actual_end_at: string | null
+  breaks: Array<{ start: string; end: string | null }>
 }
 
 /** 月60時間超残業(労基法37条)の参考情報。表示のたびに都度計算され、確定値ではない。 */
@@ -329,6 +353,12 @@ export interface WorkStyle {
   default_start_time: string | null
   default_end_time: string | null
   default_break_minutes: number
+  /** 日次勤怠の入力画面で打刻内容を初期値として反映する際の丸め単位(5/10/15/30分)。
+   *  未設定(null)は丸めない。 */
+  rounding_unit_minutes: number | null
+  /** 標準休憩の開始・終了時刻。勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。 */
+  default_break_start_time: string | null
+  default_break_end_time: string | null
   calendar_id: number
   is_shift_based: boolean
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
@@ -380,6 +410,9 @@ export interface EmployeeShiftAssignment {
   planned_start_at: string | null
   planned_end_at: string | null
   planned_break_minutes: number
+  /** 休憩の開始・終了時刻。planned_break_minutes(合計分数)とは別に持つ。未設定ならnull。 */
+  planned_break_start_at: string | null
+  planned_break_end_at: string | null
   /** UC-C004: シフトパターン割当は公開(手順6)まで下書き扱い。カレンダー一括生成は常にtrue。 */
   is_published: boolean
   /** 個別にシフトパターンを上書きした日かどうか。ローテーションの再生成では上書きされない。 */
@@ -395,6 +428,9 @@ export interface ShiftPattern {
   end_time: string | null
   crosses_midnight: boolean
   break_minutes: number
+  /** 休憩の開始・終了時刻。日次勤怠の初期値(勤務予定の休憩を含めて表示する)に使う。 */
+  break_start_time: string | null
+  break_end_time: string | null
   prescribed_work_minutes: number
 }
 

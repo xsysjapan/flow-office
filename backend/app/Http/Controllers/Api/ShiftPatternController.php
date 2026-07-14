@@ -48,6 +48,8 @@ class ShiftPatternController extends Controller
             'end_time' => ['nullable', 'date_format:H:i'],
             'crosses_midnight' => ['boolean'],
             'break_minutes' => ['integer', 'min:0'],
+            'break_start_time' => ['nullable', 'date_format:H:i'],
+            'break_end_time' => ['nullable', 'date_format:H:i'],
             'prescribed_work_minutes' => ['integer', 'min:0'],
         ]);
 
@@ -58,6 +60,8 @@ class ShiftPatternController extends Controller
             endTime: $data['end_time'] ?? null,
             crossesMidnight: $data['crosses_midnight'] ?? false,
             breakMinutes: $data['break_minutes'] ?? 0,
+            breakStartTime: $data['break_start_time'] ?? null,
+            breakEndTime: $data['break_end_time'] ?? null,
             prescribedWorkMinutes: $data['prescribed_work_minutes'] ?? 0,
             createdByUserId: $request->user()->id,
         ));
@@ -82,6 +86,8 @@ class ShiftPatternController extends Controller
             'end_time' => ['nullable', 'date_format:H:i'],
             'crosses_midnight' => ['boolean'],
             'break_minutes' => ['integer', 'min:0'],
+            'break_start_time' => ['nullable', 'date_format:H:i'],
+            'break_end_time' => ['nullable', 'date_format:H:i'],
             'prescribed_work_minutes' => ['integer', 'min:0'],
         ]);
 
@@ -92,6 +98,8 @@ class ShiftPatternController extends Controller
             endTime: $data['end_time'] ?? null,
             crossesMidnight: $data['crosses_midnight'] ?? false,
             breakMinutes: $data['break_minutes'] ?? 0,
+            breakStartTime: $data['break_start_time'] ?? null,
+            breakEndTime: $data['break_end_time'] ?? null,
             prescribedWorkMinutes: $data['prescribed_work_minutes'] ?? 0,
             updatedByUserId: $request->user()->id,
         ));

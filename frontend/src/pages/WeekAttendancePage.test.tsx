@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
 import type { AttendanceDay } from '../api/types'
@@ -36,6 +36,7 @@ const mondayRecord: AttendanceDay = {
     company_holiday_work_minutes: 0,
     legal_holiday_late_night_minutes: 0,
     core_time_violation: false,
+    is_manually_adjusted: false,
   },
 }
 
@@ -87,6 +88,24 @@ describe('WeekAttendancePage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '前週' }))
     await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart))
+  })
+
+  it('opens the week that contains the ?start= date, when navigated from the day page', async () => {
+    const otherWeekStart = addDays(weekStart, 7)
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/attendance/week?start=${otherWeekStart}`]}>
+          <Routes>
+            <Route path="/attendance/week" element={<WeekAttendancePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(otherWeekStart))
   })
 
   it('shows an error message when the week fails to load', async () => {

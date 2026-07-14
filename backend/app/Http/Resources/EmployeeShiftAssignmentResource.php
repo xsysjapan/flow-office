@@ -25,6 +25,8 @@ class EmployeeShiftAssignmentResource extends JsonResource
             'planned_start_at' => $this->planned_start_at?->toIso8601String(),
             'planned_end_at' => $this->planned_end_at?->toIso8601String(),
             'planned_break_minutes' => $this->planned_break_minutes,
+            'planned_break_start_at' => $this->planned_break_start_at?->toIso8601String(),
+            'planned_break_end_at' => $this->planned_break_end_at?->toIso8601String(),
             'is_published' => $this->is_published,
             'is_manually_overridden' => $this->is_manually_overridden,
         ];

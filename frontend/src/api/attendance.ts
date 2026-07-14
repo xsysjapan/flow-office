@@ -1,6 +1,8 @@
 import { apiFetch } from './client'
 import type {
+  AttendanceDailyCalculationAdjustment,
   AttendanceDay,
+  AttendanceDayDefaults,
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   AttendancePunch,
@@ -14,6 +16,11 @@ export function fetchToday(): Promise<AttendanceDay> {
 /** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。 */
 export function fetchWeek(startDate: string): Promise<AttendanceDay[]> {
   return apiFetch('/attendance/week', { query: { start_date: startDate } })
+}
+
+/** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
+export function fetchAttendanceDayDefaults(userId: number, workDate: string): Promise<AttendanceDayDefaults> {
+  return apiFetch('/attendance/day-defaults', { query: { user_id: userId, work_date: workDate } })
 }
 
 export function clockIn(): Promise<AttendanceDay> {
@@ -43,6 +50,15 @@ export interface EditAttendanceDayInput {
 
 export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
+}
+
+/** 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正する。
+ *  実績(出勤・退勤・休憩)が再編集され再計算されるとこの補正は解除される。 */
+export function adjustAttendanceDailyCalculation(
+  id: number,
+  input: AttendanceDailyCalculationAdjustment,
+): Promise<AttendanceDay> {
+  return apiFetch(`/attendance/days/${id}/calculation`, { method: 'PUT', body: input })
 }
 
 export interface CreateAttendanceDayInput {

@@ -97,6 +97,12 @@ class GenerateRotationShiftAssignmentsHandler implements CommandHandler
                 $plannedEndAt = $plannedEndAt->addDay();
             }
 
+            $plannedBreakStartAt = $shiftPattern->break_start_time ? $date->copy()->setTimeFromTimeString($shiftPattern->break_start_time) : null;
+            $plannedBreakEndAt = $shiftPattern->break_end_time ? $date->copy()->setTimeFromTimeString($shiftPattern->break_end_time) : null;
+            if ($plannedBreakStartAt !== null && $plannedBreakEndAt !== null && $plannedBreakEndAt->lessThanOrEqualTo($plannedBreakStartAt)) {
+                $plannedBreakEndAt = $plannedBreakEndAt->addDay();
+            }
+
             $assignment = $existing ?? new EmployeeShiftAssignment([
                 'user_id' => $command->userId,
                 'work_date' => $date->toDateString(),
@@ -112,6 +118,8 @@ class GenerateRotationShiftAssignmentsHandler implements CommandHandler
                 'planned_start_at' => $plannedStartAt,
                 'planned_end_at' => $plannedEndAt,
                 'planned_break_minutes' => $shiftPattern->break_minutes,
+                'planned_break_start_at' => $plannedBreakStartAt,
+                'planned_break_end_at' => $plannedBreakEndAt,
                 'is_published' => false,
                 'is_manually_overridden' => false,
             ])->save();
@@ -132,6 +140,8 @@ class GenerateRotationShiftAssignmentsHandler implements CommandHandler
                     plannedStartAt: $plannedStartAt?->toIso8601String(),
                     plannedEndAt: $plannedEndAt?->toIso8601String(),
                     plannedBreakMinutes: $shiftPattern->break_minutes,
+                    plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
+                    plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
                     assignedByUserId: $command->generatedByUserId,
                 ),
             );

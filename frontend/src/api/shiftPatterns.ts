@@ -12,6 +12,8 @@ export interface ShiftPatternInput {
   end_time?: string
   crosses_midnight?: boolean
   break_minutes?: number
+  break_start_time?: string
+  break_end_time?: string
   prescribed_work_minutes?: number
 }
 
