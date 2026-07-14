@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { AttendanceDay } from '../api/types'
 import { addDays, formatDate, mondayOf } from '../utils/weekDates'
 import { WeekAttendancePage } from './WeekAttendancePage'
@@ -47,7 +48,9 @@ function withSeeded(days: AttendanceDay[]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <WeekAttendancePage />
+        <MemoryRouter>
+          <WeekAttendancePage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }

@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Badge } from '../components/Badge/Badge'
+import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
-import { Button } from '../components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { useRequestTypes } from '../hooks/useRequestTypes'
 

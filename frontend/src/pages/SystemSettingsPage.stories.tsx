@@ -5,6 +5,7 @@ import { SystemSettingsPage } from './SystemSettingsPage'
 
 const settings: SystemSettings = {
   default_timezone: 'Asia/Tokyo',
+  default_work_style_id: 1,
   attendance_submission_deadline_day: 5,
   attendance_month_close_deadline_day: 10,
 }

@@ -5,6 +5,7 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../hooks/useAttendance'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
@@ -13,6 +14,7 @@ import { hasAnyRole, ROLE } from '../utils/roles'
 /**
  * UC-A009: 承認者向けの勤怠月次の承認・差戻し。
  * UC-A010: 管理者/人事による締め処理(admin・hr_staffロールのみ)。
+ * 提出済みの月次は複数選択し、まとめて承認できる(個別の差戻し/締め処理は行ごとに残す)。
  */
 export function MonthsToApprovePage() {
   const { user } = useAuth()
@@ -22,16 +24,54 @@ export function MonthsToApprovePage() {
   const closeMonth = useCloseMonth()
 
   const [comments, setComments] = useState<Record<number, string>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
+  const [bulkError, setBulkError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="承認待ちの勤怠月次の取得に失敗しました。" />
 
   const months = data ?? []
   const canClose = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
-  const actionError = approveMonth.error ?? returnMonth.error ?? closeMonth.error
+  const actionError = approveMonth.error ?? returnMonth.error ?? closeMonth.error ?? bulkError
+
+  function toggleRow(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkApprove() {
+    if (selectedIds.size === 0) return
+    setBulkError(null)
+    setIsBulkApproving(true)
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => approveMonth.mutateAsync(id)))
+      setSelectedIds(new Set())
+    } catch (e) {
+      setBulkError(e as Error)
+    } finally {
+      setIsBulkApproving(false)
+    }
+  }
 
   return (
-    <Card title="承認待ちの勤怠月次">
+    <Card
+      title="承認待ちの勤怠月次"
+      actions={
+        selectedIds.size > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
+            <Button onClick={() => void handleBulkApprove()} isLoading={isBulkApproving}>
+              まとめて承認する
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       {actionError && <ErrorMessage error={actionError} />}
 
       {months.length === 0 ? (
@@ -41,11 +81,20 @@ export function MonthsToApprovePage() {
           {months.map((month) => {
             const { label, tone } = attendanceMonthStatusLabel(month.status)
             const comment = comments[month.id] ?? ''
+            const selectable = month.status === 'submitted'
+            const selected = selectedIds.has(month.id)
 
             return (
               <li key={month.id} className="py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
+                    {selectable && (
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => toggleRow(month.id)}
+                        aria-label={`${month.year_month}(社員ID: ${month.user_id})を選択`}
+                      />
+                    )}
                     <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
                     <span className="text-sm text-muted-foreground">社員ID: {month.user_id}</span>
                   </div>

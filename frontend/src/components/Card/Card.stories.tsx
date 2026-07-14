@@ -6,6 +6,13 @@ const meta = {
   title: 'Components/Card',
   component: Card,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'ページ実装で使う公開コンポーネント。内部で`ui/card`のCardHeader/CardTitle/CardContent等を組み立て、`title`/`actions`/`children`のみを受け取る。',
+      },
+    },
+  },
 } satisfies Meta<typeof Card>
 
 export default meta

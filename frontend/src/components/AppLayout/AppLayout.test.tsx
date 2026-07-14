@@ -50,10 +50,19 @@ describe('AppLayout', () => {
     expect(screen.getByText('開発部 ・ 管理者')).toBeInTheDocument()
   })
 
-  it('shows navigation links', () => {
+  it('shows the 申請 group links inside its dropdown menu', async () => {
     renderLayout()
-    expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '申請' }))
+    expect(await screen.findByRole('menuitem', { name: '自分の申請' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
+  })
+
+  it('shows the 承認 group links inside its dropdown menu', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: '承認' }))
+    expect(await screen.findByRole('menuitem', { name: '承認待ち' })).toBeInTheDocument()
   })
 
   it('calls logout when the logout button is clicked', async () => {
@@ -77,5 +86,40 @@ describe('AppLayout', () => {
 
     expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
+  })
+
+  it('opens a mobile menu drawer listing every group and its links', async () => {
+    renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+
+    expect(await screen.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
+  })
+
+  it('closes the mobile menu drawer after choosing a link', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+    await userEvent.click(await screen.findByRole('link', { name: '自分の申請' }))
+
+    expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
+  })
+
+  it('shows a logout button inside the mobile menu drawer', async () => {
+    const logout = vi.fn()
+    renderLayout(logout)
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+    await screen.findByRole('heading', { name: 'メニュー' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+
+    expect(logout).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
 })

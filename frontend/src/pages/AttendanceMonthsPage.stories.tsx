@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { AttendanceMonth, Paginated, User } from '../api/types'
 import { AttendanceMonthsPage } from './AttendanceMonthsPage'
 
@@ -68,7 +69,9 @@ function withSeeded(data: AttendanceMonth[]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <AttendanceMonthsPage />
+        <MemoryRouter>
+          <AttendanceMonthsPage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }

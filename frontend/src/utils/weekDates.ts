@@ -23,3 +23,17 @@ export function addDays(dateStr: string, amount: number): string {
 export function weekDates(weekStart: string): string[] {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 }
+
+/** "YYYY-MM" の月次勤怠が対象とする、その月の全日付("YYYY-MM-DD")を1日から月末まで並べて返す。 */
+export function datesInMonth(yearMonth: string): string[] {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, i) => `${yearMonth}-${pad(i + 1)}`)
+}
+
+/** "YYYY-MM" にamountヶ月を加減した "YYYY-MM" を返す。 */
+export function addMonths(yearMonth: string, amount: number): string {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const d = new Date(year, month - 1 + amount, 1)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}

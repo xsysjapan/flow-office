@@ -5,6 +5,13 @@ const meta = {
   title: 'UI/Badge',
   component: Badge,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'shadcn/ui相当の内部実装プリミティブ。ページ実装では直接使わず、`components/Badge`を使うこと。',
+      },
+    },
+  },
   argTypes: {
     variant: {
       control: 'select',

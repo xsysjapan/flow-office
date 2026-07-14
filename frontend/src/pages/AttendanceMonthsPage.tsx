@@ -1,65 +1,14 @@
-import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../components/Badge/Badge'
-import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
-import { UserPicker } from '../components/UserPicker/UserPicker'
-import { useMyMonths, useSubmitMonth } from '../hooks/useAttendance'
-import type { AttendanceMonth } from '../api/types'
+import { useMyMonths } from '../hooks/useAttendance'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
 
-interface MonthRowProps {
-  month: AttendanceMonth
-}
-
 /**
- * `useSubmitMonth`はyear_monthをhook引数として受け取るため、`.map()`の中で条件付きに
- * hookを呼べない。行ごとにコンポーネントを切り出し、行1つにつきhook呼び出しを1回に保つ。
- */
-function MonthRow({ month }: MonthRowProps) {
-  const [approverUserId, setApproverUserId] = useState<number | undefined>(undefined)
-  const submitMonth = useSubmitMonth(month.year_month)
-  const { label, tone } = attendanceMonthStatusLabel(month.status)
-  const canSubmit = month.status === 'not_submitted' || month.status === 'returned'
-
-  return (
-    <li className="py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
-        <Badge tone={tone}>{label}</Badge>
-      </div>
-
-      {month.legal_holiday_warnings.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {month.legal_holiday_warnings.map((warning) => (
-            <Badge key={`${warning.rule}-${warning.period_start}`} tone="warning">
-              {legalHolidayWarningLabel(warning)}
-            </Badge>
-          ))}
-        </div>
-      )}
-
-      {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
-
-      {canSubmit && (
-        <div className="mt-2 flex items-center gap-2">
-          <UserPicker id={`approver-${month.id}`} value={approverUserId} onChange={setApproverUserId} />
-          <Button
-            isLoading={submitMonth.isPending}
-            disabled={!approverUserId}
-            onClick={() => submitMonth.mutate(approverUserId as number)}
-          >
-            提出する
-          </Button>
-        </div>
-      )}
-    </li>
-  )
-}
-
-/**
- * UC-A008: 自分の勤怠月次を確認し提出する。
+ * UC-A008: 自分の勤怠月次の一覧。月を選ぶと詳細画面(日別の内訳・提出)に遷移する
+ * (オブジェクト指向UI)。
  */
 export function AttendanceMonthsPage() {
   const { data, isLoading, error } = useMyMonths()
@@ -75,9 +24,30 @@ export function AttendanceMonthsPage() {
         <p className="text-sm text-muted-foreground">勤怠月次はまだありません。</p>
       ) : (
         <ul className="divide-y divide-border">
-          {months.map((month) => (
-            <MonthRow key={month.id} month={month} />
-          ))}
+          {months.map((month) => {
+            const { label, tone } = attendanceMonthStatusLabel(month.status)
+            return (
+              <li key={month.id}>
+                <Link
+                  to={`/attendance/months/${month.year_month}`}
+                  className="flex flex-wrap items-center gap-2.5 rounded-md px-2 py-3 transition-colors hover:bg-accent"
+                >
+                  <span className="text-sm font-semibold text-foreground">{month.year_month}</span>
+                  <Badge tone={tone}>{label}</Badge>
+                  {month.legal_holiday_warnings.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {month.legal_holiday_warnings.map((warning) => (
+                        <Badge key={`${warning.rule}-${warning.period_start}`} tone="warning">
+                          {legalHolidayWarningLabel(warning)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <span className="ml-auto text-sm text-muted-foreground">詳細を見る ›</span>
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       )}
     </Card>

@@ -6,7 +6,6 @@ import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../components/FormField/FormField'
 import { LoadingState } from '../components/LoadingState/LoadingState'
-import { buttonVariants } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
@@ -171,9 +170,9 @@ export function MyPaidLeavePage() {
       <Card
         title="自分の有給"
         actions={
-          <Link to="/paid-leave/history" className={buttonVariants({ variant: 'secondary' })}>
-            履歴を見る
-          </Link>
+          <Button asChild variant="secondary">
+            <Link to="/paid-leave/history">履歴を見る</Link>
+          </Button>
         }
       >
         <p className="mb-4 text-sm text-foreground">

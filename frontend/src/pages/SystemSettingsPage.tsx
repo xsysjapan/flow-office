@@ -17,6 +17,7 @@ export function SystemSettingsPage() {
   const [defaultTimezone, setDefaultTimezone] = useState('')
   const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
   const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
+  const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<number | null>(null)
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function SystemSettingsPage() {
     setDefaultTimezone(data.default_timezone)
     setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
     setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
+    setDefaultWorkStyleId(data.default_work_style_id)
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -36,6 +38,9 @@ export function SystemSettingsPage() {
         default_timezone: defaultTimezone,
         attendance_submission_deadline_day: Number(submissionDeadlineDay),
         attendance_month_close_deadline_day: Number(monthCloseDeadlineDay),
+        // 既定の働き方は管理メニューの勤務形態画面(デフォルトに設定)で変更する。
+        // ここでは読み込んだ値をそのまま送り返し、上書きしないようにする。
+        default_work_style_id: defaultWorkStyleId,
       },
       { onSuccess: () => setSavedMessage(true) },
     )

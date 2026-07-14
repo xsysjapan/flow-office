@@ -10,7 +10,7 @@ export function AdminLayout() {
   const visibleGroups = adminNavGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:flex-row sm:p-6">
+    <div className="flex flex-col gap-6 sm:flex-row">
       <aside className="flex w-full shrink-0 flex-col gap-5 sm:w-56" aria-label="管理メニュー">
         <Link to="/admin" className="text-sm font-semibold text-foreground">
           管理メニュー

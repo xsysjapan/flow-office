@@ -6,6 +6,13 @@ const meta = {
   title: 'UI/Card',
   component: Card,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'shadcn/ui相当の内部実装プリミティブ(CardHeader/CardTitle/CardAction等)。ページ実装では直接使わず、`components/Card`を使うこと。',
+      },
+    },
+  },
 } satisfies Meta<typeof Card>
 
 export default meta

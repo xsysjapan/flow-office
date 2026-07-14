@@ -148,4 +148,32 @@ describe('MonthsToApprovePage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
   })
+
+  it('bulk-approves selected submitted months', async () => {
+    const secondSubmittedMonth: AttendanceMonth = { ...submittedMonth, id: 4, year_month: '2026-06', user_id: 2 }
+    vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue([submittedMonth, secondSubmittedMonth])
+    const approveSpy = vi.spyOn(attendanceApi, 'approveMonth').mockResolvedValue({ ...submittedMonth, status: 'approved' })
+
+    renderPage()
+    await screen.findByText('2026-07')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-07(社員ID: 1)を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-06(社員ID: 2)を選択' }))
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'まとめて承認する' }))
+
+    await waitFor(() => expect(approveSpy).toHaveBeenCalledTimes(2))
+    expect(approveSpy).toHaveBeenCalledWith(1)
+    expect(approveSpy).toHaveBeenCalledWith(4)
+  })
+
+  it('does not show a selection checkbox for an already-approved month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue([approvedMonth])
+
+    renderPage()
+
+    await screen.findByText('2026-07')
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
 })

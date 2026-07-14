@@ -8,6 +8,7 @@ import { SystemSettingsPage } from './SystemSettingsPage'
 
 const settings: SystemSettings = {
   default_timezone: 'Asia/Tokyo',
+  default_work_style_id: 3,
   attendance_submission_deadline_day: 5,
   attendance_month_close_deadline_day: 10,
 }
@@ -47,6 +48,7 @@ describe('SystemSettingsPage', () => {
         default_timezone: 'America/Los_Angeles',
         attendance_submission_deadline_day: 5,
         attendance_month_close_deadline_day: 10,
+        default_work_style_id: 3,
       }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()

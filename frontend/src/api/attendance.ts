@@ -39,6 +39,22 @@ export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): 
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
 }
 
+export interface CreateAttendanceDayInput {
+  user_id: number
+  work_date: string
+  actual_start_at?: string | null
+  actual_end_at?: string | null
+  breaks?: Array<{ start: string; end?: string | null }>
+  work_type?: string | null
+  note?: string | null
+  reason: string
+}
+
+/** UC-A016: 出勤日を新規作成する。打刻の有無にかかわらず、月が締められるまではいつでも作成できる。 */
+export function createAttendanceDay(input: CreateAttendanceDayInput): Promise<AttendanceDay> {
+  return apiFetch('/attendance/days', { method: 'POST', body: input })
+}
+
 /** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
 export function deleteAttendanceDay(id: number, reason: string): Promise<{ deleted: boolean }> {
   return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: { reason } })

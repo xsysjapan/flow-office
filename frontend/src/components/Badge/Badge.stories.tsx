@@ -5,6 +5,13 @@ const meta = {
   title: 'Components/Badge',
   component: Badge,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component: 'ページ実装で使う公開コンポーネント。内部で`ui/badge`をラップし、業務ステータスの意味を持つ`tone`propのみを受け取る。',
+      },
+    },
+  },
   argTypes: {
     tone: {
       control: 'select',
