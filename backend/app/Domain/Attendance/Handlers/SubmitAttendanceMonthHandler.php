@@ -4,12 +4,12 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
+use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Jobs\SendTeamsNotificationJob;
-use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
@@ -22,7 +22,10 @@ use Illuminate\Support\Carbon;
  */
 class SubmitAttendanceMonthHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
+    public function __construct(
+        private readonly EventStore $eventStore,
+        private readonly MonthlyOvertimeCalculator $monthlyOvertimeCalculator,
+    ) {}
 
     public function handle(Command $command): AttendanceMonth
     {
@@ -68,23 +71,14 @@ class SubmitAttendanceMonthHandler implements CommandHandler
      */
     private function buildSnapshot(int $userId, string $yearMonth): array
     {
-        $dayIds = AttendanceDay::query()
+        $dayCount = AttendanceDay::query()
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
-            ->pluck('id');
+            ->count();
 
-        $calculations = AttendanceDailyCalculation::query()->whereIn('attendance_day_id', $dayIds)->get();
-
-        return [
-            'day_count' => $dayIds->count(),
-            'actual_work_minutes' => $calculations->sum('actual_work_minutes'),
-            'payroll_work_minutes' => $calculations->sum('payroll_work_minutes'),
-            'prescribed_work_minutes' => $calculations->sum('prescribed_work_minutes'),
-            'non_statutory_overtime_minutes' => $calculations->sum('non_statutory_overtime_minutes'),
-            'statutory_overtime_minutes' => $calculations->sum('statutory_overtime_minutes'),
-            'late_night_minutes' => $calculations->sum('late_night_minutes'),
-            'legal_holiday_work_minutes' => $calculations->sum('legal_holiday_work_minutes'),
-            'company_holiday_work_minutes' => $calculations->sum('company_holiday_work_minutes'),
-        ];
+        return array_merge(
+            ['day_count' => $dayCount],
+            $this->monthlyOvertimeCalculator->calculateCategoryTotals($userId, $yearMonth),
+        );
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Services;
 
+use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\SystemSetting;
 use App\Models\UserWorkStyleMonthlyAssignment;
@@ -28,7 +29,17 @@ use Illuminate\Support\Carbon;
  *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
  *   指定または自動推定した日かどうかで判定する。
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
- *   (WeeklyOvertimeCalculator)として別途都度計算する。
+ *   (WeeklyOvertimeCalculator)として別途都度計算する。月60時間超の判定も同様に
+ *   MonthlyOvertimeCalculatorが日次実績から都度計算する参考情報とし、ここでは計算しない。
+ * - 深夜時間帯(22:00〜05:00)の労働は、区分別に`regular_work_late_night_minutes`(所定内労働の
+ *   深夜)・`non_statutory_overtime_late_night_minutes`(所定内残業の深夜)・
+ *   `statutory_overtime_late_night_minutes`(法定外残業の深夜=法定外深夜)の3区分に分解する。
+ *   残業は勤務時間の末尾から発生する前提(休憩を除いた実働時間を始業から時系列に辿り、所定内
+ *   労働→所定内残業→法定外残業の順に消化する)で、各区分の境界時刻を求め、区分ごとに深夜
+ *   時間帯と重なる分を算出する(3区分の合計は`late_night_minutes`に一致する)。裁量労働制・
+ *   管理監督者・フレックスタイム制など実働時間から法定外残業を判定しない勤務形態、および
+ *   法定休日では算出しない(0とする。管理監督者・フレックスは所定内/所定外の区分自体が
+ *   常に0になるため、深夜労働があれば全て`regular_work_late_night_minutes`に計上される)。
  * - フレックスタイム制(work_time_system=flex)は、日次の始業・終業時刻ではなく清算期間
  *   全体で労働時間を管理するため(指示書 7.1節)、日次の残業判定(non_statutory_overtime_minutes
  *   / statutory_overtime_minutes)は行わず常に0とする(週40時間の法定労働時間総枠に基づく
@@ -140,6 +151,32 @@ class AttendanceCalculator
 
         $coreTimeViolation = $this->isCoreTimeViolated($isFlex, $workStyle, $day->work_date, $start, $end);
 
+        // 残業が実際の勤務時刻(実働時間)から判定されている場合のみ、深夜時間帯を所定内労働/
+        // 所定内残業/法定外残業の3区分に分解する。裁量労働制のみなし時間ベースの判定、
+        // 法定休日では算出しない(0のまま)。
+        $regularWorkLateNightMinutes = 0;
+        $nonStatutoryOvertimeLateNightMinutes = 0;
+        $statutoryOvertimeLateNightMinutes = 0;
+        if ($deemedWorkMinutes === 0 && ! $isLegalHoliday && $start !== null && $end !== null && $lateNightMinutes > 0) {
+            $regularWorkMinutes = max(0, $actualWorkMinutes - $nonStatutoryOvertimeMinutes - $statutoryOvertimeMinutes);
+            $nonStatutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes);
+            $statutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes + $nonStatutoryOvertimeMinutes);
+
+            $regularWorkLateNightMinutes = $this->lateNightOverlapMinutesInRange($start, $nonStatutoryOvertimeBoundary ?? $end, $breaks);
+
+            if ($nonStatutoryOvertimeBoundary !== null) {
+                $nonStatutoryOvertimeLateNightMinutes = $this->lateNightOverlapMinutesInRange(
+                    $nonStatutoryOvertimeBoundary,
+                    $statutoryOvertimeBoundary ?? $end,
+                    $breaks,
+                );
+            }
+
+            if ($statutoryOvertimeBoundary !== null) {
+                $statutoryOvertimeLateNightMinutes = $this->lateNightOverlapMinutesInRange($statutoryOvertimeBoundary, $end, $breaks);
+            }
+        }
+
         return [
             'planned_work_minutes' => $plannedWorkMinutes,
             'actual_work_minutes' => $actualWorkMinutes,
@@ -149,6 +186,9 @@ class AttendanceCalculator
             'non_statutory_overtime_minutes' => $nonStatutoryOvertimeMinutes,
             'statutory_overtime_minutes' => $statutoryOvertimeMinutes,
             'late_night_minutes' => $isLegalHoliday ? 0 : $lateNightMinutes,
+            'regular_work_late_night_minutes' => $regularWorkLateNightMinutes,
+            'non_statutory_overtime_late_night_minutes' => $nonStatutoryOvertimeLateNightMinutes,
+            'statutory_overtime_late_night_minutes' => $statutoryOvertimeLateNightMinutes,
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
             'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
@@ -193,6 +233,64 @@ class AttendanceCalculator
         }
 
         return SystemSetting::current()->defaultWorkStyle;
+    }
+
+    /**
+     * 実働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
+     * 発生する前提(休憩を除いた勤務区間を時系列に辿り、累計が閾値に達した時点)で境界を返す。
+     * 閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)はnullを返す。
+     *
+     * @param  iterable<int, AttendanceBreak>  $breaks
+     */
+    private function findOvertimeBoundary(Carbon $start, Carbon $end, iterable $breaks, int $thresholdMinutes): ?Carbon
+    {
+        $sortedBreaks = collect($breaks)->sortBy(fn ($break) => $break->break_start_at)->values();
+
+        $cursor = $start->copy();
+        $accumulated = 0;
+
+        foreach ($sortedBreaks as $break) {
+            if ($break->break_start_at->greaterThan($cursor)) {
+                $segmentMinutes = $cursor->diffInMinutes($break->break_start_at);
+                if ($accumulated + $segmentMinutes >= $thresholdMinutes) {
+                    return $cursor->copy()->addMinutes($thresholdMinutes - $accumulated);
+                }
+                $accumulated += $segmentMinutes;
+            }
+            if ($break->break_end_at->greaterThan($cursor)) {
+                $cursor = $break->break_end_at->copy();
+            }
+        }
+
+        if ($end->greaterThan($cursor)) {
+            $segmentMinutes = $cursor->diffInMinutes($end);
+            if ($accumulated + $segmentMinutes >= $thresholdMinutes) {
+                return $cursor->copy()->addMinutes($thresholdMinutes - $accumulated);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * [$rangeStart, $rangeEnd)の区間のうち深夜時間帯(22:00〜05:00)と重なる分を、休憩による
+     * 重複を除いて算出する。
+     *
+     * @param  iterable<int, AttendanceBreak>  $breaks
+     */
+    private function lateNightOverlapMinutesInRange(Carbon $rangeStart, Carbon $rangeEnd, iterable $breaks): int
+    {
+        $minutes = $this->lateNightOverlapMinutes($rangeStart, $rangeEnd);
+
+        foreach ($breaks as $break) {
+            $breakStart = $break->break_start_at->greaterThan($rangeStart) ? $break->break_start_at : $rangeStart;
+            $breakEnd = $break->break_end_at->lessThan($rangeEnd) ? $break->break_end_at : $rangeEnd;
+            if ($breakEnd->greaterThan($breakStart)) {
+                $minutes -= $this->lateNightOverlapMinutes($breakStart, $breakEnd);
+            }
+        }
+
+        return max(0, $minutes);
     }
 
     private function lateNightOverlapMinutes(Carbon $start, Carbon $end): int

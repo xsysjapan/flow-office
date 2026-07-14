@@ -206,11 +206,32 @@ export function TodayAttendancePage() {
             {day.calculation && (
               <>
                 <StatTileGrid className="sm:grid-cols-4">
+                  <StatTile label="所定労働時間" value={`${day.calculation.prescribed_work_minutes}分`} />
                   <StatTile label="実働" value={`${day.calculation.actual_work_minutes}分`} />
-                  <StatTile label="残業(法定内)" value={`${day.calculation.non_statutory_overtime_minutes}分`} />
-                  <StatTile label="残業(法定外)" value={`${day.calculation.statutory_overtime_minutes}分`} />
-                  <StatTile label="深夜" value={`${day.calculation.late_night_minutes}分`} />
+                  <StatTile label="所定内残業" value={`${day.calculation.non_statutory_overtime_minutes}分`} />
+                  <StatTile label="法定外残業" value={`${day.calculation.statutory_overtime_minutes}分`} />
                 </StatTileGrid>
+                <StatTileGrid className="sm:grid-cols-4">
+                  <StatTile label="深夜労働" value={`${day.calculation.late_night_minutes}分`} />
+                  <StatTile label="深夜(所定内労働)" value={`${day.calculation.regular_work_late_night_minutes}分`} />
+                  <StatTile label="深夜(所定内残業)" value={`${day.calculation.non_statutory_overtime_late_night_minutes}分`} />
+                  <StatTile label="法定外深夜" value={`${day.calculation.statutory_overtime_late_night_minutes}分`} />
+                </StatTileGrid>
+                <StatTileGrid className="sm:grid-cols-2">
+                  <StatTile label="法定休日労働" value={`${day.calculation.legal_holiday_work_minutes}分`} />
+                  <StatTile label="所定休日労働" value={`${day.calculation.company_holiday_work_minutes}分`} />
+                </StatTileGrid>
+                {day.calculation.legal_holiday_late_night_minutes > 0 && (
+                  <StatTileGrid className="sm:grid-cols-1">
+                    <StatTile label="法定休日深夜" value={`${day.calculation.legal_holiday_late_night_minutes}分`} />
+                  </StatTileGrid>
+                )}
+                {day.monthly_overtime && (
+                  <p className="text-xs text-muted-foreground">
+                    今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_overtime_minutes}分
+                    (うち月60時間超残業: {day.monthly_overtime.statutory_overtime_over_60h_minutes}分)
+                  </p>
+                )}
                 {day.calculation.core_time_violation && (
                   <p className="text-sm text-destructive">コアタイム違反(勤務がコアタイムを全てカバーしていません)</p>
                 )}

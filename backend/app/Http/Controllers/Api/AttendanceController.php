@@ -14,6 +14,7 @@ use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
+use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
@@ -346,6 +347,9 @@ class AttendanceController extends Controller
             // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
             // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
             'flex_settlement_summary' => app(FlexSettlementSummaryCalculator::class)->calculateForMonth($userId, $yearMonth),
+            // 9区分(所定内残業/法定外残業/月60時間超残業/深夜労働等)の月合計。提出前でも
+            // 進捗の目安として都度計算する(提出後はattendance_months.snapshot_jsonが確定値)。
+            'monthly_calculation_totals' => app(MonthlyOvertimeCalculator::class)->calculateCategoryTotals($userId, $yearMonth),
         ];
     }
 

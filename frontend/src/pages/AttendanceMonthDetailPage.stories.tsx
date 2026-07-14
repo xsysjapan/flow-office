@@ -2,7 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { fn } from 'storybook/test'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { AttendanceDay, AttendanceMonth, Paginated, User, UserWorkStyleMonthlyAssignment } from '../api/types'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  Paginated,
+  User,
+  UserWorkStyleMonthlyAssignment,
+} from '../api/types'
 import { AuthContext, type AuthContextValue } from '../auth/AuthContext'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 
@@ -54,6 +61,23 @@ const month: AttendanceMonth = {
   legal_holiday_warnings: [],
 }
 
+const monthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  actual_work_minutes: 2820,
+  payroll_work_minutes: 2820,
+  prescribed_work_minutes: 2400,
+  non_statutory_overtime_minutes: 60,
+  statutory_overtime_minutes: 360,
+  statutory_overtime_within_60h_minutes: 360,
+  statutory_overtime_over_60h_minutes: 0,
+  late_night_minutes: 0,
+  regular_work_late_night_minutes: 0,
+  non_statutory_overtime_late_night_minutes: 0,
+  statutory_overtime_late_night_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  company_holiday_work_minutes: 0,
+  legal_holiday_late_night_minutes: 0,
+}
+
 const days: AttendanceDay[] = [
   {
     id: 1,
@@ -72,7 +96,11 @@ const days: AttendanceDay[] = [
 
 function withSeeded(monthData: { days: AttendanceDay[]; month: AttendanceMonth | null }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['attendance', 'month', yearMonth], { ...monthData, flex_settlement_summary: null })
+  queryClient.setQueryData(['attendance', 'month', yearMonth], {
+    ...monthData,
+    flex_settlement_summary: null,
+    monthly_calculation_totals: monthlyCalculationTotals,
+  })
   queryClient.setQueryData(['users', ''], emptyUsers)
   queryClient.setQueryData(['user-work-style-monthly-assignments', currentUser.id], workStyleAssignments)
 
