@@ -30,7 +30,7 @@ export function SheetContent({ className, side = 'left', children, ...props }: S
       <SheetOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'fixed z-50 flex flex-col gap-4 border-border bg-card p-4 text-card-foreground shadow-sm transition ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:duration-200 data-[state=open]:duration-300',
+          'fixed z-50 flex flex-col gap-4 border-border bg-card p-4 text-card-foreground shadow-sm outline-none focus-visible:ring-0 transition ease-in-out data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:duration-200 data-[state=open]:duration-300',
           side === 'left' &&
             'inset-y-0 left-0 h-full w-3/4 max-w-xs border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
           side === 'right' &&
