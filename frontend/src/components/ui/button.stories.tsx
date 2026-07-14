@@ -6,6 +6,14 @@ const meta = {
   title: 'UI/Button',
   component: Button,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'shadcn/ui相当の内部実装プリミティブ。`outline`/`ghost`/`link`やアイコンサイズなど、他コンポーネントの内部組み立てに使う全variantを持つ。ページ実装では直接使わず、`components/Button`を使うこと。',
+      },
+    },
+  },
   args: { onClick: fn() },
   argTypes: {
     variant: {

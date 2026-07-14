@@ -6,6 +6,14 @@ const meta = {
   title: 'Components/Button',
   component: Button,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'ページ実装で使う公開コンポーネント。内部で`ui/button`をラップし、業務用途を絞った`variant`と`isLoading`合成ロジックを持つ。',
+      },
+    },
+  },
   args: {
     onClick: fn(),
   },
