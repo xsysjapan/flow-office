@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Services;
 
+use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\SystemSetting;
 use App\Models\UserWorkStyleMonthlyAssignment;
@@ -220,7 +221,7 @@ class AttendanceCalculator
      * 発生する前提(休憩を除いた勤務区間を時系列に辿り、累計が閾値に達した時点)で境界を返す。
      * 閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)はnullを返す。
      *
-     * @param  iterable<int, \App\Models\AttendanceBreak>  $breaks
+     * @param  iterable<int, AttendanceBreak>  $breaks
      */
     private function findOvertimeBoundary(Carbon $start, Carbon $end, iterable $breaks, int $thresholdMinutes): ?Carbon
     {
@@ -256,7 +257,7 @@ class AttendanceCalculator
      * [$boundary, $end)の区間のうち深夜時間帯(22:00〜05:00)と重なる分を、休憩による重複を
      * 除いて算出する。
      *
-     * @param  iterable<int, \App\Models\AttendanceBreak>  $breaks
+     * @param  iterable<int, AttendanceBreak>  $breaks
      */
     private function lateNightOverlapMinutesFrom(Carbon $boundary, Carbon $end, iterable $breaks): int
     {
