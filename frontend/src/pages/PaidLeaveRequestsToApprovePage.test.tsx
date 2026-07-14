@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../api/paidLeave'
 import type { PaidLeaveRequest } from '../api/types'
 import { PaidLeaveRequestsToApprovePage } from './PaidLeaveRequestsToApprovePage'
@@ -40,6 +40,10 @@ function renderPage() {
 }
 
 describe('PaidLeaveRequestsToApprovePage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows an empty state when there are no requests', async () => {
     vi.spyOn(paidLeaveApi, 'fetchPaidLeaveRequestsToApprove').mockResolvedValue([])
 
@@ -86,5 +90,27 @@ describe('PaidLeaveRequestsToApprovePage', () => {
     await waitFor(() =>
       expect(paidLeaveApi.returnPaidLeaveRequest).toHaveBeenCalledWith(request.id, '日程を確認してください'),
     )
+  })
+
+  it('bulk-approves selected requests', async () => {
+    const secondRequest: PaidLeaveRequest = { ...request, id: 2, target_date: '2026-08-11' }
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveRequestsToApprove').mockResolvedValue([request, secondRequest])
+    const approveSpy = vi.spyOn(paidLeaveApi, 'approvePaidLeaveRequest').mockResolvedValue({
+      ...request,
+      status: 'approved',
+    })
+
+    renderPage()
+    await screen.findByText('2026-08-10')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-10の申請者太郎の申請を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-11の申請者太郎の申請を選択' }))
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'まとめて承認する' }))
+
+    await waitFor(() => expect(approveSpy).toHaveBeenCalledTimes(2))
+    expect(approveSpy).toHaveBeenCalledWith(1)
+    expect(approveSpy).toHaveBeenCalledWith(2)
   })
 })

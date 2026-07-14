@@ -4,6 +4,7 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
+import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import {
   useApprovePaidLeaveRequest,
@@ -14,6 +15,7 @@ import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../utils/status
 
 /**
  * UC-P004: 承認者向けの有給申請の承認・差戻し。
+ * 複数選択し、まとめて承認できる(個別の差戻しは行ごとに残す)。
  */
 export function PaidLeaveRequestsToApprovePage() {
   const { data, isLoading, error } = usePaidLeaveRequestsToApprove()
@@ -21,15 +23,53 @@ export function PaidLeaveRequestsToApprovePage() {
   const returnRequest = useReturnPaidLeaveRequest()
 
   const [comments, setComments] = useState<Record<number, string>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
+  const [bulkError, setBulkError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="承認待ちの有給申請の取得に失敗しました。" />
 
   const requests = data ?? []
-  const actionError = approveRequest.error ?? returnRequest.error
+  const actionError = approveRequest.error ?? returnRequest.error ?? bulkError
+
+  function toggleRow(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkApprove() {
+    if (selectedIds.size === 0) return
+    setBulkError(null)
+    setIsBulkApproving(true)
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => approveRequest.mutateAsync(id)))
+      setSelectedIds(new Set())
+    } catch (e) {
+      setBulkError(e as Error)
+    } finally {
+      setIsBulkApproving(false)
+    }
+  }
 
   return (
-    <Card title="承認待ちの有給申請">
+    <Card
+      title="承認待ちの有給申請"
+      actions={
+        selectedIds.size > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
+            <Button onClick={() => void handleBulkApprove()} isLoading={isBulkApproving}>
+              まとめて承認する
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
       {actionError && <ErrorMessage error={actionError} />}
 
       {requests.length === 0 ? (
@@ -39,11 +79,17 @@ export function PaidLeaveRequestsToApprovePage() {
           {requests.map((request) => {
             const { label, tone } = paidLeaveRequestStatusLabel(request.status)
             const comment = comments[request.id] ?? ''
+            const selected = selectedIds.has(request.id)
 
             return (
               <li key={request.id} className="py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-4 text-sm">
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={() => toggleRow(request.id)}
+                      aria-label={`${request.target_date}の${request.user?.name}の申請を選択`}
+                    />
                     <span className="font-semibold text-foreground">{request.target_date}</span>
                     <span className="text-muted-foreground">{request.user?.name}</span>
                     <span className="text-muted-foreground">
