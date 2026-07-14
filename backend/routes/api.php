@@ -132,9 +132,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/break/end', [AttendanceController::class, 'endBreak']);
         Route::post('/clock-out', [AttendanceController::class, 'clockOut']);
         Route::get('/week', [AttendanceController::class, 'week']);
+        Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults']);
         Route::post('/days', [AttendanceController::class, 'storeDay']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
+        Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation']);
         Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
         Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);

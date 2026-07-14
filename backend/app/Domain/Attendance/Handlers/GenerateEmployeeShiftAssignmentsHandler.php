@@ -50,6 +50,10 @@ class GenerateEmployeeShiftAssignmentsHandler implements CommandHandler
             $plannedEndAt = $isWorkingDay && $workStyle->default_end_time
                 ? $date->copy()->setTimeFromTimeString($workStyle->default_end_time) : null;
             $plannedBreakMinutes = $isWorkingDay ? $workStyle->default_break_minutes : 0;
+            $plannedBreakStartAt = $isWorkingDay && $workStyle->default_break_start_time
+                ? $date->copy()->setTimeFromTimeString($workStyle->default_break_start_time) : null;
+            $plannedBreakEndAt = $isWorkingDay && $workStyle->default_break_end_time
+                ? $date->copy()->setTimeFromTimeString($workStyle->default_break_end_time) : null;
 
             $assignment->fill([
                 'work_style_id' => $workStyle->id,
@@ -61,6 +65,8 @@ class GenerateEmployeeShiftAssignmentsHandler implements CommandHandler
                 'planned_start_at' => $plannedStartAt,
                 'planned_end_at' => $plannedEndAt,
                 'planned_break_minutes' => $plannedBreakMinutes,
+                'planned_break_start_at' => $plannedBreakStartAt,
+                'planned_break_end_at' => $plannedBreakEndAt,
                 // カレンダー基準の一括生成は下書き公開の概念を持たず、従来通り即時有効にする。
                 'is_published' => true,
             ])->save();
@@ -81,6 +87,8 @@ class GenerateEmployeeShiftAssignmentsHandler implements CommandHandler
                     plannedStartAt: $plannedStartAt?->toIso8601String(),
                     plannedEndAt: $plannedEndAt?->toIso8601String(),
                     plannedBreakMinutes: $plannedBreakMinutes,
+                    plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
+                    plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
                     assignedByUserId: $command->generatedByUserId,
                 ),
             );

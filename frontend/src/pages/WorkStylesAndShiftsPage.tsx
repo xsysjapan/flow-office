@@ -198,6 +198,9 @@ function WorkStyleFormCard() {
   const [defaultStartTime, setDefaultStartTime] = useState('')
   const [defaultEndTime, setDefaultEndTime] = useState('')
   const [defaultBreakMinutes, setDefaultBreakMinutes] = useState('')
+  const [roundingUnitMinutes, setRoundingUnitMinutes] = useState('')
+  const [defaultBreakStartTime, setDefaultBreakStartTime] = useState('')
+  const [defaultBreakEndTime, setDefaultBreakEndTime] = useState('')
   const [calendarId, setCalendarId] = useState('')
   const [isShiftBased, setIsShiftBased] = useState(false)
   const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
@@ -223,6 +226,9 @@ function WorkStyleFormCard() {
         default_start_time: defaultStartTime || undefined,
         default_end_time: defaultEndTime || undefined,
         default_break_minutes: defaultBreakMinutes ? Number(defaultBreakMinutes) : undefined,
+        rounding_unit_minutes: roundingUnitMinutes ? Number(roundingUnitMinutes) : undefined,
+        default_break_start_time: defaultBreakStartTime || undefined,
+        default_break_end_time: defaultBreakEndTime || undefined,
         calendar_id: Number(calendarId),
         is_shift_based: isShiftBased,
         legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
@@ -247,6 +253,9 @@ function WorkStyleFormCard() {
           setDefaultStartTime('')
           setDefaultEndTime('')
           setDefaultBreakMinutes('')
+          setRoundingUnitMinutes('')
+          setDefaultBreakStartTime('')
+          setDefaultBreakEndTime('')
           setCalendarId('')
           setIsShiftBased(false)
           setLegalHolidayRule('weekly')
@@ -385,6 +394,44 @@ function WorkStyleFormCard() {
             value={defaultBreakMinutes}
             onChange={(e) => setDefaultBreakMinutes(e.target.value)}
           />
+        </FormField>
+
+        <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time">
+          <Input
+            id="work-style-break-start-time"
+            type="time"
+            value={defaultBreakStartTime}
+            onChange={(e) => setDefaultBreakStartTime(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            日次勤怠の入力画面で、勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。
+          </p>
+        </FormField>
+
+        <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time">
+          <Input
+            id="work-style-break-end-time"
+            type="time"
+            value={defaultBreakEndTime}
+            onChange={(e) => setDefaultBreakEndTime(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="打刻の丸め単位" htmlFor="work-style-rounding-unit-minutes">
+          <NativeSelect
+            id="work-style-rounding-unit-minutes"
+            value={roundingUnitMinutes}
+            onChange={(e) => setRoundingUnitMinutes(e.target.value)}
+          >
+            <option value="">丸めない</option>
+            <option value="5">5分</option>
+            <option value="10">10分</option>
+            <option value="15">15分</option>
+            <option value="30">30分</option>
+          </NativeSelect>
+          <p className="mt-1 text-xs text-muted-foreground">
+            日次勤怠の入力画面で打刻内容を初期値として反映する際、この単位に丸める(四捨五入)。
+          </p>
         </FormField>
 
         <FormField label="カレンダー" htmlFor="work-style-calendar" required>
@@ -795,6 +842,8 @@ function ShiftPatternFormCard() {
   const [endTime, setEndTime] = useState('')
   const [crossesMidnight, setCrossesMidnight] = useState(false)
   const [breakMinutes, setBreakMinutes] = useState('')
+  const [breakStartTime, setBreakStartTime] = useState('')
+  const [breakEndTime, setBreakEndTime] = useState('')
   const [prescribedWorkMinutes, setPrescribedWorkMinutes] = useState('')
 
   const handleCreate = () => {
@@ -806,6 +855,8 @@ function ShiftPatternFormCard() {
         end_time: endTime || undefined,
         crosses_midnight: crossesMidnight,
         break_minutes: breakMinutes ? Number(breakMinutes) : undefined,
+        break_start_time: breakStartTime || undefined,
+        break_end_time: breakEndTime || undefined,
         prescribed_work_minutes: prescribedWorkMinutes ? Number(prescribedWorkMinutes) : undefined,
       },
       {
@@ -816,6 +867,8 @@ function ShiftPatternFormCard() {
           setEndTime('')
           setCrossesMidnight(false)
           setBreakMinutes('')
+          setBreakStartTime('')
+          setBreakEndTime('')
           setPrescribedWorkMinutes('')
         },
       },
@@ -877,6 +930,27 @@ function ShiftPatternFormCard() {
             min={0}
             value={breakMinutes}
             onChange={(e) => setBreakMinutes(e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="休憩開始時刻" htmlFor="shift-pattern-break-start-time">
+          <Input
+            id="shift-pattern-break-start-time"
+            type="time"
+            value={breakStartTime}
+            onChange={(e) => setBreakStartTime(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            日次勤怠の入力画面で、打刻が無く勤務予定がある日の休憩の初期値に使う。
+          </p>
+        </FormField>
+
+        <FormField label="休憩終了時刻" htmlFor="shift-pattern-break-end-time">
+          <Input
+            id="shift-pattern-break-end-time"
+            type="time"
+            value={breakEndTime}
+            onChange={(e) => setBreakEndTime(e.target.value)}
           />
         </FormField>
 

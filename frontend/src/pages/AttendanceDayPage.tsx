@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { Badge } from '../components/Badge/Badge'
@@ -16,9 +16,11 @@ import {
 } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
-import type { AttendanceDay, AttendancePunch, PunchType } from '../api/types'
+import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType } from '../api/types'
 import { useEditableRows } from '../hooks/useEditableRows'
 import {
+  useAdjustAttendanceDailyCalculation,
+  useAttendanceDayDefaults,
   useCorrectPunch,
   useCreateAttendanceDay,
   useDeleteAttendanceDay,
@@ -27,6 +29,7 @@ import {
   useUpdateAttendanceDay,
   useWeek,
 } from '../hooks/useAttendance'
+import { breakShortfallWarning } from '../utils/attendanceDayWarnings'
 import {
   browserOffsetString,
   combineDatetimeLocalWithOffset,
@@ -37,6 +40,13 @@ import {
 } from '../utils/offsetDateTime'
 import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../utils/statusLabels'
 import { formatDate, mondayOf } from '../utils/weekDates'
+
+const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string | null> = {
+  punch: '打刻内容を初期値として反映しました(働き方の丸め単位で丸めています)。',
+  schedule: '勤務予定(休憩を含む)を初期値として反映しました。',
+  system_default: 'システムの初期設定を初期値として反映しました。',
+  none: null,
+}
 
 const PUNCH_TYPES: PunchType[] = ['clock_in', 'break_start', 'break_end', 'clock_out']
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
@@ -63,6 +73,23 @@ function buildBreaksPayload(rows: BreakRowData[], offset: string) {
       start: combineDatetimeLocalWithOffset(b.start, offset) ?? '',
       end: combineDatetimeLocalWithOffset(b.end, offset) ?? undefined,
     }))
+}
+
+/** `<input type="datetime-local">` の2値の差分(分)。片方でも空なら0とする。 */
+function diffMinutes(startLiteral: string, endLiteral: string): number {
+  if (!startLiteral || !endLiteral) return 0
+  const diff = (new Date(endLiteral).getTime() - new Date(startLiteral).getTime()) / 60000
+  return diff > 0 ? diff : 0
+}
+
+/**
+ * 保存前の入力値(出勤・退勤・休憩行)から、労基法34条の休憩不足警告を算出する
+ * (実働6時間超で休憩45分未満、実働8時間超で休憩60分未満)。警告は保存をブロックしない。
+ */
+function useBreakShortfallWarning(actualStartAt: string, actualEndAt: string, rows: BreakRowData[]): string | null {
+  const breakMinutes = rows.reduce((sum, row) => sum + diffMinutes(row.start, row.end), 0)
+  const workedMinutes = Math.max(0, diffMinutes(actualStartAt, actualEndAt) - breakMinutes)
+  return breakShortfallWarning(workedMinutes, breakMinutes)
 }
 
 function BreakRowsEditor({
@@ -324,6 +351,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
     day.breaks.map((b) => ({ start: toDatetimeLocal(b.break_start_at), end: toDatetimeLocal(b.break_end_at) })),
   )
   const updateDay = useUpdateAttendanceDay()
+  const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
 
   const handleSave = () => {
     updateDay.mutate(
@@ -369,6 +397,8 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
 
       <BreakRowsEditor rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
+      {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
+
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         修正理由(必須)
         <Input value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -395,8 +425,26 @@ function DayCreateForm({ date }: { date: string }) {
   const [workType, setWorkType] = useState('')
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
-  const { rows, addRow, updateRow, removeRow } = useEditableRows<BreakRowData>([])
+  const { rows, addRow, updateRow, removeRow, reset: resetRows } = useEditableRows<BreakRowData>([])
   const createDay = useCreateAttendanceDay()
+  const { data: defaults } = useAttendanceDayDefaults(user?.id, date)
+  const appliedDefaultsRef = useRef(false)
+
+  // 初期表示時、打刻→勤務予定(休憩を含む)→システムの初期設定の優先順位で提案された値を
+  // 一度だけ反映する(以降のリフェッチや再レンダーで、入力済みの値を上書きしない)。
+  useEffect(() => {
+    if (!defaults || appliedDefaultsRef.current) return
+    appliedDefaultsRef.current = true
+    if (defaults.source === 'none') return
+
+    const referenceOffset = isoToOffsetString(defaults.actual_start_at ?? defaults.breaks[0]?.start)
+    setOffset(referenceOffset)
+    setActualStartAt(toDatetimeLocal(defaults.actual_start_at))
+    setActualEndAt(toDatetimeLocal(defaults.actual_end_at))
+    resetRows(defaults.breaks.map((b) => ({ start: toDatetimeLocal(b.start), end: toDatetimeLocal(b.end) })))
+  }, [defaults, resetRows])
+
+  const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
 
   const handleCreate = () => {
     if (!user) return
@@ -417,6 +465,9 @@ function DayCreateForm({ date }: { date: string }) {
       <p className="text-sm text-muted-foreground">この日の勤怠記録はまだありません。実績を入力して作成できます。</p>
       {createDay.error && <ErrorMessage error={createDay.error} />}
       {createDay.isSuccess && <p className="text-sm text-success">実績を作成しました。</p>}
+      {defaults && DAY_DEFAULTS_SOURCE_LABEL[defaults.source] && (
+        <p className="text-sm text-info">{DAY_DEFAULTS_SOURCE_LABEL[defaults.source]}</p>
+      )}
 
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
@@ -441,6 +492,8 @@ function DayCreateForm({ date }: { date: string }) {
 
       <BreakRowsEditor rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
+      {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
+
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         作成理由(必須)
         <Input value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -449,6 +502,102 @@ function DayCreateForm({ date }: { date: string }) {
       <Button className="self-start" isLoading={createDay.isPending} disabled={!reason} onClick={handleCreate}>
         作成する
       </Button>
+    </div>
+  )
+}
+
+interface AdjustmentFields {
+  prescribed_work_minutes: string
+  non_statutory_overtime_minutes: string
+  statutory_overtime_minutes: string
+  late_night_minutes: string
+  legal_holiday_work_minutes: string
+  company_holiday_work_minutes: string
+}
+
+function adjustmentFieldsFrom(day: AttendanceDay): AdjustmentFields {
+  const c = day.calculation
+  return {
+    prescribed_work_minutes: String(c?.prescribed_work_minutes ?? 0),
+    non_statutory_overtime_minutes: String(c?.non_statutory_overtime_minutes ?? 0),
+    statutory_overtime_minutes: String(c?.statutory_overtime_minutes ?? 0),
+    late_night_minutes: String(c?.late_night_minutes ?? 0),
+    legal_holiday_work_minutes: String(c?.legal_holiday_work_minutes ?? 0),
+    company_holiday_work_minutes: String(c?.company_holiday_work_minutes ?? 0),
+  }
+}
+
+/**
+ * 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正するフォーム。
+ * 深夜に作業時間がかかっていない日(late_night_minutes=0)は深夜の入力欄を表示しない。
+ * 実績(出勤・退勤・休憩)が再編集され再計算されると、この補正は解除される。
+ */
+function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }) {
+  const [fields, setFields] = useState<AdjustmentFields>(adjustmentFieldsFrom(day))
+  const [reason, setReason] = useState('')
+  const adjustCalculation = useAdjustAttendanceDailyCalculation()
+  const showLateNight = (day.calculation?.late_night_minutes ?? 0) > 0
+
+  const updateField = (key: keyof AdjustmentFields, value: string) => setFields((prev) => ({ ...prev, [key]: value }))
+
+  const handleSave = () => {
+    adjustCalculation.mutate(
+      {
+        id: day.id,
+        input: {
+          prescribed_work_minutes: Number(fields.prescribed_work_minutes),
+          non_statutory_overtime_minutes: Number(fields.non_statutory_overtime_minutes),
+          statutory_overtime_minutes: Number(fields.statutory_overtime_minutes),
+          late_night_minutes: showLateNight ? Number(fields.late_night_minutes) : 0,
+          legal_holiday_work_minutes: Number(fields.legal_holiday_work_minutes),
+          company_holiday_work_minutes: Number(fields.company_holiday_work_minutes),
+          reason,
+        },
+      },
+      { onSuccess: () => onDone() },
+    )
+  }
+
+  const fieldLabels: Array<{ key: keyof AdjustmentFields; label: string }> = [
+    { key: 'prescribed_work_minutes', label: '所定労働時間(分)' },
+    { key: 'non_statutory_overtime_minutes', label: '所定内残業(分)' },
+    { key: 'statutory_overtime_minutes', label: '法定外残業(分)' },
+    ...(showLateNight ? [{ key: 'late_night_minutes' as const, label: '深夜労働(分)' }] : []),
+    { key: 'legal_holiday_work_minutes', label: '法定休日労働(分)' },
+    { key: 'company_holiday_work_minutes', label: '所定休日労働(分)' },
+  ]
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+      {adjustCalculation.error && <ErrorMessage error={adjustCalculation.error} />}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {fieldLabels.map(({ key, label }) => (
+          <label key={key} className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            {label}
+            <Input
+              type="number"
+              min={0}
+              value={fields[key]}
+              onChange={(e) => updateField(key, e.target.value)}
+            />
+          </label>
+        ))}
+      </div>
+
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        補正理由(必須)
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+      </label>
+
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={onDone}>
+          キャンセル
+        </Button>
+        <Button isLoading={adjustCalculation.isPending} disabled={!reason} onClick={handleSave}>
+          補正を保存する
+        </Button>
+      </div>
     </div>
   )
 }
@@ -462,6 +611,7 @@ export function AttendanceDayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
   const [isEditing, setIsEditing] = useState(false)
+  const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
   const { data: weekDays, isLoading, error } = useWeek(monday)
@@ -496,36 +646,48 @@ export function AttendanceDayPage() {
               <dd className="text-foreground">{isoToTimeLiteral(day.actual_end_at) || '--:--'}</dd>
             </dl>
 
-            {day.calculation && (
-              <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                <dt className="font-medium text-muted-foreground">所定労働時間</dt>
-                <dd className="text-foreground">{day.calculation.prescribed_work_minutes}分</dd>
-                <dt className="font-medium text-muted-foreground">実働</dt>
-                <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
+            {day.calculation && !isAdjustingCalculation && (
+              <div className="flex flex-col gap-2">
+                <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                  <dt className="font-medium text-muted-foreground">所定労働時間</dt>
+                  <dd className="text-foreground">{day.calculation.prescribed_work_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">実働</dt>
+                  <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
 
-                <dt className="font-medium text-muted-foreground">所定内残業</dt>
-                <dd className="text-foreground">{day.calculation.non_statutory_overtime_minutes}分</dd>
-                <dt className="font-medium text-muted-foreground">法定外残業</dt>
-                <dd className="text-foreground">{day.calculation.statutory_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">所定内残業</dt>
+                  <dd className="text-foreground">{day.calculation.non_statutory_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">法定外残業</dt>
+                  <dd className="text-foreground">{day.calculation.statutory_overtime_minutes}分</dd>
 
-                <dt className="font-medium text-muted-foreground">深夜労働</dt>
-                <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
-                <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
-                <dd className="text-foreground">{day.calculation.regular_work_late_night_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜労働</dt>
+                  <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
+                  <dd className="text-foreground">{day.calculation.regular_work_late_night_minutes}分</dd>
 
-                <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
-                <dd className="text-foreground">{day.calculation.non_statutory_overtime_late_night_minutes}分</dd>
-                <dt className="font-medium text-muted-foreground">法定外深夜</dt>
-                <dd className="text-foreground">{day.calculation.statutory_overtime_late_night_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
+                  <dd className="text-foreground">{day.calculation.non_statutory_overtime_late_night_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">法定外深夜</dt>
+                  <dd className="text-foreground">{day.calculation.statutory_overtime_late_night_minutes}分</dd>
 
-                <dt className="font-medium text-muted-foreground">法定休日労働</dt>
-                <dd className="text-foreground">{day.calculation.legal_holiday_work_minutes}分</dd>
-                <dt className="font-medium text-muted-foreground">所定休日労働</dt>
-                <dd className="text-foreground">{day.calculation.company_holiday_work_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">法定休日労働</dt>
+                  <dd className="text-foreground">{day.calculation.legal_holiday_work_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">所定休日労働</dt>
+                  <dd className="text-foreground">{day.calculation.company_holiday_work_minutes}分</dd>
 
-                <dt className="font-medium text-muted-foreground">法定休日深夜</dt>
-                <dd className="text-foreground">{day.calculation.legal_holiday_late_night_minutes}分</dd>
-              </dl>
+                  <dt className="font-medium text-muted-foreground">法定休日深夜</dt>
+                  <dd className="text-foreground">{day.calculation.legal_holiday_late_night_minutes}分</dd>
+                </dl>
+                <div className="flex items-center gap-2">
+                  {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
+                  <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
+                    内訳を編集
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {day.calculation && isAdjustingCalculation && (
+              <CalculationAdjustForm day={day} onDone={() => setIsAdjustingCalculation(false)} />
             )}
 
             {day.monthly_overtime && (
@@ -563,7 +725,13 @@ export function AttendanceDayPage() {
             )}
 
             <div className="flex gap-2 border-t border-border pt-4">
-              <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsAdjustingCalculation(false)
+                  setIsEditing(true)
+                }}
+              >
                 編集
               </Button>
               <DeleteDayDialog day={day} onDeleted={() => navigate(-1)} />

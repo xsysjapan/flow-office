@@ -20,6 +20,8 @@ class ShiftPatternResource extends JsonResource
             'end_time' => $this->end_time,
             'crosses_midnight' => $this->crosses_midnight,
             'break_minutes' => $this->break_minutes,
+            'break_start_time' => $this->break_start_time,
+            'break_end_time' => $this->break_end_time,
             'prescribed_work_minutes' => $this->prescribed_work_minutes,
         ];
     }

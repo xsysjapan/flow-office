@@ -14,6 +14,9 @@ export interface CreateWorkStyleInput {
   default_start_time?: string
   default_end_time?: string
   default_break_minutes?: number
+  rounding_unit_minutes?: number
+  default_break_start_time?: string
+  default_break_end_time?: string
   calendar_id: number
   is_shift_based?: boolean
   legal_holiday_rule?: LegalHolidayRule
@@ -36,6 +39,8 @@ export interface CreateDefaultWorkStyleInput {
   default_start_time?: string
   default_end_time?: string
   default_break_minutes?: number
+  default_break_start_time?: string
+  default_break_end_time?: string
   calendar_id?: number
 }
 

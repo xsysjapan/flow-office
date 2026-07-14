@@ -33,6 +33,9 @@ const workStyle: WorkStyle = {
   default_start_time: '09:00',
   default_end_time: '18:00',
   default_break_minutes: 60,
+  rounding_unit_minutes: null,
+  default_break_start_time: '12:00',
+  default_break_end_time: '13:00',
   calendar_id: 1,
   is_shift_based: false,
   is_default: true,
@@ -289,6 +292,8 @@ describe('WorkStylesAndShiftsPage', () => {
         planned_start_at: '2026-08-01T09:00:00+09:00',
         planned_end_at: '2026-08-01T18:00:00+09:00',
         planned_break_minutes: 60,
+        planned_break_start_at: null,
+        planned_break_end_at: null,
         is_published: true,
         is_manually_overridden: false,
       },
@@ -454,6 +459,8 @@ describe('WorkStylesAndShiftsPage', () => {
       end_time: '06:00',
       crosses_midnight: true,
       break_minutes: 60,
+      break_start_time: null,
+      break_end_time: null,
       prescribed_work_minutes: 420,
     }
     vi.spyOn(shiftPatternsApi, 'createShiftPattern').mockResolvedValue(pattern)
@@ -500,6 +507,8 @@ describe('WorkStylesAndShiftsPage', () => {
       end_time: '18:00',
       crosses_midnight: false,
       break_minutes: 60,
+      break_start_time: null,
+      break_end_time: null,
       prescribed_work_minutes: 480,
     }
     const paginatedUsers: Paginated<User> = {
@@ -521,6 +530,8 @@ describe('WorkStylesAndShiftsPage', () => {
       planned_start_at: '2026-08-10T09:00:00+09:00',
       planned_end_at: '2026-08-10T18:00:00+09:00',
       planned_break_minutes: 60,
+      planned_break_start_at: null,
+      planned_break_end_at: null,
       is_published: false,
       is_manually_overridden: true,
     })
@@ -557,6 +568,8 @@ describe('WorkStylesAndShiftsPage', () => {
       end_time: '14:00',
       crosses_midnight: false,
       break_minutes: 45,
+      break_start_time: null,
+      break_end_time: null,
       prescribed_work_minutes: 435,
     }
     const offShift: ShiftPattern = {
@@ -567,6 +580,8 @@ describe('WorkStylesAndShiftsPage', () => {
       end_time: null,
       crosses_midnight: false,
       break_minutes: 0,
+      break_start_time: null,
+      break_end_time: null,
       prescribed_work_minutes: 0,
     }
     vi.spyOn(rotationPatternsApi, 'createRotationPattern').mockResolvedValue({

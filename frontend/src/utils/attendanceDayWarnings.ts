@@ -1,5 +1,15 @@
 import type { AttendanceDay } from '../api/types'
 
+/**
+ * 休憩不足の警告文言(労基法34条: 実働6時間超で休憩45分未満、実働8時間超で休憩60分未満)。
+ * 警告はあくまで注意喚起であり、これを理由に登録・保存をブロックしない。
+ */
+export function breakShortfallWarning(workedMinutes: number, breakMinutes: number): string | null {
+  if (workedMinutes > 480 && breakMinutes < 60) return '実働8時間超で休憩が60分未満です(休憩不足)。'
+  if (workedMinutes > 360 && breakMinutes < 45) return '実働6時間超で休憩が45分未満です(休憩不足)。'
+  return null
+}
+
 /** 週次・月次画面で各日の行に表示する注意バッジ(未入力・打刻漏れ・休憩不足・長時間労働)を算出する。 */
 export function dayWarnings(date: string, day: AttendanceDay | undefined, today: string): string[] {
   const warnings: string[] = []
@@ -17,8 +27,7 @@ export function dayWarnings(date: string, day: AttendanceDay | undefined, today:
       return sum + (new Date(b.break_end_at).getTime() - new Date(b.break_start_at).getTime()) / 60000
     }, 0)
 
-    if (workedMinutes > 480 && breakMinutes < 60) warnings.push('休憩不足')
-    else if (workedMinutes > 360 && breakMinutes < 45) warnings.push('休憩不足')
+    if (breakShortfallWarning(workedMinutes, breakMinutes)) warnings.push('休憩不足')
 
     if (workedMinutes > 600) warnings.push('長時間労働')
   }

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'statutory_overtime_late_night_minutes',
     'legal_holiday_work_minutes', 'company_holiday_work_minutes', 'legal_holiday_late_night_minutes',
     'core_time_violation',
+    'is_manually_adjusted', 'adjusted_by_user_id', 'adjusted_at',
 ])]
 class AttendanceDailyCalculation extends Model
 {
@@ -25,6 +26,8 @@ class AttendanceDailyCalculation extends Model
     {
         return [
             'core_time_violation' => 'boolean',
+            'is_manually_adjusted' => 'boolean',
+            'adjusted_at' => 'datetime',
         ];
     }
 

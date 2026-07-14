@@ -37,6 +37,13 @@ class AssignShiftPatternDayHandler implements CommandHandler
             $plannedEndAt = $plannedEndAt->addDay();
         }
 
+        $plannedBreakStartAt = $pattern->break_start_time ? $workDate->copy()->setTimeFromTimeString($pattern->break_start_time) : null;
+        $plannedBreakEndAt = $pattern->break_end_time ? $workDate->copy()->setTimeFromTimeString($pattern->break_end_time) : null;
+        if ($plannedBreakStartAt !== null && $plannedBreakEndAt !== null && $plannedBreakEndAt->lessThanOrEqualTo($plannedBreakStartAt)) {
+            // 深夜勤の休憩が日付境界(24時)を跨ぐ場合。
+            $plannedBreakEndAt = $plannedBreakEndAt->addDay();
+        }
+
         // 'work_date' はdateキャストのためDB上はdatetime文字列で保存される。
         // updateOrCreateの厳密一致検索では既存行を見つけられないため、whereDateで明示的に検索する。
         $assignment = EmployeeShiftAssignment::query()
@@ -57,6 +64,8 @@ class AssignShiftPatternDayHandler implements CommandHandler
             'planned_start_at' => $plannedStartAt,
             'planned_end_at' => $plannedEndAt,
             'planned_break_minutes' => $pattern->break_minutes,
+            'planned_break_start_at' => $plannedBreakStartAt,
+            'planned_break_end_at' => $plannedBreakEndAt,
             // 公開(UC-C004手順6)までは下書き扱いにする。
             'is_published' => false,
             // 個別上書きとして扱い、ローテーションの再生成(指示書8.8節「未編集日のみ再生成」)で
@@ -80,6 +89,8 @@ class AssignShiftPatternDayHandler implements CommandHandler
                 plannedStartAt: $plannedStartAt?->toIso8601String(),
                 plannedEndAt: $plannedEndAt?->toIso8601String(),
                 plannedBreakMinutes: $pattern->break_minutes,
+                plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
+                plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
                 assignedByUserId: $command->assignedByUserId,
             ),
         );

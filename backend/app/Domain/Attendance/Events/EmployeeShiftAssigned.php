@@ -24,6 +24,8 @@ class EmployeeShiftAssigned implements DomainEvent
         public readonly ?string $plannedStartAt,
         public readonly ?string $plannedEndAt,
         public readonly int $plannedBreakMinutes,
+        public readonly ?string $plannedBreakStartAt,
+        public readonly ?string $plannedBreakEndAt,
         public readonly int $assignedByUserId,
     ) {}
 
@@ -47,6 +49,8 @@ class EmployeeShiftAssigned implements DomainEvent
             'planned_start_at' => $this->plannedStartAt,
             'planned_end_at' => $this->plannedEndAt,
             'planned_break_minutes' => $this->plannedBreakMinutes,
+            'planned_break_start_at' => $this->plannedBreakStartAt,
+            'planned_break_end_at' => $this->plannedBreakEndAt,
             'assigned_by_user_id' => $this->assignedByUserId,
         ];
     }

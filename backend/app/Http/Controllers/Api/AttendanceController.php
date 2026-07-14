@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
@@ -13,6 +14,7 @@ use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Services\AttendanceDayDefaultsResolver;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\CommandBus;
@@ -205,6 +207,31 @@ class AttendanceController extends Controller
     }
 
     /**
+     * 日次勤怠の入力画面(未入力の日)を開いた際の初期値を返す。打刻→勤務予定(休憩を含む)→
+     * システムの初期設定、の優先順位で解決する(AttendanceDayDefaultsResolver参照)。
+     * 保存されるまでは正データを変更しない、あくまで入力欄への提案。
+     */
+    #[OA\Get(
+        path: '/attendance/day-defaults',
+        operationId: 'attendance.dayDefaults',
+        summary: '日次勤怠入力の初期値を取得する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'work_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function dayDefaults(Request $request, AttendanceDayDefaultsResolver $resolver): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'work_date' => ['required', 'date'],
+        ]);
+
+        $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の日次勤怠の初期値を参照する権限がありません。');
+
+        return response()->json($resolver->resolve($data['user_id'], $data['work_date']));
+    }
+
+    /**
      * 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻(attendance_punches)とは
      * 勤務日が同じというだけの緩い関係しかなく、打刻の有無にかかわらず作成できる。
      */
@@ -281,6 +308,49 @@ class AttendanceController extends Controller
             note: $data['note'] ?? null,
             reason: $data['reason'],
             editedByUserId: $request->user()->id,
+        ));
+
+        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));
+    }
+
+    /**
+     * 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正する。
+     * 実績(actual_start_at/actual_end_at/breaks)が再編集され再計算されると、この補正は
+     * 解除される(AttendanceDailyCalculationProjector参照)。
+     */
+    #[OA\Put(
+        path: '/attendance/days/{attendanceDay}/calculation',
+        operationId: 'attendance.days.adjustCalculation',
+        summary: '日次勤怠の区分ごとの時間を手動で補正する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prescribed_work_minutes', 'non_statutory_overtime_minutes', 'statutory_overtime_minutes', 'late_night_minutes', 'legal_holiday_work_minutes', 'company_holiday_work_minutes', 'reason'], properties: [new OA\Property(property: 'prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'non_statutory_overtime_minutes', type: 'integer'), new OA\Property(property: 'statutory_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_minutes', type: 'integer'), new OA\Property(property: 'legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'company_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function adjustCalculation(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
+    {
+        $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を補正する権限がありません。');
+
+        $data = $request->validate([
+            'prescribed_work_minutes' => ['required', 'integer', 'min:0'],
+            'non_statutory_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'statutory_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_minutes' => ['required', 'integer', 'min:0'],
+            'legal_holiday_work_minutes' => ['required', 'integer', 'min:0'],
+            'company_holiday_work_minutes' => ['required', 'integer', 'min:0'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $commandBus->dispatch(new AdjustAttendanceDailyCalculation(
+            attendanceDayId: $attendanceDay->id,
+            prescribedWorkMinutes: $data['prescribed_work_minutes'],
+            nonStatutoryOvertimeMinutes: $data['non_statutory_overtime_minutes'],
+            statutoryOvertimeMinutes: $data['statutory_overtime_minutes'],
+            lateNightMinutes: $data['late_night_minutes'],
+            legalHolidayWorkMinutes: $data['legal_holiday_work_minutes'],
+            companyHolidayWorkMinutes: $data['company_holiday_work_minutes'],
+            reason: $data['reason'],
+            adjustedByUserId: $request->user()->id,
         ));
 
         return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));

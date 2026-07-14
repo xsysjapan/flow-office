@@ -34,6 +34,45 @@ class WorkStyleControllerTest extends TestCase
         return $admin;
     }
 
+    public function test_a_work_style_can_set_a_rounding_unit_and_a_standard_break_window(): void
+    {
+        $calendar = $this->makeCalendar();
+        $user = $this->makeAdmin();
+
+        $response = $this->actingAs($user)->postJson('/api/work-styles', [
+            'code' => 'fixed-standard',
+            'name' => '固定時間制',
+            'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+            'rounding_unit_minutes' => 15,
+            'default_break_start_time' => '12:00',
+            'default_break_end_time' => '13:00',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('rounding_unit_minutes', 15);
+        $response->assertJsonPath('default_break_start_time', '12:00');
+        $response->assertJsonPath('default_break_end_time', '13:00');
+    }
+
+    public function test_an_invalid_rounding_unit_is_rejected(): void
+    {
+        $calendar = $this->makeCalendar();
+        $user = $this->makeAdmin();
+
+        $this->actingAs($user)->postJson('/api/work-styles', [
+            'code' => 'fixed-standard',
+            'name' => '固定時間制',
+            'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+            'rounding_unit_minutes' => 7,
+        ])->assertStatus(422);
+    }
+
     public function test_a_non_shift_based_work_style_defaults_to_the_weekly_legal_holiday_rule(): void
     {
         $calendar = $this->makeCalendar();

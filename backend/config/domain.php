@@ -2,6 +2,7 @@
 
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
+use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
@@ -36,6 +37,7 @@ use App\Domain\Attendance\Commands\UpdateShiftPattern;
 use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
+use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
@@ -148,6 +150,7 @@ return [
         ClockOut::class => ClockOutHandler::class,
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
+        AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
         EditEmployeeShiftAssignment::class => EditEmployeeShiftAssignmentHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 

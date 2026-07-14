@@ -58,6 +58,8 @@
 - `attendance.day_edited`
 - `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
 - `attendance.day_calculated`
+- `attendance.daily_calculation_adjusted` (日次登録後、区分ごとの時間を手動で補正する。
+  実績が再編集され`attendance.day_calculated`が再発生すると解除される)
 - `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
 - `attendance_punch.recorded`
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)

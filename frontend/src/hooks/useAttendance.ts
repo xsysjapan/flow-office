@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  adjustAttendanceDailyCalculation,
   approveMonth,
   clockIn,
   clockOut,
@@ -9,6 +10,7 @@ import {
   deleteAttendanceDay,
   deletePunch,
   endBreak,
+  fetchAttendanceDayDefaults,
   fetchMonth,
   fetchMonthsToApprove,
   fetchMyMonths,
@@ -24,7 +26,7 @@ import {
   type EditAttendanceDayInput,
 } from '../api/attendance'
 import { downloadAttendanceCsv } from '../api/exports'
-import type { AttendanceExportFilters } from '../api/types'
+import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
 const WEEK_KEY = ['attendance', 'week']
@@ -35,6 +37,15 @@ export function useTodayAttendance() {
 
 export function useWeek(startDate: string) {
   return useQuery({ queryKey: [...WEEK_KEY, startDate], queryFn: () => fetchWeek(startDate) })
+}
+
+/** 日次勤怠の入力画面(未入力の日)を開いた際の初期値。userId/workDateが揃うまでは取得しない。 */
+export function useAttendanceDayDefaults(userId: number | undefined, workDate: string | undefined) {
+  return useQuery({
+    queryKey: ['attendance', 'day-defaults', userId, workDate],
+    queryFn: () => fetchAttendanceDayDefaults(userId as number, workDate as string),
+    enabled: Boolean(userId && workDate),
+  })
 }
 
 function useAttendanceAction(action: () => Promise<unknown>) {
@@ -70,6 +81,20 @@ export function useUpdateAttendanceDay() {
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: EditAttendanceDayInput }) =>
       updateAttendanceDay(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+export function useAdjustAttendanceDailyCalculation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: AttendanceDailyCalculationAdjustment }) =>
+      adjustAttendanceDailyCalculation(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })

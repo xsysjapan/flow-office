@@ -95,6 +95,28 @@ class ShiftPatternTest extends TestCase
         $this->assertSame($pattern['id'], $event->payload['shift_pattern_id']);
     }
 
+    public function test_assigning_a_pattern_with_a_break_window_reflects_it_on_the_assignment(): void
+    {
+        $admin = $this->makeAdmin();
+        $workStyle = $this->makeShiftWorkStyle();
+        $employee = User::factory()->create();
+
+        $pattern = $this->actingAs($admin)->postJson('/api/shift-patterns', [
+            'code' => 'day_shift', 'name' => '日勤', 'start_time' => '09:00', 'end_time' => '18:00',
+            'break_minutes' => 60, 'break_start_time' => '12:00', 'break_end_time' => '13:00',
+            'prescribed_work_minutes' => 480,
+        ])->assertCreated()->json();
+        $this->assertSame('12:00', $pattern['break_start_time']);
+
+        $response = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+            'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => '2026-08-10',
+            'shift_pattern_id' => $pattern['id'],
+        ])->assertCreated();
+
+        $this->assertSame('2026-08-10T12:00:00+00:00', $response->json('planned_break_start_at'));
+        $this->assertSame('2026-08-10T13:00:00+00:00', $response->json('planned_break_end_at'));
+    }
+
     public function test_assigning_a_day_off_pattern_marks_the_day_as_not_working(): void
     {
         $admin = $this->makeAdmin();
