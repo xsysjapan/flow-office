@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { Badge } from '../components/Badge/Badge'
@@ -629,16 +630,23 @@ export function AttendanceDayPage() {
         title={`${date}(${weekdayLabel(date)})の勤怠`}
         actions={
           <div className="flex items-center gap-2">
-            <Button asChild variant="secondary">
-              <Link to={`/attendance/days/${addDays(date, -1)}`}>前日</Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link to={`/attendance/week?start=${monday}`}>週次</Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link to={`/attendance/days/${addDays(date, 1)}`}>翌日</Link>
-            </Button>
             {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+            <Button asChild variant="secondary" size="icon" title="前日" aria-label="前日">
+              <Link to={`/attendance/days/${addDays(date, -1)}`}>
+                <ChevronLeft aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" title="週次で見る">
+              <Link to={`/attendance/week?start=${monday}`}>
+                <CalendarRange aria-hidden="true" />
+                週次
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="icon" title="翌日" aria-label="翌日">
+              <Link to={`/attendance/days/${addDays(date, 1)}`}>
+                <ChevronRight aria-hidden="true" />
+              </Link>
+            </Button>
           </div>
         }
       >

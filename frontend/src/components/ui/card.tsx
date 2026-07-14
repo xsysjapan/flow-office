@@ -13,7 +13,10 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex items-center justify-between gap-4 border-b border-border px-5 py-4', className)}
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4',
+        className,
+      )}
       {...props}
     />
   )
@@ -28,7 +31,7 @@ export function CardDescription({ className, ...props }: React.HTMLAttributes<HT
 }
 
 export function CardAction({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex items-center gap-2', className)} {...props} />
+  return <div className={cn('flex flex-wrap items-center gap-2', className)} {...props} />
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
