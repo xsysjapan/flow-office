@@ -494,13 +494,41 @@ export function AttendanceDayPage() {
               <dd className="text-foreground">{isoToTimeLiteral(day.actual_start_at) || '--:--'}</dd>
               <dt className="font-medium text-muted-foreground">退勤</dt>
               <dd className="text-foreground">{isoToTimeLiteral(day.actual_end_at) || '--:--'}</dd>
-              {day.calculation && (
-                <>
-                  <dt className="font-medium text-muted-foreground">実働</dt>
-                  <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
-                </>
-              )}
             </dl>
+
+            {day.calculation && (
+              <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                <dt className="font-medium text-muted-foreground">所定労働時間</dt>
+                <dd className="text-foreground">{day.calculation.prescribed_work_minutes}分</dd>
+                <dt className="font-medium text-muted-foreground">実働</dt>
+                <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
+
+                <dt className="font-medium text-muted-foreground">所定内残業</dt>
+                <dd className="text-foreground">{day.calculation.non_statutory_overtime_minutes}分</dd>
+                <dt className="font-medium text-muted-foreground">法定外残業</dt>
+                <dd className="text-foreground">{day.calculation.statutory_overtime_minutes}分</dd>
+
+                <dt className="font-medium text-muted-foreground">深夜労働</dt>
+                <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
+                <dt className="font-medium text-muted-foreground">法定外深夜</dt>
+                <dd className="text-foreground">{day.calculation.statutory_overtime_late_night_minutes}分</dd>
+
+                <dt className="font-medium text-muted-foreground">法定休日労働</dt>
+                <dd className="text-foreground">{day.calculation.legal_holiday_work_minutes}分</dd>
+                <dt className="font-medium text-muted-foreground">所定休日労働</dt>
+                <dd className="text-foreground">{day.calculation.company_holiday_work_minutes}分</dd>
+
+                <dt className="font-medium text-muted-foreground">法定休日深夜</dt>
+                <dd className="text-foreground">{day.calculation.legal_holiday_late_night_minutes}分</dd>
+              </dl>
+            )}
+
+            {day.monthly_overtime && (
+              <p className="text-xs text-muted-foreground">
+                今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_overtime_minutes}分
+                (うち月60時間超残業: {day.monthly_overtime.statutory_overtime_over_60h_minutes}分)
+              </p>
+            )}
 
             {day.breaks.length > 0 && (
               <ul className="flex flex-col gap-1 text-sm text-muted-foreground">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -39,6 +40,11 @@ class AttendanceDayResource extends JsonResource
                 fn () => $this->breaks->map(fn ($break) => new AttendanceBreakResource($break, $utcOffsetMinutes)),
             ),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
+            // 月60時間超残業(参考情報)。表示のたびに都度計算し、snapshotには含めない
+            // (docs/07-usecases-attendance.md「月60時間超残業判定」参照)。
+            'monthly_overtime' => $this->whenLoaded('calculation', fn () => $this->calculation
+                ? app(MonthlyOvertimeCalculator::class)->calculateForDate($this->user_id, $this->work_date->toDateString())
+                : null),
         ];
     }
 }

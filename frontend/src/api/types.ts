@@ -93,11 +93,20 @@ export interface AttendanceDailyCalculation {
   non_statutory_overtime_minutes: number
   statutory_overtime_minutes: number
   late_night_minutes: number
+  /** 法定外残業のうち22:00〜05:00の深夜時間帯と重なる分(late_night_minutesの内訳)。 */
+  statutory_overtime_late_night_minutes: number
   legal_holiday_work_minutes: number
   company_holiday_work_minutes: number
   legal_holiday_late_night_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
+}
+
+/** 月60時間超残業(労基法37条)の参考情報。表示のたびに都度計算され、確定値ではない。 */
+export interface MonthlyOvertimeReference {
+  cumulative_statutory_overtime_minutes: number
+  statutory_overtime_within_60h_minutes: number
+  statutory_overtime_over_60h_minutes: number
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
@@ -118,6 +127,7 @@ export interface AttendanceDay {
   is_locked: boolean
   breaks: AttendanceBreak[]
   calculation: AttendanceDailyCalculation | null
+  monthly_overtime?: MonthlyOvertimeReference | null
   planned_start_at?: string | null
   planned_end_at?: string | null
 }

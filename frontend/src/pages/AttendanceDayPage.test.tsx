@@ -42,6 +42,7 @@ const recordedDay: AttendanceDay = {
     non_statutory_overtime_minutes: 0,
     statutory_overtime_minutes: 0,
     late_night_minutes: 0,
+    statutory_overtime_late_night_minutes: 0,
     legal_holiday_work_minutes: 0,
     company_holiday_work_minutes: 0,
     legal_holiday_late_night_minutes: 0,

@@ -66,6 +66,8 @@ class AttendanceFlowTest extends TestCase
         $this->assertSame(780, $calculation['actual_work_minutes']);
         $this->assertSame(300, $calculation['statutory_overtime_minutes']);
         $this->assertSame(60, $calculation['late_night_minutes']);
+        // 22:00〜23:00の深夜1時間は、法定外残業の時間帯(18:00〜23:00)に完全に含まれる。
+        $this->assertSame(60, $calculation['statutory_overtime_late_night_minutes']);
     }
 
     /**
@@ -96,6 +98,9 @@ class AttendanceFlowTest extends TestCase
         $calculation = $editResponse->json('calculation');
         $this->assertSame(420, $calculation['actual_work_minutes']);
         $this->assertSame(420, $calculation['late_night_minutes']);
+        // 所定労働時間が無く実働420分は日8時間(480分)以内のため、法定外残業は発生しない。
+        $this->assertSame(0, $calculation['statutory_overtime_minutes']);
+        $this->assertSame(0, $calculation['statutory_overtime_late_night_minutes']);
     }
 
     public function test_editing_a_day_with_mismatched_offsets_across_fields_is_rejected(): void
