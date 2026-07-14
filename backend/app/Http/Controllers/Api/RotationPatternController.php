@@ -14,12 +14,22 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 /**
  * 指示書 8.4節: 交代制勤務のローテーションパターン(A勤・B勤・C勤・休の繰り返し周期)。
  */
+#[OA\Tag(name: 'ローテーションパターン', description: '交代制勤務のローテーション')]
 class RotationPatternController extends Controller
 {
+    #[OA\Get(
+        path: '/rotation-patterns',
+        operationId: 'rotationPatterns.index',
+        summary: 'ローテーションパターン一覧を取得する',
+        tags: ['ローテーションパターン'],
+        parameters: [new OA\Parameter(name: 'work_style_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
@@ -35,6 +45,14 @@ class RotationPatternController extends Controller
         return RotationPatternResource::collection($query->get());
     }
 
+    #[OA\Post(
+        path: '/rotation-patterns',
+        operationId: 'rotationPatterns.store',
+        summary: 'ローテーションパターンを作成する',
+        tags: ['ローテーションパターン'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_style_id', 'name', 'items'], properties: [new OA\Property(property: 'work_style_id', type: 'integer'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'items', type: 'array', items: new OA\Items(type: 'object'))])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
@@ -69,6 +87,15 @@ class RotationPatternController extends Controller
      * 指示書 8.9節 手順6・12.4節: 保存前・割当前に、開始日・開始位置から実際のカレンダーへ
      * 展開した結果をプレビューする(永続化しない)。
      */
+    #[OA\Post(
+        path: '/rotation-patterns/{rotationPattern}/preview',
+        operationId: 'rotationPatterns.preview',
+        summary: 'ローテーション展開をプレビューする',
+        tags: ['ローテーションパターン'],
+        parameters: [new OA\Parameter(name: 'rotationPattern', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['rotation_start_date', 'rotation_start_position', 'from', 'to'], properties: [new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function preview(Request $request, RotationPattern $rotationPattern): JsonResponse
     {
         $data = $request->validate([

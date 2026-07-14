@@ -15,18 +15,20 @@ use OpenApi\Attributes as OA;
 /**
  * UC-M001: 権限を設定する / ユーザー一覧管理。
  */
-#[OA\Tag(name: 'Users', description: 'ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001)')]
+#[OA\Tag(name: 'ユーザー', description: 'ユーザー・権限管理')]
 class UserController extends Controller
 {
     #[OA\Get(
         path: '/users',
+        operationId: 'users.index',
         summary: 'ユーザー一覧を取得する',
-        tags: ['Users'],
+        tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'q', description: '氏名・メールアドレスの部分一致検索', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
         ],
         responses: [
-            new OA\Response(response: 200, description: 'ユーザー一覧(ページネーション付き)'),
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
     public function index(Request $request): AnonymousResourceCollection
@@ -44,14 +46,15 @@ class UserController extends Controller
 
     #[OA\Get(
         path: '/users/{user}',
+        operationId: 'users.show',
         summary: 'ユーザー詳細を取得する',
-        tags: ['Users'],
+        tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', description: 'ユーザーID', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
-            new OA\Response(response: 200, description: 'ユーザー詳細'),
-            new OA\Response(response: 404, description: 'ユーザーが存在しない'),
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
     public function show(User $user): UserResource
@@ -61,10 +64,11 @@ class UserController extends Controller
 
     #[OA\Put(
         path: '/users/{user}/roles',
-        summary: 'ユーザーの権限を設定する',
-        tags: ['Users'],
+        operationId: 'users.updateRoles',
+        summary: 'ユーザーのロールを更新する',
+        tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', description: 'ユーザーID', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -76,8 +80,8 @@ class UserController extends Controller
             ),
         ),
         responses: [
-            new OA\Response(response: 200, description: '更新後のユーザー詳細'),
-            new OA\Response(response: 403, description: 'admin/hr_staff権限が必要'),
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
     public function updateRoles(Request $request, User $user, CommandBus $commandBus): UserResource
@@ -101,11 +105,11 @@ class UserController extends Controller
      */
     #[OA\Put(
         path: '/users/{user}/hire-date',
-        summary: 'ユーザーの入社日を設定する',
-        description: '有給付与日数の起算日として使われる (docs/09-usecases-paid-leave.md UC-P002)。',
-        tags: ['Users'],
+        operationId: 'users.updateHireDate',
+        summary: '入社日を設定する',
+        tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', description: 'ユーザーID', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -117,8 +121,8 @@ class UserController extends Controller
             ),
         ),
         responses: [
-            new OA\Response(response: 200, description: '更新後のユーザー詳細'),
-            new OA\Response(response: 403, description: 'admin/hr_staff権限が必要'),
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
     public function updateHireDate(Request $request, User $user, CommandBus $commandBus): UserResource

@@ -41,4 +41,11 @@ class AuthTest extends TestCase
     {
         $this->getJson('/api/auth/me')->assertStatus(401);
     }
+
+    public function test_api_protected_routes_return_401_without_json_accept_header(): void
+    {
+        $this->get('/api/auth/me')
+            ->assertStatus(401)
+            ->assertJson(['message' => 'Unauthenticated.']);
+    }
 }

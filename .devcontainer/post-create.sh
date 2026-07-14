@@ -29,11 +29,13 @@ set_env MICROSOFT_CLIENT_ID mock-client-id
 set_env MICROSOFT_CLIENT_SECRET mock-client-secret
 set_env MICROSOFT_TENANT_ID mock
 set_env MICROSOFT_REDIRECT_URI http://localhost:8000/api/auth/microsoft/callback
+set_env L5_SWAGGER_GENERATE_ALWAYS true
 
 php artisan key:generate --force
 mkdir -p database
 touch database/database.sqlite
 php artisan migrate --seed --force
+php artisan l5-swagger:generate
 
 cd /workspaces/flow-office/frontend
 

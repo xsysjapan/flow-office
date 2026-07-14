@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use OpenApi\Attributes as OA;
 
 /**
  * mock-oidc(ローカル開発用OIDCモックサーバー、mock-oidc/server.js)がログイン画面の
@@ -13,8 +14,16 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * `MICROSOFT_MOCK_ENABLED=true` の時のみ有効(本番・検証環境では404)。認証は不要
  * (ログイン前のモック認可画面から呼ばれるため)。
  */
+#[OA\Tag(name: '開発用認証', description: 'ローカルOIDCモック用API')]
 class MockOidcUserController extends Controller
 {
+    #[OA\Get(
+        path: '/dev/mock-users',
+        operationId: 'dev.mockUsers.index',
+        summary: 'OIDCモック用ユーザー一覧を取得する',
+        tags: ['開発用認証'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 404, description: 'Not Found')],
+    )]
     public function index(): JsonResponse
     {
         if (! config('services.azure.mock_enabled')) {

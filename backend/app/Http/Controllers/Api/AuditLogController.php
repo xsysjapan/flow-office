@@ -8,11 +8,13 @@ use App\Models\StoredEvent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-M003: 監査ログを確認する。EventStore(stored_events)を正の記録として直接検索する。
  * Projectionを別に持たない(stored_events自体が既に検索可能なテーブルであるため)。
  */
+#[OA\Tag(name: '監査ログ', description: 'EventStoreの監査ログ検索')]
 class AuditLogController extends Controller
 {
     /**
@@ -28,6 +30,14 @@ class AuditLogController extends Controller
         'closed_by_user_id', 'requested_by_user_id',
     ];
 
+    #[OA\Get(
+        path: '/audit-log',
+        operationId: 'auditLog.index',
+        summary: '監査ログを検索する',
+        tags: ['監査ログ'],
+        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $events = $this->filteredQuery($request)
@@ -37,6 +47,14 @@ class AuditLogController extends Controller
         return StoredEventResource::collection($events);
     }
 
+    #[OA\Get(
+        path: '/audit-log/export',
+        operationId: 'auditLog.exportCsv',
+        summary: '監査ログCSVを出力する',
+        tags: ['監査ログ'],
+        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function exportCsv(Request $request): StreamedResponse
     {
         $events = $this->filteredQuery($request)->orderByDesc('occurred_at')->get();

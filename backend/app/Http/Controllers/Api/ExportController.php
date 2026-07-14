@@ -13,15 +13,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-E001: 勤怠CSVを出力する / UC-E002: 経費CSVを出力する / UC-B004 step5 (会計・振込CSV)。
  */
+#[OA\Tag(name: 'CSV出力', description: '勤怠・経費CSV出力')]
 class ExportController extends Controller
 {
     /**
      * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。
      */
+    #[OA\Get(
+        path: '/exports/attendance',
+        operationId: 'exports.attendance',
+        summary: '勤怠CSVを出力する',
+        tags: ['CSV出力'],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'integer')), style: 'form', explode: true)],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function attendance(Request $request, EventStore $eventStore): StreamedResponse
     {
         $data = $request->validate([
@@ -77,6 +87,14 @@ class ExportController extends Controller
         }, 'attendance_'.$data['year_month'].'.csv', ['Content-Type' => 'text/csv']);
     }
 
+    #[OA\Get(
+        path: '/exports/expenses',
+        operationId: 'exports.expenses',
+        summary: '経費CSVを出力する',
+        tags: ['CSV出力'],
+        parameters: [new OA\Parameter(name: 'from', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function expenses(Request $request, EventStore $eventStore): StreamedResponse
     {
         $data = $request->validate([
