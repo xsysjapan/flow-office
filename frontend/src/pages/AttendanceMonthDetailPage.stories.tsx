@@ -1,10 +1,39 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { fn } from 'storybook/test'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { AttendanceDay, AttendanceMonth, Paginated, User } from '../api/types'
+import type { AttendanceDay, AttendanceMonth, Paginated, User, UserWorkStyleMonthlyAssignment } from '../api/types'
+import { AuthContext, type AuthContextValue } from '../auth/AuthContext'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 
 const yearMonth = '2026-07'
+
+const currentUser: User = {
+  id: 1,
+  name: '本人太郎',
+  email: 'taro@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  hire_date: '2026-01-15',
+  last_login_at: null,
+}
+
+const authValue: AuthContextValue = {
+  user: currentUser,
+  status: 'authenticated',
+  login: fn(),
+  completeLogin: fn(),
+  logout: fn(),
+}
+
+const workStyleAssignments: UserWorkStyleMonthlyAssignment[] = ['2026-05', '2026-06', '2026-07', '2026-08'].map((ym, i) => ({
+  id: i + 1,
+  user_id: 1,
+  year_month: ym,
+  work_style_id: 1,
+  assigned_by_user_id: 1,
+}))
 
 const emptyUsers: Paginated<User> = {
   data: [],
@@ -45,16 +74,19 @@ function withSeeded(monthData: { days: AttendanceDay[]; month: AttendanceMonth |
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['attendance', 'month', yearMonth], { ...monthData, flex_settlement_summary: null })
   queryClient.setQueryData(['users', ''], emptyUsers)
+  queryClient.setQueryData(['user-work-style-monthly-assignments', currentUser.id], workStyleAssignments)
 
   return function Decorator() {
     return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/attendance/months/${yearMonth}`]}>
-          <Routes>
-            <Route path="/attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
+      <AuthContext.Provider value={authValue}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[`/attendance/months/${yearMonth}`]}>
+            <Routes>
+              <Route path="/attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>
     )
   }
 }

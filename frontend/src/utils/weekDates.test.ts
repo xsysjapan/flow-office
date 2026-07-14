@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, datesInMonth, formatDate, mondayOf, weekDates } from './weekDates'
+import { addDays, addMonths, datesInMonth, formatDate, mondayOf, weekDates } from './weekDates'
 
 describe('weekDates utilities', () => {
   it('formats a Date as YYYY-MM-DD', () => {
@@ -53,5 +53,15 @@ describe('weekDates utilities', () => {
     const dates = datesInMonth('2028-02')
     expect(dates).toHaveLength(29)
     expect(dates.at(-1)).toBe('2028-02-29')
+  })
+
+  it('adds and subtracts months', () => {
+    expect(addMonths('2026-07', 1)).toBe('2026-08')
+    expect(addMonths('2026-07', -1)).toBe('2026-06')
+  })
+
+  it('adds and subtracts months across year boundaries', () => {
+    expect(addMonths('2026-12', 1)).toBe('2027-01')
+    expect(addMonths('2026-01', -1)).toBe('2025-12')
   })
 })

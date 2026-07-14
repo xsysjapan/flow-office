@@ -30,3 +30,10 @@ export function datesInMonth(yearMonth: string): string[] {
   const daysInMonth = new Date(year, month, 0).getDate()
   return Array.from({ length: daysInMonth }, (_, i) => `${yearMonth}-${pad(i + 1)}`)
 }
+
+/** "YYYY-MM" にamountヶ月を加減した "YYYY-MM" を返す。 */
+export function addMonths(yearMonth: string, amount: number): string {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const d = new Date(year, month - 1 + amount, 1)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
