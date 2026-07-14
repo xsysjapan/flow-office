@@ -3,8 +3,23 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
-import type { AttendanceDay } from '../api/types'
+import type { AttendanceDay, AttendanceMonthlyCalculationTotals } from '../api/types'
 import { TodayAttendancePage } from './TodayAttendancePage'
+
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  actual_work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  non_statutory_overtime_minutes: 0,
+  statutory_overtime_minutes: 0,
+  statutory_overtime_within_60h_minutes: 0,
+  statutory_overtime_over_60h_minutes: 0,
+  late_night_minutes: 0,
+  statutory_overtime_late_night_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  company_holiday_work_minutes: 0,
+  legal_holiday_late_night_minutes: 0,
+}
 
 const notStartedDay: AttendanceDay = {
   id: 1,
@@ -120,6 +135,7 @@ describe('TodayAttendancePage', () => {
         late_night_minutes: 0,
         legal_holiday_work_minutes: 0,
       },
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
     renderPage()
@@ -131,7 +147,12 @@ describe('TodayAttendancePage', () => {
 
   it('does not show the flex settlement summary card for non-flex work styles', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
-    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({ days: [], month: null, flex_settlement_summary: null })
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
 
     renderPage()
 

@@ -1,5 +1,11 @@
 import { apiFetch } from './client'
-import type { AttendanceDay, AttendanceMonth, AttendancePunch, FlexSettlementSummary } from './types'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  AttendancePunch,
+  FlexSettlementSummary,
+} from './types'
 
 export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
@@ -85,6 +91,7 @@ export function fetchMonth(yearMonth: string): Promise<{
   days: AttendanceDay[]
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
+  monthly_calculation_totals: AttendanceMonthlyCalculationTotals
 }> {
   return apiFetch(`/attendance/months/${yearMonth}`)
 }

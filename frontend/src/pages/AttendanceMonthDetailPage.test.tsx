@@ -6,10 +6,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
 import * as userWorkStyleAssignmentsApi from '../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../api/users'
-import type { AttendanceDay, AttendanceMonth, Paginated, User, UserWorkStyleMonthlyAssignment } from '../api/types'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  Paginated,
+  User,
+  UserWorkStyleMonthlyAssignment,
+} from '../api/types'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 
 const yearMonth = '2026-07'
+
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  actual_work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  non_statutory_overtime_minutes: 0,
+  statutory_overtime_minutes: 0,
+  statutory_overtime_within_60h_minutes: 0,
+  statutory_overtime_over_60h_minutes: 0,
+  late_night_minutes: 0,
+  statutory_overtime_late_night_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  company_holiday_work_minutes: 0,
+  legal_holiday_late_night_minutes: 0,
+}
 
 const currentUser: User = {
   id: 1,
@@ -97,6 +119,7 @@ describe('AttendanceMonthDetailPage', () => {
       days: [dayRecord],
       month: notSubmittedMonth,
       flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
     renderPage()
@@ -107,11 +130,35 @@ describe('AttendanceMonthDetailPage', () => {
     expect(screen.getAllByText('未入力').length).toBeGreaterThan(0)
   })
 
+  it('shows the monthly calculation totals summary', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [dayRecord],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: {
+        ...zeroMonthlyCalculationTotals,
+        actual_work_minutes: 2820,
+        non_statutory_overtime_minutes: 60,
+        statutory_overtime_minutes: 360,
+        statutory_overtime_over_60h_minutes: 30,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('今月の集計')).toBeInTheDocument()
+    expect(screen.getByText('2820分')).toBeInTheDocument()
+    expect(screen.getByText('60分')).toBeInTheDocument()
+    expect(screen.getByText('360分')).toBeInTheDocument()
+    expect(screen.getByText('30分')).toBeInTheDocument()
+  })
+
   it('shows a submit control for a not_submitted month', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: notSubmittedMonth,
       flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
 
@@ -125,6 +172,7 @@ describe('AttendanceMonthDetailPage', () => {
       days: [],
       month: { ...notSubmittedMonth, status: 'approved' },
       flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
     renderPage()
@@ -138,6 +186,7 @@ describe('AttendanceMonthDetailPage', () => {
       days: [],
       month: notSubmittedMonth,
       flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
     vi.spyOn(attendanceApi, 'submitMonth').mockResolvedValue({ ...notSubmittedMonth, status: 'submitted' })
@@ -164,6 +213,7 @@ describe('AttendanceMonthDetailPage', () => {
         ],
       },
       flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
     renderPage()
@@ -182,7 +232,7 @@ describe('AttendanceMonthDetailPage', () => {
   describe('month navigation', () => {
     it('only lists months with a work-style assignment on or after the hire date', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
-        Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null }),
+        Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
         assignment('2025-12'), // 入社日(2026-01-15)より前なので対象外
@@ -204,6 +254,7 @@ describe('AttendanceMonthDetailPage', () => {
         days: [],
         month: notSubmittedMonth,
         flex_settlement_summary: null,
+        monthly_calculation_totals: zeroMonthlyCalculationTotals,
       })
       vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([assignment(yearMonth)])
 
@@ -216,7 +267,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     it('navigates to the next navigable month', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
-        Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null }),
+        Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
         assignment(yearMonth),

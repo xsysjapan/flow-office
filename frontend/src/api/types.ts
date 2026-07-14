@@ -109,6 +109,23 @@ export interface MonthlyOvertimeReference {
   statutory_overtime_over_60h_minutes: number
 }
 
+/** 月次確認画面(UC-A007)向けの、対象月全体の9区分の合計。提出前は都度計算した進捗の目安、
+ *  提出後はattendance_months.snapshot_jsonと同じ確定値になる。 */
+export interface AttendanceMonthlyCalculationTotals {
+  actual_work_minutes: number
+  payroll_work_minutes: number
+  prescribed_work_minutes: number
+  non_statutory_overtime_minutes: number
+  statutory_overtime_minutes: number
+  statutory_overtime_within_60h_minutes: number
+  statutory_overtime_over_60h_minutes: number
+  late_night_minutes: number
+  statutory_overtime_late_night_minutes: number
+  legal_holiday_work_minutes: number
+  company_holiday_work_minutes: number
+  legal_holiday_late_night_minutes: number
+}
+
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
 
 export interface AttendanceDay {
