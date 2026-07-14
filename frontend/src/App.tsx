@@ -6,6 +6,8 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { LoginPage } from './pages/LoginPage'
 import { TodayAttendancePage } from './pages/TodayAttendancePage'
 import { WeekAttendancePage } from './pages/WeekAttendancePage'
+import { AttendanceDayPage } from './pages/AttendanceDayPage'
+import { AttendanceMonthDetailPage } from './pages/AttendanceMonthDetailPage'
 import { WorkflowRequestListPage } from './pages/WorkflowRequestListPage'
 import { WorkflowRequestNewPage } from './pages/WorkflowRequestNewPage'
 import { WorkflowRequestDetailPage } from './pages/WorkflowRequestDetailPage'
@@ -46,12 +48,14 @@ function App() {
       >
         <Route index element={<TodayAttendancePage />} />
         <Route path="attendance/week" element={<WeekAttendancePage />} />
+        <Route path="attendance/days/:date" element={<AttendanceDayPage />} />
         <Route path="requests" element={<WorkflowRequestListPage />} />
         <Route path="requests/new" element={<WorkflowRequestNewPage />} />
         <Route path="requests/:id" element={<WorkflowRequestDetailPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
+        <Route path="attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
         <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />

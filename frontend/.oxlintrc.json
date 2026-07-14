@@ -4,5 +4,31 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/pages/**/*.ts", "src/pages/**/*.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "../components/ui/button",
+                "message": "pagesではcomponents/Button/Buttonを使ってください(ui/buttonはドメインコンポーネントが内部で使う実装です)。"
+              },
+              {
+                "name": "../components/ui/badge",
+                "message": "pagesではcomponents/Badge/Badgeを使ってください(ui/badgeはドメインコンポーネントが内部で使う実装です)。"
+              },
+              {
+                "name": "../components/ui/card",
+                "message": "pagesではcomponents/Card/Cardを使ってください(ui/cardはドメインコンポーネントが内部で使う実装です)。"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

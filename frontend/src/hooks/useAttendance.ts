@@ -5,6 +5,7 @@ import {
   clockOut,
   closeMonth,
   correctPunch,
+  createAttendanceDay,
   deleteAttendanceDay,
   deletePunch,
   endBreak,
@@ -19,6 +20,7 @@ import {
   submitMonth,
   updateAttendanceDay,
   type CorrectAttendancePunchInput,
+  type CreateAttendanceDayInput,
   type EditAttendanceDayInput,
 } from '../api/attendance'
 import { downloadAttendanceCsv } from '../api/exports'
@@ -68,6 +70,19 @@ export function useUpdateAttendanceDay() {
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: EditAttendanceDayInput }) =>
       updateAttendanceDay(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+export function useCreateAttendanceDay() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: CreateAttendanceDayInput) => createAttendanceDay(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
