@@ -1,10 +1,12 @@
+import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Settings, type LucideIcon } from 'lucide-react'
+import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Settings, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
 import { Button } from '../Button/Button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet'
 
 interface NavItem {
   to: string
@@ -108,6 +110,55 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
   )
 }
 
+function MobileNav({ groups }: { groups: NavGroup[] }) {
+  const [open, setOpen] = useState(false)
+  const { pathname } = useLocation()
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          aria-label="メニューを開く"
+          className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:hidden"
+        >
+          <Menu className="size-5" aria-hidden="true" />
+        </button>
+      </SheetTrigger>
+      <SheetContent side="left">
+        <SheetHeader>
+          <SheetTitle>メニュー</SheetTitle>
+        </SheetHeader>
+        <nav className="flex flex-col gap-4 overflow-y-auto" aria-label="メインナビゲーション(モバイル)">
+          {groups.map((group) => (
+            <div key={group.label} className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <group.icon className="size-3.5 shrink-0" aria-hidden="true" />
+                {group.label}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      'rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                      isItemActive(pathname, item.to) && 'bg-accent font-medium text-foreground',
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 export function AppLayout() {
   const { user, logout } = useAuth()
   const visibleGroups = navGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
@@ -116,7 +167,10 @@ export function AppLayout() {
     <div className="flex min-h-screen flex-col">
       <header className="flex flex-col gap-2 border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-semibold text-foreground">flow-office</span>
+          <div className="flex items-center gap-2">
+            <MobileNav groups={visibleGroups} />
+            <span className="text-sm font-semibold text-foreground">flow-office</span>
+          </div>
           <div className="flex items-center gap-3">
             {user && (
               <div className="flex flex-col items-end leading-tight">
@@ -133,7 +187,7 @@ export function AppLayout() {
             </Button>
           </div>
         </div>
-        <nav className="flex flex-wrap items-center gap-1" aria-label="メインナビゲーション">
+        <nav className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="メインナビゲーション">
           {visibleGroups.map((group) => (
             <NavGroupMenu key={group.label} group={group} />
           ))}

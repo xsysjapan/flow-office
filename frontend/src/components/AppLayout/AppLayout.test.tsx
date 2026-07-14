@@ -87,4 +87,26 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
   })
+
+  it('opens a mobile menu drawer listing every group and its links', async () => {
+    renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+
+    expect(await screen.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
+  })
+
+  it('closes the mobile menu drawer after choosing a link', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+    await userEvent.click(await screen.findByRole('link', { name: '自分の申請' }))
+
+    expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
+  })
 })
