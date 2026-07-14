@@ -139,6 +139,11 @@ export function AttendanceMonthDetailPage() {
 
             <dt className="font-medium text-muted-foreground">深夜労働</dt>
             <dd className="text-foreground">{data.monthly_calculation_totals.late_night_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.regular_work_late_night_minutes}分</dd>
+
+            <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.non_statutory_overtime_late_night_minutes}分</dd>
             <dt className="font-medium text-muted-foreground">法定外深夜</dt>
             <dd className="text-foreground">{data.monthly_calculation_totals.statutory_overtime_late_night_minutes}分</dd>
 

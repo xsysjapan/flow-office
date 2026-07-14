@@ -93,6 +93,10 @@ export interface AttendanceDailyCalculation {
   non_statutory_overtime_minutes: number
   statutory_overtime_minutes: number
   late_night_minutes: number
+  /** 深夜のうち所定内労働にあたる分(late_night_minutesの内訳)。 */
+  regular_work_late_night_minutes: number
+  /** 深夜のうち所定内残業にあたる分(late_night_minutesの内訳)。 */
+  non_statutory_overtime_late_night_minutes: number
   /** 法定外残業のうち22:00〜05:00の深夜時間帯と重なる分(late_night_minutesの内訳)。 */
   statutory_overtime_late_night_minutes: number
   legal_holiday_work_minutes: number
@@ -120,6 +124,8 @@ export interface AttendanceMonthlyCalculationTotals {
   statutory_overtime_within_60h_minutes: number
   statutory_overtime_over_60h_minutes: number
   late_night_minutes: number
+  regular_work_late_night_minutes: number
+  non_statutory_overtime_late_night_minutes: number
   statutory_overtime_late_night_minutes: number
   legal_holiday_work_minutes: number
   company_holiday_work_minutes: number

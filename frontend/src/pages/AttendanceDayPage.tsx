@@ -510,6 +510,11 @@ export function AttendanceDayPage() {
 
                 <dt className="font-medium text-muted-foreground">深夜労働</dt>
                 <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
+                <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
+                <dd className="text-foreground">{day.calculation.regular_work_late_night_minutes}分</dd>
+
+                <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
+                <dd className="text-foreground">{day.calculation.non_statutory_overtime_late_night_minutes}分</dd>
                 <dt className="font-medium text-muted-foreground">法定外深夜</dt>
                 <dd className="text-foreground">{day.calculation.statutory_overtime_late_night_minutes}分</dd>
 

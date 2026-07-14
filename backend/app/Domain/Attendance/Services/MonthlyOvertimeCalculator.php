@@ -68,7 +68,7 @@ class MonthlyOvertimeCalculator
     /**
      * 月次確認画面・月次提出スナップショット向けの、対象月全体の集計(9区分の合計)。
      *
-     * @return array{actual_work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, non_statutory_overtime_minutes: int, statutory_overtime_minutes: int, statutory_overtime_within_60h_minutes: int, statutory_overtime_over_60h_minutes: int, late_night_minutes: int, statutory_overtime_late_night_minutes: int, legal_holiday_work_minutes: int, company_holiday_work_minutes: int, legal_holiday_late_night_minutes: int}
+     * @return array{actual_work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, non_statutory_overtime_minutes: int, statutory_overtime_minutes: int, statutory_overtime_within_60h_minutes: int, statutory_overtime_over_60h_minutes: int, late_night_minutes: int, regular_work_late_night_minutes: int, non_statutory_overtime_late_night_minutes: int, statutory_overtime_late_night_minutes: int, legal_holiday_work_minutes: int, company_holiday_work_minutes: int, legal_holiday_late_night_minutes: int}
      */
     public function calculateCategoryTotals(int $userId, string $yearMonth): array
     {
@@ -90,6 +90,8 @@ class MonthlyOvertimeCalculator
             'statutory_overtime_within_60h_minutes' => min($statutoryOvertimeTotal, self::MONTHLY_STATUTORY_LIMIT_MINUTES),
             'statutory_overtime_over_60h_minutes' => max(0, $statutoryOvertimeTotal - self::MONTHLY_STATUTORY_LIMIT_MINUTES),
             'late_night_minutes' => (int) $calculations->sum('late_night_minutes'),
+            'regular_work_late_night_minutes' => (int) $calculations->sum('regular_work_late_night_minutes'),
+            'non_statutory_overtime_late_night_minutes' => (int) $calculations->sum('non_statutory_overtime_late_night_minutes'),
             'statutory_overtime_late_night_minutes' => (int) $calculations->sum('statutory_overtime_late_night_minutes'),
             'legal_holiday_work_minutes' => (int) $calculations->sum('legal_holiday_work_minutes'),
             'company_holiday_work_minutes' => (int) $calculations->sum('company_holiday_work_minutes'),

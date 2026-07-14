@@ -84,6 +84,8 @@ export const ClockedOut: Story = {
       non_statutory_overtime_minutes: 0,
       statutory_overtime_minutes: 300,
       late_night_minutes: 60,
+      regular_work_late_night_minutes: 0,
+      non_statutory_overtime_late_night_minutes: 0,
       statutory_overtime_late_night_minutes: 60,
       legal_holiday_work_minutes: 0,
       company_holiday_work_minutes: 0,
