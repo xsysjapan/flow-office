@@ -27,6 +27,7 @@ if [ ! -f database/database.sqlite ]; then
 fi
 
 php artisan migrate --seed
+php artisan l5-swagger:generate
 
 php artisan serve --host=0.0.0.0 --port=8000 &
 

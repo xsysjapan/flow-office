@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-001: Microsoft SSOでログインする。
@@ -24,10 +25,18 @@ use Laravel\Socialite\Facades\Socialite;
  *
  * これにより、長期利用可能なAPIトークンがURLに直接載ることを避ける。
  */
+#[OA\Tag(name: '認証', description: 'Microsoft SSOとSanctumトークン認証')]
 class AuthController extends Controller
 {
     private const EXCHANGE_CACHE_PREFIX = 'sso-exchange:';
 
+    #[OA\Get(
+        path: '/auth/microsoft/redirect',
+        operationId: 'auth.microsoft.redirect',
+        summary: 'MicrosoftログインURLを取得する',
+        tags: ['認証'],
+        responses: [new OA\Response(response: 200, description: 'Successful response')],
+    )]
     public function redirect(): JsonResponse
     {
         $url = Socialite::driver('azure')->stateless()->redirect()->getTargetUrl();
@@ -35,6 +44,13 @@ class AuthController extends Controller
         return response()->json(['url' => $url]);
     }
 
+    #[OA\Get(
+        path: '/auth/microsoft/callback',
+        operationId: 'auth.microsoft.callback',
+        summary: 'Microsoftログイン後のコールバックを処理する',
+        tags: ['認証'],
+        responses: [new OA\Response(response: 302, description: 'Redirect response'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function callback(SsoAuthenticator $authenticator): RedirectResponse
     {
         $ssoUser = Socialite::driver('azure')->stateless()->user();
@@ -48,6 +64,14 @@ class AuthController extends Controller
         );
     }
 
+    #[OA\Post(
+        path: '/auth/token',
+        operationId: 'auth.token',
+        summary: '交換コードをAPIトークンに交換する',
+        tags: ['認証'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['code'], properties: [new OA\Property(property: 'code', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function token(Request $request): JsonResponse
     {
         $data = $request->validate(['code' => ['required', 'string']]);
@@ -68,11 +92,25 @@ class AuthController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/auth/me',
+        operationId: 'auth.me',
+        summary: 'ログイン中ユーザーを取得する',
+        tags: ['認証'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function me(Request $request): UserResource
     {
         return new UserResource($request->user()->load('roles'));
     }
 
+    #[OA\Post(
+        path: '/auth/logout',
+        operationId: 'auth.logout',
+        summary: 'ログアウトする',
+        tags: ['認証'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();

@@ -14,6 +14,7 @@ use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-A012: 打刻ログ。画面のクロックイン/クロックアウト(UC-A001〜A004)とは別に、
@@ -21,8 +22,17 @@ use Illuminate\Validation\Rule;
  * 打刻は参考情報であり、矛盾があっても記録自体は常に成功する
  * (矛盾なく1日分の勤務として組み立てられる場合のみ日次勤怠に反映される)。
  */
+#[OA\Tag(name: '打刻ログ', description: 'ICカード等を含む打刻ログ')]
 class AttendancePunchController extends Controller
 {
+    #[OA\Get(
+        path: '/attendance-punches',
+        operationId: 'attendancePunches.index',
+        summary: '打刻ログ一覧を取得する',
+        tags: ['打刻ログ'],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
@@ -44,6 +54,14 @@ class AttendancePunchController extends Controller
         return AttendancePunchResource::collection($punches);
     }
 
+    #[OA\Post(
+        path: '/attendance-punches',
+        operationId: 'attendancePunches.store',
+        summary: '打刻ログを記録する',
+        tags: ['打刻ログ'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at', 'source'], properties: [new OA\Property(property: 'user_id', type: 'integer', nullable: true), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'source', type: 'string'), new OA\Property(property: 'note', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function store(Request $request, CommandBus $commandBus): AttendancePunchResource
     {
         $data = $request->validate([
@@ -74,6 +92,15 @@ class AttendancePunchController extends Controller
      * 新しい打刻行として追記される(打刻ログは追記のみ)。矛盾なく組み立てられる場合のみ
      * 対象日の日次勤怠に反映し直す。
      */
+    #[OA\Put(
+        path: '/attendance-punches/{attendancePunch}',
+        operationId: 'attendancePunches.update',
+        summary: '打刻ログを訂正する',
+        tags: ['打刻ログ'],
+        parameters: [new OA\Parameter(name: 'attendancePunch', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['punch_type', 'punched_at', 'reason'], properties: [new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function update(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');
@@ -98,6 +125,15 @@ class AttendancePunchController extends Controller
     /**
      * UC-A014: 打刻ログを削除する。行は物理削除せず「削除済み」として残す。
      */
+    #[OA\Delete(
+        path: '/attendance-punches/{attendancePunch}',
+        operationId: 'attendancePunches.destroy',
+        summary: '打刻ログを削除する',
+        tags: ['打刻ログ'],
+        parameters: [new OA\Parameter(name: 'attendancePunch', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function destroy(Request $request, AttendancePunch $attendancePunch, CommandBus $commandBus): AttendancePunchResource
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendancePunch->user_id, '他の社員の打刻を訂正・削除する権限がありません。');

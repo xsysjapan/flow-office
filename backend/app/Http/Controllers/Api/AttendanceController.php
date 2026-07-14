@@ -28,13 +28,22 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-A001〜UC-A011: 日次・週次・月次勤怠。「今日」の判定は社員本人のタイムゾーンを
  * 基準にする (docs/06-usecases-auth.md UC-003)。
  */
+#[OA\Tag(name: '勤怠', description: '日次・週次・月次勤怠')]
 class AttendanceController extends Controller
 {
+    #[OA\Get(
+        path: '/attendance/today',
+        operationId: 'attendance.today',
+        summary: '今日の勤怠を取得する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function today(Request $request): AttendanceDayResource
     {
         $user = $request->user();
@@ -69,6 +78,13 @@ class AttendanceController extends Controller
         return new AttendanceDayResource($day);
     }
 
+    #[OA\Post(
+        path: '/attendance/clock-in',
+        operationId: 'attendance.clockIn',
+        summary: '出勤打刻する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function clockIn(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new ClockIn($request->user()->id));
@@ -76,6 +92,13 @@ class AttendanceController extends Controller
         return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
+    #[OA\Post(
+        path: '/attendance/break/start',
+        operationId: 'attendance.startBreak',
+        summary: '休憩を開始する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function startBreak(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new StartBreak($request->user()->id));
@@ -83,6 +106,13 @@ class AttendanceController extends Controller
         return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
+    #[OA\Post(
+        path: '/attendance/break/end',
+        operationId: 'attendance.endBreak',
+        summary: '休憩を終了する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function endBreak(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new EndBreak($request->user()->id));
@@ -90,6 +120,13 @@ class AttendanceController extends Controller
         return new AttendanceDayResource($day->load(['breaks', 'calculation']));
     }
 
+    #[OA\Post(
+        path: '/attendance/clock-out',
+        operationId: 'attendance.clockOut',
+        summary: '退勤打刻する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function clockOut(Request $request, CommandBus $commandBus): AttendanceDayResource
     {
         $day = $commandBus->dispatch(new ClockOut($request->user()->id));
@@ -101,6 +138,14 @@ class AttendanceController extends Controller
      * UC-A006: 週次勤怠を編集する(日次勤怠一覧の取得のみをここで提供し、
      * 保存はUC-A005の日次編集エンドポイントに委ねる。週次は独立データを持たない)。
      */
+    #[OA\Get(
+        path: '/attendance/week',
+        operationId: 'attendance.week',
+        summary: '週次勤怠を取得する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'start_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function week(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate(['start_date' => ['required', 'date']]);
@@ -143,6 +188,14 @@ class AttendanceController extends Controller
         return $workStyle?->calendar?->week_starts_on ?? 1;
     }
 
+    #[OA\Get(
+        path: '/attendance/days/{attendanceDay}',
+        operationId: 'attendance.days.show',
+        summary: '日次勤怠詳細を取得する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function showDay(Request $request, AttendanceDay $attendanceDay): AttendanceDayResource
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を閲覧する権限がありません。');
@@ -154,6 +207,14 @@ class AttendanceController extends Controller
      * 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻(attendance_punches)とは
      * 勤務日が同じというだけの緩い関係しかなく、打刻の有無にかかわらず作成できる。
      */
+    #[OA\Post(
+        path: '/attendance/days',
+        operationId: 'attendance.days.store',
+        summary: '日次勤怠を作成する',
+        tags: ['勤怠'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function storeDay(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
@@ -186,6 +247,15 @@ class AttendanceController extends Controller
         return (new AttendanceDayResource($day->load(['breaks', 'calculation'])))->response()->setStatusCode(201);
     }
 
+    #[OA\Put(
+        path: '/attendance/days/{attendanceDay}',
+        operationId: 'attendance.days.update',
+        summary: '日次勤怠を編集する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function updateDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を編集する権限がありません。');
@@ -219,6 +289,15 @@ class AttendanceController extends Controller
      * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能で、
      * 承認済み・締め済みの日次勤怠は削除できない。
      */
+    #[OA\Delete(
+        path: '/attendance/days/{attendanceDay}',
+        operationId: 'attendance.days.destroy',
+        summary: '日次勤怠を削除する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function destroyDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): JsonResponse
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を削除する権限がありません。');
@@ -237,6 +316,14 @@ class AttendanceController extends Controller
     /**
      * UC-A007: 月次勤怠を確認する。
      */
+    #[OA\Get(
+        path: '/attendance/months/{yearMonth}',
+        operationId: 'attendance.months.show',
+        summary: '月次勤怠を取得する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function month(Request $request, string $yearMonth): array
     {
         $userId = $request->user()->id;
@@ -262,6 +349,15 @@ class AttendanceController extends Controller
         ];
     }
 
+    #[OA\Post(
+        path: '/attendance/months/{yearMonth}/submit',
+        operationId: 'attendance.months.submit',
+        summary: '月次勤怠を提出する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['approver_user_id'], properties: [new OA\Property(property: 'approver_user_id', type: 'integer')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function submitMonth(Request $request, string $yearMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $data = $request->validate(['approver_user_id' => ['required', 'integer', 'exists:users,id']]);
@@ -275,6 +371,14 @@ class AttendanceController extends Controller
         return new AttendanceMonthResource($month->load('approver'));
     }
 
+    #[OA\Post(
+        path: '/attendance-months/{attendanceMonth}/approve',
+        operationId: 'attendanceMonths.approve',
+        summary: '月次勤怠を承認する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function approveMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $commandBus->dispatch(new ApproveAttendanceMonth($attendanceMonth->id, $request->user()->id));
@@ -282,6 +386,15 @@ class AttendanceController extends Controller
         return new AttendanceMonthResource($attendanceMonth->refresh()->load('approver'));
     }
 
+    #[OA\Post(
+        path: '/attendance-months/{attendanceMonth}/return',
+        operationId: 'attendanceMonths.return',
+        summary: '月次勤怠を差し戻す',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function returnMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
@@ -294,6 +407,14 @@ class AttendanceController extends Controller
     /**
      * UC-A011: 管理部が月次勤怠を締める。
      */
+    #[OA\Post(
+        path: '/attendance-months/{attendanceMonth}/close',
+        operationId: 'attendanceMonths.close',
+        summary: '月次勤怠を締める',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function closeMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $commandBus->dispatch(new CloseAttendanceMonth($attendanceMonth->id, $request->user()->id));
@@ -301,6 +422,13 @@ class AttendanceController extends Controller
         return new AttendanceMonthResource($attendanceMonth->refresh());
     }
 
+    #[OA\Get(
+        path: '/attendance/months/mine',
+        operationId: 'attendance.months.mine',
+        summary: '自分の月次勤怠一覧を取得する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function myMonths(Request $request): AnonymousResourceCollection
     {
         $months = AttendanceMonth::query()
@@ -316,6 +444,13 @@ class AttendanceController extends Controller
      * UC-A010: 自分が承認者に指定された提出済み月次に加え、UC-A011: 管理部
      * (admin・hr_staff)は承認者を問わず全社員の承認済み(締め処理待ち)月次も一覧できる。
      */
+    #[OA\Get(
+        path: '/attendance/months/to-approve',
+        operationId: 'attendance.months.toApprove',
+        summary: '承認対象の月次勤怠一覧を取得する',
+        tags: ['勤怠'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function monthsToApprove(Request $request): AnonymousResourceCollection
     {
         $user = $request->user();

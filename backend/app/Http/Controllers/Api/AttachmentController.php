@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-F001/UC-F002: 添付ファイルのアップロード・閲覧。
@@ -27,6 +28,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * docs/12-usecases-attachment.md「申請・勤怠など任意のエンティティ」に対応するため、
  * 申請(workflow_request)以外に勤怠実績(attendance_day)にも添付できる。
  */
+#[OA\Tag(name: '添付ファイル', description: '申請・勤怠に紐づく添付ファイル')]
 class AttachmentController extends Controller
 {
     /**
@@ -42,6 +44,14 @@ class AttachmentController extends Controller
         'attendance_day' => AttendanceDay::class,
     ];
 
+    #[OA\Get(
+        path: '/attachments',
+        operationId: 'attachments.index',
+        summary: '添付ファイル一覧を取得する',
+        tags: ['添付ファイル'],
+        parameters: [new OA\Parameter(name: 'owner_type', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'owner_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         [$ownerClass, $ownerId] = $this->resolveOwner($request);
@@ -50,6 +60,14 @@ class AttachmentController extends Controller
         return AttachmentResource::collection($owner->attachments()->get());
     }
 
+    #[OA\Post(
+        path: '/attachments',
+        operationId: 'attachments.store',
+        summary: '添付ファイルをアップロードする',
+        tags: ['添付ファイル'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\MediaType(mediaType: 'multipart/form-data', schema: new OA\Schema(type: 'object', required: ['owner_type', 'owner_id', 'file'], properties: [new OA\Property(property: 'owner_type', type: 'string'), new OA\Property(property: 'owner_id', type: 'integer'), new OA\Property(property: 'file', type: 'string', format: 'binary')]))),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $request->validate([
@@ -79,6 +97,14 @@ class AttachmentController extends Controller
         return (new AttachmentResource($attachment))->response()->setStatusCode(201);
     }
 
+    #[OA\Get(
+        path: '/attachments/{attachment}/download',
+        operationId: 'attachments.download',
+        summary: '添付ファイルをダウンロードする',
+        tags: ['添付ファイル'],
+        parameters: [new OA\Parameter(name: 'attachment', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function download(Request $request, Attachment $attachment, EventStore $eventStore): StreamedResponse
     {
         $owner = $attachment->owner;

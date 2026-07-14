@@ -16,15 +16,24 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-C002: 勤務形態を作成する。
  */
+#[OA\Tag(name: '勤務形態', description: '勤務形態・労働時間制度マスタ')]
 class WorkStyleController extends Controller
 {
     /**
      * 指示書 16.1節: 働き方一覧に適用社員数・使用中の勤務シフト数・設定不備の集計列を含める。
      */
+    #[OA\Get(
+        path: '/work-styles',
+        operationId: 'workStyles.index',
+        summary: '勤務形態一覧を取得する',
+        tags: ['勤務形態'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function index(WorkStyleUsageSummaryCalculator $summaryCalculator): AnonymousResourceCollection
     {
         $workStyles = WorkStyle::query()->with('employmentCategory')->orderBy('name')->get();
@@ -39,6 +48,14 @@ class WorkStyleController extends Controller
         return WorkStyleResource::collection($workStyles);
     }
 
+    #[OA\Post(
+        path: '/work-styles',
+        operationId: 'workStyles.store',
+        summary: '勤務形態を作成する',
+        tags: ['勤務形態'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['code', 'name', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes'], properties: [new OA\Property(property: 'code', type: 'string'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'employment_category_id', type: 'integer', nullable: true), new OA\Property(property: 'work_time_system', type: 'string'), new OA\Property(property: 'prescribed_daily_minutes', type: 'integer'), new OA\Property(property: 'prescribed_weekly_minutes', type: 'integer'), new OA\Property(property: 'deemed_daily_minutes', type: 'integer', nullable: true), new OA\Property(property: 'variable_period_start_day', type: 'integer', nullable: true), new OA\Property(property: 'default_start_time', type: 'string', nullable: true), new OA\Property(property: 'default_end_time', type: 'string', nullable: true), new OA\Property(property: 'default_break_minutes', type: 'integer'), new OA\Property(property: 'calendar_id', type: 'integer', nullable: true), new OA\Property(property: 'is_shift_based', type: 'boolean'), new OA\Property(property: 'legal_holiday_rule', type: 'string', nullable: true), new OA\Property(property: 'four_week_period_start_date', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'max_consecutive_work_days', type: 'integer', nullable: true), new OA\Property(property: 'settlement_start_day', type: 'integer', nullable: true), new OA\Property(property: 'core_time_enabled', type: 'boolean'), new OA\Property(property: 'core_time_start', type: 'string', nullable: true), new OA\Property(property: 'core_time_end', type: 'string', nullable: true), new OA\Property(property: 'flexible_time_start', type: 'string', nullable: true), new OA\Property(property: 'flexible_time_end', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
@@ -135,6 +152,14 @@ class WorkStyleController extends Controller
      * 作成する。既にデフォルトが存在する場合はエラーとする(SetDefaultWorkStyleで
      * 切り替える)。
      */
+    #[OA\Post(
+        path: '/work-styles/default',
+        operationId: 'workStyles.storeDefault',
+        summary: 'デフォルト勤務形態を作成する',
+        tags: ['勤務形態'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'name', type: 'string', nullable: true), new OA\Property(property: 'default_start_time', type: 'string', nullable: true), new OA\Property(property: 'default_end_time', type: 'string', nullable: true), new OA\Property(property: 'default_break_minutes', type: 'integer', nullable: true), new OA\Property(property: 'calendar_id', type: 'integer', nullable: true)])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function storeDefault(Request $request, CommandBus $commandBus): JsonResponse
     {
         $overrides = $request->validate([
@@ -156,6 +181,14 @@ class WorkStyleController extends Controller
     /**
      * 指示書 3.2節: 既存の働き方をデフォルトに切り替える。
      */
+    #[OA\Post(
+        path: '/work-styles/{workStyle}/set-default',
+        operationId: 'workStyles.setDefault',
+        summary: '勤務形態をデフォルトに設定する',
+        tags: ['勤務形態'],
+        parameters: [new OA\Parameter(name: 'workStyle', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function setDefault(Request $request, WorkStyle $workStyle, CommandBus $commandBus): WorkStyleResource
     {
         $updated = $commandBus->dispatch(new SetDefaultWorkStyle(

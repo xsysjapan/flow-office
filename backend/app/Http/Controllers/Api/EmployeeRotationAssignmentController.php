@@ -14,12 +14,22 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 /**
  * 指示書 8.5節・8.7節: 社員ごとのローテーション基準の割当と、そこからの勤務予定一括生成。
  */
+#[OA\Tag(name: 'ローテーション割当', description: '社員別ローテーション基準')]
 class EmployeeRotationAssignmentController extends Controller
 {
+    #[OA\Get(
+        path: '/employee-rotation-assignments',
+        operationId: 'employeeRotationAssignments.show',
+        summary: '社員のローテーション割当を取得する',
+        tags: ['ローテーション割当'],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function show(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -34,6 +44,14 @@ class EmployeeRotationAssignmentController extends Controller
         return response()->json($assignment ? new EmployeeRotationAssignmentResource($assignment) : null);
     }
 
+    #[OA\Post(
+        path: '/employee-rotation-assignments',
+        operationId: 'employeeRotationAssignments.store',
+        summary: '社員にローテーションを割り当てる',
+        tags: ['ローテーション割当'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'rotation_pattern_id', type: 'integer'), new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer')])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
@@ -65,6 +83,14 @@ class EmployeeRotationAssignmentController extends Controller
      * 既定(`skip_edited`)では、既に個別上書き済みの日・実績のある日・ロックされた日を
      * 自動上書きしない(安全な既定値)。
      */
+    #[OA\Post(
+        path: '/employee-rotation-assignments/generate',
+        operationId: 'employeeRotationAssignments.generate',
+        summary: 'ローテーションから勤務予定を生成する',
+        tags: ['ローテーション割当'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function generate(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([

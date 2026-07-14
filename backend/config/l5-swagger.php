@@ -12,7 +12,7 @@ return [
                 /*
                  * Route for accessing api documentation interface
                  */
-                'api' => 'api/documentation',
+                'api' => 'swagger-ui',
             ],
             'paths' => [
                 /*
@@ -54,7 +54,7 @@ return [
             /*
              * Route for accessing parsed swagger annotations.
              */
-            'docs' => 'docs',
+            'docs' => 'api-docs',
 
             /*
              * Route for Oauth2 authentication callback.
@@ -154,10 +154,7 @@ return [
              * @link https://github.com/zircote/swagger-php/tree/master/Examples/processors/schema-query-parameter
              * @see \OpenApi\scan
              */
-            'processors' => [
-                // \App\SwaggerProcessors\SchemaQueryParameter::class,
-                // ['class' => \App\SwaggerProcessors\Custom::class, 'after' => \OpenApi\Processors\AugmentSchemas::class],
-            ],
+            'processors' => [],
 
             /**
              * pattern: string       $pattern File pattern(s) to scan (default: *.php) .
@@ -186,10 +183,10 @@ return [
         'securityDefinitions' => [
             'securitySchemes' => [
                 'sanctum' => [ // Unique name of security
-                    'type' => 'apiKey', // Valid values are "basic", "apiKey" or "oauth2".
-                    'description' => 'Enter token in format (Bearer <token>)',
-                    'name' => 'Authorization', // The name of the header or query parameter to be used.
-                    'in' => 'header', // The location of the API key. Valid values are "query" or "header".
+                    'type' => 'http',
+                    'description' => 'Enter only the access token. Swagger UI will send it as Authorization: Bearer <token>.',
+                    'scheme' => 'bearer',
+                    'bearerFormat' => 'Sanctum token',
                 ],
             ],
             'security' => [

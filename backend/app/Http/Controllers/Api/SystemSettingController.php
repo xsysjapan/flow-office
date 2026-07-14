@@ -6,18 +6,35 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\SystemSettingResource;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
+use OpenApi\Attributes as OA;
 
 /**
  * UC-003: システム設定を管理する。新規作成するユーザーのデフォルトタイムゾーンなどを保持する
  * (docs/06-usecases-auth.md)。既存ユーザーのタイムゾーンには影響しない。
  */
+#[OA\Tag(name: 'システム設定', description: '認証・勤怠のシステム設定')]
 class SystemSettingController extends Controller
 {
+    #[OA\Get(
+        path: '/system-settings',
+        operationId: 'systemSettings.show',
+        summary: 'システム設定を取得する',
+        tags: ['システム設定'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function show(): SystemSettingResource
     {
         return new SystemSettingResource(SystemSetting::current()->load('defaultWorkStyle'));
     }
 
+    #[OA\Put(
+        path: '/system-settings',
+        operationId: 'systemSettings.update',
+        summary: 'システム設定を更新する',
+        tags: ['システム設定'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['default_timezone'], properties: [new OA\Property(property: 'default_timezone', type: 'string'), new OA\Property(property: 'default_work_style_id', type: 'integer', nullable: true), new OA\Property(property: 'attendance_submission_deadline_day', type: 'integer'), new OA\Property(property: 'attendance_month_close_deadline_day', type: 'integer')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
     public function update(Request $request): SystemSettingResource
     {
         $data = $request->validate([
