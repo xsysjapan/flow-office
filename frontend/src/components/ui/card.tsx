@@ -23,7 +23,15 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-base font-semibold leading-none tracking-tight', className)} {...props} />
+  return (
+    <h2
+      // flex-1でヘッダーの残り幅いっぱいに広がる。actionsが折り返して2段目になった場合も
+      // タイトル単独の行が全幅を使えるため、タイトル内で要素を左右に配置する構成
+      // (例: 日付とステータスバッジ)が意図通り右端まで届く。
+      className={cn('flex-1 text-base font-semibold leading-none tracking-tight', className)}
+      {...props}
+    />
+  )
 }
 
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {

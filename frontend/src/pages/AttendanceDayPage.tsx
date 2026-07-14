@@ -627,10 +627,18 @@ export function AttendanceDayPage() {
   return (
     <div className="flex flex-col gap-6">
       <Card
-        title={`${date}(${weekdayLabel(date)})の勤怠`}
-        actions={
-          <div className="flex items-center gap-2">
+        title={
+          // ラベル(状態バッジ)はタイトル行の右端に置く。actionsが2段目に折り返した場合も
+          // タイトルは単独で行の全幅を使うため、バッジは常にヘッダー右上に揃う。
+          <span className="flex w-full items-center justify-between gap-2">
+            {/* 日本語は文字間で折り返せてしまうため、nowrapにしないとタイトルが縮んで
+                actionsが2段目へ折り返さず、逆にタイトルが圧迫されてしまう。 */}
+            <span className="whitespace-nowrap">{`${date}(${weekdayLabel(date)})の勤怠`}</span>
             {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+          </span>
+        }
+        actions={
+          <>
             <Button asChild variant="secondary" size="icon" title="前日" aria-label="前日">
               <Link to={`/attendance/days/${addDays(date, -1)}`}>
                 <ChevronLeft aria-hidden="true" />
@@ -647,7 +655,7 @@ export function AttendanceDayPage() {
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
-          </div>
+          </>
         }
       >
         {day && !isEditing && (
