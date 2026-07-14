@@ -110,7 +110,13 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
   )
 }
 
-function MobileNav({ groups }: { groups: NavGroup[] }) {
+interface MobileNavProps {
+  groups: NavGroup[]
+  user: { name: string; department: string | null; roles?: string[] } | null
+  onLogout: () => void
+}
+
+function MobileNav({ groups, user, onLogout }: MobileNavProps) {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
 
@@ -125,11 +131,11 @@ function MobileNav({ groups }: { groups: NavGroup[] }) {
           <Menu className="size-5" aria-hidden="true" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left">
+      <SheetContent side="left" className="flex flex-col">
         <SheetHeader>
           <SheetTitle>メニュー</SheetTitle>
         </SheetHeader>
-        <nav className="flex flex-col gap-4 overflow-y-auto" aria-label="メインナビゲーション(モバイル)">
+        <nav className="flex flex-1 flex-col gap-4 overflow-y-auto" aria-label="メインナビゲーション(モバイル)">
           {groups.map((group) => (
             <div key={group.label} className="flex flex-col gap-1">
               <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -154,6 +160,27 @@ function MobileNav({ groups }: { groups: NavGroup[] }) {
             </div>
           ))}
         </nav>
+        {user && (
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm text-foreground">{user.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                  .filter(Boolean)
+                  .join(' ・ ')}
+              </span>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setOpen(false)
+                onLogout()
+              }}
+            >
+              ログアウト
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   )
@@ -168,10 +195,10 @@ export function AppLayout() {
       <header className="flex flex-col gap-2 border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <MobileNav groups={visibleGroups} />
+            <MobileNav groups={visibleGroups} user={user} onLogout={() => void logout()} />
             <span className="text-sm font-semibold text-foreground">flow-office</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 sm:flex">
             {user && (
               <div className="flex flex-col items-end leading-tight">
                 <span className="text-sm text-muted-foreground">{user.name}</span>

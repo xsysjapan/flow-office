@@ -109,4 +109,17 @@ describe('AppLayout', () => {
 
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
+
+  it('shows a logout button inside the mobile menu drawer', async () => {
+    const logout = vi.fn()
+    renderLayout(logout)
+
+    await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
+    await screen.findByRole('heading', { name: 'メニュー' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+
+    expect(logout).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
+  })
 })
