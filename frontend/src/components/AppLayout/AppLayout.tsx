@@ -196,33 +196,35 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex flex-col gap-2 border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <MobileNav groups={visibleGroups} user={user} onLogout={() => void logout()} />
-            <span className="text-sm font-semibold text-foreground">flow-office</span>
+      <header className="border-b border-border bg-card py-3">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 sm:px-6 lg:max-w-6xl lg:px-8">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <MobileNav groups={visibleGroups} user={user} onLogout={() => void logout()} />
+              <span className="text-sm font-semibold text-foreground">flow-office</span>
+            </div>
+            <div className="hidden items-center gap-3 sm:flex">
+              {user && (
+                <div className="flex flex-col items-end leading-tight">
+                  <span className="text-sm text-muted-foreground">{user.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                      .filter(Boolean)
+                      .join(' ・ ')}
+                  </span>
+                </div>
+              )}
+              <Button variant="secondary" onClick={() => void logout()}>
+                ログアウト
+              </Button>
+            </div>
           </div>
-          <div className="hidden items-center gap-3 sm:flex">
-            {user && (
-              <div className="flex flex-col items-end leading-tight">
-                <span className="text-sm text-muted-foreground">{user.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
-                    .filter(Boolean)
-                    .join(' ・ ')}
-                </span>
-              </div>
-            )}
-            <Button variant="secondary" onClick={() => void logout()}>
-              ログアウト
-            </Button>
-          </div>
+          <nav className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="メインナビゲーション">
+            {visibleGroups.map((group) => (
+              <NavGroupMenu key={group.label} group={group} />
+            ))}
+          </nav>
         </div>
-        <nav className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="メインナビゲーション">
-          {visibleGroups.map((group) => (
-            <NavGroupMenu key={group.label} group={group} />
-          ))}
-        </nav>
       </header>
       <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6 lg:max-w-6xl lg:p-8">
         <Outlet />
