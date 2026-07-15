@@ -113,7 +113,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
                 continue;
             }
 
-            $calculation = $this->calculator->calculate($day->load('breaks', 'shiftAssignment.workStyle.calendar'));
+            $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle.calendar'));
 
             $this->eventStore->append(
                 aggregateType: 'attendance_day',

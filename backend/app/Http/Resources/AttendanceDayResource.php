@@ -39,6 +39,11 @@ class AttendanceDayResource extends JsonResource
                 'breaks',
                 fn () => $this->breaks->map(fn ($break) => new AttendanceBreakResource($break, $utcOffsetMinutes)),
             ),
+            // 欠勤・特別休暇の区間(有給休暇は含まない。UC-A005「不就労時間の処理区分」参照)。
+            'leave_segments' => $this->whenLoaded(
+                'leaveSegments',
+                fn () => $this->leaveSegments->map(fn ($segment) => new AttendanceLeaveSegmentResource($segment, $utcOffsetMinutes)),
+            ),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
             // 月60時間超残業(参考情報)。表示のたびに都度計算し、snapshotには含めない
             // (docs/07-usecases-attendance.md「月60時間超残業判定」参照)。

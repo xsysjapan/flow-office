@@ -1,6 +1,7 @@
 import type { BadgeTone } from '../components/Badge/Badge'
 import type {
   AttendanceDayStatus,
+  AttendanceLeaveSegmentCategory,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
   LegalHolidayWarning,
@@ -82,6 +83,16 @@ export function legalHolidayWarningLabel(warning: LegalHolidayWarning): string {
 
 export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMeta {
   return attendanceDayStatusMeta[status]
+}
+
+const attendanceLeaveSegmentCategoryLabels: Record<AttendanceLeaveSegmentCategory, string> = {
+  absence: '欠勤',
+  special_leave: '特別休暇',
+}
+
+/** 有給休暇(全休・半休・時間単位)は対象外(paid_leave_requests/work_typeで管理する)。 */
+export function attendanceLeaveSegmentCategoryLabel(category: AttendanceLeaveSegmentCategory): string {
+  return attendanceLeaveSegmentCategoryLabels[category]
 }
 
 export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {

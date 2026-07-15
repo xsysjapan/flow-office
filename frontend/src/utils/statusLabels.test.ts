@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from '../api/types'
 import {
   attendanceDayStatusLabel,
+  attendanceLeaveSegmentCategoryLabel,
   attendanceMonthStatusLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
@@ -36,6 +37,11 @@ describe('statusLabels', () => {
   it('maps attendance day statuses to a Japanese label and tone', () => {
     expect(attendanceDayStatusLabel('on_break')).toEqual({ label: '休憩中', tone: 'warning' })
     expect(attendanceDayStatusLabel('clocked_out')).toEqual({ label: '退勤済み', tone: 'success' })
+  })
+
+  it('maps leave segment categories to a Japanese label', () => {
+    expect(attendanceLeaveSegmentCategoryLabel('absence')).toBe('欠勤')
+    expect(attendanceLeaveSegmentCategoryLabel('special_leave')).toBe('特別休暇')
   })
 
   it('maps paid leave history event types to a Japanese label and tone, falling back to the raw type', () => {

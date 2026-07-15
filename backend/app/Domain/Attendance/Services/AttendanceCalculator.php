@@ -4,6 +4,9 @@ namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceLeaveSegment;
+use App\Models\AttendanceLeaveSegmentCategory;
+use App\Models\PaidLeaveType;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -52,6 +55,18 @@ use Illuminate\Support\Carbon;
  *   (user_work_style_monthly_assignments)、(2) それも無ければシステム全体設定の
  *   デフォルト働き方(system_settings.default_work_style_id)、の順にフォールバックする
  *   (docs/08-usecases-calendar-shift.md参照)。どちらも無ければ所定労働時間0扱いになる。
+ * - 欠勤・特別休暇(`attendance_leave_segments`)は、勤務予定を勤務しなかった時間帯のうち
+ *   有給休暇以外の理由で処理した区間を表す(docs/07-usecases-attendance.md「不就労時間の
+ *   処理区分」参照)。区間は実績(actual_start_at〜actual_end_at)の内側・外側どちらにも
+ *   存在しうる(例: 遅刻して9:00〜11:00を欠勤扱いにした場合は実績の外側、勤務途中に2時間の
+ *   特別休暇を挟んだ場合は実績の内側)。実績と重なる部分だけを休憩と同様に労働時間・深夜時間
+ *   から控除し、区間そのものの合計時間(実績の有無・重なりにかかわらず)を
+ *   `absence_minutes`/`special_leave_minutes`として集計する。
+ * - 有給休暇(全休・半休・時間単位)は`attendance_leave_segments`の対象外で、既存の
+ *   `paid_leave_requests`/`attendance_days.work_type`/`paid_leave_usages`から
+ *   `paid_leave_days`(全休=1.0・半休=0.5)・`paid_leave_minutes`(時間単位有給の消化分)を
+ *   算出する。日次集計を1テーブルで完結させるための非正規化であり、有給消化の正データは
+ *   引き続き`paid_leave_usages`のまま変わらない。
  */
 class AttendanceCalculator
 {
@@ -67,7 +82,7 @@ class AttendanceCalculator
     ) {}
 
     /**
-     * @return array<string, int|bool|null>
+     * @return array<string, int|bool|float|null>
      */
     public function calculate(AttendanceDay $day): array
     {
@@ -77,17 +92,30 @@ class AttendanceCalculator
 
         $breakMinutes = $breaks->sum(fn ($break) => $break->break_start_at->diffInMinutes($break->break_end_at));
 
+        [$absenceMinutes, $specialLeaveMinutes, $leaveMinutesOverlappingActual, $lateNightLeaveOverlapMinutes]
+            = $this->summarizeLeaveSegments($day->leaveSegments, $start, $end);
+
         $workMinutes = 0;
         $lateNightWorkMinutes = 0;
         if ($start !== null && $end !== null) {
-            $workMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes);
+            $workMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes - $leaveMinutesOverlappingActual);
 
             $lateNightWorkMinutes = $this->lateNightOverlapMinutes($start, $end);
             foreach ($breaks as $break) {
                 $lateNightWorkMinutes -= $this->lateNightOverlapMinutes($break->break_start_at, $break->break_end_at);
             }
+            $lateNightWorkMinutes -= $lateNightLeaveOverlapMinutes;
             $lateNightWorkMinutes = max(0, $lateNightWorkMinutes);
         }
+
+        $paidLeaveDays = match ($day->work_type) {
+            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::FULL) => 1.0,
+            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::AM_HALF), PaidLeaveType::toAttendanceWorkType(PaidLeaveType::PM_HALF) => 0.5,
+            default => 0.0,
+        };
+        $paidLeaveMinutes = (int) $day->paidLeaveUsages
+            ->where('usage_type', PaidLeaveType::HOURLY)
+            ->sum('used_minutes');
 
         $shift = $day->shiftAssignment;
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
@@ -154,27 +182,32 @@ class AttendanceCalculator
 
         // 残業が実際の勤務時刻(労働時間)から判定されている場合のみ、深夜時間帯を所定労働/
         // 法定内残業/法定外残業の3区分に分解する。裁量労働制のみなし時間ベースの判定、
-        // 法定休日では算出しない(0のまま)。
+        // 法定休日では算出しない(0のまま)。休憩と同様、実績と重なる欠勤・特別休暇の区間も
+        // 「労働していない時間」として境界の算出から除外する(除外しないと、regularWorkMinutes
+        // (=workMinutesベース。既に欠勤・特別休暇の重なりを控除済み)との整合が取れず、
+        // 3区分の合計がlate_night_work_minutesに一致しなくなる)。
         $lateNightPrescribedWorkMinutes = 0;
         $lateNightStatutoryWithinOvertimeMinutes = 0;
         $lateNightStatutoryExcessOvertimeMinutes = 0;
         if ($deemedWorkMinutes === 0 && ! $isLegalHoliday && $start !== null && $end !== null && $lateNightWorkMinutes > 0) {
-            $regularWorkMinutes = max(0, $workMinutes - $statutoryWithinOvertimeMinutes - $statutoryExcessOvertimeMinutes);
-            $nonStatutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes);
-            $statutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes + $statutoryWithinOvertimeMinutes);
+            $excludedIntervals = $this->excludedIntervalsWithinActual($breaks, $day->leaveSegments, $start, $end);
 
-            $lateNightPrescribedWorkMinutes = $this->lateNightOverlapMinutesInRange($start, $nonStatutoryOvertimeBoundary ?? $end, $breaks);
+            $regularWorkMinutes = max(0, $workMinutes - $statutoryWithinOvertimeMinutes - $statutoryExcessOvertimeMinutes);
+            $nonStatutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $excludedIntervals, $regularWorkMinutes);
+            $statutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $excludedIntervals, $regularWorkMinutes + $statutoryWithinOvertimeMinutes);
+
+            $lateNightPrescribedWorkMinutes = $this->lateNightOverlapMinutesInRange($start, $nonStatutoryOvertimeBoundary ?? $end, $excludedIntervals);
 
             if ($nonStatutoryOvertimeBoundary !== null) {
                 $lateNightStatutoryWithinOvertimeMinutes = $this->lateNightOverlapMinutesInRange(
                     $nonStatutoryOvertimeBoundary,
                     $statutoryOvertimeBoundary ?? $end,
-                    $breaks,
+                    $excludedIntervals,
                 );
             }
 
             if ($statutoryOvertimeBoundary !== null) {
-                $lateNightStatutoryExcessOvertimeMinutes = $this->lateNightOverlapMinutesInRange($statutoryOvertimeBoundary, $end, $breaks);
+                $lateNightStatutoryExcessOvertimeMinutes = $this->lateNightOverlapMinutesInRange($statutoryOvertimeBoundary, $end, $excludedIntervals);
             }
         }
 
@@ -194,7 +227,49 @@ class AttendanceCalculator
             'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
             'core_time_violation' => $coreTimeViolation,
+            'absence_minutes' => $absenceMinutes,
+            'special_leave_minutes' => $specialLeaveMinutes,
+            'paid_leave_days' => $paidLeaveDays,
+            'paid_leave_minutes' => $paidLeaveMinutes,
         ];
+    }
+
+    /**
+     * 欠勤・特別休暇の区間(`attendance_leave_segments`)を集計する。区間そのものの合計時間
+     * (実績の有無・重なりにかかわらず)と、実績(`$start`〜`$end`)と重なる分(労働時間・
+     * 深夜時間から控除する対象)を分けて返す。
+     *
+     * @param  iterable<int, AttendanceLeaveSegment>  $segments
+     * @return array{0: int, 1: int, 2: int, 3: int} [欠勤合計分, 特別休暇合計分, 実績と重なる分, 実績と重なる分のうち深夜時間帯]
+     */
+    private function summarizeLeaveSegments(iterable $segments, ?Carbon $start, ?Carbon $end): array
+    {
+        $absenceMinutes = 0;
+        $specialLeaveMinutes = 0;
+        $overlapWithActualMinutes = 0;
+        $lateNightOverlapWithActualMinutes = 0;
+
+        foreach ($segments as $segment) {
+            $duration = $segment->start_at->diffInMinutes($segment->end_at);
+            if ($segment->category === AttendanceLeaveSegmentCategory::ABSENCE) {
+                $absenceMinutes += $duration;
+            } elseif ($segment->category === AttendanceLeaveSegmentCategory::SPECIAL_LEAVE) {
+                $specialLeaveMinutes += $duration;
+            }
+
+            if ($start === null || $end === null) {
+                continue;
+            }
+
+            $clippedStart = $segment->start_at->greaterThan($start) ? $segment->start_at : $start;
+            $clippedEnd = $segment->end_at->lessThan($end) ? $segment->end_at : $end;
+            if ($clippedEnd->greaterThan($clippedStart)) {
+                $overlapWithActualMinutes += $clippedStart->diffInMinutes($clippedEnd);
+                $lateNightOverlapWithActualMinutes += $this->lateNightOverlapMinutes($clippedStart, $clippedEnd);
+            }
+        }
+
+        return [$absenceMinutes, $specialLeaveMinutes, $overlapWithActualMinutes, $lateNightOverlapWithActualMinutes];
     }
 
     /**
@@ -228,29 +303,59 @@ class AttendanceCalculator
     }
 
     /**
-    * 労働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
-     * 発生する前提(休憩を除いた勤務区間を時系列に辿り、累計が閾値に達した時点)で境界を返す。
-     * 閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)はnullを返す。
+     * 休憩と、実績と重なる欠勤・特別休暇の区間(欠勤・特別休暇はclippedStart〜clippedEndに
+     * 実績の範囲内へ切り詰め済み)を、どちらも「労働していない時間」として同じ形
+     * (`{start, end}`)にまとめる。境界の算出(findOvertimeBoundary/lateNightOverlapMinutesInRange)
+     * で休憩と同列に除外するために使う。
      *
      * @param  iterable<int, AttendanceBreak>  $breaks
+     * @param  iterable<int, AttendanceLeaveSegment>  $leaveSegments
+     * @return array<int, array{start: Carbon, end: Carbon}>
      */
-    private function findOvertimeBoundary(Carbon $start, Carbon $end, iterable $breaks, int $thresholdMinutes): ?Carbon
+    private function excludedIntervalsWithinActual(iterable $breaks, iterable $leaveSegments, Carbon $start, Carbon $end): array
     {
-        $sortedBreaks = collect($breaks)->sortBy(fn ($break) => $break->break_start_at)->values();
+        $intervals = [];
+
+        foreach ($breaks as $break) {
+            $intervals[] = ['start' => $break->break_start_at, 'end' => $break->break_end_at];
+        }
+
+        foreach ($leaveSegments as $segment) {
+            $clippedStart = $segment->start_at->greaterThan($start) ? $segment->start_at : $start;
+            $clippedEnd = $segment->end_at->lessThan($end) ? $segment->end_at : $end;
+            if ($clippedEnd->greaterThan($clippedStart)) {
+                $intervals[] = ['start' => $clippedStart, 'end' => $clippedEnd];
+            }
+        }
+
+        return $intervals;
+    }
+
+    /**
+     * 労働時間(休憩・欠勤・特別休暇を除く)が$thresholdMinutesに達する時刻を求める。残業は
+     * 勤務時間の末尾から発生する前提(除外区間を除いた勤務区間を時系列に辿り、累計が閾値に
+     * 達した時点)で境界を返す。閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)は
+     * nullを返す。
+     *
+     * @param  iterable<int, array{start: Carbon, end: Carbon}>  $excludedIntervals
+     */
+    private function findOvertimeBoundary(Carbon $start, Carbon $end, iterable $excludedIntervals, int $thresholdMinutes): ?Carbon
+    {
+        $sorted = collect($excludedIntervals)->sortBy(fn ($interval) => $interval['start'])->values();
 
         $cursor = $start->copy();
         $accumulated = 0;
 
-        foreach ($sortedBreaks as $break) {
-            if ($break->break_start_at->greaterThan($cursor)) {
-                $segmentMinutes = $cursor->diffInMinutes($break->break_start_at);
+        foreach ($sorted as $interval) {
+            if ($interval['start']->greaterThan($cursor)) {
+                $segmentMinutes = $cursor->diffInMinutes($interval['start']);
                 if ($accumulated + $segmentMinutes >= $thresholdMinutes) {
                     return $cursor->copy()->addMinutes($thresholdMinutes - $accumulated);
                 }
                 $accumulated += $segmentMinutes;
             }
-            if ($break->break_end_at->greaterThan($cursor)) {
-                $cursor = $break->break_end_at->copy();
+            if ($interval['end']->greaterThan($cursor)) {
+                $cursor = $interval['end']->copy();
             }
         }
 
@@ -265,20 +370,20 @@ class AttendanceCalculator
     }
 
     /**
-     * [$rangeStart, $rangeEnd)の区間のうち深夜時間帯(22:00〜05:00)と重なる分を、休憩による
-     * 重複を除いて算出する。
+     * [$rangeStart, $rangeEnd)の区間のうち深夜時間帯(22:00〜05:00)と重なる分を、休憩・欠勤・
+     * 特別休暇による重複を除いて算出する。
      *
-     * @param  iterable<int, AttendanceBreak>  $breaks
+     * @param  iterable<int, array{start: Carbon, end: Carbon}>  $excludedIntervals
      */
-    private function lateNightOverlapMinutesInRange(Carbon $rangeStart, Carbon $rangeEnd, iterable $breaks): int
+    private function lateNightOverlapMinutesInRange(Carbon $rangeStart, Carbon $rangeEnd, iterable $excludedIntervals): int
     {
         $minutes = $this->lateNightOverlapMinutes($rangeStart, $rangeEnd);
 
-        foreach ($breaks as $break) {
-            $breakStart = $break->break_start_at->greaterThan($rangeStart) ? $break->break_start_at : $rangeStart;
-            $breakEnd = $break->break_end_at->lessThan($rangeEnd) ? $break->break_end_at : $rangeEnd;
-            if ($breakEnd->greaterThan($breakStart)) {
-                $minutes -= $this->lateNightOverlapMinutes($breakStart, $breakEnd);
+        foreach ($excludedIntervals as $interval) {
+            $excludedStart = $interval['start']->greaterThan($rangeStart) ? $interval['start'] : $rangeStart;
+            $excludedEnd = $interval['end']->lessThan($rangeEnd) ? $interval['end'] : $rangeEnd;
+            if ($excludedEnd->greaterThan($excludedStart)) {
+                $minutes -= $this->lateNightOverlapMinutes($excludedStart, $excludedEnd);
             }
         }
 

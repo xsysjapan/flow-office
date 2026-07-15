@@ -73,6 +73,10 @@ class AttendanceDailyCalculationProjector implements Projector
                 'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
                 'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'],
                 'core_time_violation' => $payload['core_time_violation'] ?? false,
+                'absence_minutes' => $payload['absence_minutes'] ?? 0,
+                'special_leave_minutes' => $payload['special_leave_minutes'] ?? 0,
+                'paid_leave_days' => $payload['paid_leave_days'] ?? 0,
+                'paid_leave_minutes' => $payload['paid_leave_minutes'] ?? 0,
                 // 実績の再編集による再計算は、直前の手動補正を解除する(再計算結果が最新の正)。
                 'is_manually_adjusted' => false,
                 'adjusted_by_user_id' => null,
@@ -88,7 +92,8 @@ class AttendanceDailyCalculationProjector implements Projector
 
     /**
      * 物理名変更前に保存されたイベントも再生できるよう、新しいpayloadキーへ寄せる。
-     * @param array<string, mixed> $payload
+     *
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function normalizeLegacyPayload(array $payload): array

@@ -152,6 +152,33 @@ describe('AttendanceMonthDetailPage', () => {
     expect(screen.getByText('30分')).toBeInTheDocument()
   })
 
+  it('shows the monthly absence and paid-leave summary (欠勤日数・有給日数・有給時間・特別休暇時間)', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [dayRecord],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: {
+        ...zeroMonthlyCalculationTotals,
+        absence_days: 1,
+        absence_minutes: 480,
+        paid_leave_days: 1.5,
+        paid_leave_minutes: 120,
+        special_leave_minutes: 60,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('欠勤日数')).toBeInTheDocument()
+    expect(screen.getByText('1日')).toBeInTheDocument()
+    expect(screen.getByText('欠勤時間')).toBeInTheDocument()
+    expect(screen.getByText('有給日数')).toBeInTheDocument()
+    expect(screen.getByText('1.5日')).toBeInTheDocument()
+    expect(screen.getByText('有給時間(時間単位)')).toBeInTheDocument()
+    expect(screen.getByText('特別休暇時間')).toBeInTheDocument()
+    expect(screen.getByText('1時間')).toBeInTheDocument()
+  })
+
   it('shows a submit control for a not_submitted month', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],

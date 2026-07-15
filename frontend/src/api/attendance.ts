@@ -3,11 +3,20 @@ import type {
   AttendanceDailyCalculationAdjustment,
   AttendanceDay,
   AttendanceDayDefaults,
+  AttendanceLeaveSegmentCategory,
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   AttendancePunch,
   FlexSettlementSummary,
 } from './types'
+
+/** 欠勤・特別休暇の区間入力(有給休暇は含まない)。 */
+export interface LeaveSegmentInput {
+  category: AttendanceLeaveSegmentCategory
+  start: string
+  end: string
+  note?: string | null
+}
 
 export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
@@ -45,6 +54,7 @@ export interface EditAttendanceDayInput {
   breaks?: Array<{ start: string; end?: string | null }>
   work_type?: string | null
   note?: string | null
+  leave_segments?: LeaveSegmentInput[]
   reason: string
 }
 
@@ -69,6 +79,7 @@ export interface CreateAttendanceDayInput {
   breaks?: Array<{ start: string; end?: string | null }>
   work_type?: string | null
   note?: string | null
+  leave_segments?: LeaveSegmentInput[]
   reason: string
 }
 
