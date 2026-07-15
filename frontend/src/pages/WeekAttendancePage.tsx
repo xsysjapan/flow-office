@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRow'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
@@ -24,6 +25,7 @@ export function WeekAttendancePage() {
   const { data, isLoading, error } = useWeek(weekStart)
 
   const today = formatDate(new Date())
+  const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
 
@@ -32,14 +34,20 @@ export function WeekAttendancePage() {
       title="週次勤怠"
       actions={
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
-            前週
+          <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
+            <ChevronLeft aria-hidden="true" />
           </Button>
-          <Button variant="secondary" onClick={() => setWeekStart(formatDate(mondayOf(new Date())))}>
+          <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
             今週
           </Button>
-          <Button variant="secondary" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
-            次週
+          <Button asChild variant="secondary" title="月次で見る">
+            <Link to={`/attendance/months/${weekStart.slice(0, 7)}`}>
+              <CalendarRange aria-hidden="true" />
+              月次
+            </Link>
+          </Button>
+          <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
+            <ChevronRight aria-hidden="true" />
           </Button>
         </div>
       }

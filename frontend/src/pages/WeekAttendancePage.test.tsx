@@ -90,6 +90,14 @@ describe('WeekAttendancePage', () => {
     await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart))
   })
 
+  it('links to the displayed week month and disables 今週 for the current week', async () => {
+    renderPage([])
+
+    await screen.findByText('週次勤怠')
+    expect(screen.getByRole('link', { name: '月次' })).toHaveAttribute('href', `/attendance/months/${weekStart.slice(0, 7)}`)
+    expect(screen.getByRole('button', { name: '今週' })).toBeDisabled()
+  })
+
   it('opens the week that contains the ?start= date, when navigated from the day page', async () => {
     const otherWeekStart = addDays(weekStart, 7)
     vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
@@ -106,6 +114,7 @@ describe('WeekAttendancePage', () => {
     )
 
     await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(otherWeekStart))
+    expect(screen.getByRole('button', { name: '今週' })).not.toBeDisabled()
   })
 
   it('shows an error message when the week fails to load', async () => {

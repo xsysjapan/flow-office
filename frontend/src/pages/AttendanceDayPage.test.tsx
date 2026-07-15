@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
 import type { AttendanceDay, AttendancePunch, User } from '../api/types'
 import { AttendanceDayPage } from './AttendanceDayPage'
+import { formatDate } from '../utils/weekDates'
 
 const date = '2026-07-06'
 
@@ -53,13 +54,13 @@ const recordedDay: AttendanceDay = {
   },
 }
 
-function renderPage(days: AttendanceDay[] = [recordedDay]) {
+function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/attendance/days/${date}`]}>
+      <MemoryRouter initialEntries={[`/attendance/days/${routeDate}`]}>
         <Routes>
           <Route path="/attendance/days/:date" element={<AttendanceDayPage />} />
         </Routes>
@@ -92,6 +93,15 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByRole('link', { name: '前日' })).toHaveAttribute('href', '/attendance/days/2026-07-05')
     expect(screen.getByRole('link', { name: '翌日' })).toHaveAttribute('href', '/attendance/days/2026-07-07')
     expect(screen.getByRole('link', { name: '週次' })).toHaveAttribute('href', `/attendance/week?start=${date}`)
+    expect(screen.getByRole('link', { name: '今日' })).toHaveAttribute('href', `/attendance/days/${formatDate(new Date())}`)
+  })
+
+  it('disables 今日 when displaying today', async () => {
+    const today = formatDate(new Date())
+    renderPage([], today)
+
+    await screen.findByText(`${today}(${['日', '月', '火', '水', '木', '金', '土'][new Date(`${today}T00:00:00`).getDay()]})の勤怠`)
+    expect(screen.getByRole('button', { name: '今日' })).toBeDisabled()
   })
 
   it('edits the day and saves it as a decomposed daily edit', async () => {

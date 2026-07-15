@@ -629,6 +629,7 @@ export function AttendanceDayPage() {
 
   const day = weekDays?.find((d) => d.work_date === date)
   const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
+  const today = formatDate(new Date())
 
   return (
     <div className="flex flex-col gap-6">
@@ -650,7 +651,16 @@ export function AttendanceDayPage() {
                 <ChevronLeft aria-hidden="true" />
               </Link>
             </Button>
-            <Button asChild variant="secondary" title="週次で見る">
+            {date === today ? (
+              <Button variant="secondary" disabled>
+                今日
+              </Button>
+            ) : (
+              <Button asChild variant="secondary">
+                <Link to={`/attendance/days/${today}`}>今日</Link>
+              </Button>
+            )}
+            <Button asChild variant="secondary" title="この週で見る">
               <Link to={`/attendance/week?start=${monday}`}>
                 <CalendarRange aria-hidden="true" />
                 週次
