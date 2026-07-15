@@ -149,6 +149,21 @@ export function AttendanceMonthDetailPage() {
             <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
             <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_legal_holiday_work_minutes} /></dd>
           </dl>
+
+          <dl className="mt-3 grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 border-t border-border pt-3 text-sm">
+            <dt className="font-medium text-muted-foreground">欠勤日数</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.absence_days ?? 0}日</dd>
+            <dt className="font-medium text-muted-foreground">欠勤時間</dt>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.absence_minutes ?? 0} /></dd>
+
+            <dt className="font-medium text-muted-foreground">有給日数</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.paid_leave_days ?? 0}日</dd>
+            <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.paid_leave_minutes ?? 0} /></dd>
+
+            <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.special_leave_minutes ?? 0} /></dd>
+          </dl>
         </Card>
       )}
 

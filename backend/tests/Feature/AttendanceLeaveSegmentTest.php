@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceDailyCalculation;
+use App\Models\AttendanceLeaveSegment;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
 /**
@@ -166,6 +169,56 @@ class AttendanceLeaveSegmentTest extends TestCase
     }
 
     /**
+     * 欠勤・特別休暇の区間同士が重なっていると、それぞれの時間が二重に合算され
+     * absence_minutes/special_leave_minutesが過大集計されてしまうため許可しない。
+     */
+    public function test_overlapping_leave_segments_are_rejected(): void
+    {
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $response = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-08-10',
+            'leave_segments' => [
+                ['category' => 'absence', 'start' => '2026-08-10T09:00:00+09:00', 'end' => '2026-08-10T12:00:00+09:00', 'note' => null],
+                ['category' => 'special_leave', 'start' => '2026-08-10T11:00:00+09:00', 'end' => '2026-08-10T13:00:00+09:00', 'note' => null],
+            ],
+            'reason' => '区間重複のテスト',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    /**
+     * 欠勤・特別休暇の区間が休憩と重なっていると、同じ時間帯が休憩・欠勤の両方から
+     * 労働時間・深夜時間に対して控除され、二重控除になってしまうため許可しない。
+     */
+    public function test_a_leave_segment_overlapping_a_break_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-08-10',
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => '2026-08-10T09:00:00+09:00',
+            'actual_end_at' => '2026-08-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-08-10T12:00:00+09:00', 'end' => '2026-08-10T13:00:00+09:00']],
+            'leave_segments' => [
+                ['category' => 'special_leave', 'start' => '2026-08-10T12:30:00+09:00', 'end' => '2026-08-10T14:00:00+09:00', 'note' => null],
+            ],
+            'reason' => '休憩と重複するテスト',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    /**
      * re-editing the day replaces the leave segments wholesale (attendance_breaksと同じ扱い)。
      */
     public function test_re_editing_the_day_replaces_leave_segments(): void
@@ -268,5 +321,144 @@ class AttendanceLeaveSegmentTest extends TestCase
         $this->assertSame(1, $totals['absence_days']);
         $this->assertSame(540, $totals['absence_minutes']); // 欠勤区間そのものの時間(9:00-18:00、休憩の控除はしない)
         $this->assertEquals(1.0, $totals['paid_leave_days']);
+    }
+
+    /**
+     * 夜勤(21:00〜翌05:00)の途中に2時間の特別休暇を挟んだ場合、深夜時間帯
+     * (22:00〜05:00)と重なる分だけ深夜労働時間からも控除されることを確認する
+     * (休憩と同じ扱い。二重減算や符号ミスがないかのケース)。
+     */
+    public function test_a_special_leave_segment_overlapping_the_late_night_window_reduces_late_night_minutes(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-08-10';
+        $nextDateString = '2026-08-11';
+
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'night-shift', 'name' => '夜勤', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '21:00', 'default_end_time' => '05:00',
+            'default_break_minutes' => 0, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        EmployeeShiftAssignment::query()->create([
+            'user_id' => $employee->id, 'work_date' => $dateString, 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => "{$dateString} 21:00:00", 'planned_end_at' => "{$nextDateString} 05:00:00",
+            'planned_break_minutes' => 0,
+        ]);
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => $dateString,
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T21:00:00+09:00",
+            'actual_end_at' => "{$nextDateString}T05:00:00+09:00",
+            'breaks' => [],
+            'leave_segments' => [
+                ['category' => 'special_leave', 'start' => "{$dateString}T23:00:00+09:00", 'end' => "{$nextDateString}T01:00:00+09:00", 'note' => null],
+            ],
+            'reason' => '夜勤中に特別休暇',
+        ]);
+
+        $response->assertOk();
+        $calculation = $response->json('calculation');
+        // 21:00〜翌05:00(480分) - 特別休暇120分 = 360分。
+        $this->assertSame(360, $calculation['work_minutes']);
+        $this->assertSame(120, $calculation['special_leave_minutes']);
+        // 深夜帯(22:00〜翌05:00)420分のうち、特別休暇と重なる120分(23:00〜翌01:00は深夜帯に
+        // 完全に含まれる)を控除して300分。
+        $this->assertSame(300, $calculation['late_night_work_minutes']);
+        // 3区分(所定/法定内残業/法定外残業)の合計はlate_night_work_minutesに一致する必要がある
+        // (深夜時間帯と重なる欠勤・特別休暇の区間を境界計算からも除外できているかの確認)。
+        $this->assertSame(
+            $calculation['late_night_work_minutes'],
+            $calculation['late_night_prescribed_work_minutes']
+                + $calculation['late_night_statutory_within_overtime_minutes']
+                + $calculation['late_night_statutory_excess_overtime_minutes'],
+        );
+    }
+
+    /**
+     * 再編集のたびに欠勤・特別休暇区間の内容が最新の状態に更新され、`projections:rebuild`で
+     * `attendance_daily_calculations`を再生成しても同じ状態を再現できることを確認する
+     * (docs/03-architecture.md 3.2「Projectionは再生成可能な派生データ」)。
+     */
+    public function test_projections_rebuild_reproduces_the_calculation_after_multiple_edits(): void
+    {
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-08-10',
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        // 1回目の編集: 遅刻を欠勤扱いにする。
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => '2026-08-10T11:00:00+09:00',
+            'actual_end_at' => '2026-08-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-08-10T12:00:00+09:00', 'end' => '2026-08-10T13:00:00+09:00']],
+            'leave_segments' => [
+                ['category' => 'absence', 'start' => '2026-08-10T09:00:00+09:00', 'end' => '2026-08-10T11:00:00+09:00', 'note' => '寝坊'],
+            ],
+            'reason' => '遅刻を欠勤扱いにする',
+        ])->assertOk();
+
+        // 2回目の編集: 通院の証明が出たため特別休暇に変更する(区間を入れ替え)。
+        $finalResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => '2026-08-10T11:00:00+09:00',
+            'actual_end_at' => '2026-08-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-08-10T12:00:00+09:00', 'end' => '2026-08-10T13:00:00+09:00']],
+            'leave_segments' => [
+                ['category' => 'special_leave', 'start' => '2026-08-10T09:00:00+09:00', 'end' => '2026-08-10T11:00:00+09:00', 'note' => '通院のため'],
+            ],
+            'reason' => '欠勤から特別休暇へ変更',
+        ]);
+        $finalResponse->assertOk();
+        $this->assertSame(0, $finalResponse->json('calculation.absence_minutes'));
+        $this->assertSame(120, $finalResponse->json('calculation.special_leave_minutes'));
+
+        $before = AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->first()->toArray();
+
+        Artisan::call('projections:rebuild', ['projector' => 'AttendanceDailyCalculationProjector']);
+
+        $after = AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->first()->toArray();
+
+        unset($before['updated_at'], $after['updated_at']);
+        $this->assertSame($before, $after);
+    }
+
+    /**
+     * UC-A015: 日次勤怠を削除すると、attendance_leave_segmentsも外部キーのcascadeOnDeleteで
+     * 併せて削除される(attendance_breaks/attendance_daily_calculationsと同じ扱い)。
+     */
+    public function test_deleting_the_day_cascades_to_its_leave_segments(): void
+    {
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-08-10',
+            'leave_segments' => [
+                ['category' => 'absence', 'start' => '2026-08-10T09:00:00+09:00', 'end' => '2026-08-10T11:00:00+09:00', 'note' => null],
+            ],
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $this->assertSame(1, AttendanceLeaveSegment::query()->where('attendance_day_id', $dayId)->count());
+
+        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", ['reason' => '削除テスト'])->assertOk();
+
+        $this->assertSame(0, AttendanceLeaveSegment::query()->where('attendance_day_id', $dayId)->count());
     }
 }

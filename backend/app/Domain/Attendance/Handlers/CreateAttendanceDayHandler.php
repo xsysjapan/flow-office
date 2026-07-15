@@ -142,12 +142,16 @@ class CreateAttendanceDayHandler implements CommandHandler
     }
 
     /**
-     * 欠勤・特別休暇の区間(有給休暇を除く)を作成する。
+     * 欠勤・特別休暇の区間(有給休暇を除く)を作成する。区間同士、および休憩との重複は、
+     * 同じ時間帯が二重に労働時間から控除されたり欠勤・特別休暇時間が過大集計されたりするのを
+     * 防ぐため許可しない。
      *
      * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
      */
     private function createLeaveSegments(AttendanceDay $day, array $leaveSegments): void
     {
+        /** @var array<int, array{start: Carbon, end: Carbon}> $parsed */
+        $parsed = [];
         foreach ($leaveSegments as $segment) {
             if (! in_array($segment['category'], AttendanceLeaveSegmentCategory::values(), true)) {
                 throw new DomainRuleException("不明な処理区分です: {$segment['category']}");
@@ -159,6 +163,18 @@ class CreateAttendanceDayHandler implements CommandHandler
                 throw new DomainRuleException('欠勤・特別休暇の終了時刻は開始時刻より後にしてください。');
             }
 
+            foreach ($parsed as $existing) {
+                if ($this->intervalsOverlap($start, $end, $existing['start'], $existing['end'])) {
+                    throw new DomainRuleException('欠勤・特別休暇の時間帯が重複しています。');
+                }
+            }
+            foreach ($day->breaks as $break) {
+                if ($break->break_end_at !== null && $this->intervalsOverlap($start, $end, $break->break_start_at, $break->break_end_at)) {
+                    throw new DomainRuleException('欠勤・特別休暇の時間帯が休憩と重複しています。');
+                }
+            }
+            $parsed[] = ['start' => $start, 'end' => $end];
+
             $day->leaveSegments()->create([
                 'category' => $segment['category'],
                 'start_at' => $start,
@@ -166,5 +182,10 @@ class CreateAttendanceDayHandler implements CommandHandler
                 'note' => $segment['note'] ?? null,
             ]);
         }
+    }
+
+    private function intervalsOverlap(Carbon $aStart, Carbon $aEnd, Carbon $bStart, Carbon $bEnd): bool
+    {
+        return $aStart->lessThan($bEnd) && $bStart->lessThan($aEnd);
     }
 }

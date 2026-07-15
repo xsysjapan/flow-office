@@ -51,8 +51,9 @@ class DeleteAttendanceDayHandler implements CommandHandler
             ),
         );
 
-        // attendance_breaks / attendance_daily_calculations は外部キーのcascadeOnDeleteで
-        // 併せて削除される。paid_leave_usages は上のチェックで存在しないことを保証済み。
+        // attendance_breaks / attendance_leave_segments / attendance_daily_calculations は
+        // 外部キーのcascadeOnDeleteで併せて削除される。paid_leave_usages は上のチェックで
+        // 存在しないことを保証済み。
         $day->delete();
 
         return null;
