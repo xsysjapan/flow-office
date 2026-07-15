@@ -124,6 +124,7 @@ describe('AttendanceMonthDetailPage', () => {
     expect(await screen.findByText('2026-07-01(水)')).toBeInTheDocument()
     const link = screen.getByText('2026-07-01(水)').closest('a')
     expect(link).toHaveAttribute('href', '/attendance/days/2026-07-01')
+    expect(screen.getByRole('heading', { name: '日別の内訳' })).toBeInTheDocument()
     expect(screen.getAllByText('未入力').length).toBeGreaterThan(0)
   })
 
@@ -203,7 +204,7 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
-    await screen.findByText(`${yearMonth}の勤怠月次`)
+    await screen.findByText('月次勤怠')
     expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
   })
 
@@ -261,7 +262,7 @@ describe('AttendanceMonthDetailPage', () => {
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       renderPage()
-      await screen.findByText(`${yearMonth}の勤怠月次`)
+      await screen.findByText('月次勤怠')
 
       expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
@@ -276,7 +277,7 @@ describe('AttendanceMonthDetailPage', () => {
         monthly_calculation_totals: zeroMonthlyCalculationTotals,
       })
       renderPage()
-      await screen.findByText(`${yearMonth}の勤怠月次`)
+      await screen.findByText('月次勤怠')
 
       expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
@@ -287,11 +288,11 @@ describe('AttendanceMonthDetailPage', () => {
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       renderPage()
-      await screen.findByText(`${yearMonth}の勤怠月次`)
+      await screen.findByText('月次勤怠')
 
       await userEvent.click(screen.getByRole('button', { name: '前月' }))
 
-      expect(await screen.findByText('2026-06の勤怠月次')).toBeInTheDocument()
+      expect(await screen.findByText('2026-06')).toBeInTheDocument()
     })
   })
 })

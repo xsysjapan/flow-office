@@ -227,10 +227,10 @@ export function TodayAttendancePage() {
                   <StatTile label="法定休日労働時間" value={<Duration minutes={day.calculation.legal_holiday_work_minutes} />} />
                 </StatTileGrid>
                 <StatTileGrid className="sm:grid-cols-4">
-                  <StatTile label="深夜所定労働時間" value={<Duration minutes={day.calculation.late_night_prescribed_work_minutes} />} />
-                  <StatTile label="深夜法定内残業時間" value={<Duration minutes={day.calculation.late_night_statutory_within_overtime_minutes} />} />
-                  <StatTile label="深夜法定外残業時間" value={<Duration minutes={day.calculation.late_night_statutory_excess_overtime_minutes} />} />
-                  <StatTile label="深夜法定休日労働時間" value={<Duration minutes={day.calculation.late_night_legal_holiday_work_minutes} />} />
+                  <StatTile label="うち深夜所定労働時間" value={<Duration minutes={day.calculation.late_night_prescribed_work_minutes} />} />
+                  <StatTile label="うち深夜法定内残業時間" value={<Duration minutes={day.calculation.late_night_statutory_within_overtime_minutes} />} />
+                  <StatTile label="うち深夜法定外残業時間" value={<Duration minutes={day.calculation.late_night_statutory_excess_overtime_minutes} />} />
+                  <StatTile label="うち深夜法定休日労働時間" value={<Duration minutes={day.calculation.late_night_legal_holiday_work_minutes} />} />
                 </StatTileGrid>
                 {day.monthly_overtime && (
                   <p className="text-xs text-muted-foreground">

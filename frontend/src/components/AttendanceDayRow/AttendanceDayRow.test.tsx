@@ -76,4 +76,12 @@ describe('AttendanceDayRow', () => {
     renderRow({ day: undefined, warnings: ['打刻漏れ'] })
     expect(screen.getByText('打刻漏れ')).toBeInTheDocument()
   })
+
+  it('uses a mobile grid that separates the primary and supplementary day information', () => {
+    renderRow({ day: calculatedDay, warnings: ['打刻漏れ'] })
+
+    const link = screen.getByRole('link')
+    expect(link).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto]', 'sm:flex')
+    expect(screen.getByText('09:00 〜 18:00').parentElement).toHaveClass('col-start-1', 'sm:contents')
+  })
 })

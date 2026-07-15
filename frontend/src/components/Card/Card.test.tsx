@@ -18,7 +18,13 @@ describe('Card', () => {
     expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument()
   })
 
-  it('renders navigation in a separate row below the title on mobile', () => {
+  it('keeps the title row at button height when actions are absent', () => {
+    render(<Card title="今日の勤怠">内容</Card>)
+
+    expect(screen.getByRole('heading', { name: '今日の勤怠' }).parentElement).toHaveClass('min-h-9')
+  })
+
+  it('renders navigation above the title row on mobile', () => {
     render(
       <Card title="勤怠" actions={<span>提出済み</span>} navigation={<button>前日</button>}>
         内容
@@ -26,9 +32,9 @@ describe('Card', () => {
     )
 
     const navigationRow = screen.getByRole('button', { name: '前日' }).parentElement
-    expect(navigationRow).toHaveClass('w-full', 'md:w-auto')
-    expect(navigationRow?.previousElementSibling).toContainElement(screen.getByRole('heading', { name: '勤怠' }))
-    expect(navigationRow?.previousElementSibling).toContainElement(screen.getByText('提出済み'))
+    expect(navigationRow).toHaveClass('mb-3', 'md:mb-0', 'md:order-3')
+    expect(navigationRow?.nextElementSibling).toContainElement(screen.getByRole('heading', { name: '勤怠' }))
+    expect(navigationRow?.nextElementSibling).toContainElement(screen.getByText('提出済み'))
   })
 
   it('omits the header when no title or actions are given', () => {

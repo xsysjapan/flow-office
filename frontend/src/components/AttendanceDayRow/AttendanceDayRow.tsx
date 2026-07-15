@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { AttendanceDay } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
@@ -30,26 +31,30 @@ export function AttendanceDayRow({ date, day, warnings = [] }: AttendanceDayRowP
     <li>
       <Link
         to={`/attendance/days/${date}`}
-        className="flex flex-wrap items-center gap-2.5 rounded-md px-2 py-3 transition-colors hover:bg-accent"
+        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-md px-2 py-3 transition-colors hover:bg-accent sm:flex sm:items-center sm:gap-2.5"
       >
-        <span className="min-w-40 text-sm font-semibold text-foreground">
-          {date}({weekdayLabel(date)})
-        </span>
-        <Badge tone={tone}>{label}</Badge>
-        {warnings.map((warning) => (
-          <Badge key={warning} tone="warning">
-            {warning}
-          </Badge>
-        ))}
-        {day && (day.actual_start_at || day.actual_end_at) && (
-          <span className="text-sm text-muted-foreground">
-            {isoToTimeLiteral(day.actual_start_at) || '--:--'} 〜 {isoToTimeLiteral(day.actual_end_at) || '--:--'}
+        <div className="flex min-w-0 items-center gap-2 sm:contents">
+          <span className="whitespace-nowrap text-sm font-semibold text-foreground">
+            {date}({weekdayLabel(date)})
           </span>
-        )}
-        {day?.calculation && (
-          <span className="text-sm text-muted-foreground">労働時間 <Duration minutes={day.calculation.work_minutes} /></span>
-        )}
-        <span className="ml-auto text-sm text-muted-foreground">詳細を見る ›</span>
+          <Badge tone={tone}>{label}</Badge>
+        </div>
+        <div className="col-start-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:contents">
+          {day && (day.actual_start_at || day.actual_end_at) && (
+            <span className="whitespace-nowrap text-sm sm:text-sm">
+              {isoToTimeLiteral(day.actual_start_at) || '--:--'} 〜 {isoToTimeLiteral(day.actual_end_at) || '--:--'}
+            </span>
+          )}
+          {day?.calculation && (
+            <span className="whitespace-nowrap text-sm sm:text-sm">労働時間 <Duration minutes={day.calculation.work_minutes} /></span>
+          )}
+          {warnings.map((warning) => (
+            <Badge key={warning} tone="warning">
+              {warning}
+            </Badge>
+          ))}
+        </div>
+        <ChevronRight className="col-start-2 row-span-2 size-4 self-center text-muted-foreground sm:order-last sm:ml-auto" aria-hidden="true" />
       </Link>
     </li>
   )

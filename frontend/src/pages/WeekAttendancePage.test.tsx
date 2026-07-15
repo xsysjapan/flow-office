@@ -72,11 +72,36 @@ describe('WeekAttendancePage', () => {
     expect(screen.getAllByText('未入力').length).toBeGreaterThan(0)
   })
 
+  it('shows the summed weekly calculation in the common summary layout', async () => {
+    renderPage([
+      mondayRecord,
+      {
+        ...mondayRecord,
+        id: 2,
+        work_date: addDays(weekStart, 1),
+        calculation: {
+          ...mondayRecord.calculation!,
+          prescribed_work_minutes: 240,
+          absence_minutes: 480,
+          special_leave_minutes: 240,
+        },
+      },
+    ])
+
+    await screen.findByText(`${weekStart}(月)`)
+    expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
+    expect(screen.getByText('12時間')).toBeInTheDocument()
+    expect(screen.getByText('所定労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
+    expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('1日')
+    expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')
+  })
+
   it('links each day to its day detail page', async () => {
     renderPage([mondayRecord])
 
     const link = (await screen.findByText(`${weekStart}(月)`)).closest('a')
     expect(link).toHaveAttribute('href', `/attendance/days/${weekStart}`)
+    expect(screen.getByRole('heading', { name: '日別の内訳' })).toBeInTheDocument()
   })
 
   it('moves to the next and previous week when the nav buttons are clicked', async () => {

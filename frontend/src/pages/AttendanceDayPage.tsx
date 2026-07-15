@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { AttendanceCalculationSummary } from '../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
@@ -776,10 +777,10 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
     { key: 'statutory_within_overtime_minutes', label: '法定内残業時間(分)' },
     { key: 'statutory_excess_overtime_minutes', label: '法定外残業時間(分)' },
     { key: 'legal_holiday_work_minutes', label: '法定休日労働時間(分)' },
-    { key: 'late_night_prescribed_work_minutes', label: '深夜所定労働時間(分)' },
-    { key: 'late_night_statutory_within_overtime_minutes', label: '深夜法定内残業時間(分)' },
-    { key: 'late_night_statutory_excess_overtime_minutes', label: '深夜法定外残業時間(分)' },
-    { key: 'late_night_legal_holiday_work_minutes', label: '深夜法定休日労働時間(分)' },
+    { key: 'late_night_prescribed_work_minutes', label: 'うち深夜所定労働時間(分)' },
+    { key: 'late_night_statutory_within_overtime_minutes', label: 'うち深夜法定内残業時間(分)' },
+    { key: 'late_night_statutory_excess_overtime_minutes', label: 'うち深夜法定外残業時間(分)' },
+    { key: 'late_night_legal_holiday_work_minutes', label: 'うち深夜法定休日労働時間(分)' },
   ]
 
   return (
@@ -838,21 +839,21 @@ export function AttendanceDayPage() {
   const day = weekDays?.find((d) => d.work_date === date)
   const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
   const today = formatDate(new Date())
+  const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
+    ? 1
+    : 0
+  const specialLeaveDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.special_leave_minutes ?? 0) >= day.calculation.prescribed_work_minutes
+    ? 1
+    : 0
 
   return (
     <div className="flex flex-col gap-6">
       <Card
-        title={
-          // ラベル(状態バッジ)はタイトル行の右端に置く。actionsが2段目に折り返した場合も
-          // タイトルは単独で行の全幅を使うため、バッジは常にヘッダー右上に揃う。
-          <span className="flex w-full items-center justify-between gap-2">
-            {/* 日本語は文字間で折り返せてしまうため、nowrapにしないとタイトルが縮んで
-                actionsが2段目へ折り返さず、逆にタイトルが圧迫されてしまう。 */}
-            <span className="whitespace-nowrap">{`${date}(${weekdayLabel(date)})の勤怠`}</span>
-            <span className="flex items-center gap-1.5">
-              {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}
-              {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
-            </span>
+        title="日次勤怠"
+        actions={
+          <span className="flex items-center gap-1.5">
+            {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}
+            {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
           </span>
         }
         navigation={
@@ -885,6 +886,43 @@ export function AttendanceDayPage() {
           </div>
         }
       >
+        <p className="mb-3 text-sm text-muted-foreground">{date}({weekdayLabel(date)})</p>
+
+        {day && !isEditing && (
+          <div className="flex flex-col gap-4 border-t border-border pt-4">
+            {day.calculation && !isAdjustingCalculation && (
+              <div className="flex flex-col gap-2">
+                <AttendanceCalculationSummary
+                  title="この日の集計"
+                  totals={day.calculation}
+                  absenceDays={day.calculation.absence_minutes ? absenceDays : undefined}
+                  specialLeaveDays={day.calculation.special_leave_minutes ? specialLeaveDays : undefined}
+                />
+
+                <div className="flex items-center gap-2">
+                  {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
+                  <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
+                    集計値を修正
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {day.calculation && isAdjustingCalculation && (
+              <CalculationAdjustForm day={day} onDone={() => setIsAdjustingCalculation(false)} />
+            )}
+
+            {day.monthly_overtime && (
+              <p className="text-xs text-muted-foreground">
+                今月の法定外残業累計(参考): <Duration minutes={day.monthly_overtime.cumulative_statutory_excess_overtime_minutes} />
+                (うち月60時間超残業: <Duration minutes={day.monthly_overtime.statutory_excess_overtime_over_60h_minutes} />)
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <Card title="日別の内訳">
         {day && !isEditing && (
           <div className="flex flex-col gap-4">
             <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
@@ -901,80 +939,6 @@ export function AttendanceDayPage() {
               <dt className="font-medium text-muted-foreground">退勤</dt>
               <dd className="text-foreground">{isoToTimeLiteral(day.actual_end_at) || '--:--'}</dd>
             </dl>
-
-            {day.calculation && !isAdjustingCalculation && (
-              <div className="flex flex-col gap-2">
-                <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                  <dt className="font-medium text-muted-foreground">所定労働時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.prescribed_work_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">法定内残業時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.statutory_within_overtime_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">法定外残業時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.statutory_excess_overtime_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">法定休日労働時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.legal_holiday_work_minutes} /></dd>
-
-                  <dt className="font-medium text-muted-foreground">深夜所定労働時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.late_night_prescribed_work_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">深夜法定内残業時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.late_night_statutory_within_overtime_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">深夜法定外残業時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.late_night_statutory_excess_overtime_minutes} /></dd>
-                  <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
-                  <dd className="text-foreground"><Duration minutes={day.calculation.late_night_legal_holiday_work_minutes} /></dd>
-                </dl>
-
-                {(!!day.calculation.absence_minutes
-                  || !!day.calculation.special_leave_minutes
-                  || !!day.calculation.paid_leave_days
-                  || !!day.calculation.paid_leave_minutes) && (
-                    <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                      {!!day.calculation.absence_minutes && (
-                        <>
-                          <dt className="font-medium text-muted-foreground">欠勤時間</dt>
-                          <dd className="text-foreground"><Duration minutes={day.calculation.absence_minutes} /></dd>
-                        </>
-                      )}
-                      {!!day.calculation.special_leave_minutes && (
-                        <>
-                          <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
-                          <dd className="text-foreground"><Duration minutes={day.calculation.special_leave_minutes} /></dd>
-                        </>
-                      )}
-                      {!!day.calculation.paid_leave_days && (
-                        <>
-                          <dt className="font-medium text-muted-foreground">有給日数</dt>
-                          <dd className="text-foreground">{day.calculation.paid_leave_days}日</dd>
-                        </>
-                      )}
-                      {!!day.calculation.paid_leave_minutes && (
-                        <>
-                          <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
-                          <dd className="text-foreground"><Duration minutes={day.calculation.paid_leave_minutes} /></dd>
-                        </>
-                      )}
-                    </dl>
-                  )}
-
-                <div className="flex items-center gap-2">
-                  {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
-                  <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
-                    内訳を編集
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {day.calculation && isAdjustingCalculation && (
-              <CalculationAdjustForm day={day} onDone={() => setIsAdjustingCalculation(false)} />
-            )}
-
-            {day.monthly_overtime && (
-              <p className="text-xs text-muted-foreground">
-                今月の法定外残業累計(参考): <Duration minutes={day.monthly_overtime.cumulative_statutory_excess_overtime_minutes} />
-                (うち月60時間超残業: <Duration minutes={day.monthly_overtime.statutory_excess_overtime_over_60h_minutes} />)
-              </p>
-            )}
 
             {day.breaks.length > 0 && (
               <ul className="flex flex-col gap-1 text-sm text-muted-foreground">

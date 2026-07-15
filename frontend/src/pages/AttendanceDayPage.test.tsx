@@ -78,7 +78,9 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
-    expect(await screen.findByText(`${date}(月)の勤怠`)).toBeInTheDocument()
+    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(screen.getByText(`${date}(月)`)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '日別の内訳' })).toBeInTheDocument()
     expect(screen.getByText('退勤済み')).toBeInTheDocument()
     expect(screen.getByText('09:00')).toBeInTheDocument()
     expect(screen.getByText('18:00')).toBeInTheDocument()
@@ -88,7 +90,7 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
-    await screen.findByText(`${date}(月)の勤怠`)
+    await screen.findByText('日次勤怠')
 
     expect(screen.getByRole('link', { name: '前日' })).toHaveAttribute('href', '/attendance/days/2026-07-05')
     expect(screen.getByRole('link', { name: '翌日' })).toHaveAttribute('href', '/attendance/days/2026-07-07')
@@ -100,7 +102,7 @@ describe('AttendanceDayPage', () => {
     const today = formatDate(new Date())
     renderPage([], today)
 
-    await screen.findByText(`${today}(${['日', '月', '火', '水', '木', '金', '土'][new Date(`${today}T00:00:00`).getDay()]})の勤怠`)
+    await screen.findByText('日次勤怠')
     expect(screen.getByRole('button', { name: '今日' })).toBeDisabled()
   })
 
@@ -344,7 +346,7 @@ describe('AttendanceDayPage', () => {
     })
     renderPage([recordedDay])
 
-    await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
+    await userEvent.click(await screen.findByRole('button', { name: '集計値を修正' }))
     const overtimeInput = screen.getByLabelText('法定内残業時間(分)')
     await userEvent.clear(overtimeInput)
     await userEvent.type(overtimeInput, '30')
@@ -366,13 +368,16 @@ describe('AttendanceDayPage', () => {
         ...recordedDay,
         leave_segments: [
           { id: 1, category: 'absence', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
+          { id: 2, category: 'special_leave', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T17:00:00+09:00`, note: '慶弔休暇' },
         ],
-        calculation: { ...recordedDay.calculation!, absence_minutes: 120 },
+        calculation: { ...recordedDay.calculation!, absence_minutes: 120, special_leave_minutes: 480 },
       },
     ])
 
     expect(await screen.findByText(/欠勤 09:00 〜 11:00 \(寝坊のため\)/)).toBeInTheDocument()
     expect(screen.getByText('欠勤時間')).toBeInTheDocument()
+    expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('0日')
+    expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('欠勤あり')).toBeInTheDocument()
   })
 
@@ -407,15 +412,15 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
-    await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
+    await userEvent.click(await screen.findByRole('button', { name: '集計値を修正' }))
     expect(screen.getByLabelText('所定労働時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('法定内残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('法定外残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('法定休日労働時間(分)')).toBeInTheDocument()
-    expect(screen.getByLabelText('深夜所定労働時間(分)')).toBeInTheDocument()
-    expect(screen.getByLabelText('深夜法定内残業時間(分)')).toBeInTheDocument()
-    expect(screen.getByLabelText('深夜法定外残業時間(分)')).toBeInTheDocument()
-    expect(screen.getByLabelText('深夜法定休日労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('うち深夜所定労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('うち深夜法定内残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('うち深夜法定外残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('うち深夜法定休日労働時間(分)')).toBeInTheDocument()
   })
 
   it('shows an error message when the week fails to load', async () => {

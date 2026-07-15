@@ -123,6 +123,39 @@ describe('TodayAttendancePage', () => {
     expect(await screen.findByText('本日の勤怠は完了しています。')).toBeInTheDocument()
   })
 
+  it('labels late-night statutory excess overtime as part of statutory excess overtime', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue({
+      ...notStartedDay,
+      status: 'clocked_out',
+      actual_start_at: '2026-07-09T09:00:00+09:00',
+      actual_end_at: '2026-07-09T23:00:00+09:00',
+      calculation: {
+        planned_work_minutes: 480,
+        work_minutes: 780,
+        prescribed_work_minutes: 480,
+        statutory_within_overtime_minutes: 0,
+        statutory_excess_overtime_minutes: 300,
+        late_night_work_minutes: 60,
+        late_night_prescribed_work_minutes: 0,
+        late_night_statutory_within_overtime_minutes: 0,
+        late_night_statutory_excess_overtime_minutes: 60,
+        legal_holiday_work_minutes: 0,
+        prescribed_holiday_work_minutes: 0,
+        late_night_legal_holiday_work_minutes: 0,
+        core_time_violation: false,
+        is_manually_adjusted: false,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('法定外残業時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜法定内残業時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜法定外残業時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜法定休日労働時間')).toBeInTheDocument()
+  })
+
   it('shows an error message when the initial fetch fails', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockRejectedValue(new Error('network down'))
 

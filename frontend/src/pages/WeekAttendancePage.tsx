@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { AttendanceCalculationSummary } from '../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRow'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
@@ -9,6 +10,21 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useWeek } from '../hooks/useAttendance'
 import { dayWarnings } from '../utils/attendanceDayWarnings'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
+
+const WEEKLY_TOTAL_FIELDS = [
+  'prescribed_work_minutes',
+  'statutory_within_overtime_minutes',
+  'statutory_excess_overtime_minutes',
+  'late_night_prescribed_work_minutes',
+  'late_night_statutory_within_overtime_minutes',
+  'late_night_statutory_excess_overtime_minutes',
+  'legal_holiday_work_minutes',
+  'late_night_legal_holiday_work_minutes',
+  'absence_minutes',
+  'special_leave_minutes',
+  'paid_leave_days',
+  'paid_leave_minutes',
+] as const
 
 /**
  * UC-A006: 週次勤怠を編集する。日次勤怠(attendance_days)の編集ビューであり、独立データ
@@ -28,50 +44,103 @@ export function WeekAttendancePage() {
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
+  const weeklyLeaveDays = (data ?? []).reduce(
+    (totals, day) => {
+      const calculation = day.calculation
+      if (!calculation || calculation.prescribed_work_minutes <= 0) return totals
+
+      if ((calculation.absence_minutes ?? 0) >= calculation.prescribed_work_minutes) totals.absence += 1
+      if ((calculation.special_leave_minutes ?? 0) >= calculation.prescribed_work_minutes) totals.specialLeave += 1
+
+      return totals
+    },
+    { absence: 0, specialLeave: 0 },
+  )
+  const weeklyTotals = (data ?? []).reduce(
+    (totals, day) => {
+      if (!day.calculation) return totals
+
+      for (const field of WEEKLY_TOTAL_FIELDS) {
+        totals[field] += day.calculation[field] ?? 0
+      }
+
+      return totals
+    },
+    {
+      prescribed_work_minutes: 0,
+      statutory_within_overtime_minutes: 0,
+      statutory_excess_overtime_minutes: 0,
+      late_night_prescribed_work_minutes: 0,
+      late_night_statutory_within_overtime_minutes: 0,
+      late_night_statutory_excess_overtime_minutes: 0,
+      legal_holiday_work_minutes: 0,
+      late_night_legal_holiday_work_minutes: 0,
+      absence_minutes: 0,
+      special_leave_minutes: 0,
+      paid_leave_days: 0,
+      paid_leave_minutes: 0,
+    },
+  )
 
   return (
-    <Card
-      title="週次勤怠"
-      navigation={
-        <div className="flex gap-2">
-          <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
-            今週
-          </Button>
-          <Button asChild variant="secondary" title="月次で見る">
-            <Link to={`/attendance/months/${weekStart.slice(0, 7)}`}>
-              <CalendarRange aria-hidden="true" />
-              月次
-            </Link>
-          </Button>
-          <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
-      }
-    >
-      <p className="mb-3 text-sm text-muted-foreground">
-        {dates[0]} 〜 {dates[6]}
-      </p>
+    <div className="flex flex-col gap-6">
+      <Card
+        title="週次勤怠"
+        navigation={
+          <div className="flex gap-2">
+            <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
+              今週
+            </Button>
+            <Button asChild variant="secondary" title="月次で見る">
+              <Link to={`/attendance/months/${weekStart.slice(0, 7)}`}>
+                <CalendarRange aria-hidden="true" />
+                月次
+              </Link>
+            </Button>
+            <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        }
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          {dates[0]} 〜 {dates[6]}
+        </p>
 
-      {isLoading ? (
-        <LoadingState />
-      ) : error ? (
-        <ErrorMessage error={error} fallback="週次勤怠の取得に失敗しました。" />
-      ) : (
-        <ul className="divide-y divide-border">
-          {dates.map((date) => (
-            <AttendanceDayRow
-              key={date}
-              date={date}
-              day={daysByDate.get(date)}
-              warnings={dayWarnings(date, daysByDate.get(date), today)}
+        {isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorMessage error={error} fallback="週次勤怠の取得に失敗しました。" />
+        ) : (
+          <div className="border-t border-border pt-4">
+            <AttendanceCalculationSummary
+              title="今週の集計"
+              totals={weeklyTotals}
+              absenceDays={weeklyLeaveDays.absence}
+              specialLeaveDays={weeklyLeaveDays.specialLeave}
+              showAllLeaveTotals
             />
-          ))}
-        </ul>
+          </div>
+        )}
+      </Card>
+
+      {!isLoading && !error && (
+        <Card title="日別の内訳">
+            <ul className="divide-y divide-border">
+              {dates.map((date) => (
+                <AttendanceDayRow
+                  key={date}
+                  date={date}
+                  day={daysByDate.get(date)}
+                  warnings={dayWarnings(date, daysByDate.get(date), today)}
+                />
+              ))}
+            </ul>
+          </Card>
       )}
-    </Card>
+      </div>
   )
 }

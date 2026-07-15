@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { AttendanceCalculationSummary } from '../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRow'
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
-import { Duration } from '../components/Duration/Duration'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { UserPicker } from '../components/UserPicker/UserPicker'
@@ -76,8 +76,6 @@ export function AttendanceMonthDetailPage() {
   const submitMonth = useSubmitMonth(yearMonth ?? '')
 
   if (!yearMonth) return null
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="勤怠月次の取得に失敗しました。" />
 
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
@@ -89,10 +87,18 @@ export function AttendanceMonthDetailPage() {
   return (
     <div className="flex flex-col gap-6">
       <Card
-        title={`${yearMonth}の勤怠月次`}
+        title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
         navigation={<MonthNav yearMonth={yearMonth} />}
       >
+        <p className="mb-3 text-sm text-muted-foreground">{yearMonth}</p>
+
+        {isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorMessage error={error} fallback="勤怠月次の取得に失敗しました。" />
+        ) : (
+          <>
         {month && month.legal_holiday_warnings.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
             {month.legal_holiday_warnings.map((warning) => (
@@ -120,62 +126,33 @@ export function AttendanceMonthDetailPage() {
 
         {data?.monthly_calculation_totals && (
           <div className="mt-4 border-t border-border pt-4">
-            <h3 className="mb-3 text-sm font-medium text-foreground">今月の集計</h3>
-          <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-            <dt className="font-medium text-muted-foreground">所定労働時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.prescribed_work_minutes} /></dd>
-            <dt className="font-medium text-muted-foreground">法定内残業時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_within_overtime_minutes} /></dd>
-
-            <dt className="font-medium text-muted-foreground">法定外残業時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_excess_overtime_minutes} /></dd>
-            <dt className="font-medium text-muted-foreground">うち月60時間超</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes} /></dd>
-
-            <dt className="font-medium text-muted-foreground">法定休日労働時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.legal_holiday_work_minutes} /></dd>
-            <dt className="font-medium text-muted-foreground">深夜所定労働時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_prescribed_work_minutes} /></dd>
-
-            <dt className="font-medium text-muted-foreground">深夜法定内残業時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_statutory_within_overtime_minutes} /></dd>
-            <dt className="font-medium text-muted-foreground">深夜法定外残業時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_statutory_excess_overtime_minutes} /></dd>
-
-            <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_legal_holiday_work_minutes} /></dd>
-          </dl>
-
-          <dl className="mt-3 grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 border-t border-border pt-3 text-sm">
-            <dt className="font-medium text-muted-foreground">欠勤日数</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.absence_days ?? 0}日</dd>
-            <dt className="font-medium text-muted-foreground">欠勤時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.absence_minutes ?? 0} /></dd>
-
-            <dt className="font-medium text-muted-foreground">有給日数</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.paid_leave_days ?? 0}日</dd>
-            <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.paid_leave_minutes ?? 0} /></dd>
-
-            <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
-            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.special_leave_minutes ?? 0} /></dd>
-          </dl>
+            <AttendanceCalculationSummary
+              title="今月の集計"
+              totals={data.monthly_calculation_totals}
+              statutoryExcessOver60hMinutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}
+              absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
+              showAllLeaveTotals
+            />
           </div>
+        )}
+          </>
         )}
       </Card>
 
-      <Card title="日別の内訳">
-        <ul className="divide-y divide-border">
-          {dates.map((date) => (
-            <AttendanceDayRow
-              key={date}
-              date={date}
-              day={daysByDate.get(date)}
-              warnings={dayWarnings(date, daysByDate.get(date), today)}
-            />
-          ))}
-        </ul>
-      </Card>
+      {!isLoading && !error && (
+        <Card title="日別の内訳">
+          <ul className="divide-y divide-border">
+            {dates.map((date) => (
+              <AttendanceDayRow
+                key={date}
+                date={date}
+                day={daysByDate.get(date)}
+                warnings={dayWarnings(date, daysByDate.get(date), today)}
+              />
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   )
 }
