@@ -23,6 +23,7 @@ class UserResource extends JsonResource
             'employment_status' => $this->employment_status,
             'timezone' => $this->timezone,
             'hire_date' => $this->hire_date?->toDateString(),
+            'termination_date' => $this->termination_date?->toDateString(),
             'roles' => $this->whenLoaded('roles', fn () => $this->roles->pluck('code')),
             // last_login_atのような一般的な日時はシステムのデフォルトタイムゾーンのオフセットで
             // 送信し、画面表示では本人のタイムゾーン(timezone)に変換して表示する

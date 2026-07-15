@@ -12,7 +12,6 @@ import type {
   AttendanceMonthlyCalculationTotals,
   Paginated,
   User,
-  UserWorkStyleMonthlyAssignment,
 } from '../api/types'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 
@@ -49,10 +48,6 @@ const currentUser: User = {
 vi.mock('../auth/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
-
-function assignment(ym: string): UserWorkStyleMonthlyAssignment {
-  return { id: Number(ym.replace('-', '')), user_id: 1, year_month: ym, work_style_id: 1, assigned_by_user_id: 1 }
-}
 
 const approver: User = {
   id: 2,
@@ -234,56 +229,42 @@ describe('AttendanceMonthDetailPage', () => {
   })
 
   describe('month navigation', () => {
-    it('only lists months with a work-style assignment on or after the hire date', async () => {
+    it('lists every month in the employment period regardless of work-style assignments', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
-      vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
-        assignment('2025-12'), // 入社日(2026-01-15)より前なので対象外
-        assignment('2026-06'),
-        assignment(yearMonth),
-        assignment('2026-08'),
-      ])
-
       renderPage()
       await screen.findByText(`${yearMonth}の勤怠月次`)
 
-      await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3))
+      await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(7))
       const options = screen.getAllByRole('option').map((option) => option.textContent)
-      expect(options).toEqual(['2026-08', '2026-07', '2026-06'])
+      expect(options).toEqual(['2026-07', '2026-06', '2026-05', '2026-04', '2026-03', '2026-02', '2026-01'])
     })
 
-    it('disables 前月/次月 when there is no adjacent navigable month', async () => {
+    it('disables 次月 for the current month but allows navigating to earlier employment months', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
         days: [],
         month: notSubmittedMonth,
         flex_settlement_summary: null,
         monthly_calculation_totals: zeroMonthlyCalculationTotals,
       })
-      vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([assignment(yearMonth)])
-
       renderPage()
       await screen.findByText(`${yearMonth}の勤怠月次`)
 
-      expect(screen.getByRole('button', { name: '前月' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
       expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
     })
 
-    it('navigates to the next navigable month', async () => {
+    it('navigates to the previous employment month', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
-      vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
-        assignment(yearMonth),
-        assignment('2026-08'),
-      ])
-
       renderPage()
       await screen.findByText(`${yearMonth}の勤怠月次`)
 
-      await userEvent.click(screen.getByRole('button', { name: '次月' }))
+      await userEvent.click(screen.getByRole('button', { name: '前月' }))
 
-      expect(await screen.findByText('2026-08の勤怠月次')).toBeInTheDocument()
+      expect(await screen.findByText('2026-06の勤怠月次')).toBeInTheDocument()
     })
   })
 })

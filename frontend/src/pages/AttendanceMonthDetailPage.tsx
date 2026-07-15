@@ -10,24 +10,20 @@ import { LoadingState } from '../components/LoadingState/LoadingState'
 import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useAttendanceMonth, useSubmitMonth } from '../hooks/useAttendance'
-import { useUserWorkStyleMonthlyAssignments } from '../hooks/useUserWorkStyleMonthlyAssignments'
 import { dayWarnings } from '../utils/attendanceDayWarnings'
+import { employmentYearMonths } from '../utils/employmentPeriod'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
 import { datesInMonth, formatDate } from '../utils/weekDates'
 
 /**
- * 在籍期間(hire_date以降)かつ働き方のマスタ設定(user_work_style_monthly_assignments)が
- * ある月だけに遷移できるよう、選択・前後移動の対象を絞り込む。
+ * 在籍期間内の全月を選択・前後移動の対象にする。月別の働き方割当や実績の有無は、
+ * 月次勤怠の閲覧可否に影響しない。
  */
 function useNavigableYearMonths(yearMonth: string) {
   const { user } = useAuth()
-  const { data: assignments } = useUserWorkStyleMonthlyAssignments(user?.id)
-  const hireYearMonth = user?.hire_date?.slice(0, 7)
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
 
-  const navigable = (assignments ?? [])
-    .map((assignment) => assignment.year_month)
-    .filter((ym) => !hireYearMonth || ym >= hireYearMonth)
-    .sort()
+  const navigable = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
 
   const selectable = navigable.includes(yearMonth) ? navigable : [...navigable, yearMonth].sort()
   const prevMonth = [...navigable].reverse().find((ym) => ym < yearMonth)
@@ -67,8 +63,7 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
 /**
  * UC-A007: 月次勤怠を確認する。日別の内訳を一覧表示し、問題がある日は行を選んで
  * 日次画面(実績の作成・編集・打刻履歴)に遷移できる(オブジェクト指向UI)。
- * 前月・次月への移動、特定の月への直接ジャンプは、在籍期間かつ働き方のマスタ設定が
- * ある月だけに制限する。
+ * 前月・次月への移動、特定の月への直接ジャンプは在籍期間内の全月で行える。
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()

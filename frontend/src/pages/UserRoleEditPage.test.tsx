@@ -150,6 +150,17 @@ describe('UserRoleEditPage', () => {
     )
   })
 
+  it('prefills and saves the termination date', async () => {
+    vi.spyOn(usersApi, 'updateUserTerminationDate').mockResolvedValue({ ...targetUser, termination_date: '2026-03-31' })
+    renderPage({ ...targetUser, termination_date: '2026-03-31' })
+
+    expect(await screen.findByLabelText('退社日(未設定なら在籍中)')).toHaveValue('2026-03-31')
+    await userEvent.clear(screen.getByLabelText('退社日(未設定なら在籍中)'))
+    await userEvent.click(screen.getByRole('button', { name: '退社日を保存する' }))
+
+    await waitFor(() => expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith(1, null))
+  })
+
   it('defaults to using the company default work style when no monthly assignment exists', async () => {
     renderPage(targetUser)
 

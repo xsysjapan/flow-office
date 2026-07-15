@@ -98,10 +98,12 @@ use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
+use App\Domain\User\Commands\SetUserTerminationDate;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
 use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
+use App\Domain\User\Handlers\SetUserTerminationDateHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
@@ -131,6 +133,7 @@ return [
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
+        SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
         RecordSsoLogin::class => RecordSsoLoginHandler::class,
 

@@ -38,4 +38,38 @@ class UserHireDateTest extends TestCase
             'hire_date' => '2024-04-01',
         ])->assertForbidden();
     }
+
+    public function test_hr_staff_can_set_and_clear_a_users_termination_date(): void
+    {
+        $hr = User::factory()->create();
+        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create(['hire_date' => '2024-04-01']);
+
+        $this->actingAs($hr)->putJson("/api/users/{$employee->id}/termination-date", [
+            'termination_date' => '2026-03-31',
+        ])->assertOk()->assertJsonPath('termination_date', '2026-03-31');
+
+        $this->assertSame('2026-03-31', $employee->refresh()->termination_date->toDateString());
+
+        $this->actingAs($hr)->putJson("/api/users/{$employee->id}/termination-date", [
+            'termination_date' => null,
+        ])->assertOk()->assertJsonPath('termination_date', null);
+
+        $this->assertNull($employee->refresh()->termination_date);
+    }
+
+    public function test_hire_and_termination_dates_must_form_a_valid_employment_period(): void
+    {
+        $hr = User::factory()->create();
+        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create(['hire_date' => '2024-04-01', 'termination_date' => '2026-03-31']);
+
+        $this->actingAs($hr)->putJson("/api/users/{$employee->id}/hire-date", [
+            'hire_date' => '2026-04-01',
+        ])->assertStatus(422);
+
+        $this->actingAs($hr)->putJson("/api/users/{$employee->id}/termination-date", [
+            'termination_date' => '2024-03-31',
+        ])->assertStatus(422);
+    }
 }

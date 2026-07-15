@@ -8,6 +8,8 @@ export interface User {
   timezone?: string
   /** 継続勤務期間の計算に使う入社日(docs/09-usecases-paid-leave.md UC-P002)。未設定ならnull。 */
   hire_date?: string | null
+  /** 在籍期間の終端となる退社日。未設定なら在籍中。 */
+  termination_date?: string | null
   roles?: string[]
   last_login_at: string | null
 }

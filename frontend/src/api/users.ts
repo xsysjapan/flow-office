@@ -18,3 +18,7 @@ export function updateUserRoles(id: number, roleCodes: string[]): Promise<User> 
 export function updateUserHireDate(id: number, hireDate: string): Promise<User> {
   return apiFetch(`/users/${id}/hire-date`, { method: 'PUT', body: { hire_date: hireDate } })
 }
+
+export function updateUserTerminationDate(id: number, terminationDate: string | null): Promise<User> {
+  return apiFetch(`/users/${id}/termination-date`, { method: 'PUT', body: { termination_date: terminationDate } })
+}

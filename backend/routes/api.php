@@ -48,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('role:admin,hr_staff');
+    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('role:admin,hr_staff');
     Route::get('/roles', [RoleController::class, 'index']);
 
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---

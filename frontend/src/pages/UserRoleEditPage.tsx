@@ -15,7 +15,7 @@ import {
   useRemoveUserWorkStyleMonthlyAssignment,
   useUserWorkStyleMonthlyAssignments,
 } from '../hooks/useUserWorkStyleMonthlyAssignments'
-import { useUpdateUserHireDate, useUpdateUserRoles, useUser } from '../hooks/useUsers'
+import { useUpdateUserHireDate, useUpdateUserRoles, useUpdateUserTerminationDate, useUser } from '../hooks/useUsers'
 import { useWorkStyles } from '../hooks/useWorkStyles'
 import { formatDate } from '../utils/weekDates'
 
@@ -36,11 +36,13 @@ export function UserRoleEditPage() {
 
   const updateRoles = useUpdateUserRoles()
   const updateHireDate = useUpdateUserHireDate()
+  const updateTerminationDate = useUpdateUserTerminationDate()
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth()
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment()
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [hireDate, setHireDate] = useState('')
+  const [terminationDate, setTerminationDate] = useState('')
   const [isInitialized, setIsInitialized] = useState(false)
 
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
@@ -54,6 +56,7 @@ export function UserRoleEditPage() {
     if (user && !isInitialized) {
       setSelectedCodes(user.roles ?? [])
       setHireDate(user.hire_date ?? '')
+      setTerminationDate(user.termination_date ?? '')
       setIsInitialized(true)
     }
   }, [user, isInitialized])
@@ -128,25 +131,47 @@ export function UserRoleEditPage() {
 
       <div className="mt-6 border-t border-border pt-4">
         {updateHireDate.error && <ErrorMessage error={updateHireDate.error} />}
+        {updateTerminationDate.error && <ErrorMessage error={updateTerminationDate.error} />}
         {updateHireDate.isSuccess && <Badge tone="success">保存しました</Badge>}
+        {updateTerminationDate.isSuccess && <Badge tone="success">保存しました</Badge>}
 
-        <FormField label="入社日(有給の自動付与に使用)" htmlFor="user-role-edit-hire-date">
-          <Input
-            id="user-role-edit-hire-date"
-            type="date"
-            value={hireDate}
-            onChange={(e) => setHireDate(e.target.value)}
-          />
-        </FormField>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label="入社日(有給の自動付与に使用)" htmlFor="user-role-edit-hire-date">
+            <Input
+              id="user-role-edit-hire-date"
+              type="date"
+              value={hireDate}
+              onChange={(e) => setHireDate(e.target.value)}
+            />
+          </FormField>
+          <FormField label="退社日(未設定なら在籍中)" htmlFor="user-role-edit-termination-date">
+            <Input
+              id="user-role-edit-termination-date"
+              type="date"
+              min={hireDate || undefined}
+              value={terminationDate}
+              onChange={(e) => setTerminationDate(e.target.value)}
+            />
+          </FormField>
+        </div>
 
-        <Button
-          variant="secondary"
-          isLoading={updateHireDate.isPending}
-          disabled={!hireDate}
-          onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
-        >
-          入社日を保存する
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            isLoading={updateHireDate.isPending}
+            disabled={!hireDate}
+            onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
+          >
+            入社日を保存する
+          </Button>
+          <Button
+            variant="secondary"
+            isLoading={updateTerminationDate.isPending}
+            onClick={() => updateTerminationDate.mutate({ id: userId, terminationDate: terminationDate || null })}
+          >
+            退社日を保存する
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6 border-t border-border pt-4">

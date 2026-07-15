@@ -6,34 +6,33 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\User\Commands\SetUserHireDate;
-use App\Domain\User\Events\UserHireDateSet;
+use App\Domain\User\Commands\SetUserTerminationDate;
+use App\Domain\User\Events\UserTerminationDateSet;
 use App\Models\User;
 
-/**
- * @implements CommandHandler<SetUserHireDate>
- */
-class SetUserHireDateHandler implements CommandHandler
+/** @implements CommandHandler<SetUserTerminationDate> */
+class SetUserTerminationDateHandler implements CommandHandler
 {
     public function __construct(private readonly EventStore $eventStore) {}
 
     public function handle(Command $command): User
     {
-        assert($command instanceof SetUserHireDate);
+        assert($command instanceof SetUserTerminationDate);
 
         $user = User::query()->findOrFail($command->userId);
-        if ($user->termination_date !== null && $user->termination_date->toDateString() < $command->hireDate) {
-            throw new DomainRuleException('入社日は退社日以前の日付を指定してください。');
+        if ($command->terminationDate !== null && $user->hire_date?->toDateString() > $command->terminationDate) {
+            throw new DomainRuleException('退社日は入社日以降の日付を指定してください。');
         }
-        $user->hire_date = $command->hireDate;
+
+        $user->termination_date = $command->terminationDate;
         $user->save();
 
         $this->eventStore->append(
             aggregateType: 'user',
             aggregateId: (string) $user->id,
-            event: new UserHireDateSet(
+            event: new UserTerminationDateSet(
                 userId: $user->id,
-                hireDate: $command->hireDate,
+                terminationDate: $command->terminationDate,
                 changedByUserId: $command->changedByUserId,
             ),
         );
