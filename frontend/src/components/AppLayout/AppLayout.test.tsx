@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
+import { formatDate } from '../../utils/weekDates'
 import { AppLayout } from './AppLayout'
 
 const mockUser: User = {
@@ -56,6 +57,17 @@ describe('AppLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請' }))
     expect(await screen.findByRole('menuitem', { name: '自分の申請' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
+  })
+
+  it('links 勤怠月次 to the current month detail page', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+
+    expect(await screen.findByRole('menuitem', { name: '勤怠月次' })).toHaveAttribute(
+      'href',
+      `/attendance/months/${formatDate(new Date()).slice(0, 7)}`,
+    )
   })
 
   it('shows the 承認 group links inside its dropdown menu', async () => {

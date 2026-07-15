@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRow'
 import { Badge } from '../components/Badge/Badge'
@@ -7,7 +8,6 @@ import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
-import { NativeSelect } from '../components/ui/native-select'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { useAttendanceMonth, useSubmitMonth } from '../hooks/useAttendance'
 import { dayWarnings } from '../utils/attendanceDayWarnings'
@@ -16,7 +16,7 @@ import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/s
 import { datesInMonth, formatDate } from '../utils/weekDates'
 
 /**
- * 在籍期間内の全月を選択・前後移動の対象にする。月別の働き方割当や実績の有無は、
+ * 在籍期間内の全月を前後移動の対象にする。月別の働き方割当や実績の有無は、
  * 月次勤怠の閲覧可否に影響しない。
  */
 function useNavigableYearMonths(yearMonth: string) {
@@ -25,36 +25,39 @@ function useNavigableYearMonths(yearMonth: string) {
 
   const navigable = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
 
-  const selectable = navigable.includes(yearMonth) ? navigable : [...navigable, yearMonth].sort()
   const prevMonth = [...navigable].reverse().find((ym) => ym < yearMonth)
   const nextMonth = navigable.find((ym) => ym > yearMonth)
 
-  return { selectable, prevMonth, nextMonth }
+  return { prevMonth, nextMonth }
 }
 
 function MonthNav({ yearMonth }: { yearMonth: string }) {
   const navigate = useNavigate()
-  const { selectable, prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
+  const { prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button variant="secondary" disabled={!prevMonth} onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`)}>
-        前月
+    <div className="flex gap-2">
+      <Button variant="secondary" size="icon" title="前月" aria-label="前月" disabled={!prevMonth} onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`)}>
+        <ChevronLeft aria-hidden="true" />
       </Button>
-      <NativeSelect
-        aria-label="表示する月"
-        className="w-auto"
-        value={yearMonth}
-        onChange={(e) => navigate(`/attendance/months/${e.target.value}`)}
-      >
-        {[...selectable].reverse().map((ym) => (
-          <option key={ym} value={ym}>
-            {ym}
-          </option>
-        ))}
-      </NativeSelect>
-      <Button variant="secondary" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
-        次月
+      {yearMonth === currentYearMonth ? (
+        <Button variant="secondary" disabled>
+          今月
+        </Button>
+      ) : (
+        <Button asChild variant="secondary">
+          <Link to={`/attendance/months/${currentYearMonth}`}>今月</Link>
+        </Button>
+      )}
+      <Button asChild variant="secondary" title="月次一覧へ戻る">
+        <Link to="/attendance/months">
+          <CalendarRange aria-hidden="true" />
+          一覧
+        </Link>
+      </Button>
+      <Button variant="secondary" size="icon" title="次月" aria-label="次月" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
+        <ChevronRight aria-hidden="true" />
       </Button>
     </div>
   )
@@ -63,7 +66,7 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
 /**
  * UC-A007: 月次勤怠を確認する。日別の内訳を一覧表示し、問題がある日は行を選んで
  * 日次画面(実績の作成・編集・打刻履歴)に遷移できる(オブジェクト指向UI)。
- * 前月・次月への移動、特定の月への直接ジャンプは在籍期間内の全月で行える。
+ * 前月・次月への移動は在籍期間内の全月で行える。
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()

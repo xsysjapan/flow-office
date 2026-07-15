@@ -229,16 +229,16 @@ describe('AttendanceMonthDetailPage', () => {
   })
 
   describe('month navigation', () => {
-    it('lists every month in the employment period regardless of work-style assignments', async () => {
+    it('allows navigation in the employment period regardless of work-style assignments', async () => {
       vi.spyOn(attendanceApi, 'fetchMonth').mockImplementation((ym) =>
         Promise.resolve({ days: [], month: { ...notSubmittedMonth, year_month: ym }, flex_settlement_summary: null, monthly_calculation_totals: zeroMonthlyCalculationTotals }),
       )
       renderPage()
       await screen.findByText(`${yearMonth}の勤怠月次`)
 
-      await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(7))
-      const options = screen.getAllByRole('option').map((option) => option.textContent)
-      expect(options).toEqual(['2026-07', '2026-06', '2026-05', '2026-04', '2026-03', '2026-02', '2026-01'])
+      expect(screen.getByRole('button', { name: '前月' })).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: '次月' })).toBeDisabled()
+      expect(screen.getByRole('link', { name: '一覧' })).toHaveAttribute('href', '/attendance/months')
     })
 
     it('disables 次月 for the current month but allows navigating to earlier employment months', async () => {

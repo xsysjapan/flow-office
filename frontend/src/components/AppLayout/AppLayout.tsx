@@ -4,6 +4,7 @@ import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Se
 import { useAuth } from '../../auth/useAuth'
 import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
+import { formatDate } from '../../utils/weekDates'
 import { Button } from '../Button/Button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet'
@@ -21,14 +22,15 @@ interface NavGroup {
   roles?: RoleCode[]
 }
 
-const navGroups: NavGroup[] = [
+function navGroups(currentYearMonth: string): NavGroup[] {
+  return [
   {
     label: '勤怠',
     icon: CalendarClock,
     items: [
       { to: '/', label: '今日の勤怠' },
       { to: '/attendance/week', label: '週次勤怠' },
-      { to: '/attendance/months', label: '勤怠月次' },
+      { to: `/attendance/months/${currentYearMonth}`, label: '勤怠月次' },
       { to: '/paid-leave', label: '有給' },
       { to: '/paid-leave/history', label: '有給履歴' },
     ],
@@ -62,7 +64,8 @@ const navGroups: NavGroup[] = [
     roles: [ROLE.ADMIN, ROLE.HR_STAFF],
     items: [{ to: '/admin', label: '管理メニュー' }],
   },
-]
+  ]
+}
 
 /** そのナビ項目(またはその配下のページ)を今表示しているか。前方一致するパス同士(有給/有給履歴等)が
  *  同時にアクティブにならないよう、"/"は完全一致、それ以外は自身か"to/"始まりのパスのみ一致させる。 */
@@ -188,7 +191,8 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
 
 export function AppLayout() {
   const { user, logout } = useAuth()
-  const visibleGroups = navGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
+  const visibleGroups = navGroups(currentYearMonth).filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
 
   return (
     <div className="flex min-h-screen flex-col">
