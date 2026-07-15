@@ -145,10 +145,10 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText('今月の集計')).toBeInTheDocument()
-  expect(screen.getByText('所定労働時間')).toBeInTheDocument()
-  expect(screen.getByText('2400分')).toBeInTheDocument()
-    expect(screen.getByText('60分')).toBeInTheDocument()
-    expect(screen.getByText('360分')).toBeInTheDocument()
+    expect(screen.getByText('所定労働時間')).toBeInTheDocument()
+    expect(screen.getByText('40時間')).toBeInTheDocument()
+    expect(screen.getByText('1時間')).toBeInTheDocument()
+    expect(screen.getByText('6時間')).toBeInTheDocument()
     expect(screen.getByText('30分')).toBeInTheDocument()
   })
 

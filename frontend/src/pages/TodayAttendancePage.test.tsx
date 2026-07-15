@@ -143,7 +143,7 @@ describe('TodayAttendancePage', () => {
     renderPage()
 
     expect(await screen.findByText('今月の清算期間(フレックスタイム制)')).toBeInTheDocument()
-    expect(screen.getByText('10560分')).toBeInTheDocument()
+    expect(screen.getByText('176時間')).toBeInTheDocument()
     expect(screen.getByText('1日')).toBeInTheDocument()
   })
 

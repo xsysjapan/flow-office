@@ -6,6 +6,7 @@ import { AttendanceDayRow } from '../components/AttendanceDayRow/AttendanceDayRo
 import { Badge } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
+import { Duration } from '../components/Duration/Duration'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { UserPicker } from '../components/UserPicker/UserPicker'
@@ -126,27 +127,27 @@ export function AttendanceMonthDetailPage() {
         <Card title="今月の集計">
           <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
             <dt className="font-medium text-muted-foreground">所定労働時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.prescribed_work_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.prescribed_work_minutes} /></dd>
             <dt className="font-medium text-muted-foreground">法定内残業時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_within_overtime_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_within_overtime_minutes} /></dd>
 
             <dt className="font-medium text-muted-foreground">法定外残業時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_excess_overtime_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_excess_overtime_minutes} /></dd>
             <dt className="font-medium text-muted-foreground">うち月60時間超</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes} /></dd>
 
             <dt className="font-medium text-muted-foreground">法定休日労働時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.legal_holiday_work_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.legal_holiday_work_minutes} /></dd>
             <dt className="font-medium text-muted-foreground">深夜所定労働時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_prescribed_work_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_prescribed_work_minutes} /></dd>
 
             <dt className="font-medium text-muted-foreground">深夜法定内残業時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_statutory_within_overtime_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_statutory_within_overtime_minutes} /></dd>
             <dt className="font-medium text-muted-foreground">深夜法定外残業時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_statutory_excess_overtime_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_statutory_excess_overtime_minutes} /></dd>
 
             <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_legal_holiday_work_minutes}分</dd>
+            <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.late_night_legal_holiday_work_minutes} /></dd>
           </dl>
         </Card>
       )}

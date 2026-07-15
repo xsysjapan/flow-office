@@ -64,7 +64,7 @@ describe('AttendanceDayRow', () => {
 
   it('shows labor time when calculation exists', () => {
     renderRow({ day: calculatedDay })
-    expect(screen.getByText('労働時間 480分')).toBeInTheDocument()
+    expect(screen.getByText('8時間')).toBeInTheDocument()
   })
 
   it('shows 未入力 when there is no record for the day', () => {

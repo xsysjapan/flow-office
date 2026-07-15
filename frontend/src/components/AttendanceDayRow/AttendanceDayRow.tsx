@@ -3,6 +3,7 @@ import type { AttendanceDay } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
 import { attendanceDayStatusLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
+import { Duration } from '../Duration/Duration'
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -46,7 +47,7 @@ export function AttendanceDayRow({ date, day, warnings = [] }: AttendanceDayRowP
           </span>
         )}
         {day?.calculation && (
-          <span className="text-sm text-muted-foreground">労働時間 {day.calculation.work_minutes}分</span>
+          <span className="text-sm text-muted-foreground">労働時間 <Duration minutes={day.calculation.work_minutes} /></span>
         )}
         <span className="ml-auto text-sm text-muted-foreground">詳細を見る ›</span>
       </Link>

@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, Coffee, LogIn, type LucideIcon } from 'lucide-reac
 import { Badge, type BadgeTone } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
+import { Duration } from '../components/Duration/Duration'
 import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useAttendanceMonth, useClockIn, useClockOut, useEndBreak, useStartBreak, useTodayAttendance } from '../hooks/useAttendance'
@@ -79,19 +80,18 @@ function elapsedWorkedMinutes(day: AttendanceDay, now: Date): number | null {
   return Math.max(0, Math.round(grossMinutes - completedBreakMinutes(day.breaks)))
 }
 
-function formatMinutes(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return hours > 0 ? `${hours}時間${minutes}分` : `${minutes}分`
-}
-
-function statusDescription(day: AttendanceDay, now: Date): string {
+function statusDescription(day: AttendanceDay, now: Date): ReactNode {
   switch (day.status) {
     case 'not_started':
       return 'まだ出勤していません'
     case 'working': {
       const minutes = elapsedWorkedMinutes(day, now)
-      return `${formatTime(day.actual_start_at)}から勤務中${minutes !== null ? `(労働時間 ${formatMinutes(minutes)})` : ''}`
+      return (
+        <>
+          {formatTime(day.actual_start_at)}から勤務中
+          {minutes !== null && <> (労働時間 <Duration minutes={minutes} />)</>}
+        </>
+      )
     }
     case 'on_break':
       return `${formatTime(day.actual_start_at)}から勤務中・現在休憩中です`
@@ -122,12 +122,12 @@ function FlexSettlementSummaryCard({ summary }: { summary: FlexSettlementSummary
           {summary.settlement_period_start} 〜 {summary.settlement_period_end}
         </p>
         <StatTileGrid>
-          <StatTile label="必要労働時間" value={`${summary.required_minutes}分`} />
-          <StatTile label="実労働時間" value={`${summary.actual_minutes}分`} />
-          <StatTile label="残り必要時間" value={`${summary.remaining_minutes}分`} />
+          <StatTile label="必要労働時間" value={<Duration minutes={summary.required_minutes} />} />
+          <StatTile label="実労働時間" value={<Duration minutes={summary.actual_minutes} />} />
+          <StatTile label="残り必要時間" value={<Duration minutes={summary.remaining_minutes} />} />
           <StatTile label="勤務残日数" value={`${summary.remaining_working_days}日`} />
         </StatTileGrid>
-        <p className="text-sm text-muted-foreground">1日あたり必要時間 {summary.per_day_required_minutes}分</p>
+        <p className="text-sm text-muted-foreground">1日あたり必要時間 <Duration minutes={summary.per_day_required_minutes} /></p>
         {summary.core_time_violation_days > 0 && (
           <p className="text-sm text-destructive">コアタイム違反日数 <span>{summary.core_time_violation_days}日</span></p>
         )}
@@ -206,21 +206,21 @@ export function TodayAttendancePage() {
             {day.calculation && (
               <>
                 <StatTileGrid className="sm:grid-cols-4">
-                  <StatTile label="所定労働時間" value={`${day.calculation.prescribed_work_minutes}分`} />
-                  <StatTile label="法定内残業時間" value={`${day.calculation.statutory_within_overtime_minutes}分`} />
-                  <StatTile label="法定外残業時間" value={`${day.calculation.statutory_excess_overtime_minutes}分`} />
-                  <StatTile label="法定休日労働時間" value={`${day.calculation.legal_holiday_work_minutes}分`} />
+                  <StatTile label="所定労働時間" value={<Duration minutes={day.calculation.prescribed_work_minutes} />} />
+                  <StatTile label="法定内残業時間" value={<Duration minutes={day.calculation.statutory_within_overtime_minutes} />} />
+                  <StatTile label="法定外残業時間" value={<Duration minutes={day.calculation.statutory_excess_overtime_minutes} />} />
+                  <StatTile label="法定休日労働時間" value={<Duration minutes={day.calculation.legal_holiday_work_minutes} />} />
                 </StatTileGrid>
                 <StatTileGrid className="sm:grid-cols-4">
-                  <StatTile label="深夜所定労働時間" value={`${day.calculation.late_night_prescribed_work_minutes}分`} />
-                  <StatTile label="深夜法定内残業時間" value={`${day.calculation.late_night_statutory_within_overtime_minutes}分`} />
-                  <StatTile label="深夜法定外残業時間" value={`${day.calculation.late_night_statutory_excess_overtime_minutes}分`} />
-                  <StatTile label="深夜法定休日労働時間" value={`${day.calculation.late_night_legal_holiday_work_minutes}分`} />
+                  <StatTile label="深夜所定労働時間" value={<Duration minutes={day.calculation.late_night_prescribed_work_minutes} />} />
+                  <StatTile label="深夜法定内残業時間" value={<Duration minutes={day.calculation.late_night_statutory_within_overtime_minutes} />} />
+                  <StatTile label="深夜法定外残業時間" value={<Duration minutes={day.calculation.late_night_statutory_excess_overtime_minutes} />} />
+                  <StatTile label="深夜法定休日労働時間" value={<Duration minutes={day.calculation.late_night_legal_holiday_work_minutes} />} />
                 </StatTileGrid>
                 {day.monthly_overtime && (
                   <p className="text-xs text-muted-foreground">
-                    今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_excess_overtime_minutes}分
-                    (うち月60時間超残業: {day.monthly_overtime.statutory_excess_overtime_over_60h_minutes}分)
+                    今月の法定外残業累計(参考): <Duration minutes={day.monthly_overtime.cumulative_statutory_excess_overtime_minutes} />
+                    (うち月60時間超残業: <Duration minutes={day.monthly_overtime.statutory_excess_overtime_over_60h_minutes} />)
                   </p>
                 )}
                 {day.calculation.core_time_violation && (
