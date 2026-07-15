@@ -7,6 +7,7 @@ import {
   closeMonth,
   correctPunch,
   createAttendanceDay,
+  createPunch,
   deleteAttendanceDay,
   deletePunch,
   endBreak,
@@ -23,6 +24,7 @@ import {
   updateAttendanceDay,
   type CorrectAttendancePunchInput,
   type CreateAttendanceDayInput,
+  type CreateAttendancePunchInput,
   type EditAttendanceDayInput,
 } from '../api/attendance'
 import { downloadAttendanceCsv } from '../api/exports'
@@ -144,6 +146,20 @@ function usePunchAction<TInput>(action: (id: number, input: TInput) => Promise<u
 
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: TInput }) => action(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+export function useCreatePunch() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: CreateAttendancePunchInput) => createPunch(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle2, Clock, Coffee, LogIn, type LucideIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Badge, type BadgeTone } from '../components/Badge/Badge'
 import { Button } from '../components/Button/Button'
 import { Card } from '../components/Card/Card'
@@ -161,7 +162,17 @@ export function TodayAttendancePage() {
   return (
     <div className={cn('grid grid-cols-1 gap-6', flexSummary && 'lg:grid-cols-3')}>
       <div className={flexSummary ? 'lg:col-span-2' : undefined}>
-        <Card title="今日の勤怠" actions={<Badge tone={tone}>{label}</Badge>}>
+        <Card
+          title="今日の勤怠"
+          actions={
+            <div className="flex items-center gap-2">
+              <Badge tone={tone}>{label}</Badge>
+              <Button asChild variant="secondary">
+                <Link to={`/attendance/days/${day.work_date}`}>日次勤怠</Link>
+              </Button>
+            </div>
+          }
+        >
           {actionError && <ErrorMessage error={actionError} />}
 
           <div className="flex flex-col gap-5">

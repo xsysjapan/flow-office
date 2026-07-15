@@ -151,7 +151,10 @@ describe('AttendanceDayPage', () => {
     renderPage([recordedDay])
 
     expect(await screen.findByText('有効')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '訂正' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '削除' })).toHaveLength(1)
 
+    await userEvent.click(screen.getByRole('button', { name: 'ログを編集' }))
     await userEvent.click(screen.getByRole('button', { name: '訂正' }))
     await userEvent.type(screen.getByLabelText('訂正理由'), '打刻時刻の入力ミス')
     await userEvent.click(screen.getByRole('button', { name: '訂正を保存' }))
@@ -159,6 +162,111 @@ describe('AttendanceDayPage', () => {
     await waitFor(() =>
       expect(attendanceApi.correctPunch).toHaveBeenCalledWith(10, expect.objectContaining({ reason: '打刻時刻の入力ミス' })),
     )
+  })
+
+  it('adds a punch from the punch log edit mode', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'createPunch').mockResolvedValue({
+      id: 10,
+      user_id: 1,
+      work_date: date,
+      punch_type: 'clock_in',
+      punched_at: `${date}T09:00:00+09:00`,
+      source: 'web',
+      note: null,
+      status: 'active',
+      correction_reason: null,
+      corrected_by_user_id: null,
+      corrected_at: null,
+      superseded_by_punch_id: null,
+      created_at: null,
+    })
+    renderPage([recordedDay])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
+    await userEvent.selectOptions(screen.getByLabelText('追加する打刻種別'), 'clock_out')
+    await userEvent.type(screen.getByLabelText('追加する日時'), `${date}T18:00`)
+    await userEvent.clear(screen.getByLabelText('追加するオフセット'))
+    await userEvent.type(screen.getByLabelText('追加するオフセット'), '+09:00')
+    await userEvent.click(screen.getByRole('button', { name: '打刻を追加' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.createPunch).toHaveBeenCalledWith({
+        work_date: date,
+        punch_type: 'clock_out',
+        punched_at: `${date}T18:00:00+09:00`,
+        source: 'web',
+      }),
+    )
+  })
+
+  it('shows only active punches by default and marks a corrected replacement as edited', async () => {
+    const originalPunch: AttendancePunch = {
+      id: 10,
+      user_id: 1,
+      work_date: date,
+      punch_type: 'clock_in',
+      punched_at: `${date}T09:30:00+09:00`,
+      source: 'web',
+      note: null,
+      status: 'corrected',
+      correction_reason: '打刻時刻の入力ミス',
+      corrected_by_user_id: 1,
+      corrected_at: `${date}T10:00:00+09:00`,
+      superseded_by_punch_id: 11,
+      created_at: null,
+    }
+    const correctedPunch: AttendancePunch = {
+      ...originalPunch,
+      id: 11,
+      punched_at: `${date}T09:00:00+09:00`,
+      status: 'active',
+      correction_reason: null,
+      corrected_by_user_id: null,
+      corrected_at: null,
+      superseded_by_punch_id: null,
+    }
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([originalPunch, correctedPunch])
+    renderPage([recordedDay])
+
+    expect(await screen.findByText('(編集済)')).toBeInTheDocument()
+    expect(screen.queryByText('訂正済み')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'ログを編集' }))
+
+    expect(screen.getByText('訂正済み')).toBeInTheDocument()
+    expect(screen.getByText('理由: 打刻時刻の入力ミス')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '閲覧に戻る' })).toBeInTheDocument()
+  })
+
+  it('cancels an in-progress punch correction when returning to view mode', async () => {
+    const punch: AttendancePunch = {
+      id: 10,
+      user_id: 1,
+      work_date: date,
+      punch_type: 'clock_in',
+      punched_at: `${date}T09:30:00+09:00`,
+      source: 'web',
+      note: null,
+      status: 'active',
+      correction_reason: null,
+      corrected_by_user_id: null,
+      corrected_at: null,
+      superseded_by_punch_id: null,
+      created_at: null,
+    }
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([punch])
+    renderPage([recordedDay])
+
+    await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
+    await userEvent.click(screen.getByRole('button', { name: '訂正' }))
+    await userEvent.type(screen.getByLabelText('訂正理由'), '保存しない入力')
+
+    await userEvent.click(screen.getByRole('button', { name: '閲覧に戻る' }))
+
+    expect(screen.queryByLabelText('訂正理由')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '訂正を保存' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '訂正' })).not.toBeInTheDocument()
   })
 
   it('shows a create form and creates a day when there is no record yet (UC-A016)', async () => {

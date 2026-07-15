@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../api/attendance'
 import type { AttendanceDay, AttendanceMonthlyCalculationTotals } from '../api/types'
@@ -41,7 +42,9 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <TodayAttendancePage />
+      <MemoryRouter>
+        <TodayAttendancePage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -58,6 +61,14 @@ describe('TodayAttendancePage', () => {
 
     expect(await screen.findByRole('button', { name: '出勤' })).toBeInTheDocument()
     expect(screen.getByText('未出勤')).toBeInTheDocument()
+  })
+
+  it('links to the current day attendance detail', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
+
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: '日次勤怠' })).toHaveAttribute('href', '/attendance/days/2026-07-09')
   })
 
   it('clocks in when the button is clicked', async () => {

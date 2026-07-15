@@ -25,6 +25,7 @@ import {
   useAttendanceDayDefaults,
   useCorrectPunch,
   useCreateAttendanceDay,
+  useCreatePunch,
   useDeleteAttendanceDay,
   useDeletePunch,
   usePunches,
@@ -227,11 +228,8 @@ function LeaveSegmentsEditor({
   )
 }
 
-/**
- * UC-A013/UC-A014: 打刻ログの訂正・削除。訂正・削除後も行は残り、状態
- * (有効・訂正済み・削除済み)付きで一覧に表示され続ける(打刻ログは追記のみ)。
- */
-function PunchLogRow({ punch }: { punch: AttendancePunch }) {
+/** UC-A013/UC-A014: 編集モードでは、訂正・削除済みの監査ログも含めて表示する。 */
+function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; isEdited: boolean; isEditing: boolean }) {
   const [mode, setMode] = useState<'view' | 'correct' | 'delete'>('view')
   const [punchType, setPunchType] = useState<PunchType>(punch.punch_type)
   const [punchedAt, setPunchedAt] = useState(isoToLocalDatetimeLiteral(punch.punched_at))
@@ -240,6 +238,10 @@ function PunchLogRow({ punch }: { punch: AttendancePunch }) {
   const correctPunch = useCorrectPunch()
   const deletePunch = useDeletePunch()
   const { label, tone } = punchStatusLabel(punch.status)
+
+  useEffect(() => {
+    if (!isEditing) setMode('view')
+  }, [isEditing])
 
   const startEditing = () => {
     setPunchType(punch.punch_type)
@@ -272,8 +274,9 @@ function PunchLogRow({ punch }: { punch: AttendancePunch }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-foreground">{punchTypeLabel(punch.punch_type)}</span>
         <span className="text-muted-foreground">{isoToLocalDatetimeLiteral(punch.punched_at).replace('T', ' ')}</span>
+        {isEdited && <span className="text-muted-foreground">(編集済)</span>}
         <Badge tone={tone}>{label}</Badge>
-        {punch.status === 'active' && mode === 'view' && (
+        {isEditing && punch.status === 'active' && mode === 'view' && (
           <div className="ml-auto flex gap-1.5">
             <Button variant="secondary" onClick={startEditing}>
               訂正
@@ -359,22 +362,88 @@ function PunchLogRow({ punch }: { punch: AttendancePunch }) {
   )
 }
 
-function PunchLogCard({ date }: { date: string }) {
-  const { data: punches, isLoading } = usePunches({ from: date, to: date })
+function PunchAddForm({ date }: { date: string }) {
+  const [punchType, setPunchType] = useState<PunchType>('clock_in')
+  const [punchedAt, setPunchedAt] = useState('')
+  const [offset, setOffset] = useState(browserOffsetString())
+  const createPunch = useCreatePunch()
+
+  const handleSubmit = () => {
+    const combined = combineDatetimeLocalWithOffset(punchedAt, offset)
+    if (!combined) return
+    createPunch.mutate(
+      { work_date: date, punch_type: punchType, punched_at: combined, source: 'web' },
+      { onSuccess: () => setPunchedAt('') },
+    )
+  }
 
   return (
-    <Card title="打刻ログ">
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+      {createPunch.error && <ErrorMessage error={createPunch.error} />}
+      <div className="flex flex-wrap items-center gap-2">
+        <NativeSelect
+          aria-label="追加する打刻種別"
+          className="w-auto"
+          value={punchType}
+          onChange={(e) => setPunchType(e.target.value as PunchType)}
+        >
+          {PUNCH_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {punchTypeLabel(type)}
+            </option>
+          ))}
+        </NativeSelect>
+        <Input
+          type="datetime-local"
+          aria-label="追加する日時"
+          className="w-auto"
+          value={punchedAt}
+          onChange={(e) => setPunchedAt(e.target.value)}
+        />
+        <Input
+          aria-label="追加するオフセット"
+          className="w-24"
+          value={offset}
+          placeholder="+09:00"
+          onChange={(e) => setOffset(e.target.value)}
+        />
+        <Button isLoading={createPunch.isPending} disabled={!punchedAt} onClick={handleSubmit}>
+          打刻を追加
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function PunchLogCard({ date }: { date: string }) {
+  const { data: punches, isLoading } = usePunches({ from: date, to: date })
+  const [isEditing, setIsEditing] = useState(false)
+  const visiblePunches = isEditing ? punches : punches?.filter((punch) => punch.status === 'active')
+  const editedPunchIds = new Set(punches?.flatMap((punch) => punch.superseded_by_punch_id ?? []))
+
+  return (
+    <Card
+      title="打刻ログ"
+      actions={
+        <Button variant="secondary" onClick={() => setIsEditing((current) => !current)}>
+          {isEditing ? '閲覧に戻る' : 'ログを編集'}
+        </Button>
+      }
+    >
       {isLoading ? (
         <LoadingState />
       ) : !punches || punches.length === 0 ? (
         <p className="text-sm text-muted-foreground">この日の打刻ログはありません。</p>
+      ) : !visiblePunches || visiblePunches.length === 0 ? (
+        <p className="text-sm text-muted-foreground">有効な打刻ログはありません。</p>
       ) : (
         <ul className="divide-y divide-border">
-          {punches.map((punch) => (
-            <PunchLogRow key={punch.id} punch={punch} />
+          {visiblePunches.map((punch) => (
+            <PunchLogRow key={punch.id} punch={punch} isEdited={editedPunchIds.has(punch.id)} isEditing={isEditing} />
           ))}
         </ul>
       )}
+      {isEditing && <PunchAddForm date={date} />}
     </Card>
   )
 }

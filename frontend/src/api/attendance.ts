@@ -98,6 +98,18 @@ export function fetchPunches(params: { from?: string; to?: string } = {}): Promi
   return apiFetch('/attendance-punches', { query: params })
 }
 
+export interface CreateAttendancePunchInput {
+  work_date: string
+  punch_type: AttendancePunch['punch_type']
+  punched_at: string
+  source: string
+}
+
+/** UC-A012: 打刻ログを記録する。 */
+export function createPunch(input: CreateAttendancePunchInput): Promise<AttendancePunch> {
+  return apiFetch('/attendance-punches', { method: 'POST', body: input })
+}
+
 export interface CorrectAttendancePunchInput {
   punch_type: AttendancePunch['punch_type']
   punched_at: string
