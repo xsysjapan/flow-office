@@ -164,6 +164,7 @@ describe('AttendanceMonthDetailPage', () => {
         absence_minutes: 480,
         paid_leave_days: 1.5,
         paid_leave_minutes: 120,
+        special_leave_days: 1,
         special_leave_minutes: 60,
       },
     })
@@ -171,11 +172,13 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText('欠勤日数')).toBeInTheDocument()
-    expect(screen.getByText('1日')).toBeInTheDocument()
+  expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('欠勤時間')).toBeInTheDocument()
     expect(screen.getByText('有給日数')).toBeInTheDocument()
     expect(screen.getByText('1.5日')).toBeInTheDocument()
     expect(screen.getByText('有給時間(時間単位)')).toBeInTheDocument()
+    expect(screen.getByText('特別休暇日数')).toBeInTheDocument()
+    expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('特別休暇時間')).toBeInTheDocument()
     expect(screen.getByText('1時間')).toBeInTheDocument()
   })

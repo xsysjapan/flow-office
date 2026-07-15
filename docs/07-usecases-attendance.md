@@ -123,7 +123,9 @@ docs/03-architecture.md 3.4 を参照。
 月次確認画面(UC-A007)の月次集計(`MonthlyOvertimeCalculator::calculateCategoryTotals()`)
 では、上記を対象月全体で合算するとともに、欠勤時間(`absence_minutes`)がその日の
 所定労働時間以上になった日を「終日欠勤」として`absence_days`(欠勤日数)を数える
-(1時間の欠勤が発生しただけの日を1日欠勤として扱わないため)。
+(1時間の欠勤が発生しただけの日を1日欠勤として扱わないため)。特別休暇も同じ基準で、
+特別休暇時間(`special_leave_minutes`)がその日の所定労働時間以上になった日を
+`special_leave_days`(特別休暇日数)として数える。
 
 ## UC-A006: 週次勤怠を編集する
 

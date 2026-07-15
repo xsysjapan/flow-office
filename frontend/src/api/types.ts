@@ -171,6 +171,8 @@ export interface AttendanceMonthlyCalculationTotals {
   absence_minutes?: number
   paid_leave_days?: number
   paid_leave_minutes?: number
+  /** 終日特別休暇の日数(特別休暇時間がその日の所定労働時間以上になった日を1日と数える)。 */
+  special_leave_days?: number
   special_leave_minutes?: number
 }
 

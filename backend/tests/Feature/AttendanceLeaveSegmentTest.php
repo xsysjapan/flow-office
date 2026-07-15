@@ -285,12 +285,13 @@ class AttendanceLeaveSegmentTest extends TestCase
         $this->assertEquals(0, $dayByDate['2026-08-11']['calculation']['paid_leave_minutes']);
     }
 
-    public function test_monthly_category_totals_include_absence_and_paid_leave_summaries(): void
+    public function test_monthly_category_totals_include_absence_paid_leave_and_special_leave_summaries(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $this->createWorkingDayShift($employee, '2026-08-10');
         $this->createWorkingDayShift($employee, '2026-08-11');
+        $this->createWorkingDayShift($employee, '2026-08-12');
 
         // 8/10: 終日欠勤(実績なし)。
         $this->actingAs($employee)->postJson('/api/attendance/days', [
@@ -314,6 +315,16 @@ class AttendanceLeaveSegmentTest extends TestCase
         ])->assertCreated()->json('id');
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
 
+        // 8/12: 終日特別休暇(実績なし)。
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-08-12',
+            'leave_segments' => [
+                ['category' => 'special_leave', 'start' => '2026-08-12T09:00:00+09:00', 'end' => '2026-08-12T18:00:00+09:00', 'note' => null],
+            ],
+            'reason' => '終日特別休暇',
+        ])->assertCreated();
+
         $monthResponse = $this->actingAs($employee)->getJson('/api/attendance/months/2026-08');
         $monthResponse->assertOk();
         $totals = $monthResponse->json('monthly_calculation_totals');
@@ -321,6 +332,8 @@ class AttendanceLeaveSegmentTest extends TestCase
         $this->assertSame(1, $totals['absence_days']);
         $this->assertSame(540, $totals['absence_minutes']); // 欠勤区間そのものの時間(9:00-18:00、休憩の控除はしない)
         $this->assertEquals(1.0, $totals['paid_leave_days']);
+        $this->assertSame(1, $totals['special_leave_days']);
+        $this->assertSame(540, $totals['special_leave_minutes']);
     }
 
     /**
