@@ -32,7 +32,7 @@ export function WeekAttendancePage() {
   return (
     <Card
       title="週次勤怠"
-      actions={
+      navigation={
         <div className="flex gap-2">
           <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
             <ChevronLeft aria-hidden="true" />

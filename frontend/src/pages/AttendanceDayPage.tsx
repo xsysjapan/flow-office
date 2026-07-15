@@ -774,7 +774,7 @@ export function AttendanceDayPage() {
             </span>
           </span>
         }
-        actions={
+        navigation={
           <>
             <Button asChild variant="secondary" size="icon" title="前日" aria-label="前日">
               <Link to={`/attendance/days/${addDays(date, -1)}`}>

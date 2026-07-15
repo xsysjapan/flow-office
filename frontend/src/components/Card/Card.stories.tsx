@@ -9,7 +9,7 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: 'ページ実装で使う公開コンポーネント。内部で`ui/card`のCardHeader/CardTitle/CardContent等を組み立て、`title`/`actions`/`children`のみを受け取る。',
+        component: 'ページ実装で使う公開コンポーネント。内部で`ui/card`のCardHeader/CardTitle/CardContent等を組み立て、`title`/`actions`/`navigation`/`children`を受け取る。',
       },
     },
   },
@@ -30,5 +30,14 @@ export const WithActions: Story = {
     title: '経費精算',
     actions: <Button variant="secondary">編集</Button>,
     children: <p>金額: 1,200円</p>,
+  },
+}
+
+export const WithNavigation: Story = {
+  args: {
+    title: '日次勤怠',
+    actions: <span className="text-sm text-muted-foreground">提出済み</span>,
+    navigation: <Button variant="secondary">前日</Button>,
+    children: <p>出勤: 09:00 / 退勤: 18:00</p>,
   },
 }

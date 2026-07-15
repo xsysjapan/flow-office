@@ -90,12 +90,8 @@ export function AttendanceMonthDetailPage() {
     <div className="flex flex-col gap-6">
       <Card
         title={`${yearMonth}の勤怠月次`}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <MonthNav yearMonth={yearMonth} />
-            {monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
-          </div>
-        }
+        actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
+        navigation={<MonthNav yearMonth={yearMonth} />}
       >
         {month && month.legal_holiday_warnings.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
