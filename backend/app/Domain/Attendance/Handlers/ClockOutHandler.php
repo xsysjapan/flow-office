@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Events\AttendanceClockedOut;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Services\LiveAttendancePunchRecorder;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -26,6 +27,7 @@ class ClockOutHandler implements CommandHandler
     public function __construct(
         private readonly EventStore $eventStore,
         private readonly AttendanceCalculator $calculator,
+        private readonly LiveAttendancePunchRecorder $punchRecorder,
     ) {}
 
     public function handle(Command $command): AttendanceDay
@@ -46,6 +48,8 @@ class ClockOutHandler implements CommandHandler
         $day->actual_end_at = LocalDateTime::now($user->timezone);
         $day->status = AttendanceDayStatus::CLOCKED_OUT;
         $day->save();
+
+        $this->punchRecorder->record($day, 'clock_out', $day->actual_end_at);
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',

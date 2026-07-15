@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Events\AttendanceBreakEnded;
+use App\Domain\Attendance\Services\LiveAttendancePunchRecorder;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -21,7 +22,10 @@ use Illuminate\Support\Carbon;
  */
 class EndBreakHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
+    public function __construct(
+        private readonly EventStore $eventStore,
+        private readonly LiveAttendancePunchRecorder $punchRecorder,
+    ) {}
 
     public function handle(Command $command): AttendanceDay
     {
@@ -48,6 +52,8 @@ class EndBreakHandler implements CommandHandler
 
         $day->status = AttendanceDayStatus::WORKING;
         $day->save();
+
+        $this->punchRecorder->record($day, 'break_end', $break->break_end_at);
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',

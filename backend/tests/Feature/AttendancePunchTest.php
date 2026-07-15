@@ -129,6 +129,23 @@ class AttendancePunchTest extends TestCase
         $this->assertSame($liveActualStart, $liveDay->actual_start_at->toIso8601String());
     }
 
+    public function test_live_clock_actions_are_listed_as_web_punches_for_the_attendance_day(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = Carbon::today($employee->timezone)->toDateString();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/break/start')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/break/end')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+
+        $response = $this->actingAs($employee)->getJson("/api/attendance-punches?from={$workDate}&to={$workDate}");
+
+        $response->assertSuccessful();
+        $this->assertSame(['clock_in', 'break_start', 'break_end', 'clock_out'], array_column($response->json(), 'punch_type'));
+        $this->assertSame(['web', 'web', 'web', 'web'], array_column($response->json(), 'source'));
+    }
+
     public function test_punches_do_not_overwrite_a_locked_day_even_if_punch_sourced(): void
     {
         $employee = User::factory()->create();

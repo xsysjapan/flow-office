@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Events\AttendanceClockedIn;
+use App\Domain\Attendance\Services\LiveAttendancePunchRecorder;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
@@ -25,7 +26,10 @@ use Illuminate\Support\Carbon;
  */
 class ClockInHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
+    public function __construct(
+        private readonly EventStore $eventStore,
+        private readonly LiveAttendancePunchRecorder $punchRecorder,
+    ) {}
 
     public function handle(Command $command): AttendanceDay
     {
@@ -64,6 +68,8 @@ class ClockInHandler implements CommandHandler
         $day->status = AttendanceDayStatus::WORKING;
         $day->source = AttendanceDaySource::LIVE;
         $day->save();
+
+        $this->punchRecorder->record($day, 'clock_in', $now);
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',
