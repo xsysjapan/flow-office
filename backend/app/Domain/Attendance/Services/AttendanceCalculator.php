@@ -4,6 +4,9 @@ namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceLeaveSegment;
+use App\Models\AttendanceLeaveSegmentCategory;
+use App\Models\PaidLeaveType;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -52,6 +55,18 @@ use Illuminate\Support\Carbon;
  *   (user_work_style_monthly_assignments)、(2) それも無ければシステム全体設定の
  *   デフォルト働き方(system_settings.default_work_style_id)、の順にフォールバックする
  *   (docs/08-usecases-calendar-shift.md参照)。どちらも無ければ所定労働時間0扱いになる。
+ * - 欠勤・特別休暇(`attendance_leave_segments`)は、勤務予定を勤務しなかった時間帯のうち
+ *   有給休暇以外の理由で処理した区間を表す(docs/07-usecases-attendance.md「不就労時間の
+ *   処理区分」参照)。区間は実績(actual_start_at〜actual_end_at)の内側・外側どちらにも
+ *   存在しうる(例: 遅刻して9:00〜11:00を欠勤扱いにした場合は実績の外側、勤務途中に2時間の
+ *   特別休暇を挟んだ場合は実績の内側)。実績と重なる部分だけを休憩と同様に労働時間・深夜時間
+ *   から控除し、区間そのものの合計時間(実績の有無・重なりにかかわらず)を
+ *   `absence_minutes`/`special_leave_minutes`として集計する。
+ * - 有給休暇(全休・半休・時間単位)は`attendance_leave_segments`の対象外で、既存の
+ *   `paid_leave_requests`/`attendance_days.work_type`/`paid_leave_usages`から
+ *   `paid_leave_days`(全休=1.0・半休=0.5)・`paid_leave_minutes`(時間単位有給の消化分)を
+ *   算出する。日次集計を1テーブルで完結させるための非正規化であり、有給消化の正データは
+ *   引き続き`paid_leave_usages`のまま変わらない。
  */
 class AttendanceCalculator
 {
@@ -67,7 +82,7 @@ class AttendanceCalculator
     ) {}
 
     /**
-     * @return array<string, int|bool|null>
+     * @return array<string, int|bool|float|null>
      */
     public function calculate(AttendanceDay $day): array
     {
@@ -77,17 +92,30 @@ class AttendanceCalculator
 
         $breakMinutes = $breaks->sum(fn ($break) => $break->break_start_at->diffInMinutes($break->break_end_at));
 
+        [$absenceMinutes, $specialLeaveMinutes, $leaveMinutesOverlappingActual, $lateNightLeaveOverlapMinutes]
+            = $this->summarizeLeaveSegments($day->leaveSegments, $start, $end);
+
         $workMinutes = 0;
         $lateNightWorkMinutes = 0;
         if ($start !== null && $end !== null) {
-            $workMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes);
+            $workMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes - $leaveMinutesOverlappingActual);
 
             $lateNightWorkMinutes = $this->lateNightOverlapMinutes($start, $end);
             foreach ($breaks as $break) {
                 $lateNightWorkMinutes -= $this->lateNightOverlapMinutes($break->break_start_at, $break->break_end_at);
             }
+            $lateNightWorkMinutes -= $lateNightLeaveOverlapMinutes;
             $lateNightWorkMinutes = max(0, $lateNightWorkMinutes);
         }
+
+        $paidLeaveDays = match ($day->work_type) {
+            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::FULL) => 1.0,
+            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::AM_HALF), PaidLeaveType::toAttendanceWorkType(PaidLeaveType::PM_HALF) => 0.5,
+            default => 0.0,
+        };
+        $paidLeaveMinutes = (int) $day->paidLeaveUsages
+            ->where('usage_type', PaidLeaveType::HOURLY)
+            ->sum('used_minutes');
 
         $shift = $day->shiftAssignment;
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
@@ -194,7 +222,49 @@ class AttendanceCalculator
             'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
             'core_time_violation' => $coreTimeViolation,
+            'absence_minutes' => $absenceMinutes,
+            'special_leave_minutes' => $specialLeaveMinutes,
+            'paid_leave_days' => $paidLeaveDays,
+            'paid_leave_minutes' => $paidLeaveMinutes,
         ];
+    }
+
+    /**
+     * 欠勤・特別休暇の区間(`attendance_leave_segments`)を集計する。区間そのものの合計時間
+     * (実績の有無・重なりにかかわらず)と、実績(`$start`〜`$end`)と重なる分(労働時間・
+     * 深夜時間から控除する対象)を分けて返す。
+     *
+     * @param  iterable<int, AttendanceLeaveSegment>  $segments
+     * @return array{0: int, 1: int, 2: int, 3: int} [欠勤合計分, 特別休暇合計分, 実績と重なる分, 実績と重なる分のうち深夜時間帯]
+     */
+    private function summarizeLeaveSegments(iterable $segments, ?Carbon $start, ?Carbon $end): array
+    {
+        $absenceMinutes = 0;
+        $specialLeaveMinutes = 0;
+        $overlapWithActualMinutes = 0;
+        $lateNightOverlapWithActualMinutes = 0;
+
+        foreach ($segments as $segment) {
+            $duration = $segment->start_at->diffInMinutes($segment->end_at);
+            if ($segment->category === AttendanceLeaveSegmentCategory::ABSENCE) {
+                $absenceMinutes += $duration;
+            } elseif ($segment->category === AttendanceLeaveSegmentCategory::SPECIAL_LEAVE) {
+                $specialLeaveMinutes += $duration;
+            }
+
+            if ($start === null || $end === null) {
+                continue;
+            }
+
+            $clippedStart = $segment->start_at->greaterThan($start) ? $segment->start_at : $start;
+            $clippedEnd = $segment->end_at->lessThan($end) ? $segment->end_at : $end;
+            if ($clippedEnd->greaterThan($clippedStart)) {
+                $overlapWithActualMinutes += $clippedStart->diffInMinutes($clippedEnd);
+                $lateNightOverlapWithActualMinutes += $this->lateNightOverlapMinutes($clippedStart, $clippedEnd);
+            }
+        }
+
+        return [$absenceMinutes, $specialLeaveMinutes, $overlapWithActualMinutes, $lateNightOverlapWithActualMinutes];
     }
 
     /**
@@ -228,7 +298,7 @@ class AttendanceCalculator
     }
 
     /**
-    * 労働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
+     * 労働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
      * 発生する前提(休憩を除いた勤務区間を時系列に辿り、累計が閾値に達した時点)で境界を返す。
      * 閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)はnullを返す。
      *

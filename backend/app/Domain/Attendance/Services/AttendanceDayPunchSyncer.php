@@ -97,7 +97,7 @@ class AttendanceDayPunchSyncer
             ),
         );
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',

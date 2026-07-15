@@ -14,6 +14,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceLeaveSegmentCategory;
 use App\Support\LocalDateTime;
 
 /**
@@ -68,6 +69,8 @@ class EditAttendanceDayHandler implements CommandHandler
             ]);
         }
 
+        $this->replaceLeaveSegments($day, $command->leaveSegments);
+
         $this->eventStore->append(
             aggregateType: 'attendance_day',
             aggregateId: (string) $day->id,
@@ -78,7 +81,7 @@ class EditAttendanceDayHandler implements CommandHandler
             ),
         );
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',
@@ -93,9 +96,9 @@ class EditAttendanceDayHandler implements CommandHandler
     }
 
     /**
-     * 今回の編集で送られた日時(actual_start_at / actual_end_at / breaks[].start / breaks[].end)
-     * のオフセットが全て一致することを検証し、その値を返す。1件も送られなかった場合は
-     * 既存のオフセットを維持する。
+     * 今回の編集で送られた日時(actual_start_at / actual_end_at / breaks[].start / breaks[].end /
+     * leaveSegments[].start / leaveSegments[].end)のオフセットが全て一致することを検証し、
+     * その値を返す。1件も送られなかった場合は既存のオフセットを維持する。
      */
     private function resolveOffsetMinutes(EditAttendanceDay $command, int $existingOffsetMinutes): int
     {
@@ -104,6 +107,8 @@ class EditAttendanceDayHandler implements CommandHandler
             $command->actualEndAt,
             ...array_column($command->breaks, 'start'),
             ...array_column($command->breaks, 'end'),
+            ...array_column($command->leaveSegments, 'start'),
+            ...array_column($command->leaveSegments, 'end'),
         ], fn (?string $value) => $value !== null);
 
         $resolved = null;
@@ -116,5 +121,33 @@ class EditAttendanceDayHandler implements CommandHandler
         }
 
         return $resolved ?? $existingOffsetMinutes;
+    }
+
+    /**
+     * 欠勤・特別休暇の区間(有給休暇を除く)を全件入れ替える(attendance_breaksと同じ扱い)。
+     *
+     * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
+     */
+    private function replaceLeaveSegments(AttendanceDay $day, array $leaveSegments): void
+    {
+        $day->leaveSegments()->delete();
+        foreach ($leaveSegments as $segment) {
+            if (! in_array($segment['category'], AttendanceLeaveSegmentCategory::values(), true)) {
+                throw new DomainRuleException("不明な処理区分です: {$segment['category']}");
+            }
+
+            $start = LocalDateTime::splitOffset($segment['start'])[0];
+            $end = LocalDateTime::splitOffset($segment['end'])[0];
+            if (! $end->greaterThan($start)) {
+                throw new DomainRuleException('欠勤・特別休暇の終了時刻は開始時刻より後にしてください。');
+            }
+
+            $day->leaveSegments()->create([
+                'category' => $segment['category'],
+                'start_at' => $start,
+                'end_at' => $end,
+                'note' => $segment['note'] ?? null,
+            ]);
+        }
     }
 }

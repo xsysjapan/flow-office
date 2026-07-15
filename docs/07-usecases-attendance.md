@@ -84,6 +84,47 @@ docs/03-architecture.md 3.4 を参照。
 `PUT /attendance/days/{id}/calculation`)。
 実績(出勤・退勤・休憩)が再編集され日次計算が再実行されると、この補正は解除される。
 
+### 不就労時間の処理区分(欠勤・特別休暇・遅刻・早退)
+
+1日の中に複数の勤怠区分が混在しうる(例: 9:00〜15:00は勤務、15:00〜18:00は時間単位有給)。
+このため日次勤怠は「1日につき1つの区分」では管理せず、以下の3つを分離して持つ。
+
+1. **勤務予定**(`employee_shift_assignments.planned_start_at`/`planned_end_at`): 本来
+   勤務する予定だった時間。
+2. **勤務実績**(`attendance_days.actual_start_at`/`actual_end_at`): 実際に勤務した時間。
+3. **不就労時間の処理区分**: 勤務予定のうち勤務しなかった時間を、どの制度で処理したか。
+
+有給休暇(全休・半休・時間単位)は既存の`paid_leave_requests`/`paid_leave_usages`と
+`attendance_days.work_type`(`paid_leave_full`/`paid_leave_am_half`/`paid_leave_pm_half`/
+`paid_leave_hourly`)で管理する(UC-P003/UC-P004参照)。それ以外の理由(欠勤・特別休暇)で
+勤務しなかった時間帯は、`attendance_leave_segments`に区間(開始・終了・区分・備考)として
+保持する(`category`: `absence`=欠勤 / `special_leave`=その他特別休暇)。日次編集
+(本節)・作成(UC-A016)のたびに全件入れ替える(`attendance_breaks`と同じ扱い)。
+
+区間は実績の内側・外側どちらにも存在しうる。
+
+- 実績の外側(例: 2時間遅刻し、その2時間を欠勤扱いにする)は、労働時間には影響せず、
+  欠勤時間だけが別途集計される。
+- 実績の内側(例: 勤務途中に2時間の特別休暇を挟む「中抜け」)は、休憩と同様に労働時間・
+  深夜時間から控除される。
+
+同じ2時間の遅刻でも、遅刻控除(`absence`として処理)にするか、時間単位有給
+(既存のUC-P003で申請・承認)で補填するかは、都度どちらの制度で処理するかを選べる
+(「遅刻した」という事実と「どう処理するか」は別)。
+
+日次集計(`attendance_daily_calculations`、1テーブル)には、以下を1テーブルに集約して持つ。
+
+- `absence_minutes`: `attendance_leave_segments`(`category=absence`)の区間の合計時間。
+- `special_leave_minutes`: 同(`category=special_leave`)の合計時間。
+- `paid_leave_days`: `attendance_days.work_type`から算出する全休・半休の日数
+  (全休=1.0、半休=0.5。時間単位有給はここに含めない)。
+- `paid_leave_minutes`: 対象日の`paid_leave_usages`(時間単位)の消化時間合計。
+
+月次確認画面(UC-A007)の月次集計(`MonthlyOvertimeCalculator::calculateCategoryTotals()`)
+では、上記を対象月全体で合算するとともに、欠勤時間(`absence_minutes`)がその日の
+所定労働時間以上になった日を「終日欠勤」として`absence_days`(欠勤日数)を数える
+(1時間の欠勤が発生しただけの日を1日欠勤として扱わないため)。
+
 ## UC-A006: 週次勤怠を編集する
 
 1. 社員が週次勤怠画面を開く

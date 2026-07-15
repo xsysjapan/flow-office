@@ -56,7 +56,7 @@ class ClockOutHandler implements CommandHandler
             ),
         );
 
-        $calculation = $this->calculator->calculate($day->refresh());
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',

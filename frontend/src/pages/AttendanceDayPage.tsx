@@ -18,7 +18,7 @@ import {
 } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
-import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType } from '../api/types'
+import type { AttendanceDay, AttendanceDayDefaults, AttendanceLeaveSegmentCategory, AttendancePunch, PunchType } from '../api/types'
 import { useEditableRows } from '../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
@@ -40,7 +40,12 @@ import {
   isoToTimeLiteral,
   offsetMinutesToString,
 } from '../utils/offsetDateTime'
-import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../utils/statusLabels'
+import {
+  attendanceDayStatusLabel,
+  attendanceLeaveSegmentCategoryLabel,
+  punchStatusLabel,
+  punchTypeLabel,
+} from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf } from '../utils/weekDates'
 
 const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string | null> = {
@@ -131,6 +136,92 @@ function BreakRowsEditor({
       ))}
       <Button variant="secondary" className="self-start" onClick={onAdd}>
         休憩を追加
+      </Button>
+    </div>
+  )
+}
+
+const LEAVE_SEGMENT_CATEGORIES: AttendanceLeaveSegmentCategory[] = ['absence', 'special_leave']
+
+interface LeaveSegmentRowData {
+  category: AttendanceLeaveSegmentCategory
+  start: string
+  end: string
+  note: string
+}
+
+function buildLeaveSegmentsPayload(rows: LeaveSegmentRowData[], offset: string) {
+  return rows
+    .filter((row) => row.start && row.end)
+    .map((row) => ({
+      category: row.category,
+      start: combineDatetimeLocalWithOffset(row.start, offset) ?? '',
+      end: combineDatetimeLocalWithOffset(row.end, offset) ?? '',
+      note: row.note || null,
+    }))
+}
+
+/**
+ * 欠勤・特別休暇の区間(有給休暇は既存のUC-P003/P004で申請・承認する)。実績(出勤・退勤)の
+ * 内側・外側どちらの時間帯も入力できる(docs/07-usecases-attendance.md「不就労時間の処理
+ * 区分」参照)。
+ */
+function LeaveSegmentsEditor({
+  rows,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  rows: ReturnType<typeof useEditableRows<LeaveSegmentRowData>>['rows']
+  onAdd: () => void
+  onUpdate: (rowId: number, patch: Partial<LeaveSegmentRowData>) => void
+  onRemove: (rowId: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">欠勤・特別休暇</span>
+      {rows.map((row) => (
+        <div key={row.rowId} className="flex flex-wrap items-center gap-2">
+          <NativeSelect
+            aria-label="処理区分"
+            className="w-auto"
+            value={row.category}
+            onChange={(e) => onUpdate(row.rowId, { category: e.target.value as AttendanceLeaveSegmentCategory })}
+          >
+            {LEAVE_SEGMENT_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {attendanceLeaveSegmentCategoryLabel(category)}
+              </option>
+            ))}
+          </NativeSelect>
+          <Input
+            type="datetime-local"
+            aria-label="欠勤・特別休暇開始"
+            className="w-auto"
+            value={row.start}
+            onChange={(e) => onUpdate(row.rowId, { start: e.target.value })}
+          />
+          <Input
+            type="datetime-local"
+            aria-label="欠勤・特別休暇終了"
+            className="w-auto"
+            value={row.end}
+            onChange={(e) => onUpdate(row.rowId, { end: e.target.value })}
+          />
+          <Input
+            aria-label="欠勤・特別休暇の備考"
+            placeholder="備考"
+            className="w-auto"
+            value={row.note}
+            onChange={(e) => onUpdate(row.rowId, { note: e.target.value })}
+          />
+          <Button variant="danger" onClick={() => onRemove(row.rowId)}>
+            削除
+          </Button>
+        </div>
+      ))}
+      <Button variant="secondary" className="self-start" onClick={onAdd}>
+        欠勤・特別休暇を追加
       </Button>
     </div>
   )
@@ -352,6 +443,19 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
   const { rows, addRow, updateRow, removeRow } = useEditableRows<BreakRowData>(
     day.breaks.map((b) => ({ start: toDatetimeLocal(b.break_start_at), end: toDatetimeLocal(b.break_end_at) })),
   )
+  const {
+    rows: leaveSegmentRows,
+    addRow: addLeaveSegmentRow,
+    updateRow: updateLeaveSegmentRow,
+    removeRow: removeLeaveSegmentRow,
+  } = useEditableRows<LeaveSegmentRowData>(
+    (day.leave_segments ?? []).map((segment) => ({
+      category: segment.category,
+      start: toDatetimeLocal(segment.start_at),
+      end: toDatetimeLocal(segment.end_at),
+      note: segment.note ?? '',
+    })),
+  )
   const updateDay = useUpdateAttendanceDay()
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
 
@@ -365,6 +469,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
           breaks: buildBreaksPayload(rows, offset),
           work_type: workType || null,
           note: note || null,
+          leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
           reason,
         },
       },
@@ -401,6 +506,13 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
 
       {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
 
+      <LeaveSegmentsEditor
+        rows={leaveSegmentRows}
+        onAdd={() => addLeaveSegmentRow({ category: 'absence', start: '', end: '', note: '' })}
+        onUpdate={updateLeaveSegmentRow}
+        onRemove={removeLeaveSegmentRow}
+      />
+
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         修正理由(必須)
         <Input value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -428,6 +540,12 @@ function DayCreateForm({ date }: { date: string }) {
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
   const { rows, addRow, updateRow, removeRow, reset: resetRows } = useEditableRows<BreakRowData>([])
+  const {
+    rows: leaveSegmentRows,
+    addRow: addLeaveSegmentRow,
+    updateRow: updateLeaveSegmentRow,
+    removeRow: removeLeaveSegmentRow,
+  } = useEditableRows<LeaveSegmentRowData>([])
   const createDay = useCreateAttendanceDay()
   const { data: defaults } = useAttendanceDayDefaults(user?.id, date)
   const appliedDefaultsRef = useRef(false)
@@ -458,6 +576,7 @@ function DayCreateForm({ date }: { date: string }) {
       breaks: buildBreaksPayload(rows, offset),
       work_type: workType || null,
       note: note || null,
+      leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
       reason,
     })
   }
@@ -495,6 +614,13 @@ function DayCreateForm({ date }: { date: string }) {
       <BreakRowsEditor rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
       {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
+
+      <LeaveSegmentsEditor
+        rows={leaveSegmentRows}
+        onAdd={() => addLeaveSegmentRow({ category: 'absence', start: '', end: '', note: '' })}
+        onUpdate={updateLeaveSegmentRow}
+        onRemove={removeLeaveSegmentRow}
+      />
 
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         作成理由(必須)
@@ -642,7 +768,10 @@ export function AttendanceDayPage() {
             {/* 日本語は文字間で折り返せてしまうため、nowrapにしないとタイトルが縮んで
                 actionsが2段目へ折り返さず、逆にタイトルが圧迫されてしまう。 */}
             <span className="whitespace-nowrap">{`${date}(${weekdayLabel(date)})の勤怠`}</span>
-            {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+            <span className="flex items-center gap-1.5">
+              {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}
+              {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+            </span>
           </span>
         }
         actions={
@@ -713,6 +842,39 @@ export function AttendanceDayPage() {
                   <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
                   <dd className="text-foreground"><Duration minutes={day.calculation.late_night_legal_holiday_work_minutes} /></dd>
                 </dl>
+
+                {(!!day.calculation.absence_minutes
+                  || !!day.calculation.special_leave_minutes
+                  || !!day.calculation.paid_leave_days
+                  || !!day.calculation.paid_leave_minutes) && (
+                  <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                    {!!day.calculation.absence_minutes && (
+                      <>
+                        <dt className="font-medium text-muted-foreground">欠勤時間</dt>
+                        <dd className="text-foreground"><Duration minutes={day.calculation.absence_minutes} /></dd>
+                      </>
+                    )}
+                    {!!day.calculation.special_leave_minutes && (
+                      <>
+                        <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
+                        <dd className="text-foreground"><Duration minutes={day.calculation.special_leave_minutes} /></dd>
+                      </>
+                    )}
+                    {!!day.calculation.paid_leave_days && (
+                      <>
+                        <dt className="font-medium text-muted-foreground">有給日数</dt>
+                        <dd className="text-foreground">{day.calculation.paid_leave_days}日</dd>
+                      </>
+                    )}
+                    {!!day.calculation.paid_leave_minutes && (
+                      <>
+                        <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
+                        <dd className="text-foreground"><Duration minutes={day.calculation.paid_leave_minutes} /></dd>
+                      </>
+                    )}
+                  </dl>
+                )}
+
                 <div className="flex items-center gap-2">
                   {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
                   <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
@@ -738,6 +900,18 @@ export function AttendanceDayPage() {
                 {day.breaks.map((b) => (
                   <li key={b.id}>
                     休憩 {isoToTimeLiteral(b.break_start_at) || '--:--'} 〜 {isoToTimeLiteral(b.break_end_at) || '--:--'}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!!day.leave_segments?.length && (
+              <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                {day.leave_segments.map((segment) => (
+                  <li key={segment.id}>
+                    {attendanceLeaveSegmentCategoryLabel(segment.category)}{' '}
+                    {isoToTimeLiteral(segment.start_at) || '--:--'} 〜 {isoToTimeLiteral(segment.end_at) || '--:--'}
+                    {segment.note && ` (${segment.note})`}
                   </li>
                 ))}
               </ul>

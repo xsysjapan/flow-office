@@ -10,7 +10,8 @@ export function breakShortfallWarning(workedMinutes: number, breakMinutes: numbe
   return null
 }
 
-/** 週次・月次画面で各日の行に表示する注意バッジ(未入力・打刻漏れ・休憩不足・長時間労働)を算出する。 */
+/** 週次・月次画面で各日の行に表示する注意バッジ(未入力・打刻漏れ・欠勤・休憩不足・
+ *  長時間労働)を算出する。 */
 export function dayWarnings(date: string, day: AttendanceDay | undefined, today: string): string[] {
   const warnings: string[] = []
   const isPast = date < today
@@ -18,7 +19,11 @@ export function dayWarnings(date: string, day: AttendanceDay | undefined, today:
   // 記録が無い日は行の状態バッジ自体が「未入力」を表示するため、ここでは重複させない。
   if (!day) return warnings
 
-  if (isPast && day.status !== 'clocked_out') warnings.push('打刻漏れ')
+  const hasAbsence = !!day.calculation?.absence_minutes
+  if (hasAbsence) warnings.push('欠勤')
+
+  // 欠勤として処理済みの不就労時間を、重ねて打刻漏れとして警告しない。
+  if (isPast && day.status !== 'clocked_out' && !hasAbsence) warnings.push('打刻漏れ')
 
   if (day.calculation) {
     const workedMinutes = day.calculation.work_minutes

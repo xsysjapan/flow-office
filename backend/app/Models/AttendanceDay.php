@@ -70,6 +70,14 @@ class AttendanceDay extends Model
     }
 
     /**
+     * @return HasMany<AttendanceLeaveSegment, $this>
+     */
+    public function leaveSegments(): HasMany
+    {
+        return $this->hasMany(AttendanceLeaveSegment::class);
+    }
+
+    /**
      * @return MorphMany<Attachment, $this>
      */
     public function attachments(): MorphMany

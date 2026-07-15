@@ -106,6 +106,15 @@ export interface AttendanceDailyCalculation {
   late_night_legal_holiday_work_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
+  /** 欠勤時間(分)。attendance_leave_segments(category=absence)の区間の合計時間。
+   *  docs/07-usecases-attendance.md「不就労時間の処理区分」参照。 */
+  absence_minutes?: number
+  /** その他特別休暇の時間(分)。同(category=special_leave)の合計時間。 */
+  special_leave_minutes?: number
+  /** 全休・半休の有給日数(全休=1.0・半休=0.5)。時間単位有給は含まない。 */
+  paid_leave_days?: number
+  /** 時間単位有給の消化時間(分)。 */
+  paid_leave_minutes?: number
   /** 区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正したか。実績が再編集され
    *  再計算されるとfalseに戻る。 */
   is_manually_adjusted: boolean
@@ -157,9 +166,29 @@ export interface AttendanceMonthlyCalculationTotals {
   legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  /** 終日欠勤の日数(欠勤時間がその日の所定労働時間以上になった日を1日と数える)。 */
+  absence_days?: number
+  absence_minutes?: number
+  paid_leave_days?: number
+  paid_leave_minutes?: number
+  special_leave_minutes?: number
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
+
+/** attendance_leave_segments.category。有給休暇(全休・半休・時間単位)は対象外
+ *  (paid_leave_requests/attendance_days.work_typeで管理する)。 */
+export type AttendanceLeaveSegmentCategory = 'absence' | 'special_leave'
+
+/** 勤務予定を勤務しなかった時間帯のうち、欠勤・特別休暇として処理した区間
+ *  (docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。 */
+export interface AttendanceLeaveSegment {
+  id: number
+  category: AttendanceLeaveSegmentCategory
+  start_at: string
+  end_at: string
+  note: string | null
+}
 
 export interface AttendanceDay {
   id: number
@@ -176,6 +205,7 @@ export interface AttendanceDay {
   note: string | null
   is_locked: boolean
   breaks: AttendanceBreak[]
+  leave_segments?: AttendanceLeaveSegment[]
   calculation: AttendanceDailyCalculation | null
   monthly_overtime?: MonthlyOvertimeReference | null
   planned_start_at?: string | null

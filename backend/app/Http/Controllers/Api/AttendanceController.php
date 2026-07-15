@@ -53,7 +53,7 @@ class AttendanceController extends Controller
         $today = Carbon::today($user->timezone)->toDateString();
 
         $day = AttendanceDay::query()
-            ->with(['breaks', 'calculation'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $user->id)
             ->whereDate('work_date', $today)
             ->first();
@@ -70,6 +70,7 @@ class AttendanceController extends Controller
                 'status' => 'not_started',
             ]);
             $day->setRelation('breaks', collect());
+            $day->setRelation('leaveSegments', collect());
         }
 
         // 勤務予定(shift)は勤務実績とは異なり出張先の現地時刻を持たないため、一般の日時と
@@ -92,7 +93,7 @@ class AttendanceController extends Controller
     {
         $day = $commandBus->dispatch(new ClockIn($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     #[OA\Post(
@@ -106,7 +107,7 @@ class AttendanceController extends Controller
     {
         $day = $commandBus->dispatch(new StartBreak($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     #[OA\Post(
@@ -120,7 +121,7 @@ class AttendanceController extends Controller
     {
         $day = $commandBus->dispatch(new EndBreak($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     #[OA\Post(
@@ -134,7 +135,7 @@ class AttendanceController extends Controller
     {
         $day = $commandBus->dispatch(new ClockOut($request->user()->id));
 
-        return new AttendanceDayResource($day->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     /**
@@ -162,7 +163,7 @@ class AttendanceController extends Controller
         $end = $start->copy()->addDays(6);
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'calculation'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $request->user()->id)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
@@ -203,7 +204,7 @@ class AttendanceController extends Controller
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を閲覧する権限がありません。');
 
-        return new AttendanceDayResource($attendanceDay->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($attendanceDay->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     /**
@@ -240,7 +241,7 @@ class AttendanceController extends Controller
         operationId: 'attendance.days.store',
         summary: '日次勤怠を作成する',
         tags: ['勤怠'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'leave_segments', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeDay(Request $request, CommandBus $commandBus): JsonResponse
@@ -255,6 +256,11 @@ class AttendanceController extends Controller
             'breaks.*.end' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'work_type' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
+            'leave_segments' => ['array'],
+            'leave_segments.*.category' => ['required', 'string'],
+            'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'leave_segments.*.end' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'leave_segments.*.note' => ['nullable', 'string'],
             'reason' => ['required', 'string'],
         ]);
 
@@ -268,11 +274,12 @@ class AttendanceController extends Controller
             breaks: $data['breaks'] ?? [],
             workType: $data['work_type'] ?? null,
             note: $data['note'] ?? null,
+            leaveSegments: $data['leave_segments'] ?? [],
             reason: $data['reason'],
             createdByUserId: $request->user()->id,
         ));
 
-        return (new AttendanceDayResource($day->load(['breaks', 'calculation'])))->response()->setStatusCode(201);
+        return (new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation'])))->response()->setStatusCode(201);
     }
 
     #[OA\Put(
@@ -281,7 +288,7 @@ class AttendanceController extends Controller
         summary: '日次勤怠を編集する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'leave_segments', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function updateDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
@@ -296,6 +303,11 @@ class AttendanceController extends Controller
             'breaks.*.end' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'work_type' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
+            'leave_segments' => ['array'],
+            'leave_segments.*.category' => ['required', 'string'],
+            'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'leave_segments.*.end' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
+            'leave_segments.*.note' => ['nullable', 'string'],
             'reason' => ['required', 'string'],
         ]);
 
@@ -306,15 +318,16 @@ class AttendanceController extends Controller
             breaks: $data['breaks'] ?? [],
             workType: $data['work_type'] ?? null,
             note: $data['note'] ?? null,
+            leaveSegments: $data['leave_segments'] ?? [],
             reason: $data['reason'],
             editedByUserId: $request->user()->id,
         ));
 
-        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     /**
-    * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
+     * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
      * 実績(actual_start_at/actual_end_at/breaks)が再編集され再計算されると、この補正は
      * 解除される(AttendanceDailyCalculationProjector参照)。
      */
@@ -357,7 +370,7 @@ class AttendanceController extends Controller
             adjustedByUserId: $request->user()->id,
         ));
 
-        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'calculation']));
+        return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'leaveSegments', 'calculation']));
     }
 
     /**
@@ -404,7 +417,7 @@ class AttendanceController extends Controller
         $userId = $request->user()->id;
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'calculation'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
             ->orderBy('work_date')

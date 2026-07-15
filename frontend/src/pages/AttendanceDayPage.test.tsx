@@ -245,6 +245,50 @@ describe('AttendanceDayPage', () => {
     )
   })
 
+  it('shows leave segments and their aggregated minutes on the summary', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    renderPage([
+      {
+        ...recordedDay,
+        leave_segments: [
+          { id: 1, category: 'absence', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
+        ],
+        calculation: { ...recordedDay.calculation!, absence_minutes: 120 },
+      },
+    ])
+
+    expect(await screen.findByText(/欠勤 09:00 〜 11:00 \(寝坊のため\)/)).toBeInTheDocument()
+    expect(screen.getByText('欠勤時間')).toBeInTheDocument()
+    expect(screen.getByText('欠勤あり')).toBeInTheDocument()
+  })
+
+  it('adds an absence segment on the create form and submits it (UC-A016)', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
+      source: 'none',
+      actual_start_at: null,
+      actual_end_at: null,
+      breaks: [],
+    })
+    renderPage([])
+
+    await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
+    await userEvent.click(screen.getByRole('button', { name: '欠勤・特別休暇を追加' }))
+    fireEvent.change(screen.getByLabelText('欠勤・特別休暇開始'), { target: { value: `${date}T09:00` } })
+    fireEvent.change(screen.getByLabelText('欠勤・特別休暇終了'), { target: { value: `${date}T11:00` } })
+    await userEvent.type(screen.getByLabelText('作成理由(必須)'), '午前は欠勤')
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.createAttendanceDay).toHaveBeenCalledWith(
+        expect.objectContaining({
+          leave_segments: [expect.objectContaining({ category: 'absence' })],
+        }),
+      ),
+    )
+  })
+
   it('shows the eight calculation adjustment inputs', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])

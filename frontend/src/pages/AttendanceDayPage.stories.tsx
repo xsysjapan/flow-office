@@ -114,3 +114,17 @@ export const Recorded: Story = {
 export const NoRecordYet: Story = {
   render: withSeeded([]),
 }
+
+const dayWithAbsence: AttendanceDay = {
+  ...recordedDay,
+  actual_start_at: `${date}T11:00:00+09:00`,
+  leave_segments: [
+    { id: 1, category: 'absence', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
+  ],
+  calculation: { ...recordedDay.calculation!, work_minutes: 360, absence_minutes: 120 },
+}
+
+/** 2時間遅刻し、その時間を欠勤扱いにした日(docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。 */
+export const WithAbsence: Story = {
+  render: withSeeded([dayWithAbsence], [punch]),
+}

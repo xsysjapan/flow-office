@@ -65,4 +65,13 @@ describe('dayWarnings', () => {
     }
     expect(dayWarnings('2026-07-06', day, '2026-07-06')).toContain('長時間労働')
   })
+
+  it('warns of 欠勤 when the daily calculation reports absence minutes, without also warning 打刻漏れ', () => {
+    const day: AttendanceDay = {
+      ...baseDay,
+      status: 'not_started',
+      calculation: { ...baseDay.calculation!, absence_minutes: 480 },
+    }
+    expect(dayWarnings('2026-07-01', day, '2026-07-06')).toEqual(['欠勤'])
+  })
 })

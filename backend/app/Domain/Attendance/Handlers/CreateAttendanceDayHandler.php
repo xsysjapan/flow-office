@@ -14,6 +14,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceLeaveSegmentCategory;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
@@ -77,6 +78,8 @@ class CreateAttendanceDayHandler implements CommandHandler
             ]);
         }
 
+        $this->createLeaveSegments($day, $command->leaveSegments);
+
         $this->eventStore->append(
             aggregateType: 'attendance_day',
             aggregateId: (string) $day->id,
@@ -89,7 +92,7 @@ class CreateAttendanceDayHandler implements CommandHandler
             ),
         );
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',
@@ -116,6 +119,8 @@ class CreateAttendanceDayHandler implements CommandHandler
             $command->actualEndAt,
             ...array_column($command->breaks, 'start'),
             ...array_column($command->breaks, 'end'),
+            ...array_column($command->leaveSegments, 'start'),
+            ...array_column($command->leaveSegments, 'end'),
         ], fn (?string $value) => $value !== null);
 
         $resolved = null;
@@ -134,5 +139,32 @@ class CreateAttendanceDayHandler implements CommandHandler
         $defaultTimezone = SystemSetting::current()->default_timezone;
 
         return intdiv(Carbon::parse($command->workDate, $defaultTimezone)->getOffset(), 60);
+    }
+
+    /**
+     * 欠勤・特別休暇の区間(有給休暇を除く)を作成する。
+     *
+     * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
+     */
+    private function createLeaveSegments(AttendanceDay $day, array $leaveSegments): void
+    {
+        foreach ($leaveSegments as $segment) {
+            if (! in_array($segment['category'], AttendanceLeaveSegmentCategory::values(), true)) {
+                throw new DomainRuleException("不明な処理区分です: {$segment['category']}");
+            }
+
+            $start = LocalDateTime::splitOffset($segment['start'])[0];
+            $end = LocalDateTime::splitOffset($segment['end'])[0];
+            if (! $end->greaterThan($start)) {
+                throw new DomainRuleException('欠勤・特別休暇の終了時刻は開始時刻より後にしてください。');
+            }
+
+            $day->leaveSegments()->create([
+                'category' => $segment['category'],
+                'start_at' => $start,
+                'end_at' => $end,
+                'note' => $segment['note'] ?? null,
+            ]);
+        }
     }
 }
