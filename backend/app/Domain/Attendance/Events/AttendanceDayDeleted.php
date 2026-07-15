@@ -12,6 +12,7 @@ class AttendanceDayDeleted implements DomainEvent
         public readonly string $workDate,
         public readonly string $reason,
         public readonly int $deletedByUserId,
+        public readonly string $punchLogAction,
     ) {}
 
     public function eventType(): string
@@ -27,6 +28,7 @@ class AttendanceDayDeleted implements DomainEvent
             'work_date' => $this->workDate,
             'reason' => $this->reason,
             'deleted_by_user_id' => $this->deletedByUserId,
+            'punch_log_action' => $this->punchLogAction,
         ];
     }
 }

@@ -4,12 +4,17 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
+use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
+use App\Domain\Attendance\Services\AttendanceDayPunchSyncer;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
+use App\Models\AttendancePunch;
+use App\Models\PunchStatus;
+use Illuminate\Support\Carbon;
 
 /**
  * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能で、
@@ -24,6 +29,7 @@ class DeleteAttendanceDayHandler implements CommandHandler
     public function __construct(
         private readonly EventStore $eventStore,
         private readonly AttendanceEditGuard $guard,
+        private readonly AttendanceDayPunchSyncer $punchSyncer,
     ) {}
 
     public function handle(Command $command): mixed
@@ -43,11 +49,12 @@ class DeleteAttendanceDayHandler implements CommandHandler
             aggregateType: 'attendance_day',
             aggregateId: (string) $day->id,
             event: new AttendanceDayDeleted(
-                attendanceDayId: $day->id,
-                userId: $day->user_id,
-                workDate: $workDate,
-                reason: $command->reason,
-                deletedByUserId: $command->deletedByUserId,
+                $day->id,
+                $day->user_id,
+                $workDate,
+                $command->reason,
+                $command->deletedByUserId,
+                $command->punchLogAction,
             ),
         );
 
@@ -55,6 +62,34 @@ class DeleteAttendanceDayHandler implements CommandHandler
         // 外部キーのcascadeOnDeleteで併せて削除される。paid_leave_usages は上のチェックで
         // 存在しないことを保証済み。
         $day->delete();
+
+        if ($command->punchLogAction === DeleteAttendanceDay::DELETE_PUNCHES) {
+            AttendancePunch::query()
+                ->where('user_id', $day->user_id)
+                ->whereDate('work_date', $workDate)
+                ->where('status', PunchStatus::ACTIVE)
+                ->each(function (AttendancePunch $punch) use ($command): void {
+                    $punch->status = PunchStatus::DELETED;
+                    $punch->correction_reason = $command->reason;
+                    $punch->corrected_by_user_id = $command->deletedByUserId;
+                    $punch->corrected_at = Carbon::now();
+                    $punch->save();
+
+                    $this->eventStore->append(
+                        aggregateType: 'attendance_punch',
+                        aggregateId: (string) $punch->id,
+                        event: new AttendancePunchDeleted(
+                            attendancePunchId: $punch->id,
+                            reason: $command->reason,
+                            deletedByUserId: $command->deletedByUserId,
+                        ),
+                    );
+                });
+        }
+
+        if ($command->punchLogAction === DeleteAttendanceDay::RECREATE_FROM_PUNCHES) {
+            $this->punchSyncer->sync($day->user_id, $workDate);
+        }
 
         return null;
     }

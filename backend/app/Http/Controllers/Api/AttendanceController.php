@@ -385,19 +385,27 @@ class AttendanceController extends Controller
         summary: '日次勤怠を削除する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string'), new OA\Property(property: 'punch_log_action', type: 'string', enum: ['leave_punches', 'delete_punches', 'recreate_from_punches'])])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function destroyDay(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): JsonResponse
     {
         $this->abortUnlessOwnerOrAdmin($request, $attendanceDay->user_id, '他の社員の日次勤怠を削除する権限がありません。');
 
-        $data = $request->validate(['reason' => ['required', 'string']]);
+        $data = $request->validate([
+            'reason' => ['required', 'string'],
+            'punch_log_action' => ['nullable', Rule::in([
+                DeleteAttendanceDay::LEAVE_PUNCHES,
+                DeleteAttendanceDay::DELETE_PUNCHES,
+                DeleteAttendanceDay::RECREATE_FROM_PUNCHES,
+            ])],
+        ]);
 
         $commandBus->dispatch(new DeleteAttendanceDay(
             attendanceDayId: $attendanceDay->id,
             reason: $data['reason'],
             deletedByUserId: $request->user()->id,
+            punchLogAction: $data['punch_log_action'] ?? DeleteAttendanceDay::LEAVE_PUNCHES,
         ));
 
         return response()->json(['deleted' => true]);

@@ -19,6 +19,7 @@ import {
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
 import type { AttendanceDay, AttendanceDayDefaults, AttendanceLeaveSegmentCategory, AttendancePunch, PunchType } from '../api/types'
+import type { AttendanceDayPunchLogAction } from '../api/attendance'
 import { useEditableRows } from '../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
@@ -449,9 +450,10 @@ function PunchLogCard({ date }: { date: string }) {
 }
 
 /** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
-function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: () => void }) {
+function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (punchLogAction: AttendanceDayPunchLogAction) => void }) {
   const [isOpen, setIsOpen] = useState(false)
   const [reason, setReason] = useState('')
+  const [punchLogAction, setPunchLogAction] = useState<AttendanceDayPunchLogAction>('leave_punches')
   const deleteDay = useDeleteAttendanceDay()
 
   return (
@@ -461,6 +463,7 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: ()
         setIsOpen(open)
         if (open) {
           setReason('')
+          setPunchLogAction('leave_punches')
           deleteDay.reset()
         }
       }}
@@ -482,6 +485,15 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: ()
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
+        <NativeSelect
+          aria-label="打刻ログの扱い"
+          value={punchLogAction}
+          onChange={(e) => setPunchLogAction(e.target.value as AttendanceDayPunchLogAction)}
+        >
+          <option value="leave_punches">打刻ログはそのまま残す</option>
+          <option value="delete_punches">有効な打刻ログも削除する</option>
+          <option value="recreate_from_punches">打刻ログに合わせて日次勤怠を再作成する</option>
+        </NativeSelect>
         <DialogFooter>
           <Button variant="secondary" onClick={() => setIsOpen(false)}>
             キャンセル
@@ -490,7 +502,7 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: ()
             variant="danger"
             isLoading={deleteDay.isPending}
             disabled={!reason}
-            onClick={() => deleteDay.mutate({ id: day.id, reason }, { onSuccess: () => onDeleted() })}
+            onClick={() => deleteDay.mutate({ id: day.id, input: { reason, punch_log_action: punchLogAction } }, { onSuccess: () => onDeleted(punchLogAction) })}
           >
             削除する
           </Button>
@@ -844,7 +856,7 @@ export function AttendanceDayPage() {
           </span>
         }
         navigation={
-          <>
+          <div className="flex gap-2">
             <Button asChild variant="secondary" size="icon" title="前日" aria-label="前日">
               <Link to={`/attendance/days/${addDays(date, -1)}`}>
                 <ChevronLeft aria-hidden="true" />
@@ -870,7 +882,7 @@ export function AttendanceDayPage() {
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
-          </>
+          </div>
         }
       >
         {day && !isEditing && (
@@ -916,33 +928,33 @@ export function AttendanceDayPage() {
                   || !!day.calculation.special_leave_minutes
                   || !!day.calculation.paid_leave_days
                   || !!day.calculation.paid_leave_minutes) && (
-                  <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-                    {!!day.calculation.absence_minutes && (
-                      <>
-                        <dt className="font-medium text-muted-foreground">欠勤時間</dt>
-                        <dd className="text-foreground"><Duration minutes={day.calculation.absence_minutes} /></dd>
-                      </>
-                    )}
-                    {!!day.calculation.special_leave_minutes && (
-                      <>
-                        <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
-                        <dd className="text-foreground"><Duration minutes={day.calculation.special_leave_minutes} /></dd>
-                      </>
-                    )}
-                    {!!day.calculation.paid_leave_days && (
-                      <>
-                        <dt className="font-medium text-muted-foreground">有給日数</dt>
-                        <dd className="text-foreground">{day.calculation.paid_leave_days}日</dd>
-                      </>
-                    )}
-                    {!!day.calculation.paid_leave_minutes && (
-                      <>
-                        <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
-                        <dd className="text-foreground"><Duration minutes={day.calculation.paid_leave_minutes} /></dd>
-                      </>
-                    )}
-                  </dl>
-                )}
+                    <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                      {!!day.calculation.absence_minutes && (
+                        <>
+                          <dt className="font-medium text-muted-foreground">欠勤時間</dt>
+                          <dd className="text-foreground"><Duration minutes={day.calculation.absence_minutes} /></dd>
+                        </>
+                      )}
+                      {!!day.calculation.special_leave_minutes && (
+                        <>
+                          <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
+                          <dd className="text-foreground"><Duration minutes={day.calculation.special_leave_minutes} /></dd>
+                        </>
+                      )}
+                      {!!day.calculation.paid_leave_days && (
+                        <>
+                          <dt className="font-medium text-muted-foreground">有給日数</dt>
+                          <dd className="text-foreground">{day.calculation.paid_leave_days}日</dd>
+                        </>
+                      )}
+                      {!!day.calculation.paid_leave_minutes && (
+                        <>
+                          <dt className="font-medium text-muted-foreground">有給時間(時間単位)</dt>
+                          <dd className="text-foreground"><Duration minutes={day.calculation.paid_leave_minutes} /></dd>
+                        </>
+                      )}
+                    </dl>
+                  )}
 
                 <div className="flex items-center gap-2">
                   {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
@@ -1013,7 +1025,12 @@ export function AttendanceDayPage() {
               >
                 編集
               </Button>
-              <DeleteDayDialog day={day} onDeleted={() => navigate(-1)} />
+              <DeleteDayDialog
+                day={day}
+                onDeleted={(punchLogAction) => {
+                  if (punchLogAction !== 'recreate_from_punches') navigate(-1)
+                }}
+              />
             </div>
           </div>
         )}

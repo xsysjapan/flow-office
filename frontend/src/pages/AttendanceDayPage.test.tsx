@@ -125,9 +125,15 @@ describe('AttendanceDayPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '削除' }))
     await userEvent.type(screen.getByLabelText('削除理由'), '二重入力の削除')
+    await userEvent.selectOptions(screen.getByLabelText('打刻ログの扱い'), 'delete_punches')
     await userEvent.click(screen.getByRole('button', { name: '削除する' }))
 
-    await waitFor(() => expect(attendanceApi.deleteAttendanceDay).toHaveBeenCalledWith(1, '二重入力の削除'))
+    await waitFor(() =>
+      expect(attendanceApi.deleteAttendanceDay).toHaveBeenCalledWith(1, {
+        reason: '二重入力の削除',
+        punch_log_action: 'delete_punches',
+      }),
+    )
   })
 
   it('shows the punch log and corrects an active punch (UC-A013)', async () => {

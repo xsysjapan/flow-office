@@ -117,10 +117,10 @@ export function AttendanceMonthDetailPage() {
             </Button>
           </div>
         )}
-      </Card>
 
-      {data?.monthly_calculation_totals && (
-        <Card title="今月の集計">
+        {data?.monthly_calculation_totals && (
+          <div className="mt-4 border-t border-border pt-4">
+            <h3 className="mb-3 text-sm font-medium text-foreground">今月の集計</h3>
           <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
             <dt className="font-medium text-muted-foreground">所定労働時間</dt>
             <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.prescribed_work_minutes} /></dd>
@@ -160,8 +160,9 @@ export function AttendanceMonthDetailPage() {
             <dt className="font-medium text-muted-foreground">特別休暇時間</dt>
             <dd className="text-foreground"><Duration minutes={data.monthly_calculation_totals.special_leave_minutes ?? 0} /></dd>
           </dl>
-        </Card>
-      )}
+          </div>
+        )}
+      </Card>
 
       <Card title="日別の内訳">
         <ul className="divide-y divide-border">

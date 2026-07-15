@@ -10,9 +10,16 @@ use App\Domain\EventSourcing\Contracts\Command;
  */
 class DeleteAttendanceDay implements Command
 {
+    public const LEAVE_PUNCHES = 'leave_punches';
+
+    public const DELETE_PUNCHES = 'delete_punches';
+
+    public const RECREATE_FROM_PUNCHES = 'recreate_from_punches';
+
     public function __construct(
         public readonly int $attendanceDayId,
         public readonly string $reason,
         public readonly int $deletedByUserId,
+        public readonly string $punchLogAction = self::LEAVE_PUNCHES,
     ) {}
 }

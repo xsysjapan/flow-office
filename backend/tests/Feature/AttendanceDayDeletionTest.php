@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
+use App\Models\AttendancePunch;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
@@ -37,6 +38,55 @@ class AttendanceDayDeletionTest extends TestCase
         $response->assertOk();
 
         $this->assertNull(AttendanceDay::query()->find($dayId));
+    }
+
+    public function test_deleting_a_day_can_mark_its_active_punches_as_deleted(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", [
+            'reason' => '打刻誤りのため削除',
+            'punch_log_action' => 'delete_punches',
+        ])->assertOk();
+
+        $this->assertNull(AttendanceDay::query()->find($dayId));
+        $this->assertSame(['deleted', 'deleted'], AttendancePunch::query()->pluck('status')->all());
+        $this->assertSame(['打刻誤りのため削除', '打刻誤りのため削除'], AttendancePunch::query()->pluck('correction_reason')->all());
+    }
+
+    public function test_deleting_a_day_can_recreate_it_from_consistent_punches(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+
+        $this->actingAs($employee)->postJson('/api/attendance-punches', [
+            'work_date' => $workDate,
+            'punch_type' => 'clock_in',
+            'punched_at' => "{$workDate}T09:00:00+09:00",
+            'source' => 'web',
+        ])->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance-punches', [
+            'work_date' => $workDate,
+            'punch_type' => 'clock_out',
+            'punched_at' => "{$workDate}T18:00:00+09:00",
+            'source' => 'web',
+        ])->assertSuccessful();
+        $dayId = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->value('id');
+
+        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", [
+            'reason' => '打刻内容で再作成',
+            'punch_log_action' => 'recreate_from_punches',
+        ])->assertOk();
+
+        $recreatedDay = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $this->assertNotNull($recreatedDay);
+        $this->assertNotSame($dayId, $recreatedDay->id);
+        $this->assertSame('punch', $recreatedDay->source);
+        $this->assertSame('clocked_out', $recreatedDay->status);
     }
 
     /**

@@ -165,8 +165,12 @@ export function TodayAttendancePage() {
         <Card
           title="今日の勤怠"
           actions={
-            <div className="flex items-center gap-2">
+            <span className="flex w-full items-center justify-between gap-2">
               <Badge tone={tone}>{label}</Badge>
+            </span>
+          }
+          navigation={
+            <div className="flex gap-2">
               <Button asChild variant="secondary">
                 <Link to={`/attendance/days/${day.work_date}`}>日次勤怠</Link>
               </Button>

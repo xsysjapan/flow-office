@@ -25,6 +25,7 @@ import {
   type CorrectAttendancePunchInput,
   type CreateAttendanceDayInput,
   type CreateAttendancePunchInput,
+  type DeleteAttendanceDayInput,
   type EditAttendanceDayInput,
 } from '../api/attendance'
 import { downloadAttendanceCsv } from '../api/exports'
@@ -122,8 +123,9 @@ export function useDeleteAttendanceDay() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) => deleteAttendanceDay(id, reason),
+    mutationFn: ({ id, input }: { id: number; input: DeleteAttendanceDayInput }) => deleteAttendanceDay(id, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
       void queryClient.invalidateQueries({ queryKey: WEEK_KEY })

@@ -88,9 +88,16 @@ export function createAttendanceDay(input: CreateAttendanceDayInput): Promise<At
   return apiFetch('/attendance/days', { method: 'POST', body: input })
 }
 
+export type AttendanceDayPunchLogAction = 'leave_punches' | 'delete_punches' | 'recreate_from_punches'
+
+export interface DeleteAttendanceDayInput {
+  reason: string
+  punch_log_action: AttendanceDayPunchLogAction
+}
+
 /** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
-export function deleteAttendanceDay(id: number, reason: string): Promise<{ deleted: boolean }> {
-  return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: { reason } })
+export function deleteAttendanceDay(id: number, input: DeleteAttendanceDayInput): Promise<{ deleted: boolean }> {
+  return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: input })
 }
 
 /** UC-A012: 指定した勤務日範囲の打刻ログ(訂正済み・削除済みも含む)を取得する。 */
