@@ -254,7 +254,7 @@ class LegalHolidayUndeterminedTest extends TestCase
         ])->assertSuccessful();
 
         $week = collect($response->json('weekly_overtime_reference'))->firstWhere('week_start_date', '2026-06-01');
-        $this->assertSame(2880, $week['actual_work_minutes'], '法定休日労働(日曜)は週の実働集計に含めない');
+        $this->assertSame(2880, $week['work_minutes'], '法定休日労働(日曜)は週の労働時間集計に含めない');
         $this->assertSame(300, $week['legal_holiday_work_minutes']);
     }
 }

@@ -45,6 +45,9 @@ export function AttendanceDayRow({ date, day, warnings = [] }: AttendanceDayRowP
             {isoToTimeLiteral(day.actual_start_at) || '--:--'} 〜 {isoToTimeLiteral(day.actual_end_at) || '--:--'}
           </span>
         )}
+        {day?.calculation && (
+          <span className="text-sm text-muted-foreground">労働時間 {day.calculation.work_minutes}分</span>
+        )}
         <span className="ml-auto text-sm text-muted-foreground">詳細を見る ›</span>
       </Link>
     </li>

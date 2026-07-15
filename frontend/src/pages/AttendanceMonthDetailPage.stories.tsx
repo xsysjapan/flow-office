@@ -62,20 +62,20 @@ const month: AttendanceMonth = {
 }
 
 const monthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
-  actual_work_minutes: 2820,
+  work_minutes: 2820,
   payroll_work_minutes: 2820,
   prescribed_work_minutes: 2400,
-  non_statutory_overtime_minutes: 60,
-  statutory_overtime_minutes: 360,
-  statutory_overtime_within_60h_minutes: 360,
-  statutory_overtime_over_60h_minutes: 0,
-  late_night_minutes: 0,
-  regular_work_late_night_minutes: 0,
-  non_statutory_overtime_late_night_minutes: 0,
-  statutory_overtime_late_night_minutes: 0,
+  statutory_within_overtime_minutes: 60,
+  statutory_excess_overtime_minutes: 360,
+  statutory_excess_overtime_within_60h_minutes: 360,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
   legal_holiday_work_minutes: 0,
-  company_holiday_work_minutes: 0,
-  legal_holiday_late_night_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
 }
 
 const days: AttendanceDay[] = [

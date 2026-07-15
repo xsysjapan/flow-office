@@ -90,7 +90,7 @@ class WeeklyOvertimeCalculationTest extends TestCase
     }
 
     /**
-     * @return array{week_start_date: string, week_end_date: string, actual_work_minutes: int, daily_statutory_overtime_minutes: int, weekly_statutory_overtime_minutes: int, legal_holiday_work_minutes: int}
+     * @return array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}
      */
     private function weekReference(TestResponse $response, string $weekStartDate): array
     {
@@ -103,16 +103,16 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $workStyle = $this->makeWorkStyle($calendar);
         $user = User::factory()->create();
 
-        // 2026-06-01(月)〜06-06(土)を7時間実働(週42時間)にする。どの日も8時間を超えない。
+        // 2026-06-01(月)〜06-06(土)を7時間労働(週42時間)にする。どの日も8時間を超えない。
         foreach (['06-01', '06-02', '06-03', '06-04', '06-05', '06-06'] as $day) {
             $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '17:00');
         }
 
         $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
 
-        $this->assertSame(2520, $week['actual_work_minutes']);
-        $this->assertSame(0, $week['daily_statutory_overtime_minutes']);
-        $this->assertSame(120, $week['weekly_statutory_overtime_minutes']);
+        $this->assertSame(2520, $week['work_minutes']);
+        $this->assertSame(0, $week['daily_statutory_excess_overtime_minutes']);
+        $this->assertSame(120, $week['weekly_statutory_excess_overtime_minutes']);
     }
 
     public function test_daily_and_weekly_statutory_overtime_are_not_double_counted(): void
@@ -129,8 +129,8 @@ class WeeklyOvertimeCalculationTest extends TestCase
 
         $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
 
-        $this->assertSame(120, $week['daily_statutory_overtime_minutes'], '金曜の日8時間超(2時間)のみ');
-        $this->assertSame(0, $week['weekly_statutory_overtime_minutes'], '日次で計上済みの時間を除けば週40時間ちょうどのため0');
+        $this->assertSame(120, $week['daily_statutory_excess_overtime_minutes'], '金曜の日8時間超(2時間)のみ');
+        $this->assertSame(0, $week['weekly_statutory_excess_overtime_minutes'], '日次で計上済みの時間を除けば週40時間ちょうどのため0');
     }
 
     public function test_company_holiday_work_is_included_in_the_weekly_forty_hour_threshold(): void
@@ -146,11 +146,11 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $this->recordDay($user, $workStyle, '2026-06-06', '09:00', '19:00', isCompanyHoliday: true);
 
         $saturday = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-06-06')->firstOrFail();
-        $this->assertSame(60, $saturday->calculation->statutory_overtime_minutes, '所定休日でも日8時間超は法定時間外になる');
+        $this->assertSame(60, $saturday->calculation->statutory_excess_overtime_minutes, '所定休日でも日8時間超は法定時間外になる');
 
         $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
-        $this->assertSame(60, $week['daily_statutory_overtime_minutes']);
-        $this->assertSame(480, $week['weekly_statutory_overtime_minutes'], '週40時間超過分(合計49時間-40時間-日次計上済み1時間)');
+        $this->assertSame(60, $week['daily_statutory_excess_overtime_minutes']);
+        $this->assertSame(480, $week['weekly_statutory_excess_overtime_minutes'], '週40時間超過分(合計49時間-40時間-日次計上済み1時間)');
     }
 
     public function test_legal_holiday_work_is_excluded_from_the_weekly_forty_hour_aggregation(): void
@@ -167,8 +167,8 @@ class WeeklyOvertimeCalculationTest extends TestCase
 
         $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
 
-        $this->assertSame(2400, $week['actual_work_minutes'], '法定休日労働は週の実働集計に含めない');
-        $this->assertSame(0, $week['weekly_statutory_overtime_minutes']);
+        $this->assertSame(2400, $week['work_minutes'], '法定休日労働は週の労働時間集計に含めない');
+        $this->assertSame(0, $week['weekly_statutory_excess_overtime_minutes']);
         $this->assertSame(300, $week['legal_holiday_work_minutes']);
     }
 
@@ -184,6 +184,6 @@ class WeeklyOvertimeCalculationTest extends TestCase
 
         $response = $this->submitMonth($user, '2026-06');
 
-        $this->assertArrayNotHasKey('weekly_statutory_overtime_minutes', $response->json('snapshot'));
+        $this->assertArrayNotHasKey('weekly_statutory_excess_overtime_minutes', $response->json('snapshot'));
     }
 }

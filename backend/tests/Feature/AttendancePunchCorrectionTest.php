@@ -81,8 +81,8 @@ class AttendancePunchCorrectionTest extends TestCase
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
         $this->assertNotNull($day);
         $this->assertSame('punch', $day->source);
-        // 休憩なしの09:00〜18:00勤務なので実働9時間(540分)。
-        $this->assertSame(540, $day->calculation->actual_work_minutes);
+        // 休憩なしの09:00〜18:00勤務なので労働時間9時間(540分)。
+        $this->assertSame(540, $day->calculation->work_minutes);
     }
 
     public function test_deleting_a_duplicate_punch_resyncs_the_attendance_day(): void

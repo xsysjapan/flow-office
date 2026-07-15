@@ -8,7 +8,7 @@ use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
- * 日次勤怠の実働・残業・深夜・休日労働を計算する。
+ * 日次勤怠の労働時間・残業・深夜・休日労働を計算する。
  *
  * 注意 (.claude/skills/attendance-calc-review 参照):
  * - 1日8時間の法定労働時間・22:00〜05:00の深夜時間は労働基準法で定められた値であり、
@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  *   (docs/08-usecases-calendar-shift.md「1か月単位変形労働時間制」参照)。
  * - 裁量労働制(work_time_system=discretionary)は、実労働時間ではなくみなし時間
  *   (work_styles.deemed_daily_minutes)を給与計算上の労働時間(payroll_work_minutes)とする。
- *   実労働時間(actual_work_minutes)は健康管理のための実績として別途保持し、両者を混同しない。
+ *   実労働時間(work_minutes)は健康管理のための実績として別途保持し、両者を混同しない。
  *   深夜・法定休日・法定外休日の労働は、みなし時間ではなく実際の時刻から計算する。
  * - 管理監督者(work_time_system=manager_supervisor)は労働時間・休憩・休日の規定の適用が
  *   除外されるため、残業・休日の割増計算対象にはしない。ただし深夜割増は適用される。
@@ -29,18 +29,18 @@ use Illuminate\Support\Carbon;
  * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
  *   (WeeklyOvertimeCalculator)として別途都度計算する。月60時間超の判定も同様に
  *   MonthlyOvertimeCalculatorが日次実績から都度計算する参考情報とし、ここでは計算しない。
- * - 深夜時間帯(22:00〜05:00)の労働は、区分別に`regular_work_late_night_minutes`(所定内労働の
- *   深夜)・`non_statutory_overtime_late_night_minutes`(所定内残業の深夜)・
- *   `statutory_overtime_late_night_minutes`(法定外残業の深夜=法定外深夜)の3区分に分解する。
- *   残業は勤務時間の末尾から発生する前提(休憩を除いた実働時間を始業から時系列に辿り、所定内
- *   労働→所定内残業→法定外残業の順に消化する)で、各区分の境界時刻を求め、区分ごとに深夜
- *   時間帯と重なる分を算出する(3区分の合計は`late_night_minutes`に一致する)。裁量労働制・
- *   管理監督者・フレックスタイム制など実働時間から法定外残業を判定しない勤務形態、および
+ * - 深夜時間帯(22:00〜05:00)の労働は、区分別に`late_night_prescribed_work_minutes`(所定労働の
+ *   深夜)・`late_night_statutory_within_overtime_minutes`(法定内残業の深夜)・
+ *   `late_night_statutory_excess_overtime_minutes`(法定外残業の深夜)の3区分に分解する。
+ *   残業は勤務時間の末尾から発生する前提(休憩を除いた労働時間を始業から時系列に辿り、所定
+ *   労働→法定内残業→法定外残業の順に消化する)で、各区分の境界時刻を求め、区分ごとに深夜
+ *   時間帯と重なる分を算出する(3区分の合計は`late_night_work_minutes`に一致する)。裁量労働制・
+ *   管理監督者・フレックスタイム制など労働時間から法定外残業を判定しない勤務形態、および
  *   法定休日では算出しない(0とする。管理監督者・フレックスは所定内/所定外の区分自体が
- *   常に0になるため、深夜労働があれば全て`regular_work_late_night_minutes`に計上される)。
+ *   常に0になるため、深夜時間があれば全て`late_night_prescribed_work_minutes`に計上される)。
  * - フレックスタイム制(work_time_system=flex)は、日次の始業・終業時刻ではなく清算期間
- *   全体で労働時間を管理するため(指示書 7.1節)、日次の残業判定(non_statutory_overtime_minutes
- *   / statutory_overtime_minutes)は行わず常に0とする(週40時間の法定労働時間総枠に基づく
+ *   全体で労働時間を管理するため(指示書 7.1節)、日次の残業判定(statutory_within_overtime_minutes
+ *   / statutory_excess_overtime_minutes)は行わず常に0とする(週40時間の法定労働時間総枠に基づく
  *   清算期間単位の過不足判定は、初期実装では簡略化しFlexSettlementSummaryCalculatorが
  *   清算期間の必要労働時間との単純な過不足のみを算出する。参考情報であり給与計算上の
  *   確定値ではない)。深夜・法定休日・法定外休日の労働は実際の時刻から通常通り計算する。
@@ -77,16 +77,16 @@ class AttendanceCalculator
 
         $breakMinutes = $breaks->sum(fn ($break) => $break->break_start_at->diffInMinutes($break->break_end_at));
 
-        $actualWorkMinutes = 0;
-        $lateNightMinutes = 0;
+        $workMinutes = 0;
+        $lateNightWorkMinutes = 0;
         if ($start !== null && $end !== null) {
-            $actualWorkMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes);
+            $workMinutes = max(0, $start->diffInMinutes($end) - $breakMinutes);
 
-            $lateNightMinutes = $this->lateNightOverlapMinutes($start, $end);
+            $lateNightWorkMinutes = $this->lateNightOverlapMinutes($start, $end);
             foreach ($breaks as $break) {
-                $lateNightMinutes -= $this->lateNightOverlapMinutes($break->break_start_at, $break->break_end_at);
+                $lateNightWorkMinutes -= $this->lateNightOverlapMinutes($break->break_start_at, $break->break_end_at);
             }
-            $lateNightMinutes = max(0, $lateNightMinutes);
+            $lateNightWorkMinutes = max(0, $lateNightWorkMinutes);
         }
 
         $shift = $day->shiftAssignment;
@@ -118,55 +118,55 @@ class AttendanceCalculator
         // 法定休日の労働は日8時間の判定に乗せず、全て法定休日労働として扱う。
         // 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、1日8時間・
         // 週40時間の判定からは除外しない(所定休日での「所定」は0分として扱う)。
-        $nonStatutoryOvertimeMinutes = 0;
-        $statutoryOvertimeMinutes = 0;
+        $statutoryWithinOvertimeMinutes = 0;
+        $statutoryExcessOvertimeMinutes = 0;
         if (! $isLegalHoliday) {
             $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : ($isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes);
-            $statutoryOvertimeMinutes = max(0, $actualWorkMinutes - $legalDailyLimitMinutes);
-            $withinLegalMinutes = min($actualWorkMinutes, $legalDailyLimitMinutes);
-            $nonStatutoryOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
+            $statutoryExcessOvertimeMinutes = max(0, $workMinutes - $legalDailyLimitMinutes);
+            $withinLegalMinutes = min($workMinutes, $legalDailyLimitMinutes);
+            $statutoryWithinOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
         }
 
         // 裁量労働制のみなし時間は8時間を超えた部分のみが法定時間外になる(所定内/所定外の
         // 区分はみなし制度上意味を持たないため0とする)。実労働時間ベースの計算を上書きする。
         if ($deemedWorkMinutes > 0) {
-            $statutoryOvertimeMinutes = max(0, $deemedWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
-            $nonStatutoryOvertimeMinutes = 0;
+            $statutoryExcessOvertimeMinutes = max(0, $deemedWorkMinutes - self::LEGAL_DAILY_LIMIT_MINUTES);
+            $statutoryWithinOvertimeMinutes = 0;
         }
 
         // 管理監督者は労働時間・休憩・休日の規定の適用が除外されるため、残業・休日の
-        // 割増計算対象にはしない(深夜割増は対象のためlate_night_minutesはここでは変更しない)。
+        // 割増計算対象にはしない(深夜割増は対象のためlate_night_work_minutesはここでは変更しない)。
         if ($isManagerSupervisor) {
-            $statutoryOvertimeMinutes = 0;
-            $nonStatutoryOvertimeMinutes = 0;
+            $statutoryExcessOvertimeMinutes = 0;
+            $statutoryWithinOvertimeMinutes = 0;
         }
 
         // フレックスタイム制は清算期間全体で労働時間を管理するため、日次の残業判定は行わない
         // (清算期間単位の過不足はFlexSettlementSummaryCalculatorが別途算出する)。
         if ($isFlex) {
-            $statutoryOvertimeMinutes = 0;
-            $nonStatutoryOvertimeMinutes = 0;
+            $statutoryExcessOvertimeMinutes = 0;
+            $statutoryWithinOvertimeMinutes = 0;
         }
 
-        $payrollWorkMinutes = $deemedWorkMinutes > 0 ? $deemedWorkMinutes : $actualWorkMinutes;
+        $payrollWorkMinutes = $deemedWorkMinutes > 0 ? $deemedWorkMinutes : $workMinutes;
 
         $coreTimeViolation = $this->isCoreTimeViolated($isFlex, $workStyle, $day->work_date, $start, $end);
 
-        // 残業が実際の勤務時刻(実働時間)から判定されている場合のみ、深夜時間帯を所定内労働/
-        // 所定内残業/法定外残業の3区分に分解する。裁量労働制のみなし時間ベースの判定、
+        // 残業が実際の勤務時刻(労働時間)から判定されている場合のみ、深夜時間帯を所定労働/
+        // 法定内残業/法定外残業の3区分に分解する。裁量労働制のみなし時間ベースの判定、
         // 法定休日では算出しない(0のまま)。
-        $regularWorkLateNightMinutes = 0;
-        $nonStatutoryOvertimeLateNightMinutes = 0;
-        $statutoryOvertimeLateNightMinutes = 0;
-        if ($deemedWorkMinutes === 0 && ! $isLegalHoliday && $start !== null && $end !== null && $lateNightMinutes > 0) {
-            $regularWorkMinutes = max(0, $actualWorkMinutes - $nonStatutoryOvertimeMinutes - $statutoryOvertimeMinutes);
+        $lateNightPrescribedWorkMinutes = 0;
+        $lateNightStatutoryWithinOvertimeMinutes = 0;
+        $lateNightStatutoryExcessOvertimeMinutes = 0;
+        if ($deemedWorkMinutes === 0 && ! $isLegalHoliday && $start !== null && $end !== null && $lateNightWorkMinutes > 0) {
+            $regularWorkMinutes = max(0, $workMinutes - $statutoryWithinOvertimeMinutes - $statutoryExcessOvertimeMinutes);
             $nonStatutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes);
-            $statutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes + $nonStatutoryOvertimeMinutes);
+            $statutoryOvertimeBoundary = $this->findOvertimeBoundary($start, $end, $breaks, $regularWorkMinutes + $statutoryWithinOvertimeMinutes);
 
-            $regularWorkLateNightMinutes = $this->lateNightOverlapMinutesInRange($start, $nonStatutoryOvertimeBoundary ?? $end, $breaks);
+            $lateNightPrescribedWorkMinutes = $this->lateNightOverlapMinutesInRange($start, $nonStatutoryOvertimeBoundary ?? $end, $breaks);
 
             if ($nonStatutoryOvertimeBoundary !== null) {
-                $nonStatutoryOvertimeLateNightMinutes = $this->lateNightOverlapMinutesInRange(
+                $lateNightStatutoryWithinOvertimeMinutes = $this->lateNightOverlapMinutesInRange(
                     $nonStatutoryOvertimeBoundary,
                     $statutoryOvertimeBoundary ?? $end,
                     $breaks,
@@ -174,25 +174,25 @@ class AttendanceCalculator
             }
 
             if ($statutoryOvertimeBoundary !== null) {
-                $statutoryOvertimeLateNightMinutes = $this->lateNightOverlapMinutesInRange($statutoryOvertimeBoundary, $end, $breaks);
+                $lateNightStatutoryExcessOvertimeMinutes = $this->lateNightOverlapMinutesInRange($statutoryOvertimeBoundary, $end, $breaks);
             }
         }
 
         return [
             'planned_work_minutes' => $plannedWorkMinutes,
-            'actual_work_minutes' => $actualWorkMinutes,
+            'work_minutes' => $workMinutes,
             'deemed_work_minutes' => $deemedWorkMinutes > 0 ? $deemedWorkMinutes : null,
             'payroll_work_minutes' => $payrollWorkMinutes,
             'prescribed_work_minutes' => $prescribedWorkMinutes,
-            'non_statutory_overtime_minutes' => $nonStatutoryOvertimeMinutes,
-            'statutory_overtime_minutes' => $statutoryOvertimeMinutes,
-            'late_night_minutes' => $isLegalHoliday ? 0 : $lateNightMinutes,
-            'regular_work_late_night_minutes' => $regularWorkLateNightMinutes,
-            'non_statutory_overtime_late_night_minutes' => $nonStatutoryOvertimeLateNightMinutes,
-            'statutory_overtime_late_night_minutes' => $statutoryOvertimeLateNightMinutes,
-            'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
-            'company_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $actualWorkMinutes : 0,
-            'legal_holiday_late_night_minutes' => $isLegalHoliday ? $lateNightMinutes : 0,
+            'statutory_within_overtime_minutes' => $statutoryWithinOvertimeMinutes,
+            'statutory_excess_overtime_minutes' => $statutoryExcessOvertimeMinutes,
+            'late_night_work_minutes' => $isLegalHoliday ? 0 : $lateNightWorkMinutes,
+            'late_night_prescribed_work_minutes' => $lateNightPrescribedWorkMinutes,
+            'late_night_statutory_within_overtime_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
+            'late_night_statutory_excess_overtime_minutes' => $lateNightStatutoryExcessOvertimeMinutes,
+            'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
+            'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
+            'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
             'core_time_violation' => $coreTimeViolation,
         ];
     }
@@ -228,7 +228,7 @@ class AttendanceCalculator
     }
 
     /**
-     * 実働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
+    * 労働時間(休憩を除く)が$thresholdMinutesに達する時刻を求める。残業は勤務時間の末尾から
      * 発生する前提(休憩を除いた勤務区間を時系列に辿り、累計が閾値に達した時点)で境界を返す。
      * 閾値に達しないまま退勤時刻を迎えた場合(=残業が無い場合)はnullを返す。
      *

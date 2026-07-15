@@ -16,9 +16,9 @@ use Illuminate\Support\Carbon;
  *   (attendance_months.snapshot_json)には合算せず、Projectionとしても永続化しない。
  * - LegalHolidayRequirementChecker(UC-C005)と同じ考え方で、画面表示のたびに
  *   日次実績(attendance_daily_calculations)から都度再計算する読み取り専用の参考情報とする。
- * - 日8時間超で既に計上済みの時間(attendance_daily_calculations.statutory_overtime_minutes)
- *   を除いた「日8時間以内の実働」だけを週単位で合計し、40時間を超えた分のみを
- *   weekly_statutory_overtime_minutes とする(日8時間判定との二重計上を避けるため)。
+ * - 日8時間超で既に計上済みの時間(attendance_daily_calculations.statutory_excess_overtime_minutes)
+ *   を除いた「日8時間以内の労働時間」だけを週単位で合計し、40時間を超えた分のみを
+ *   weekly_statutory_excess_overtime_minutes とする(日8時間判定との二重計上を避けるため)。
  * - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
  * - 1か月単位変形労働時間制(work_time_system=monthly_variable)で、あらかじめ40時間を
  *   超える所定労働時間を設定した週は、その時間を超えた部分のみが週40時間超の法定時間外になる。
@@ -33,7 +33,7 @@ class WeeklyOvertimeCalculator
     public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
 
     /**
-     * @return list<array{week_start_date: string, week_end_date: string, actual_work_minutes: int, daily_statutory_overtime_minutes: int, weekly_statutory_overtime_minutes: int, legal_holiday_work_minutes: int}>
+     * @return list<array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}>
      */
     public function calculateForMonth(int $userId, string $yearMonth): array
     {
@@ -57,7 +57,7 @@ class WeeklyOvertimeCalculator
     }
 
     /**
-     * @return array{week_start_date: string, week_end_date: string, actual_work_minutes: int, daily_statutory_overtime_minutes: int, weekly_statutory_overtime_minutes: int, legal_holiday_work_minutes: int}
+     * @return array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}
      */
     private function calculateWeek(int $userId, string $weekStartDate, string $weekEndDate): array
     {
@@ -68,7 +68,7 @@ class WeeklyOvertimeCalculator
             ->with(['calculation', 'shiftAssignment.workStyle.calendar'])
             ->get();
 
-        $actualWorkMinutes = 0;
+        $workMinutes = 0;
         $dailyStatutoryOvertimeMinutes = 0;
         $legalHolidayWorkMinutes = 0;
         $withinDailyLimitMinutes = 0;
@@ -86,9 +86,9 @@ class WeeklyOvertimeCalculator
                 continue;
             }
 
-            $actualWorkMinutes += $calculation->actual_work_minutes;
-            $dailyStatutoryOvertimeMinutes += $calculation->statutory_overtime_minutes;
-            $withinDailyLimitMinutes += $calculation->actual_work_minutes - $calculation->statutory_overtime_minutes;
+            $workMinutes += $calculation->work_minutes;
+            $dailyStatutoryOvertimeMinutes += $calculation->statutory_excess_overtime_minutes;
+            $withinDailyLimitMinutes += $calculation->work_minutes - $calculation->statutory_excess_overtime_minutes;
 
             if ($day->shiftAssignment?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
                 $plannedMinutesForMonthlyVariable += $day->shiftAssignment->plannedWorkMinutes();
@@ -100,9 +100,9 @@ class WeeklyOvertimeCalculator
         return [
             'week_start_date' => $weekStartDate,
             'week_end_date' => $weekEndDate,
-            'actual_work_minutes' => $actualWorkMinutes,
-            'daily_statutory_overtime_minutes' => $dailyStatutoryOvertimeMinutes,
-            'weekly_statutory_overtime_minutes' => max(0, $withinDailyLimitMinutes - $weeklyLimitMinutes),
+            'work_minutes' => $workMinutes,
+            'daily_statutory_excess_overtime_minutes' => $dailyStatutoryOvertimeMinutes,
+            'weekly_statutory_excess_overtime_minutes' => max(0, $withinDailyLimitMinutes - $weeklyLimitMinutes),
             'legal_holiday_work_minutes' => $legalHolidayWorkMinutes,
         ];
     }

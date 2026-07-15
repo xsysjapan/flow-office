@@ -88,36 +88,37 @@ export interface AttendanceBreak {
 
 export interface AttendanceDailyCalculation {
   planned_work_minutes: number
-  actual_work_minutes: number
+  work_minutes: number
   prescribed_work_minutes: number
-  non_statutory_overtime_minutes: number
-  statutory_overtime_minutes: number
-  late_night_minutes: number
-  /** 深夜のうち所定内労働にあたる分(late_night_minutesの内訳)。 */
-  regular_work_late_night_minutes: number
-  /** 深夜のうち所定内残業にあたる分(late_night_minutesの内訳)。 */
-  non_statutory_overtime_late_night_minutes: number
-  /** 法定外残業のうち22:00〜05:00の深夜時間帯と重なる分(late_night_minutesの内訳)。 */
-  statutory_overtime_late_night_minutes: number
+  statutory_within_overtime_minutes: number
+  statutory_excess_overtime_minutes: number
+  late_night_work_minutes: number
+  /** 深夜のうち所定労働にあたる分(late_night_work_minutesの内訳)。 */
+  late_night_prescribed_work_minutes: number
+  /** 深夜のうち法定内残業にあたる分(late_night_work_minutesの内訳)。 */
+  late_night_statutory_within_overtime_minutes: number
+  /** 法定外残業のうち22:00〜05:00の深夜時間帯と重なる分(late_night_work_minutesの内訳)。 */
+  late_night_statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
-  company_holiday_work_minutes: number
-  legal_holiday_late_night_minutes: number
+  prescribed_holiday_work_minutes: number
+  late_night_legal_holiday_work_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
-  /** 区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正したか。実績が再編集され
+  /** 区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正したか。実績が再編集され
    *  再計算されるとfalseに戻る。 */
   is_manually_adjusted: boolean
 }
 
-/** 日次登録後に手動補正できる区分ごとの時間。深夜(late_night_minutes)は0分の日は
- *  入力欄自体を表示しない。 */
+/** 日次登録後に手動補正できる区分ごとの時間。 */
 export interface AttendanceDailyCalculationAdjustment {
   prescribed_work_minutes: number
-  non_statutory_overtime_minutes: number
-  statutory_overtime_minutes: number
-  late_night_minutes: number
+  statutory_within_overtime_minutes: number
+  statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
-  company_holiday_work_minutes: number
+  late_night_prescribed_work_minutes: number
+  late_night_statutory_within_overtime_minutes: number
+  late_night_statutory_excess_overtime_minutes: number
+  late_night_legal_holiday_work_minutes: number
   reason: string
 }
 
@@ -132,28 +133,28 @@ export interface AttendanceDayDefaults {
 
 /** 月60時間超残業(労基法37条)の参考情報。表示のたびに都度計算され、確定値ではない。 */
 export interface MonthlyOvertimeReference {
-  cumulative_statutory_overtime_minutes: number
-  statutory_overtime_within_60h_minutes: number
-  statutory_overtime_over_60h_minutes: number
+  cumulative_statutory_excess_overtime_minutes: number
+  statutory_excess_overtime_within_60h_minutes: number
+  statutory_excess_overtime_over_60h_minutes: number
 }
 
 /** 月次確認画面(UC-A007)向けの、対象月全体の9区分の合計。提出前は都度計算した進捗の目安、
  *  提出後はattendance_months.snapshot_jsonと同じ確定値になる。 */
 export interface AttendanceMonthlyCalculationTotals {
-  actual_work_minutes: number
+  work_minutes: number
   payroll_work_minutes: number
   prescribed_work_minutes: number
-  non_statutory_overtime_minutes: number
-  statutory_overtime_minutes: number
-  statutory_overtime_within_60h_minutes: number
-  statutory_overtime_over_60h_minutes: number
-  late_night_minutes: number
-  regular_work_late_night_minutes: number
-  non_statutory_overtime_late_night_minutes: number
-  statutory_overtime_late_night_minutes: number
+  statutory_within_overtime_minutes: number
+  statutory_excess_overtime_minutes: number
+  statutory_excess_overtime_within_60h_minutes: number
+  statutory_excess_overtime_over_60h_minutes: number
+  late_night_work_minutes: number
+  late_night_prescribed_work_minutes: number
+  late_night_statutory_within_overtime_minutes: number
+  late_night_statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
-  company_holiday_work_minutes: number
-  legal_holiday_late_night_minutes: number
+  prescribed_holiday_work_minutes: number
+  late_night_legal_holiday_work_minutes: number
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
@@ -238,7 +239,7 @@ export interface FlexSettlementSummary {
   remaining_working_days: number
   per_day_required_minutes: number
   core_time_violation_days: number
-  late_night_minutes: number
+  late_night_work_minutes: number
   legal_holiday_work_minutes: number
 }
 

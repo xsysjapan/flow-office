@@ -72,7 +72,7 @@ function completedBreakMinutes(breaks: AttendanceDay['breaks']): number {
   }, 0)
 }
 
-/** 出勤時刻から現在までの経過時間から、完了済みの休憩時間を差し引いた実働時間(分)。 */
+/** 出勤時刻から現在までの経過時間から、完了済みの休憩時間を差し引いた労働時間(分)。 */
 function elapsedWorkedMinutes(day: AttendanceDay, now: Date): number | null {
   if (!day.actual_start_at) return null
   const grossMinutes = (now.getTime() - new Date(day.actual_start_at).getTime()) / 60000
@@ -91,7 +91,7 @@ function statusDescription(day: AttendanceDay, now: Date): string {
       return 'まだ出勤していません'
     case 'working': {
       const minutes = elapsedWorkedMinutes(day, now)
-      return `${formatTime(day.actual_start_at)}から勤務中${minutes !== null ? `(実働 ${formatMinutes(minutes)})` : ''}`
+      return `${formatTime(day.actual_start_at)}から勤務中${minutes !== null ? `(労働時間 ${formatMinutes(minutes)})` : ''}`
     }
     case 'on_break':
       return `${formatTime(day.actual_start_at)}から勤務中・現在休憩中です`
@@ -207,29 +207,20 @@ export function TodayAttendancePage() {
               <>
                 <StatTileGrid className="sm:grid-cols-4">
                   <StatTile label="所定労働時間" value={`${day.calculation.prescribed_work_minutes}分`} />
-                  <StatTile label="実働" value={`${day.calculation.actual_work_minutes}分`} />
-                  <StatTile label="所定内残業" value={`${day.calculation.non_statutory_overtime_minutes}分`} />
-                  <StatTile label="法定外残業" value={`${day.calculation.statutory_overtime_minutes}分`} />
+                  <StatTile label="法定内残業時間" value={`${day.calculation.statutory_within_overtime_minutes}分`} />
+                  <StatTile label="法定外残業時間" value={`${day.calculation.statutory_excess_overtime_minutes}分`} />
+                  <StatTile label="法定休日労働時間" value={`${day.calculation.legal_holiday_work_minutes}分`} />
                 </StatTileGrid>
                 <StatTileGrid className="sm:grid-cols-4">
-                  <StatTile label="深夜労働" value={`${day.calculation.late_night_minutes}分`} />
-                  <StatTile label="深夜(所定内労働)" value={`${day.calculation.regular_work_late_night_minutes}分`} />
-                  <StatTile label="深夜(所定内残業)" value={`${day.calculation.non_statutory_overtime_late_night_minutes}分`} />
-                  <StatTile label="法定外深夜" value={`${day.calculation.statutory_overtime_late_night_minutes}分`} />
+                  <StatTile label="深夜所定労働時間" value={`${day.calculation.late_night_prescribed_work_minutes}分`} />
+                  <StatTile label="深夜法定内残業時間" value={`${day.calculation.late_night_statutory_within_overtime_minutes}分`} />
+                  <StatTile label="深夜法定外残業時間" value={`${day.calculation.late_night_statutory_excess_overtime_minutes}分`} />
+                  <StatTile label="深夜法定休日労働時間" value={`${day.calculation.late_night_legal_holiday_work_minutes}分`} />
                 </StatTileGrid>
-                <StatTileGrid className="sm:grid-cols-2">
-                  <StatTile label="法定休日労働" value={`${day.calculation.legal_holiday_work_minutes}分`} />
-                  <StatTile label="所定休日労働" value={`${day.calculation.company_holiday_work_minutes}分`} />
-                </StatTileGrid>
-                {day.calculation.legal_holiday_late_night_minutes > 0 && (
-                  <StatTileGrid className="sm:grid-cols-1">
-                    <StatTile label="法定休日深夜" value={`${day.calculation.legal_holiday_late_night_minutes}分`} />
-                  </StatTileGrid>
-                )}
                 {day.monthly_overtime && (
                   <p className="text-xs text-muted-foreground">
-                    今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_overtime_minutes}分
-                    (うち月60時間超残業: {day.monthly_overtime.statutory_overtime_over_60h_minutes}分)
+                    今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_excess_overtime_minutes}分
+                    (うち月60時間超残業: {day.monthly_overtime.statutory_excess_overtime_over_60h_minutes}分)
                   </p>
                 )}
                 {day.calculation.core_time_violation && (

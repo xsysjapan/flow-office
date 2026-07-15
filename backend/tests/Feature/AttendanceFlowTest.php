@@ -63,18 +63,18 @@ class AttendanceFlowTest extends TestCase
 
         $editResponse->assertOk();
         $calculation = $editResponse->json('calculation');
-        $this->assertSame(780, $calculation['actual_work_minutes']);
-        $this->assertSame(300, $calculation['statutory_overtime_minutes']);
-        $this->assertSame(60, $calculation['late_night_minutes']);
+        $this->assertSame(780, $calculation['work_minutes']);
+        $this->assertSame(300, $calculation['statutory_excess_overtime_minutes']);
+        $this->assertSame(60, $calculation['late_night_work_minutes']);
         // 22:00〜23:00の深夜1時間は、法定外残業の時間帯(18:00〜23:00)に完全に含まれる。
-        $this->assertSame(60, $calculation['statutory_overtime_late_night_minutes']);
-        $this->assertSame(0, $calculation['regular_work_late_night_minutes']);
-        $this->assertSame(0, $calculation['non_statutory_overtime_late_night_minutes']);
+        $this->assertSame(60, $calculation['late_night_statutory_excess_overtime_minutes']);
+        $this->assertSame(0, $calculation['late_night_prescribed_work_minutes']);
+        $this->assertSame(0, $calculation['late_night_statutory_within_overtime_minutes']);
     }
 
     /**
-     * 所定労働時間(6時間)より長く法定8時間以内で働いた場合、深夜時間帯が「所定内残業」の
-     * 時間帯に完全に含まれるケース。所定内労働・法定外残業の深夜はいずれも発生しない。
+    * 所定労働時間(6時間)より長く法定8時間以内で働いた場合、深夜時間帯が「法定内残業」の
+    * 時間帯に完全に含まれるケース。所定労働・法定外残業の深夜はいずれも発生しない。
      */
     public function test_late_night_overlapping_non_statutory_overtime_is_recorded_separately(): void
     {
@@ -104,7 +104,7 @@ class AttendanceFlowTest extends TestCase
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
-        // 16:00〜24:00(休憩なし)で実働8時間。所定(6時間)は超えるが法定8時間は超えない。
+        // 16:00〜24:00(休憩なし)で労働時間8時間。所定(6時間)は超えるが法定8時間は超えない。
         $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
             'actual_start_at' => "{$dateString}T16:00:00+09:00",
             'actual_end_at' => "{$nextDateString}T00:00:00+09:00",
@@ -114,13 +114,13 @@ class AttendanceFlowTest extends TestCase
 
         $editResponse->assertOk();
         $calculation = $editResponse->json('calculation');
-        $this->assertSame(480, $calculation['actual_work_minutes']);
-        $this->assertSame(120, $calculation['non_statutory_overtime_minutes'], '所定6時間を超え法定8時間以内の2時間');
-        $this->assertSame(0, $calculation['statutory_overtime_minutes']);
-        $this->assertSame(120, $calculation['late_night_minutes'], '22:00〜24:00の2時間');
-        $this->assertSame(0, $calculation['regular_work_late_night_minutes'], '所定内労働(16:00〜22:00)は深夜帯にかからない');
-        $this->assertSame(120, $calculation['non_statutory_overtime_late_night_minutes'], '所定内残業(22:00〜24:00)がそのまま深夜と重なる');
-        $this->assertSame(0, $calculation['statutory_overtime_late_night_minutes']);
+        $this->assertSame(480, $calculation['work_minutes']);
+        $this->assertSame(120, $calculation['statutory_within_overtime_minutes'], '所定6時間を超え法定8時間以内の2時間');
+        $this->assertSame(0, $calculation['statutory_excess_overtime_minutes']);
+        $this->assertSame(120, $calculation['late_night_work_minutes'], '22:00〜24:00の2時間');
+        $this->assertSame(0, $calculation['late_night_prescribed_work_minutes'], '所定労働(16:00〜22:00)は深夜帯にかからない');
+        $this->assertSame(120, $calculation['late_night_statutory_within_overtime_minutes'], '法定内残業(22:00〜24:00)がそのまま深夜と重なる');
+        $this->assertSame(0, $calculation['late_night_statutory_excess_overtime_minutes']);
     }
 
     /**
@@ -149,11 +149,11 @@ class AttendanceFlowTest extends TestCase
         $editResponse->assertJsonPath('utc_offset_minutes', -300);
 
         $calculation = $editResponse->json('calculation');
-        $this->assertSame(420, $calculation['actual_work_minutes']);
-        $this->assertSame(420, $calculation['late_night_minutes']);
-        // 所定労働時間が無く実働420分は日8時間(480分)以内のため、法定外残業は発生しない。
-        $this->assertSame(0, $calculation['statutory_overtime_minutes']);
-        $this->assertSame(0, $calculation['statutory_overtime_late_night_minutes']);
+        $this->assertSame(420, $calculation['work_minutes']);
+        $this->assertSame(420, $calculation['late_night_work_minutes']);
+        // 所定労働時間が無く労働時間420分は日8時間(480分)以内のため、法定外残業は発生しない。
+        $this->assertSame(0, $calculation['statutory_excess_overtime_minutes']);
+        $this->assertSame(0, $calculation['late_night_statutory_excess_overtime_minutes']);
     }
 
     public function test_editing_a_day_with_mismatched_offsets_across_fields_is_rejected(): void

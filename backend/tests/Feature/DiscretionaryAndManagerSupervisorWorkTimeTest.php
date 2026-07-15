@@ -100,11 +100,11 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->editDay($user, $day, '2026-06-01', '09:00', '20:00');
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(600, $calculation->actual_work_minutes, '実労働時間は健康管理用にそのまま記録する');
+        $this->assertSame(600, $calculation->work_minutes, '実労働時間は健康管理用にそのまま記録する');
         $this->assertSame(540, $calculation->deemed_work_minutes);
         $this->assertSame(540, $calculation->payroll_work_minutes, '給与計算上はみなし時間を採用する');
-        $this->assertSame(60, $calculation->statutory_overtime_minutes, 'みなし9時間のうち8時間を超えた1時間のみ法定時間外');
-        $this->assertSame(0, $calculation->non_statutory_overtime_minutes);
+        $this->assertSame(60, $calculation->statutory_excess_overtime_minutes, 'みなし9時間のうち8時間を超えた1時間のみ法定時間外');
+        $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
 
     public function test_discretionary_worker_does_not_need_to_clock_in_for_payroll_to_apply(): void
@@ -123,9 +123,9 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->editDay($user, $day, '2026-06-01', null, null, break: null);
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(0, $calculation->actual_work_minutes);
+        $this->assertSame(0, $calculation->work_minutes);
         $this->assertSame(540, $calculation->payroll_work_minutes, '打刻が無くてもみなし時間が給与計算上の労働時間になる');
-        $this->assertSame(60, $calculation->statutory_overtime_minutes);
+        $this->assertSame(60, $calculation->statutory_excess_overtime_minutes);
     }
 
     public function test_discretionary_worker_legal_holiday_work_is_calculated_from_actual_time_not_deemed_time(): void
@@ -146,7 +146,7 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->assertNull($calculation->deemed_work_minutes, '法定休日はみなし労働の対象日ではない');
         $this->assertSame(240, $calculation->legal_holiday_work_minutes, '法定休日労働は実際の時刻から計算する');
         $this->assertSame(240, $calculation->payroll_work_minutes, 'みなしが適用されない日は実労働時間を給与計算に使う');
-        $this->assertSame(0, $calculation->statutory_overtime_minutes);
+        $this->assertSame(0, $calculation->statutory_excess_overtime_minutes);
     }
 
     public function test_manager_supervisor_is_not_paid_overtime_or_holiday_premium_but_late_night_still_applies(): void
@@ -166,11 +166,11 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->editDay($user, $day, '2026-06-07', '20:00', '23:00', break: null);
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(180, $calculation->actual_work_minutes, '実労働時間(健康管理)はそのまま記録する');
+        $this->assertSame(180, $calculation->work_minutes, '実労働時間(健康管理)はそのまま記録する');
         $this->assertSame(180, $calculation->payroll_work_minutes);
-        $this->assertSame(0, $calculation->statutory_overtime_minutes, '管理監督者は残業規定の適用除外');
+        $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, '管理監督者は残業規定の適用除外');
         $this->assertSame(0, $calculation->legal_holiday_work_minutes, '管理監督者は休日規定の適用除外のため休日割増は付けない');
-        $this->assertSame(60, $calculation->legal_holiday_late_night_minutes, '深夜割増(22-23時)は管理監督者にも適用される');
+        $this->assertSame(60, $calculation->late_night_legal_holiday_work_minutes, '深夜割増(22-23時)は管理監督者にも適用される');
     }
 
     public function test_manager_supervisor_long_hours_do_not_trigger_daily_statutory_overtime(): void
@@ -189,9 +189,9 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $this->editDay($user, $day, '2026-06-01', '09:00', '21:00');
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(660, $calculation->actual_work_minutes);
+        $this->assertSame(660, $calculation->work_minutes);
         $this->assertSame(660, $calculation->payroll_work_minutes);
-        $this->assertSame(0, $calculation->statutory_overtime_minutes, '8時間を超えても管理監督者には残業代を計算しない');
-        $this->assertSame(0, $calculation->non_statutory_overtime_minutes);
+        $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, '8時間を超えても管理監督者には残業代を計算しない');
+        $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
 }

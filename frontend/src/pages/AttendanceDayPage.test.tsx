@@ -37,17 +37,17 @@ const recordedDay: AttendanceDay = {
   breaks: [{ id: 1, break_start_at: `${date}T12:00:00+09:00`, break_end_at: `${date}T12:45:00+09:00` }],
   calculation: {
     planned_work_minutes: 480,
-    actual_work_minutes: 480,
+    work_minutes: 480,
     prescribed_work_minutes: 480,
-    non_statutory_overtime_minutes: 0,
-    statutory_overtime_minutes: 0,
-    late_night_minutes: 0,
-    regular_work_late_night_minutes: 0,
-    non_statutory_overtime_late_night_minutes: 0,
-    statutory_overtime_late_night_minutes: 0,
+    statutory_within_overtime_minutes: 0,
+    statutory_excess_overtime_minutes: 0,
+    late_night_work_minutes: 0,
+    late_night_prescribed_work_minutes: 0,
+    late_night_statutory_within_overtime_minutes: 0,
+    late_night_statutory_excess_overtime_minutes: 0,
     legal_holiday_work_minutes: 0,
-    company_holiday_work_minutes: 0,
-    legal_holiday_late_night_minutes: 0,
+    prescribed_holiday_work_minutes: 0,
+    late_night_legal_holiday_work_minutes: 0,
     core_time_violation: false,
     is_manually_adjusted: false,
   },
@@ -216,12 +216,12 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'adjustAttendanceDailyCalculation').mockResolvedValue({
       ...recordedDay,
-      calculation: { ...recordedDay.calculation!, non_statutory_overtime_minutes: 30, is_manually_adjusted: true },
+      calculation: { ...recordedDay.calculation!, statutory_within_overtime_minutes: 30, is_manually_adjusted: true },
     })
     renderPage([recordedDay])
 
     await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
-    const overtimeInput = screen.getByLabelText('所定内残業(分)')
+    const overtimeInput = screen.getByLabelText('法定内残業時間(分)')
     await userEvent.clear(overtimeInput)
     await userEvent.type(overtimeInput, '30')
     await userEvent.type(screen.getByLabelText('補正理由(必須)'), '休憩の取り方を考慮して補正')
@@ -230,17 +230,24 @@ describe('AttendanceDayPage', () => {
     await waitFor(() =>
       expect(attendanceApi.adjustAttendanceDailyCalculation).toHaveBeenCalledWith(
         1,
-        expect.objectContaining({ non_statutory_overtime_minutes: 30, reason: '休憩の取り方を考慮して補正' }),
+        expect.objectContaining({ statutory_within_overtime_minutes: 30, reason: '休憩の取り方を考慮して補正' }),
       ),
     )
   })
 
-  it('hides the late-night input when there was no late-night work', async () => {
+  it('shows the eight calculation adjustment inputs', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([recordedDay])
 
     await userEvent.click(await screen.findByRole('button', { name: '内訳を編集' }))
-    expect(screen.queryByLabelText('深夜労働(分)')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('所定労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('法定内残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('法定外残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('法定休日労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('深夜所定労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('深夜法定内残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('深夜法定外残業時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('深夜法定休日労働時間(分)')).toBeInTheDocument()
   })
 
   it('shows an error message when the week fails to load', async () => {

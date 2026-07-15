@@ -31,7 +31,7 @@ const months: AttendanceMonth[] = [
     approved_at: '2026-06-02T00:00:00+09:00',
     returned_at: null,
     closed_at: '2026-06-05T00:00:00+09:00',
-    snapshot: { actual_work_minutes: 9600 },
+    snapshot: { work_minutes: 9600 },
     legal_holiday_warnings: [],
   },
   {

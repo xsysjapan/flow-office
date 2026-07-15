@@ -84,8 +84,8 @@ class MonthlyVariableWorkTimeTest extends TestCase
         ])->assertOk();
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(0, $calculation->statutory_overtime_minutes, '所定通り9時間働いても法定時間外にならない');
-        $this->assertSame(0, $calculation->non_statutory_overtime_minutes);
+        $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, '所定通り9時間働いても法定時間外にならない');
+        $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
 
         // 10時間働いた場合は所定(9時間)を超えた1時間のみ法定時間外。
         $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
@@ -96,7 +96,7 @@ class MonthlyVariableWorkTimeTest extends TestCase
         ])->assertOk();
 
         $calculation = $day->refresh()->calculation;
-        $this->assertSame(60, $calculation->statutory_overtime_minutes, '所定9時間を超えた1時間のみ法定時間外');
+        $this->assertSame(60, $calculation->statutory_excess_overtime_minutes, '所定9時間を超えた1時間のみ法定時間外');
     }
 
     public function test_editing_a_shift_plan_is_rejected_once_actual_attendance_exists(): void
@@ -198,7 +198,7 @@ class MonthlyVariableWorkTimeTest extends TestCase
         $user = User::factory()->create();
         $approver = User::factory()->create();
 
-        // 月〜金、あらかじめ1日8.8時間(528分)ずつ設定(週合計44時間)。実働も所定通り。
+        // 月〜金、あらかじめ1日8.8時間(528分)ずつ設定(週合計44時間)。労働時間も所定通り。
         foreach (['06-01', '06-02', '06-03', '06-04', '06-05'] as $day) {
             $date = "2026-{$day}";
             $shift = $this->makeShiftAssignment($user, $workStyle, $date, '09:00', '18:48');
@@ -222,7 +222,7 @@ class MonthlyVariableWorkTimeTest extends TestCase
 
         $week = collect($response->json('weekly_overtime_reference'))->firstWhere('week_start_date', '2026-06-01');
 
-        $this->assertSame(0, $week['daily_statutory_overtime_minutes'], 'どの日も所定8.8時間通りのため日次残業なし');
-        $this->assertSame(0, $week['weekly_statutory_overtime_minutes'], '週の所定合計44時間まで働いても超過なし');
+        $this->assertSame(0, $week['daily_statutory_excess_overtime_minutes'], 'どの日も所定8.8時間通りのため日次残業なし');
+        $this->assertSame(0, $week['weekly_statutory_excess_overtime_minutes'], '週の所定合計44時間まで働いても超過なし');
     }
 }

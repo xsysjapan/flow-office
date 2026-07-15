@@ -1,12 +1,12 @@
 import type { AttendanceDay } from '../api/types'
 
 /**
- * 休憩不足の警告文言(労基法34条: 実働6時間超で休憩45分未満、実働8時間超で休憩60分未満)。
+ * 休憩不足の警告文言(労基法34条: 労働時間6時間超で休憩45分未満、労働時間8時間超で休憩60分未満)。
  * 警告はあくまで注意喚起であり、これを理由に登録・保存をブロックしない。
  */
 export function breakShortfallWarning(workedMinutes: number, breakMinutes: number): string | null {
-  if (workedMinutes > 480 && breakMinutes < 60) return '実働8時間超で休憩が60分未満です(休憩不足)。'
-  if (workedMinutes > 360 && breakMinutes < 45) return '実働6時間超で休憩が45分未満です(休憩不足)。'
+  if (workedMinutes > 480 && breakMinutes < 60) return '労働時間8時間超で休憩が60分未満です(休憩不足)。'
+  if (workedMinutes > 360 && breakMinutes < 45) return '労働時間6時間超で休憩が45分未満です(休憩不足)。'
   return null
 }
 
@@ -21,7 +21,7 @@ export function dayWarnings(date: string, day: AttendanceDay | undefined, today:
   if (isPast && day.status !== 'clocked_out') warnings.push('打刻漏れ')
 
   if (day.calculation) {
-    const workedMinutes = day.calculation.actual_work_minutes
+    const workedMinutes = day.calculation.work_minutes
     const breakMinutes = day.breaks.reduce((sum, b) => {
       if (!b.break_start_at || !b.break_end_at) return sum
       return sum + (new Date(b.break_end_at).getTime() - new Date(b.break_start_at).getTime()) / 60000

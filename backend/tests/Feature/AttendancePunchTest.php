@@ -41,7 +41,7 @@ class AttendancePunchTest extends TestCase
         $this->assertSame('clocked_out', $day->status);
         $this->assertSame(1, $day->breaks()->count());
         $this->assertNotNull($day->calculation);
-        $this->assertSame(480, $day->calculation->actual_work_minutes);
+        $this->assertSame(480, $day->calculation->work_minutes);
     }
 
     public function test_a_punch_offset_different_from_the_owners_timezone_is_preserved_on_the_day(): void
@@ -93,7 +93,7 @@ class AttendancePunchTest extends TestCase
         $this->assertNotNull($day);
         $this->assertSame('2026-07-09T21:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
         $this->assertSame('2026-07-10T06:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
-        $this->assertSame(540, $day->calculation->actual_work_minutes);
+        $this->assertSame(540, $day->calculation->work_minutes);
     }
 
     public function test_inconsistent_punches_are_recorded_but_do_not_touch_the_attendance_day(): void

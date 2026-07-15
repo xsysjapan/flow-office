@@ -21,7 +21,7 @@ class AttendanceDailyCalculationProjector implements Projector
 
     public function project(StoredEvent $event): void
     {
-        $payload = $event->payload;
+        $payload = $this->normalizeLegacyPayload($event->payload);
         $attendanceDayId = $payload['attendance_day_id'];
 
         // UC-A015で日次勤怠(attendance_days)自体が削除されている場合、そのIDを参照する
@@ -37,11 +37,15 @@ class AttendanceDailyCalculationProjector implements Projector
                 ['attendance_day_id' => $attendanceDayId],
                 [
                     'prescribed_work_minutes' => $payload['prescribed_work_minutes'],
-                    'non_statutory_overtime_minutes' => $payload['non_statutory_overtime_minutes'],
-                    'statutory_overtime_minutes' => $payload['statutory_overtime_minutes'],
-                    'late_night_minutes' => $payload['late_night_minutes'],
+                    'statutory_within_overtime_minutes' => $payload['statutory_within_overtime_minutes'],
+                    'statutory_excess_overtime_minutes' => $payload['statutory_excess_overtime_minutes'],
+                    'late_night_work_minutes' => $payload['late_night_work_minutes'],
+                    'late_night_prescribed_work_minutes' => $payload['late_night_prescribed_work_minutes'] ?? 0,
+                    'late_night_statutory_within_overtime_minutes' => $payload['late_night_statutory_within_overtime_minutes'] ?? 0,
+                    'late_night_statutory_excess_overtime_minutes' => $payload['late_night_statutory_excess_overtime_minutes'] ?? 0,
                     'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
-                    'company_holiday_work_minutes' => $payload['company_holiday_work_minutes'],
+                    'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
+                    'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'] ?? 0,
                     'is_manually_adjusted' => true,
                     'adjusted_by_user_id' => $payload['adjusted_by_user_id'],
                     'adjusted_at' => $event->occurred_at,
@@ -55,19 +59,19 @@ class AttendanceDailyCalculationProjector implements Projector
             ['attendance_day_id' => $attendanceDayId],
             [
                 'planned_work_minutes' => $payload['planned_work_minutes'],
-                'actual_work_minutes' => $payload['actual_work_minutes'],
+                'work_minutes' => $payload['work_minutes'],
                 'deemed_work_minutes' => $payload['deemed_work_minutes'],
                 'payroll_work_minutes' => $payload['payroll_work_minutes'],
                 'prescribed_work_minutes' => $payload['prescribed_work_minutes'],
-                'non_statutory_overtime_minutes' => $payload['non_statutory_overtime_minutes'],
-                'statutory_overtime_minutes' => $payload['statutory_overtime_minutes'],
-                'late_night_minutes' => $payload['late_night_minutes'],
-                'regular_work_late_night_minutes' => $payload['regular_work_late_night_minutes'] ?? 0,
-                'non_statutory_overtime_late_night_minutes' => $payload['non_statutory_overtime_late_night_minutes'] ?? 0,
-                'statutory_overtime_late_night_minutes' => $payload['statutory_overtime_late_night_minutes'] ?? 0,
+                'statutory_within_overtime_minutes' => $payload['statutory_within_overtime_minutes'],
+                'statutory_excess_overtime_minutes' => $payload['statutory_excess_overtime_minutes'],
+                'late_night_work_minutes' => $payload['late_night_work_minutes'],
+                'late_night_prescribed_work_minutes' => $payload['late_night_prescribed_work_minutes'] ?? 0,
+                'late_night_statutory_within_overtime_minutes' => $payload['late_night_statutory_within_overtime_minutes'] ?? 0,
+                'late_night_statutory_excess_overtime_minutes' => $payload['late_night_statutory_excess_overtime_minutes'] ?? 0,
                 'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
-                'company_holiday_work_minutes' => $payload['company_holiday_work_minutes'],
-                'legal_holiday_late_night_minutes' => $payload['legal_holiday_late_night_minutes'],
+                'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
+                'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'],
                 'core_time_violation' => $payload['core_time_violation'] ?? false,
                 // 実績の再編集による再計算は、直前の手動補正を解除する(再計算結果が最新の正)。
                 'is_manually_adjusted' => false,
@@ -80,5 +84,33 @@ class AttendanceDailyCalculationProjector implements Projector
     public function reset(): void
     {
         DB::table('attendance_daily_calculations')->truncate();
+    }
+
+    /**
+     * 物理名変更前に保存されたイベントも再生できるよう、新しいpayloadキーへ寄せる。
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeLegacyPayload(array $payload): array
+    {
+        $renamedKeys = [
+            'actual_work_minutes' => 'work_minutes',
+            'non_statutory_overtime_minutes' => 'statutory_within_overtime_minutes',
+            'statutory_overtime_minutes' => 'statutory_excess_overtime_minutes',
+            'late_night_minutes' => 'late_night_work_minutes',
+            'regular_work_late_night_minutes' => 'late_night_prescribed_work_minutes',
+            'non_statutory_overtime_late_night_minutes' => 'late_night_statutory_within_overtime_minutes',
+            'statutory_overtime_late_night_minutes' => 'late_night_statutory_excess_overtime_minutes',
+            'company_holiday_work_minutes' => 'prescribed_holiday_work_minutes',
+            'legal_holiday_late_night_minutes' => 'late_night_legal_holiday_work_minutes',
+        ];
+
+        foreach ($renamedKeys as $legacyKey => $newKey) {
+            if (! array_key_exists($newKey, $payload) && array_key_exists($legacyKey, $payload)) {
+                $payload[$newKey] = $payload[$legacyKey];
+            }
+        }
+
+        return $payload;
     }
 }

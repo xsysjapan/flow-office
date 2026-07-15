@@ -7,20 +7,20 @@ import type { AttendanceDay, AttendanceMonthlyCalculationTotals } from '../api/t
 import { TodayAttendancePage } from './TodayAttendancePage'
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
-  actual_work_minutes: 0,
+  work_minutes: 0,
   payroll_work_minutes: 0,
   prescribed_work_minutes: 0,
-  non_statutory_overtime_minutes: 0,
-  statutory_overtime_minutes: 0,
-  statutory_overtime_within_60h_minutes: 0,
-  statutory_overtime_over_60h_minutes: 0,
-  late_night_minutes: 0,
-  regular_work_late_night_minutes: 0,
-  non_statutory_overtime_late_night_minutes: 0,
-  statutory_overtime_late_night_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
   legal_holiday_work_minutes: 0,
-  company_holiday_work_minutes: 0,
-  legal_holiday_late_night_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
 }
 
 const notStartedDay: AttendanceDay = {
@@ -134,7 +134,7 @@ describe('TodayAttendancePage', () => {
         remaining_working_days: 12,
         per_day_required_minutes: 480,
         core_time_violation_days: 1,
-        late_night_minutes: 0,
+        late_night_work_minutes: 0,
         legal_holiday_work_minutes: 0,
       },
       monthly_calculation_totals: zeroMonthlyCalculationTotals,

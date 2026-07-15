@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 深夜時間帯(22:00〜05:00)の労働を、所定内労働・所定内残業・法定外残業(既存の
+ * 深夜時間帯(22:00〜05:00)の労働を、所定労働・法定内残業・法定外残業(既存の
  * statutory_overtime_late_night_minutes)の3区分に分解する(docs/07-usecases-attendance.md参照)。
  * 3区分の合計はlate_night_minutesに一致する。
  */

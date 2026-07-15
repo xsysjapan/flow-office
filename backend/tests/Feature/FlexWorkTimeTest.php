@@ -80,8 +80,8 @@ class FlexWorkTimeTest extends TestCase
 
         $calculation = $day->refresh()->calculation;
         $this->assertFalse($calculation->core_time_violation);
-        $this->assertSame(0, $calculation->statutory_overtime_minutes, 'フレックスは日次残業を判定しない');
-        $this->assertSame(0, $calculation->non_statutory_overtime_minutes);
+        $this->assertSame(0, $calculation->statutory_excess_overtime_minutes, 'フレックスは日次残業を判定しない');
+        $this->assertSame(0, $calculation->statutory_within_overtime_minutes);
     }
 
     public function test_leaving_before_core_time_ends_is_a_violation(): void
@@ -125,7 +125,7 @@ class FlexWorkTimeTest extends TestCase
         $this->assignForMonth($user, $workStyle, '2026-06');
 
         // 2026年6月は月〜金22日(カレンダー未設定のため平日フォールバック)。
-        // 1日(月)に8時間だけ実働を記録する。
+        // 1日(月)に8時間だけ労働時間を記録する。
         $day = $this->makeDay($user, '2026-06-01');
         $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
             'actual_start_at' => '2026-06-01T09:00:00+09:00',

@@ -111,7 +111,7 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   (deemed_daily_minutes)・変形期間の起算日(variable_period_start_day)・法定休日
   「決めない方式」の入力欄がまだ無く、`calendar_id`も必須のままになっている
   (バックエンドは2026-07-12時点でnullable)
-- 週次勤怠画面(`WeekAttendancePage`)は実働時間(actual_work_minutes)しか表示せず、
+- 週次勤怠画面(`WeekAttendancePage`)は労働時間(work_minutes)しか表示せず、
   給与計算上の労働時間(payroll_work_minutes)・みなし時間(deemed_work_minutes)・
   法定内/法定時間外・法定休日労働などの内訳を表示しない
 - 「打刻漏れ」警告が`day.status !== 'clocked_out'`のみで判定されており、裁量労働制の

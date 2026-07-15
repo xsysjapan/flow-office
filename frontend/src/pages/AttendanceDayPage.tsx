@@ -85,7 +85,7 @@ function diffMinutes(startLiteral: string, endLiteral: string): number {
 
 /**
  * 保存前の入力値(出勤・退勤・休憩行)から、労基法34条の休憩不足警告を算出する
- * (実働6時間超で休憩45分未満、実働8時間超で休憩60分未満)。警告は保存をブロックしない。
+ * (労働時間6時間超で休憩45分未満、労働時間8時間超で休憩60分未満)。警告は保存をブロックしない。
  */
 function useBreakShortfallWarning(actualStartAt: string, actualEndAt: string, rows: BreakRowData[]): string | null {
   const breakMinutes = rows.reduce((sum, row) => sum + diffMinutes(row.start, row.end), 0)
@@ -509,35 +509,37 @@ function DayCreateForm({ date }: { date: string }) {
 
 interface AdjustmentFields {
   prescribed_work_minutes: string
-  non_statutory_overtime_minutes: string
-  statutory_overtime_minutes: string
-  late_night_minutes: string
+  statutory_within_overtime_minutes: string
+  statutory_excess_overtime_minutes: string
   legal_holiday_work_minutes: string
-  company_holiday_work_minutes: string
+  late_night_prescribed_work_minutes: string
+  late_night_statutory_within_overtime_minutes: string
+  late_night_statutory_excess_overtime_minutes: string
+  late_night_legal_holiday_work_minutes: string
 }
 
 function adjustmentFieldsFrom(day: AttendanceDay): AdjustmentFields {
   const c = day.calculation
   return {
     prescribed_work_minutes: String(c?.prescribed_work_minutes ?? 0),
-    non_statutory_overtime_minutes: String(c?.non_statutory_overtime_minutes ?? 0),
-    statutory_overtime_minutes: String(c?.statutory_overtime_minutes ?? 0),
-    late_night_minutes: String(c?.late_night_minutes ?? 0),
+    statutory_within_overtime_minutes: String(c?.statutory_within_overtime_minutes ?? 0),
+    statutory_excess_overtime_minutes: String(c?.statutory_excess_overtime_minutes ?? 0),
     legal_holiday_work_minutes: String(c?.legal_holiday_work_minutes ?? 0),
-    company_holiday_work_minutes: String(c?.company_holiday_work_minutes ?? 0),
+    late_night_prescribed_work_minutes: String(c?.late_night_prescribed_work_minutes ?? 0),
+    late_night_statutory_within_overtime_minutes: String(c?.late_night_statutory_within_overtime_minutes ?? 0),
+    late_night_statutory_excess_overtime_minutes: String(c?.late_night_statutory_excess_overtime_minutes ?? 0),
+    late_night_legal_holiday_work_minutes: String(c?.late_night_legal_holiday_work_minutes ?? 0),
   }
 }
 
 /**
- * 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正するフォーム。
- * 深夜に作業時間がかかっていない日(late_night_minutes=0)は深夜の入力欄を表示しない。
+ * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正するフォーム。
  * 実績(出勤・退勤・休憩)が再編集され再計算されると、この補正は解除される。
  */
 function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }) {
   const [fields, setFields] = useState<AdjustmentFields>(adjustmentFieldsFrom(day))
   const [reason, setReason] = useState('')
   const adjustCalculation = useAdjustAttendanceDailyCalculation()
-  const showLateNight = (day.calculation?.late_night_minutes ?? 0) > 0
 
   const updateField = (key: keyof AdjustmentFields, value: string) => setFields((prev) => ({ ...prev, [key]: value }))
 
@@ -547,11 +549,13 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
         id: day.id,
         input: {
           prescribed_work_minutes: Number(fields.prescribed_work_minutes),
-          non_statutory_overtime_minutes: Number(fields.non_statutory_overtime_minutes),
-          statutory_overtime_minutes: Number(fields.statutory_overtime_minutes),
-          late_night_minutes: showLateNight ? Number(fields.late_night_minutes) : 0,
+          statutory_within_overtime_minutes: Number(fields.statutory_within_overtime_minutes),
+          statutory_excess_overtime_minutes: Number(fields.statutory_excess_overtime_minutes),
           legal_holiday_work_minutes: Number(fields.legal_holiday_work_minutes),
-          company_holiday_work_minutes: Number(fields.company_holiday_work_minutes),
+          late_night_prescribed_work_minutes: Number(fields.late_night_prescribed_work_minutes),
+          late_night_statutory_within_overtime_minutes: Number(fields.late_night_statutory_within_overtime_minutes),
+          late_night_statutory_excess_overtime_minutes: Number(fields.late_night_statutory_excess_overtime_minutes),
+          late_night_legal_holiday_work_minutes: Number(fields.late_night_legal_holiday_work_minutes),
           reason,
         },
       },
@@ -561,11 +565,13 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
 
   const fieldLabels: Array<{ key: keyof AdjustmentFields; label: string }> = [
     { key: 'prescribed_work_minutes', label: '所定労働時間(分)' },
-    { key: 'non_statutory_overtime_minutes', label: '所定内残業(分)' },
-    { key: 'statutory_overtime_minutes', label: '法定外残業(分)' },
-    ...(showLateNight ? [{ key: 'late_night_minutes' as const, label: '深夜労働(分)' }] : []),
-    { key: 'legal_holiday_work_minutes', label: '法定休日労働(分)' },
-    { key: 'company_holiday_work_minutes', label: '所定休日労働(分)' },
+    { key: 'statutory_within_overtime_minutes', label: '法定内残業時間(分)' },
+    { key: 'statutory_excess_overtime_minutes', label: '法定外残業時間(分)' },
+    { key: 'legal_holiday_work_minutes', label: '法定休日労働時間(分)' },
+    { key: 'late_night_prescribed_work_minutes', label: '深夜所定労働時間(分)' },
+    { key: 'late_night_statutory_within_overtime_minutes', label: '深夜法定内残業時間(分)' },
+    { key: 'late_night_statutory_excess_overtime_minutes', label: '深夜法定外残業時間(分)' },
+    { key: 'late_night_legal_holiday_work_minutes', label: '深夜法定休日労働時間(分)' },
   ]
 
   return (
@@ -680,31 +686,21 @@ export function AttendanceDayPage() {
                 <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
                   <dt className="font-medium text-muted-foreground">所定労働時間</dt>
                   <dd className="text-foreground">{day.calculation.prescribed_work_minutes}分</dd>
-                  <dt className="font-medium text-muted-foreground">実働</dt>
-                  <dd className="text-foreground">{day.calculation.actual_work_minutes}分</dd>
-
-                  <dt className="font-medium text-muted-foreground">所定内残業</dt>
-                  <dd className="text-foreground">{day.calculation.non_statutory_overtime_minutes}分</dd>
-                  <dt className="font-medium text-muted-foreground">法定外残業</dt>
-                  <dd className="text-foreground">{day.calculation.statutory_overtime_minutes}分</dd>
-
-                  <dt className="font-medium text-muted-foreground">深夜労働</dt>
-                  <dd className="text-foreground">{day.calculation.late_night_minutes}分</dd>
-                  <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
-                  <dd className="text-foreground">{day.calculation.regular_work_late_night_minutes}分</dd>
-
-                  <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
-                  <dd className="text-foreground">{day.calculation.non_statutory_overtime_late_night_minutes}分</dd>
-                  <dt className="font-medium text-muted-foreground">法定外深夜</dt>
-                  <dd className="text-foreground">{day.calculation.statutory_overtime_late_night_minutes}分</dd>
-
-                  <dt className="font-medium text-muted-foreground">法定休日労働</dt>
+                  <dt className="font-medium text-muted-foreground">法定内残業時間</dt>
+                  <dd className="text-foreground">{day.calculation.statutory_within_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">法定外残業時間</dt>
+                  <dd className="text-foreground">{day.calculation.statutory_excess_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">法定休日労働時間</dt>
                   <dd className="text-foreground">{day.calculation.legal_holiday_work_minutes}分</dd>
-                  <dt className="font-medium text-muted-foreground">所定休日労働</dt>
-                  <dd className="text-foreground">{day.calculation.company_holiday_work_minutes}分</dd>
 
-                  <dt className="font-medium text-muted-foreground">法定休日深夜</dt>
-                  <dd className="text-foreground">{day.calculation.legal_holiday_late_night_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜所定労働時間</dt>
+                  <dd className="text-foreground">{day.calculation.late_night_prescribed_work_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜法定内残業時間</dt>
+                  <dd className="text-foreground">{day.calculation.late_night_statutory_within_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜法定外残業時間</dt>
+                  <dd className="text-foreground">{day.calculation.late_night_statutory_excess_overtime_minutes}分</dd>
+                  <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
+                  <dd className="text-foreground">{day.calculation.late_night_legal_holiday_work_minutes}分</dd>
                 </dl>
                 <div className="flex items-center gap-2">
                   {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
@@ -721,8 +717,8 @@ export function AttendanceDayPage() {
 
             {day.monthly_overtime && (
               <p className="text-xs text-muted-foreground">
-                今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_overtime_minutes}分
-                (うち月60時間超残業: {day.monthly_overtime.statutory_overtime_over_60h_minutes}分)
+                今月の法定外残業累計(参考): {day.monthly_overtime.cumulative_statutory_excess_overtime_minutes}分
+                (うち月60時間超残業: {day.monthly_overtime.statutory_excess_overtime_over_60h_minutes}分)
               </p>
             )}
 

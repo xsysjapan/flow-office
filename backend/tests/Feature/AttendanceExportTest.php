@@ -26,13 +26,13 @@ class AttendanceExportTest extends TestCase
             'year_month' => '2026-06',
             'status' => 'closed',
             'snapshot_json' => [
-                'actual_work_minutes' => 9600,
+                'work_minutes' => 9600,
                 'prescribed_work_minutes' => 9600,
-                'non_statutory_overtime_minutes' => 0,
-                'statutory_overtime_minutes' => 120,
-                'late_night_minutes' => 60,
+                'statutory_within_overtime_minutes' => 0,
+                'statutory_excess_overtime_minutes' => 120,
+                'late_night_work_minutes' => 60,
                 'legal_holiday_work_minutes' => 0,
-                'company_holiday_work_minutes' => 0,
+                'prescribed_holiday_work_minutes' => 0,
             ],
         ]);
 

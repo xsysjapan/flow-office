@@ -314,7 +314,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正する。
+    * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
      * 実績(actual_start_at/actual_end_at/breaks)が再編集され再計算されると、この補正は
      * 解除される(AttendanceDailyCalculationProjector参照)。
      */
@@ -324,7 +324,7 @@ class AttendanceController extends Controller
         summary: '日次勤怠の区分ごとの時間を手動で補正する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prescribed_work_minutes', 'non_statutory_overtime_minutes', 'statutory_overtime_minutes', 'late_night_minutes', 'legal_holiday_work_minutes', 'company_holiday_work_minutes', 'reason'], properties: [new OA\Property(property: 'prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'non_statutory_overtime_minutes', type: 'integer'), new OA\Property(property: 'statutory_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_minutes', type: 'integer'), new OA\Property(property: 'legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'company_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prescribed_work_minutes', 'statutory_within_overtime_minutes', 'statutory_excess_overtime_minutes', 'legal_holiday_work_minutes', 'late_night_prescribed_work_minutes', 'late_night_statutory_within_overtime_minutes', 'late_night_statutory_excess_overtime_minutes', 'late_night_legal_holiday_work_minutes', 'reason'], properties: [new OA\Property(property: 'prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'late_night_prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function adjustCalculation(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
@@ -333,22 +333,26 @@ class AttendanceController extends Controller
 
         $data = $request->validate([
             'prescribed_work_minutes' => ['required', 'integer', 'min:0'],
-            'non_statutory_overtime_minutes' => ['required', 'integer', 'min:0'],
-            'statutory_overtime_minutes' => ['required', 'integer', 'min:0'],
-            'late_night_minutes' => ['required', 'integer', 'min:0'],
+            'statutory_within_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'statutory_excess_overtime_minutes' => ['required', 'integer', 'min:0'],
             'legal_holiday_work_minutes' => ['required', 'integer', 'min:0'],
-            'company_holiday_work_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_prescribed_work_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_statutory_within_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_statutory_excess_overtime_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_legal_holiday_work_minutes' => ['required', 'integer', 'min:0'],
             'reason' => ['required', 'string'],
         ]);
 
         $commandBus->dispatch(new AdjustAttendanceDailyCalculation(
             attendanceDayId: $attendanceDay->id,
             prescribedWorkMinutes: $data['prescribed_work_minutes'],
-            nonStatutoryOvertimeMinutes: $data['non_statutory_overtime_minutes'],
-            statutoryOvertimeMinutes: $data['statutory_overtime_minutes'],
-            lateNightMinutes: $data['late_night_minutes'],
+            statutoryWithinOvertimeMinutes: $data['statutory_within_overtime_minutes'],
+            statutoryExcessOvertimeMinutes: $data['statutory_excess_overtime_minutes'],
             legalHolidayWorkMinutes: $data['legal_holiday_work_minutes'],
-            companyHolidayWorkMinutes: $data['company_holiday_work_minutes'],
+            lateNightPrescribedWorkMinutes: $data['late_night_prescribed_work_minutes'],
+            lateNightStatutoryWithinOvertimeMinutes: $data['late_night_statutory_within_overtime_minutes'],
+            lateNightStatutoryExcessOvertimeMinutes: $data['late_night_statutory_excess_overtime_minutes'],
+            lateNightLegalHolidayWorkMinutes: $data['late_night_legal_holiday_work_minutes'],
             reason: $data['reason'],
             adjustedByUserId: $request->user()->id,
         ));
@@ -417,7 +421,7 @@ class AttendanceController extends Controller
             // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
             // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
             'flex_settlement_summary' => app(FlexSettlementSummaryCalculator::class)->calculateForMonth($userId, $yearMonth),
-            // 9区分(所定内残業/法定外残業/月60時間超残業/深夜労働等)の月合計。提出前でも
+            // 9区分(法定内残業/法定外残業/月60時間超残業/深夜時間等)の月合計。提出前でも
             // 進捗の目安として都度計算する(提出後はattendance_months.snapshot_jsonが確定値)。
             'monthly_calculation_totals' => app(MonthlyOvertimeCalculator::class)->calculateCategoryTotals($userId, $yearMonth),
         ];

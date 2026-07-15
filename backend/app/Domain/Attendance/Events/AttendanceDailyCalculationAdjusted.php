@@ -16,11 +16,14 @@ class AttendanceDailyCalculationAdjusted implements DomainEvent
     public function __construct(
         public readonly int $attendanceDayId,
         public readonly int $prescribedWorkMinutes,
-        public readonly int $nonStatutoryOvertimeMinutes,
-        public readonly int $statutoryOvertimeMinutes,
-        public readonly int $lateNightMinutes,
+        public readonly int $statutoryWithinOvertimeMinutes,
+        public readonly int $statutoryExcessOvertimeMinutes,
         public readonly int $legalHolidayWorkMinutes,
-        public readonly int $companyHolidayWorkMinutes,
+        public readonly int $prescribedHolidayWorkMinutes,
+        public readonly int $lateNightPrescribedWorkMinutes,
+        public readonly int $lateNightStatutoryWithinOvertimeMinutes,
+        public readonly int $lateNightStatutoryExcessOvertimeMinutes,
+        public readonly int $lateNightLegalHolidayWorkMinutes,
         public readonly string $reason,
         public readonly int $adjustedByUserId,
     ) {}
@@ -35,11 +38,18 @@ class AttendanceDailyCalculationAdjusted implements DomainEvent
         return [
             'attendance_day_id' => $this->attendanceDayId,
             'prescribed_work_minutes' => $this->prescribedWorkMinutes,
-            'non_statutory_overtime_minutes' => $this->nonStatutoryOvertimeMinutes,
-            'statutory_overtime_minutes' => $this->statutoryOvertimeMinutes,
-            'late_night_minutes' => $this->lateNightMinutes,
+            'statutory_within_overtime_minutes' => $this->statutoryWithinOvertimeMinutes,
+            'statutory_excess_overtime_minutes' => $this->statutoryExcessOvertimeMinutes,
+            'late_night_work_minutes' => $this->lateNightPrescribedWorkMinutes
+                + $this->lateNightStatutoryWithinOvertimeMinutes
+                + $this->lateNightStatutoryExcessOvertimeMinutes
+                + $this->lateNightLegalHolidayWorkMinutes,
+            'late_night_prescribed_work_minutes' => $this->lateNightPrescribedWorkMinutes,
+            'late_night_statutory_within_overtime_minutes' => $this->lateNightStatutoryWithinOvertimeMinutes,
+            'late_night_statutory_excess_overtime_minutes' => $this->lateNightStatutoryExcessOvertimeMinutes,
             'legal_holiday_work_minutes' => $this->legalHolidayWorkMinutes,
-            'company_holiday_work_minutes' => $this->companyHolidayWorkMinutes,
+            'prescribed_holiday_work_minutes' => $this->prescribedHolidayWorkMinutes,
+            'late_night_legal_holiday_work_minutes' => $this->lateNightLegalHolidayWorkMinutes,
             'reason' => $this->reason,
             'adjusted_by_user_id' => $this->adjustedByUserId,
         ];

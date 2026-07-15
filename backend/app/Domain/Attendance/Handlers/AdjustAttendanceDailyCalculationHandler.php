@@ -11,7 +11,7 @@ use App\Domain\EventSourcing\EventStore;
 use App\Models\AttendanceDay;
 
 /**
- * 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正する。
+ * 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
  * 締め後・承認済み月次に属する日次勤怠は、実績編集と同様に修正申請ワークフローを使う
  * (AttendanceEditGuard参照)。
  *
@@ -31,6 +31,7 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
         $day = AttendanceDay::query()->findOrFail($command->attendanceDayId);
 
         $this->guard->assertMutable($day, $day->user_id, $day->work_date->toDateString());
+        $prescribedHolidayWorkMinutes = (int) ($day->calculation?->prescribed_holiday_work_minutes ?? 0);
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',
@@ -38,11 +39,14 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
             event: new AttendanceDailyCalculationAdjusted(
                 attendanceDayId: $day->id,
                 prescribedWorkMinutes: $command->prescribedWorkMinutes,
-                nonStatutoryOvertimeMinutes: $command->nonStatutoryOvertimeMinutes,
-                statutoryOvertimeMinutes: $command->statutoryOvertimeMinutes,
-                lateNightMinutes: $command->lateNightMinutes,
+                statutoryWithinOvertimeMinutes: $command->statutoryWithinOvertimeMinutes,
+                statutoryExcessOvertimeMinutes: $command->statutoryExcessOvertimeMinutes,
                 legalHolidayWorkMinutes: $command->legalHolidayWorkMinutes,
-                companyHolidayWorkMinutes: $command->companyHolidayWorkMinutes,
+                prescribedHolidayWorkMinutes: $prescribedHolidayWorkMinutes,
+                lateNightPrescribedWorkMinutes: $command->lateNightPrescribedWorkMinutes,
+                lateNightStatutoryWithinOvertimeMinutes: $command->lateNightStatutoryWithinOvertimeMinutes,
+                lateNightStatutoryExcessOvertimeMinutes: $command->lateNightStatutoryExcessOvertimeMinutes,
+                lateNightLegalHolidayWorkMinutes: $command->lateNightLegalHolidayWorkMinutes,
                 reason: $command->reason,
                 adjustedByUserId: $command->adjustedByUserId,
             ),

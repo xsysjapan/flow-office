@@ -19,20 +19,20 @@ import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 const yearMonth = '2026-07'
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
-  actual_work_minutes: 0,
+  work_minutes: 0,
   payroll_work_minutes: 0,
   prescribed_work_minutes: 0,
-  non_statutory_overtime_minutes: 0,
-  statutory_overtime_minutes: 0,
-  statutory_overtime_within_60h_minutes: 0,
-  statutory_overtime_over_60h_minutes: 0,
-  late_night_minutes: 0,
-  regular_work_late_night_minutes: 0,
-  non_statutory_overtime_late_night_minutes: 0,
-  statutory_overtime_late_night_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
   legal_holiday_work_minutes: 0,
-  company_holiday_work_minutes: 0,
-  legal_holiday_late_night_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
 }
 
 const currentUser: User = {
@@ -139,17 +139,19 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: {
         ...zeroMonthlyCalculationTotals,
-        actual_work_minutes: 2820,
-        non_statutory_overtime_minutes: 60,
-        statutory_overtime_minutes: 360,
-        statutory_overtime_over_60h_minutes: 30,
+        work_minutes: 2820,
+        prescribed_work_minutes: 2400,
+        statutory_within_overtime_minutes: 60,
+        statutory_excess_overtime_minutes: 360,
+        statutory_excess_overtime_over_60h_minutes: 30,
       },
     })
 
     renderPage()
 
     expect(await screen.findByText('今月の集計')).toBeInTheDocument()
-    expect(screen.getByText('2820分')).toBeInTheDocument()
+  expect(screen.getByText('所定労働時間')).toBeInTheDocument()
+  expect(screen.getByText('2400分')).toBeInTheDocument()
     expect(screen.getByText('60分')).toBeInTheDocument()
     expect(screen.getByText('360分')).toBeInTheDocument()
     expect(screen.getByText('30分')).toBeInTheDocument()

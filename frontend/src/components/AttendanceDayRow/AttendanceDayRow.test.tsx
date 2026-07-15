@@ -19,6 +19,26 @@ const day: AttendanceDay = {
   calculation: null,
 }
 
+const calculatedDay: AttendanceDay = {
+  ...day,
+  calculation: {
+    planned_work_minutes: 480,
+    work_minutes: 480,
+    prescribed_work_minutes: 480,
+    statutory_within_overtime_minutes: 0,
+    statutory_excess_overtime_minutes: 0,
+    late_night_work_minutes: 0,
+    late_night_prescribed_work_minutes: 0,
+    late_night_statutory_within_overtime_minutes: 0,
+    late_night_statutory_excess_overtime_minutes: 0,
+    legal_holiday_work_minutes: 0,
+    prescribed_holiday_work_minutes: 0,
+    late_night_legal_holiday_work_minutes: 0,
+    core_time_violation: false,
+    is_manually_adjusted: false,
+  },
+}
+
 function renderRow(props: Partial<ComponentProps<typeof AttendanceDayRow>> = {}) {
   return render(
     <MemoryRouter>
@@ -40,6 +60,11 @@ describe('AttendanceDayRow', () => {
     expect(screen.getByText('2026-07-06(月)')).toBeInTheDocument()
     expect(screen.getByText('退勤済み')).toBeInTheDocument()
     expect(screen.getByText('09:00 〜 18:00')).toBeInTheDocument()
+  })
+
+  it('shows labor time when calculation exists', () => {
+    renderRow({ day: calculatedDay })
+    expect(screen.getByText('労働時間 480分')).toBeInTheDocument()
   })
 
   it('shows 未入力 when there is no record for the day', () => {

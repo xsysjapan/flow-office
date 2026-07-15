@@ -33,7 +33,7 @@ class CreateAttendanceDayTest extends TestCase
 
         $response->assertCreated();
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-06-01')->firstOrFail();
-        $this->assertSame(480, $day->calculation->actual_work_minutes);
+        $this->assertSame(480, $day->calculation->work_minutes);
     }
 
     public function test_a_day_can_be_created_without_any_actual_times(): void
@@ -49,7 +49,7 @@ class CreateAttendanceDayTest extends TestCase
         $response->assertCreated();
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-06-01')->firstOrFail();
         $this->assertNull($day->actual_start_at);
-        $this->assertSame(0, $day->calculation->actual_work_minutes);
+        $this->assertSame(0, $day->calculation->work_minutes);
     }
 
     public function test_creating_a_day_that_already_exists_is_rejected(): void

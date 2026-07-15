@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 区分ごとの時間(所定内労働・残業・深夜・休日労働)を、日次登録後に手動で補正できるように
+ * 区分ごとの時間(所定労働・残業・深夜・休日労働)を、日次登録後に手動で補正できるように
  * する(attendance.daily_calculation_adjustedイベント)。補正後に日次実績が再編集されて
  * 再計算(attendance.day_calculated)されると、この補正は解除される。
  */

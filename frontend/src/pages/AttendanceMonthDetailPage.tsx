@@ -127,33 +127,28 @@ export function AttendanceMonthDetailPage() {
       {data?.monthly_calculation_totals && (
         <Card title="今月の集計">
           <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-            <dt className="font-medium text-muted-foreground">実働</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.actual_work_minutes}分</dd>
-            <dt className="font-medium text-muted-foreground">所定内残業</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.non_statutory_overtime_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">所定労働時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.prescribed_work_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">法定内残業時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_within_overtime_minutes}分</dd>
 
-            <dt className="font-medium text-muted-foreground">法定外残業</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_overtime_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">法定外残業時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_excess_overtime_minutes}分</dd>
             <dt className="font-medium text-muted-foreground">うち月60時間超</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_overtime_over_60h_minutes}分</dd>
+            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}分</dd>
 
-            <dt className="font-medium text-muted-foreground">深夜労働</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_minutes}分</dd>
-            <dt className="font-medium text-muted-foreground">深夜(所定内労働)</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.regular_work_late_night_minutes}分</dd>
-
-            <dt className="font-medium text-muted-foreground">深夜(所定内残業)</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.non_statutory_overtime_late_night_minutes}分</dd>
-            <dt className="font-medium text-muted-foreground">法定外深夜</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.statutory_overtime_late_night_minutes}分</dd>
-
-            <dt className="font-medium text-muted-foreground">法定休日労働</dt>
+            <dt className="font-medium text-muted-foreground">法定休日労働時間</dt>
             <dd className="text-foreground">{data.monthly_calculation_totals.legal_holiday_work_minutes}分</dd>
-            <dt className="font-medium text-muted-foreground">所定休日労働</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.company_holiday_work_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">深夜所定労働時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_prescribed_work_minutes}分</dd>
 
-            <dt className="font-medium text-muted-foreground">法定休日深夜</dt>
-            <dd className="text-foreground">{data.monthly_calculation_totals.legal_holiday_late_night_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">深夜法定内残業時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_statutory_within_overtime_minutes}分</dd>
+            <dt className="font-medium text-muted-foreground">深夜法定外残業時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_statutory_excess_overtime_minutes}分</dd>
+
+            <dt className="font-medium text-muted-foreground">深夜法定休日労働時間</dt>
+            <dd className="text-foreground">{data.monthly_calculation_totals.late_night_legal_holiday_work_minutes}分</dd>
           </dl>
         </Card>
       )}

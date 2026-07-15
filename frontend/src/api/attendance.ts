@@ -52,7 +52,7 @@ export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): 
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
 }
 
-/** 日次登録後、区分ごとの時間(所定内労働・残業・深夜・休日労働)を手動で補正する。
+/** 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
  *  実績(出勤・退勤・休憩)が再編集され再計算されるとこの補正は解除される。 */
 export function adjustAttendanceDailyCalculation(
   id: number,

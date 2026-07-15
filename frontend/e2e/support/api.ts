@@ -133,15 +133,15 @@ export async function fetchAttendanceDay(
   actual_start_at: string | null
   actual_end_at: string | null
   calculation: {
-    actual_work_minutes: number
+    work_minutes: number
     deemed_work_minutes: number | null
     payroll_work_minutes: number
-    non_statutory_overtime_minutes: number
-    statutory_overtime_minutes: number
-    late_night_minutes: number
+    statutory_within_overtime_minutes: number
+    statutory_excess_overtime_minutes: number
+    late_night_work_minutes: number
     legal_holiday_work_minutes: number
-    company_holiday_work_minutes: number
-    legal_holiday_late_night_minutes: number
+    prescribed_holiday_work_minutes: number
+    late_night_legal_holiday_work_minutes: number
   } | null
 }> {
   return apiFetch(page, `/attendance/days/${dayId}`)

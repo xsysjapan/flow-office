@@ -5,7 +5,7 @@ description: Use before merging any change to attendance time-calculation logic 
 
 # 勤怠集計ロジックのセルフレビュー
 
-勤怠の実働時間・残業・深夜・休日労働・有給消化の計算ロジックは、法令に関わるため
+勤怠の労働時間・残業・深夜・休日労働・有給消化の計算ロジックは、法令に関わるため
 安易に変更しない。変更・追加のたびに以下を確認する。
 
 ## 正データの確認
@@ -42,7 +42,7 @@ description: Use before merging any change to attendance time-calculation logic 
 
 ## 変更後に確認すること
 
-- [ ] 変更が既存の集計値(実働/所定内/法定内残業/法定時間外/深夜/休日労働)の
+- [ ] 変更が既存の集計値(労働時間/所定労働/法定内残業/法定外残業/深夜/休日労働)の
       どれに影響するか明示できるか
 - [ ] 法的な解釈(何が法定休日か、変形労働時間制の扱いなど)に関わる変更は、
       `docs/20-implementation-notes.md` の「最終設定は社労士確認を前提にする」旨を

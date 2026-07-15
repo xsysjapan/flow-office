@@ -62,9 +62,9 @@ class ExportController extends Controller
         return response()->streamDownload(function () use ($months) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'user_id', 'user_name', 'year_month', 'actual_work_minutes', 'prescribed_work_minutes',
-                'non_statutory_overtime_minutes', 'statutory_overtime_minutes', 'late_night_minutes',
-                'legal_holiday_work_minutes', 'company_holiday_work_minutes',
+                'user_id', 'user_name', 'year_month', 'work_minutes', 'prescribed_work_minutes',
+                'statutory_within_overtime_minutes', 'statutory_excess_overtime_minutes', 'late_night_work_minutes',
+                'legal_holiday_work_minutes', 'prescribed_holiday_work_minutes',
             ]);
 
             foreach ($months as $month) {
@@ -73,13 +73,13 @@ class ExportController extends Controller
                     $month->user_id,
                     $month->user?->name,
                     $month->year_month,
-                    $snapshot['actual_work_minutes'] ?? 0,
+                    $snapshot['work_minutes'] ?? 0,
                     $snapshot['prescribed_work_minutes'] ?? 0,
-                    $snapshot['non_statutory_overtime_minutes'] ?? 0,
-                    $snapshot['statutory_overtime_minutes'] ?? 0,
-                    $snapshot['late_night_minutes'] ?? 0,
+                    $snapshot['statutory_within_overtime_minutes'] ?? 0,
+                    $snapshot['statutory_excess_overtime_minutes'] ?? 0,
+                    $snapshot['late_night_work_minutes'] ?? 0,
                     $snapshot['legal_holiday_work_minutes'] ?? 0,
-                    $snapshot['company_holiday_work_minutes'] ?? 0,
+                    $snapshot['prescribed_holiday_work_minutes'] ?? 0,
                 ]);
             }
 

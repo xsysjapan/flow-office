@@ -88,10 +88,10 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
-        $this->assertSame(340, $response->json('calculation.statutory_overtime_minutes'));
-        $this->assertSame(3640, $response->json('monthly_overtime.cumulative_statutory_overtime_minutes'));
-        $this->assertSame(300, $response->json('monthly_overtime.statutory_overtime_within_60h_minutes'));
-        $this->assertSame(40, $response->json('monthly_overtime.statutory_overtime_over_60h_minutes'));
+        $this->assertSame(340, $response->json('calculation.statutory_excess_overtime_minutes'));
+        $this->assertSame(3640, $response->json('monthly_overtime.cumulative_statutory_excess_overtime_minutes'));
+        $this->assertSame(300, $response->json('monthly_overtime.statutory_excess_overtime_within_60h_minutes'));
+        $this->assertSame(40, $response->json('monthly_overtime.statutory_excess_overtime_over_60h_minutes'));
     }
 
     public function test_days_before_reaching_the_sixty_hour_threshold_have_no_excess(): void
@@ -104,8 +104,8 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
-        $this->assertSame(300, $response->json('monthly_overtime.statutory_overtime_within_60h_minutes'));
-        $this->assertSame(0, $response->json('monthly_overtime.statutory_overtime_over_60h_minutes'));
+        $this->assertSame(300, $response->json('monthly_overtime.statutory_excess_overtime_within_60h_minutes'));
+        $this->assertSame(0, $response->json('monthly_overtime.statutory_excess_overtime_over_60h_minutes'));
     }
 
     public function test_legal_holiday_work_is_excluded_from_the_sixty_hour_aggregation(): void
@@ -118,8 +118,8 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
-        $this->assertSame(0, $response->json('calculation.statutory_overtime_minutes'), '法定休日労働は法定外残業に含まれない');
-        $this->assertSame(0, $response->json('monthly_overtime.statutory_overtime_over_60h_minutes'));
+        $this->assertSame(0, $response->json('calculation.statutory_excess_overtime_minutes'), '法定休日労働は法定外残業に含まれない');
+        $this->assertSame(0, $response->json('monthly_overtime.statutory_excess_overtime_over_60h_minutes'));
     }
 
     /**
@@ -137,12 +137,12 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $response = $this->actingAs($user)->getJson('/api/attendance/months/2026-06')->assertOk();
         $totals = $response->json('monthly_calculation_totals');
 
-        $this->assertSame(780 + 480, $totals['actual_work_minutes']);
-        $this->assertSame(300, $totals['statutory_overtime_minutes']);
-        $this->assertSame(300, $totals['statutory_overtime_within_60h_minutes']);
-        $this->assertSame(0, $totals['statutory_overtime_over_60h_minutes']);
-        $this->assertSame(60, $totals['late_night_minutes']);
-        $this->assertSame(60, $totals['statutory_overtime_late_night_minutes']);
+        $this->assertSame(780 + 480, $totals['work_minutes']);
+        $this->assertSame(300, $totals['statutory_excess_overtime_minutes']);
+        $this->assertSame(300, $totals['statutory_excess_overtime_within_60h_minutes']);
+        $this->assertSame(0, $totals['statutory_excess_overtime_over_60h_minutes']);
+        $this->assertSame(60, $totals['late_night_work_minutes']);
+        $this->assertSame(60, $totals['late_night_statutory_excess_overtime_minutes']);
     }
 
     /**
@@ -166,9 +166,9 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $snapshot = $response->json('snapshot');
 
-        $this->assertSame(3600, $snapshot['statutory_overtime_minutes'], '1日300分×12日');
-        $this->assertSame(3600, $snapshot['statutory_overtime_within_60h_minutes']);
-        $this->assertSame(0, $snapshot['statutory_overtime_over_60h_minutes']);
-        $this->assertSame(720, $snapshot['statutory_overtime_late_night_minutes'], '1日60分×12日');
+        $this->assertSame(3600, $snapshot['statutory_excess_overtime_minutes'], '1日300分×12日');
+        $this->assertSame(3600, $snapshot['statutory_excess_overtime_within_60h_minutes']);
+        $this->assertSame(0, $snapshot['statutory_excess_overtime_over_60h_minutes']);
+        $this->assertSame(720, $snapshot['late_night_statutory_excess_overtime_minutes'], '1日60分×12日');
     }
 }

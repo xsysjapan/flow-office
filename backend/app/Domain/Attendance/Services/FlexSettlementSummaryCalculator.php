@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
 class FlexSettlementSummaryCalculator
 {
     /**
-     * @return array{settlement_period_start: string, settlement_period_end: string, required_minutes: int, actual_minutes: int, remaining_minutes: int, remaining_working_days: int, per_day_required_minutes: int, core_time_violation_days: int, late_night_minutes: int, legal_holiday_work_minutes: int}|null
+     * @return array{settlement_period_start: string, settlement_period_end: string, required_minutes: int, actual_minutes: int, remaining_minutes: int, remaining_working_days: int, per_day_required_minutes: int, core_time_violation_days: int, late_night_work_minutes: int, legal_holiday_work_minutes: int}|null
      */
     public function calculateForMonth(int $userId, string $yearMonth): ?array
     {
@@ -53,8 +53,8 @@ class FlexSettlementSummaryCalculator
             ->with('calculation')
             ->get();
 
-        $actualMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->actual_work_minutes ?? 0);
-        $lateNightMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->late_night_minutes ?? 0);
+        $actualMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->work_minutes ?? 0);
+        $lateNightWorkMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->late_night_work_minutes ?? 0);
         $legalHolidayWorkMinutes = (int) $days->sum(fn (AttendanceDay $day) => $day->calculation?->legal_holiday_work_minutes ?? 0);
         $coreTimeViolationDays = $days->filter(fn (AttendanceDay $day) => $day->calculation?->core_time_violation === true)->count();
 
@@ -69,7 +69,7 @@ class FlexSettlementSummaryCalculator
             'remaining_working_days' => $remainingWorkingDays,
             'per_day_required_minutes' => $remainingWorkingDays > 0 ? (int) ceil($remainingMinutes / $remainingWorkingDays) : 0,
             'core_time_violation_days' => $coreTimeViolationDays,
-            'late_night_minutes' => $lateNightMinutes,
+            'late_night_work_minutes' => $lateNightWorkMinutes,
             'legal_holiday_work_minutes' => $legalHolidayWorkMinutes,
         ];
     }
