@@ -16,9 +16,9 @@ const assignee = {
 
 const unassignedTasks: BackOfficeTask[] = [
   {
-    id: 1,
+    id: 'backoffice-task-1',
     source_type: 'workflow_request',
-    source_id: 10,
+    source_id: '10',
     task_type: 'expense_reimbursement',
     title: 'タクシー代の経理処理',
     status: 'not_started',
@@ -31,9 +31,9 @@ const unassignedTasks: BackOfficeTask[] = [
 
 const myTasks: BackOfficeTask[] = [
   {
-    id: 2,
+    id: 'backoffice-task-2',
     source_type: 'workflow_request',
-    source_id: 11,
+    source_id: '11',
     task_type: 'business_card_order',
     title: '名刺発注',
     status: 'processing',

@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class AssignBackOfficeTask implements Command
 {
     public function __construct(
-        public readonly int $backOfficeTaskId,
+        public readonly string $backOfficeTaskId,
         public readonly int $assignedUserId,
         public readonly int $assignedByUserId,
     ) {}

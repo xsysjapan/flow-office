@@ -38,7 +38,7 @@ function SectionHeading({ children }: { children: string }) {
  */
 export function WorkflowRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const requestId = Number(id)
+  const requestId = id ?? ''
   const { user } = useAuth()
   const { data: request, isLoading, error } = useWorkflowRequest(requestId)
 

@@ -14,7 +14,9 @@ return new class extends Migration
         Schema::create('attachments', function (Blueprint $table) {
             $table->id();
             $table->string('owner_type');
-            $table->unsignedBigInteger('owner_id');
+            // ポリモーフィックな所有者のID。attendance_day は数値ID、workflow_request は
+            // UUID なので string にする(混在するため型を固定できない)。
+            $table->string('owner_id');
             $table->foreignId('uploaded_by')->constrained('users');
             $table->string('file_name');
             $table->string('stored_path');

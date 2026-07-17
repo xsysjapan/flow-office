@@ -12,7 +12,6 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\BackOfficeTask;
 use App\Models\BackOfficeTaskStatus;
 use App\Models\WorkflowRequest;
-use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
 /**
@@ -36,12 +35,6 @@ class ChangeBackOfficeTaskStatusHandler implements CommandHandler
         $this->assertAllowedTransition($task, $command->newStatus);
 
         $previousStatus = $task->status;
-        $task->status = $command->newStatus;
-
-        if ($command->newStatus === BackOfficeTaskStatus::COMPLETED) {
-            $task->completed_at = Carbon::now();
-        }
-        $task->save();
 
         if ($command->newStatus === BackOfficeTaskStatus::COMPLETED) {
             $this->eventStore->append(
@@ -67,7 +60,7 @@ class ChangeBackOfficeTaskStatusHandler implements CommandHandler
             );
         }
 
-        return $task;
+        return $task->refresh();
     }
 
     /**

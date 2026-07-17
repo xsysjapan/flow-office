@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class BackOfficeTaskAssigned implements DomainEvent
 {
     public function __construct(
-        public readonly int $backOfficeTaskId,
+        public readonly string $backOfficeTaskId,
         public readonly int $assignedUserId,
         public readonly int $assignedByUserId,
     ) {}

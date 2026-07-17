@@ -79,6 +79,7 @@ use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
+use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -127,6 +128,7 @@ use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\SubmitWorkflowRequestHandler;
+use App\Domain\Workflow\Projectors\WorkflowRequestProjector;
 
 return [
 
@@ -220,13 +222,21 @@ return [
     |
     | stored_events を購読してProjection Table (再生成可能な派生データ) を更新する
     | Projectorの一覧。`php artisan projections:rebuild` はこのリストを総なめして再生成する。
-    | 注意: backoffice_tasks / attendance_days のような「正データ」はここに含めない。
-    | 正データはCommandHandlerが直接更新するものであり、再生成対象ではない。
+    | 注意: attendance_days / paid_leave_requests / special_leave_requests のような
+    | 「正データ」はここに含めない。これらはCommandHandlerが直接更新するものであり、
+    | 再生成対象ではない(承認1件が複数集約にまたがる副作用を持つなど、単純な
+    | イベント→行の対応関係に収まらないため)。
+    |
+    | workflow_requests / backoffice_tasks は主キーをコマンド側生成のUUIDにしたことで、
+    | 行の新規作成を含めて完全にProjector化している(DB採番PKだと集約IDが確定する前に
+    | イベントを書けず、作成イベントだけはProjector化できないため)。
     | (.claude/skills/add-projection 参照)
     |
     */
     'projectors' => [
         AttendanceDailyCalculationProjector::class,
+        WorkflowRequestProjector::class,
+        BackOfficeTaskProjector::class,
     ],
 
 ];

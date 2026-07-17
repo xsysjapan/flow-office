@@ -12,9 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('backoffice_tasks', function (Blueprint $table) {
-            $table->id();
+            // workflow_requests と同様、Projector経由で作成できるようコマンド側生成のUUIDを
+            // 主キーにする(.claude/skills/add-projection「集約ルートのUUID化」参照)。
+            $table->uuid('id')->primary();
             $table->string('source_type');
-            $table->unsignedBigInteger('source_id');
+            // ポリモーフィックな発生源のID(workflow_request は UUID)。将来の発生源が
+            // 数値IDでも文字列として保持できるよう string にする。
+            $table->string('source_id');
             $table->string('task_type');
             $table->string('title');
             $table->string('status')->default('not_started');

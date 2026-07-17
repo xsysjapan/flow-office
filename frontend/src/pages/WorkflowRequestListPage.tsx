@@ -23,7 +23,7 @@ export function WorkflowRequestListPage() {
   const { data, isLoading, error } = useMyWorkflowRequests()
   const cancelRequest = useCancelWorkflowRequest()
 
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkReason, setBulkReason] = useState('')
   const [isBulkCancelling, setIsBulkCancelling] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
@@ -33,7 +33,7 @@ export function WorkflowRequestListPage() {
 
   const requests = data?.data ?? []
 
-  function toggleRow(id: number) {
+  function toggleRow(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)

@@ -3,13 +3,13 @@ import type { Attachment } from './types'
 
 export type AttachmentOwnerType = 'workflow_request'
 
-export function fetchAttachments(ownerType: AttachmentOwnerType, ownerId: number): Promise<Attachment[]> {
+export function fetchAttachments(ownerType: AttachmentOwnerType, ownerId: string): Promise<Attachment[]> {
   return apiFetch('/attachments', { query: { owner_type: ownerType, owner_id: ownerId } })
 }
 
 export async function uploadAttachment(
   ownerType: AttachmentOwnerType,
-  ownerId: number,
+  ownerId: string,
   file: File,
 ): Promise<Attachment> {
   const formData = new FormData()

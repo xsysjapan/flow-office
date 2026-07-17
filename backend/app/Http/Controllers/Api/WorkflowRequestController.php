@@ -66,7 +66,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.show',
         summary: '申請詳細を取得する',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function show(Request $request, WorkflowRequest $workflowRequest): WorkflowRequestResource
@@ -111,7 +111,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.submit',
         summary: '申請を提出する',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'approver_user_id', type: 'integer', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -135,7 +135,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.approve',
         summary: '申請を承認する',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function approve(Request $request, WorkflowRequest $workflowRequest, CommandBus $commandBus): WorkflowRequestResource
@@ -153,7 +153,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.return',
         summary: '申請を差し戻す',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -179,7 +179,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.history',
         summary: '申請の履歴を取得する',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function history(Request $request, WorkflowRequest $workflowRequest): AnonymousResourceCollection
@@ -208,7 +208,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.cancel',
         summary: '申請を取り消す',
         tags: ['汎用申請'],
-        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

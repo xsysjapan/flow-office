@@ -11,7 +11,7 @@ use App\Domain\Workflow\Events\WorkflowRequestDrafted;
 use App\Models\RequestType;
 use App\Models\User;
 use App\Models\WorkflowRequest;
-use App\Models\WorkflowRequestStatus;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -41,26 +41,24 @@ class DraftWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException("申請種別 [{$requestType->name}] を申請する権限がありません。");
         }
 
-        $workflowRequest = WorkflowRequest::query()->create([
-            'request_type_id' => $requestType->id,
-            'title' => $command->title,
-            'applicant_user_id' => $command->applicantUserId,
-            'approver_user_id' => $command->approverUserId,
-            'status' => WorkflowRequestStatus::DRAFT,
-            'form_data' => $command->formData,
-        ]);
+        // 主キーがコマンド側生成のUUIDのため、workflow_requests行はここで直接作成せず
+        // WorkflowRequestProjectorに委ねる(.claude/skills/add-projection参照)。
+        $workflowRequestId = (string) Str::uuid();
 
         $this->eventStore->append(
             aggregateType: 'workflow_request',
-            aggregateId: (string) $workflowRequest->id,
+            aggregateId: $workflowRequestId,
             event: new WorkflowRequestDrafted(
-                workflowRequestId: $workflowRequest->id,
+                workflowRequestId: $workflowRequestId,
+                requestTypeId: $requestType->id,
                 requestTypeCode: $requestType->code,
                 applicantUserId: $command->applicantUserId,
                 title: $command->title,
+                formData: $command->formData,
+                approverUserId: $command->approverUserId,
             ),
         );
 
-        return $workflowRequest;
+        return WorkflowRequest::query()->findOrFail($workflowRequestId);
     }
 }

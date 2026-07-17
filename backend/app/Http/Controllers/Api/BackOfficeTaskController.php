@@ -59,7 +59,7 @@ class BackOfficeTaskController extends Controller
         operationId: 'backofficeTasks.show',
         summary: 'バックオフィスタスク詳細を取得する',
         tags: ['バックオフィス処理'],
-        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function show(BackOfficeTask $backOfficeTask): BackOfficeTaskResource
@@ -72,7 +72,7 @@ class BackOfficeTaskController extends Controller
         operationId: 'backofficeTasks.assign',
         summary: 'バックオフィスタスク担当者を割り当てる',
         tags: ['バックオフィス処理'],
-        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['assigned_user_id'], properties: [new OA\Property(property: 'assigned_user_id', type: 'integer')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -94,7 +94,7 @@ class BackOfficeTaskController extends Controller
         operationId: 'backofficeTasks.changeStatus',
         summary: 'バックオフィスタスクのステータスを更新する',
         tags: ['バックオフィス処理'],
-        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['status'], properties: [new OA\Property(property: 'status', type: 'string'), new OA\Property(property: 'comment', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

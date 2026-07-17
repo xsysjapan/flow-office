@@ -35,7 +35,7 @@ vi.mock('../auth/useAuth', () => ({
 }))
 
 const submittedRequest: WorkflowRequest = {
-  id: 1,
+  id: 'workflow-request-1',
   title: 'タクシー代',
   status: 'submitted',
   form_data: { amount: '1200' },
@@ -108,7 +108,9 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage(submittedRequest)
     await userEvent.click(await screen.findByRole('button', { name: '承認する' }))
 
-    await waitFor(() => expect(workflowRequestsApi.approveWorkflowRequest).toHaveBeenCalledWith(1))
+    await waitFor(() =>
+      expect(workflowRequestsApi.approveWorkflowRequest).toHaveBeenCalledWith('workflow-request-1'),
+    )
   })
 
   it('returns the request with a comment when the approver clicks return', async () => {
@@ -123,7 +125,7 @@ describe('WorkflowRequestDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '差戻す' }))
 
     await waitFor(() =>
-      expect(workflowRequestsApi.returnWorkflowRequest).toHaveBeenCalledWith(1, '不備があります'),
+      expect(workflowRequestsApi.returnWorkflowRequest).toHaveBeenCalledWith('workflow-request-1', '不備があります'),
     )
   })
 
@@ -158,7 +160,7 @@ describe('WorkflowRequestDetailPage', () => {
     await userEvent.upload(input, file)
 
     await waitFor(() =>
-      expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('workflow_request', 1, file),
+      expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('workflow_request', 'workflow-request-1', file),
     )
   })
 

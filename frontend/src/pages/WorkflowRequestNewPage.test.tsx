@@ -69,7 +69,7 @@ describe('WorkflowRequestNewPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [approver], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
 
     const created: WorkflowRequest = {
-      id: 42,
+      id: 'workflow-request-42',
       title: 'タクシー代',
       status: 'draft',
       form_data: { amount: '1200' },
@@ -102,7 +102,7 @@ describe('WorkflowRequestNewPage', () => {
       }),
     )
     await waitFor(() =>
-      expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith(42, 5),
+      expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-42', 5),
     )
     expect(await screen.findByText('申請詳細ページ')).toBeInTheDocument()
   })

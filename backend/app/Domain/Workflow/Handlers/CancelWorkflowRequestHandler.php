@@ -11,7 +11,6 @@ use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
-use Illuminate\Support\Carbon;
 
 /**
  * @implements CommandHandler<CancelWorkflowRequest>
@@ -34,10 +33,6 @@ class CancelWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException('この申請は現在のステータスからは取り消せません。');
         }
 
-        $workflowRequest->status = WorkflowRequestStatus::CANCELLED;
-        $workflowRequest->cancelled_at = Carbon::now();
-        $workflowRequest->save();
-
         $this->eventStore->append(
             aggregateType: 'workflow_request',
             aggregateId: (string) $workflowRequest->id,
@@ -56,6 +51,6 @@ class CancelWorkflowRequestHandler implements CommandHandler
             );
         }
 
-        return $workflowRequest;
+        return $workflowRequest->refresh();
     }
 }

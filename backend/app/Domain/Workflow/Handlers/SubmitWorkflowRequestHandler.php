@@ -11,7 +11,6 @@ use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -44,11 +43,6 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             throw ValidationException::withMessages(['approver_user_id' => ['承認者を指定してください。']]);
         }
 
-        $workflowRequest->approver_user_id = $approverUserId;
-        $workflowRequest->status = WorkflowRequestStatus::SUBMITTED;
-        $workflowRequest->submitted_at = Carbon::now();
-        $workflowRequest->save();
-
         $this->eventStore->append(
             aggregateType: 'workflow_request',
             aggregateId: (string) $workflowRequest->id,
@@ -65,6 +59,6 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             detailUrl: null,
         );
 
-        return $workflowRequest;
+        return $workflowRequest->refresh();
     }
 }

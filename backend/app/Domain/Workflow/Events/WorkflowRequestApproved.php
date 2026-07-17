@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class WorkflowRequestApproved implements DomainEvent
 {
     public function __construct(
-        public readonly int $workflowRequestId,
+        public readonly string $workflowRequestId,
         public readonly int $approvedByUserId,
     ) {}
 

@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class SubmitWorkflowRequest implements Command
 {
     public function __construct(
-        public readonly int $workflowRequestId,
+        public readonly string $workflowRequestId,
         public readonly int $submittedByUserId,
         public readonly ?int $approverUserId = null,
     ) {}

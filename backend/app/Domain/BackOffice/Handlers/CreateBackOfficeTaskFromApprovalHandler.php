@@ -9,9 +9,9 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\BackOfficeTask;
-use App\Models\BackOfficeTaskStatus;
 use App\Models\WorkflowRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * UC-B001: バックオフィスタスクを自動作成する。
@@ -34,27 +34,27 @@ class CreateBackOfficeTaskFromApprovalHandler implements CommandHandler
         }
 
         $taskType = $requestType->backoffice_task_type ?? 'general_affairs';
+        $title = "{$requestType->name}: {$workflowRequest->title}";
 
-        $task = BackOfficeTask::query()->create([
-            'source_type' => 'workflow_request',
-            'source_id' => $workflowRequest->id,
-            'task_type' => $taskType,
-            'title' => "{$requestType->name}: {$workflowRequest->title}",
-            'status' => BackOfficeTaskStatus::NOT_STARTED,
-            'assigned_department' => $requestType->backoffice_department,
-            'due_on' => Carbon::now()->addDays(7)->toDateString(),
-        ]);
+        // 主キーがコマンド側生成のUUIDのため、backoffice_tasks行はここで直接作成せず
+        // BackOfficeTaskProjectorに委ねる(.claude/skills/add-projection参照)。
+        $backOfficeTaskId = (string) Str::uuid();
 
         $this->eventStore->append(
             aggregateType: 'backoffice_task',
-            aggregateId: (string) $task->id,
+            aggregateId: $backOfficeTaskId,
             event: new BackOfficeTaskCreated(
-                backOfficeTaskId: $task->id,
+                backOfficeTaskId: $backOfficeTaskId,
                 sourceType: 'workflow_request',
                 sourceId: $workflowRequest->id,
                 taskType: $taskType,
+                title: $title,
+                assignedDepartment: $requestType->backoffice_department,
+                dueOn: Carbon::now()->addDays(7)->toDateString(),
             ),
         );
+
+        $task = BackOfficeTask::query()->findOrFail($backOfficeTaskId);
 
         SendTeamsNotificationJob::enqueue(
             title: 'バックオフィスタスク作成',

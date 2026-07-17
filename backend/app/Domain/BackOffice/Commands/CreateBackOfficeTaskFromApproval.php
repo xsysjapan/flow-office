@@ -10,5 +10,5 @@ use App\Domain\EventSourcing\Contracts\Command;
  */
 class CreateBackOfficeTaskFromApproval implements Command
 {
-    public function __construct(public readonly int $workflowRequestId) {}
+    public function __construct(public readonly string $workflowRequestId) {}
 }

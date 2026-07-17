@@ -15,9 +15,9 @@ const assignee = {
 }
 
 const baseTask: BackOfficeTask = {
-  id: 1,
+  id: 'backoffice-task-1',
   source_type: 'workflow_request',
-  source_id: 10,
+  source_id: '10',
   task_type: 'expense_reimbursement',
   title: 'タクシー代の経理処理',
   status: 'not_started',

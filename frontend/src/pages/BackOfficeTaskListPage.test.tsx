@@ -37,9 +37,9 @@ describe('BackOfficeTaskListPage', () => {
   it('lists unassigned tasks and my tasks with status and due date', async () => {
     const unassigned: BackOfficeTask[] = [
       {
-        id: 1,
+        id: 'backoffice-task-1',
         source_type: 'workflow_request',
-        source_id: 10,
+        source_id: '10',
         task_type: 'expense_reimbursement',
         title: 'タクシー代の経理処理',
         status: 'not_started',
@@ -51,9 +51,9 @@ describe('BackOfficeTaskListPage', () => {
     ]
     const mine: BackOfficeTask[] = [
       {
-        id: 2,
+        id: 'backoffice-task-2',
         source_type: 'workflow_request',
-        source_id: 11,
+        source_id: '11',
         task_type: 'business_card_order',
         title: '名刺発注',
         status: 'processing',
@@ -79,12 +79,12 @@ describe('BackOfficeTaskListPage', () => {
 
     expect(await screen.findByRole('link', { name: 'タクシー代の経理処理' })).toHaveAttribute(
       'href',
-      '/backoffice-tasks/1',
+      '/backoffice-tasks/backoffice-task-1',
     )
     expect(screen.getByText('未着手')).toBeInTheDocument()
     expect(screen.getByText('期限: 2026-07-15')).toBeInTheDocument()
 
-    expect(screen.getByRole('link', { name: '名刺発注' })).toHaveAttribute('href', '/backoffice-tasks/2')
+    expect(screen.getByRole('link', { name: '名刺発注' })).toHaveAttribute('href', '/backoffice-tasks/backoffice-task-2')
     expect(screen.getByText('処理中')).toBeInTheDocument()
     expect(screen.getByText('担当者花子')).toBeInTheDocument()
   })
@@ -92,9 +92,9 @@ describe('BackOfficeTaskListPage', () => {
   it('bulk-assigns selected unassigned tasks to the picked user', async () => {
     const unassigned: BackOfficeTask[] = [
       {
-        id: 1,
+        id: 'backoffice-task-1',
         source_type: 'workflow_request',
-        source_id: 10,
+        source_id: '10',
         task_type: 'expense_reimbursement',
         title: 'タクシー代の経理処理',
         status: 'not_started',
@@ -104,9 +104,9 @@ describe('BackOfficeTaskListPage', () => {
         created_at: '2026-07-01T00:00:00+09:00',
       },
       {
-        id: 3,
+        id: 'backoffice-task-3',
         source_type: 'workflow_request',
-        source_id: 12,
+        source_id: '12',
         task_type: 'business_card_order',
         title: '名刺の再作成',
         status: 'not_started',
@@ -143,7 +143,7 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
-    expect(assignSpy).toHaveBeenCalledWith(1, 2)
-    expect(assignSpy).toHaveBeenCalledWith(3, 2)
+    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 2)
+    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 2)
   })
 })
