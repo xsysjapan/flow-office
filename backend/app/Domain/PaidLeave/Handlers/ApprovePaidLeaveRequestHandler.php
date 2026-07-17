@@ -68,7 +68,7 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
 
         $this->consumeGrants($request, $day->id);
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',

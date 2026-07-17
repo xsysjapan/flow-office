@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -18,7 +19,6 @@ use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
-use App\Models\StoredEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -304,28 +304,18 @@ class PaidLeaveController extends Controller
     }
 
     /**
-     * `paid_leave_grant`/`paid_leave_request` それぞれの集約に属するイベントを時系列で返す。
-     * `paid_leave.request_approved`/`request_returned`/`request_cancelled` のpayloadには
-     * 申請者本人の `user_id` ではなく実行者(承認者等)のIDしか含まれないため、payloadの中身で
-     * 絞り込むのではなく、対象社員が実際に持つ `paid_leave_grants`/`paid_leave_requests` の
-     * id(=aggregate_id)で絞り込む。
+     * `paid_leave_grant`/`paid_leave_request` それぞれの集約に属するイベントを時系列で返す
+     * (LeaveHistoryQuery参照。有給・特別休暇で共通の読み取り専用Query)。
      */
     private function historyResponse(int $userId): AnonymousResourceCollection
     {
-        $grantIds = PaidLeaveGrant::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
-        $requestIds = PaidLeaveRequest::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
-
-        $events = StoredEvent::query()
-            ->where(function ($query) use ($grantIds, $requestIds) {
-                $query->where(fn ($q) => $q->where('aggregate_type', 'paid_leave_grant')->whereIn('aggregate_id', $grantIds))
-                    ->orWhere(fn ($q) => $q->where('aggregate_type', 'paid_leave_request')->whereIn('aggregate_id', $requestIds));
-            })
-            // occurred_atは秒単位までしか保持しないため、同一リクエスト内で複数イベントが
-            // 記録された場合に順序が曖昧にならないよう、idを副次的な並び順として使う
-            // (idは常に記録順に単調増加するため)。
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->get();
+        $events = LeaveHistoryQuery::eventsForUser(
+            userId: $userId,
+            grantModelClass: PaidLeaveGrant::class,
+            grantAggregateType: 'paid_leave_grant',
+            requestModelClass: PaidLeaveRequest::class,
+            requestAggregateType: 'paid_leave_request',
+        );
 
         return StoredEventResource::collection($events);
     }

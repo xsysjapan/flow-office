@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { StoredEvent } from '../../api/types'
-import { PaidLeaveHistoryList } from './PaidLeaveHistoryList'
+import { LeaveHistoryList } from './LeaveHistoryList'
 
 const events: StoredEvent[] = [
   {
@@ -46,25 +46,33 @@ const events: StoredEvent[] = [
 ]
 
 const meta = {
-  title: 'Components/PaidLeaveHistoryList',
-  component: PaidLeaveHistoryList,
-} satisfies Meta<typeof PaidLeaveHistoryList>
+  title: 'Components/LeaveHistoryList',
+  component: LeaveHistoryList,
+} satisfies Meta<typeof LeaveHistoryList>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
-  args: { events, isLoading: false },
+  args: { domain: 'paid_leave', events, isLoading: false },
+}
+
+export const SpecialLeave: Story = {
+  args: {
+    domain: 'special_leave',
+    events: events.map((event) => ({ ...event, event_type: event.event_type.replace('paid_leave', 'special_leave') })),
+    isLoading: false,
+  },
 }
 
 export const Loading: Story = {
-  args: { events: undefined, isLoading: true },
+  args: { domain: 'paid_leave', events: undefined, isLoading: true },
 }
 
 export const Empty: Story = {
-  args: { events: [], isLoading: false },
+  args: { domain: 'paid_leave', events: [], isLoading: false },
 }
 
 export const WithError: Story = {
-  args: { events: undefined, isLoading: false, error: new Error('取得に失敗しました') },
+  args: { domain: 'paid_leave', events: undefined, isLoading: false, error: new Error('取得に失敗しました') },
 }

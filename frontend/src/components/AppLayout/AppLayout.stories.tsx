@@ -1,9 +1,13 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { fn } from 'storybook/test'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import type { User } from '../../api/types'
 import { AppLayout } from './AppLayout'
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+queryClient.setQueryData(['special-leave', 'types'], [])
 
 const mockUser: User = {
   id: 1,
@@ -34,15 +38,17 @@ const meta = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <AuthContext.Provider value={mockAuthValue}>
-        <MemoryRouter initialEntries={['/']}>
-          <Routes>
-            <Route path="/" element={<Story />}>
-              <Route index element={<p>今日の勤怠画面がここに表示されます。</p>} />
-            </Route>
-          </Routes>
-        </MemoryRouter>
-      </AuthContext.Provider>
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={mockAuthValue}>
+          <MemoryRouter initialEntries={['/']}>
+            <Routes>
+              <Route path="/" element={<Story />}>
+                <Route index element={<p>今日の勤怠画面がここに表示されます。</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </QueryClientProvider>
     ),
   ],
 } satisfies Meta<typeof AppLayout>

@@ -34,10 +34,9 @@ describe('AttendanceCalculationSummary', () => {
     render(
       <AttendanceCalculationSummary
         title="今月の集計"
-        totals={{ ...totals, absence_minutes: 60, paid_leave_days: 1 }}
+        totals={{ ...totals, absence_minutes: 60, paid_leave_days: 1, special_leave_days: 1 }}
         statutoryExcessOver60hMinutes={30}
         absenceDays={1}
-        specialLeaveDays={1}
         showAllLeaveTotals
       />,
     )

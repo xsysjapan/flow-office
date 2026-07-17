@@ -19,7 +19,7 @@ import {
 } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { NativeSelect } from '../components/ui/native-select'
-import type { AttendanceDay, AttendanceDayDefaults, AttendanceLeaveSegmentCategory, AttendancePunch, PunchType } from '../api/types'
+import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType } from '../api/types'
 import type { AttendanceDayPunchLogAction } from '../api/attendance'
 import { useEditableRows } from '../hooks/useEditableRows'
 import {
@@ -43,12 +43,7 @@ import {
   isoToTimeLiteral,
   offsetMinutesToString,
 } from '../utils/offsetDateTime'
-import {
-  attendanceDayStatusLabel,
-  attendanceLeaveSegmentCategoryLabel,
-  punchStatusLabel,
-  punchTypeLabel,
-} from '../utils/statusLabels'
+import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../utils/statusLabels'
 import { addDays, formatDate, mondayOf } from '../utils/weekDates'
 
 const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string | null> = {
@@ -144,10 +139,7 @@ function BreakRowsEditor({
   )
 }
 
-const LEAVE_SEGMENT_CATEGORIES: AttendanceLeaveSegmentCategory[] = ['absence', 'special_leave']
-
 interface LeaveSegmentRowData {
-  category: AttendanceLeaveSegmentCategory
   start: string
   end: string
   note: string
@@ -157,7 +149,6 @@ function buildLeaveSegmentsPayload(rows: LeaveSegmentRowData[], offset: string) 
   return rows
     .filter((row) => row.start && row.end)
     .map((row) => ({
-      category: row.category,
       start: combineDatetimeLocalWithOffset(row.start, offset) ?? '',
       end: combineDatetimeLocalWithOffset(row.end, offset) ?? '',
       note: row.note || null,
@@ -165,9 +156,9 @@ function buildLeaveSegmentsPayload(rows: LeaveSegmentRowData[], offset: string) 
 }
 
 /**
- * 欠勤・特別休暇の区間(有給休暇は既存のUC-P003/P004で申請・承認する)。実績(出勤・退勤)の
- * 内側・外側どちらの時間帯も入力できる(docs/07-usecases-attendance.md「不就労時間の処理
- * 区分」参照)。
+ * 遅刻・早退等を欠勤時間として扱う区間(有給休暇・特別休暇は既存の申請・承認機能で扱う)。
+ * 実績(出勤・退勤)の内側・外側どちらの時間帯も入力できる(docs/07-usecases-attendance.md
+ * 「不就労時間の処理区分」参照)。
  */
 function LeaveSegmentsEditor({
   rows,
@@ -182,37 +173,25 @@ function LeaveSegmentsEditor({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">欠勤・特別休暇</span>
+      <span className="text-xs font-medium text-muted-foreground">遅刻・早退</span>
       {rows.map((row) => (
         <div key={row.rowId} className="flex flex-wrap items-center gap-2">
-          <NativeSelect
-            aria-label="処理区分"
-            className="w-auto"
-            value={row.category}
-            onChange={(e) => onUpdate(row.rowId, { category: e.target.value as AttendanceLeaveSegmentCategory })}
-          >
-            {LEAVE_SEGMENT_CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {attendanceLeaveSegmentCategoryLabel(category)}
-              </option>
-            ))}
-          </NativeSelect>
           <Input
             type="datetime-local"
-            aria-label="欠勤・特別休暇開始"
+            aria-label="遅刻・早退開始"
             className="w-auto"
             value={row.start}
             onChange={(e) => onUpdate(row.rowId, { start: e.target.value })}
           />
           <Input
             type="datetime-local"
-            aria-label="欠勤・特別休暇終了"
+            aria-label="遅刻・早退終了"
             className="w-auto"
             value={row.end}
             onChange={(e) => onUpdate(row.rowId, { end: e.target.value })}
           />
           <Input
-            aria-label="欠勤・特別休暇の備考"
+            aria-label="遅刻・早退の備考"
             placeholder="備考"
             className="w-auto"
             value={row.note}
@@ -224,7 +203,7 @@ function LeaveSegmentsEditor({
         </div>
       ))}
       <Button variant="secondary" className="self-start" onClick={onAdd}>
-        欠勤・特別休暇を追加
+        遅刻・早退を追加
       </Button>
     </div>
   )
@@ -532,7 +511,6 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
     removeRow: removeLeaveSegmentRow,
   } = useEditableRows<LeaveSegmentRowData>(
     (day.leave_segments ?? []).map((segment) => ({
-      category: segment.category,
       start: toDatetimeLocal(segment.start_at),
       end: toDatetimeLocal(segment.end_at),
       note: segment.note ?? '',
@@ -590,7 +568,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
 
       <LeaveSegmentsEditor
         rows={leaveSegmentRows}
-        onAdd={() => addLeaveSegmentRow({ category: 'absence', start: '', end: '', note: '' })}
+        onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
         onRemove={removeLeaveSegmentRow}
       />
@@ -699,7 +677,7 @@ function DayCreateForm({ date }: { date: string }) {
 
       <LeaveSegmentsEditor
         rows={leaveSegmentRows}
-        onAdd={() => addLeaveSegmentRow({ category: 'absence', start: '', end: '', note: '' })}
+        onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
         onRemove={removeLeaveSegmentRow}
       />
@@ -842,9 +820,6 @@ export function AttendanceDayPage() {
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
     ? 1
     : 0
-  const specialLeaveDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.special_leave_minutes ?? 0) >= day.calculation.prescribed_work_minutes
-    ? 1
-    : 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -896,7 +871,6 @@ export function AttendanceDayPage() {
                   title="この日の集計"
                   totals={day.calculation}
                   absenceDays={day.calculation.absence_minutes ? absenceDays : undefined}
-                  specialLeaveDays={day.calculation.special_leave_minutes ? specialLeaveDays : undefined}
                 />
 
                 <div className="flex items-center gap-2">
@@ -954,8 +928,7 @@ export function AttendanceDayPage() {
               <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
                 {day.leave_segments.map((segment) => (
                   <li key={segment.id}>
-                    {attendanceLeaveSegmentCategoryLabel(segment.category)}{' '}
-                    {isoToTimeLiteral(segment.start_at) || '--:--'} 〜 {isoToTimeLiteral(segment.end_at) || '--:--'}
+                    遅刻・早退 {isoToTimeLiteral(segment.start_at) || '--:--'} 〜 {isoToTimeLiteral(segment.end_at) || '--:--'}
                     {segment.note && ` (${segment.note})`}
                   </li>
                 ))}

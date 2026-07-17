@@ -77,6 +77,7 @@ class AttendanceDailyCalculationProjector implements Projector
                 'special_leave_minutes' => $payload['special_leave_minutes'] ?? 0,
                 'paid_leave_days' => $payload['paid_leave_days'] ?? 0,
                 'paid_leave_minutes' => $payload['paid_leave_minutes'] ?? 0,
+                'special_leave_days' => $payload['special_leave_days'] ?? 0,
                 // 実績の再編集による再計算は、直前の手動補正を解除する(再計算結果が最新の正)。
                 'is_manually_adjusted' => false,
                 'adjusted_by_user_id' => null,

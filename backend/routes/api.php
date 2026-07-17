@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
+use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
@@ -178,6 +179,27 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/paid-leave/grants/user/{userId}', [PaidLeaveController::class, 'grantsForUser']);
         Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
+    });
+
+    // --- 特別休暇の種別マスタ・残数管理・申請・承認(有給と同じUXだが、ビジネスロジックは
+    //     App\Domain\SpecialLeaveとして完全に独立させる) ---
+    Route::get('/special-leave/types', [SpecialLeaveController::class, 'indexTypes']);
+    Route::get('/special-leave/grant-rules', [SpecialLeaveController::class, 'indexRules']);
+    Route::get('/special-leave/grants/mine', [SpecialLeaveController::class, 'myGrants']);
+    Route::get('/special-leave/requests/mine', [SpecialLeaveController::class, 'myRequests']);
+    Route::get('/special-leave/requests/to-approve', [SpecialLeaveController::class, 'requestsToApprove']);
+    Route::get('/special-leave/history/mine', [SpecialLeaveController::class, 'myHistory']);
+    Route::post('/special-leave/requests', [SpecialLeaveController::class, 'storeRequest']);
+    Route::post('/special-leave/requests/{specialLeaveRequest}/approve', [SpecialLeaveController::class, 'approveRequest']);
+    Route::post('/special-leave/requests/{specialLeaveRequest}/return', [SpecialLeaveController::class, 'returnRequest']);
+    Route::post('/special-leave/requests/{specialLeaveRequest}/cancel', [SpecialLeaveController::class, 'cancelRequest']);
+    Route::middleware('role:admin,hr_staff')->group(function () {
+        Route::post('/special-leave/types', [SpecialLeaveController::class, 'storeType']);
+        Route::put('/special-leave/types/{specialLeaveType}', [SpecialLeaveController::class, 'updateType']);
+        Route::post('/special-leave/grant-rules', [SpecialLeaveController::class, 'storeRule']);
+        Route::get('/special-leave/grants/user/{userId}', [SpecialLeaveController::class, 'grantsForUser']);
+        Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
+        Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
     });
 
     // --- 監査ログ (docs/15-usecases-admin.md UC-M003) ---

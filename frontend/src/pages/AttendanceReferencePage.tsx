@@ -14,12 +14,7 @@ import { useAttendanceMonth, useWeek } from '../hooks/useAttendance'
 import { dayWarnings } from '../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../utils/attendanceWeeklyTotals'
 import { isoToTimeLiteral } from '../utils/offsetDateTime'
-import {
-  attendanceDayStatusLabel,
-  attendanceLeaveSegmentCategoryLabel,
-  attendanceMonthStatusLabel,
-  legalHolidayWarningLabel,
-} from '../utils/statusLabels'
+import { attendanceDayStatusLabel, attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../utils/statusLabels'
 import { addDays, addMonths, datesInMonth, formatDate, mondayOf, weekDates } from '../utils/weekDates'
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -126,7 +121,6 @@ function MonthlyReferenceView({ userId }: { userId: number }) {
                   totals={data.monthly_calculation_totals}
                   statutoryExcessOver60hMinutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}
                   absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
-                  specialLeaveDays={data.monthly_calculation_totals.special_leave_days ?? 0}
                   showAllLeaveTotals
                 />
               </div>
@@ -155,7 +149,7 @@ function WeeklyReferenceView({ userId }: { userId: number }) {
 
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
-  const { totals, absenceDays, specialLeaveDays } = weeklyAttendanceTotals(data ?? [])
+  const { totals, absenceDays } = weeklyAttendanceTotals(data ?? [])
 
   return (
     <>
@@ -189,7 +183,6 @@ function WeeklyReferenceView({ userId }: { userId: number }) {
               title="今週の集計"
               totals={totals}
               absenceDays={absenceDays}
-              specialLeaveDays={specialLeaveDays}
               showAllLeaveTotals
             />
           </div>
@@ -276,8 +269,7 @@ function DailyReferenceView({ userId }: { userId: number }) {
             <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
               {day.leave_segments.map((segment) => (
                 <li key={segment.id}>
-                  {attendanceLeaveSegmentCategoryLabel(segment.category)} {isoToTimeLiteral(segment.start_at) || '--:--'} 〜{' '}
-                  {isoToTimeLiteral(segment.end_at) || '--:--'}
+                  遅刻・早退 {isoToTimeLiteral(segment.start_at) || '--:--'} 〜 {isoToTimeLiteral(segment.end_at) || '--:--'}
                   {segment.note && ` (${segment.note})`}
                 </li>
               ))}
@@ -306,7 +298,6 @@ function DailyReferenceView({ userId }: { userId: number }) {
               title="この日の集計"
               totals={day.calculation}
               absenceDays={day.calculation.absence_minutes ? 1 : undefined}
-              specialLeaveDays={day.calculation.special_leave_minutes ? 1 : undefined}
             />
           )}
         </div>

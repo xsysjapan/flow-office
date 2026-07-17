@@ -1,5 +1,5 @@
 import { Card } from '../components/Card/Card'
-import { PaidLeaveHistoryList } from '../components/PaidLeaveHistoryList/PaidLeaveHistoryList'
+import { LeaveHistoryList } from '../components/LeaveHistoryList/LeaveHistoryList'
 import { useMyPaidLeaveHistory } from '../hooks/usePaidLeave'
 
 /**
@@ -10,7 +10,7 @@ export function MyPaidLeaveHistoryPage() {
 
   return (
     <Card title="有給履歴">
-      <PaidLeaveHistoryList events={data} isLoading={isLoading} error={error} />
+      <LeaveHistoryList domain="paid_leave" events={data} isLoading={isLoading} error={error} />
     </Card>
   )
 }

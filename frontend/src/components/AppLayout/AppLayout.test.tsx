@@ -1,8 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
-import type { User } from '../../api/types'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as specialLeaveApi from '../../api/specialLeave'
+import type { SpecialLeaveType, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { formatDate } from '../../utils/weekDates'
 import { AppLayout } from './AppLayout'
@@ -17,7 +19,7 @@ const mockUser: User = {
   last_login_at: null,
 }
 
-function renderLayout(logout = vi.fn(), user: User = mockUser) {
+function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes: SpecialLeaveType[] = []) {
   const authValue: AuthContextValue = {
     user,
     status: 'authenticated',
@@ -25,21 +27,29 @@ function renderLayout(logout = vi.fn(), user: User = mockUser) {
     completeLogin: vi.fn(),
     logout,
   }
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(specialLeaveTypes)
 
   return render(
-    <AuthContext.Provider value={authValue}>
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<p>今日の勤怠画面</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </AuthContext.Provider>,
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={authValue}>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/" element={<AppLayout />}>
+              <Route index element={<p>今日の勤怠画面</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </QueryClientProvider>,
   )
 }
 
 describe('AppLayout', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows the current user name and the routed content', () => {
     renderLayout()
     expect(screen.getByText('山田 太郎')).toBeInTheDocument()
@@ -75,6 +85,35 @@ describe('AppLayout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '承認' }))
     expect(await screen.findByRole('menuitem', { name: '承認待ち' })).toBeInTheDocument()
+  })
+
+  it('hides the 特別休暇 menu items when there is no active special leave type', async () => {
+    renderLayout(vi.fn(), mockUser, [])
+
+    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    expect(await screen.findByRole('menuitem', { name: '有給' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
+  })
+
+  it('shows the 特別休暇 menu item under 勤怠 once an active special leave type exists', async () => {
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
+
+    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
+  })
+
+  it('shows the 特別休暇申請承認 menu item under 承認 once an active special leave type exists', async () => {
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
+
+    await userEvent.click(screen.getByRole('button', { name: '承認' }))
+    expect(await screen.findByRole('menuitem', { name: '特別休暇申請承認' })).toBeInTheDocument()
+  })
+
+  it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false }])
+
+    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
   })
 
   it('calls logout when the logout button is clicked', async () => {

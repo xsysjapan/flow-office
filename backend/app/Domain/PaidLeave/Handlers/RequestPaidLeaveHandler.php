@@ -14,6 +14,8 @@ use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
+use App\Models\SpecialLeaveRequest;
+use App\Models\SpecialLeaveRequestStatus;
 use Illuminate\Support\Carbon;
 
 /**
@@ -47,6 +49,16 @@ class RequestPaidLeaveHandler implements CommandHandler
 
         if ($alreadyRequested) {
             throw new DomainRuleException('この日は既に有給を申請済みです。');
+        }
+
+        $alreadyHasSpecialLeave = SpecialLeaveRequest::query()
+            ->where('user_id', $command->userId)
+            ->whereDate('target_date', $command->targetDate)
+            ->whereIn('status', [SpecialLeaveRequestStatus::SUBMITTED, SpecialLeaveRequestStatus::APPROVED])
+            ->exists();
+
+        if ($alreadyHasSpecialLeave) {
+            throw new DomainRuleException('この日は既に特別休暇を申請済みです。');
         }
 
         $requestedDays = $this->resolveRequestedDays($command, $shiftAssignment);

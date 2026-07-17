@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Card } from '../components/Card/Card'
 import { FormField } from '../components/FormField/FormField'
-import { PaidLeaveHistoryList } from '../components/PaidLeaveHistoryList/PaidLeaveHistoryList'
+import { LeaveHistoryList } from '../components/LeaveHistoryList/LeaveHistoryList'
 import { UserPicker } from '../components/UserPicker/UserPicker'
 import { usePaidLeaveHistoryForUser } from '../hooks/usePaidLeave'
 
@@ -20,7 +20,7 @@ export function PaidLeaveHistoryAdminPage() {
         </FormField>
       </div>
 
-      {userId !== undefined && <PaidLeaveHistoryList events={data} isLoading={isLoading} error={error} />}
+      {userId !== undefined && <LeaveHistoryList domain="paid_leave" events={data} isLoading={isLoading} error={error} />}
     </Card>
   )
 }

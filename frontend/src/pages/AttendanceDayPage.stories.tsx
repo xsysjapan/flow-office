@@ -119,7 +119,7 @@ const dayWithAbsence: AttendanceDay = {
   ...recordedDay,
   actual_start_at: `${date}T11:00:00+09:00`,
   leave_segments: [
-    { id: 1, category: 'absence', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
+    { id: 1, start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
   ],
   calculation: { ...recordedDay.calculation!, work_minutes: 360, absence_minutes: 120 },
 }

@@ -14,7 +14,6 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
-use App\Models\AttendanceLeaveSegmentCategory;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
@@ -92,7 +91,7 @@ class CreateAttendanceDayHandler implements CommandHandler
             ),
         );
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
 
         $this->eventStore->append(
             aggregateType: 'attendance_day',
@@ -142,41 +141,36 @@ class CreateAttendanceDayHandler implements CommandHandler
     }
 
     /**
-     * 欠勤・特別休暇の区間(有給休暇を除く)を作成する。区間同士、および休憩との重複は、
-     * 同じ時間帯が二重に労働時間から控除されたり欠勤・特別休暇時間が過大集計されたりするのを
-     * 防ぐため許可しない。
+     * 遅刻・早退等を欠勤時間として扱う区間(有給休暇を除く)を作成する。区間同士、
+     * および休憩との重複は、同じ時間帯が二重に労働時間から控除されたり欠勤時間が
+     * 過大集計されたりするのを防ぐため許可しない。
      *
-     * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
+     * @param  array<int, array{start: string, end: string, note: string|null}>  $leaveSegments
      */
     private function createLeaveSegments(AttendanceDay $day, array $leaveSegments): void
     {
         /** @var array<int, array{start: Carbon, end: Carbon}> $parsed */
         $parsed = [];
         foreach ($leaveSegments as $segment) {
-            if (! in_array($segment['category'], AttendanceLeaveSegmentCategory::values(), true)) {
-                throw new DomainRuleException("不明な処理区分です: {$segment['category']}");
-            }
-
             $start = LocalDateTime::splitOffset($segment['start'])[0];
             $end = LocalDateTime::splitOffset($segment['end'])[0];
             if (! $end->greaterThan($start)) {
-                throw new DomainRuleException('欠勤・特別休暇の終了時刻は開始時刻より後にしてください。');
+                throw new DomainRuleException('遅刻・早退の終了時刻は開始時刻より後にしてください。');
             }
 
             foreach ($parsed as $existing) {
                 if ($this->intervalsOverlap($start, $end, $existing['start'], $existing['end'])) {
-                    throw new DomainRuleException('欠勤・特別休暇の時間帯が重複しています。');
+                    throw new DomainRuleException('遅刻・早退の時間帯が重複しています。');
                 }
             }
             foreach ($day->breaks as $break) {
                 if ($break->break_end_at !== null && $this->intervalsOverlap($start, $end, $break->break_start_at, $break->break_end_at)) {
-                    throw new DomainRuleException('欠勤・特別休暇の時間帯が休憩と重複しています。');
+                    throw new DomainRuleException('遅刻・早退の時間帯が休憩と重複しています。');
                 }
             }
             $parsed[] = ['start' => $start, 'end' => $end];
 
             $day->leaveSegments()->create([
-                'category' => $segment['category'],
                 'start_at' => $start,
                 'end_at' => $end,
                 'note' => $segment['note'] ?? null,

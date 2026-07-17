@@ -11,9 +11,10 @@ export interface AttendanceCalculationSummaryData {
   legal_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
   absence_minutes?: number
-  special_leave_minutes?: number
   paid_leave_days?: number
   paid_leave_minutes?: number
+  special_leave_days?: number
+  special_leave_minutes?: number
 }
 
 export interface AttendanceCalculationSummaryProps {
@@ -21,7 +22,6 @@ export interface AttendanceCalculationSummaryProps {
   totals: AttendanceCalculationSummaryData
   statutoryExcessOver60hMinutes?: number
   absenceDays?: number
-  specialLeaveDays?: number
   showAllLeaveTotals?: boolean
 }
 
@@ -40,16 +40,15 @@ export function AttendanceCalculationSummary({
   totals,
   statutoryExcessOver60hMinutes,
   absenceDays,
-  specialLeaveDays,
   showAllLeaveTotals = false,
 }: AttendanceCalculationSummaryProps) {
   const hasLeaveTotals = showAllLeaveTotals
     || !!totals.absence_minutes
-    || !!totals.special_leave_minutes
     || !!totals.paid_leave_days
     || !!totals.paid_leave_minutes
+    || !!totals.special_leave_days
+    || !!totals.special_leave_minutes
     || absenceDays !== undefined
-    || specialLeaveDays !== undefined
 
   return (
     <section aria-labelledby={`${title}-summary`}>
@@ -74,7 +73,7 @@ export function AttendanceCalculationSummary({
           {(showAllLeaveTotals || !!totals.absence_minutes) && <SummaryItem label="欠勤時間"><Duration minutes={totals.absence_minutes ?? 0} /></SummaryItem>}
           {(showAllLeaveTotals || !!totals.paid_leave_days) && <SummaryItem label="有給日数">{totals.paid_leave_days ?? 0}日</SummaryItem>}
           {(showAllLeaveTotals || !!totals.paid_leave_minutes) && <SummaryItem label="有給時間(時間単位)"><Duration minutes={totals.paid_leave_minutes ?? 0} /></SummaryItem>}
-          {specialLeaveDays !== undefined && <SummaryItem label="特別休暇日数">{specialLeaveDays}日</SummaryItem>}
+          {(showAllLeaveTotals || !!totals.special_leave_days) && <SummaryItem label="特別休暇日数">{totals.special_leave_days ?? 0}日</SummaryItem>}
           {(showAllLeaveTotals || !!totals.special_leave_minutes) && <SummaryItem label="特別休暇時間"><Duration minutes={totals.special_leave_minutes ?? 0} /></SummaryItem>}
         </dl>
       )}

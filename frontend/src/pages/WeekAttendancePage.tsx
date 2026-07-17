@@ -30,7 +30,7 @@ export function WeekAttendancePage() {
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
-  const { totals: weeklyTotals, absenceDays, specialLeaveDays } = weeklyAttendanceTotals(data ?? [])
+  const { totals: weeklyTotals, absenceDays } = weeklyAttendanceTotals(data ?? [])
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +70,6 @@ export function WeekAttendancePage() {
               title="今週の集計"
               totals={weeklyTotals}
               absenceDays={absenceDays}
-              specialLeaveDays={specialLeaveDays}
               showAllLeaveTotals
             />
           </div>

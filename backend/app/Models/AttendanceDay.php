@@ -70,6 +70,14 @@ class AttendanceDay extends Model
     }
 
     /**
+     * @return HasMany<SpecialLeaveUsage, $this>
+     */
+    public function specialLeaveUsages(): HasMany
+    {
+        return $this->hasMany(SpecialLeaveUsage::class);
+    }
+
+    /**
      * @return HasMany<AttendanceLeaveSegment, $this>
      */
     public function leaveSegments(): HasMany

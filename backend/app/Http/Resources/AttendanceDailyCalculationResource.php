@@ -32,6 +32,7 @@ class AttendanceDailyCalculationResource extends JsonResource
             'special_leave_minutes' => $this->special_leave_minutes,
             'paid_leave_days' => (float) $this->paid_leave_days,
             'paid_leave_minutes' => $this->paid_leave_minutes,
+            'special_leave_days' => (float) $this->special_leave_days,
             'is_manually_adjusted' => $this->is_manually_adjusted,
         ];
     }
