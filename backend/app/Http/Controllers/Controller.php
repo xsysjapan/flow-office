@@ -27,4 +27,18 @@ abstract class Controller
             $message,
         );
     }
+
+    /**
+     * クエリパラメータ等で指定された対象社員(未指定なら自分自身)を、本人またはadminの
+     * 場合のみ解決する(AttendanceController::week/month、AttendancePunchController::index/store
+     * で共通利用)。
+     */
+    protected function resolveTargetUserId(Request $request, ?int $requestedUserId, string $message): int
+    {
+        $userId = $requestedUserId ?? $request->user()->id;
+
+        $this->abortUnlessOwnerOrAdmin($request, $userId, $message);
+
+        return $userId;
+    }
 }

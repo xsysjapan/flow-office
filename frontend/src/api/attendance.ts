@@ -22,9 +22,10 @@ export function fetchToday(): Promise<AttendanceDay> {
   return apiFetch('/attendance/today')
 }
 
-/** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。 */
-export function fetchWeek(startDate: string): Promise<AttendanceDay[]> {
-  return apiFetch('/attendance/week', { query: { start_date: startDate } })
+/** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。userIdを指定すると自分以外の社員を
+ *  参照できる(adminのみ)。 */
+export function fetchWeek(startDate: string, userId?: number): Promise<AttendanceDay[]> {
+  return apiFetch('/attendance/week', { query: { start_date: startDate, user_id: userId } })
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
@@ -133,13 +134,14 @@ export function deletePunch(id: number, reason: string): Promise<AttendancePunch
   return apiFetch(`/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
-export function fetchMonth(yearMonth: string): Promise<{
+/** UC-A007: 月次勤怠。userIdを指定すると自分以外の社員を参照できる(adminのみ)。 */
+export function fetchMonth(yearMonth: string, userId?: number): Promise<{
   days: AttendanceDay[]
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
   monthly_calculation_totals: AttendanceMonthlyCalculationTotals
 }> {
-  return apiFetch(`/attendance/months/${yearMonth}`)
+  return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }
 
 export function submitMonth(yearMonth: string, approverUserId: number): Promise<AttendanceMonth> {
@@ -151,6 +153,11 @@ export function submitMonth(yearMonth: string, approverUserId: number): Promise<
 
 export function fetchMyMonths(): Promise<AttendanceMonth[]> {
   return apiFetch('/attendance/months/mine')
+}
+
+/** 管理者が対象社員を選んで月次勤怠一覧(月次・週次・日次の勤怠参照)を確認する。 */
+export function fetchMonthsForUser(userId: number): Promise<AttendanceMonth[]> {
+  return apiFetch(`/attendance/months/user/${userId}`)
 }
 
 export function fetchMonthsToApprove(): Promise<AttendanceMonth[]> {

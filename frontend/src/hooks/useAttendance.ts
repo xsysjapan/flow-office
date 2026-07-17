@@ -13,6 +13,7 @@ import {
   endBreak,
   fetchAttendanceDayDefaults,
   fetchMonth,
+  fetchMonthsForUser,
   fetchMonthsToApprove,
   fetchMyMonths,
   fetchPunches,
@@ -38,8 +39,13 @@ export function useTodayAttendance() {
   return useQuery({ queryKey: TODAY_KEY, queryFn: fetchToday })
 }
 
-export function useWeek(startDate: string) {
-  return useQuery({ queryKey: [...WEEK_KEY, startDate], queryFn: () => fetchWeek(startDate) })
+/** userIdを指定すると自分以外の社員の週次勤怠を参照できる(adminのみ)。既存のキャッシュキーと
+ *  互換性を保つため、userId未指定時は末尾に付与しない。 */
+export function useWeek(startDate: string, userId?: number) {
+  return useQuery({
+    queryKey: userId === undefined ? [...WEEK_KEY, startDate] : [...WEEK_KEY, startDate, userId],
+    queryFn: () => (userId === undefined ? fetchWeek(startDate) : fetchWeek(startDate, userId)),
+  })
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値。userId/workDateが揃うまでは取得しない。 */
@@ -179,10 +185,12 @@ export function useDeletePunch() {
   return usePunchAction<string>((id, reason) => deletePunch(id, reason))
 }
 
-export function useAttendanceMonth(yearMonth: string) {
+/** userIdを指定すると自分以外の社員の月次勤怠を参照できる(adminのみ)。既存のキャッシュキーと
+ *  互換性を保つため、userId未指定時は末尾に付与しない。 */
+export function useAttendanceMonth(yearMonth: string, userId?: number) {
   return useQuery({
-    queryKey: ['attendance', 'month', yearMonth],
-    queryFn: () => fetchMonth(yearMonth),
+    queryKey: userId === undefined ? ['attendance', 'month', yearMonth] : ['attendance', 'month', yearMonth, userId],
+    queryFn: () => (userId === undefined ? fetchMonth(yearMonth) : fetchMonth(yearMonth, userId)),
   })
 }
 
@@ -207,6 +215,15 @@ export function useMyMonths() {
 
 export function useMonthsToApprove() {
   return useQuery({ queryKey: MONTHS_TO_APPROVE_KEY, queryFn: fetchMonthsToApprove })
+}
+
+/** 管理者が対象社員を選んで月次勤怠一覧(月の選択画面)を確認する。userId未確定の間は取得しない。 */
+export function useMonthsForUser(userId: number | undefined) {
+  return useQuery({
+    queryKey: ['attendance', 'months', 'user', userId],
+    queryFn: () => fetchMonthsForUser(userId as number),
+    enabled: userId !== undefined,
+  })
 }
 
 function useInvalidateMonths() {
