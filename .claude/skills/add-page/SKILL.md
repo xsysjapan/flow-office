@@ -1,23 +1,25 @@
 ---
 name: add-page
-description: Use when adding a new routed screen to the flow-office frontend (e.g. a new page under frontend/src/pages/). Guides composing existing components/hooks into a page, registering the route in App.tsx, adding a nav entry in AppLayout or AdminLayout, updating affected e2e specs, and writing the story + test, following the pattern in TodayAttendancePage and WorkflowRequestDetailPage.
+description: Use when adding a new routed screen to the flow-office frontend (e.g. a new page under frontend/src/pages/<domain>/). Guides composing existing components/hooks into a page, registering the route in App.tsx, adding a nav entry in AppLayout or AdminLayout, updating affected e2e specs, and writing the story + test, following the pattern in TodayAttendancePage and WorkflowRequestDetailPage.
 ---
 
 # 新しいページ(画面)を追加する
 
-flow-office のページは `frontend/src/pages/` に置き、`frontend/src/components/` の
-コンポーネントと `frontend/src/hooks/` のAPIフックを組み合わせて作る。ページ自体は
-`apiFetch`を直接呼ばない。
+flow-office のページは `frontend/src/pages/<domain>/` (attendance/workflow/paidLeave/
+specialLeave/backOffice/workCalendar/admin/auth) にドメインごとに分けて置き、
+`frontend/src/components/` のコンポーネントと `frontend/src/hooks/` のAPIフックを
+組み合わせて作る。ページ自体は `apiFetch`を直接呼ばない。
 
-参考実装: `frontend/src/pages/TodayAttendancePage.tsx` (一覧+アクション),
-`frontend/src/pages/WorkflowRequestDetailPage.tsx` (権限に応じてUIを分岐する例)
+参考実装: `frontend/src/pages/attendance/TodayAttendancePage.tsx` (一覧+アクション),
+`frontend/src/pages/workflow/WorkflowRequestDetailPage.tsx` (権限に応じてUIを分岐する例)
 
 ## 手順
 
 1. **ページに必要なdocsのユースケースを確認する**: `docs/07`〜`docs/15` の該当UCを読み、
    誰が(申請者/承認者/管理者)何をできる画面かを確認する。
 
-2. **`frontend/src/pages/<PageName>.tsx` を作る**:
+2. **`frontend/src/pages/<domain>/<PageName>.tsx` を作る**(既存のドメインフォルダに
+   収まらない新しい種別の画面であれば、新しいドメインフォルダを作ってよい):
    - データ取得は `.claude/skills/add-api-hook` で用意したhookを使う
    - ローディング/エラーは `LoadingState` / `ErrorMessage` コンポーネントで統一する
      (`if (isLoading) return <LoadingState />` / `if (error) return <ErrorMessage error={error} />`)
@@ -72,13 +74,13 @@ flow-office のページは `frontend/src/pages/` に置き、`frontend/src/comp
    `QueryClientProvider`でラップする(実ネットワーク呼び出しをStorybook上で発生させない)。
    `useAuth()`や`useParams()`に依存するページは`MemoryRouter`や
    `AuthContext.Provider`も一緒にラップする
-   (`frontend/src/pages/WorkflowRequestDetailPage.stories.tsx`参照)。
+   (`frontend/src/pages/workflow/WorkflowRequestDetailPage.stories.tsx`参照)。
 
 6. **テストを書く**: ページが呼ぶapi関数を`vi.spyOn(resourceApi, 'fetchXxx')`でモックし、
    「ローディング→表示」「役割ごとに出るアクションが違う」「アクション実行でAPIが正しい
    引数で呼ばれる」を確認する。ルーティングを跨ぐ遷移がある場合は`MemoryRouter`+`Routes`
    で遷移先に目印となる要素を置いて確認する
-   (`frontend/src/pages/WorkflowRequestNewPage.test.tsx`の遷移確認を参照)。
+   (`frontend/src/pages/workflow/WorkflowRequestNewPage.test.tsx`の遷移確認を参照)。
 
 ## チェックリスト (実装後)
 
