@@ -33,6 +33,7 @@ import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
 import { PaidLeaveHistoryAdminPage } from './pages/PaidLeaveHistoryAdminPage'
 import { SpecialLeaveAdminPage } from './pages/SpecialLeaveAdminPage'
 import { SpecialLeaveHistoryAdminPage } from './pages/SpecialLeaveHistoryAdminPage'
+import { AttendanceReferencePage } from './pages/AttendanceReferencePage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AttendanceExportPage } from './pages/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
@@ -82,6 +83,7 @@ function App() {
           <Route path="paid-leave/history" element={<PaidLeaveHistoryAdminPage />} />
           <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
           <Route path="special-leave/history" element={<SpecialLeaveHistoryAdminPage />} />
+          <Route path="attendance" element={<AttendanceReferencePage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

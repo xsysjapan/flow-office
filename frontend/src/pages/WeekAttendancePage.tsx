@@ -9,23 +9,8 @@ import { ErrorMessage } from '../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../components/LoadingState/LoadingState'
 import { useWeek } from '../hooks/useAttendance'
 import { dayWarnings } from '../utils/attendanceDayWarnings'
+import { weeklyAttendanceTotals } from '../utils/attendanceWeeklyTotals'
 import { addDays, formatDate, mondayOf, weekDates } from '../utils/weekDates'
-
-const WEEKLY_TOTAL_FIELDS = [
-  'prescribed_work_minutes',
-  'statutory_within_overtime_minutes',
-  'statutory_excess_overtime_minutes',
-  'late_night_prescribed_work_minutes',
-  'late_night_statutory_within_overtime_minutes',
-  'late_night_statutory_excess_overtime_minutes',
-  'legal_holiday_work_minutes',
-  'late_night_legal_holiday_work_minutes',
-  'absence_minutes',
-  'paid_leave_days',
-  'paid_leave_minutes',
-  'special_leave_days',
-  'special_leave_minutes',
-] as const
 
 /**
  * UC-A006: 週次勤怠を編集する。日次勤怠(attendance_days)の編集ビューであり、独立データ
@@ -45,43 +30,7 @@ export function WeekAttendancePage() {
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
-  const weeklyLeaveDays = (data ?? []).reduce(
-    (totals, day) => {
-      const calculation = day.calculation
-      if (!calculation || calculation.prescribed_work_minutes <= 0) return totals
-
-      if ((calculation.absence_minutes ?? 0) >= calculation.prescribed_work_minutes) totals.absence += 1
-
-      return totals
-    },
-    { absence: 0 },
-  )
-  const weeklyTotals = (data ?? []).reduce(
-    (totals, day) => {
-      if (!day.calculation) return totals
-
-      for (const field of WEEKLY_TOTAL_FIELDS) {
-        totals[field] += day.calculation[field] ?? 0
-      }
-
-      return totals
-    },
-    {
-      prescribed_work_minutes: 0,
-      statutory_within_overtime_minutes: 0,
-      statutory_excess_overtime_minutes: 0,
-      late_night_prescribed_work_minutes: 0,
-      late_night_statutory_within_overtime_minutes: 0,
-      late_night_statutory_excess_overtime_minutes: 0,
-      legal_holiday_work_minutes: 0,
-      late_night_legal_holiday_work_minutes: 0,
-      absence_minutes: 0,
-      paid_leave_days: 0,
-      paid_leave_minutes: 0,
-      special_leave_days: 0,
-      special_leave_minutes: 0,
-    },
-  )
+  const { totals: weeklyTotals, absenceDays } = weeklyAttendanceTotals(data ?? [])
 
   return (
     <div className="flex flex-col gap-6">
@@ -120,7 +69,7 @@ export function WeekAttendancePage() {
             <AttendanceCalculationSummary
               title="今週の集計"
               totals={weeklyTotals}
-              absenceDays={weeklyLeaveDays.absence}
+              absenceDays={absenceDays}
               showAllLeaveTotals
             />
           </div>

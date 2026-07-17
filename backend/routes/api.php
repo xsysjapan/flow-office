@@ -143,6 +143,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
         Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
+        Route::get('/months/user/{userId}', [AttendanceController::class, 'monthsForUser'])
+            ->middleware('role:admin');
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth']);
     });
