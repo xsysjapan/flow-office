@@ -243,4 +243,61 @@ class AttendanceFlowTest extends TestCase
             ->assertJsonCount(1)
             ->assertJsonPath('0.status', 'approved');
     }
+
+    /**
+     * 管理者は自分以外の社員の週次・月次勤怠も`user_id`を指定して参照できる
+     * (docs/07-usecases-attendance.md UC-A006/UC-A007を管理者にも拡張)。管理者以外は
+     * 他の社員を指定すると403になる。
+     */
+    public function test_admin_can_view_another_employees_week_and_month(): void
+    {
+        $employee = User::factory()->create();
+        $other = User::factory()->create();
+        $today = Carbon::today($other->timezone);
+
+        $this->actingAs($other)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($other)->postJson('/api/attendance/clock-out')->assertSuccessful();
+
+        $this->actingAs($employee)->getJson("/api/attendance/week?start_date={$today->toDateString()}&user_id={$other->id}")
+            ->assertForbidden();
+        $this->actingAs($employee)->getJson("/api/attendance/months/{$today->format('Y-m')}?user_id={$other->id}")
+            ->assertForbidden();
+
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $weekResponse = $this->actingAs($admin)->getJson("/api/attendance/week?start_date={$today->toDateString()}&user_id={$other->id}");
+        $weekResponse->assertSuccessful();
+        $this->assertSame([$other->id], array_values(array_unique(array_column($weekResponse->json(), 'user_id'))));
+
+        $monthResponse = $this->actingAs($admin)->getJson("/api/attendance/months/{$today->format('Y-m')}?user_id={$other->id}");
+        $monthResponse->assertSuccessful();
+        $this->assertSame($other->id, $monthResponse->json('days.0.user_id'));
+    }
+
+    /**
+     * `/attendance/months/user/{userId}`は管理者向けの月次一覧(月の選択画面用)で、
+     * ルートの`role:admin`ミドルウェアにより管理者以外は本人でも403になる。
+     */
+    public function test_admin_can_list_months_for_another_employee(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $today = Carbon::today($employee->timezone);
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in');
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out');
+        $yearMonth = $today->format('Y-m');
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+
+        $this->actingAs($employee)->getJson("/api/attendance/months/user/{$employee->id}")->assertForbidden();
+
+        $response = $this->actingAs($admin)->getJson("/api/attendance/months/user/{$employee->id}");
+        $response->assertSuccessful()->assertJsonCount(1);
+        $this->assertSame($yearMonth, $response->json('0.year_month'));
+    }
 }

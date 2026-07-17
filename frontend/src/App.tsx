@@ -28,6 +28,7 @@ import { WorkCalendarDaysPage } from './pages/WorkCalendarDaysPage'
 import { WorkStylesAndShiftsPage } from './pages/WorkStylesAndShiftsPage'
 import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
 import { PaidLeaveHistoryAdminPage } from './pages/PaidLeaveHistoryAdminPage'
+import { AttendanceReferencePage } from './pages/AttendanceReferencePage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AttendanceExportPage } from './pages/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
@@ -72,6 +73,7 @@ function App() {
           <Route path="work-styles" element={<WorkStylesAndShiftsPage />} />
           <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
           <Route path="paid-leave/history" element={<PaidLeaveHistoryAdminPage />} />
+          <Route path="attendance" element={<AttendanceReferencePage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

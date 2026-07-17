@@ -149,14 +149,18 @@ class AttendanceController extends Controller
         operationId: 'attendance.week',
         summary: '週次勤怠を取得する',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'start_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'start_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'integer'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function week(Request $request): AnonymousResourceCollection
     {
-        $data = $request->validate(['start_date' => ['required', 'date']]);
+        $data = $request->validate([
+            'start_date' => ['required', 'date'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の週次勤怠を閲覧する権限がありません。');
         $requestedDate = Carbon::parse($data['start_date']);
-        $weekStartsOn = $this->resolveWeekStartsOn($request->user()->id, $requestedDate);
+        $weekStartsOn = $this->resolveWeekStartsOn($targetUserId, $requestedDate);
 
         $start = $requestedDate->copy();
         while ($start->isoWeekday() !== $weekStartsOn) {
@@ -166,7 +170,7 @@ class AttendanceController extends Controller
 
         $days = AttendanceDay::query()
             ->with(['breaks', 'leaveSegments', 'calculation'])
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $targetUserId)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
             ->orderBy('work_date')
@@ -419,12 +423,13 @@ class AttendanceController extends Controller
         operationId: 'attendance.months.show',
         summary: '月次勤怠を取得する',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
+        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'integer'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function month(Request $request, string $yearMonth): array
     {
-        $userId = $request->user()->id;
+        $data = $request->validate(['user_id' => ['nullable', 'integer', 'exists:users,id']]);
+        $userId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の月次勤怠を閲覧する権限がありません。');
 
         $days = AttendanceDay::query()
             ->with(['breaks', 'leaveSegments', 'calculation'])
@@ -535,6 +540,29 @@ class AttendanceController extends Controller
         $months = AttendanceMonth::query()
             ->with('approver')
             ->where('user_id', $request->user()->id)
+            ->orderByDesc('year_month')
+            ->get();
+
+        return AttendanceMonthResource::collection($months);
+    }
+
+    /**
+     * 管理者が対象社員を選んで月次勤怠一覧を確認する(月次・週次・日次の勤怠参照)。
+     * ルート側で`role:admin`ミドルウェアにより制限する。
+     */
+    #[OA\Get(
+        path: '/attendance/months/user/{userId}',
+        operationId: 'attendance.months.forUser',
+        summary: '指定した社員の月次勤怠一覧を取得する(管理者のみ)',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function monthsForUser(int $userId): AnonymousResourceCollection
+    {
+        $months = AttendanceMonth::query()
+            ->with('approver')
+            ->where('user_id', $userId)
             ->orderByDesc('year_month')
             ->get();
 

@@ -41,7 +41,7 @@ class AttendancePunchController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null);
+        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の打刻を記録・閲覧する権限がありません。');
 
         $punches = AttendancePunch::query()
             ->where('user_id', $targetUserId)
@@ -73,7 +73,7 @@ class AttendancePunchController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null);
+        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の打刻を記録・閲覧する権限がありません。');
 
         $punch = $commandBus->dispatch(new RecordAttendancePunch(
             userId: $targetUserId,
@@ -147,18 +147,5 @@ class AttendancePunchController extends Controller
         ));
 
         return new AttendancePunchResource($attendancePunch->refresh());
-    }
-
-    /**
-     * 自分以外の打刻を記録・閲覧・訂正・削除できるのはadminのみ(将来の共有デバイス連携を
-     * 想定した拡張点)。
-     */
-    private function resolveTargetUserId(Request $request, ?int $requestedUserId): int
-    {
-        $userId = $requestedUserId ?? $request->user()->id;
-
-        $this->abortUnlessOwnerOrAdmin($request, $userId, '他の社員の打刻を記録・閲覧する権限がありません。');
-
-        return $userId;
     }
 }
