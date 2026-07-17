@@ -11,7 +11,6 @@ use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
-use Illuminate\Support\Carbon;
 
 /**
  * @implements CommandHandler<ReturnWorkflowRequest>
@@ -34,10 +33,6 @@ class ReturnWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
-        $workflowRequest->status = WorkflowRequestStatus::RETURNED;
-        $workflowRequest->returned_at = Carbon::now();
-        $workflowRequest->save();
-
         $this->eventStore->append(
             aggregateType: 'workflow_request',
             aggregateId: (string) $workflowRequest->id,
@@ -54,6 +49,6 @@ class ReturnWorkflowRequestHandler implements CommandHandler
             detailUrl: null,
         );
 
-        return $workflowRequest;
+        return $workflowRequest->refresh();
     }
 }

@@ -14,8 +14,8 @@ import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
 
 interface BackOfficeTaskTableProps {
   tasks: BackOfficeTask[]
-  selectedIds?: Set<number>
-  onToggleRow?: (id: number) => void
+  selectedIds?: Set<string>
+  onToggleRow?: (id: string) => void
 }
 
 /** selectedIds/onToggleRowを渡した場合のみ、行選択用のチェックボックス列を表示する。 */
@@ -81,7 +81,7 @@ export function BackOfficeTaskListPage() {
   const mine = useMyBackOfficeTasks()
   const assignTask = useAssignBackOfficeTask()
 
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAssignee, setBulkAssignee] = useState<number | undefined>(undefined)
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
@@ -95,7 +95,7 @@ export function BackOfficeTaskListPage() {
   const unassignedTasks = unassigned.data?.data ?? []
   const myTasks = mine.data?.data ?? []
 
-  function toggleRow(id: number) {
+  function toggleRow(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)

@@ -11,7 +11,6 @@ use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
-use Illuminate\Support\Carbon;
 
 /**
  * @implements CommandHandler<ApproveWorkflowRequest>
@@ -34,10 +33,6 @@ class ApproveWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 
-        $workflowRequest->status = WorkflowRequestStatus::APPROVED;
-        $workflowRequest->approved_at = Carbon::now();
-        $workflowRequest->save();
-
         // このイベントを App\Listeners\CreateBackOfficeTaskOnApproval が購読し、
         // 必要な申請種別ならバックオフィスタスクを自動生成する (UC-B001)。
         $this->eventStore->append(
@@ -55,6 +50,6 @@ class ApproveWorkflowRequestHandler implements CommandHandler
             detailUrl: null,
         );
 
-        return $workflowRequest;
+        return $workflowRequest->refresh();
     }
 }

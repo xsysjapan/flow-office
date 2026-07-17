@@ -9,7 +9,6 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Jobs\SendTeamsNotificationJob;
 use App\Models\BackOfficeTask;
-use App\Models\BackOfficeTaskStatus;
 
 /**
  * UC-B002: 担当者を割り当てる。
@@ -25,9 +24,6 @@ class AssignBackOfficeTaskHandler implements CommandHandler
         assert($command instanceof AssignBackOfficeTask);
 
         $task = BackOfficeTask::query()->findOrFail($command->backOfficeTaskId);
-        $task->assigned_user_id = $command->assignedUserId;
-        $task->status = BackOfficeTaskStatus::IN_REVIEW;
-        $task->save();
 
         $this->eventStore->append(
             aggregateType: 'backoffice_task',
@@ -38,6 +34,8 @@ class AssignBackOfficeTaskHandler implements CommandHandler
                 assignedByUserId: $command->assignedByUserId,
             ),
         );
+
+        $task->refresh();
 
         SendTeamsNotificationJob::enqueue(
             title: 'タスク割当',

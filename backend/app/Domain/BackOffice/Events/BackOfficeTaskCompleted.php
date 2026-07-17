@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class BackOfficeTaskCompleted implements DomainEvent
 {
     public function __construct(
-        public readonly int $backOfficeTaskId,
+        public readonly string $backOfficeTaskId,
         public readonly int $completedByUserId,
         public readonly ?string $comment,
     ) {}

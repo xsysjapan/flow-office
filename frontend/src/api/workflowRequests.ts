@@ -9,7 +9,7 @@ export function fetchWorkflowRequestsToApprove(): Promise<Paginated<WorkflowRequ
   return apiFetch('/workflow-requests/to-approve')
 }
 
-export function fetchWorkflowRequest(id: number): Promise<WorkflowRequest> {
+export function fetchWorkflowRequest(id: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}`)
 }
 
@@ -24,26 +24,26 @@ export function createWorkflowRequest(input: CreateWorkflowRequestInput): Promis
   return apiFetch('/workflow-requests', { method: 'POST', body: input })
 }
 
-export function submitWorkflowRequest(id: number, approverUserId?: number): Promise<WorkflowRequest> {
+export function submitWorkflowRequest(id: string, approverUserId?: number): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/submit`, {
     method: 'POST',
     body: { approver_user_id: approverUserId },
   })
 }
 
-export function approveWorkflowRequest(id: number): Promise<WorkflowRequest> {
+export function approveWorkflowRequest(id: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/approve`, { method: 'POST' })
 }
 
-export function returnWorkflowRequest(id: number, comment: string): Promise<WorkflowRequest> {
+export function returnWorkflowRequest(id: string, comment: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function cancelWorkflowRequest(id: number, reason: string): Promise<WorkflowRequest> {
+export function cancelWorkflowRequest(id: string, reason: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/cancel`, { method: 'POST', body: { reason } })
 }
 
 /** UC-W003/UC-W004 コメント履歴。 */
-export function fetchWorkflowRequestHistory(id: number): Promise<StoredEvent[]> {
+export function fetchWorkflowRequestHistory(id: string): Promise<StoredEvent[]> {
   return apiFetch(`/workflow-requests/${id}/history`)
 }

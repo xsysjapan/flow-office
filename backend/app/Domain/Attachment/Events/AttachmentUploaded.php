@@ -12,7 +12,7 @@ class AttachmentUploaded implements DomainEvent
     public function __construct(
         public readonly int $attachmentId,
         public readonly string $ownerType,
-        public readonly int $ownerId,
+        public readonly int|string $ownerId,
         public readonly int $uploadedByUserId,
         public readonly string $fileName,
         public readonly int $fileSize,

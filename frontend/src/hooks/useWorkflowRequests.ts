@@ -23,18 +23,18 @@ export function useWorkflowRequestsToApprove() {
   return useQuery({ queryKey: TO_APPROVE_KEY, queryFn: fetchWorkflowRequestsToApprove })
 }
 
-export function useWorkflowRequest(id: number) {
+export function useWorkflowRequest(id: string) {
   return useQuery({
     queryKey: ['workflow-requests', id],
     queryFn: () => fetchWorkflowRequest(id),
-    enabled: Number.isFinite(id),
+    enabled: Boolean(id),
   })
 }
 
 function useInvalidateWorkflowRequests() {
   const queryClient = useQueryClient()
 
-  return (id?: number) => {
+  return (id?: string) => {
     void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     void queryClient.invalidateQueries({ queryKey: TO_APPROVE_KEY })
     if (id !== undefined) {
@@ -56,7 +56,7 @@ export function useSubmitWorkflowRequest() {
   const invalidate = useInvalidateWorkflowRequests()
 
   return useMutation({
-    mutationFn: ({ id, approverUserId }: { id: number; approverUserId?: number }) =>
+    mutationFn: ({ id, approverUserId }: { id: string; approverUserId?: number }) =>
       submitWorkflowRequest(id, approverUserId),
     onSuccess: (_data, { id }) => invalidate(id),
   })
@@ -66,7 +66,7 @@ export function useApproveWorkflowRequest() {
   const invalidate = useInvalidateWorkflowRequests()
 
   return useMutation({
-    mutationFn: (id: number) => approveWorkflowRequest(id),
+    mutationFn: (id: string) => approveWorkflowRequest(id),
     onSuccess: (_data, id) => invalidate(id),
   })
 }
@@ -75,16 +75,16 @@ export function useReturnWorkflowRequest() {
   const invalidate = useInvalidateWorkflowRequests()
 
   return useMutation({
-    mutationFn: ({ id, comment }: { id: number; comment: string }) => returnWorkflowRequest(id, comment),
+    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnWorkflowRequest(id, comment),
     onSuccess: (_data, { id }) => invalidate(id),
   })
 }
 
-export function useWorkflowRequestHistory(id: number) {
+export function useWorkflowRequestHistory(id: string) {
   return useQuery({
     queryKey: ['workflow-requests', id, 'history'],
     queryFn: () => fetchWorkflowRequestHistory(id),
-    enabled: Number.isFinite(id),
+    enabled: Boolean(id),
   })
 }
 
@@ -92,7 +92,7 @@ export function useCancelWorkflowRequest() {
   const invalidate = useInvalidateWorkflowRequests()
 
   return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) => cancelWorkflowRequest(id, reason),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => cancelWorkflowRequest(id, reason),
     onSuccess: (_data, { id }) => invalidate(id),
   })
 }

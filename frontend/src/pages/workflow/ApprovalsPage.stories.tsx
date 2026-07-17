@@ -6,7 +6,7 @@ import { ApprovalsPage } from './ApprovalsPage'
 
 const sample: WorkflowRequest[] = [
   {
-    id: 1,
+    id: 'workflow-request-1',
     title: 'タクシー代',
     status: 'submitted',
     form_data: {},

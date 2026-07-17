@@ -34,7 +34,7 @@ const STATUS_OPTIONS: BackOfficeTaskStatus[] = [
  */
 export function BackOfficeTaskDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const taskId = Number(id)
+  const taskId = id ?? ''
   const { data: task, isLoading, error } = useBackOfficeTask(taskId)
 
   const assignTask = useAssignBackOfficeTask()

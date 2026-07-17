@@ -9,11 +9,11 @@ export function fetchMyTasks(): Promise<Paginated<BackOfficeTask>> {
   return apiFetch('/backoffice-tasks/mine')
 }
 
-export function fetchBackOfficeTask(id: number): Promise<BackOfficeTask> {
+export function fetchBackOfficeTask(id: string): Promise<BackOfficeTask> {
   return apiFetch(`/backoffice-tasks/${id}`)
 }
 
-export function assignBackOfficeTask(id: number, assignedUserId: number): Promise<BackOfficeTask> {
+export function assignBackOfficeTask(id: string, assignedUserId: number): Promise<BackOfficeTask> {
   return apiFetch(`/backoffice-tasks/${id}/assign`, {
     method: 'POST',
     body: { assigned_user_id: assignedUserId },
@@ -21,7 +21,7 @@ export function assignBackOfficeTask(id: number, assignedUserId: number): Promis
 }
 
 export function changeBackOfficeTaskStatus(
-  id: number,
+  id: string,
   status: BackOfficeTaskStatus,
   comment?: string,
 ): Promise<BackOfficeTask> {

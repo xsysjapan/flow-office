@@ -19,9 +19,9 @@ const assignee: User = {
 }
 
 const baseTask: BackOfficeTask = {
-  id: 1,
+  id: 'backoffice-task-1',
   source_type: 'workflow_request',
-  source_id: 10,
+  source_id: '10',
   task_type: 'expense_reimbursement',
   title: 'タクシー代の経理処理',
   status: 'not_started',
@@ -89,7 +89,7 @@ describe('BackOfficeTaskDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
     await waitFor(() =>
-      expect(backOfficeTasksApi.assignBackOfficeTask).toHaveBeenCalledWith(1, 2),
+      expect(backOfficeTasksApi.assignBackOfficeTask).toHaveBeenCalledWith('backoffice-task-1', 2),
     )
   })
 
@@ -107,7 +107,7 @@ describe('BackOfficeTaskDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '更新する' }))
 
     await waitFor(() =>
-      expect(backOfficeTasksApi.changeBackOfficeTaskStatus).toHaveBeenCalledWith(1, 'processing', '発注しました'),
+      expect(backOfficeTasksApi.changeBackOfficeTaskStatus).toHaveBeenCalledWith('backoffice-task-1', 'processing', '発注しました'),
     )
   })
 })

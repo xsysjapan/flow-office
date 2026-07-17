@@ -6,7 +6,7 @@ import { WorkflowRequestListPage } from './WorkflowRequestListPage'
 
 const sample: WorkflowRequest[] = [
   {
-    id: 1,
+    id: 'workflow-request-1',
     title: 'タクシー代',
     status: 'approved',
     form_data: { amount: 1200 },
@@ -18,7 +18,7 @@ const sample: WorkflowRequest[] = [
     created_at: '2026-07-01T00:00:00+09:00',
   },
   {
-    id: 2,
+    id: 'workflow-request-2',
     title: '名刺の再作成',
     status: 'submitted',
     form_data: { quantity: 100 },

@@ -32,7 +32,7 @@ describe('WorkflowRequestListPage', () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [
         {
-          id: 1,
+          id: 'workflow-request-1',
           title: 'タクシー代',
           status: 'approved',
           form_data: {},
@@ -50,7 +50,7 @@ describe('WorkflowRequestListPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('link', { name: 'タクシー代' })).toHaveAttribute('href', '/requests/1')
+    expect(await screen.findByRole('link', { name: 'タクシー代' })).toHaveAttribute('href', '/requests/workflow-request-1')
     expect(screen.getByText('承認済み')).toBeInTheDocument()
   })
 
@@ -58,7 +58,7 @@ describe('WorkflowRequestListPage', () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [
         {
-          id: 1,
+          id: 'workflow-request-1',
           title: 'タクシー代',
           status: 'approved',
           form_data: {},
@@ -84,7 +84,7 @@ describe('WorkflowRequestListPage', () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [
         {
-          id: 1,
+          id: 'workflow-request-1',
           title: 'タクシー代',
           status: 'submitted',
           form_data: {},
@@ -95,7 +95,7 @@ describe('WorkflowRequestListPage', () => {
           created_at: null,
         },
         {
-          id: 2,
+          id: 'workflow-request-2',
           title: '名刺の再作成',
           status: 'draft',
           form_data: {},
@@ -122,7 +122,7 @@ describe('WorkflowRequestListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'まとめて取り消す' }))
 
     await waitFor(() => expect(cancelSpy).toHaveBeenCalledTimes(2))
-    expect(cancelSpy).toHaveBeenCalledWith(1, '重複申請のため')
-    expect(cancelSpy).toHaveBeenCalledWith(2, '重複申請のため')
+    expect(cancelSpy).toHaveBeenCalledWith('workflow-request-1', '重複申請のため')
+    expect(cancelSpy).toHaveBeenCalledWith('workflow-request-2', '重複申請のため')
   })
 })

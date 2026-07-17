@@ -31,7 +31,7 @@ describe('ApprovalsPage', () => {
     const withData: Paginated<WorkflowRequest> = {
       data: [
         {
-          id: 7,
+          id: 'workflow-request-7',
           title: 'タクシー代',
           status: 'submitted',
           form_data: {},
@@ -50,7 +50,7 @@ describe('ApprovalsPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('link', { name: 'タクシー代' })).toHaveAttribute('href', '/requests/7')
+    expect(await screen.findByRole('link', { name: 'タクシー代' })).toHaveAttribute('href', '/requests/workflow-request-7')
     expect(screen.getByText('申請者太郎')).toBeInTheDocument()
     expect(screen.getByText('提出済み')).toBeInTheDocument()
   })

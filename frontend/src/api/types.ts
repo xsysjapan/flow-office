@@ -65,7 +65,7 @@ export interface RequestFormFieldSchema {
 export type WorkflowRequestStatus = 'draft' | 'submitted' | 'approved' | 'returned' | 'cancelled'
 
 export interface WorkflowRequest {
-  id: number
+  id: string
   title: string
   status: WorkflowRequestStatus
   form_data: Record<string, unknown>
@@ -293,9 +293,9 @@ export type BackOfficeTaskStatus =
   | 'cancelled'
 
 export interface BackOfficeTask {
-  id: number
+  id: string
   source_type: string
-  source_id: number
+  source_id: string
   task_type: string
   title: string
   status: BackOfficeTaskStatus

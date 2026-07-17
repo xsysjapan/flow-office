@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('workflow_requests', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする(この行自体もProjector経由で作成できる
+            // ようにするため。.claude/skills/add-projection「集約ルートのUUID化」参照)。
+            $table->uuid('id')->primary();
             $table->foreignId('request_type_id')->constrained();
             $table->string('title');
             $table->foreignId('applicant_user_id')->constrained('users');

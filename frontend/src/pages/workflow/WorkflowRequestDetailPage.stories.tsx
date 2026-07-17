@@ -27,7 +27,7 @@ const approver: User = {
 }
 
 const submittedRequest: WorkflowRequest = {
-  id: 1,
+  id: 'workflow-request-1',
   title: 'タクシー代',
   status: 'submitted',
   form_data: { amount: '1200', purpose: '客先訪問' },

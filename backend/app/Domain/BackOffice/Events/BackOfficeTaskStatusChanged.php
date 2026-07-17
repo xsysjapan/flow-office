@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class BackOfficeTaskStatusChanged implements DomainEvent
 {
     public function __construct(
-        public readonly int $backOfficeTaskId,
+        public readonly string $backOfficeTaskId,
         public readonly string $previousStatus,
         public readonly string $newStatus,
         public readonly int $changedByUserId,
