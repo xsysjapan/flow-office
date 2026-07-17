@@ -18,8 +18,8 @@ use Illuminate\Support\Carbon;
 
 /**
  * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能で、
- * 承認済み・締め済みの日次勤怠は削除できない(AttendanceEditGuard参照)。有給消化済みの
- * 日は、有給残数の整合性が崩れるため削除できない(承認済みの有給申請を取り消す機能は
+ * 承認済み・締め済みの日次勤怠は削除できない(AttendanceEditGuard参照)。有給・特別休暇の
+ * 消化済みの日は、残数の整合性が崩れるため削除できない(承認済みの申請を取り消す機能は
  * 現状無いため、この場合は削除不可が最終的な扱いになる)。
  *
  * @implements CommandHandler<DeleteAttendanceDay>
@@ -43,6 +43,10 @@ class DeleteAttendanceDayHandler implements CommandHandler
 
         if ($day->paidLeaveUsages()->exists()) {
             throw new DomainRuleException('有給消化済みの日次勤怠は削除できません。');
+        }
+
+        if ($day->specialLeaveUsages()->exists()) {
+            throw new DomainRuleException('特別休暇消化済みの日次勤怠は削除できません。');
         }
 
         $this->eventStore->append(

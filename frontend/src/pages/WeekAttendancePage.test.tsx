@@ -83,7 +83,7 @@ describe('WeekAttendancePage', () => {
           ...mondayRecord.calculation!,
           prescribed_work_minutes: 240,
           absence_minutes: 480,
-          special_leave_minutes: 240,
+          special_leave_days: 1,
         },
       },
     ])

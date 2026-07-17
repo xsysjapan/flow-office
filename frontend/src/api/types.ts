@@ -106,15 +106,17 @@ export interface AttendanceDailyCalculation {
   late_night_legal_holiday_work_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
-  /** 欠勤時間(分)。attendance_leave_segments(category=absence)の区間の合計時間。
+  /** 欠勤時間(分)。attendance_leave_segmentsの区間(遅刻・早退等)の合計時間。
    *  docs/07-usecases-attendance.md「不就労時間の処理区分」参照。 */
   absence_minutes?: number
-  /** その他特別休暇の時間(分)。同(category=special_leave)の合計時間。 */
-  special_leave_minutes?: number
   /** 全休・半休の有給日数(全休=1.0・半休=0.5)。時間単位有給は含まない。 */
   paid_leave_days?: number
   /** 時間単位有給の消化時間(分)。 */
   paid_leave_minutes?: number
+  /** 全休・半休の特別休暇日数(全休=1.0・半休=0.5)。時間単位特別休暇は含まない。 */
+  special_leave_days?: number
+  /** 時間単位特別休暇の消化時間(分)。 */
+  special_leave_minutes?: number
   /** 区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正したか。実績が再編集され
    *  再計算されるとfalseに戻る。 */
   is_manually_adjusted: boolean
@@ -171,22 +173,18 @@ export interface AttendanceMonthlyCalculationTotals {
   absence_minutes?: number
   paid_leave_days?: number
   paid_leave_minutes?: number
-  /** 終日特別休暇の日数(特別休暇時間がその日の所定労働時間以上になった日を1日と数える)。 */
   special_leave_days?: number
   special_leave_minutes?: number
 }
 
 export type AttendanceDaySource = 'live' | 'manual' | 'punch'
 
-/** attendance_leave_segments.category。有給休暇(全休・半休・時間単位)は対象外
- *  (paid_leave_requests/attendance_days.work_typeで管理する)。 */
-export type AttendanceLeaveSegmentCategory = 'absence' | 'special_leave'
-
-/** 勤務予定を勤務しなかった時間帯のうち、欠勤・特別休暇として処理した区間
- *  (docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。 */
+/** 勤務予定を勤務しなかった時間帯のうち、遅刻・早退等を欠勤時間として処理した区間
+ *  (docs/07-usecases-attendance.md「不就労時間の処理区分」参照。有給休暇・特別休暇
+ *  (全休・半休・時間単位)は対象外で、paid_leave_requests/special_leave_requests/
+ *  attendance_days.work_typeで管理する)。 */
 export interface AttendanceLeaveSegment {
   id: number
-  category: AttendanceLeaveSegmentCategory
   start_at: string
   end_at: string
   note: string | null
@@ -354,6 +352,68 @@ export interface PaidLeaveGrantRule {
   grant_cycle_months: number
   is_active: boolean
   steps?: PaidLeaveGrantRuleStep[]
+}
+
+/** 特別休暇の名前付き種別マスタ(例: 誕生日休暇)。有効な種別が1件も無ければ
+ *  特別休暇メニュー自体を表示しない。 */
+export interface SpecialLeaveType {
+  id: number
+  name: string
+  is_active: boolean
+}
+
+/** 特別休暇の取得単位(全休/半休/時間休)は有給と同じ概念のためPaidLeaveTypeを再利用する。 */
+export interface SpecialLeaveGrant {
+  id: number
+  user_id: number
+  special_leave_type_id: number
+  special_leave_type_name?: string
+  granted_on: string
+  /** 有給と異なり法定の時効が無いため、失効しない付与はnullになる。 */
+  expires_on: string | null
+  granted_days: number
+  used_days: number
+  remaining_days: number
+  grant_reason: string | null
+}
+
+export interface SpecialLeaveGrantRuleStep {
+  continuous_service_months: number
+  grant_days: number
+}
+
+export interface SpecialLeaveGrantRule {
+  id: number
+  special_leave_type_id: number
+  special_leave_type_name?: string
+  name: string
+  work_style_id: number | null
+  min_attendance_rate: number
+  first_grant_after_months: number
+  grant_cycle_months: number
+  /** 失効しない自動付与ルールの場合はnull。 */
+  expires_after_months: number | null
+  is_active: boolean
+  steps?: SpecialLeaveGrantRuleStep[]
+}
+
+export interface SpecialLeaveRequest {
+  id: number
+  user_id: number
+  user?: User
+  approver?: User
+  special_leave_type_id: number
+  special_leave_type_name?: string
+  status: PaidLeaveRequestStatus
+  leave_type: PaidLeaveType
+  target_date: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
 }
 
 export interface WorkCalendarDay {

@@ -22,7 +22,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
 use App\Http\Resources\AttendanceMonthResource;
 use App\Models\AttendanceDay;
-use App\Models\AttendanceLeaveSegmentCategory;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
@@ -259,7 +258,6 @@ class AttendanceController extends Controller
             'work_type' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'leave_segments' => ['array'],
-            'leave_segments.*.category' => ['required', 'string', Rule::in(AttendanceLeaveSegmentCategory::values())],
             'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'leave_segments.*.end' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'leave_segments.*.note' => ['nullable', 'string'],
@@ -306,7 +304,6 @@ class AttendanceController extends Controller
             'work_type' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
             'leave_segments' => ['array'],
-            'leave_segments.*.category' => ['required', 'string', Rule::in(AttendanceLeaveSegmentCategory::values())],
             'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'leave_segments.*.end' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'leave_segments.*.note' => ['nullable', 'string'],

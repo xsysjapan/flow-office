@@ -1,7 +1,6 @@
 import type { BadgeTone } from '../components/Badge/Badge'
 import type {
   AttendanceDayStatus,
-  AttendanceLeaveSegmentCategory,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
   LegalHolidayWarning,
@@ -85,16 +84,6 @@ export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMet
   return attendanceDayStatusMeta[status]
 }
 
-const attendanceLeaveSegmentCategoryLabels: Record<AttendanceLeaveSegmentCategory, string> = {
-  absence: '欠勤',
-  special_leave: '特別休暇',
-}
-
-/** 有給休暇(全休・半休・時間単位)は対象外(paid_leave_requests/work_typeで管理する)。 */
-export function attendanceLeaveSegmentCategoryLabel(category: AttendanceLeaveSegmentCategory): string {
-  return attendanceLeaveSegmentCategoryLabels[category]
-}
-
 export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {
   return backOfficeTaskStatusMeta[status]
 }
@@ -128,46 +117,73 @@ export function punchStatusLabel(status: PunchStatus): StatusMeta {
   return punchStatusMeta[status]
 }
 
-const paidLeaveEventTypeMeta: Record<string, StatusMeta> = {
-  'paid_leave.granted': { label: '付与', tone: 'success' },
-  'paid_leave.requested': { label: '申請', tone: 'info' },
-  'paid_leave.request_approved': { label: '承認', tone: 'success' },
-  'paid_leave.request_returned': { label: '差戻し', tone: 'warning' },
-  'paid_leave.request_cancelled': { label: '取消', tone: 'danger' },
-  'paid_leave.used': { label: '消化', tone: 'info' },
-  'paid_leave.warning_raised': { label: '警告', tone: 'warning' },
+/**
+ * 有給・特別休暇の履歴イベントは「ドメイン.種別」の形で、末尾の種別(granted/requested/
+ * request_approved等)はどちらのドメインでも共通のため、末尾だけで引き当てる
+ * (Queryのみ共通化し、ビジネスロジックは別ドメインとして実装する方針に合わせた表示側の共通化)。
+ */
+const leaveEventSuffixMeta: Record<string, StatusMeta> = {
+  granted: { label: '付与', tone: 'success' },
+  requested: { label: '申請', tone: 'info' },
+  request_approved: { label: '承認', tone: 'success' },
+  request_returned: { label: '差戻し', tone: 'warning' },
+  request_cancelled: { label: '取消', tone: 'danger' },
+  used: { label: '消化', tone: 'info' },
+  warning_raised: { label: '警告', tone: 'warning' },
+}
+
+function leaveEventTypeLabel(eventType: string): StatusMeta {
+  const suffix = eventType.split('.').slice(1).join('.')
+  return leaveEventSuffixMeta[suffix] ?? { label: eventType, tone: 'neutral' }
 }
 
 export function paidLeaveEventTypeLabel(eventType: string): StatusMeta {
-  return paidLeaveEventTypeMeta[eventType] ?? { label: eventType, tone: 'neutral' }
+  return leaveEventTypeLabel(eventType)
+}
+
+export function specialLeaveEventTypeLabel(eventType: string): StatusMeta {
+  return leaveEventTypeLabel(eventType)
 }
 
 /**
- * UC-P007: 有給履歴の各イベントを、payloadの内容を使って人が読める1行に整形する。
- * イベントの種類ごとにpayloadの形が異なるため(docs/17-events.md参照)、
- * イベント種別で分岐して必要なフィールドだけを取り出す。
+ * 有給・特別休暇履歴の各イベントを、payloadの内容を使って人が読める1行に整形する。
+ * イベントの種類ごとにpayloadの形が異なるため(docs/17-events.md参照)、末尾の種別
+ * (leaveEventTypeLabelと同じ考え方)で分岐して必要なフィールドだけを取り出す。
+ * 有給には無い(法定の時効が無い)特別休暇の無期限付与に対応するため、`expires_on`が
+ * 無い場合は「有効期限なし」と表示する。
  */
-export function paidLeaveEventDetail(event: StoredEvent): string {
+function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
   const payload = event.payload
+  const suffix = event.event_type.split('.').slice(1).join('.')
 
-  switch (event.event_type) {
-    case 'paid_leave.granted':
-      return `${payload.granted_days}日を付与(有効期限 ${payload.expires_on})`
-    case 'paid_leave.requested':
+  switch (suffix) {
+    case 'granted': {
+      const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
+      return `${payload.granted_days}日を付与(${expiry})`
+    }
+    case 'requested':
       return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`
-    case 'paid_leave.request_approved':
-      return '有給申請が承認されました'
-    case 'paid_leave.request_returned':
-      return `有給申請が差し戻されました: ${payload.comment}`
-    case 'paid_leave.request_cancelled':
-      return '有給申請を取り消しました'
-    case 'paid_leave.used':
+    case 'request_approved':
+      return `${domainLabel}申請が承認されました`
+    case 'request_returned':
+      return `${domainLabel}申請が差し戻されました: ${payload.comment}`
+    case 'request_cancelled':
+      return `${domainLabel}申請を取り消しました`
+    case 'used':
       return `対象日 ${payload.used_on} に${payload.used_days}日を消化`
-    case 'paid_leave.warning_raised':
+    case 'warning_raised':
       return String(payload.message)
     default:
       return event.event_type
   }
+}
+
+export function paidLeaveEventDetail(event: StoredEvent): string {
+  return leaveEventDetail(event, '有給')
+}
+
+export function specialLeaveEventDetail(event: StoredEvent): string {
+  return leaveEventDetail(event, '特別休暇')
 }
 
 const workflowRequestEventTypeLabels: Record<string, string> = {

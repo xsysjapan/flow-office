@@ -17,6 +17,9 @@ import { MonthsToApprovePage } from './pages/MonthsToApprovePage'
 import { MyPaidLeavePage } from './pages/MyPaidLeavePage'
 import { MyPaidLeaveHistoryPage } from './pages/MyPaidLeaveHistoryPage'
 import { PaidLeaveRequestsToApprovePage } from './pages/PaidLeaveRequestsToApprovePage'
+import { MySpecialLeavePage } from './pages/MySpecialLeavePage'
+import { MySpecialLeaveHistoryPage } from './pages/MySpecialLeaveHistoryPage'
+import { SpecialLeaveRequestsToApprovePage } from './pages/SpecialLeaveRequestsToApprovePage'
 import { BackOfficeTaskListPage } from './pages/BackOfficeTaskListPage'
 import { BackOfficeTaskDetailPage } from './pages/BackOfficeTaskDetailPage'
 import { UserListPage } from './pages/UserListPage'
@@ -28,6 +31,8 @@ import { WorkCalendarDaysPage } from './pages/WorkCalendarDaysPage'
 import { WorkStylesAndShiftsPage } from './pages/WorkStylesAndShiftsPage'
 import { PaidLeaveAdminPage } from './pages/PaidLeaveAdminPage'
 import { PaidLeaveHistoryAdminPage } from './pages/PaidLeaveHistoryAdminPage'
+import { SpecialLeaveAdminPage } from './pages/SpecialLeaveAdminPage'
+import { SpecialLeaveHistoryAdminPage } from './pages/SpecialLeaveHistoryAdminPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AttendanceExportPage } from './pages/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
@@ -59,6 +64,9 @@ function App() {
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
         <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
+        <Route path="special-leave" element={<MySpecialLeavePage />} />
+        <Route path="special-leave/history" element={<MySpecialLeaveHistoryPage />} />
+        <Route path="special-leave/to-approve" element={<SpecialLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
         <Route path="admin" element={<AdminLayout />}>
@@ -72,6 +80,8 @@ function App() {
           <Route path="work-styles" element={<WorkStylesAndShiftsPage />} />
           <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
           <Route path="paid-leave/history" element={<PaidLeaveHistoryAdminPage />} />
+          <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
+          <Route path="special-leave/history" element={<SpecialLeaveHistoryAdminPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

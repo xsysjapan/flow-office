@@ -367,14 +367,13 @@ describe('AttendanceDayPage', () => {
       {
         ...recordedDay,
         leave_segments: [
-          { id: 1, category: 'absence', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
-          { id: 2, category: 'special_leave', start_at: `${date}T09:00:00+09:00`, end_at: `${date}T17:00:00+09:00`, note: '慶弔休暇' },
+          { id: 1, start_at: `${date}T09:00:00+09:00`, end_at: `${date}T11:00:00+09:00`, note: '寝坊のため' },
         ],
-        calculation: { ...recordedDay.calculation!, absence_minutes: 120, special_leave_minutes: 480 },
+        calculation: { ...recordedDay.calculation!, absence_minutes: 120, special_leave_days: 1 },
       },
     ])
 
-    expect(await screen.findByText(/欠勤 09:00 〜 11:00 \(寝坊のため\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/遅刻・早退 09:00 〜 11:00 \(寝坊のため\)/)).toBeInTheDocument()
     expect(screen.getByText('欠勤時間')).toBeInTheDocument()
     expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('0日')
     expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')
@@ -393,16 +392,16 @@ describe('AttendanceDayPage', () => {
     renderPage([])
 
     await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
-    await userEvent.click(screen.getByRole('button', { name: '欠勤・特別休暇を追加' }))
-    fireEvent.change(screen.getByLabelText('欠勤・特別休暇開始'), { target: { value: `${date}T09:00` } })
-    fireEvent.change(screen.getByLabelText('欠勤・特別休暇終了'), { target: { value: `${date}T11:00` } })
+    await userEvent.click(screen.getByRole('button', { name: '遅刻・早退を追加' }))
+    fireEvent.change(screen.getByLabelText('遅刻・早退開始'), { target: { value: `${date}T09:00` } })
+    fireEvent.change(screen.getByLabelText('遅刻・早退終了'), { target: { value: `${date}T11:00` } })
     await userEvent.type(screen.getByLabelText('作成理由(必須)'), '午前は欠勤')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(attendanceApi.createAttendanceDay).toHaveBeenCalledWith(
         expect.objectContaining({
-          leave_segments: [expect.objectContaining({ category: 'absence' })],
+          leave_segments: [expect.objectContaining({ start: expect.any(String), end: expect.any(String) })],
         }),
       ),
     )

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from '../../api/types'
-import { PaidLeaveHistoryList } from './PaidLeaveHistoryList'
+import { LeaveHistoryList } from './LeaveHistoryList'
 
 const grantedEvent: StoredEvent = {
   id: 1,
@@ -25,28 +25,42 @@ const requestedEvent: StoredEvent = {
   occurred_at: '2026-08-05T09:00:00+09:00',
 }
 
-describe('PaidLeaveHistoryList', () => {
+describe('LeaveHistoryList', () => {
   it('shows a loading state', () => {
-    render(<PaidLeaveHistoryList events={undefined} isLoading />)
+    render(<LeaveHistoryList domain="paid_leave" events={undefined} isLoading />)
     expect(screen.getByRole('status')).toBeInTheDocument()
   })
 
   it('shows an error message', () => {
-    render(<PaidLeaveHistoryList events={undefined} isLoading={false} error={new Error('失敗')} />)
+    render(<LeaveHistoryList domain="paid_leave" events={undefined} isLoading={false} error={new Error('失敗')} />)
     expect(screen.getByText('失敗')).toBeInTheDocument()
   })
 
   it('shows an empty state when there is no history', () => {
-    render(<PaidLeaveHistoryList events={[]} isLoading={false} />)
+    render(<LeaveHistoryList domain="paid_leave" events={[]} isLoading={false} />)
     expect(screen.getByText('有給履歴はまだありません。')).toBeInTheDocument()
   })
 
   it('renders each event with its label and payload-derived detail', () => {
-    render(<PaidLeaveHistoryList events={[requestedEvent, grantedEvent]} isLoading={false} />)
+    render(<LeaveHistoryList domain="paid_leave" events={[requestedEvent, grantedEvent]} isLoading={false} />)
 
     expect(screen.getByText('付与')).toBeInTheDocument()
     expect(screen.getByText('10日を付与(有効期限 2027-06-30)')).toBeInTheDocument()
     expect(screen.getByText('申請')).toBeInTheDocument()
     expect(screen.getByText('対象日 2026-08-10 の全休を申請(1日)')).toBeInTheDocument()
+  })
+
+  it('shows the special leave empty state and formats special leave grants without an expiry', () => {
+    const { rerender } = render(<LeaveHistoryList domain="special_leave" events={[]} isLoading={false} />)
+    expect(screen.getByText('特別休暇履歴はまだありません。')).toBeInTheDocument()
+
+    const specialLeaveGrantedEvent: StoredEvent = {
+      ...grantedEvent,
+      event_type: 'special_leave.granted',
+      payload: { granted_days: 3, expires_on: null },
+    }
+    rerender(<LeaveHistoryList domain="special_leave" events={[specialLeaveGrantedEvent]} isLoading={false} />)
+
+    expect(screen.getByText('3日を付与(有効期限なし)')).toBeInTheDocument()
   })
 })

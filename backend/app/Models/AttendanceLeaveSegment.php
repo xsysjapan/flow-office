@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * 勤務予定を勤務しなかった時間帯のうち、欠勤・特別休暇として処理した区間
+ * 勤務予定を勤務しなかった時間帯のうち、遅刻・早退等を欠勤時間として処理した区間
  * (docs/03-architecture.md 3.3: 勤怠の正の一つ)。
  */
-#[Fillable(['attendance_day_id', 'category', 'start_at', 'end_at', 'note'])]
+#[Fillable(['attendance_day_id', 'start_at', 'end_at', 'note'])]
 class AttendanceLeaveSegment extends Model
 {
     protected function casts(): array

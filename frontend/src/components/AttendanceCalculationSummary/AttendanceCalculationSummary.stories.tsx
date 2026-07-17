@@ -25,6 +25,7 @@ export const Monthly: Story = {
       absence_minutes: 0,
       paid_leave_days: 1,
       paid_leave_minutes: 120,
+      special_leave_days: 0,
       special_leave_minutes: 0,
     },
     statutoryExcessOver60hMinutes: 0,

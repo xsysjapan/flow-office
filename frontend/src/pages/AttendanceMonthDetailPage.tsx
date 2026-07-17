@@ -131,7 +131,6 @@ export function AttendanceMonthDetailPage() {
               totals={data.monthly_calculation_totals}
               statutoryExcessOver60hMinutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}
               absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
-              specialLeaveDays={data.monthly_calculation_totals.special_leave_days ?? 0}
               showAllLeaveTotals
             />
           </div>

@@ -95,6 +95,18 @@ use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
+use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
+use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
+use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
+use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
+use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
+use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
+use App\Domain\SpecialLeave\Handlers\ApproveSpecialLeaveRequestHandler;
+use App\Domain\SpecialLeave\Handlers\CancelSpecialLeaveRequestHandler;
+use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
@@ -192,6 +204,13 @@ return [
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
         CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
+
+        GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
+        GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,
+        RequestSpecialLeave::class => RequestSpecialLeaveHandler::class,
+        ApproveSpecialLeaveRequest::class => ApproveSpecialLeaveRequestHandler::class,
+        ReturnSpecialLeaveRequest::class => ReturnSpecialLeaveRequestHandler::class,
+        CancelSpecialLeaveRequest::class => CancelSpecialLeaveRequestHandler::class,
     ],
 
     /*

@@ -20,7 +20,6 @@ class AttendanceLeaveSegmentResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'category' => $this->category,
             'start_at' => LocalDateTime::formatWithOffsetMinutes($this->start_at, $this->utcOffsetMinutes),
             'end_at' => LocalDateTime::formatWithOffsetMinutes($this->end_at, $this->utcOffsetMinutes),
             'note' => $this->note,

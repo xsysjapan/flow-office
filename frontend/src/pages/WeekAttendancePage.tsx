@@ -21,9 +21,10 @@ const WEEKLY_TOTAL_FIELDS = [
   'legal_holiday_work_minutes',
   'late_night_legal_holiday_work_minutes',
   'absence_minutes',
-  'special_leave_minutes',
   'paid_leave_days',
   'paid_leave_minutes',
+  'special_leave_days',
+  'special_leave_minutes',
 ] as const
 
 /**
@@ -50,11 +51,10 @@ export function WeekAttendancePage() {
       if (!calculation || calculation.prescribed_work_minutes <= 0) return totals
 
       if ((calculation.absence_minutes ?? 0) >= calculation.prescribed_work_minutes) totals.absence += 1
-      if ((calculation.special_leave_minutes ?? 0) >= calculation.prescribed_work_minutes) totals.specialLeave += 1
 
       return totals
     },
-    { absence: 0, specialLeave: 0 },
+    { absence: 0 },
   )
   const weeklyTotals = (data ?? []).reduce(
     (totals, day) => {
@@ -76,9 +76,10 @@ export function WeekAttendancePage() {
       legal_holiday_work_minutes: 0,
       late_night_legal_holiday_work_minutes: 0,
       absence_minutes: 0,
-      special_leave_minutes: 0,
       paid_leave_days: 0,
       paid_leave_minutes: 0,
+      special_leave_days: 0,
+      special_leave_minutes: 0,
     },
   )
 
@@ -120,7 +121,6 @@ export function WeekAttendancePage() {
               title="今週の集計"
               totals={weeklyTotals}
               absenceDays={weeklyLeaveDays.absence}
-              specialLeaveDays={weeklyLeaveDays.specialLeave}
               showAllLeaveTotals
             />
           </div>

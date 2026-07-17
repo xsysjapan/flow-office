@@ -37,6 +37,12 @@ Schedule::command('paid-leave:warn-five-day-obligation')
     ->dailyAt('02:20')
     ->withoutOverlapping();
 
+// 特別休暇種別ごとの自動付与ルールに基づき特別休暇を毎日自動付与する
+// (継続勤務期間の記念日にのみ実際に付与される)。
+Schedule::command('special-leave:grant-scheduled')
+    ->dailyAt('02:05')
+    ->withoutOverlapping();
+
 // UC-N001「勤怠未提出」: 前月分の勤怠がまだ提出されていない社員に毎日警告する。
 Schedule::command('attendance:warn-unsubmitted')
     ->dailyAt('02:30')

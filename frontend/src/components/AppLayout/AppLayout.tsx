@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Settings, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
+import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
 import { formatDate } from '../../utils/weekDates'
@@ -22,7 +23,7 @@ interface NavGroup {
   roles?: RoleCode[]
 }
 
-function navGroups(currentYearMonth: string): NavGroup[] {
+function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): NavGroup[] {
   return [
   {
     label: '勤怠',
@@ -32,7 +33,7 @@ function navGroups(currentYearMonth: string): NavGroup[] {
       { to: '/attendance/week', label: '週次勤怠' },
       { to: `/attendance/months/${currentYearMonth}`, label: '勤怠月次' },
       { to: '/paid-leave', label: '有給' },
-      { to: '/paid-leave/history', label: '有給履歴' },
+      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
     ],
   },
   {
@@ -50,6 +51,7 @@ function navGroups(currentYearMonth: string): NavGroup[] {
       { to: '/approvals', label: '承認待ち' },
       { to: '/attendance/months/to-approve', label: '勤怠月次承認' },
       { to: '/paid-leave/to-approve', label: '有給申請承認' },
+      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave/to-approve', label: '特別休暇申請承認' }] : []),
     ],
   },
   {
@@ -192,7 +194,11 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
 export function AppLayout() {
   const { user, logout } = useAuth()
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
-  const visibleGroups = navGroups(currentYearMonth).filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes()
+  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes).filter(
+    (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
+  )
 
   return (
     <div className="flex min-h-screen flex-col">

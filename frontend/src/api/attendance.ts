@@ -3,16 +3,14 @@ import type {
   AttendanceDailyCalculationAdjustment,
   AttendanceDay,
   AttendanceDayDefaults,
-  AttendanceLeaveSegmentCategory,
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   AttendancePunch,
   FlexSettlementSummary,
 } from './types'
 
-/** 欠勤・特別休暇の区間入力(有給休暇は含まない)。 */
+/** 遅刻・早退等を欠勤時間として扱う区間の入力(有給休暇・特別休暇は含まない)。 */
 export interface LeaveSegmentInput {
-  category: AttendanceLeaveSegmentCategory
   start: string
   end: string
   note?: string | null

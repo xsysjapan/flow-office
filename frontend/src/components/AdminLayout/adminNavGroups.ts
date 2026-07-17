@@ -33,6 +33,8 @@ export const adminNavGroups: AdminNavGroup[] = [
       { to: '/admin/work-styles', label: '勤務形態・シフト', description: '勤務形態とシフトパターンを管理する' },
       { to: '/admin/paid-leave', label: '有給ルール', description: '有給の付与・消化ルールを管理する' },
       { to: '/admin/paid-leave/history', label: '有給履歴', description: '対象社員の有給履歴を確認する' },
+      { to: '/admin/special-leave', label: '特別休暇設定', description: '特別休暇の種類・付与ルールを管理する' },
+      { to: '/admin/special-leave/history', label: '特別休暇履歴', description: '対象社員の特別休暇履歴を確認する' },
       {
         to: '/admin/attendance-export',
         label: '勤怠CSV出力',
