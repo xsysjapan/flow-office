@@ -88,7 +88,19 @@ describe('AuthenticationKeysPanel', () => {
 
     await screen.findByText('本社ICカード')
     await user.click(screen.getByRole('button', { name: '無効化する' }))
+    const buttons = await screen.findAllByRole('button', { name: '無効化する' })
+    await user.click(buttons[buttons.length - 1])
 
     expect(disableSpy).toHaveBeenCalledWith(1)
+  })
+
+  it('opens a confirmation dialog before disabling a key', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+
+    await screen.findByText('本社ICカード')
+    await user.click(screen.getByRole('button', { name: '無効化する' }))
+
+    expect(await screen.findByText('認証キーを無効化しますか?')).toBeInTheDocument()
   })
 })

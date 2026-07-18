@@ -5,13 +5,14 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useDevices, useDisableDevice, useIssueDevicePairingCode, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
+import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
 const DEVICE_TYPE_LABELS: Record<DeviceType, string> = {
   android: 'Android',
@@ -36,16 +37,6 @@ const DEVICE_ROLE_LABELS: Record<DeviceRoleType, string> = {
   personal_operation: '個人操作',
   admin_operation: '管理操作',
   external_event_source: '外部イベント連携',
-}
-
-const WORK_LOCATION_TYPE_LABELS: Record<WorkLocationType, string> = {
-  office: '出社',
-  remote: '在宅',
-  client_site: '客先',
-  business_trip: '出張',
-  direct_to_site: '直行',
-  direct_from_site: '直帰',
-  other: 'その他',
 }
 
 const DEVICE_STATUS_TONE: Record<DeviceStatus, 'neutral' | 'success' | 'warning' | 'danger'> = {
@@ -173,9 +164,9 @@ export function DeviceListPage() {
                 onChange={(e) => setDefaultWorkLocationType(e.target.value as WorkLocationType | '')}
               >
                 <option value="">未設定(自動反映しない)</option>
-                {Object.entries(WORK_LOCATION_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+                {WORK_LOCATION_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </NativeSelect>
@@ -278,56 +269,31 @@ export function DeviceListPage() {
 }
 
 function RevokeDeviceDialog({ device }: { device: Device }) {
-  const [isOpen, setIsOpen] = useState(false)
   const [reason, setReason] = useState('')
   const revokeDevice = useRevokeDevice()
 
   return (
-    <Dialog
-      open={isOpen}
+    <ConfirmActionDialog
+      triggerLabel="失効させる"
+      title="端末を失効させますか?"
+      description={`「${device.name}」を失効させます。この端末のトークンは使用できなくなり、元に戻せません。`}
+      confirmLabel="失効させる"
+      isPending={revokeDevice.isPending}
+      error={revokeDevice.error}
       onOpenChange={(open) => {
-        setIsOpen(open)
         if (open) {
           setReason('')
           revokeDevice.reset()
         }
       }}
+      onConfirm={() => revokeDevice.mutate({ deviceId: device.id, reason: reason || undefined })}
     >
-      <Button size="sm" variant="danger" onClick={() => setIsOpen(true)}>
-        失効させる
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>端末を失効させますか?</DialogTitle>
-          <DialogDescription>
-            「{device.name}」を失効させます。この端末のトークンは使用できなくなり、元に戻せません。
-          </DialogDescription>
-        </DialogHeader>
-        {revokeDevice.error && <ErrorMessage error={revokeDevice.error} />}
-        <Input
-          aria-label="失効理由"
-          placeholder="失効理由(任意。例: 端末紛失)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => setIsOpen(false)}>
-            キャンセル
-          </Button>
-          <Button
-            variant="danger"
-            isLoading={revokeDevice.isPending}
-            onClick={() =>
-              revokeDevice.mutate(
-                { deviceId: device.id, reason: reason || undefined },
-                { onSuccess: () => setIsOpen(false) },
-              )
-            }
-          >
-            失効させる
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Input
+        aria-label="失効理由"
+        placeholder="失効理由(任意。例: 端末紛失)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+    </ConfirmActionDialog>
   )
 }

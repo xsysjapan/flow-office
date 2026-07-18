@@ -5,8 +5,8 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -225,41 +225,20 @@ export function MyIntegrationsPage() {
 }
 
 function RevokeIntegrationDialog({ integration }: { integration: ApplicationIntegration }) {
-  const [isOpen, setIsOpen] = useState(false)
   const revokeIntegration = useRevokeIntegration()
 
   return (
-    <Dialog
-      open={isOpen}
+    <ConfirmActionDialog
+      triggerLabel="停止する"
+      title="連携を停止しますか?"
+      description={`「${integration.client_name}」を停止します。発行済みのトークンは使用できなくなり、元に戻せません。`}
+      confirmLabel="停止する"
+      isPending={revokeIntegration.isPending}
+      error={revokeIntegration.error}
       onOpenChange={(open) => {
-        setIsOpen(open)
         if (open) revokeIntegration.reset()
       }}
-    >
-      <Button size="sm" variant="danger" onClick={() => setIsOpen(true)}>
-        停止する
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>連携を停止しますか?</DialogTitle>
-          <DialogDescription>
-            「{integration.client_name}」を停止します。発行済みのトークンは使用できなくなり、元に戻せません。
-          </DialogDescription>
-        </DialogHeader>
-        {revokeIntegration.error && <ErrorMessage error={revokeIntegration.error} />}
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => setIsOpen(false)}>
-            キャンセル
-          </Button>
-          <Button
-            variant="danger"
-            isLoading={revokeIntegration.isPending}
-            onClick={() => revokeIntegration.mutate(integration.id, { onSuccess: () => setIsOpen(false) })}
-          >
-            停止する
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      onConfirm={() => revokeIntegration.mutate(integration.id)}
+    />
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AuthenticationKeyStatus, AuthenticationKeyType } from '../../api/types'
+import type { AuthenticationKey, AuthenticationKeyStatus, AuthenticationKeyType } from '../../api/types'
 import {
   useAuthenticationKeysForUser,
   useDisableAuthenticationKey,
@@ -7,6 +7,7 @@ import {
 } from '../../hooks/useAuthenticationKeys'
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
+import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
 import { LoadingState } from '../LoadingState/LoadingState'
@@ -51,7 +52,6 @@ export interface AuthenticationKeysPanelProps {
 export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps) {
   const { data: keys, isLoading, error } = useAuthenticationKeysForUser(userId)
   const issueKey = useIssueAuthenticationKey()
-  const disableKey = useDisableAuthenticationKey()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [keyType, setKeyType] = useState<AuthenticationKeyType>('nfc_uid')
@@ -91,7 +91,6 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
       </div>
 
       {issueKey.error && <ErrorMessage error={issueKey.error} />}
-      {disableKey.error && <ErrorMessage error={disableKey.error} />}
 
       {isFormOpen && (
         <div className="mb-4 rounded-md border border-border p-4">
@@ -164,16 +163,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
                   {key.registered_at ? new Date(key.registered_at).toLocaleDateString('ja-JP') : '-'}
                 </TableCell>
                 <TableCell>
-                  {key.status !== 'disabled' && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      isLoading={disableKey.isPending}
-                      onClick={() => disableKey.mutate({ id: key.id, userId })}
-                    >
-                      無効化する
-                    </Button>
-                  )}
+                  {key.status !== 'disabled' && <DisableAuthenticationKeyDialog authKey={key} userId={userId} />}
                 </TableCell>
               </TableRow>
             ))}
@@ -181,5 +171,24 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
         </Table>
       )}
     </div>
+  )
+}
+
+function DisableAuthenticationKeyDialog({ authKey, userId }: { authKey: AuthenticationKey; userId: number }) {
+  const disableKey = useDisableAuthenticationKey()
+
+  return (
+    <ConfirmActionDialog
+      triggerLabel="無効化する"
+      title="認証キーを無効化しますか?"
+      description={`「${authKey.display_name}」を無効化します。この操作は取り消せません。`}
+      confirmLabel="無効化する"
+      isPending={disableKey.isPending}
+      error={disableKey.error}
+      onOpenChange={(open) => {
+        if (open) disableKey.reset()
+      }}
+      onConfirm={() => disableKey.mutate({ id: authKey.id, userId })}
+    />
   )
 }
