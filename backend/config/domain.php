@@ -73,6 +73,24 @@ use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
 use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
+use App\Domain\AttendanceImport\Commands\ApplyAttendanceImportSessionToDraft;
+use App\Domain\AttendanceImport\Commands\BulkUpdateAttendanceDays;
+use App\Domain\AttendanceImport\Commands\ConfirmFieldProvenance;
+use App\Domain\AttendanceImport\Commands\CreateAttendanceImportSession;
+use App\Domain\AttendanceImport\Commands\CreateMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Commands\PreviewAttendanceImportSession;
+use App\Domain\AttendanceImport\Commands\SubmitMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Commands\UploadAttendanceImportData;
+use App\Domain\AttendanceImport\Commands\ValidateMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Handlers\ApplyAttendanceImportSessionToDraftHandler;
+use App\Domain\AttendanceImport\Handlers\BulkUpdateAttendanceDaysHandler;
+use App\Domain\AttendanceImport\Handlers\ConfirmFieldProvenanceHandler;
+use App\Domain\AttendanceImport\Handlers\CreateAttendanceImportSessionHandler;
+use App\Domain\AttendanceImport\Handlers\CreateMonthlyAttendanceDraftHandler;
+use App\Domain\AttendanceImport\Handlers\PreviewAttendanceImportSessionHandler;
+use App\Domain\AttendanceImport\Handlers\SubmitMonthlyAttendanceDraftHandler;
+use App\Domain\AttendanceImport\Handlers\UploadAttendanceImportDataHandler;
+use App\Domain\AttendanceImport\Handlers\ValidateMonthlyAttendanceDraftHandler;
 use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
 use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
 use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
@@ -180,6 +198,16 @@ return [
         RegisterIntegration::class => RegisterIntegrationHandler::class,
         RevokeIntegration::class => RevokeIntegrationHandler::class,
         ReissueIntegrationToken::class => ReissueIntegrationTokenHandler::class,
+
+        CreateMonthlyAttendanceDraft::class => CreateMonthlyAttendanceDraftHandler::class,
+        BulkUpdateAttendanceDays::class => BulkUpdateAttendanceDaysHandler::class,
+        ValidateMonthlyAttendanceDraft::class => ValidateMonthlyAttendanceDraftHandler::class,
+        SubmitMonthlyAttendanceDraft::class => SubmitMonthlyAttendanceDraftHandler::class,
+        CreateAttendanceImportSession::class => CreateAttendanceImportSessionHandler::class,
+        UploadAttendanceImportData::class => UploadAttendanceImportDataHandler::class,
+        PreviewAttendanceImportSession::class => PreviewAttendanceImportSessionHandler::class,
+        ApplyAttendanceImportSessionToDraft::class => ApplyAttendanceImportSessionToDraftHandler::class,
+        ConfirmFieldProvenance::class => ConfirmFieldProvenanceHandler::class,
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
