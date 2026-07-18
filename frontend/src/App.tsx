@@ -38,6 +38,7 @@ import { AuditLogPage } from './pages/admin/AuditLogPage'
 import { AttendanceExportPage } from './pages/attendance/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/admin/SystemSettingsPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { DeviceListPage } from './pages/admin/DeviceListPage'
 
 function App() {
   return (
@@ -84,6 +85,7 @@ function App() {
           <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
           <Route path="special-leave/history" element={<SpecialLeaveHistoryAdminPage />} />
           <Route path="attendance" element={<AttendanceReferencePage />} />
+          <Route path="devices" element={<DeviceListPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

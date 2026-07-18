@@ -603,6 +603,74 @@ export interface StoredEvent {
   occurred_at: string
 }
 
+export type DeviceOwnerType = 'organization_shared' | 'personal'
+
+export type DeviceType =
+  | 'android'
+  | 'ios'
+  | 'web_browser'
+  | 'windows'
+  | 'macos'
+  | 'linux'
+  | 'nfc_reader'
+  | 'fingerprint_reader'
+  | 'face_recognition_device'
+  | 'access_control_device'
+  | 'iot_device'
+  | 'external_system'
+  | 'other'
+
+export type DeviceRoleType =
+  | 'attendance_reader'
+  | 'authentication_device'
+  | 'access_control'
+  | 'personal_operation'
+  | 'admin_operation'
+  | 'external_event_source'
+
+export type DeviceScopeType =
+  | 'attendance:clock'
+  | 'attendance:read_current_state'
+  | 'attendance:read_result'
+  | 'identity:resolve'
+  | 'device:heartbeat'
+
+export type DeviceStatus = 'pending_pairing' | 'active' | 'disabled' | 'revoked'
+
+export type WorkLocationType =
+  | 'office'
+  | 'remote'
+  | 'client_site'
+  | 'business_trip'
+  | 'direct_to_site'
+  | 'direct_from_site'
+  | 'other'
+
+export interface Device {
+  id: number
+  owner_type: DeviceOwnerType
+  owner_user_id: number | null
+  name: string
+  device_type: DeviceType
+  status: DeviceStatus
+  site_id: string | null
+  location_name: string | null
+  default_work_location_type: WorkLocationType | null
+  timezone: string | null
+  allowed_punch_types: string[] | null
+  allow_offline: boolean
+  require_location: boolean
+  auto_detect_punch_type: boolean
+  app_version: string | null
+  last_seen_at: string | null
+  paired_at: string | null
+  disabled_at: string | null
+  revoked_at: string | null
+  roles?: DeviceRoleType[]
+  scopes?: DeviceScopeType[]
+  created_at: string | null
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {
