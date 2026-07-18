@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Device\Commands\DisableDevice;
+use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingCode;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
@@ -12,6 +13,7 @@ use App\Http\Resources\DeviceResource;
 use App\Models\Device;
 use App\Models\DeviceOwnerType;
 use App\Models\DeviceRoleType;
+use App\Models\DeviceScopeType;
 use App\Models\DeviceType;
 use App\Models\Role;
 use App\Models\User;
@@ -34,7 +36,7 @@ class DeviceController extends Controller
     {
         $devices = Device::query()
             ->when($request->query('owner_type'), fn ($q, $ownerType) => $q->where('owner_type', $ownerType))
-            ->with('roles')
+            ->with(['roles', 'scopes'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -103,7 +105,7 @@ class DeviceController extends Controller
         $devices = Device::query()
             ->where('owner_type', DeviceOwnerType::PERSONAL)
             ->where('owner_user_id', $request->user()->id)
-            ->with('roles')
+            ->with(['roles', 'scopes'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -157,6 +159,23 @@ class DeviceController extends Controller
             deviceId: $device->id,
             revokedByUserId: $request->user()->id,
             reason: $data['reason'] ?? null,
+        ));
+
+        return new DeviceResource($device);
+    }
+
+    /**
+     * UC-D004: 外部端末にAPIスコープを付与する(管理者)。
+     */
+    #[OA\Post(path: '/devices/{device}/scopes', operationId: 'devices.grantScope', summary: '端末にAPIスコープを付与する(UC-D004)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function grantScope(Request $request, Device $device, CommandBus $commandBus): DeviceResource
+    {
+        $data = $request->validate(['scope' => ['required', Rule::in(DeviceScopeType::values())]]);
+
+        $device = $commandBus->dispatch(new GrantDeviceScope(
+            deviceId: $device->id,
+            scope: $data['scope'],
+            grantedByUserId: $request->user()->id,
         ));
 
         return new DeviceResource($device);

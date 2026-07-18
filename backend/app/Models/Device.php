@@ -77,8 +77,9 @@ class Device extends Authenticatable
     }
 
     /**
-     * このデバイスが持つ役割から発行すべきSanctumトークンのabilityを決定する
-     * (docs/23-usecases-devices.md UC-D002「最小権限」)。
+     * このデバイスが持つ役割・端末スコープから発行すべきSanctumトークンのabilityを決定する
+     * (docs/23-usecases-devices.md UC-D002「最小権限」)。役割由来のability(recorder:punch等)に
+     * 加えて、外部端末に個別付与された`device_scopes`(attendance:clock等)も合成する。
      *
      * @return array<int, string>
      */
@@ -87,6 +88,9 @@ class Device extends Authenticatable
         $abilities = [];
         foreach ($this->roles as $role) {
             $abilities = [...$abilities, ...DeviceRoleType::abilitiesFor($role->role_type)];
+        }
+        foreach ($this->scopes as $scope) {
+            $abilities[] = $scope->scope;
         }
 
         return array_values(array_unique($abilities));

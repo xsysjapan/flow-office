@@ -42,7 +42,7 @@ class ExchangeDevicePairingCodeHandler implements CommandHandler
             throw new DomainRuleException('ペアリングコードが一致しません。');
         }
 
-        $device->load('roles');
+        $device->load('roles', 'scopes');
         $abilities = $device->tokenAbilities();
         $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 

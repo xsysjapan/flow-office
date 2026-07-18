@@ -86,14 +86,22 @@ use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
 use App\Domain\Device\Commands\DisableDevice;
 use App\Domain\Device\Commands\ExchangeDevicePairingCode;
+use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingCode;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
 use App\Domain\Device\Handlers\DisableDeviceHandler;
 use App\Domain\Device\Handlers\ExchangeDevicePairingCodeHandler;
+use App\Domain\Device\Handlers\GrantDeviceScopeHandler;
 use App\Domain\Device\Handlers\IssueDevicePairingCodeHandler;
 use App\Domain\Device\Handlers\RegisterDeviceHandler;
 use App\Domain\Device\Handlers\RevokeDeviceHandler;
+use App\Domain\Integration\Commands\RegisterIntegration;
+use App\Domain\Integration\Commands\ReissueIntegrationToken;
+use App\Domain\Integration\Commands\RevokeIntegration;
+use App\Domain\Integration\Handlers\RegisterIntegrationHandler;
+use App\Domain\Integration\Handlers\ReissueIntegrationTokenHandler;
+use App\Domain\Integration\Handlers\RevokeIntegrationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -164,9 +172,14 @@ return [
         ExchangeDevicePairingCode::class => ExchangeDevicePairingCodeHandler::class,
         DisableDevice::class => DisableDeviceHandler::class,
         RevokeDevice::class => RevokeDeviceHandler::class,
+        GrantDeviceScope::class => GrantDeviceScopeHandler::class,
 
         IssueAuthenticationKey::class => IssueAuthenticationKeyHandler::class,
         DisableAuthenticationKey::class => DisableAuthenticationKeyHandler::class,
+
+        RegisterIntegration::class => RegisterIntegrationHandler::class,
+        RevokeIntegration::class => RevokeIntegrationHandler::class,
+        ReissueIntegrationToken::class => ReissueIntegrationTokenHandler::class,
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,

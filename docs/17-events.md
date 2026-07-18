@@ -90,8 +90,9 @@
 
 ## Integration (docs/25-usecases-integrations-mcp.md)
 
-- `application_integration.registered` (個人または組織のAPI/MCP連携登録)
-- `application_integration.scope_granted`
+- `application_integration.registered` (個人または組織のAPI/MCP連携登録。スコープは登録時に
+  選択するため、`scope_granted`という別イベントは持たず`registered`のpayloadに含める)
+- `application_integration.token_reissued` (アクセストークンの再発行)
 - `application_integration.revoked`
 
 ## AttendanceImport / MonthlyAttendanceDraft (docs/26-usecases-monthly-import.md)

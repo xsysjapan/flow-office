@@ -77,7 +77,7 @@ class RegisterDeviceHandler implements CommandHandler
         $plainTextToken = null;
 
         if ($command->ownerType === DeviceOwnerType::PERSONAL) {
-            $device->load('roles');
+            $device->load('roles', 'scopes');
             $abilities = $device->tokenAbilities();
             $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 

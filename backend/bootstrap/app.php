@@ -1,14 +1,14 @@
 <?php
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Http\Middleware\CheckAbilitiesOrFullSession;
+use App\Http\Middleware\CheckForAnyAbilityOrFullSession;
 use App\Http\Middleware\EnsureFullAccessOrExplicitAbility;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
-use Laravel\Sanctum\Http\Middleware\CheckAbilities;
-use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -21,9 +21,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
             // 端末(devices)・認証キー発行トークン等、限定abilityのSanctumトークン用。
-            // docs/23-usecases-devices.md UC-D002参照。
-            'abilities' => CheckAbilities::class,
-            'ability' => CheckForAnyAbility::class,
+            // docs/23-usecases-devices.md UC-D002参照。Sanctum標準のCheckAbilities/
+            // CheckForAnyAbilityではなく、解決可能なトークンが無い場合(通常のログイン
+            // セッション・テストのactingAs())をフルアクセスとして扱う版を使う
+            // (CheckForAnyAbilityOrFullSession参照)。
+            'abilities' => CheckAbilitiesOrFullSession::class,
+            'ability' => CheckForAnyAbilityOrFullSession::class,
         ]);
 
         // 限定abilityのトークンが、それ用に用意された経路(ability:/abilities:が
