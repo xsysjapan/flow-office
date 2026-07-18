@@ -9,6 +9,7 @@ use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Commands\UpdateDeviceSettings;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DeviceResource;
@@ -56,6 +57,12 @@ class DeviceController extends Controller
             ->paginate(20);
 
         return DeviceResource::collection($devices);
+    }
+
+    #[OA\Get(path: '/devices/{device}', operationId: 'devices.show', summary: '端末詳細を取得する(管理者)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function show(Device $device): DeviceResource
+    {
+        return new DeviceResource($device->load(['roles', 'scopes']));
     }
 
     #[OA\Post(path: '/devices', operationId: 'devices.store', summary: '共有端末を登録する(UC-D001)', tags: ['端末管理'], responses: [new OA\Response(response: 201, description: 'Created')])]
@@ -167,6 +174,41 @@ class DeviceController extends Controller
             'device' => new DeviceResource($result['device']),
             'token' => $result['plainTextToken'],
         ]);
+    }
+
+    /**
+     * 端末の設置場所・自動反映する勤務形態区分などの設定を変更する(管理者)。
+     */
+    #[OA\Patch(path: '/devices/{device}', operationId: 'devices.update', summary: '端末の設定を変更する', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function update(Request $request, Device $device, CommandBus $commandBus): DeviceResource
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'site_id' => ['nullable', 'string'],
+            'location_name' => ['nullable', 'string'],
+            'default_work_location_type' => ['nullable', Rule::in(WorkLocationType::values())],
+            'timezone' => ['nullable', 'string'],
+            'allowed_punch_types' => ['nullable', 'array'],
+            'allow_offline' => ['nullable', 'boolean'],
+            'require_location' => ['nullable', 'boolean'],
+            'auto_detect_punch_type' => ['nullable', 'boolean'],
+        ]);
+
+        $device = $commandBus->dispatch(new UpdateDeviceSettings(
+            deviceId: $device->id,
+            name: $data['name'],
+            siteId: $data['site_id'] ?? null,
+            locationName: $data['location_name'] ?? null,
+            defaultWorkLocationType: $data['default_work_location_type'] ?? null,
+            timezone: $data['timezone'] ?? null,
+            allowedPunchTypes: $data['allowed_punch_types'] ?? null,
+            allowOffline: $data['allow_offline'] ?? true,
+            requireLocation: $data['require_location'] ?? false,
+            autoDetectPunchType: $data['auto_detect_punch_type'] ?? false,
+            updatedByUserId: $request->user()->id,
+        ));
+
+        return new DeviceResource($device);
     }
 
     /**

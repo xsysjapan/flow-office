@@ -2,13 +2,16 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   deleteDevice,
   disableDevice,
+  fetchDevice,
   fetchDevices,
   grantDeviceScope,
   issueDevicePairingClaim,
   registerDevice,
   revokeDevice,
+  updateDeviceSettings,
   type FetchDevicesOptions,
   type RegisterDeviceInput,
+  type UpdateDeviceSettingsInput,
 } from '../api/devices'
 import type { DeviceScopeType } from '../api/types'
 
@@ -17,6 +20,14 @@ export function useDevices({ ownerType, page = 1, withTrashed = false }: FetchDe
     queryKey: ['devices', ownerType, page, withTrashed],
     queryFn: () => fetchDevices({ ownerType, page, withTrashed }),
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useDevice(deviceId: number | undefined) {
+  return useQuery({
+    queryKey: ['devices', 'detail', deviceId],
+    queryFn: () => fetchDevice(deviceId as number),
+    enabled: deviceId !== undefined,
   })
 }
 
@@ -71,6 +82,19 @@ export function useDeleteDevice() {
     mutationFn: (deviceId: number) => deleteDevice(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+  })
+}
+
+export function useUpdateDeviceSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ deviceId, input }: { deviceId: number; input: UpdateDeviceSettingsInput }) =>
+      updateDeviceSettings(deviceId, input),
+    onSuccess: (device) => {
+      void queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.setQueryData(['devices', 'detail', device.id], device)
     },
   })
 }

@@ -83,6 +83,7 @@
 - `device.deleted` (停止・失効済み端末の一覧からの論理削除。監査証跡は`stored_events`に残る)
 - `device.role_assigned` (端末役割(`device_roles`)の追加・変更)
 - `device.scope_granted` (外部端末へのAPIスコープ(`device_scopes`)付与)
+- `device.settings_updated` (設置場所・自動反映する勤務形態区分など端末設定の変更)
 - `device_admin_session.started` (UC-D006: 管理者ICカードをかざす、またはブートストラップ
   経路により端末が管理者モードになった)
 - `device_admin_session.ended` (UC-D006: 管理者モードの明示的な終了、または新しいセッション

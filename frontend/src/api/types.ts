@@ -635,6 +635,7 @@ export type DeviceScopeType =
   | 'attendance:read_result'
   | 'identity:resolve'
   | 'device:heartbeat'
+  | 'admin:mode'
 
 export type DeviceStatus = 'pending_pairing' | 'active' | 'disabled' | 'revoked'
 
