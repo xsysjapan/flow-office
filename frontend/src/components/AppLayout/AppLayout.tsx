@@ -31,7 +31,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
     items: [
       { to: '/', label: '今日の勤怠' },
       { to: '/attendance/week', label: '週次勤怠' },
-      { to: `/attendance/months/${currentYearMonth}`, label: '勤怠月次' },
+      { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
       { to: '/paid-leave', label: '有給' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
     ],
@@ -49,7 +49,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
     icon: CheckCircle2,
     items: [
       { to: '/approvals', label: '承認待ち' },
-      { to: '/attendance/months/to-approve', label: '勤怠月次承認' },
+      { to: '/attendance/months/to-approve', label: '月次勤怠承認' },
       { to: '/paid-leave/to-approve', label: '有給申請承認' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave/to-approve', label: '特別休暇申請承認' }] : []),
     ],

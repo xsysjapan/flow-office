@@ -69,12 +69,12 @@ describe('AppLayout', () => {
     expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
   })
 
-  it('links 勤怠月次 to the current month detail page', async () => {
+  it('links 月次勤怠 to the current month detail page', async () => {
     renderLayout()
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
 
-    expect(await screen.findByRole('menuitem', { name: '勤怠月次' })).toHaveAttribute(
+    expect(await screen.findByRole('menuitem', { name: '月次勤怠' })).toHaveAttribute(
       'href',
       `/attendance/months/${formatDate(new Date()).slice(0, 7)}`,
     )

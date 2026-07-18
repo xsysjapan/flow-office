@@ -12,7 +12,7 @@ import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../util
 import { hasAnyRole, ROLE } from '../../utils/roles'
 
 /**
- * UC-A009: 承認者向けの勤怠月次の承認・差戻し。
+ * UC-A009: 承認者向けの月次勤怠の承認・差戻し。
  * UC-A010: 管理者/人事による締め処理(admin・hr_staffロールのみ)。
  * 提出済みの月次は複数選択し、まとめて承認できる(個別の差戻し/締め処理は行ごとに残す)。
  */
@@ -29,7 +29,7 @@ export function MonthsToApprovePage() {
   const [bulkError, setBulkError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="承認待ちの勤怠月次の取得に失敗しました。" />
+  if (error) return <ErrorMessage error={error} fallback="承認待ちの月次勤怠の取得に失敗しました。" />
 
   const months = data ?? []
   const canClose = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
@@ -60,7 +60,7 @@ export function MonthsToApprovePage() {
 
   return (
     <Card
-      title="承認待ちの勤怠月次"
+      title="承認待ちの月次勤怠"
       actions={
         selectedIds.size > 0 ? (
           <div className="flex items-center gap-2">
@@ -75,7 +75,7 @@ export function MonthsToApprovePage() {
       {actionError && <ErrorMessage error={actionError} />}
 
       {months.length === 0 ? (
-        <p className="text-sm text-muted-foreground">承認待ちの勤怠月次はありません。</p>
+        <p className="text-sm text-muted-foreground">承認待ちの月次勤怠はありません。</p>
       ) : (
         <ul className="divide-y divide-border">
           {months.map((month) => {

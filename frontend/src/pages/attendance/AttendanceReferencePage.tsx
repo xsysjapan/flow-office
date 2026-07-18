@@ -101,7 +101,7 @@ function MonthlyReferenceView({ userId }: { userId: number }) {
         {isLoading ? (
           <LoadingState />
         ) : error ? (
-          <ErrorMessage error={error} fallback="勤怠月次の取得に失敗しました。" />
+          <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
         ) : (
           <>
             {month && month.legal_holiday_warnings.length > 0 && (

@@ -71,7 +71,7 @@ describe('MonthsToApprovePage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('承認待ちの勤怠月次はありません。')).toBeInTheDocument()
+    expect(await screen.findByText('承認待ちの月次勤怠はありません。')).toBeInTheDocument()
   })
 
   it('shows approve and return actions for a submitted month', async () => {
