@@ -667,6 +667,7 @@ export interface Device {
   paired_at: string | null
   disabled_at: string | null
   revoked_at: string | null
+  deleted_at: string | null
   roles?: DeviceRoleType[]
   scopes?: DeviceScopeType[]
   created_at: string | null

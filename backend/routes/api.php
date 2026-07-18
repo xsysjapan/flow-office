@@ -262,6 +262,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/devices', [DeviceController::class, 'store']);
         Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
         Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
+        Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
     });
     // 停止・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
     // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。

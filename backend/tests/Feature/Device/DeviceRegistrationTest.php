@@ -199,4 +199,66 @@ class DeviceRegistrationTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertUnauthorized();
     }
+
+    public function test_admin_can_delete_a_disabled_or_revoked_device(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'status' => DeviceStatus::DISABLED,
+            'disabled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
+
+        $this->assertSoftDeleted('devices', ['id' => $device->id]);
+        $this->assertDatabaseHas('stored_events', [
+            'aggregate_type' => 'device',
+            'aggregate_id' => (string) $device->id,
+            'event_type' => 'device.deleted',
+        ]);
+    }
+
+    public function test_active_or_pending_device_cannot_be_deleted(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'status' => DeviceStatus::PENDING_PAIRING,
+        ]);
+
+        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertUnprocessable();
+
+        $this->assertDatabaseHas('devices', ['id' => $device->id, 'deleted_at' => null]);
+    }
+
+    public function test_deleted_devices_are_hidden_from_the_default_list_but_visible_with_trashed(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'status' => DeviceStatus::REVOKED,
+        ]);
+        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
+
+        $default = $this->actingAs($admin)->getJson('/api/devices');
+        $default->assertSuccessful();
+        $this->assertNotContains($device->id, array_column($default->json('data'), 'id'));
+
+        $withTrashed = $this->actingAs($admin)->getJson('/api/devices?with_trashed=1');
+        $withTrashed->assertSuccessful();
+        $this->assertContains($device->id, array_column($withTrashed->json('data'), 'id'));
+    }
+
+    public function test_device_list_is_paginated(): void
+    {
+        $admin = $this->admin();
+        Device::factory()->count(25)->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
+
+        $response = $this->actingAs($admin)->getJson('/api/devices');
+
+        $response->assertSuccessful();
+        $this->assertCount(20, $response->json('data'));
+        $this->assertSame(2, $response->json('meta.last_page'));
+    }
 }

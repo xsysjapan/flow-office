@@ -1,8 +1,14 @@
 import { apiFetch } from './client'
-import type { Device, DeviceRoleType, DeviceScopeType, DeviceType, WorkLocationType } from './types'
+import type { Device, DeviceRoleType, DeviceScopeType, DeviceType, Paginated, WorkLocationType } from './types'
 
-export function fetchDevices(ownerType?: 'organization_shared' | 'personal'): Promise<Device[]> {
-  return apiFetch('/devices', { query: { owner_type: ownerType } })
+export interface FetchDevicesOptions {
+  ownerType?: 'organization_shared' | 'personal'
+  page?: number
+  withTrashed?: boolean
+}
+
+export function fetchDevices({ ownerType, page, withTrashed }: FetchDevicesOptions = {}): Promise<Paginated<Device>> {
+  return apiFetch('/devices', { query: { owner_type: ownerType, page, with_trashed: withTrashed } })
 }
 
 export interface RegisterDeviceInput {
@@ -45,4 +51,10 @@ export function revokeDevice(deviceId: number, reason?: string): Promise<Device>
 
 export function grantDeviceScope(deviceId: number, scope: DeviceScopeType): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/scopes`, { method: 'POST', body: { scope } })
+}
+
+// UC-D005: 停止・失効済みの端末を一覧から論理削除する(管理者)。監査証跡は
+// バックエンド側でstored_eventsに残り続けるため、フロントは削除操作の起点にすぎない。
+export function deleteDevice(deviceId: number): Promise<void> {
+  return apiFetch(`/devices/${deviceId}`, { method: 'DELETE' })
 }
