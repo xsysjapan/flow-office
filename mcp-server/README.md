@@ -69,8 +69,9 @@ docs/25-usecases-integrations-mcp.md「MCPツール一覧」に対応する。
 - 打刻系: `clock_in`, `start_break`, `end_break`, `clock_out`
 - 日次勤怠編集系: `create_attendance_day_draft`, `update_attendance_day_draft`,
   `bulk_update_attendance_days`, `delete_attendance_day_draft`
-- 月次勤怠系: `create_monthly_attendance_draft`, `get_monthly_attendance_draft`,
-  `validate_monthly_attendance`, `confirm_attendance_draft_field`,
+- 月次勤怠系: `create_monthly_attendance_draft`, `list_my_monthly_attendance_drafts`,
+  `get_monthly_attendance_draft`, `validate_monthly_attendance`,
+  `list_attendance_draft_fields`, `confirm_attendance_draft_field`,
   `submit_monthly_attendance`, `cancel_monthly_attendance_submission`
 - インポート・照合系: `create_attendance_import_session`, `upload_attendance_import_data`,
   `preview_attendance_import`, `compare_import_with_existing_attendance`,

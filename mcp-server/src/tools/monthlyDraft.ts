@@ -60,6 +60,15 @@ export function registerMonthlyDraftTools(server: McpServer, client: FlowOfficeA
   );
 
   server.registerTool(
+    "list_my_monthly_attendance_drafts",
+    {
+      description: "自分の月次勤怠下書きを一覧する(新しい順)。",
+      inputSchema: {},
+    },
+    async () => callAndReport(() => client.get("/attendance/monthly-drafts/mine")),
+  );
+
+  server.registerTool(
     "get_monthly_attendance_draft",
     {
       description: "月次勤怠下書きを取得する。",
@@ -144,9 +153,24 @@ export function registerMonthlyDraftTools(server: McpServer, client: FlowOfficeA
   );
 
   server.registerTool(
+    "list_attendance_draft_fields",
+    {
+      description:
+        "月次勤怠下書きに紐づく各項目(日付・項目名・値の出所・確認状況)を一覧する。" +
+        "validate_monthly_attendanceは未確認項目の名前(例: '2026-07-01:start_time')しか返さないため、" +
+        "confirm_attendance_draft_fieldに渡すfield_provenance_idはこのツールで取得すること。",
+      inputSchema: { draft_id: z.number() },
+    },
+    async ({ draft_id }) => callAndReport(() => client.get(`/attendance/monthly-drafts/${draft_id}/fields`)),
+  );
+
+  server.registerTool(
     "confirm_attendance_draft_field",
     {
-      description: "月次勤怠下書きのAI推定値をユーザーが確認したことを記録する。",
+      description:
+        "月次勤怠下書きのAI推定値をユーザーが確認したことを記録する。field_provenance_idは" +
+        "list_attendance_draft_fieldsで取得したidを使うこと。ユーザー自身がその値の内容を確認・" +
+        "了承した場合にのみ呼び出すこと(AIが自己判断で確定させない、docs/03-architecture.md 3.7)。",
       inputSchema: { draft_id: z.number(), field_provenance_id: z.number() },
     },
     async ({ draft_id, field_provenance_id }) =>
