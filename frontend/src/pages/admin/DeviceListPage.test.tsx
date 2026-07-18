@@ -28,6 +28,7 @@ const devices: Device[] = [
     paired_at: '2026-07-01T00:00:00+09:00',
     disabled_at: null,
     revoked_at: null,
+    deleted_at: null,
     roles: ['attendance_reader'],
     scopes: [],
     created_at: '2026-07-01T00:00:00+09:00',
@@ -52,6 +53,7 @@ const devices: Device[] = [
     paired_at: null,
     disabled_at: null,
     revoked_at: null,
+    deleted_at: null,
     roles: ['attendance_reader'],
     scopes: [],
     created_at: '2026-07-10T00:00:00+09:00',
@@ -60,7 +62,11 @@ const devices: Device[] = [
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue(devices)
+  vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
+    data: devices,
+    meta: { current_page: 1, last_page: 1, total: devices.length },
+    links: { next: null, prev: null },
+  })
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -128,5 +134,49 @@ describe('DeviceListPage', () => {
     await user.click(screen.getAllByRole('button', { name: '失効させる' })[0])
 
     expect(await screen.findByText('端末を失効させますか?')).toBeInTheDocument()
+  })
+
+  it('shows a delete button only for disabled or revoked devices', async () => {
+    const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
+      data: [
+        { ...devices[0], status: 'disabled', disabled_at: '2026-07-01T00:00:00+09:00' },
+        { ...devices[1], status: 'pending_pairing' },
+      ],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    })
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <DeviceListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('本社1階受付')
+    expect(screen.getAllByRole('button', { name: '削除する' })).toHaveLength(1)
+    fetchSpy.mockRestore()
+  })
+
+  it('toggles the with_trashed query param when showing deleted devices', async () => {
+    const user = userEvent.setup()
+    const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
+      data: devices,
+      meta: { current_page: 1, last_page: 1, total: devices.length },
+      links: { next: null, prev: null },
+    })
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <DeviceListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('本社1階受付')
+    await user.click(screen.getByRole('button', { name: '削除済みを表示' }))
+
+    expect(fetchSpy).toHaveBeenLastCalledWith({ ownerType: 'organization_shared', page: 1, withTrashed: true })
+    fetchSpy.mockRestore()
   })
 })

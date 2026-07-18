@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Device\Commands\ClaimDevicePairing;
+use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
 use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
@@ -22,6 +23,7 @@ use App\Models\WorkLocationType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -32,14 +34,26 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '端末管理', description: '共有端末・個人端末・外部端末の登録・ペアリング・停止/失効')]
 class DeviceController extends Controller
 {
-    #[OA\Get(path: '/devices', operationId: 'devices.index', summary: '端末一覧を取得する(管理者)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    #[OA\Get(
+        path: '/devices',
+        operationId: 'devices.index',
+        summary: '端末一覧を取得する(管理者)',
+        tags: ['端末管理'],
+        parameters: [
+            new OA\Parameter(name: 'owner_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'with_trashed', in: 'query', required: false, description: '削除済みの端末も含めて取得する', schema: new OA\Schema(type: 'boolean')),
+            new OA\Parameter(name: 'page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [new OA\Response(response: 200, description: 'Successful response')],
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $devices = Device::query()
+            ->when($request->boolean('with_trashed'), fn ($q) => $q->withTrashed())
             ->when($request->query('owner_type'), fn ($q, $ownerType) => $q->where('owner_type', $ownerType))
             ->with(['roles', 'scopes'])
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(20);
 
         return DeviceResource::collection($devices);
     }
@@ -188,6 +202,21 @@ class DeviceController extends Controller
         ));
 
         return new DeviceResource($device);
+    }
+
+    /**
+     * UC-D005: 停止・失効済みの端末を一覧から論理削除する(管理者)。監査証跡
+     * (stored_events、UC-M003)は残すため物理削除はしない。
+     */
+    #[OA\Delete(path: '/devices/{device}', operationId: 'devices.destroy', summary: '端末を削除する(UC-D005)', tags: ['端末管理'], responses: [new OA\Response(response: 204, description: 'No Content')])]
+    public function destroy(Device $device, CommandBus $commandBus, Request $request): Response
+    {
+        $commandBus->dispatch(new DeleteDevice(
+            deviceId: $device->id,
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->noContent();
     }
 
     /**

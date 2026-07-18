@@ -32,6 +32,7 @@ class DeviceResource extends JsonResource
             'paired_at' => $this->paired_at?->toIso8601String(),
             'disabled_at' => $this->disabled_at?->toIso8601String(),
             'revoked_at' => $this->revoked_at?->toIso8601String(),
+            'deleted_at' => $this->deleted_at?->toIso8601String(),
             'roles' => $this->whenLoaded('roles', fn () => $this->roles->pluck('role_type')),
             'scopes' => $this->whenLoaded('scopes', fn () => $this->scopes->pluck('scope')),
             'created_at' => $this->created_at?->toIso8601String(),

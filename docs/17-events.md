@@ -80,6 +80,7 @@
 - `device.paired` (ペアリングコード/QRコードによる端末鍵確立の完了)
 - `device.disabled` (管理者・本人による一時停止)
 - `device.revoked` (紛失・盗難等による失効。再度使うには新規登録が必要)
+- `device.deleted` (停止・失効済み端末の一覧からの論理削除。監査証跡は`stored_events`に残る)
 - `device.role_assigned` (端末役割(`device_roles`)の追加・変更)
 - `device.scope_granted` (外部端末へのAPIスコープ(`device_scopes`)付与)
 

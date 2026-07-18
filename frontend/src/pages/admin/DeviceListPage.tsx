@@ -7,11 +7,19 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DevicePairingQr } from '../../components/DevicePairingQr/DevicePairingQr'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useDevices, useDisableDevice, useIssueDevicePairingClaim, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
+import {
+  useDeleteDevice,
+  useDevices,
+  useDisableDevice,
+  useIssueDevicePairingClaim,
+  useRegisterDevice,
+  useRevokeDevice,
+} from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -62,10 +70,17 @@ const REGISTERABLE_ROLE_TYPES: DeviceRoleType[] = ['attendance_reader', 'authent
  * 組織共有端末(owner_type=organization_shared)のみを扱う。
  */
 export function DeviceListPage() {
-  const { data: devices, isLoading, error } = useDevices('organization_shared')
+  const [page, setPage] = useState(1)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const { data: devices, isLoading, error } = useDevices({
+    ownerType: 'organization_shared',
+    page,
+    withTrashed: showDeleted,
+  })
   const registerDevice = useRegisterDevice()
   const issuePairingClaim = useIssueDevicePairingClaim()
   const disableDevice = useDisableDevice()
+  const deleteDevice = useDeleteDevice()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [name, setName] = useState('')
@@ -74,6 +89,11 @@ export function DeviceListPage() {
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
   const [claimTokenByDevice, setClaimTokenByDevice] = useState<Record<number, string>>({})
+
+  const toggleShowDeleted = () => {
+    setShowDeleted((v) => !v)
+    setPage(1)
+  }
 
   const toggleRoleType = (roleType: DeviceRoleType) => {
     setRoleTypes((prev) => (prev.includes(roleType) ? prev.filter((r) => r !== roleType) : [...prev, roleType]))
@@ -116,20 +136,26 @@ export function DeviceListPage() {
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
 
-  const list = devices ?? []
+  const list = devices?.data ?? []
 
   return (
     <Card
       title="端末管理"
       actions={
-        <Button onClick={() => setIsFormOpen((v) => !v)} variant={isFormOpen ? 'secondary' : 'primary'}>
-          {isFormOpen ? '閉じる' : '新規登録'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant={showDeleted ? 'primary' : 'secondary'} onClick={toggleShowDeleted}>
+            {showDeleted ? '削除済みを非表示' : '削除済みを表示'}
+          </Button>
+          <Button onClick={() => setIsFormOpen((v) => !v)} variant={isFormOpen ? 'secondary' : 'primary'}>
+            {isFormOpen ? '閉じる' : '新規登録'}
+          </Button>
+        </div>
       }
     >
       {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
       {issuePairingClaim.error && <ErrorMessage error={issuePairingClaim.error} />}
       {disableDevice.error && <ErrorMessage error={disableDevice.error} />}
+      {deleteDevice.error && <ErrorMessage error={deleteDevice.error} />}
 
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
@@ -202,76 +228,99 @@ export function DeviceListPage() {
       {list.length === 0 ? (
         <p className="text-sm text-muted-foreground">登録済みの共有端末はまだありません。</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead>種別</TableHead>
-              <TableHead>設置場所</TableHead>
-              <TableHead>役割</TableHead>
-              <TableHead>状態</TableHead>
-              <TableHead>最終通信</TableHead>
-              <TableHead>操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {list.map((device) => (
-              <TableRow key={device.id}>
-                <TableCell className="font-medium text-foreground">{device.name}</TableCell>
-                <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
-                <TableCell className="text-muted-foreground">{device.location_name ?? '-'}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {(device.roles ?? []).map((role) => DEVICE_ROLE_LABELS[role]).join(' / ') || '-'}
-                </TableCell>
-                <TableCell>
-                  <Badge tone={DEVICE_STATUS_TONE[device.status]}>{DEVICE_STATUS_LABELS[device.status]}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('ja-JP') : '未通信'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col items-start gap-2">
-                    {device.status === 'pending_pairing' && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        isLoading={issuePairingClaim.isPending}
-                        onClick={() => handleIssuePairingClaim(device)}
-                      >
-                        ペアリング用QRを発行
-                      </Button>
-                    )}
-                    {claimTokenByDevice[device.id] && (
-                      <div className="max-w-xs text-xs text-foreground">
-                        <DevicePairingQr claimToken={claimTokenByDevice[device.id]} />
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
-                          <CopyClaimTokenButton token={claimTokenByDevice[device.id]} />
-                        </div>
-                        <p className="mt-1">
-                          (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取るか、
-                          カメラのない端末はこの文字列をコピーしてセットアップ画面に貼り付けて
-                          ください。画面を撮影・共有しないでください)
-                        </p>
-                      </div>
-                    )}
-                    {device.status === 'active' && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        isLoading={disableDevice.isPending}
-                        onClick={() => disableDevice.mutate(device.id)}
-                      >
-                        停止する
-                      </Button>
-                    )}
-                    {device.status !== 'revoked' && <RevokeDeviceDialog device={device} />}
-                  </div>
-                </TableCell>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名称</TableHead>
+                <TableHead>種別</TableHead>
+                <TableHead>設置場所</TableHead>
+                <TableHead>役割</TableHead>
+                <TableHead>状態</TableHead>
+                <TableHead>最終通信</TableHead>
+                <TableHead>操作</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {list.map((device) => {
+                const isDeleted = device.deleted_at !== null
+                return (
+                  <TableRow key={device.id}>
+                    <TableCell className="font-medium text-foreground">{device.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
+                    <TableCell className="text-muted-foreground">{device.location_name ?? '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {(device.roles ?? []).map((role) => DEVICE_ROLE_LABELS[role]).join(' / ') || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge tone={DEVICE_STATUS_TONE[device.status]}>{DEVICE_STATUS_LABELS[device.status]}</Badge>
+                        {isDeleted && <Badge tone="danger">削除済み</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('ja-JP') : '未通信'}
+                    </TableCell>
+                    <TableCell>
+                      {isDeleted ? (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      ) : (
+                        <div className="flex flex-col items-start gap-2">
+                          {device.status === 'pending_pairing' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              isLoading={issuePairingClaim.isPending}
+                              onClick={() => handleIssuePairingClaim(device)}
+                            >
+                              ペアリング用QRを発行
+                            </Button>
+                          )}
+                          {claimTokenByDevice[device.id] && (
+                            <div className="max-w-xs text-xs text-foreground">
+                              <DevicePairingQr claimToken={claimTokenByDevice[device.id]} />
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
+                                <CopyClaimTokenButton token={claimTokenByDevice[device.id]} />
+                              </div>
+                              <p className="mt-1">
+                                (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取るか、
+                                カメラのない端末はこの文字列をコピーしてセットアップ画面に貼り付けて
+                                ください。画面を撮影・共有しないでください)
+                              </p>
+                            </div>
+                          )}
+                          {device.status === 'active' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              isLoading={disableDevice.isPending}
+                              onClick={() => disableDevice.mutate(device.id)}
+                            >
+                              停止する
+                            </Button>
+                          )}
+                          {device.status !== 'revoked' && <RevokeDeviceDialog device={device} />}
+                          {(device.status === 'disabled' || device.status === 'revoked') && (
+                            <DeleteDeviceDialog device={device} />
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          {devices && (
+            <Pagination
+              currentPage={devices.meta.current_page}
+              lastPage={devices.meta.last_page}
+              total={devices.meta.total}
+              onPageChange={setPage}
+            />
+          )}
+        </>
       )}
     </Card>
   )
@@ -320,5 +369,24 @@ function RevokeDeviceDialog({ device }: { device: Device }) {
         onChange={(e) => setReason(e.target.value)}
       />
     </ConfirmActionDialog>
+  )
+}
+
+function DeleteDeviceDialog({ device }: { device: Device }) {
+  const deleteDevice = useDeleteDevice()
+
+  return (
+    <ConfirmActionDialog
+      triggerLabel="削除する"
+      title="端末を削除しますか?"
+      description={`「${device.name}」を一覧から削除します。監査記録として操作履歴は残りますが、この端末は一覧から見えなくなります(「削除済みを表示」で再表示できます)。`}
+      confirmLabel="削除する"
+      isPending={deleteDevice.isPending}
+      error={deleteDevice.error}
+      onOpenChange={(open) => {
+        if (open) deleteDevice.reset()
+      }}
+      onConfirm={() => deleteDevice.mutate(device.id)}
+    />
   )
 }

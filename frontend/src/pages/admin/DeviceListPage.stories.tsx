@@ -25,6 +25,7 @@ const devices: Device[] = [
     paired_at: '2026-07-01T00:00:00+09:00',
     disabled_at: null,
     revoked_at: null,
+    deleted_at: null,
     roles: ['attendance_reader'],
     scopes: [],
     created_at: '2026-07-01T00:00:00+09:00',
@@ -49,6 +50,7 @@ const devices: Device[] = [
     paired_at: null,
     disabled_at: null,
     revoked_at: null,
+    deleted_at: null,
     roles: ['attendance_reader'],
     scopes: [],
     created_at: '2026-07-10T00:00:00+09:00',
@@ -57,7 +59,11 @@ const devices: Device[] = [
 
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['devices', 'organization_shared'], devices)
+  queryClient.setQueryData(['devices', 'organization_shared', 1, false], {
+    data: devices,
+    meta: { current_page: 1, last_page: 1, total: devices.length },
+    links: { next: null, prev: null },
+  })
 
   return function Decorator() {
     return (
