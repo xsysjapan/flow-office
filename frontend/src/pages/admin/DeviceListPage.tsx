@@ -241,12 +241,17 @@ export function DeviceListPage() {
                       </Button>
                     )}
                     {claimTokenByDevice[device.id] && (
-                      <p className="max-w-xs text-xs text-foreground">
-                        <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
-                        <br />
-                        (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取ってください。
-                        画面を撮影・共有しないでください)
-                      </p>
+                      <div className="max-w-xs text-xs text-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
+                          <CopyClaimTokenButton token={claimTokenByDevice[device.id]} />
+                        </div>
+                        <p className="mt-1">
+                          (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取るか、
+                          カメラのない端末はこの文字列をコピーしてセットアップ画面に貼り付けて
+                          ください。画面を撮影・共有しないでください)
+                        </p>
+                      </div>
                     )}
                     {device.status === 'active' && (
                       <Button
@@ -267,6 +272,22 @@ export function DeviceListPage() {
         </Table>
       )}
     </Card>
+  )
+}
+
+function CopyClaimTokenButton({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(token)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Button size="sm" variant="secondary" onClick={handleCopy}>
+      {copied ? 'コピーしました' : 'コピー'}
+    </Button>
   )
 }
 

@@ -101,6 +101,8 @@ describe('DeviceListPage', () => {
     await user.click(screen.getByRole('button', { name: 'ペアリング用QRを発行' }))
 
     expect(await screen.findByText('1|abc123secret')).toBeInTheDocument()
+    // カメラのない端末向けに、claim tokenをコピーできるボタンも表示する。
+    expect(screen.getByRole('button', { name: 'コピー' })).toBeInTheDocument()
   })
 
   it('opens the registration form and submits a new device', async () => {
