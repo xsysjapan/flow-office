@@ -41,6 +41,10 @@ class EmployeeShiftAssignmentController extends Controller
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
+        // 本人または管理者のみ閲覧できる(docs/25-usecases-integrations-mcp.md UC-I002、
+        // 個人API/MCP連携からの`schedule:self:read`スコープでの利用を想定)。
+        $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の勤務予定を閲覧する権限がありません。');
+
         $assignments = EmployeeShiftAssignment::query()
             ->where('user_id', $data['user_id'])
             ->whereDate('work_date', '>=', $data['from'])

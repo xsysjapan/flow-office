@@ -1,0 +1,29 @@
+{
+  "name": "@flow-office/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "flow-office 個人API/MCP連携(docs/25-usecases-integrations-mcp.md)。ClaudeなどのAIアプリへ勤怠操作用ツールを提供する。勤怠計算ロジックはbackend/のLaravel APIに委譲し、ここでは接続・認可・ツール定義・入力検証・レスポンス整形のみを担当する。",
+  "type": "module",
+  "bin": {
+    "flow-office-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

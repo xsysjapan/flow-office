@@ -6,10 +6,13 @@
 ## リポジトリ構成
 
 ```
-backend/   Laravel API (Sanctumトークン認証)。実装の詳細は backend/CLAUDE.md を参照
-frontend/  Vite + React + TypeScript のSPA。Storybook導入済み
-docs/      設計ドキュメント(全体の目次は docs/README.md)
-.claude/   開発でよく使うパターンをまとめたスキル
+backend/     Laravel API (Sanctumトークン認証)。実装の詳細は backend/CLAUDE.md を参照
+frontend/    Vite + React + TypeScript のSPA。Storybook導入済み
+mcp-server/  ClaudeなどのAIアプリへ勤怠操作ツールを提供するMCPサーバー(TypeScript)。
+             backend/のAPIを呼び出すクライアントであり、勤怠計算ロジックは持たない
+             (docs/25-usecases-integrations-mcp.md)。詳細は mcp-server/README.md を参照
+docs/        設計ドキュメント(全体の目次は docs/README.md)
+.claude/     開発でよく使うパターンをまとめたスキル
 ```
 
 バックエンドとフロントエンドは別々にデプロイされることを前提にする。認証はSanctumの

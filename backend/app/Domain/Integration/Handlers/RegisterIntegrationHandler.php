@@ -46,8 +46,12 @@ class RegisterIntegrationHandler implements CommandHandler
             throw new DomainRuleException('少なくとも1つのスコープを選択してください。');
         }
 
+        // 「自分は誰か」を確認できる最低限のスコープは、選択したスコープに関わらず常に
+        // 付与する(他の多くのツールが対象ユーザーIDの解決に必要とするため)。
+        $scopes = array_values(array_unique([IntegrationScopeType::PROFILE_SELF_READ, ...$command->scopes]));
+
         $user = User::query()->findOrFail($command->ownerUserId);
-        $newToken = $user->createToken($command->clientName, $command->scopes);
+        $newToken = $user->createToken($command->clientName, $scopes);
         $plainTextToken = $newToken->plainTextToken;
         $tokenId = $newToken->accessToken->id;
 
@@ -62,7 +66,7 @@ class RegisterIntegrationHandler implements CommandHandler
             'registered_by_user_id' => $command->registeredByUserId,
         ]);
 
-        foreach ($command->scopes as $scope) {
+        foreach ($scopes as $scope) {
             $integration->scopes()->create(['scope' => $scope]);
         }
 
@@ -74,7 +78,7 @@ class RegisterIntegrationHandler implements CommandHandler
                 ownerUserId: $command->ownerUserId,
                 clientType: $command->clientType,
                 clientName: $command->clientName,
-                scopes: $command->scopes,
+                scopes: $scopes,
                 registeredByUserId: $command->registeredByUserId,
             ),
         );

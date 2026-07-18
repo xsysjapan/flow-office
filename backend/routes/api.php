@@ -42,7 +42,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/token', [AuthController::class, 'token']);
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/me', [AuthController::class, 'me'])->middleware('ability:profile:self:read');
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
@@ -113,7 +113,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/work-calendars', [WorkCalendarController::class, 'index']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
-    Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
+    Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index'])->middleware('ability:schedule:self:read');
     Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
     Route::get('/rotation-patterns', [RotationPatternController::class, 'index']);
     Route::get('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'show']);
