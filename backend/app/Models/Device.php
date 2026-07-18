@@ -21,8 +21,8 @@ use Laravel\Sanctum\HasApiTokens;
  * 解決されるよう、Userと同様にIlluminate\Foundation\Auth\Userを継承する。
  */
 #[Fillable([
-    'owner_type', 'owner_user_id', 'name', 'device_type', 'status', 'site_id', 'location_name',
-    'default_work_location_type', 'timezone', 'allowed_punch_types', 'allow_offline',
+    'owner_type', 'owner_user_id', 'activated_by_user_id', 'name', 'device_type', 'status', 'site_id',
+    'location_name', 'default_work_location_type', 'timezone', 'allowed_punch_types', 'allow_offline',
     'require_location', 'auto_detect_punch_type', 'last_seen_at', 'app_version',
     'paired_at', 'disabled_at', 'revoked_at',
 ])]
@@ -51,6 +51,17 @@ class Device extends Authenticatable
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    /**
+     * ペアリング用一時トークンを発行した管理者(UC-D002)。管理者ICカードの初回登録
+     * (ブートストラップ)時に、自分自身を登録できるかどうかの判定に使う。
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function activatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'activated_by_user_id');
     }
 
     /**

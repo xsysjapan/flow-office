@@ -118,6 +118,12 @@ use App\Domain\Device\Handlers\IssueDevicePairingClaimHandler;
 use App\Domain\Device\Handlers\RegisterDeviceHandler;
 use App\Domain\Device\Handlers\RevokeDeviceHandler;
 use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
+use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
+use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSession;
+use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSessionBootstrap;
+use App\Domain\DeviceAdminSession\Handlers\EndDeviceAdminSessionHandler;
+use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionBootstrapHandler;
+use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionHandler;
 use App\Domain\Integration\Commands\RegisterIntegration;
 use App\Domain\Integration\Commands\ReissueIntegrationToken;
 use App\Domain\Integration\Commands\RevokeIntegration;
@@ -197,6 +203,10 @@ return [
         DeleteDevice::class => DeleteDeviceHandler::class,
         GrantDeviceScope::class => GrantDeviceScopeHandler::class,
         WarnStaleDevices::class => WarnStaleDevicesHandler::class,
+
+        StartDeviceAdminSession::class => StartDeviceAdminSessionHandler::class,
+        StartDeviceAdminSessionBootstrap::class => StartDeviceAdminSessionBootstrapHandler::class,
+        EndDeviceAdminSession::class => EndDeviceAdminSessionHandler::class,
 
         IssueAuthenticationKey::class => IssueAuthenticationKeyHandler::class,
         DisableAuthenticationKey::class => DisableAuthenticationKeyHandler::class,

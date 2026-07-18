@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
+use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\DeviceIdentityController;
 use App\Http\Controllers\Api\DevicePunchController;
@@ -293,4 +294,16 @@ Route::middleware(['auth:sanctum', 'ability:recorder:punch,punch:self,attendance
 });
 Route::middleware(['auth:sanctum', 'ability:identity:resolve,recorder:punch'])->group(function () {
     Route::post('/devices/identity/resolve', [DeviceIdentityController::class, 'resolve']);
+});
+
+// --- 端末管理者モード (docs/23-usecases-devices.md UC-D006) ---
+// Android端末が管理者ICカードをかざして管理者モードに入り、社員証NFCを現地登録するための入口。
+Route::middleware(['auth:sanctum', 'ability:admin:mode'])->group(function () {
+    Route::get('/devices/me/admin-bootstrap', [DeviceAdminController::class, 'bootstrapEligibility']);
+    Route::post('/devices/me/admin-bootstrap/authentication-keys', [DeviceAdminController::class, 'bootstrapRegisterKey']);
+    Route::post('/devices/me/admin-sessions', [DeviceAdminController::class, 'startSession']);
+    Route::post('/devices/me/admin-sessions/current/end', [DeviceAdminController::class, 'endSession']);
+    Route::get('/devices/me/admin/users', [DeviceAdminController::class, 'users']);
+    Route::get('/devices/me/admin/users/{user}/authentication-keys', [DeviceAdminController::class, 'userAuthenticationKeys']);
+    Route::post('/devices/me/admin/users/{user}/authentication-keys', [DeviceAdminController::class, 'registerUserAuthenticationKey']);
 });
