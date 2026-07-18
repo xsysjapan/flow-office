@@ -20,13 +20,20 @@ final class DeviceScopeType
     public const DEVICE_HEARTBEAT = 'device:heartbeat';
 
     /**
+     * 管理者モード(docs/23-usecases-devices.md UC-D006)。管理者ICカードのブートストラップ
+     * 登録、管理者ICカードをかざしての管理者モード開始、および管理者モード中のユーザー・
+     * 認証キー一覧取得/社員証NFC登録を許可する。
+     */
+    public const ADMIN_MODE = 'admin:mode';
+
+    /**
      * @return array<int, string>
      */
     public static function values(): array
     {
         return [
             self::ATTENDANCE_CLOCK, self::ATTENDANCE_READ_CURRENT_STATE, self::ATTENDANCE_READ_RESULT,
-            self::IDENTITY_RESOLVE, self::DEVICE_HEARTBEAT,
+            self::IDENTITY_RESOLVE, self::DEVICE_HEARTBEAT, self::ADMIN_MODE,
         ];
     }
 }

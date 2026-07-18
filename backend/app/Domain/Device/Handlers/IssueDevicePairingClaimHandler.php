@@ -38,6 +38,11 @@ class IssueDevicePairingClaimHandler implements CommandHandler
             throw new DomainRuleException('この端末は現在ペアリング待ち状態ではありません。');
         }
 
+        // 誰の管理者権限でこの端末がアクティベーションされたかを記録する(管理者ICカードの
+        // 初回登録・ブートストラップ判定に使う。docs/23-usecases-devices.md UC-D006)。
+        $device->activated_by_user_id = $command->issuedByUserId;
+        $device->save();
+
         // 既に発行済みの未使用トークンが残っていれば無効化してから発行し直す
         // (QRを表示し直した際に古いトークンが使われてしまうことを防ぐ)。
         $device->tokens()->delete();

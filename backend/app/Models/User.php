@@ -6,6 +6,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -44,5 +45,13 @@ class User extends Authenticatable
     public function hasRole(string $code): bool
     {
         return $this->roles->contains('code', $code);
+    }
+
+    /**
+     * @return HasMany<AuthenticationKey, $this>
+     */
+    public function authenticationKeys(): HasMany
+    {
+        return $this->hasMany(AuthenticationKey::class);
     }
 }
