@@ -28,8 +28,6 @@ return new class extends Migration
             $table->boolean('require_location')->default(false);
             $table->boolean('auto_detect_punch_type')->default(false);
             $table->string('app_version')->nullable();
-            $table->string('pairing_code_hash')->nullable();
-            $table->dateTime('pairing_code_expires_at')->nullable();
             $table->dateTime('last_seen_at')->nullable();
             $table->dateTime('paired_at')->nullable();
             $table->dateTime('disabled_at')->nullable();

@@ -10,7 +10,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useDevices, useDisableDevice, useIssueDevicePairingCode, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
+import { useDevices, useDisableDevice, useIssueDevicePairingClaim, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -63,7 +63,7 @@ const REGISTERABLE_ROLE_TYPES: DeviceRoleType[] = ['attendance_reader', 'authent
 export function DeviceListPage() {
   const { data: devices, isLoading, error } = useDevices('organization_shared')
   const registerDevice = useRegisterDevice()
-  const issuePairingCode = useIssueDevicePairingCode()
+  const issuePairingClaim = useIssueDevicePairingClaim()
   const disableDevice = useDisableDevice()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -72,7 +72,7 @@ export function DeviceListPage() {
   const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(['attendance_reader'])
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
-  const [pairingCodeByDevice, setPairingCodeByDevice] = useState<Record<number, string>>({})
+  const [claimTokenByDevice, setClaimTokenByDevice] = useState<Record<number, string>>({})
 
   const toggleRoleType = (roleType: DeviceRoleType) => {
     setRoleTypes((prev) => (prev.includes(roleType) ? prev.filter((r) => r !== roleType) : [...prev, roleType]))
@@ -104,10 +104,10 @@ export function DeviceListPage() {
     )
   }
 
-  const handleIssuePairingCode = (device: Device) => {
-    issuePairingCode.mutate(device.id, {
+  const handleIssuePairingClaim = (device: Device) => {
+    issuePairingClaim.mutate(device.id, {
       onSuccess: (result) => {
-        setPairingCodeByDevice((prev) => ({ ...prev, [device.id]: result.pairing_code }))
+        setClaimTokenByDevice((prev) => ({ ...prev, [device.id]: result.claim_token }))
       },
     })
   }
@@ -127,7 +127,7 @@ export function DeviceListPage() {
       }
     >
       {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
-      {issuePairingCode.error && <ErrorMessage error={issuePairingCode.error} />}
+      {issuePairingClaim.error && <ErrorMessage error={issuePairingClaim.error} />}
       {disableDevice.error && <ErrorMessage error={disableDevice.error} />}
 
       {isFormOpen && (
@@ -234,16 +234,18 @@ export function DeviceListPage() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        isLoading={issuePairingCode.isPending}
-                        onClick={() => handleIssuePairingCode(device)}
+                        isLoading={issuePairingClaim.isPending}
+                        onClick={() => handleIssuePairingClaim(device)}
                       >
-                        ペアリングコード発行
+                        ペアリング用QRを発行
                       </Button>
                     )}
-                    {pairingCodeByDevice[device.id] && (
-                      <p className="text-xs text-foreground">
-                        コード: <span className="font-mono font-semibold">{pairingCodeByDevice[device.id]}</span>
-                        (一度のみ表示・端末アプリに入力してください)
+                    {claimTokenByDevice[device.id] && (
+                      <p className="max-w-xs text-xs text-foreground">
+                        <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
+                        <br />
+                        (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取ってください。
+                        画面を撮影・共有しないでください)
                       </p>
                     )}
                     {device.status === 'active' && (

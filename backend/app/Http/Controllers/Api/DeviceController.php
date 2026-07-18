@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DisableDevice;
 use App\Domain\Device\Commands\GrantDeviceScope;
-use App\Domain\Device\Commands\IssueDevicePairingCode;
+use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
 use App\Domain\EventSourcing\CommandBus;
@@ -113,19 +114,44 @@ class DeviceController extends Controller
     }
 
     /**
-     * UC-D002: 共有端末のペアリングコードを発行する。
+     * UC-D002: 共有端末の一時ペアリングトークン(claim token)を発行する。管理者の
+     * 認証済みトークンだけを認可根拠にする(匿名のコード発行APIは持たない)。管理者
+     * トークンをそのまま端末に渡すのではなく、`device:claim-pairing`abilityのみを持つ
+     * 5分間有効な一時トークンを新たに発行し、それをQRコードとして端末アプリへ渡す。
+     * 端末アプリは`POST /devices/pairing/claim`へこの一時トークンを提示し、業務用の
+     * 本トークンに交換する。
      */
-    #[OA\Post(path: '/devices/{device}/pairing', operationId: 'devices.issuePairingCode', summary: 'ペアリングコードを発行する(UC-D002)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
-    public function issuePairingCode(Device $device, CommandBus $commandBus, Request $request): JsonResponse
+    #[OA\Post(path: '/devices/{device}/pairing', operationId: 'devices.issuePairingClaim', summary: '端末の一時ペアリングトークンを発行する(UC-D002)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function issuePairingClaim(Device $device, CommandBus $commandBus, Request $request): JsonResponse
     {
-        $result = $commandBus->dispatch(new IssueDevicePairingCode(
+        $result = $commandBus->dispatch(new IssueDevicePairingClaim(
             deviceId: $device->id,
             issuedByUserId: $request->user()->id,
         ));
 
         return response()->json([
             'device' => new DeviceResource($result['device']),
-            'pairing_code' => $result['pairingCode'],
+            'claim_token' => $result['claimToken'],
+        ]);
+    }
+
+    /**
+     * UC-D002: 端末アプリが一時ペアリングトークン(claim token)を業務用の本トークンに
+     * 交換する。ルートは`auth:sanctum`+`ability:device:claim-pairing`で保護されており、
+     * ここに到達した時点で`$request->user()`は一時トークンの持ち主(Device自身)であることが
+     * 確認済み。
+     */
+    #[OA\Post(path: '/devices/pairing/claim', operationId: 'devices.claimPairing', summary: '一時ペアリングトークンを本トークンに交換する(UC-D002)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function claimPairing(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $device = $request->user();
+        abort_unless($device instanceof Device, 401);
+
+        $result = $commandBus->dispatch(new ClaimDevicePairing(deviceId: $device->id));
+
+        return response()->json([
+            'device' => new DeviceResource($result['device']),
+            'token' => $result['plainTextToken'],
         ]);
     }
 

@@ -2,7 +2,7 @@
 
 namespace App\Domain\Device\Handlers;
 
-use App\Domain\Device\Commands\ExchangeDevicePairingCode;
+use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Events\DevicePaired;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
@@ -10,14 +10,15 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceStatus;
-use Illuminate\Support\Facades\Hash;
 
 /**
- * UC-D002: 端末アプリがペアリングコードをSanctumトークンへ交換する。
+ * UC-D002: 一時ペアリングトークン(claim token)を、業務用の本トークンに交換する。
+ * ルートは`auth:sanctum`+`ability:device:claim-pairing`で保護されており、ここに
+ * 到達した時点で呼び出し元(claim tokenの持ち主)は既に検証済み。
  *
- * @implements CommandHandler<ExchangeDevicePairingCode>
+ * @implements CommandHandler<ClaimDevicePairing>
  */
-class ExchangeDevicePairingCodeHandler implements CommandHandler
+class ClaimDevicePairingHandler implements CommandHandler
 {
     public function __construct(private readonly EventStore $eventStore) {}
 
@@ -26,37 +27,24 @@ class ExchangeDevicePairingCodeHandler implements CommandHandler
      */
     public function handle(Command $command): array
     {
-        assert($command instanceof ExchangeDevicePairingCode);
+        assert($command instanceof ClaimDevicePairing);
 
         $device = Device::query()->findOrFail($command->deviceId);
 
-        // 停止・失効済みの端末はペアリングコードが(本来クリアされているはずでも)
-        // 何らかの理由で残っていた場合に備え、statusでも明示的に拒否する
-        // (disable/revoke後に古いペアリングコードで復活できてしまうことを防ぐ)。
         if ($device->status !== DeviceStatus::PENDING_PAIRING) {
             throw new DomainRuleException('この端末は現在ペアリング待ち状態ではありません。');
         }
 
-        if ($device->pairing_code_hash === null || $device->pairing_code_expires_at === null) {
-            throw new DomainRuleException('ペアリングコードが発行されていません。');
-        }
-
-        if (now()->gt($device->pairing_code_expires_at)) {
-            throw new DomainRuleException('ペアリングコードの有効期限が切れています。');
-        }
-
-        if (! Hash::check($command->pairingCode, $device->pairing_code_hash)) {
-            throw new DomainRuleException('ペアリングコードが一致しません。');
-        }
-
         $device->load('roles', 'scopes');
         $abilities = $device->tokenAbilities();
+
+        // claim token(device:claim-pairingのみのability)を含め、この端末の
+        // Sanctumトークンをすべて入れ替える(一時トークンの使い捨て)。
+        $device->tokens()->delete();
         $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 
         $device->status = DeviceStatus::ACTIVE;
         $device->paired_at = now();
-        $device->pairing_code_hash = null;
-        $device->pairing_code_expires_at = null;
         $device->save();
 
         $this->eventStore->append(
