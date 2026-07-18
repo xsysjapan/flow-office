@@ -3,8 +3,11 @@ import type { StoredEvent } from '../api/types'
 import {
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
+  fieldSourceTypeLabel,
+  monthlyDraftStatusLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
+  parseFieldProvenanceName,
   workflowRequestStatusLabel,
 } from './statusLabels'
 
@@ -36,6 +39,27 @@ describe('statusLabels', () => {
   it('maps attendance day statuses to a Japanese label and tone', () => {
     expect(attendanceDayStatusLabel('on_break')).toEqual({ label: '休憩中', tone: 'warning' })
     expect(attendanceDayStatusLabel('clocked_out')).toEqual({ label: '退勤済み', tone: 'success' })
+  })
+
+  it('maps monthly draft statuses to a Japanese label and tone', () => {
+    expect(monthlyDraftStatusLabel('needs_review')).toEqual({ label: '要確認', tone: 'warning' })
+    expect(monthlyDraftStatusLabel('ready_to_submit')).toEqual({ label: '申請可能', tone: 'success' })
+  })
+
+  it('maps field provenance source types to a Japanese label and tone', () => {
+    expect(fieldSourceTypeLabel('ai_inferred')).toEqual({ label: 'AI推定(要確認)', tone: 'warning' })
+    expect(fieldSourceTypeLabel('user_confirmed')).toEqual({ label: '本人確認済み', tone: 'success' })
+  })
+
+  it('parses a field provenance name into a date and a Japanese field label', () => {
+    expect(parseFieldProvenanceName('2026-07-01:start_time')).toEqual({
+      date: '2026-07-01',
+      fieldLabel: '出勤時刻',
+    })
+    expect(parseFieldProvenanceName('2026-07-01:some_future_field')).toEqual({
+      date: '2026-07-01',
+      fieldLabel: 'some_future_field',
+    })
   })
 
   it('maps paid leave history event types to a Japanese label and tone, falling back to the raw type', () => {

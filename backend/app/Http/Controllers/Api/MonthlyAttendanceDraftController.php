@@ -9,6 +9,7 @@ use App\Domain\AttendanceImport\Commands\SubmitMonthlyAttendanceDraft;
 use App\Domain\AttendanceImport\Commands\ValidateMonthlyAttendanceDraft;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\FieldProvenanceResource;
 use App\Http\Resources\MonthlyAttendanceDraftResource;
 use App\Models\FieldProvenance;
 use App\Models\FieldSourceType;
@@ -16,6 +17,7 @@ use App\Models\MonthlyAttendanceDraft;
 use App\Models\WorkLocationType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -26,6 +28,17 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '月次勤怠下書き', description: '作業報告書等からの月次勤怠下書き・一括更新・申請')]
 class MonthlyAttendanceDraftController extends Controller
 {
+    #[OA\Get(path: '/attendance/monthly-drafts/mine', operationId: 'monthlyDrafts.indexMine', summary: '自分の月次勤怠下書き一覧を取得する', tags: ['月次勤怠下書き'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function indexMine(Request $request): AnonymousResourceCollection
+    {
+        $drafts = MonthlyAttendanceDraft::query()
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('id')
+            ->get();
+
+        return MonthlyAttendanceDraftResource::collection($drafts);
+    }
+
     #[OA\Post(path: '/attendance/monthly-drafts', operationId: 'monthlyDrafts.store', summary: '月次勤怠下書きを作成する', tags: ['月次勤怠下書き'], responses: [new OA\Response(response: 201, description: 'Created')])]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
@@ -52,6 +65,28 @@ class MonthlyAttendanceDraftController extends Controller
         $this->abortUnlessOwnerOrAdmin($request, $monthlyAttendanceDraft->user_id, '他の社員の月次勤怠下書きを閲覧する権限がありません。');
 
         return new MonthlyAttendanceDraftResource($monthlyAttendanceDraft);
+    }
+
+    /**
+     * UC-R001「不明点の確認」: 下書きに紐づく各項目の出所(AI推定値か否か・確認状況)を
+     * 一覧取得する。項目ごとの最新の記録のみを返す(BulkUpdateAttendanceDaysHandler等が
+     * 同一項目を複数回追記しうるため)。
+     */
+    #[OA\Get(path: '/attendance/monthly-drafts/{monthlyAttendanceDraft}/fields', operationId: 'monthlyDrafts.fields', summary: '下書きの項目出所一覧を取得する', tags: ['月次勤怠下書き'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function fields(Request $request, MonthlyAttendanceDraft $monthlyAttendanceDraft): AnonymousResourceCollection
+    {
+        $this->abortUnlessOwnerOrAdmin($request, $monthlyAttendanceDraft->user_id, '他の社員の月次勤怠下書きを閲覧する権限がありません。');
+
+        $provenances = FieldProvenance::query()
+            ->where('entity_type', FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT)
+            ->where('entity_id', $monthlyAttendanceDraft->id)
+            ->orderByDesc('id')
+            ->get()
+            ->unique('field_name')
+            ->sortBy('field_name')
+            ->values();
+
+        return FieldProvenanceResource::collection($provenances);
     }
 
     /**

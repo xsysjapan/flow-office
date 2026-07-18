@@ -173,8 +173,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 月次勤怠下書き・作業報告書インポート (docs/26-usecases-monthly-import.md UC-R001〜UC-R002) ---
     Route::prefix('attendance/monthly-drafts')->group(function () {
+        Route::get('/mine', [MonthlyAttendanceDraftController::class, 'indexMine'])->middleware('ability:attendance:self:read');
         Route::post('/', [MonthlyAttendanceDraftController::class, 'store'])->middleware('ability:attendance:self:draft');
         Route::get('/{monthlyAttendanceDraft}', [MonthlyAttendanceDraftController::class, 'show'])->middleware('ability:attendance:self:read');
+        Route::get('/{monthlyAttendanceDraft}/fields', [MonthlyAttendanceDraftController::class, 'fields'])->middleware('ability:attendance:self:read');
         Route::put('/{monthlyAttendanceDraft}/days', [MonthlyAttendanceDraftController::class, 'bulkUpdateDays'])->middleware('ability:attendance:self:update');
         Route::post('/{monthlyAttendanceDraft}/validate', [MonthlyAttendanceDraftController::class, 'validateDraft'])->middleware('ability:attendance:self:validate');
         Route::post('/{monthlyAttendanceDraft}/submit', [MonthlyAttendanceDraftController::class, 'submit'])->middleware('ability:attendance:self:submit');

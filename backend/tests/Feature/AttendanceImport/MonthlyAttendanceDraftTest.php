@@ -198,4 +198,50 @@ class MonthlyAttendanceDraftTest extends TestCase
 
         $this->actingAs($other)->getJson("/api/attendance/monthly-drafts/{$draft['id']}")->assertForbidden();
     }
+
+    public function test_it_lists_only_the_current_users_drafts_newest_first(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $this->createDraft($user, '2026-06');
+        $this->createDraft($user, '2026-07');
+        $this->createDraft($other, '2026-07');
+
+        $response = $this->actingAs($user)->getJson('/api/attendance/monthly-drafts/mine');
+
+        $response->assertSuccessful();
+        $months = collect($response->json())->pluck('target_month');
+        $this->assertSame(['2026-07', '2026-06'], $months->all());
+    }
+
+    public function test_fields_endpoint_returns_the_latest_provenance_per_field(): void
+    {
+        $user = User::factory()->create();
+        $draft = $this->createDraft($user);
+
+        $aiDay = $this->cleanDayPayload('2026-07-01');
+        $aiDay['source'] = FieldSourceType::AI_INFERRED;
+
+        $this->actingAs($user)->putJson("/api/attendance/monthly-drafts/{$draft['id']}/days", [
+            'expected_version' => 1,
+            'days' => [$aiDay],
+        ])->assertSuccessful();
+
+        $response = $this->actingAs($user)->getJson("/api/attendance/monthly-drafts/{$draft['id']}/fields");
+
+        $response->assertSuccessful();
+        $fieldNames = collect($response->json())->pluck('field_name');
+        $this->assertTrue($fieldNames->contains('2026-07-01:start_time'));
+        $sourceTypes = collect($response->json())->pluck('source_type')->unique();
+        $this->assertSame([FieldSourceType::AI_INFERRED], $sourceTypes->all());
+    }
+
+    public function test_an_employee_cannot_view_another_employees_draft_fields(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        $draft = $this->createDraft($owner);
+
+        $this->actingAs($other)->getJson("/api/attendance/monthly-drafts/{$draft['id']}/fields")->assertForbidden();
+    }
 }
