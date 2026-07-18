@@ -52,3 +52,8 @@ Schedule::command('attendance:warn-unsubmitted')
 Schedule::command('attendance:warn-month-close-deadline')
     ->dailyAt('02:40')
     ->withoutOverlapping();
+
+// docs/23-usecases-devices.md「端末管理画面」: 疎通が途絶えている端末を毎日検出する。
+Schedule::command('devices:health-check')
+    ->dailyAt('03:00')
+    ->withoutOverlapping();
