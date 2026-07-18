@@ -30,6 +30,13 @@ class ExchangeDevicePairingCodeHandler implements CommandHandler
 
         $device = Device::query()->findOrFail($command->deviceId);
 
+        // 停止・失効済みの端末はペアリングコードが(本来クリアされているはずでも)
+        // 何らかの理由で残っていた場合に備え、statusでも明示的に拒否する
+        // (disable/revoke後に古いペアリングコードで復活できてしまうことを防ぐ)。
+        if ($device->status !== DeviceStatus::PENDING_PAIRING) {
+            throw new DomainRuleException('この端末は現在ペアリング待ち状態ではありません。');
+        }
+
         if ($device->pairing_code_hash === null || $device->pairing_code_expires_at === null) {
             throw new DomainRuleException('ペアリングコードが発行されていません。');
         }

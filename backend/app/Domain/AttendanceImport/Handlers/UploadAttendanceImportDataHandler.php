@@ -3,8 +3,10 @@
 namespace App\Domain\AttendanceImport\Handlers;
 
 use App\Domain\AttendanceImport\Commands\UploadAttendanceImportData;
+use App\Domain\AttendanceImport\Events\AttendanceImportDataUploaded;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
+use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceImportSession;
 use App\Models\ImportItemStatus;
@@ -13,13 +15,13 @@ use App\Models\ImportSessionStatus;
 /**
  * 作業報告書から抽出した構造化データ(日別の勤務候補)を受け取る(docs/26「Claudeによる構造化」)。
  * ファイル解析自体はClaude側で完結しており、ここでは構造化済みJSONの受け入れのみ行う。
- * このステップ自体は下書きに何かを確定させるものではないため、ドメインイベントは記録しない
- * (attendance_import_session.created/previewed/appliedが節目のイベント)。
  *
  * @implements CommandHandler<UploadAttendanceImportData>
  */
 class UploadAttendanceImportDataHandler implements CommandHandler
 {
+    public function __construct(private readonly EventStore $eventStore) {}
+
     public function handle(Command $command): AttendanceImportSession
     {
         assert($command instanceof UploadAttendanceImportData);
@@ -42,6 +44,15 @@ class UploadAttendanceImportDataHandler implements CommandHandler
 
         $session->status = ImportSessionStatus::PREVIEWING;
         $session->save();
+
+        $this->eventStore->append(
+            aggregateType: 'attendance_import_session',
+            aggregateId: (string) $session->id,
+            event: new AttendanceImportDataUploaded(
+                sessionId: $session->id,
+                itemCount: count($command->days),
+            ),
+        );
 
         return $session->load('items');
     }

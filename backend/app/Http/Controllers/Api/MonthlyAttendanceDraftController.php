@@ -77,12 +77,7 @@ class MonthlyAttendanceDraftController extends Controller
     {
         $this->abortUnlessOwnerOrAdmin($request, $monthlyAttendanceDraft->user_id, '他の社員の月次勤怠下書きを閲覧する権限がありません。');
 
-        $provenances = FieldProvenance::query()
-            ->where('entity_type', FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT)
-            ->where('entity_id', $monthlyAttendanceDraft->id)
-            ->orderByDesc('id')
-            ->get()
-            ->unique('field_name')
+        $provenances = FieldProvenance::latestForEntity(FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT, $monthlyAttendanceDraft->id)
             ->sortBy('field_name')
             ->values();
 

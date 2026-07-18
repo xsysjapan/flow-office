@@ -98,6 +98,7 @@
 ## AttendanceImport / MonthlyAttendanceDraft (docs/26-usecases-monthly-import.md)
 
 - `attendance_import_session.created`
+- `attendance_import_session.data_uploaded` (Claudeが構造化した作業報告書データの受け入れ)
 - `attendance_import_session.previewed` (差異検出・検証結果の生成)
 - `attendance_import_session.applied` (下書きへの反映)
 - `attendance_import_session.cancelled`

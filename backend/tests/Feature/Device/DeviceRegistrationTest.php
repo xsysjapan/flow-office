@@ -139,4 +139,52 @@ class DeviceRegistrationTest extends TestCase
         $device->refresh();
         $this->assertSame(DeviceStatus::REVOKED, $device->status);
     }
+
+    public function test_a_pairing_code_cannot_be_exchanged_after_the_device_is_revoked(): void
+    {
+        $admin = $this->admin();
+        $response = $this->actingAs($admin)->postJson('/api/devices', [
+            'name' => '紛失した端末',
+            'device_type' => DeviceType::ANDROID,
+            'role_types' => [DeviceRoleType::ATTENDANCE_READER],
+        ]);
+        $deviceId = $response->json('id');
+
+        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $code = $pairing->json('pairing_code');
+
+        // ペアリングコードの有効期限内に、端末を紛失したものとして失効させる。
+        $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/revoke", ['reason' => '紛失'])->assertSuccessful();
+
+        $exchange = $this->postJson('/api/devices/pairing/exchange', [
+            'device_id' => $deviceId,
+            'pairing_code' => $code,
+        ]);
+
+        $exchange->assertStatus(422);
+        $device = Device::query()->findOrFail($deviceId);
+        $this->assertSame(DeviceStatus::REVOKED, $device->status);
+        $this->assertNull($device->pairing_code_hash);
+    }
+
+    public function test_a_pairing_code_cannot_be_exchanged_after_the_device_is_disabled(): void
+    {
+        $admin = $this->admin();
+        $response = $this->actingAs($admin)->postJson('/api/devices', [
+            'name' => '一時停止端末',
+            'device_type' => DeviceType::ANDROID,
+            'role_types' => [DeviceRoleType::ATTENDANCE_READER],
+        ]);
+        $deviceId = $response->json('id');
+
+        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $code = $pairing->json('pairing_code');
+
+        $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/disable")->assertSuccessful();
+
+        $this->postJson('/api/devices/pairing/exchange', [
+            'device_id' => $deviceId,
+            'pairing_code' => $code,
+        ])->assertStatus(422);
+    }
 }

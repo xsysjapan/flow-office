@@ -47,8 +47,11 @@ class BulkUpdateAttendanceDaysHandler implements CommandHandler
     {
         assert($command instanceof BulkUpdateAttendanceDays);
 
-        if ($command->idempotencyKey !== null) {
-            $cacheKey = self::IDEMPOTENCY_CACHE_PREFIX.$command->draftId.':'.$command->idempotencyKey;
+        $cacheKey = $command->idempotencyKey !== null
+            ? self::IDEMPOTENCY_CACHE_PREFIX.$command->draftId.':'.$command->idempotencyKey
+            : null;
+
+        if ($cacheKey !== null) {
             $cached = Cache::get($cacheKey);
             if ($cached !== null) {
                 // 同じIdempotency-Keyでの再送は再処理せず、直前の結果をそのまま返す
@@ -60,7 +63,12 @@ class BulkUpdateAttendanceDaysHandler implements CommandHandler
             }
         }
 
-        $draft = MonthlyAttendanceDraft::query()->findOrFail($command->draftId);
+        // lockForUpdate()で行ロックを取得し、バージョン確認から書き込みまでを
+        // アトミックにする(CommandBus::dispatch()がこのhandle()全体をDB::transaction()で
+        // 包んでいるため、ロックはこのトランザクションのコミット/ロールバックまで保持される)。
+        // ロックが無いと、同じexpected_versionを持つ2つの同時リクエストが両方チェックを
+        // 通過し、一方の更新がもう一方に静かに上書きされるlost updateが起こり得る。
+        $draft = MonthlyAttendanceDraft::query()->lockForUpdate()->findOrFail($command->draftId);
 
         if ($draft->version !== $command->expectedVersion) {
             throw new ConcurrencyException(
@@ -103,8 +111,7 @@ class BulkUpdateAttendanceDaysHandler implements CommandHandler
             ),
         );
 
-        if ($command->idempotencyKey !== null) {
-            $cacheKey = self::IDEMPOTENCY_CACHE_PREFIX.$command->draftId.':'.$command->idempotencyKey;
+        if ($cacheKey !== null) {
             Cache::put($cacheKey, ['draft_id' => $draft->id, 'results' => $results], now()->addHours(24));
         }
 
@@ -160,6 +167,7 @@ class BulkUpdateAttendanceDaysHandler implements CommandHandler
                 reason: '月次一括作成(作業報告書インポート)',
                 editedByUserId: $user->id,
                 workLocationType: $dayInput['workLocationType'] ?? $existing->work_location_type,
+                workLocationTypeProvided: true,
             ));
         }
 

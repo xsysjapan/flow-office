@@ -25,6 +25,10 @@ class RevokeDeviceHandler implements CommandHandler
         $device->tokens()->delete();
         $device->status = DeviceStatus::REVOKED;
         $device->revoked_at = now();
+        // 発行済みの未使用ペアリングコードが残っていると、失効後もそのコードで
+        // ペアリングし直され復活してしまうため、あわせて無効化する。
+        $device->pairing_code_hash = null;
+        $device->pairing_code_expires_at = null;
         $device->save();
 
         $this->eventStore->append(

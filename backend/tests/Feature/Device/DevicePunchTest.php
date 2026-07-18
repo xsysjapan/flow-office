@@ -140,6 +140,39 @@ class DevicePunchTest extends TestCase
         $this->assertSame(1, AttendancePunch::query()->count());
     }
 
+    public function test_a_colliding_idempotency_key_from_a_different_user_is_rejected(): void
+    {
+        $employeeA = User::factory()->create();
+        $this->issueKey($employeeA, 'NFC-UID-005');
+        $employeeB = User::factory()->create();
+        $this->issueKey($employeeB, 'NFC-UID-006');
+
+        $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
+        Sanctum::actingAs($device, ['recorder:punch']);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-07-18T09:00:00+09:00',
+            'authentication_key_value' => 'NFC-UID-005',
+            'idempotency_key' => 'colliding-key',
+        ])->assertSuccessful();
+
+        // 端末側の不具合等で異なる利用者の打刻に同じ冪等性キーが使われた場合、
+        // 最初の利用者の打刻を誤って返さず、エラーとして拒否する。
+        $response = $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-07-18T09:05:00+09:00',
+            'authentication_key_value' => 'NFC-UID-006',
+            'idempotency_key' => 'colliding-key',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(1, AttendancePunch::query()->count());
+        $this->assertSame($employeeA->id, AttendancePunch::query()->firstOrFail()->user_id);
+    }
+
     public function test_personal_device_punches_as_its_own_owner_without_an_authentication_key(): void
     {
         $employee = User::factory()->create();

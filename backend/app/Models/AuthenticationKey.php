@@ -63,6 +63,12 @@ class AuthenticationKey extends Model
         return true;
     }
 
+    /**
+     * docs/16-database-schema.md「authentication_key_device_rules」: ルールが1件も
+     * 無ければ制限なし(全端末・全事業所で利用可能)。ルールが1件でもあれば、この端末
+     * (または所属事業所)に一致するルールが無い限り拒否する(default-deny)。
+     * device_id/site_idが共にnullのルールは、特定の端末・事業所を問わない全体ルールとして扱う。
+     */
     public function isUsableOnDevice(?int $deviceId): bool
     {
         $rules = $this->deviceRules;
@@ -70,11 +76,23 @@ class AuthenticationKey extends Model
             return true;
         }
 
-        $applicable = $rules->filter(fn (AuthenticationKeyDeviceRule $rule) => $rule->device_id === null || $rule->device_id === $deviceId);
-        if ($applicable->isEmpty()) {
-            return true;
+        $siteId = $deviceId !== null ? Device::query()->find($deviceId)?->site_id : null;
+
+        $matching = $rules->filter(function (AuthenticationKeyDeviceRule $rule) use ($deviceId, $siteId) {
+            if ($rule->device_id === null && $rule->site_id === null) {
+                return true;
+            }
+            if ($rule->device_id !== null && $rule->device_id === $deviceId) {
+                return true;
+            }
+
+            return $rule->site_id !== null && $siteId !== null && $rule->site_id === $siteId;
+        });
+
+        if ($matching->isEmpty()) {
+            return false;
         }
 
-        return $applicable->contains(fn (AuthenticationKeyDeviceRule $rule) => $rule->allow);
+        return ! $matching->contains(fn (AuthenticationKeyDeviceRule $rule) => ! $rule->allow);
     }
 }

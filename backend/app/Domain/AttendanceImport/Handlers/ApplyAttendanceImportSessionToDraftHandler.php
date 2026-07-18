@@ -47,6 +47,9 @@ class ApplyAttendanceImportSessionToDraftHandler implements CommandHandler
 
         if ($command->draftId !== null) {
             $draft = MonthlyAttendanceDraft::query()->findOrFail($command->draftId);
+            if ($draft->user_id !== $session->user_id) {
+                throw new DomainRuleException('指定された下書きはこのインポートセッションの対象社員のものではありません。');
+            }
         } else {
             $draft = $this->createDraftHandler->handle(new CreateMonthlyAttendanceDraft(
                 userId: $session->user_id,
@@ -68,7 +71,10 @@ class ApplyAttendanceImportSessionToDraftHandler implements CommandHandler
 
             $days[] = [
                 ...$item->proposed_data_json,
-                'source' => $item->hasBlockingDifferences() ? FieldSourceType::AI_INFERRED : FieldSourceType::USER_CONFIRMED,
+                // 差異が1件でもある日は(severityがwarningのみであっても)AIが自己判断で
+                // 確定させず、必ずai_inferredとして残しユーザー確認を要求する。差異が
+                // 全く無い日(既存の実績・打刻・休暇・シフトと完全一致)のみ自動確定する。
+                'source' => $item->hasAnyDifferences() ? FieldSourceType::AI_INFERRED : FieldSourceType::USER_CONFIRMED,
             ];
             $item->status = ImportItemStatus::CONFIRMED;
             $item->save();

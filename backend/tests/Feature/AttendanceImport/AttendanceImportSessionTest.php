@@ -5,9 +5,11 @@ namespace Tests\Feature\AttendanceImport;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\FieldProvenance;
+use App\Models\FieldSourceType;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
+use App\Models\StoredEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -41,6 +43,16 @@ class AttendanceImportSessionTest extends TestCase
         ]);
         $upload->assertSuccessful();
 
+        // 構造化データの受け入れも状態変更であるため、stored_eventsに記録される
+        // (backend/CLAUDE.md「イベントを書かない状態変更は作らない」)。
+        $uploadedEvent = StoredEvent::query()
+            ->where('aggregate_type', 'attendance_import_session')
+            ->where('aggregate_id', (string) $session['id'])
+            ->where('event_type', 'attendance_import_session.data_uploaded')
+            ->first();
+        $this->assertNotNull($uploadedEvent);
+        $this->assertSame(2, $uploadedEvent->payload['item_count']);
+
         $preview = $this->actingAs($user)->postJson("/api/attendance/import-sessions/{$session['id']}/preview");
         $preview->assertSuccessful();
         $this->assertCount(2, $preview->json('items'));
@@ -60,13 +72,55 @@ class AttendanceImportSessionTest extends TestCase
         $this->assertNotNull($day);
         $this->assertSame('09:00', $day->actual_start_at->format('H:i'));
 
-        // 差異のない日は自動的に確認済み扱いになる(docs/26「不明点の確認」)。
+        // 既存の勤怠・打刻が無い状態からの新規登録はMISSING_EXISTING_ATTENDANCE差異が
+        // 検出される(ブロッキングではないが差異はある)ため、AIが自己判断でuser_confirmed
+        // にしてはならず、ai_inferredのまま未確認で残る(docs/03-architecture.md 3.7)。
+        $provenance = FieldProvenance::query()
+            ->where('entity_type', FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT)
+            ->where('entity_id', $draftId)
+            ->where('field_name', '2026-07-01:start_time')
+            ->firstOrFail();
+        $this->assertFalse($provenance->isConfirmed());
+        $this->assertSame(FieldSourceType::AI_INFERRED, $provenance->source_type);
+    }
+
+    public function test_a_day_with_no_differences_from_existing_attendance_is_auto_confirmed(): void
+    {
+        $user = User::factory()->create();
+
+        // 既存の実績と完全に一致する日は差異が無いため、自動的に確認済み扱いになる
+        // (docs/26「不明点の確認」)。差異検出はMISSING_EXISTING_ATTENDANCEを避けるため
+        // 事前に打刻を作っておく。
+        AttendanceDay::query()->create([
+            'user_id' => $user->id,
+            'work_date' => '2026-07-01',
+            'status' => 'clocked_out',
+            'source' => AttendanceDaySource::MANUAL,
+            'utc_offset_minutes' => 540,
+            'actual_start_at' => '2026-07-01T09:00:00+09:00',
+            'actual_end_at' => '2026-07-01T18:00:00+09:00',
+        ]);
+
+        $session = $this->createSession($user);
+        $this->actingAs($user)->postJson("/api/attendance/import-sessions/{$session['id']}/data", [
+            'days' => [['date' => '2026-07-01', 'startTime' => '09:00', 'endTime' => '18:00', 'confidence' => 'high']],
+        ])->assertSuccessful();
+
+        $preview = $this->actingAs($user)->postJson("/api/attendance/import-sessions/{$session['id']}/preview");
+        $preview->assertSuccessful();
+        $this->assertSame([], $preview->json('items.0.differences'));
+
+        $apply = $this->actingAs($user)->postJson("/api/attendance/import-sessions/{$session['id']}/apply");
+        $apply->assertSuccessful();
+        $draftId = $apply->json('draft.id');
+
         $provenance = FieldProvenance::query()
             ->where('entity_type', FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT)
             ->where('entity_id', $draftId)
             ->where('field_name', '2026-07-01:start_time')
             ->firstOrFail();
         $this->assertTrue($provenance->isConfirmed());
+        $this->assertSame(FieldSourceType::USER_CONFIRMED, $provenance->source_type);
     }
 
     public function test_preview_detects_a_leave_conflict(): void
@@ -156,5 +210,31 @@ class AttendanceImportSessionTest extends TestCase
         $session = $this->createSession($owner);
 
         $this->actingAs($other)->getJson("/api/attendance/import-sessions/{$session['id']}")->assertForbidden();
+    }
+
+    public function test_applying_a_session_to_another_employees_draft_is_rejected(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+
+        $otherDraft = $this->actingAs($other)->postJson('/api/attendance/monthly-drafts', [
+            'target_month' => '2026-07',
+        ])->assertCreated()->json();
+
+        $session = $this->createSession($owner);
+        $this->actingAs($owner)->postJson("/api/attendance/import-sessions/{$session['id']}/data", [
+            'days' => [['date' => '2026-07-01', 'startTime' => '09:00', 'endTime' => '18:00', 'confidence' => 'high']],
+        ])->assertSuccessful();
+        $this->actingAs($owner)->postJson("/api/attendance/import-sessions/{$session['id']}/preview")->assertSuccessful();
+
+        $apply = $this->actingAs($owner)->postJson("/api/attendance/import-sessions/{$session['id']}/apply", [
+            'draft_id' => $otherDraft['id'],
+        ]);
+
+        $apply->assertStatus(422);
+        $this->assertDatabaseMissing('attendance_days', [
+            'user_id' => $other->id,
+            'work_date' => '2026-07-01',
+        ]);
     }
 }

@@ -42,4 +42,16 @@ class AttendanceImportItem extends Model
 
         return false;
     }
+
+    /**
+     * severityを問わず何らかの差異(警告レベルの時刻不一致・休暇競合等も含む)が
+     * 検出されているか。「本人確認済みとして自動反映してよいか」の判定に使う
+     * (docs/03-architecture.md 3.7「AIは勤怠ルールを決定しない」)。差異が1件でも
+     * ある値をAIが自己判断でuser_confirmedにしてはならないため、hasBlockingDifferences()
+     * (severity=errorのみを見る、下書き作成のブロック可否の判定用)とは別に用意する。
+     */
+    public function hasAnyDifferences(): bool
+    {
+        return ! empty($this->differences_json);
+    }
 }

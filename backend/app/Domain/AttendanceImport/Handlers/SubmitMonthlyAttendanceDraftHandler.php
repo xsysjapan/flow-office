@@ -39,12 +39,7 @@ class SubmitMonthlyAttendanceDraftHandler implements CommandHandler
             throw new DomainRuleException('この下書きは既に月次申請済みです。');
         }
 
-        $unconfirmed = FieldProvenance::query()
-            ->where('entity_type', FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT)
-            ->where('entity_id', $draft->id)
-            ->orderByDesc('id')
-            ->get()
-            ->unique('field_name')
+        $unconfirmed = FieldProvenance::latestForEntity(FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT, $draft->id)
             ->filter(fn (FieldProvenance $provenance) => $provenance->isImportantAndUnconfirmed());
 
         if ($unconfirmed->isNotEmpty()) {

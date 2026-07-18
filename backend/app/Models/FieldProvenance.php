@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * 各入力項目の値の出所(docs/26-usecases-monthly-import.md、docs/03-architecture.md 3.7)。
@@ -41,6 +43,29 @@ class FieldProvenance extends Model
     public function confirmedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by_user_id');
+    }
+
+    /**
+     * 指定エンティティの各field_nameについて、最新の記録のみを取得する
+     * (同じ項目が複数回追記されうるため。docs/26「AI生成値の出所管理」)。
+     * ValidateMonthlyAttendanceDraftHandler・SubmitMonthlyAttendanceDraftHandler・
+     * MonthlyAttendanceDraftController::fields()から共通利用する。
+     *
+     * @return Collection<int, FieldProvenance>
+     */
+    public static function latestForEntity(string $entityType, int $entityId): Collection
+    {
+        return static::query()
+            ->where('entity_type', $entityType)
+            ->where('entity_id', $entityId)
+            ->whereIn('id', function (Builder $query) use ($entityType, $entityId) {
+                $query->selectRaw('MAX(id)')
+                    ->from('field_provenances')
+                    ->where('entity_type', $entityType)
+                    ->where('entity_id', $entityId)
+                    ->groupBy('field_name');
+            })
+            ->get();
     }
 
     public function isConfirmed(): bool
