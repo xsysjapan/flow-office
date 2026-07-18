@@ -6,6 +6,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { DevicePairingQr } from '../../components/DevicePairingQr/DevicePairingQr'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -242,7 +243,8 @@ export function DeviceListPage() {
                     )}
                     {claimTokenByDevice[device.id] && (
                       <div className="max-w-xs text-xs text-foreground">
-                        <div className="flex items-center gap-2">
+                        <DevicePairingQr claimToken={claimTokenByDevice[device.id]} />
+                        <div className="mt-2 flex items-center gap-2">
                           <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
                           <CopyClaimTokenButton token={claimTokenByDevice[device.id]} />
                         </div>
