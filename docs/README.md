@@ -38,6 +38,10 @@ Teams通知に集中する。
 | 20 | [20-implementation-notes.md](./20-implementation-notes.md) | 実装時の注意 |
 | 21 | [21-mvp-scope.md](./21-mvp-scope.md) | 最小MVP範囲 |
 | 22 | [22-glossary.md](./22-glossary.md) | 用語集 |
+| 23 | [23-usecases-devices.md](./23-usecases-devices.md) | 端末管理ユースケース (UC-D001~) |
+| 24 | [24-usecases-authentication-keys.md](./24-usecases-authentication-keys.md) | 認証キー管理ユースケース (UC-K001~) |
+| 25 | [25-usecases-integrations-mcp.md](./25-usecases-integrations-mcp.md) | API・MCP連携ユースケース (UC-I001~) |
+| 26 | [26-usecases-monthly-import.md](./26-usecases-monthly-import.md) | 作業報告書からの月次勤怠作成ユースケース (UC-R001~) |
 
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。
@@ -54,3 +58,8 @@ Teams通知に集中する。
 - **Teamsは通知専用**: チャット・掲示板・お知らせ機能は作らない。
 - **法務判断が必要な値はマスタ化する**: 有給付与ルール、残業計算ルールなどはハードコードせず、
   マスタテーブルで管理し、最終設定は社労士確認を前提とする。
+- **操作経路と業務ロジックを分離する**: Web・共有Android打刻リーダー・個人端末・外部端末・
+  API・MCPのどの入口から操作されても、共通のCommand→CommandHandlerに集約する。
+- **打刻と勤怠編集を区別する**: 打刻は追記のみの事実記録、勤怠編集は日次勤怠の作成・修正。
+- **AIは勤怠ルールを決定しない**: Claude等のAIは下書き生成・対話までを担当し、労働時間計算・
+  休日判定・締め判定・承認ルールは必ず勤怠管理API側で行う。

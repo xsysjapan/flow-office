@@ -62,7 +62,10 @@
 - `attendance.daily_calculation_adjusted` (日次登録後、区分ごとの時間を手動で補正する。
   実績が再編集され`attendance.day_calculated`が再発生すると解除される)
 - `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
-- `attendance_punch.recorded`
+- `attendance_punch.recorded` (payloadに`deviceId`/`authenticationKeyId`/`actorUserId`/
+  `integrationId`/`offline`/`idempotencyKey`/`requestId`を追加。docs/23〜docs/25の端末・
+  認証キー・アプリ連携経由の打刻に対応するための追記であり、イベント種別自体は増やさない。
+  これらのフィールドを持たない過去のイベントはnull相当として扱う)
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
 - `attendance_punch.deleted` (UC-A014 打刻ログを削除する)
 - `attendance_day.synced_from_punches`
@@ -70,6 +73,41 @@
 - `attendance.month_approved`
 - `attendance.month_returned`
 - `attendance.month_closed`
+
+## Device (docs/23-usecases-devices.md)
+
+- `device.registered` (共有端末の登録、または個人端末の本人登録)
+- `device.paired` (ペアリングコード/QRコードによる端末鍵確立の完了)
+- `device.disabled` (管理者・本人による一時停止)
+- `device.revoked` (紛失・盗難等による失効。再度使うには新規登録が必要)
+- `device.role_assigned` (端末役割(`device_roles`)の追加・変更)
+- `device.scope_granted` (外部端末へのAPIスコープ(`device_scopes`)付与)
+
+## AuthenticationKey (docs/24-usecases-authentication-keys.md)
+
+- `authentication_key.issued` (本人または管理者代理による認証キー登録。`key_hash`の発行を含む)
+- `authentication_key.disabled` (紛失・退職・交換時の無効化)
+
+## Integration (docs/25-usecases-integrations-mcp.md)
+
+- `application_integration.registered` (個人または組織のAPI/MCP連携登録)
+- `application_integration.scope_granted`
+- `application_integration.revoked`
+
+## AttendanceImport / MonthlyAttendanceDraft (docs/26-usecases-monthly-import.md)
+
+- `attendance_import_session.created`
+- `attendance_import_session.previewed` (差異検出・検証結果の生成)
+- `attendance_import_session.applied` (下書きへの反映)
+- `attendance_import_session.cancelled`
+- `monthly_attendance_draft.created`
+- `monthly_attendance_draft.updated` (`bulk_update_attendance_days`相当の一括更新を含む)
+- `monthly_attendance_draft.validated`
+- `monthly_attendance_draft.submitted` (ユーザーの明示的な指示による月次申請。UC-A008の
+  月次提出フローへ引き渡す)
+- `monthly_attendance_draft.submission_cancelled`
+- `field_provenance.recorded` (AI推定値・ユーザー確認等、項目ごとの出所の記録)
+- `field_provenance.confirmed` (ユーザーがAI推定値を確認したことの記録)
 
 ## PaidLeave
 

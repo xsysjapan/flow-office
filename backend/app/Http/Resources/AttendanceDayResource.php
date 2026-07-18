@@ -30,6 +30,7 @@ class AttendanceDayResource extends JsonResource
             'actual_end_at' => LocalDateTime::formatWithOffsetMinutes($this->actual_end_at, $utcOffsetMinutes),
             'utc_offset_minutes' => $utcOffsetMinutes,
             'work_type' => $this->work_type,
+            'work_location_type' => $this->work_location_type,
             'note' => $this->note,
             'is_locked' => $this->isLocked(),
             // today()でその日の勤務予定を一時的に載せている場合のみ含める(UC-A001 手順2)。

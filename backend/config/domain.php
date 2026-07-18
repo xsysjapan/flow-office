@@ -73,6 +73,10 @@ use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
 use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
+use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
+use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
+use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
+use App\Domain\AuthenticationKey\Handlers\IssueAuthenticationKeyHandler;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
@@ -80,6 +84,16 @@ use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
+use App\Domain\Device\Commands\DisableDevice;
+use App\Domain\Device\Commands\ExchangeDevicePairingCode;
+use App\Domain\Device\Commands\IssueDevicePairingCode;
+use App\Domain\Device\Commands\RegisterDevice;
+use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Handlers\DisableDeviceHandler;
+use App\Domain\Device\Handlers\ExchangeDevicePairingCodeHandler;
+use App\Domain\Device\Handlers\IssueDevicePairingCodeHandler;
+use App\Domain\Device\Handlers\RegisterDeviceHandler;
+use App\Domain\Device\Handlers\RevokeDeviceHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -144,6 +158,15 @@ return [
     */
     'command_handlers' => [
         UploadAttachment::class => UploadAttachmentHandler::class,
+
+        RegisterDevice::class => RegisterDeviceHandler::class,
+        IssueDevicePairingCode::class => IssueDevicePairingCodeHandler::class,
+        ExchangeDevicePairingCode::class => ExchangeDevicePairingCodeHandler::class,
+        DisableDevice::class => DisableDeviceHandler::class,
+        RevokeDevice::class => RevokeDeviceHandler::class,
+
+        IssueAuthenticationKey::class => IssueAuthenticationKeyHandler::class,
+        DisableAuthenticationKey::class => DisableAuthenticationKeyHandler::class,
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,

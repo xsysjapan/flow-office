@@ -5,8 +5,12 @@ use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
+use App\Http\Controllers\Api\DeviceController;
+use App\Http\Controllers\Api\DevicePairingController;
+use App\Http\Controllers\Api\DevicePunchController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
@@ -48,6 +52,11 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // エンドポイント。認証不要(テスト実行の最初期、ログイン前に呼ばれるため)。
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
+
+// --- 端末ペアリング (docs/23-usecases-devices.md UC-D002) ---
+// この時点では端末はまだSanctumトークンを持たないため、auth:sanctumの外側で提供する
+// (既存のSSOトークン交換フロー AuthController::token と同じ考え方)。
+Route::post('/devices/pairing/exchange', [DevicePairingController::class, 'exchange']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
@@ -217,4 +226,32 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- システム設定 (docs/06-usecases-auth.md UC-003) ---
     Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('role:admin');
     Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('role:admin');
+
+    // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
+    Route::get('/users/me/devices', [DeviceController::class, 'indexMine']);
+    Route::post('/users/me/devices', [DeviceController::class, 'storePersonal']);
+    Route::post('/devices/heartbeat', [DeviceController::class, 'heartbeat'])
+        ->middleware('ability:recorder:punch,punch:self');
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/devices', [DeviceController::class, 'index']);
+        Route::post('/devices', [DeviceController::class, 'store']);
+        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingCode']);
+    });
+    // 停止・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
+    // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。
+    Route::post('/devices/{device}/disable', [DeviceController::class, 'disable']);
+    Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke']);
+
+    // --- 認証キー管理 (docs/24-usecases-authentication-keys.md UC-K001〜UC-K003) ---
+    Route::get('/users/me/authentication-keys', [AuthenticationKeyController::class, 'indexMine']);
+    Route::post('/users/me/authentication-keys', [AuthenticationKeyController::class, 'store']);
+    Route::get('/users/{userId}/authentication-keys', [AuthenticationKeyController::class, 'indexForUser']);
+    Route::post('/authentication-keys/{authenticationKey}/disable', [AuthenticationKeyController::class, 'disable']);
+});
+
+// --- 端末打刻 (docs/07-usecases-attendance.md UC-A020、docs/23-usecases-devices.md UC-D002) ---
+// 端末トークン(ability: recorder:punch=共有端末、punch:self=個人端末)で認証する、
+// 人間のSanctumセッションを前提とするattendance-punchesとは別の入口。
+Route::middleware(['auth:sanctum', 'ability:recorder:punch,punch:self'])->group(function () {
+    Route::post('/device-punches', [DevicePunchController::class, 'store']);
 });

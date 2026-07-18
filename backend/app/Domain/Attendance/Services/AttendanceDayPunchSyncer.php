@@ -34,6 +34,7 @@ class AttendanceDayPunchSyncer
             ->whereDate('work_date', $workDate)
             ->where('status', PunchStatus::ACTIVE)
             ->orderBy('punched_at')
+            ->with('device')
             ->get();
 
         $reconciled = $this->reconciler->reconcile($punches);
@@ -77,6 +78,20 @@ class AttendanceDayPunchSyncer
         $day->utc_offset_minutes = $reconciled['utc_offset_minutes'];
         $day->status = AttendanceDayStatus::CLOCKED_OUT;
         $day->source = AttendanceDaySource::PUNCH;
+
+        // 打刻に使われた端末に既定の勤務形態区分が設定されていれば反映する
+        // (docs/07-usecases-attendance.md「勤務形態区分」)。どの端末で打刻したか分からない
+        // 場合は既存の値を保持する(勝手にクリアしない)。
+        $workLocationType = $punches
+            ->whereNotNull('device_id')
+            ->reverse()
+            ->map(fn (AttendancePunch $punch) => $punch->device?->default_work_location_type)
+            ->first(fn (?string $value) => $value !== null);
+
+        if ($workLocationType !== null) {
+            $day->work_location_type = $workLocationType;
+        }
+
         $day->save();
 
         $day->breaks()->delete();

@@ -26,6 +26,7 @@ use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
 use App\Models\SystemSetting;
+use App\Models\WorkLocationType;
 use App\Support\LocalDateTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -260,6 +261,7 @@ class AttendanceController extends Controller
             'breaks.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'breaks.*.end' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'work_type' => ['nullable', 'string'],
+            'work_location_type' => ['nullable', Rule::in(WorkLocationType::values())],
             'note' => ['nullable', 'string'],
             'leave_segments' => ['array'],
             'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
@@ -281,6 +283,7 @@ class AttendanceController extends Controller
             leaveSegments: $data['leave_segments'] ?? [],
             reason: $data['reason'],
             createdByUserId: $request->user()->id,
+            workLocationType: $data['work_location_type'] ?? null,
         ));
 
         return (new AttendanceDayResource($day->load(['breaks', 'leaveSegments', 'calculation'])))->response()->setStatusCode(201);
@@ -306,6 +309,7 @@ class AttendanceController extends Controller
             'breaks.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'breaks.*.end' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'work_type' => ['nullable', 'string'],
+            'work_location_type' => ['nullable', Rule::in(WorkLocationType::values())],
             'note' => ['nullable', 'string'],
             'leave_segments' => ['array'],
             'leave_segments.*.start' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
@@ -324,6 +328,7 @@ class AttendanceController extends Controller
             leaveSegments: $data['leave_segments'] ?? [],
             reason: $data['reason'],
             editedByUserId: $request->user()->id,
+            workLocationType: $data['work_location_type'] ?? null,
         ));
 
         return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'leaveSegments', 'calculation']));

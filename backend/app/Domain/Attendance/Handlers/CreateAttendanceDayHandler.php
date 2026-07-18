@@ -66,6 +66,7 @@ class CreateAttendanceDayHandler implements CommandHandler
             'actual_start_at' => $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null,
             'actual_end_at' => $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null,
             'work_type' => $command->workType,
+            'work_location_type' => $command->workLocationType,
             'note' => $command->note,
         ]);
         $day->save();
