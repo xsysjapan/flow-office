@@ -16,7 +16,7 @@ import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../util
 const PAGE_SIZE = 6
 
 /**
- * UC-A008: 自分の勤怠月次の一覧。月を選ぶと詳細画面(日別の内訳・提出)に遷移する
+ * UC-A008: 自分の月次勤怠の一覧。月を選ぶと詳細画面(日別の内訳・提出)に遷移する
  * (オブジェクト指向UI)。
  */
 export function AttendanceMonthsPage() {
@@ -29,7 +29,7 @@ export function AttendanceMonthsPage() {
   const [page, setPage] = useState(1)
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="勤怠月次の取得に失敗しました。" />
+  if (error) return <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
 
   const monthsByYearMonth = new Map((data ?? []).map((month) => [month.year_month, month]))
   const months = allYearMonths
@@ -47,7 +47,7 @@ export function AttendanceMonthsPage() {
 
   return (
     <Card
-      title="自分の勤怠月次"
+      title="自分の月次勤怠"
       actions={
         years.length > 0 ? (
           <NativeSelect aria-label="表示する年" className="w-auto" value={selectedYear} onChange={(event) => handleYearChange(event.target.value)}>
@@ -62,7 +62,7 @@ export function AttendanceMonthsPage() {
       }
     >
       {months.length === 0 ? (
-        <p className="text-sm text-muted-foreground">入社日を設定すると、その月以降の勤怠月次を確認できます。</p>
+        <p className="text-sm text-muted-foreground">入社日を設定すると、その月以降の月次勤怠を確認できます。</p>
       ) : (
         <>
           <ul className="divide-y divide-border">

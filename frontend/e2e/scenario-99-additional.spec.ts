@@ -143,7 +143,7 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await loginAs(adminPage, SCENARIO_USERS.admin)
 
-    // 当月の勤怠月次を提出〜承認〜締めまで進める(UC-A008〜UC-A011)。同一日に何度
+    // 当月の月次勤怠を提出〜承認〜締めまで進める(UC-A008〜UC-A011)。同一日に何度
     // 実行しても、既に進んでいるステータスはスキップするため冪等に動く。
     const { workDate } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
 

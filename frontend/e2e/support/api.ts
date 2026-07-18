@@ -424,7 +424,7 @@ export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: number
 type MonthSummary = { id: number; year_month: string; status: string }
 
 /**
- * UC-A008〜UC-A009: 指定した年月の勤怠月次を提出〜承認まで進める(締めまでは行わない)。
+ * UC-A008〜UC-A009: 指定した年月の月次勤怠を提出〜承認まで進める(締めまでは行わない)。
  * 同一月に何度実行しても冪等に動くよう、既に進んでいるステータスはスキップする。
  * 呼び出し前に`employeePage`/`approverPage`それぞれで対応するロールでログイン済みであること。
  * `yearMonth`は"today"の月に限らず任意の年月を指定できる(対象日の`attendance_days`が
@@ -459,7 +459,7 @@ export async function submitAndApproveMonth(
 }
 
 /**
- * UC-A008〜UC-A011: 当月の勤怠月次を提出〜承認〜締めまで進める。同一日に何度実行しても
+ * UC-A008〜UC-A011: 当月の月次勤怠を提出〜承認〜締めまで進める。同一日に何度実行しても
  * 冪等に動くよう、既に進んでいるステータスはスキップする(締めた月は二重に締められない
  * ため)。呼び出し前に3つの`page`それぞれで対応するロールでログイン済みであること
  * (社員/承認者/admin・hr_staff)。
@@ -510,7 +510,7 @@ export async function fetchAttendanceMonthDetail(
 }
 
 /**
- * UC-A008: 指定した年月の勤怠月次を提出のみ行う(承認は行わない)。`submitAndApproveMonth`と
+ * UC-A008: 指定した年月の月次勤怠を提出のみ行う(承認は行わない)。`submitAndApproveMonth`と
  * 異なり、複数社員分をまとめて「提出済み」状態にしてから承認者側の一覧・絞り込みを確認したい
  * ケース(§5-15、複数の労働時間制度が混在する月の月次締め)向け。既に提出済み以降のステータス
  * であれば何もしない(冪等)。
@@ -535,7 +535,7 @@ export async function submitMonth(employeePage: Page, approverUserId: number, ye
 }
 
 /**
- * UC-A011: 指定した年月の勤怠月次を締める(管理部・admin/hr_staff)。承認済みでなければ
+ * UC-A011: 指定した年月の月次勤怠を締める(管理部・admin/hr_staff)。承認済みでなければ
  * 何もしない(冪等)。
  */
 export async function closeMonth(adminPage: Page, employeePage: Page, yearMonth: string): Promise<void> {

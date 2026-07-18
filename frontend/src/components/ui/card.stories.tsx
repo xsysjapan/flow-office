@@ -23,7 +23,7 @@ export const Default: Story = {
     <Card className="w-96">
       <CardHeader>
         <div>
-          <CardTitle>勤怠月次(2026年7月)</CardTitle>
+          <CardTitle>月次勤怠(2026年7月)</CardTitle>
           <CardDescription>締め日: 7月31日</CardDescription>
         </div>
         <CardAction>
