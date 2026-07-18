@@ -671,6 +671,33 @@ export interface Device {
   created_at: string | null
 }
 
+export type AuthenticationKeyType =
+  | 'nfc_uid'
+  | 'employee_card_id'
+  | 'qr_code'
+  | 'barcode'
+  | 'fingerprint_external_id'
+  | 'face_recognition_external_id'
+  | 'fido_credential'
+  | 'bluetooth_device_id'
+  | 'external_system_user_id'
+  | 'custom'
+
+export type AuthenticationKeyStatus = 'active' | 'suspended' | 'disabled'
+
+export interface AuthenticationKey {
+  id: number
+  user_id: number
+  key_type: AuthenticationKeyType
+  display_name: string
+  status: AuthenticationKeyStatus
+  valid_from: string | null
+  valid_until: string | null
+  registered_by_user_id: number | null
+  registered_at: string | null
+  disabled_at: string | null
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {
