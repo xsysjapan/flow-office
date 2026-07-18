@@ -5,14 +5,18 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * 前提: backend (php artisan serve, http://localhost:8000)、mock-oidc
  * (http://localhost:9000)、frontend (npm run dev, http://localhost:5173) が
- * 起動していること。`ScenarioSeeder` (backend/database/seeders/ScenarioSeeder.php)
- * を一度実行してシナリオ用マスタデータ・ユーザーを投入してから実行する。
+ * 起動していること。`globalSetup`(./global-setup.ts)が実行開始時に
+ * `POST /dev/reset-database` を1回呼び、DBを`migrate:fresh --seed` +
+ * `ScenarioSeeder`の状態に自動でリセットするため、シナリオ用マスタデータ・ユーザーの
+ * 投入を手動で行う必要はない(backend側の`.env`で`MICROSOFT_MOCK_ENABLED=true`が
+ * 必須)。
  *
  * 実行: cd frontend && npm run test:e2e
  */
 export default defineConfig({
   testDir: './',
   testMatch: '**/*.spec.ts',
+  globalSetup: './global-setup.ts',
   fullyParallel: false,
   retries: 0,
   reporter: 'list',

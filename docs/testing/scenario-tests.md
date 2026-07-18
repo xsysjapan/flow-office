@@ -28,6 +28,13 @@
     シナリオに必要な最小マスタデータ(カレンダー・勤務形態・有給付与ルール・登場人物の
     ユーザー・勤務予定・有給付与)が投入される(§4参照)。何度実行しても安全(冪等)。
 - frontend: `cd frontend && npm install && cp .env.example .env && npm run dev`
+- Playwright E2Eテスト(`cd frontend && npm run test:e2e`)を実行する場合、実行開始時に
+  `globalSetup`(`frontend/e2e/global-setup.ts`)が`POST /dev/reset-database`
+  (`backend/app/Http/Controllers/Api/DevDatabaseResetController.php`)を1回呼び、
+  開発DBを`migrate:fresh --seed` + `ScenarioSeeder`の状態へ自動的にリセットする。
+  永続的な開発DBに対して何度実行しても常に同じ初期状態から始まるため、上記の
+  `db:seed --class=ScenarioSeeder`の手動実行は不要(詳細は`frontend/e2e/README.md`)。
+  本エンドポイントは`MICROSOFT_MOCK_ENABLED=true`の時のみ有効(本番・検証環境では404)。
 - ログインは実際のMicrosoft Entra IDではなく `mock-oidc/` のログイン画面でダミーユーザーを
   選択する(`docs/06-usecases-auth.md` UC-001、README.md参照)。
 - **`backend/.env` の `APP_URL` は `php artisan serve` の待受ポート(既定8000)まで含めて
@@ -159,9 +166,13 @@
 3. 承認者が承認する(UC-W003、`POST /workflow-requests/{id}/approve`)。
 4. 承認により自動生成される経理向けバックオフィスタスク(`task_type=expense_reimbursement`)
    を確認する(UC-B001、`GET /backoffice-tasks/unassigned`)。
-5. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`)、
-   処理ステータスを進めて完了にする(UC-B003、`POST .../status`、
-   `processing`→`payment_scheduled`→`completed` など)。
+5. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`。割り当てと
+   同時に自動的に`in_review`になる)、処理ステータスを進めて完了にする(UC-B003、
+   `POST .../status`、`payment_scheduled`→`completed`)。**2026-07時点で
+   `request_types.allowed_status_transitions`(タスク種別ごとの遷移マスタ、
+   `backend/database/seeders/RequestTypeSeeder.php`)が追加されたため、経費精算系
+   (`commuting_expense`/`expense_reimbursement`)では`in_review`から`processing`への
+   遷移は許可されておらず、`payment_scheduled`に直接進む。**
 6. 経理担当者が経費CSVを出力し、金額が含まれることを確認する(UC-E001、
    `GET /exports/expenses`)。**2026-07-10時点でこの出力用の画面はまだ実装されて
    おらず、APIを直接呼ぶ以外に確認方法がない**。フロントエンドにCSV出力画面
@@ -181,17 +192,23 @@
    (`task_type=business_card`)が自動生成されることを確認する(UC-B001)。
 3. 総務担当者(中村恵)が未担当タスク一覧からタスクを確認し、氏名・部署・役職・メール・
    電話番号など名刺記載情報を確認する(UC-B005 手順1〜2)。
-4. ステータスを `in_review`(担当) → `processing`(発注データ作成) → `ordered`(発注済み)
+4. 割り当てと同時に自動的に `in_review`(担当) になる。そこから `ordered`(発注済み)
    → `shipped`(発送済み) → `completed`(完了)の順に進める(UC-B005 手順3〜6、
-   `POST /backoffice-tasks/{id}/status`)。
+   `POST /backoffice-tasks/{id}/status`)。**2026-07時点で
+   `request_types.allowed_status_transitions`が追加されたため、名刺申請
+   (`business_card`)では`in_review`から`processing`への遷移は許可されておらず、
+   `ordered`に直接進む。**
 5. 各ステータス変更でTeams通知ジョブがキューに積まれることを確認する
    (UC-N001、`jobs`テーブルまたは`schedule:work`実行後のログ)。
 6. 申請者が自分の申請一覧で「完了」になっていることを確認する。
 
 **確認ポイント**: ステータス遷移が `BackOfficeTaskStatus::all()` の定義通りに1段階ずつ
-進められること、不正な遷移(例: `not_started`から`completed`へ一気に飛ばす)を弾くか
-どうかは現状のバリデーションでは許容されている点にも注意(値が有効なステータス文字列で
-あることしかチェックしていないため、業務手順としての遷移順はUI/運用でのみ担保している)。
+進められること。**2026-07時点で `request_types.allowed_status_transitions`
+(`backend/app/Domain/BackOffice/Handlers/ChangeBackOfficeTaskStatusHandler.php`)が
+追加され、申請種別ごとに許可された遷移マップ外の変更(例: `not_started`から
+`completed`へ一気に飛ばす、対象外の`processing`を経由する等)は`DomainRuleException`
+で拒否されるようになった**(旧記述: 当時は値が有効なステータス文字列であることしか
+チェックしておらず、遷移順はUI/運用でのみ担保していた)。
 
 **⚠️ E2Eテスト実装時に判明した既知の欠落機能**: UC-B005手順1〜2(氏名・部署・役職・
 メール・電話番号、および申請内容(枚数)の確認)は、この画面だけでは行えない。
@@ -203,6 +220,81 @@
 `workflow_requests`側の申請詳細を都度探して照合する必要があり、UC-B005の運用にそのまま
 使える状態ではない。対応案: (1) `BackOfficeTaskResource`に申請者情報・form_dataを含める、
 または (2) `BackOfficeTaskDetailPage`から元の申請詳細ページへのリンクを追加する。
+
+### シナリオ6: 通年運用シミュレーション(1年間)
+
+年度カレンダー・月次締め・有給の年次付与サイクルなど、月内の検証だけでは見えない
+**年度またぎ・複数月連続運用**での不具合を確認する。2026年度(2026-04-01〜2027-03-31)の
+12か月分を通しで動かす。
+
+**実装上の注意(対象社員・カレンダー)**: `ScenarioSeeder`が投入するカレンダーは実行時点の
+実年(例: 実行日が2026-07なら`fiscal_year=2026`)を使い、期間も実行月の前後1か月しか
+カバーしないため、本シナリオ専用に2026-04-01〜2027-03-31を丸ごとカバーする
+`WorkCalendar`を`POST /work-calendars`で新規作成する必要がある。`work_calendars.fiscal_year`
+は`unsignedSmallInteger`(最大65535)のため、既存の`fiscal_year`(実行時点の実年)や
+他シナリオが使う年度レンジ(scenario-00/07: 3000〜8999年度、scenario-09: 9000年台)と
+衝突しない範囲(例: 59000番台)のテスト専用値を使う(`starts_on`/`ends_on`は
+`fiscal_year`の値と無関係な単なる日付フィールドのため、実在の2026-04-01〜2027-03-31を
+設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・月次入力ユーザー(伊藤舞)を使うと、
+2026-04〜2027-03という実在の期間の一部(特に実行時点に近い月)が他の多数のシナリオ
+(シナリオ1〜5、その他§5-1〜16等)による月次提出・承認・締めと衝突し、
+`AttendanceEditGuard`により日次実績が編集不能になる恐れがある。予備枠
+(mock-entra-user-001〜003、山田太郎・佐藤花子・鈴木一郎)は§5-9(新入社員初回ログイン)
+専用のため消費せず、代わりに総務担当者(中村恵)を対象社員として使う。中村恵は
+`ScenarioSeeder`内で`generateShiftAssignments`の対象になっておらず、他のどのシナリオでも
+打刻・日次実績作成の対象として使われていないため、出勤・シフト・勤務形態の対象者として
+転用しても衝突しない(経理担当者の小林誠は§5-14で有給付与・消化の対象になっており、
+`fetchPaidLeaveGrantsForUser`がユーザー単位で全付与を合算する都合上、本シナリオと
+並行実行すると有給消化数の検証に他シナリオの付与・消化が混入するため使わない)。
+
+**技術的な前提(重要)**: `paid-leave:grant-scheduled`/`paid-leave:warn-expiring`/
+`paid-leave:warn-five-day-obligation` はいずれもサーバーの実時刻(`now()`)を基準に
+cron実行される設計で、日付を偽装する手段が無い。Playwrightは実際に起動している
+`php artisan serve` プロセスにHTTPでアクセスするだけなので、1年間の経過を実時間の
+経過なしに外側から偽装することはできない。そのため本シナリオは **実時刻に依存しない
+月次サイクル(勤務予定生成→日次実績→月次提出→承認→締め)を12回連続で回すこと」で
+「1年間の運用」を検証し**、実時刻に依存する年次付与・失効警告・年5日警告の3バッチは
+別途「境界条件の単発確認」として切り出す(下記手順4)。
+
+1. **12か月連続の勤怠サイクル**: 各月について、(a) `POST
+   /employee-shift-assignments/generate` でその月の勤務予定を生成する、(b) 対象月の
+   全営業日ぶん日次実績を入力する(通常勤務を主としつつ、月ごとに残業日・遅刻日・
+   法定休日出勤日・有給消化日を最低1件ずつ混ぜる)、(c) 月次提出→承認→締めまで進める、
+   を2026年4月から2027年3月まで順に繰り返す。`submitAndApproveMonth`/`closeMonth`
+   (`frontend/e2e/support/api.ts`)は対象年月を明示的に指定して呼び出せるため、
+   実行時の実際の日付とは無関係に過去・未来問わず任意の年月を検証できる。
+2. **年度またぎの確認**: 3月分の締め処理の直後に4月分の勤務予定生成・日次入力が
+   支障なく行えるか(前年度の締め済みデータが新年度の処理をブロックしないか)。
+   ゴールデンウィーク・お盆・年末年始など休日が集中する月でも勤務予定生成
+   (UC-C003)が正しく休日を除外するか。
+3. **有給の年間消化**: 年度開始時に有給を付与(`POST /paid-leave/grants`、
+   `granted_on=2026-04-01`)し、複数月に分散して全休・半休を申請〜承認する。
+   月をまたいでも残数(`paid_leave_grants.remaining_days`)が正しく累積して減る
+   ことを確認する(消化ロジック自体は各グラントの`expires_on`同士の比較のみで
+   実時刻に依存しないため、通常のシナリオ3と同じ検証方法で年間分をカバーできる)。
+4. **境界条件の単発確認(実時刻ベース)**: 3バッチについては年間シミュレーションの
+   一部としてではなく、Playwrightのspecプロセスから`child_process`で
+   `php artisan paid-leave:warn-expiring` 等を直接実行し、以下のように実時刻の
+   境界に合わせて作成したデータで検証する。
+   - 失効警告: `expires_on` = 実行時の実日付 + 90日 の付与を作成し、
+     `warn-expiring` 実行後に `expiry_warned_at` が記録されることを確認する
+     (+91日/+89日のデータでは記録されないことも確認する)。
+   - 年5日警告: `granted_on` = 実行時の実日付 − 305日(期限まで60日)・
+     使用日数4日以下の付与を作成し、`warn-five-day-obligation` 実行後に
+     `five_day_obligation_warned_at` が記録されることを確認する。
+   - 年次自動付与: `hire_date` を実行時の実日付から逆算して「今日がちょうど
+     継続勤務6か月/1年6か月...の記念日」になる社員を作成し、`grant-scheduled`
+     実行後に `paid_leave_grants` が1件増えることを確認する。
+   - この3件は「送信結果を確認できるAPI」が無いため(§5-5の既知の欠落と同様)、
+     DBの`paid_leave_grants`カラム(`expiry_warned_at`等)を直接検証するか、
+     `backend/tests/Feature/PaidLeave/PaidLeaveScheduledBatchTest.php`側の
+     PHPUnitテストでカバーし、本シナリオでは「実際にartisanコマンドがエラー無く
+     完走し対象件数が期待通りであること」の疎通確認にとどめる、のいずれかを
+     実装時に選ぶ。
+
+**確認ポイント**: 12回の月次締めを連続実行してもパフォーマンス劣化やデータ不整合が
+起きないか、月次残業60時間超判定(月初リセット)が毎月正しくリセットされるか、
+年度またぎでカレンダー・勤務予定生成が途切れないか。
 
 ## 5. その他、用意しておくべきシナリオ
 
@@ -254,6 +346,26 @@
     雇用区分・みなし時間・変形期間の起算日・法定休日「決めない方式」の入力欄がまだ
     無いため、これらの設定はAPIを直接叩いて行う
     (`frontend/e2e/scenario-07-new-work-time-systems.spec.ts`)。
+14. **有給消化と月60時間超残業判定の同一月内共存**: 同じ月内に(a)全休・半休で
+    複数日有給消化し、(b)別の日で法定外残業を積み上げて月60時間を超えさせる、を
+    同時に行う。有給消化日は実労働時間に加算されない(既知の制約、
+    `docs/09-usecases-paid-leave.md`実装上のポイント参照)ため、60時間超判定が
+    有給消化日を挟んでも実働日だけで正しく積算されるかを確認する。
+15. **複数の労働時間制度が混在する月の月次締め**: 固定時間制・変形労働時間制・
+    裁量労働制・管理監督者の社員を同一月・同一部署内に混在させた状態で、月次提出→
+    承認→締めのバッチ処理(月次一覧の絞り込み・一括承認画面)が制度によらず正しく
+    動くか(シナリオ7の各制度が単体では検証済みなのに対し、混在時の一覧表示・
+    絞り込みロジックを見る)。対象社員には固定時間制=小林誠(経理担当者)、
+    1か月単位変形労働時間制=中村恵(総務担当者)、裁量労働制=加藤由美(人事担当者)、
+    管理監督者=高橋健太(打刻ユーザー)を使う(§14も同様に小林誠を使う)。予備枠
+    (mock-entra-user-001〜003、山田太郎・佐藤花子・鈴木一郎)は§5-9(新入社員初回
+    ログイン)専用のため消費しない。
+16. **承認とバックオフィス処理のステータス系列独立性**: 月次勤怠を締めた後(UC-A011)も、
+    同月内に発生した交通費精算・名刺申請のバックオフィスタスク(シナリオ4・5)が
+    通常どおり(交通費精算は`payment_scheduled`→`completed`、名刺申請は
+    `ordered`→`shipped`→`completed`)完了まで進められることを確認する。月次締めが
+    誤って他ドメインの処理をブロックしないか(CLAUDE.md「バックオフィス処理は承認とは
+    別ステータス系列」の回帰確認)。
 
 ## 6. 実行方法の検討
 

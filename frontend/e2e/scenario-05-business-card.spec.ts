@@ -5,7 +5,14 @@ import { pickUser } from './support/ui'
 /**
  * docs/testing/scenario-tests.md シナリオ5(名刺の申請〜作成・発行)。
  * 申請(request_type_code=business_card)〜承認〜総務バックオフィスタスクの
- * ステータス遷移(in_review→processing→ordered→shipped→completed)までの流れ。
+ * ステータス遷移(in_review→ordered→shipped→completed)までの流れ。
+ *
+ * 【ドキュメントとの差異】`request_types.allowed_status_transitions`
+ * (`backend/database/seeders/RequestTypeSeeder.php`)により、名刺申請の遷移は
+ * `in_review`から直接`ordered`のみ許可され(`processing`は含まれない)、割り当て時点で
+ * 自動的に`in_review`になる(2026-07時点で追加されたタスク種別ごとの遷移制限。
+ * `backend/app/Domain/BackOffice/Handlers/ChangeBackOfficeTaskStatusHandler.php`
+ * 参照)。本ドキュメントの旧記述(手順3〜6の`processing`)は実装に合わせて修正済み。
  */
 test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', async ({ browser }) => {
   test.setTimeout(60000)
@@ -42,8 +49,9 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 3. 中村恵(総務担当者)が未担当タスクを自分に割り当て、氏名・部署等を確認したうえで
-    //    processing(発注データ作成) → ordered(発注済み) → shipped(発送済み) →
-    //    completed(完了)の順にステータスを進める(UC-B005)。
+    //    ordered(発注済み) → shipped(発送済み) → completed(完了)の順にステータスを
+    //    進める(割り当て時点で自動的にin_reviewになり、名刺申請の遷移にprocessingは
+    //    含まれないため、UC-B005手順3〜6のうち実際に操作するのはこの3ステップ)。
     await loginAs(generalAffairsPage, SCENARIO_USERS.generalAffairsStaff)
     await generalAffairsPage.goto('/backoffice-tasks')
     const taskRow = generalAffairsPage.getByRole('row', { name: title })
@@ -61,8 +69,10 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await generalAffairsPage.getByRole('button', { name: '割り当てる' }).click()
     await expect(generalAffairsPage.getByText('未割り当て')).toHaveCount(0)
 
+    // request_types.allowed_status_transitions(名刺申請: 未着手→確認中→発注済み→発送済み→
+    // 完了。「処理中」は名刺申請の遷移には含まれず、割り当て時点で自動的に確認中になる)により、
+    // 確認中から直接「発注済み」へ進む(2026-07時点で追加された遷移制限)。
     const statusSteps: Array<{ value: string; label: string }> = [
-      { value: 'processing', label: '処理中' },
       { value: 'ordered', label: '発注済み' },
       { value: 'shipped', label: '発送済み' },
       { value: 'completed', label: '完了' },

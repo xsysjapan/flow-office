@@ -147,15 +147,18 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
     // 実行しても、既に進んでいるステータスはスキップするため冪等に動く。
     const { workDate } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
 
-    // 締め済みの日を週次画面で編集しようとすると、保存時にブロックされる(UC-A011)。
-    await applicantPage.goto('/attendance/week')
-    const targetRow = applicantPage.getByRole('listitem').filter({ hasText: workDate })
-    await targetRow.getByRole('button', { name: '編集' }).click()
-    await targetRow.getByLabel('修正理由(必須)').fill('締め後編集の拒否確認(E2E)')
-    await targetRow.getByRole('button', { name: '保存する' }).click()
+    // 締め済みの日を日次勤怠画面(`/attendance/days/{date}`)で編集しようとすると、
+    // 保存時にブロックされる(UC-A011)。日次実績の編集・削除操作は週次画面のインライン
+    // ボタンではなく専用の日次勤怠画面に集約されている(2026-07時点でのUI変更、
+    // scenario-06-attendance-corrections.spec.ts冒頭コメント参照)。
+    await applicantPage.goto(`/attendance/days/${workDate}`)
+    // 「ログを編集」(打刻ログカード)と区別するため完全一致で指定する。
+    await applicantPage.getByRole('button', { name: '編集', exact: true }).click()
+    await applicantPage.getByLabel('修正理由(必須)').fill('締め後編集の拒否確認(E2E)')
+    await applicantPage.getByRole('button', { name: '保存する' }).click()
 
     await expect(
-      targetRow.getByRole('alert').filter({ hasText: '締め後の勤怠は修正申請から変更してください。' }),
+      applicantPage.getByRole('alert').filter({ hasText: '締め後の勤怠は修正申請から変更してください。' }),
     ).toBeVisible()
   } finally {
     await applicantContext.close()
@@ -193,20 +196,22 @@ test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) =>
   expect(punches.length).toBeGreaterThanOrEqual(2)
 
   // 矛盾があるためattendance_daysには反映されず、週次画面でもその日は未入力のままになる
-  // (専用の「要確認」バッジ等のUIはまだ無いため、未入力=編集ボタンが出ないことで確認する)。
+  // (専用の「要確認」バッジ等のUIはまだ無いため、ステータスバッジが「未入力」のままで
+  // あることで確認する)。
   await page.goto('/attendance/week')
   await page.getByRole('button', { name: '次週' }).click()
   const futureRow = page.getByRole('listitem').filter({ hasText: futureDate })
   await expect(futureRow).toBeVisible()
-  await expect(futureRow.getByRole('button', { name: '編集' })).toHaveCount(0)
+  await expect(futureRow.getByRole('status', { name: '未入力' })).toBeVisible()
 })
 
 // §5-5: 有給の自動失効警告・年5日取得義務警告バッチ(WarnExpiringPaidLeave /
-// WarnFiveDayObligation)は artisan コマンドとしては存在するが、送信結果を確認できる
-// API・画面が無く(Teams通知ジョブをキューに積むのみ)、`docs/testing/scenario-tests.md`
-// が前提とするブラックボックスE2E(HTTP/画面操作のみで完結)では検証できない。
-// 実装するなら通知履歴を返すAPIの追加が前提になるため、TODOのまま残す。
-test.skip('有給の自動失効警告・年5日取得義務警告バッチ (TODO, §5-5: 検証用API/画面が無いため現状のブラックボックスE2E方針では実装不可)', async () => {})
+// WarnFiveDayObligation)は、送信結果を確認できるAPI・画面が無く(Teams通知ジョブを
+// キューに積むのみ)、本ファイルが前提とするブラックボックスE2E(HTTP/画面操作のみで
+// 完結)では検証できない。シナリオ6(通年運用シミュレーション)の手順4が同じ制約を
+// 持つバッチ(grant-scheduledも含む3つ)を、ドキュメントで明示的に許容された例外として
+// `child_process`経由でartisanコマンドを直接実行する方式で検証しているため、
+// `scenario-08-fiscal-year-cycle.spec.ts`の`境界条件の単発確認`を参照。
 
 test('§5-8: 締めた月の勤怠CSV出力', async ({ browser }) => {
   test.setTimeout(60000)

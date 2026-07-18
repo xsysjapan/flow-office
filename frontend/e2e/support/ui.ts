@@ -10,9 +10,9 @@ export async function pickUser(
   label: string,
   name: string,
   email: string,
-  options: { timeout?: number } = {},
+  options: { timeout?: number; exact?: boolean } = {},
 ): Promise<void> {
-  await page.getByLabel(label).click(options)
+  await page.getByLabel(label, { exact: options.exact }).click(options)
   await page.getByPlaceholder('氏名またはメールアドレスで検索').fill(name, options)
   await page.getByRole('option', { name: `${name}(${email})` }).click(options)
 }
