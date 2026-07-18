@@ -108,12 +108,14 @@ use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingCode;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Commands\WarnStaleDevices;
 use App\Domain\Device\Handlers\DisableDeviceHandler;
 use App\Domain\Device\Handlers\ExchangeDevicePairingCodeHandler;
 use App\Domain\Device\Handlers\GrantDeviceScopeHandler;
 use App\Domain\Device\Handlers\IssueDevicePairingCodeHandler;
 use App\Domain\Device\Handlers\RegisterDeviceHandler;
 use App\Domain\Device\Handlers\RevokeDeviceHandler;
+use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
 use App\Domain\Integration\Commands\RegisterIntegration;
 use App\Domain\Integration\Commands\ReissueIntegrationToken;
 use App\Domain\Integration\Commands\RevokeIntegration;
@@ -191,6 +193,7 @@ return [
         DisableDevice::class => DisableDeviceHandler::class,
         RevokeDevice::class => RevokeDeviceHandler::class,
         GrantDeviceScope::class => GrantDeviceScopeHandler::class,
+        WarnStaleDevices::class => WarnStaleDevicesHandler::class,
 
         IssueAuthenticationKey::class => IssueAuthenticationKeyHandler::class,
         DisableAuthenticationKey::class => DisableAuthenticationKeyHandler::class,

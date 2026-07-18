@@ -2,34 +2,27 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Device;
-use App\Models\DeviceStatus;
+use App\Domain\Device\Commands\WarnStaleDevices;
+use App\Domain\EventSourcing\CommandBus;
 use Illuminate\Console\Command;
 
 /**
  * docs/23-usecases-devices.md「端末管理画面(UI)」の「最終通信確認」を補助する運用強化コマンド。
- * 一定期間ハートビート(POST /devices/heartbeat)が届いていない有効な端末を検出しログに残す。
- * 常駐workerを前提としないため(docs/02-tech-stack.md)、cronから毎日実行する想定。
- *
- * Teams通知への連携は今回のスコープ外とし、ログ出力(および終了コード)のみで報告する。
+ * 一定期間ハートビート(POST /devices/heartbeat)が届いていない有効な端末を検出し、
+ * ログ出力に加えTeamsへも警告する(add-teams-notificationスキル)。常駐workerを前提と
+ * しないため(docs/02-tech-stack.md)、cronから毎日実行する想定。
  */
 class DeviceHealthCheckCommand extends Command
 {
     protected $signature = 'devices:health-check {--stale-after-hours=48}';
 
-    protected $description = '一定時間ハートビートが無い有効な端末を検出する';
+    protected $description = '一定時間ハートビートが無い有効な端末を検出しTeamsへ警告する';
 
-    public function handle(): int
+    public function handle(CommandBus $commandBus): int
     {
         $staleAfterHours = (int) $this->option('stale-after-hours');
 
-        $staleDevices = Device::query()
-            ->where('status', DeviceStatus::ACTIVE)
-            ->where(function ($query) use ($staleAfterHours) {
-                $query->whereNull('last_seen_at')
-                    ->orWhere('last_seen_at', '<', now()->subHours($staleAfterHours));
-            })
-            ->get();
+        $staleDevices = $commandBus->dispatch(new WarnStaleDevices($staleAfterHours));
 
         if ($staleDevices->isEmpty()) {
             $this->info('疎通が途絶えている端末はありません。');
