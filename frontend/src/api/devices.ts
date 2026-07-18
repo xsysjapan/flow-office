@@ -11,6 +11,10 @@ export function fetchDevices({ ownerType, page, withTrashed }: FetchDevicesOptio
   return apiFetch('/devices', { query: { owner_type: ownerType, page, with_trashed: withTrashed } })
 }
 
+export function fetchDevice(deviceId: number): Promise<Device> {
+  return apiFetch(`/devices/${deviceId}`)
+}
+
 export interface RegisterDeviceInput {
   name: string
   device_type: DeviceType
@@ -26,6 +30,23 @@ export interface RegisterDeviceInput {
 
 export function registerDevice(input: RegisterDeviceInput): Promise<Device> {
   return apiFetch('/devices', { method: 'POST', body: input })
+}
+
+export interface UpdateDeviceSettingsInput {
+  name: string
+  site_id?: string
+  location_name?: string
+  default_work_location_type?: WorkLocationType
+  timezone?: string
+  allow_offline?: boolean
+  require_location?: boolean
+  auto_detect_punch_type?: boolean
+}
+
+// 設置場所・自動反映する勤務形態区分などの端末設定を変更する(管理者)。役割・スコープ・
+// 稼働状態(停止/失効)は別のAPI(grantDeviceScope/disableDevice/revokeDevice)で扱う。
+export function updateDeviceSettings(deviceId: number, input: UpdateDeviceSettingsInput): Promise<Device> {
+  return apiFetch(`/devices/${deviceId}`, { method: 'PATCH', body: input })
 }
 
 export interface IssuePairingClaimResult {

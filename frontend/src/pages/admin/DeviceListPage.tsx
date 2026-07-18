@@ -6,6 +6,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { DeviceDetailModal } from '../../components/DeviceDetailModal/DeviceDetailModal'
 import { DevicePairingQr } from '../../components/DevicePairingQr/DevicePairingQr'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -266,6 +267,7 @@ export function DeviceListPage() {
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
                         <div className="flex flex-col items-start gap-2">
+                          <DeviceDetailModal device={device} />
                           {device.status === 'pending_pairing' && (
                             <Button
                               size="sm"

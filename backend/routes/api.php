@@ -261,6 +261,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::get('/devices', [DeviceController::class, 'index']);
         Route::post('/devices', [DeviceController::class, 'store']);
+        Route::get('/devices/{device}', [DeviceController::class, 'show']);
+        Route::patch('/devices/{device}', [DeviceController::class, 'update']);
         Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
         Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
         Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
