@@ -9,6 +9,8 @@ import {
   paidLeaveEventTypeLabel,
   parseFieldProvenanceName,
   workflowRequestStatusLabel,
+  workLocationTypeLabel,
+  WORK_LOCATION_TYPE_OPTIONS,
 } from './statusLabels'
 
 function buildEvent(eventType: string, payload: Record<string, unknown>): StoredEvent {
@@ -49,6 +51,13 @@ describe('statusLabels', () => {
   it('maps field provenance source types to a Japanese label and tone', () => {
     expect(fieldSourceTypeLabel('ai_inferred')).toEqual({ label: 'AI推定(要確認)', tone: 'warning' })
     expect(fieldSourceTypeLabel('user_confirmed')).toEqual({ label: '本人確認済み', tone: 'success' })
+  })
+
+  it('maps work location types to a Japanese label and lists them as select options', () => {
+    expect(workLocationTypeLabel('remote')).toBe('在宅')
+    expect(workLocationTypeLabel('client_site')).toBe('客先')
+    expect(WORK_LOCATION_TYPE_OPTIONS).toContainEqual({ value: 'office', label: '出社' })
+    expect(WORK_LOCATION_TYPE_OPTIONS).toHaveLength(7)
   })
 
   it('parses a field provenance name into a date and a Japanese field label', () => {

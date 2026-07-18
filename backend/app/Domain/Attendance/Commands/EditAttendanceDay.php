@@ -24,5 +24,11 @@ class EditAttendanceDay implements Command
         public readonly string $reason,
         public readonly int $editedByUserId,
         public readonly ?string $workLocationType = null,
+        /**
+         * work_location_typeがリクエストに含まれていたか。falseの場合、Handlerは
+         * 既存の値を維持する(未送信のたびにnullへ上書きされてレコーダー/インポートで
+         * 設定済みの値が消えてしまうのを防ぐ)。
+         */
+        public readonly bool $workLocationTypeProvided = false,
     ) {}
 }

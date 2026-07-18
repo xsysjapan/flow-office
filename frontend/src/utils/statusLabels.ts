@@ -12,6 +12,7 @@ import type {
   PunchType,
   StoredEvent,
   WorkflowRequestStatus,
+  WorkLocationType,
 } from '../api/types'
 
 interface StatusMeta {
@@ -142,6 +143,25 @@ export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): Sta
 
 export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {
   return paidLeaveTypeLabels[leaveType]
+}
+
+const workLocationTypeLabels: Record<WorkLocationType, string> = {
+  office: '出社',
+  remote: '在宅',
+  client_site: '客先',
+  business_trip: '出張',
+  direct_to_site: '直行',
+  direct_from_site: '直帰',
+  other: 'その他',
+}
+
+/** attendance_days.work_location_type(出社/在宅/客先等)のセレクト肢一覧。 */
+export const WORK_LOCATION_TYPE_OPTIONS: Array<{ value: WorkLocationType; label: string }> = (
+  Object.entries(workLocationTypeLabels) as Array<[WorkLocationType, string]>
+).map(([value, label]) => ({ value, label }))
+
+export function workLocationTypeLabel(type: WorkLocationType): string {
+  return workLocationTypeLabels[type]
 }
 
 const punchTypeLabels: Record<PunchType, string> = {

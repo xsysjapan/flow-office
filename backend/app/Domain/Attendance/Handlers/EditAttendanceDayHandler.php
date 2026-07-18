@@ -54,7 +54,9 @@ class EditAttendanceDayHandler implements CommandHandler
             ? LocalDateTime::splitOffset($command->actualEndAt)[0]
             : null;
         $day->work_type = $command->workType;
-        $day->work_location_type = $command->workLocationType;
+        if ($command->workLocationTypeProvided) {
+            $day->work_location_type = $command->workLocationType;
+        }
         $day->note = $command->note;
         $day->source = AttendanceDaySource::MANUAL;
         if ($command->actualEndAt !== null) {

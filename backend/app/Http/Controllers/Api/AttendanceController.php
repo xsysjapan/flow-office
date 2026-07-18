@@ -329,6 +329,7 @@ class AttendanceController extends Controller
             reason: $data['reason'],
             editedByUserId: $request->user()->id,
             workLocationType: $data['work_location_type'] ?? null,
+            workLocationTypeProvided: $request->has('work_location_type'),
         ));
 
         return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'leaveSegments', 'calculation']));

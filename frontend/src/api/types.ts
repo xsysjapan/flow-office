@@ -202,6 +202,7 @@ export interface AttendanceDay {
    *  海外出張などで勤務日ごとに現地時刻が変わるため、社員本人の既定タイムゾーンとは別に持つ。 */
   utc_offset_minutes?: number | null
   work_type: string | null
+  work_location_type?: WorkLocationType | null
   note: string | null
   is_locked: boolean
   breaks: AttendanceBreak[]
