@@ -37,15 +37,27 @@ import {
  * は`unsignedSmallInteger`(最大65535)のため990001は入らない。59000番台に読み替えている
  * (本ファイル作成時にドキュメント側も修正済み)。
  *
- * 対象社員は予備枠 mock-entra-user-003(鈴木一郎)を1名使う(scenario-07・scenario-09が
- * 同じ予備枠ユーザーを使っているが、いずれも実在しない年月(7000年台・9000年台)を
- * 対象にしており、本シナリオの実在の2026〜2027年とは日付レンジで隔離されているため
- * 衝突しない)。
+ * 対象社員には総務担当者(中村恵、`SCENARIO_USERS.generalAffairsStaff`)を1名使う。
+ * 予備枠 mock-entra-user-001〜003(山田太郎・佐藤花子・鈴木一郎)は
+ * §5-9(新入社員初回ログイン)専用のため、本シナリオでは消費しない。中村恵は
+ * `ScenarioSeeder`内で`generateShiftAssignments`の対象になっておらず、他のどの
+ * シナリオファイルでも打刻・日次実績作成の対象として使われていない(バックオフィス
+ * タスク処理・承認操作の担当者としてのみ使われる)ため、出勤・シフト・勤務形態の
+ * 対象者として転用しても衝突しない。入社日(hire_date)も`ScenarioSeeder`で
+ * 2019-04-01に設定済みのため、追加設定は不要。
+ *
+ * 経理担当者(小林誠)は使わない: `scenario-09-cross-domain.spec.ts`の§5-14が
+ * 小林誠に対して(本シナリオとは別に)有給付与・消化を行っており、
+ * `fetchPaidLeaveGrantsForUser`はユーザー単位で全付与を合算するため、両シナリオが
+ * 並行実行されると本シナリオの有給消化数の検証(`initialRemaining - finalRemaining`)
+ * に他シナリオの付与・消化が混入してしまう(実際にこの組み合わせで検証に失敗することを
+ * 確認済み)。人事担当者(加藤由美)は§5-15でのみ使われ有給を触らないため、中村恵の
+ * 代わりに使っても問題ない。
  */
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const BACKEND_DIR = path.resolve(CURRENT_DIR, '../../backend')
-const TARGET_EMPLOYEE_NAME = '鈴木 一郎'
+const TARGET_EMPLOYEE_NAME = SCENARIO_USERS.generalAffairsStaff
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')

@@ -28,6 +28,13 @@
     シナリオに必要な最小マスタデータ(カレンダー・勤務形態・有給付与ルール・登場人物の
     ユーザー・勤務予定・有給付与)が投入される(§4参照)。何度実行しても安全(冪等)。
 - frontend: `cd frontend && npm install && cp .env.example .env && npm run dev`
+- Playwright E2Eテスト(`cd frontend && npm run test:e2e`)を実行する場合、実行開始時に
+  `globalSetup`(`frontend/e2e/global-setup.ts`)が`POST /dev/reset-database`
+  (`backend/app/Http/Controllers/Api/DevDatabaseResetController.php`)を1回呼び、
+  開発DBを`migrate:fresh --seed` + `ScenarioSeeder`の状態へ自動的にリセットする。
+  永続的な開発DBに対して何度実行しても常に同じ初期状態から始まるため、上記の
+  `db:seed --class=ScenarioSeeder`の手動実行は不要(詳細は`frontend/e2e/README.md`)。
+  本エンドポイントは`MICROSOFT_MOCK_ENABLED=true`の時のみ有効(本番・検証環境では404)。
 - ログインは実際のMicrosoft Entra IDではなく `mock-oidc/` のログイン画面でダミーユーザーを
   選択する(`docs/06-usecases-auth.md` UC-001、README.md参照)。
 - **`backend/.env` の `APP_URL` は `php artisan serve` の待受ポート(既定8000)まで含めて
@@ -231,9 +238,14 @@
 設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・月次入力ユーザー(伊藤舞)を使うと、
 2026-04〜2027-03という実在の期間の一部(特に実行時点に近い月)が他の多数のシナリオ
 (シナリオ1〜5、その他§5-1〜16等)による月次提出・承認・締めと衝突し、
-`AttendanceEditGuard`により日次実績が編集不能になる恐れがあるため、本シナリオ専用に
-予備枠(`docs/testing/scenario-tests.md`§3、mock-entra-user-001〜003)から1名
-(実装では鈴木一郎)を使う。
+`AttendanceEditGuard`により日次実績が編集不能になる恐れがある。予備枠
+(mock-entra-user-001〜003、山田太郎・佐藤花子・鈴木一郎)は§5-9(新入社員初回ログイン)
+専用のため消費せず、代わりに総務担当者(中村恵)を対象社員として使う。中村恵は
+`ScenarioSeeder`内で`generateShiftAssignments`の対象になっておらず、他のどのシナリオでも
+打刻・日次実績作成の対象として使われていないため、出勤・シフト・勤務形態の対象者として
+転用しても衝突しない(経理担当者の小林誠は§5-14で有給付与・消化の対象になっており、
+`fetchPaidLeaveGrantsForUser`がユーザー単位で全付与を合算する都合上、本シナリオと
+並行実行すると有給消化数の検証に他シナリオの付与・消化が混入するため使わない)。
 
 **技術的な前提(重要)**: `paid-leave:grant-scheduled`/`paid-leave:warn-expiring`/
 `paid-leave:warn-five-day-obligation` はいずれもサーバーの実時刻(`now()`)を基準に
@@ -343,7 +355,11 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     裁量労働制・管理監督者の社員を同一月・同一部署内に混在させた状態で、月次提出→
     承認→締めのバッチ処理(月次一覧の絞り込み・一括承認画面)が制度によらず正しく
     動くか(シナリオ7の各制度が単体では検証済みなのに対し、混在時の一覧表示・
-    絞り込みロジックを見る)。
+    絞り込みロジックを見る)。対象社員には固定時間制=小林誠(経理担当者)、
+    1か月単位変形労働時間制=中村恵(総務担当者)、裁量労働制=加藤由美(人事担当者)、
+    管理監督者=高橋健太(打刻ユーザー)を使う(§14も同様に小林誠を使う)。予備枠
+    (mock-entra-user-001〜003、山田太郎・佐藤花子・鈴木一郎)は§5-9(新入社員初回
+    ログイン)専用のため消費しない。
 16. **承認とバックオフィス処理のステータス系列独立性**: 月次勤怠を締めた後(UC-A011)も、
     同月内に発生した交通費精算・名刺申請のバックオフィスタスク(シナリオ4・5)が
     通常どおり(交通費精算は`payment_scheduled`→`completed`、名刺申請は

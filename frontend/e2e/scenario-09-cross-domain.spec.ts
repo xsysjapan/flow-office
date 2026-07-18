@@ -23,14 +23,19 @@ import { pickUser } from './support/ui'
  * 対応する。項目13(scenario-07-new-work-time-systems.spec.ts)と同様、月内で複数の
  * ユースケースを組み合わせて確認する「その他」の追加分。
  *
- * §5-15(複数の労働時間制度混在)は§5-13と同じ理由で、対象社員に
- * `docs/testing/scenario-tests.md`§3の予備枠 mock-entra-user-001〜003(山田太郎・
- * 佐藤花子・鈴木一郎)を使う。§5-14も、実在の暦年・他シナリオの日付レンジ
- * (scenario-00/07: 3000〜8999年度、scenario-08: 実在の2026〜2027年)と衝突しない
- * 専用レンジ(9000年台)の年月を使うため、同じ予備枠のユーザーを再利用する
- * (日付レンジで隔離しているため、識別子の使い回し自体はscenario-07が既に確立した
- * パターン)。§5-16は月次締めとバックオフィス処理の独立性の確認であり、対象日付を
- * 実在の年月から隔離する必要が無いため、共有ユーザー(高橋健太)をそのまま使う。
+ * §5-14・§5-15は対象社員に経理担当者(小林誠)・総務担当者(中村恵)・人事担当者
+ * (加藤由美)を使う(§5-15は固定時間制=小林誠、1か月単位変形労働時間制=中村恵、
+ * 裁量労働制=加藤由美、管理監督者=高橋健太)。この3人は`ScenarioSeeder`内で
+ * `generateShiftAssignments`の対象になっておらず、他のどのシナリオファイルでも
+ * 打刻・日次実績作成の対象として使われていない(バックオフィスタスク処理・承認操作の
+ * 担当者としてのみ使われる)ため、出勤・シフト・勤務形態の対象者として転用しても
+ * 衝突しない。予備枠 mock-entra-user-001〜003(山田太郎・佐藤花子・鈴木一郎)は
+ * §5-9(新入社員初回ログイン)専用のため、本ファイルでは消費しない
+ * (以前は§5-14・§5-15がこの予備枠を消費していたが、フルスイート実行順
+ * (00→...→08→09→99)でscenario-99の§5-9実行時に3人とも初回ログイン済みになって
+ * しまい検証が成立しなくなるため、転用可能な既存の登場人物に差し替えた)。§5-16は
+ * 月次締めとバックオフィス処理の独立性の確認であり、対象日付を実在の年月から
+ * 隔離する必要が無いため、共有ユーザー(高橋健太)をそのまま使う。
  */
 
 /** 指定した年月内の平日("YYYY-MM-DD")を1日から順に列挙する。 */
@@ -62,7 +67,7 @@ test('§5-14: 有給消化と月60時間超残業判定の同一月内共存', a
     const approverPage = await approverContext.newPage()
     const adminPage = await adminContext.newPage()
 
-    await loginAs(employeePage, '佐藤 花子')
+    await loginAs(employeePage, SCENARIO_USERS.accountingStaff)
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await loginAs(adminPage, SCENARIO_USERS.admin)
 
@@ -172,11 +177,12 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
     const approverPage = await approverContext.newPage()
     const adminPage = await adminContext.newPage()
 
-    // 固定時間制=山田太郎、1か月単位変形労働時間制=佐藤花子、裁量労働制=鈴木一郎、
-    // 管理監督者=高橋健太(共有ユーザーだが、この年月は他シナリオが触れない専用レンジ)。
-    await loginAs(fixedPage, '山田 太郎')
-    await loginAs(variablePage, '佐藤 花子')
-    await loginAs(discretionaryPage, '鈴木 一郎')
+    // 固定時間制=小林誠(経理担当者)、1か月単位変形労働時間制=中村恵(総務担当者)、
+    // 裁量労働制=加藤由美(人事担当者)、管理監督者=高橋健太(共有ユーザーだが、この年月は
+    // 他シナリオが触れない専用レンジ)。
+    await loginAs(fixedPage, SCENARIO_USERS.accountingStaff)
+    await loginAs(variablePage, SCENARIO_USERS.generalAffairsStaff)
+    await loginAs(discretionaryPage, SCENARIO_USERS.hrStaff)
     await loginAs(managerPage, SCENARIO_USERS.punchEmployee)
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await loginAs(adminPage, SCENARIO_USERS.admin)
@@ -186,9 +192,9 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
     const regular = employmentCategories.find((c) => c.code === 'regular')
 
     const actors = [
-      { page: fixedPage, name: '山田太郎(固定時間制)' },
-      { page: variablePage, name: '佐藤花子(1か月単位変形労働時間制)' },
-      { page: discretionaryPage, name: '鈴木一郎(裁量労働制)' },
+      { page: fixedPage, name: '小林誠(固定時間制)' },
+      { page: variablePage, name: '中村恵(1か月単位変形労働時間制)' },
+      { page: discretionaryPage, name: '加藤由美(裁量労働制)' },
       { page: managerPage, name: '高橋健太(管理監督者)' },
     ]
     const userIds = await Promise.all(actors.map((actor) => fetchOwnUserId(actor.page)))

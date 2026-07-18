@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
+use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
@@ -42,6 +43,11 @@ Route::prefix('auth')->group(function () {
 // 開発専用エンドポイント。認証不要(ログイン前に呼ばれるため)。MICROSOFT_MOCK_ENABLED=false
 // では404を返す(MockOidcUserController参照)。
 Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
+
+// Playwright E2Eテスト(frontend/e2e/)の実行開始時にDBをリセットするための開発専用
+// エンドポイント。認証不要(テスト実行の最初期、ログイン前に呼ばれるため)。
+// MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
+Route::post('/dev/reset-database', DevDatabaseResetController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
