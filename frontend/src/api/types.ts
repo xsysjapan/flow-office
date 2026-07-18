@@ -698,6 +698,36 @@ export interface AuthenticationKey {
   disabled_at: string | null
 }
 
+export type IntegrationClientType = 'api_client' | 'mcp_client' | 'ai_application' | 'external_application'
+
+export type IntegrationStatus = 'active' | 'revoked'
+
+export type IntegrationScopeType =
+  | 'profile:self:read'
+  | 'attendance:self:read'
+  | 'attendance:self:clock'
+  | 'attendance:self:draft'
+  | 'attendance:self:update'
+  | 'attendance:self:validate'
+  | 'attendance:self:submit'
+  | 'leave:self:read'
+  | 'leave:self:create'
+  | 'schedule:self:read'
+  | 'report:self:import'
+
+export interface ApplicationIntegration {
+  id: number
+  owner_type: 'personal' | 'organization'
+  owner_user_id: number | null
+  client_type: IntegrationClientType
+  client_name: string
+  purpose: string | null
+  status: IntegrationStatus
+  last_used_at: string | null
+  scopes?: IntegrationScopeType[]
+  created_at: string | null
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {
