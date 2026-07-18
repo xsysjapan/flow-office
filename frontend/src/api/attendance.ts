@@ -7,6 +7,7 @@ import type {
   AttendanceMonthlyCalculationTotals,
   AttendancePunch,
   FlexSettlementSummary,
+  WorkLocationType,
 } from './types'
 
 /** 遅刻・早退等を欠勤時間として扱う区間の入力(有給休暇・特別休暇は含まない)。 */
@@ -52,6 +53,9 @@ export interface EditAttendanceDayInput {
   actual_end_at?: string | null
   breaks?: Array<{ start: string; end?: string | null }>
   work_type?: string | null
+  /** 未指定(キー自体を省略)の場合、サーバー側は既存の値を維持する。明示的にnullを
+   *  送ると値をクリアする。 */
+  work_location_type?: WorkLocationType | null
   note?: string | null
   leave_segments?: LeaveSegmentInput[]
   reason: string
@@ -77,6 +81,7 @@ export interface CreateAttendanceDayInput {
   actual_end_at?: string | null
   breaks?: Array<{ start: string; end?: string | null }>
   work_type?: string | null
+  work_location_type?: WorkLocationType | null
   note?: string | null
   leave_segments?: LeaveSegmentInput[]
   reason: string

@@ -19,7 +19,7 @@ import {
 } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
-import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType } from '../../api/types'
+import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType, WorkLocationType } from '../../api/types'
 import type { AttendanceDayPunchLogAction } from '../../api/attendance'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import {
@@ -43,7 +43,13 @@ import {
   isoToTimeLiteral,
   offsetMinutesToString,
 } from '../../utils/offsetDateTime'
-import { attendanceDayStatusLabel, punchStatusLabel, punchTypeLabel } from '../../utils/statusLabels'
+import {
+  attendanceDayStatusLabel,
+  punchStatusLabel,
+  punchTypeLabel,
+  WORK_LOCATION_TYPE_OPTIONS,
+  workLocationTypeLabel,
+} from '../../utils/statusLabels'
 import { addDays, formatDate, mondayOf } from '../../utils/weekDates'
 
 const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string | null> = {
@@ -499,6 +505,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
     typeof day.utc_offset_minutes === 'number' ? offsetMinutesToString(day.utc_offset_minutes) : browserOffsetString(),
   )
   const [workType, setWorkType] = useState(day.work_type ?? '')
+  const [workLocationType, setWorkLocationType] = useState<WorkLocationType | ''>(day.work_location_type ?? '')
   const [note, setNote] = useState(day.note ?? '')
   const [reason, setReason] = useState('')
   const { rows, addRow, updateRow, removeRow } = useEditableRows<BreakRowData>(
@@ -528,6 +535,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
           actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
           breaks: buildBreaksPayload(rows, offset),
           work_type: workType || null,
+          work_location_type: workLocationType || null,
           note: note || null,
           leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
           reason,
@@ -556,6 +564,20 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         作業内容
         <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        勤務形態区分
+        <NativeSelect
+          value={workLocationType}
+          onChange={(e) => setWorkLocationType(e.target.value as WorkLocationType | '')}
+        >
+          <option value="">未設定</option>
+          {WORK_LOCATION_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </NativeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         備考
@@ -597,6 +619,7 @@ function DayCreateForm({ date }: { date: string }) {
   const [actualEndAt, setActualEndAt] = useState('')
   const [offset, setOffset] = useState(browserOffsetString())
   const [workType, setWorkType] = useState('')
+  const [workLocationType, setWorkLocationType] = useState<WorkLocationType | ''>('')
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
   const { rows, addRow, updateRow, removeRow, reset: resetRows } = useEditableRows<BreakRowData>([])
@@ -635,6 +658,7 @@ function DayCreateForm({ date }: { date: string }) {
       actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
       breaks: buildBreaksPayload(rows, offset),
       work_type: workType || null,
+      work_location_type: workLocationType || null,
       note: note || null,
       leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
       reason,
@@ -665,6 +689,20 @@ function DayCreateForm({ date }: { date: string }) {
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         作業内容
         <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        勤務形態区分
+        <NativeSelect
+          value={workLocationType}
+          onChange={(e) => setWorkLocationType(e.target.value as WorkLocationType | '')}
+        >
+          <option value="">未設定</option>
+          {WORK_LOCATION_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </NativeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         備考
@@ -935,12 +973,18 @@ export function AttendanceDayPage() {
               </ul>
             )}
 
-            {(day.work_type || day.note) && (
+            {(day.work_type || day.work_location_type || day.note) && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
                 {day.work_type && (
                   <>
                     <dt className="font-medium text-muted-foreground">作業内容</dt>
                     <dd className="text-foreground">{day.work_type}</dd>
+                  </>
+                )}
+                {day.work_location_type && (
+                  <>
+                    <dt className="font-medium text-muted-foreground">勤務形態区分</dt>
+                    <dd className="text-foreground">{workLocationTypeLabel(day.work_location_type)}</dd>
                   </>
                 )}
                 {day.note && (

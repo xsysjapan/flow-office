@@ -2,17 +2,25 @@
 
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AttendanceImportSessionController;
 use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
+use App\Http\Controllers\Api\DeviceController;
+use App\Http\Controllers\Api\DeviceIdentityController;
+use App\Http\Controllers\Api\DevicePairingController;
+use App\Http\Controllers\Api\DevicePunchController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
+use App\Http\Controllers\Api\MonthlyAttendanceDraftController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -34,7 +42,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/token', [AuthController::class, 'token']);
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/me', [AuthController::class, 'me'])->middleware('ability:profile:self:read');
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
@@ -48,6 +56,11 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // エンドポイント。認証不要(テスト実行の最初期、ログイン前に呼ばれるため)。
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
+
+// --- 端末ペアリング (docs/23-usecases-devices.md UC-D002) ---
+// この時点では端末はまだSanctumトークンを持たないため、auth:sanctumの外側で提供する
+// (既存のSSOトークン交換フロー AuthController::token と同じ考え方)。
+Route::post('/devices/pairing/exchange', [DevicePairingController::class, 'exchange']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
@@ -100,7 +113,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/work-calendars', [WorkCalendarController::class, 'index']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
-    Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index']);
+    Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index'])->middleware('ability:schedule:self:read');
     Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
     Route::get('/rotation-patterns', [RotationPatternController::class, 'index']);
     Route::get('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'show']);
@@ -133,32 +146,54 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- 勤怠 (docs/07-usecases-attendance.md UC-A001〜UC-A011, UC-A015) ---
+    // ability:のタグは個人API/MCP連携(docs/25-usecases-integrations-mcp.md)のスコープ限定
+    // トークンからも呼べるようにするためのオプトイン。ability`*`を持つ通常の人間向けトークンは
+    // 影響を受けない(Sanctumのability`*`は全ability判定を満たすため)。
     Route::prefix('attendance')->group(function () {
-        Route::get('/today', [AttendanceController::class, 'today']);
-        Route::post('/clock-in', [AttendanceController::class, 'clockIn']);
-        Route::post('/break/start', [AttendanceController::class, 'startBreak']);
-        Route::post('/break/end', [AttendanceController::class, 'endBreak']);
-        Route::post('/clock-out', [AttendanceController::class, 'clockOut']);
-        Route::get('/week', [AttendanceController::class, 'week']);
-        Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults']);
-        Route::post('/days', [AttendanceController::class, 'storeDay']);
-        Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay']);
-        Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay']);
+        Route::get('/today', [AttendanceController::class, 'today'])->middleware('ability:attendance:self:read');
+        Route::post('/clock-in', [AttendanceController::class, 'clockIn'])->middleware('ability:attendance:self:clock');
+        Route::post('/break/start', [AttendanceController::class, 'startBreak'])->middleware('ability:attendance:self:clock');
+        Route::post('/break/end', [AttendanceController::class, 'endBreak'])->middleware('ability:attendance:self:clock');
+        Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->middleware('ability:attendance:self:clock');
+        Route::get('/week', [AttendanceController::class, 'week'])->middleware('ability:attendance:self:read');
+        Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware('ability:attendance:self:read');
+        Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware('ability:attendance:self:update');
+        Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware('ability:attendance:self:read');
+        Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware('ability:attendance:self:update');
         Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation']);
         Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
         Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
-        Route::get('/months/mine', [AttendanceController::class, 'myMonths']);
+        Route::get('/months/mine', [AttendanceController::class, 'myMonths'])->middleware('ability:attendance:self:read');
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
         Route::get('/months/user/{userId}', [AttendanceController::class, 'monthsForUser'])
             ->middleware('role:admin');
-        Route::get('/months/{yearMonth}', [AttendanceController::class, 'month']);
-        Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth']);
+        Route::get('/months/{yearMonth}', [AttendanceController::class, 'month'])->middleware('ability:attendance:self:read');
+        Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware('ability:attendance:self:submit');
+    });
+
+    // --- 月次勤怠下書き・作業報告書インポート (docs/26-usecases-monthly-import.md UC-R001〜UC-R002) ---
+    Route::prefix('attendance/monthly-drafts')->group(function () {
+        Route::get('/mine', [MonthlyAttendanceDraftController::class, 'indexMine'])->middleware('ability:attendance:self:read');
+        Route::post('/', [MonthlyAttendanceDraftController::class, 'store'])->middleware('ability:attendance:self:draft');
+        Route::get('/{monthlyAttendanceDraft}', [MonthlyAttendanceDraftController::class, 'show'])->middleware('ability:attendance:self:read');
+        Route::get('/{monthlyAttendanceDraft}/fields', [MonthlyAttendanceDraftController::class, 'fields'])->middleware('ability:attendance:self:read');
+        Route::put('/{monthlyAttendanceDraft}/days', [MonthlyAttendanceDraftController::class, 'bulkUpdateDays'])->middleware('ability:attendance:self:update');
+        Route::post('/{monthlyAttendanceDraft}/validate', [MonthlyAttendanceDraftController::class, 'validateDraft'])->middleware('ability:attendance:self:validate');
+        Route::post('/{monthlyAttendanceDraft}/submit', [MonthlyAttendanceDraftController::class, 'submit'])->middleware('ability:attendance:self:submit');
+        Route::post('/{monthlyAttendanceDraft}/fields/{fieldProvenance}/confirm', [MonthlyAttendanceDraftController::class, 'confirmField'])->middleware('ability:attendance:self:update');
+    });
+    Route::prefix('attendance/import-sessions')->group(function () {
+        Route::post('/', [AttendanceImportSessionController::class, 'store'])->middleware('ability:report:self:import');
+        Route::get('/{importSession}', [AttendanceImportSessionController::class, 'show'])->middleware('ability:report:self:import');
+        Route::post('/{importSession}/data', [AttendanceImportSessionController::class, 'uploadData'])->middleware('ability:report:self:import');
+        Route::post('/{importSession}/preview', [AttendanceImportSessionController::class, 'preview'])->middleware('ability:report:self:import');
+        Route::post('/{importSession}/apply', [AttendanceImportSessionController::class, 'apply'])->middleware('ability:report:self:import');
     });
 
     // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012〜UC-A014) ---
     Route::prefix('attendance-punches')->group(function () {
-        Route::get('/', [AttendancePunchController::class, 'index']);
-        Route::post('/', [AttendancePunchController::class, 'store']);
+        Route::get('/', [AttendancePunchController::class, 'index'])->middleware('ability:attendance:self:read');
+        Route::post('/', [AttendancePunchController::class, 'store'])->middleware('ability:attendance:self:clock');
         Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update']);
         Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy']);
     });
@@ -171,12 +206,12 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
-    Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants']);
+    Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
-    Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests']);
+    Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove']);
-    Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory']);
-    Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest']);
+    Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory'])->middleware('ability:leave:self:read');
+    Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest'])->middleware('ability:leave:self:create');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest']);
     Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest']);
     Route::post('/paid-leave/requests/{paidLeaveRequest}/cancel', [PaidLeaveController::class, 'cancelRequest']);
@@ -217,4 +252,45 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- システム設定 (docs/06-usecases-auth.md UC-003) ---
     Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('role:admin');
     Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('role:admin');
+
+    // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
+    Route::get('/users/me/devices', [DeviceController::class, 'indexMine']);
+    Route::post('/users/me/devices', [DeviceController::class, 'storePersonal']);
+    Route::post('/devices/heartbeat', [DeviceController::class, 'heartbeat'])
+        ->middleware('ability:recorder:punch,punch:self,device:heartbeat');
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/devices', [DeviceController::class, 'index']);
+        Route::post('/devices', [DeviceController::class, 'store']);
+        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingCode']);
+        Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
+    });
+    // 停止・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
+    // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。
+    Route::post('/devices/{device}/disable', [DeviceController::class, 'disable']);
+    Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke']);
+
+    // --- 認証キー管理 (docs/24-usecases-authentication-keys.md UC-K001〜UC-K003) ---
+    Route::get('/users/me/authentication-keys', [AuthenticationKeyController::class, 'indexMine']);
+    Route::post('/users/me/authentication-keys', [AuthenticationKeyController::class, 'store']);
+    Route::get('/users/{userId}/authentication-keys', [AuthenticationKeyController::class, 'indexForUser']);
+    Route::post('/authentication-keys/{authenticationKey}/disable', [AuthenticationKeyController::class, 'disable']);
+
+    // --- 個人API・MCP連携 (docs/25-usecases-integrations-mcp.md UC-I001〜UC-I003) ---
+    // 連携の登録・再発行・停止自体は連携トークンではなく本人の通常ログインセッションで行う
+    // (ability指定なし。scoped自身のトークンではこのAPIを呼べない=連携管理は連携自身に
+    // 権限を持たせない)。
+    Route::get('/users/me/integrations', [IntegrationController::class, 'indexMine']);
+    Route::post('/users/me/integrations', [IntegrationController::class, 'store']);
+    Route::post('/users/me/integrations/{integration}/reissue', [IntegrationController::class, 'reissue']);
+    Route::post('/users/me/integrations/{integration}/revoke', [IntegrationController::class, 'revoke']);
+});
+
+// --- 端末打刻 (docs/07-usecases-attendance.md UC-A020、docs/23-usecases-devices.md UC-D002) ---
+// 端末トークン(ability: recorder:punch=共有端末、punch:self=個人端末)で認証する、
+// 人間のSanctumセッションを前提とするattendance-punchesとは別の入口。
+Route::middleware(['auth:sanctum', 'ability:recorder:punch,punch:self,attendance:clock'])->group(function () {
+    Route::post('/device-punches', [DevicePunchController::class, 'store']);
+});
+Route::middleware(['auth:sanctum', 'ability:identity:resolve,recorder:punch'])->group(function () {
+    Route::post('/devices/identity/resolve', [DeviceIdentityController::class, 'resolve']);
 });

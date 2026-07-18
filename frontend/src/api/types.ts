@@ -202,6 +202,7 @@ export interface AttendanceDay {
    *  海外出張などで勤務日ごとに現地時刻が変わるため、社員本人の既定タイムゾーンとは別に持つ。 */
   utc_offset_minutes?: number | null
   work_type: string | null
+  work_location_type?: WorkLocationType | null
   note: string | null
   is_locked: boolean
   breaks: AttendanceBreak[]
@@ -601,6 +602,175 @@ export interface StoredEvent {
   event_type: string
   payload: Record<string, unknown>
   occurred_at: string
+}
+
+export type DeviceOwnerType = 'organization_shared' | 'personal'
+
+export type DeviceType =
+  | 'android'
+  | 'ios'
+  | 'web_browser'
+  | 'windows'
+  | 'macos'
+  | 'linux'
+  | 'nfc_reader'
+  | 'fingerprint_reader'
+  | 'face_recognition_device'
+  | 'access_control_device'
+  | 'iot_device'
+  | 'external_system'
+  | 'other'
+
+export type DeviceRoleType =
+  | 'attendance_reader'
+  | 'authentication_device'
+  | 'access_control'
+  | 'personal_operation'
+  | 'admin_operation'
+  | 'external_event_source'
+
+export type DeviceScopeType =
+  | 'attendance:clock'
+  | 'attendance:read_current_state'
+  | 'attendance:read_result'
+  | 'identity:resolve'
+  | 'device:heartbeat'
+
+export type DeviceStatus = 'pending_pairing' | 'active' | 'disabled' | 'revoked'
+
+export type WorkLocationType =
+  | 'office'
+  | 'remote'
+  | 'client_site'
+  | 'business_trip'
+  | 'direct_to_site'
+  | 'direct_from_site'
+  | 'other'
+
+export interface Device {
+  id: number
+  owner_type: DeviceOwnerType
+  owner_user_id: number | null
+  name: string
+  device_type: DeviceType
+  status: DeviceStatus
+  site_id: string | null
+  location_name: string | null
+  default_work_location_type: WorkLocationType | null
+  timezone: string | null
+  allowed_punch_types: string[] | null
+  allow_offline: boolean
+  require_location: boolean
+  auto_detect_punch_type: boolean
+  app_version: string | null
+  last_seen_at: string | null
+  paired_at: string | null
+  disabled_at: string | null
+  revoked_at: string | null
+  roles?: DeviceRoleType[]
+  scopes?: DeviceScopeType[]
+  created_at: string | null
+}
+
+export type AuthenticationKeyType =
+  | 'nfc_uid'
+  | 'employee_card_id'
+  | 'qr_code'
+  | 'barcode'
+  | 'fingerprint_external_id'
+  | 'face_recognition_external_id'
+  | 'fido_credential'
+  | 'bluetooth_device_id'
+  | 'external_system_user_id'
+  | 'custom'
+
+export type AuthenticationKeyStatus = 'active' | 'suspended' | 'disabled'
+
+export interface AuthenticationKey {
+  id: number
+  user_id: number
+  key_type: AuthenticationKeyType
+  display_name: string
+  status: AuthenticationKeyStatus
+  valid_from: string | null
+  valid_until: string | null
+  registered_by_user_id: number | null
+  registered_at: string | null
+  disabled_at: string | null
+}
+
+export type IntegrationClientType = 'api_client' | 'mcp_client' | 'ai_application' | 'external_application'
+
+export type IntegrationStatus = 'active' | 'revoked'
+
+export type IntegrationScopeType =
+  | 'profile:self:read'
+  | 'attendance:self:read'
+  | 'attendance:self:clock'
+  | 'attendance:self:draft'
+  | 'attendance:self:update'
+  | 'attendance:self:validate'
+  | 'attendance:self:submit'
+  | 'leave:self:read'
+  | 'leave:self:create'
+  | 'schedule:self:read'
+  | 'report:self:import'
+
+export interface ApplicationIntegration {
+  id: number
+  owner_type: 'personal' | 'organization'
+  owner_user_id: number | null
+  client_type: IntegrationClientType
+  client_name: string
+  purpose: string | null
+  status: IntegrationStatus
+  last_used_at: string | null
+  scopes?: IntegrationScopeType[]
+  created_at: string | null
+}
+
+export type MonthlyDraftStatus =
+  | 'draft'
+  | 'validating'
+  | 'needs_review'
+  | 'ready_to_submit'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'locked'
+
+export interface MonthlyAttendanceDraft {
+  id: number
+  user_id: number
+  target_month: string
+  status: MonthlyDraftStatus
+  version: number
+  source_type: string | null
+  source_reference: string | null
+  submitted_at: string | null
+  created_at: string | null
+}
+
+export type FieldSourceType =
+  | 'source_document'
+  | 'existing_clock_event'
+  | 'existing_attendance'
+  | 'work_schedule'
+  | 'employment_rule'
+  | 'ai_inferred'
+  | 'user_confirmed'
+  | 'user_manual_input'
+  | 'admin_correction'
+
+export interface FieldProvenance {
+  id: number
+  field_name: string
+  source_type: FieldSourceType
+  confidence: string | null
+  previous_value: string | null
+  confirmed_by_user_id: number | null
+  confirmed_at: string | null
+  created_at: string | null
 }
 
 export interface Paginated<T> {

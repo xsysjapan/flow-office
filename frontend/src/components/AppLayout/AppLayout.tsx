@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Settings, type LucideIcon } from 'lucide-react'
+import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Plug, Settings, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { cn } from '../../lib/utils'
@@ -34,6 +34,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
       { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
       { to: '/paid-leave', label: '有給' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
+      { to: '/attendance/monthly-drafts', label: '月次勤怠下書き' },
     ],
   },
   {
@@ -53,6 +54,11 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
       { to: '/paid-leave/to-approve', label: '有給申請承認' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave/to-approve', label: '特別休暇申請承認' }] : []),
     ],
+  },
+  {
+    label: '連携',
+    icon: Plug,
+    items: [{ to: '/integrations', label: 'API・MCP連携' }],
   },
   {
     label: 'バックオフィス',

@@ -18,5 +18,11 @@ class RecordAttendancePunch implements Command
         public readonly string $punchedAt,
         public readonly string $source,
         public readonly ?string $note,
+        public readonly ?int $deviceId = null,
+        public readonly ?int $authenticationKeyId = null,
+        public readonly ?int $actorUserId = null,
+        public readonly bool $offline = false,
+        public readonly ?string $idempotencyKey = null,
+        public readonly ?string $requestId = null,
     ) {}
 }

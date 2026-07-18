@@ -38,6 +38,10 @@ import { AuditLogPage } from './pages/admin/AuditLogPage'
 import { AttendanceExportPage } from './pages/attendance/AttendanceExportPage'
 import { SystemSettingsPage } from './pages/admin/SystemSettingsPage'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
+import { DeviceListPage } from './pages/admin/DeviceListPage'
+import { MyIntegrationsPage } from './pages/integrations/MyIntegrationsPage'
+import { MyMonthlyAttendanceDraftsPage } from './pages/attendance/MyMonthlyAttendanceDraftsPage'
+import { MonthlyAttendanceDraftReviewPage } from './pages/attendance/MonthlyAttendanceDraftReviewPage'
 
 function App() {
   return (
@@ -62,6 +66,8 @@ function App() {
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
         <Route path="attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
+        <Route path="attendance/monthly-drafts" element={<MyMonthlyAttendanceDraftsPage />} />
+        <Route path="attendance/monthly-drafts/:id" element={<MonthlyAttendanceDraftReviewPage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
         <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
@@ -70,6 +76,7 @@ function App() {
         <Route path="special-leave/to-approve" element={<SpecialLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
+        <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<UserListPage />} />
@@ -84,6 +91,7 @@ function App() {
           <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
           <Route path="special-leave/history" element={<SpecialLeaveHistoryAdminPage />} />
           <Route path="attendance" element={<AttendanceReferencePage />} />
+          <Route path="devices" element={<DeviceListPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />

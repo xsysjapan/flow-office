@@ -54,6 +54,7 @@ export const adminNavGroups: AdminNavGroup[] = [
     icon: Settings,
     roles: [ROLE.ADMIN],
     items: [
+      { to: '/admin/devices', label: '端末管理', description: '打刻レコーダー等の共有端末を登録・管理する' },
       { to: '/admin/audit-log', label: '監査ログ', description: '重要な操作の履歴を確認する' },
       { to: '/admin/system-settings', label: 'システム設定', description: 'システム全体の設定を管理する' },
     ],

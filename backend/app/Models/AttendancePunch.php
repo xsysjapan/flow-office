@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note',
     'status', 'correction_reason', 'corrected_by_user_id', 'corrected_at', 'superseded_by_punch_id',
+    'device_id', 'authentication_key_id', 'actor_user_id', 'integration_id', 'offline',
+    'idempotency_key', 'request_id', 'metadata_json',
 ])]
 class AttendancePunch extends Model
 {
@@ -23,6 +25,8 @@ class AttendancePunch extends Model
             'work_date' => 'date',
             'punched_at' => 'datetime',
             'corrected_at' => 'datetime',
+            'offline' => 'boolean',
+            'metadata_json' => 'array',
         ];
     }
 
@@ -40,6 +44,30 @@ class AttendancePunch extends Model
     public function correctedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'corrected_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
+
+    /**
+     * @return BelongsTo<Device, $this>
+     */
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class);
+    }
+
+    /**
+     * @return BelongsTo<AuthenticationKey, $this>
+     */
+    public function authenticationKey(): BelongsTo
+    {
+        return $this->belongsTo(AuthenticationKey::class);
     }
 
     /**

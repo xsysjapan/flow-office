@@ -6,6 +6,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { AuthenticationKeysPanel } from '../../components/AuthenticationKeysPanel/AuthenticationKeysPanel'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -253,6 +254,10 @@ export function UserRoleEditPage() {
             </ul>
           </div>
         )}
+      </div>
+
+      <div className="mt-6 border-t border-border pt-4">
+        <AuthenticationKeysPanel userId={userId} />
       </div>
     </Card>
   )

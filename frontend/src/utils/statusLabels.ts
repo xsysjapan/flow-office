@@ -3,13 +3,16 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
+  FieldSourceType,
   LegalHolidayWarning,
+  MonthlyDraftStatus,
   PaidLeaveRequestStatus,
   PaidLeaveType,
   PunchStatus,
   PunchType,
   StoredEvent,
   WorkflowRequestStatus,
+  WorkLocationType,
 } from '../api/types'
 
 interface StatusMeta {
@@ -66,6 +69,52 @@ const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
   cancelled: { label: '取消', tone: 'danger' },
 }
 
+const monthlyDraftStatusMeta: Record<MonthlyDraftStatus, StatusMeta> = {
+  draft: { label: '下書き', tone: 'neutral' },
+  validating: { label: '検証中', tone: 'info' },
+  needs_review: { label: '要確認', tone: 'warning' },
+  ready_to_submit: { label: '申請可能', tone: 'success' },
+  submitted: { label: '提出済み', tone: 'info' },
+  approved: { label: '承認済み', tone: 'success' },
+  rejected: { label: '却下', tone: 'danger' },
+  locked: { label: 'ロック済み', tone: 'neutral' },
+}
+
+const fieldSourceTypeMeta: Record<FieldSourceType, StatusMeta> = {
+  source_document: { label: '作業報告書から読み取り', tone: 'info' },
+  existing_clock_event: { label: '既存の打刻から算出', tone: 'info' },
+  existing_attendance: { label: '既存の勤怠から算出', tone: 'info' },
+  work_schedule: { label: '勤務予定から算出', tone: 'info' },
+  employment_rule: { label: '勤務ルールから算出', tone: 'info' },
+  ai_inferred: { label: 'AI推定(要確認)', tone: 'warning' },
+  user_confirmed: { label: '本人確認済み', tone: 'success' },
+  user_manual_input: { label: '本人入力', tone: 'success' },
+  admin_correction: { label: '管理者修正', tone: 'success' },
+}
+
+const fieldNameLabels: Record<string, string> = {
+  start_time: '出勤時刻',
+  end_time: '退勤時刻',
+}
+
+export function monthlyDraftStatusLabel(status: MonthlyDraftStatus): StatusMeta {
+  return monthlyDraftStatusMeta[status]
+}
+
+export function fieldSourceTypeLabel(sourceType: FieldSourceType): StatusMeta {
+  return fieldSourceTypeMeta[sourceType]
+}
+
+/** field_provenances.field_name(`"{日付}:{項目名}"`形式)を日付と日本語ラベルに分解する。 */
+export function parseFieldProvenanceName(fieldName: string): { date: string; fieldLabel: string } {
+  const separatorIndex = fieldName.lastIndexOf(':')
+  if (separatorIndex === -1) return { date: fieldName, fieldLabel: fieldName }
+
+  const date = fieldName.slice(0, separatorIndex)
+  const field = fieldName.slice(separatorIndex + 1)
+  return { date, fieldLabel: fieldNameLabels[field] ?? field }
+}
+
 export function workflowRequestStatusLabel(status: WorkflowRequestStatus): StatusMeta {
   return workflowRequestStatusMeta[status]
 }
@@ -94,6 +143,25 @@ export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): Sta
 
 export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {
   return paidLeaveTypeLabels[leaveType]
+}
+
+const workLocationTypeLabels: Record<WorkLocationType, string> = {
+  office: '出社',
+  remote: '在宅',
+  client_site: '客先',
+  business_trip: '出張',
+  direct_to_site: '直行',
+  direct_from_site: '直帰',
+  other: 'その他',
+}
+
+/** attendance_days.work_location_type(出社/在宅/客先等)のセレクト肢一覧。 */
+export const WORK_LOCATION_TYPE_OPTIONS: Array<{ value: WorkLocationType; label: string }> = (
+  Object.entries(workLocationTypeLabels) as Array<[WorkLocationType, string]>
+).map(([value, label]) => ({ value, label }))
+
+export function workLocationTypeLabel(type: WorkLocationType): string {
+  return workLocationTypeLabels[type]
 }
 
 const punchTypeLabels: Record<PunchType, string> = {

@@ -18,14 +18,29 @@ abstract class Controller
     /**
      * 対象データの所有者本人、またはadminのみ操作できることを保証する
      * (自分以外の社員の勤怠・打刻を参照・記録・訂正・削除できるのはadminのみ)。
+     *
+     * 個人API/MCP連携(docs/25-usecases-integrations-mcp.md)のようなability限定トークンでは、
+     * たとえ本人がadminロールを持っていても管理者としての抜け道を使わせない
+     * (「管理職であっても、個人トークンへ自動的に部下の閲覧権限を付与しない」UC-I002)。
+     * ability`*`を持つ通常の人間向けトークンでは今まで通りadmin判定を適用する。
      */
     protected function abortUnlessOwnerOrAdmin(Request $request, int $ownerId, string $message): void
     {
-        abort_if(
-            $ownerId !== $request->user()->id && ! $request->user()->hasRole(Role::ADMIN),
-            403,
-            $message,
-        );
+        $isSelf = $ownerId === $request->user()->id;
+        $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
+
+        abort_if(! $isSelf && ! $isAdmin, 403, $message);
+    }
+
+    /**
+     * 現在のSanctumトークンがability`*`(通常の人間向けログインセッション)かどうか。
+     * トークンを持たない場合(セッション認証等)はtrueとして扱う。
+     */
+    protected function currentTokenHasFullAccess(Request $request): bool
+    {
+        $token = $request->user()?->currentAccessToken();
+
+        return $token === null || ! method_exists($token, 'can') || $token->can('*');
     }
 
     /**

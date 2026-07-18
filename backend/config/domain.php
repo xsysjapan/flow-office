@@ -73,6 +73,28 @@ use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
 use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
+use App\Domain\AttendanceImport\Commands\ApplyAttendanceImportSessionToDraft;
+use App\Domain\AttendanceImport\Commands\BulkUpdateAttendanceDays;
+use App\Domain\AttendanceImport\Commands\ConfirmFieldProvenance;
+use App\Domain\AttendanceImport\Commands\CreateAttendanceImportSession;
+use App\Domain\AttendanceImport\Commands\CreateMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Commands\PreviewAttendanceImportSession;
+use App\Domain\AttendanceImport\Commands\SubmitMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Commands\UploadAttendanceImportData;
+use App\Domain\AttendanceImport\Commands\ValidateMonthlyAttendanceDraft;
+use App\Domain\AttendanceImport\Handlers\ApplyAttendanceImportSessionToDraftHandler;
+use App\Domain\AttendanceImport\Handlers\BulkUpdateAttendanceDaysHandler;
+use App\Domain\AttendanceImport\Handlers\ConfirmFieldProvenanceHandler;
+use App\Domain\AttendanceImport\Handlers\CreateAttendanceImportSessionHandler;
+use App\Domain\AttendanceImport\Handlers\CreateMonthlyAttendanceDraftHandler;
+use App\Domain\AttendanceImport\Handlers\PreviewAttendanceImportSessionHandler;
+use App\Domain\AttendanceImport\Handlers\SubmitMonthlyAttendanceDraftHandler;
+use App\Domain\AttendanceImport\Handlers\UploadAttendanceImportDataHandler;
+use App\Domain\AttendanceImport\Handlers\ValidateMonthlyAttendanceDraftHandler;
+use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
+use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
+use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
+use App\Domain\AuthenticationKey\Handlers\IssueAuthenticationKeyHandler;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
@@ -80,6 +102,26 @@ use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
+use App\Domain\Device\Commands\DisableDevice;
+use App\Domain\Device\Commands\ExchangeDevicePairingCode;
+use App\Domain\Device\Commands\GrantDeviceScope;
+use App\Domain\Device\Commands\IssueDevicePairingCode;
+use App\Domain\Device\Commands\RegisterDevice;
+use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Commands\WarnStaleDevices;
+use App\Domain\Device\Handlers\DisableDeviceHandler;
+use App\Domain\Device\Handlers\ExchangeDevicePairingCodeHandler;
+use App\Domain\Device\Handlers\GrantDeviceScopeHandler;
+use App\Domain\Device\Handlers\IssueDevicePairingCodeHandler;
+use App\Domain\Device\Handlers\RegisterDeviceHandler;
+use App\Domain\Device\Handlers\RevokeDeviceHandler;
+use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
+use App\Domain\Integration\Commands\RegisterIntegration;
+use App\Domain\Integration\Commands\ReissueIntegrationToken;
+use App\Domain\Integration\Commands\RevokeIntegration;
+use App\Domain\Integration\Handlers\RegisterIntegrationHandler;
+use App\Domain\Integration\Handlers\ReissueIntegrationTokenHandler;
+use App\Domain\Integration\Handlers\RevokeIntegrationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -144,6 +186,31 @@ return [
     */
     'command_handlers' => [
         UploadAttachment::class => UploadAttachmentHandler::class,
+
+        RegisterDevice::class => RegisterDeviceHandler::class,
+        IssueDevicePairingCode::class => IssueDevicePairingCodeHandler::class,
+        ExchangeDevicePairingCode::class => ExchangeDevicePairingCodeHandler::class,
+        DisableDevice::class => DisableDeviceHandler::class,
+        RevokeDevice::class => RevokeDeviceHandler::class,
+        GrantDeviceScope::class => GrantDeviceScopeHandler::class,
+        WarnStaleDevices::class => WarnStaleDevicesHandler::class,
+
+        IssueAuthenticationKey::class => IssueAuthenticationKeyHandler::class,
+        DisableAuthenticationKey::class => DisableAuthenticationKeyHandler::class,
+
+        RegisterIntegration::class => RegisterIntegrationHandler::class,
+        RevokeIntegration::class => RevokeIntegrationHandler::class,
+        ReissueIntegrationToken::class => ReissueIntegrationTokenHandler::class,
+
+        CreateMonthlyAttendanceDraft::class => CreateMonthlyAttendanceDraftHandler::class,
+        BulkUpdateAttendanceDays::class => BulkUpdateAttendanceDaysHandler::class,
+        ValidateMonthlyAttendanceDraft::class => ValidateMonthlyAttendanceDraftHandler::class,
+        SubmitMonthlyAttendanceDraft::class => SubmitMonthlyAttendanceDraftHandler::class,
+        CreateAttendanceImportSession::class => CreateAttendanceImportSessionHandler::class,
+        UploadAttendanceImportData::class => UploadAttendanceImportDataHandler::class,
+        PreviewAttendanceImportSession::class => PreviewAttendanceImportSessionHandler::class,
+        ApplyAttendanceImportSessionToDraft::class => ApplyAttendanceImportSessionToDraftHandler::class,
+        ConfirmFieldProvenance::class => ConfirmFieldProvenanceHandler::class,
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,

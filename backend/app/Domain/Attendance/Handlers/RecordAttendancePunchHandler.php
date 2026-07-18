@@ -8,6 +8,7 @@ use App\Domain\Attendance\Services\AttendanceDayPunchSyncer;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendancePunch;
 use App\Models\User;
 use App\Support\LocalDateTime;
@@ -33,6 +34,23 @@ class RecordAttendancePunchHandler implements CommandHandler
     {
         assert($command instanceof RecordAttendancePunch);
 
+        if ($command->idempotencyKey !== null) {
+            $existing = AttendancePunch::query()->where('idempotency_key', $command->idempotencyKey)->first();
+            if ($existing !== null) {
+                // idempotency_keyはDBレベルでも一意制約(グローバル)のため、本来は
+                // 同一利用者からの再送のみがここに到達する想定。万一異なる利用者の
+                // キーと衝突した場合、他人の打刻を誤って返すことのないよう例外にする
+                // (低エントロピーな冪等性キー生成など、端末側の実装不備を早期に検知する)。
+                if ($existing->user_id !== $command->userId) {
+                    throw new DomainRuleException('冪等性キーが他の利用者の打刻と重複しています。');
+                }
+
+                // 端末のオフラインキューからの再送等、同一冪等性キーでの再実行は
+                // 新しい行を追加せず既存の結果をそのまま返す(docs/23-usecases-devices.md)。
+                return $existing;
+            }
+        }
+
         $user = User::query()->findOrFail($command->userId);
         [$punchedAt, $utcOffsetMinutes] = LocalDateTime::splitOffset($command->punchedAt);
 
@@ -44,6 +62,12 @@ class RecordAttendancePunchHandler implements CommandHandler
             'utc_offset_minutes' => $utcOffsetMinutes,
             'source' => $command->source,
             'note' => $command->note,
+            'device_id' => $command->deviceId,
+            'authentication_key_id' => $command->authenticationKeyId,
+            'actor_user_id' => $command->actorUserId ?? $command->userId,
+            'offline' => $command->offline,
+            'idempotency_key' => $command->idempotencyKey,
+            'request_id' => $command->requestId,
         ]);
 
         $this->eventStore->append(
@@ -56,6 +80,12 @@ class RecordAttendancePunchHandler implements CommandHandler
                 punchType: $command->punchType,
                 punchedAt: LocalDateTime::formatWithOffsetMinutes($punch->punched_at, $punch->utc_offset_minutes),
                 source: $command->source,
+                deviceId: $command->deviceId,
+                authenticationKeyId: $command->authenticationKeyId,
+                actorUserId: $command->actorUserId ?? $command->userId,
+                offline: $command->offline,
+                idempotencyKey: $command->idempotencyKey,
+                requestId: $command->requestId,
             ),
         );
 

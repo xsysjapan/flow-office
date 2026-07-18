@@ -25,5 +25,6 @@ class CreateAttendanceDay implements Command
         public readonly array $leaveSegments,
         public readonly string $reason,
         public readonly int $createdByUserId,
+        public readonly ?string $workLocationType = null,
     ) {}
 }

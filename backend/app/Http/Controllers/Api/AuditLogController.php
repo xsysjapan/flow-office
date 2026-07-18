@@ -7,8 +7,8 @@ use App\Http\Resources\StoredEventResource;
 use App\Models\StoredEvent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * UC-M003: 監査ログを確認する。EventStore(stored_events)を正の記録として直接検索する。
@@ -28,6 +28,10 @@ class AuditLogController extends Controller
         'submitted_by_user_id', 'returned_by_user_id', 'cancelled_by_user_id',
         'changed_by_user_id', 'assigned_by_user_id', 'assigned_user_id', 'edited_by_user_id',
         'closed_by_user_id', 'requested_by_user_id',
+        // 端末・認証キー・API/MCP連携・月次一括作成(docs/23〜docs/26)。
+        'owner_user_id', 'registered_by_user_id', 'issued_by_user_id', 'disabled_by_user_id',
+        'revoked_by_user_id', 'granted_by_user_id', 'actor_user_id', 'created_by_user_id',
+        'updated_by_user_id', 'applied_by_user_id', 'confirmed_by_user_id', 'reissued_by_user_id',
     ];
 
     #[OA\Get(
