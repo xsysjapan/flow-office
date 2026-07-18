@@ -22,12 +22,16 @@ export function registerDevice(input: RegisterDeviceInput): Promise<Device> {
   return apiFetch('/devices', { method: 'POST', body: input })
 }
 
-export interface IssuePairingCodeResult {
+export interface IssuePairingClaimResult {
   device: Device
-  pairing_code: string
+  claim_token: string
 }
 
-export function issueDevicePairingCode(deviceId: number): Promise<IssuePairingCodeResult> {
+// 一時ペアリングトークン(claim token)を発行する。管理者の認証済みトークンだけを
+// 認可根拠にする(匿名のペアリングコード交換APIは持たない)。この一時トークンは
+// device:claim-pairingのみのabilityを持つ短命なSanctumトークンで、QRコードとして
+// 端末アプリへ渡す想定。
+export function issueDevicePairingClaim(deviceId: number): Promise<IssuePairingClaimResult> {
   return apiFetch(`/devices/${deviceId}/pairing`, { method: 'POST' })
 }
 

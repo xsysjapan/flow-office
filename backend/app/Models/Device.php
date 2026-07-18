@@ -23,14 +23,12 @@ use Laravel\Sanctum\HasApiTokens;
     'owner_type', 'owner_user_id', 'name', 'device_type', 'status', 'site_id', 'location_name',
     'default_work_location_type', 'timezone', 'allowed_punch_types', 'allow_offline',
     'require_location', 'auto_detect_punch_type', 'last_seen_at', 'app_version',
-    'pairing_code_hash', 'pairing_code_expires_at', 'paired_at', 'disabled_at', 'revoked_at',
+    'paired_at', 'disabled_at', 'revoked_at',
 ])]
 class Device extends Authenticatable
 {
     /** @use HasFactory<DeviceFactory> */
     use HasApiTokens, HasFactory;
-
-    protected $hidden = ['pairing_code_hash'];
 
     protected function casts(): array
     {
@@ -40,7 +38,6 @@ class Device extends Authenticatable
             'require_location' => 'boolean',
             'auto_detect_punch_type' => 'boolean',
             'last_seen_at' => 'datetime',
-            'pairing_code_expires_at' => 'datetime',
             'paired_at' => 'datetime',
             'disabled_at' => 'datetime',
             'revoked_at' => 'datetime',

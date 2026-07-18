@@ -18,7 +18,7 @@ use App\Models\DeviceStatus;
  * 個人端末(owner_type=personal)は、既にログイン済みの本人操作であるため、UC-D002の
  * ペアリングコード交換を経由せずこのHandler内で即座にSanctumトークンを発行し有効化する。
  * 共有端末(owner_type=organization_shared)はpending_pairingのまま作成し、
- * IssueDevicePairingCode/ExchangeDevicePairingCodeで別途ペアリングする。
+ * IssueDevicePairingClaim/ClaimDevicePairingで別途ペアリングする。
  *
  * @implements CommandHandler<RegisterDevice>
  */

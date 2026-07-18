@@ -3,7 +3,7 @@ import {
   disableDevice,
   fetchDevices,
   grantDeviceScope,
-  issueDevicePairingCode,
+  issueDevicePairingClaim,
   registerDevice,
   revokeDevice,
   type RegisterDeviceInput,
@@ -28,11 +28,11 @@ export function useRegisterDevice() {
   })
 }
 
-export function useIssueDevicePairingCode() {
+export function useIssueDevicePairingClaim() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (deviceId: number) => issueDevicePairingCode(deviceId),
+    mutationFn: (deviceId: number) => issueDevicePairingClaim(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },

@@ -47,28 +47,31 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSame(DeviceStatus::PENDING_PAIRING, $device->status);
         $this->assertSame(DeviceOwnerType::ORGANIZATION_SHARED, $device->owner_type);
 
+        // 管理者の認証済みトークンだけを根拠に、一時ペアリングトークン(claim token)を発行する。
         $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
         $pairing->assertSuccessful();
-        $code = $pairing->json('pairing_code');
-        $this->assertNotEmpty($code);
+        $claimToken = $pairing->json('claim_token');
+        $this->assertNotEmpty($claimToken);
 
-        // 一般ユーザーがコードを使ってトークンに交換する(端末アプリ自身がSanctumトークンを
-        // まだ持たない時点の呼び出しのため、認証不要)。
-        $exchange = $this->postJson('/api/devices/pairing/exchange', [
-            'device_id' => $deviceId,
-            'pairing_code' => $code,
-        ]);
+        // actingAs()で設定したセッション認証(webガード)がSanctumガードのフォールバックとして
+        // 残り続け、以降のBearerトークンでの認証を上書きしてしまうため、テスト内で明示的に
+        // クリアする(実運用では端末アプリにセッションクッキーは存在しないため発生しない)。
+        $this->app['auth']->forgetGuards();
 
-        $exchange->assertSuccessful();
-        $this->assertNotEmpty($exchange->json('token'));
+        // 端末アプリがQRコード経由で受け取ったclaim tokenを提示し、業務用の本トークンに
+        // 交換する(claim tokenはdevice:claim-pairingのみのabilityを持つ)。
+        $claim = $this->withToken($claimToken)->postJson('/api/devices/pairing/claim');
+
+        $claim->assertSuccessful();
+        $this->assertNotEmpty($claim->json('token'));
+        $this->assertNotSame($claimToken, $claim->json('token'));
 
         $device->refresh();
         $this->assertSame(DeviceStatus::ACTIVE, $device->status);
         $this->assertNotNull($device->paired_at);
-        $this->assertNull($device->pairing_code_hash);
     }
 
-    public function test_expired_or_wrong_pairing_code_is_rejected(): void
+    public function test_claim_token_cannot_be_reused_after_claiming(): void
     {
         $admin = $this->admin();
         $response = $this->actingAs($admin)->postJson('/api/devices', [
@@ -78,12 +81,26 @@ class DeviceRegistrationTest extends TestCase
         ]);
         $deviceId = $response->json('id');
 
-        $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing")->assertSuccessful();
+        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $claimToken = $pairing->json('claim_token');
 
-        $this->postJson('/api/devices/pairing/exchange', [
-            'device_id' => $deviceId,
-            'pairing_code' => 'WRONGCODE',
-        ])->assertStatus(422);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertSuccessful();
+
+        // 一度使ったclaim tokenは使い捨てのため、再度の交換は失敗する
+        // (Sanctumトークン自体が削除済みのため401)。ガードは一度解決したユーザーを
+        // インスタンス内にキャッシュするため、再度明示的にクリアする。
+        $this->app['auth']->forgetGuards();
+        $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertUnauthorized();
+    }
+
+    public function test_a_device_token_cannot_claim_pairing(): void
+    {
+        $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
+        Sanctum::actingAs($device, ['recorder:punch']);
+
+        // device:claim-pairing ability を持たない通常の端末トークンでは呼び出せない。
+        $this->postJson('/api/devices/pairing/claim')->assertForbidden();
     }
 
     public function test_non_admin_cannot_register_a_shared_device(): void
@@ -140,7 +157,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSame(DeviceStatus::REVOKED, $device->status);
     }
 
-    public function test_a_pairing_code_cannot_be_exchanged_after_the_device_is_revoked(): void
+    public function test_a_pending_claim_token_cannot_be_used_after_the_device_is_revoked(): void
     {
         $admin = $this->admin();
         $response = $this->actingAs($admin)->postJson('/api/devices', [
@@ -151,23 +168,20 @@ class DeviceRegistrationTest extends TestCase
         $deviceId = $response->json('id');
 
         $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
-        $code = $pairing->json('pairing_code');
+        $claimToken = $pairing->json('claim_token');
 
-        // ペアリングコードの有効期限内に、端末を紛失したものとして失効させる。
+        // claim token発行後、端末を紛失したものとして失効させる。
         $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/revoke", ['reason' => '紛失'])->assertSuccessful();
 
-        $exchange = $this->postJson('/api/devices/pairing/exchange', [
-            'device_id' => $deviceId,
-            'pairing_code' => $code,
-        ]);
+        // 失効時にこの端末のSanctumトークン(claim token含む)がすべて削除されるため401。
+        $this->app['auth']->forgetGuards();
+        $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertUnauthorized();
 
-        $exchange->assertStatus(422);
         $device = Device::query()->findOrFail($deviceId);
         $this->assertSame(DeviceStatus::REVOKED, $device->status);
-        $this->assertNull($device->pairing_code_hash);
     }
 
-    public function test_a_pairing_code_cannot_be_exchanged_after_the_device_is_disabled(): void
+    public function test_a_pending_claim_token_cannot_be_used_after_the_device_is_disabled(): void
     {
         $admin = $this->admin();
         $response = $this->actingAs($admin)->postJson('/api/devices', [
@@ -178,13 +192,11 @@ class DeviceRegistrationTest extends TestCase
         $deviceId = $response->json('id');
 
         $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
-        $code = $pairing->json('pairing_code');
+        $claimToken = $pairing->json('claim_token');
 
         $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/disable")->assertSuccessful();
 
-        $this->postJson('/api/devices/pairing/exchange', [
-            'device_id' => $deviceId,
-            'pairing_code' => $code,
-        ])->assertStatus(422);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertUnauthorized();
     }
 }

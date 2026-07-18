@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\DeviceIdentityController;
-use App\Http\Controllers\Api\DevicePairingController;
 use App\Http\Controllers\Api\DevicePunchController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
@@ -56,11 +55,6 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // エンドポイント。認証不要(テスト実行の最初期、ログイン前に呼ばれるため)。
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
-
-// --- 端末ペアリング (docs/23-usecases-devices.md UC-D002) ---
-// この時点では端末はまだSanctumトークンを持たないため、auth:sanctumの外側で提供する
-// (既存のSSOトークン交換フロー AuthController::token と同じ考え方)。
-Route::post('/devices/pairing/exchange', [DevicePairingController::class, 'exchange']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
@@ -258,10 +252,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/me/devices', [DeviceController::class, 'storePersonal']);
     Route::post('/devices/heartbeat', [DeviceController::class, 'heartbeat'])
         ->middleware('ability:recorder:punch,punch:self,device:heartbeat');
+    // 端末アプリが一時ペアリングトークン(claim token、device:claim-pairingのみのability)を
+    // 業務用の本トークンに交換する。呼び出し元はこの時点でその一時トークンの持ち主自身
+    // (Device)であることが認証済みのため、role:adminではなくabilityで絞る。
+    Route::post('/devices/pairing/claim', [DeviceController::class, 'claimPairing'])
+        ->middleware('ability:device:claim-pairing');
     Route::middleware('role:admin')->group(function () {
         Route::get('/devices', [DeviceController::class, 'index']);
         Route::post('/devices', [DeviceController::class, 'store']);
-        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingCode']);
+        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
         Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
     });
     // 停止・失効は「本人(個人端末)または管理者」を許可するためController側で判定する

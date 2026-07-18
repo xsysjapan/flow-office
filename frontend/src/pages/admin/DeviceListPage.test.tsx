@@ -81,26 +81,28 @@ describe('DeviceListPage', () => {
     expect(screen.getByText('ペアリング待ち')).toBeInTheDocument()
   })
 
-  it('shows a pairing-code button only for devices pending pairing', async () => {
+  it('shows a pairing-claim button only for devices pending pairing', async () => {
     renderPage()
 
     await screen.findByText('本社1階受付')
 
-    expect(screen.getAllByRole('button', { name: 'ペアリングコード発行' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'ペアリング用QRを発行' })).toHaveLength(1)
   })
 
-  it('issues a pairing code and displays it once', async () => {
+  it('issues a pairing claim token and displays it once', async () => {
     const user = userEvent.setup()
-    vi.spyOn(devicesApi, 'issueDevicePairingCode').mockResolvedValue({
+    vi.spyOn(devicesApi, 'issueDevicePairingClaim').mockResolvedValue({
       device: devices[1],
-      pairing_code: 'ABC123',
+      claim_token: '1|abc123secret',
     })
     renderPage()
 
     await screen.findByText('大阪支店リーダー')
-    await user.click(screen.getByRole('button', { name: 'ペアリングコード発行' }))
+    await user.click(screen.getByRole('button', { name: 'ペアリング用QRを発行' }))
 
-    expect(await screen.findByText('ABC123')).toBeInTheDocument()
+    expect(await screen.findByText('1|abc123secret')).toBeInTheDocument()
+    // カメラのない端末向けに、claim tokenをコピーできるボタンも表示する。
+    expect(screen.getByRole('button', { name: 'コピー' })).toBeInTheDocument()
   })
 
   it('opens the registration form and submits a new device', async () => {
