@@ -159,9 +159,13 @@
 3. 承認者が承認する(UC-W003、`POST /workflow-requests/{id}/approve`)。
 4. 承認により自動生成される経理向けバックオフィスタスク(`task_type=expense_reimbursement`)
    を確認する(UC-B001、`GET /backoffice-tasks/unassigned`)。
-5. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`)、
-   処理ステータスを進めて完了にする(UC-B003、`POST .../status`、
-   `processing`→`payment_scheduled`→`completed` など)。
+5. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`。割り当てと
+   同時に自動的に`in_review`になる)、処理ステータスを進めて完了にする(UC-B003、
+   `POST .../status`、`payment_scheduled`→`completed`)。**2026-07時点で
+   `request_types.allowed_status_transitions`(タスク種別ごとの遷移マスタ、
+   `backend/database/seeders/RequestTypeSeeder.php`)が追加されたため、経費精算系
+   (`commuting_expense`/`expense_reimbursement`)では`in_review`から`processing`への
+   遷移は許可されておらず、`payment_scheduled`に直接進む。**
 6. 経理担当者が経費CSVを出力し、金額が含まれることを確認する(UC-E001、
    `GET /exports/expenses`)。**2026-07-10時点でこの出力用の画面はまだ実装されて
    おらず、APIを直接呼ぶ以外に確認方法がない**。フロントエンドにCSV出力画面
@@ -181,17 +185,23 @@
    (`task_type=business_card`)が自動生成されることを確認する(UC-B001)。
 3. 総務担当者(中村恵)が未担当タスク一覧からタスクを確認し、氏名・部署・役職・メール・
    電話番号など名刺記載情報を確認する(UC-B005 手順1〜2)。
-4. ステータスを `in_review`(担当) → `processing`(発注データ作成) → `ordered`(発注済み)
+4. 割り当てと同時に自動的に `in_review`(担当) になる。そこから `ordered`(発注済み)
    → `shipped`(発送済み) → `completed`(完了)の順に進める(UC-B005 手順3〜6、
-   `POST /backoffice-tasks/{id}/status`)。
+   `POST /backoffice-tasks/{id}/status`)。**2026-07時点で
+   `request_types.allowed_status_transitions`が追加されたため、名刺申請
+   (`business_card`)では`in_review`から`processing`への遷移は許可されておらず、
+   `ordered`に直接進む。**
 5. 各ステータス変更でTeams通知ジョブがキューに積まれることを確認する
    (UC-N001、`jobs`テーブルまたは`schedule:work`実行後のログ)。
 6. 申請者が自分の申請一覧で「完了」になっていることを確認する。
 
 **確認ポイント**: ステータス遷移が `BackOfficeTaskStatus::all()` の定義通りに1段階ずつ
-進められること、不正な遷移(例: `not_started`から`completed`へ一気に飛ばす)を弾くか
-どうかは現状のバリデーションでは許容されている点にも注意(値が有効なステータス文字列で
-あることしかチェックしていないため、業務手順としての遷移順はUI/運用でのみ担保している)。
+進められること。**2026-07時点で `request_types.allowed_status_transitions`
+(`backend/app/Domain/BackOffice/Handlers/ChangeBackOfficeTaskStatusHandler.php`)が
+追加され、申請種別ごとに許可された遷移マップ外の変更(例: `not_started`から
+`completed`へ一気に飛ばす、対象外の`processing`を経由する等)は`DomainRuleException`
+で拒否されるようになった**(旧記述: 当時は値が有効なステータス文字列であることしか
+チェックしておらず、遷移順はUI/運用でのみ担保していた)。
 
 **⚠️ E2Eテスト実装時に判明した既知の欠落機能**: UC-B005手順1〜2(氏名・部署・役職・
 メール・電話番号、および申請内容(枚数)の確認)は、この画面だけでは行えない。
@@ -207,8 +217,23 @@
 ### シナリオ6: 通年運用シミュレーション(1年間)
 
 年度カレンダー・月次締め・有給の年次付与サイクルなど、月内の検証だけでは見えない
-**年度またぎ・複数月連続運用**での不具合を確認する。打刻ユーザー(高橋健太)・月次入力
-ユーザー(伊藤舞)を対象に、2026年度(2026-04-01〜2027-03-31)の12か月分を通しで動かす。
+**年度またぎ・複数月連続運用**での不具合を確認する。2026年度(2026-04-01〜2027-03-31)の
+12か月分を通しで動かす。
+
+**実装上の注意(対象社員・カレンダー)**: `ScenarioSeeder`が投入するカレンダーは実行時点の
+実年(例: 実行日が2026-07なら`fiscal_year=2026`)を使い、期間も実行月の前後1か月しか
+カバーしないため、本シナリオ専用に2026-04-01〜2027-03-31を丸ごとカバーする
+`WorkCalendar`を`POST /work-calendars`で新規作成する必要がある。`work_calendars.fiscal_year`
+は`unsignedSmallInteger`(最大65535)のため、既存の`fiscal_year`(実行時点の実年)や
+他シナリオが使う年度レンジ(scenario-00/07: 3000〜8999年度、scenario-09: 9000年台)と
+衝突しない範囲(例: 59000番台)のテスト専用値を使う(`starts_on`/`ends_on`は
+`fiscal_year`の値と無関係な単なる日付フィールドのため、実在の2026-04-01〜2027-03-31を
+設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・月次入力ユーザー(伊藤舞)を使うと、
+2026-04〜2027-03という実在の期間の一部(特に実行時点に近い月)が他の多数のシナリオ
+(シナリオ1〜5、その他§5-1〜16等)による月次提出・承認・締めと衝突し、
+`AttendanceEditGuard`により日次実績が編集不能になる恐れがあるため、本シナリオ専用に
+予備枠(`docs/testing/scenario-tests.md`§3、mock-entra-user-001〜003)から1名
+(実装では鈴木一郎)を使う。
 
 **技術的な前提(重要)**: `paid-leave:grant-scheduled`/`paid-leave:warn-expiring`/
 `paid-leave:warn-five-day-obligation` はいずれもサーバーの実時刻(`now()`)を基準に
@@ -321,7 +346,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     絞り込みロジックを見る)。
 16. **承認とバックオフィス処理のステータス系列独立性**: 月次勤怠を締めた後(UC-A011)も、
     同月内に発生した交通費精算・名刺申請のバックオフィスタスク(シナリオ4・5)が
-    通常どおり `processing`→`completed` まで進められることを確認する。月次締めが
+    通常どおり(交通費精算は`payment_scheduled`→`completed`、名刺申請は
+    `ordered`→`shipped`→`completed`)完了まで進められることを確認する。月次締めが
     誤って他ドメインの処理をブロックしないか(CLAUDE.md「バックオフィス処理は承認とは
     別ステータス系列」の回帰確認)。
 

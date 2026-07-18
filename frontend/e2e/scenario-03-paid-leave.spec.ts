@@ -17,11 +17,21 @@ test('有給残数画面が表示できる', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '自分の有給', exact: true })).toBeVisible()
 })
 
-/** ScenarioSeederのシフト予定期間(前後1か月)に収まる平日をランダムに選ぶ。 */
-function randomWorkingDate(minDaysFromNow: number, maxDaysFromNow: number): string {
-  const offset = minDaysFromNow + Math.floor(Math.random() * (maxDaysFromNow - minDaysFromNow))
-  const date = new Date()
-  date.setDate(date.getDate() + offset)
+/**
+ * ScenarioSeederのシフト予定期間(前後1か月)に収まる平日をランダムに選ぶ。
+ * 当月(今月)は他のシナリオ(scenario-01/04/06、scenario-99 §5-3/§5-8等が使う
+ * `submitApproveAndCloseCurrentMonth`)が承認・締めまで進めてしまうことがあり、
+ * 承認済みの月次に含まれる日は日次実績を変更できなくなる(UC-A011のガード)。有給申請の
+ * 承認もこのガードの対象のため、当月と衝突しない翌月から選ぶ(ScenarioSeederのシフト予定は
+ * 前月〜翌月まであるため、翌月であれば確実にシフト予定が存在する)。
+ */
+function randomWorkingDate(): string {
+  const now = new Date()
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const daysInNextMonth = new Date(nextMonthStart.getFullYear(), nextMonthStart.getMonth() + 1, 0).getDate()
+  // 週末補正で翌々月にはみ出さないよう、月末3日は候補から外す。
+  const day = 1 + Math.floor(Math.random() * (daysInNextMonth - 3))
+  const date = new Date(nextMonthStart.getFullYear(), nextMonthStart.getMonth(), day)
   while (date.getDay() === 0 || date.getDay() === 6) {
     date.setDate(date.getDate() + 1)
   }
@@ -53,7 +63,7 @@ async function submitPaidLeaveRequest(
   options: { leaveTypeLabel: string; approverName: string; approverEmail: string },
 ): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const targetDate = randomWorkingDate(2, 45)
+    const targetDate = randomWorkingDate()
 
     try {
       await page.locator('#paid-leave-target-date').fill(targetDate, { timeout: 5000 })

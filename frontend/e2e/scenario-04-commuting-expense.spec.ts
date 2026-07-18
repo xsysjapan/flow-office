@@ -55,8 +55,10 @@ test('交通費申請〜承認〜経理タスク処理〜CSV出力', async ({ br
     await accountingPage.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
+    // request_types.allowed_status_transitions(経費精算系: 未着手→確認中→支払予定→完了。
+    // 「処理中」は経費精算系の遷移には含まれず、割り当て時点で自動的に確認中になる)により、
+    // 確認中から直接「支払予定」へ進む(2026-07時点で追加された遷移制限)。
     const statusSteps: Array<{ value: string; label: string }> = [
-      { value: 'processing', label: '処理中' },
       { value: 'payment_scheduled', label: '支払予定' },
       { value: 'completed', label: '完了' },
     ]

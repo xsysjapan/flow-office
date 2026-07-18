@@ -21,7 +21,19 @@ async function apiFetch<T>(page: Page, path: string, init?: { method?: string; b
       })
       const text = await response.text()
       if (!response.ok) {
-        throw new Error(`E2E setup: ${method ?? 'GET'} ${path} failed (${response.status}): ${text}`)
+        // バックエンドのJSONエラーレスポンスは(JSON_UNESCAPED_UNICODEを付けていないため)
+        // 日本語メッセージが`\uXXXX`形式にエスケープされた文字列で返る。そのまま
+        // `${text}`で埋め込むと、呼び出し側の`error.message.includes('既に存在します')`
+        // のような日本語文字列マッチが常に不一致になってしまうため、JSONとしてデコードした
+        // `message`フィールドを優先してエラーメッセージに含める。
+        let decodedMessage = text
+        try {
+          const parsed = JSON.parse(text) as { message?: string }
+          if (parsed?.message) decodedMessage = parsed.message
+        } catch {
+          // JSONとして解釈できない場合は元のテキストのまま扱う。
+        }
+        throw new Error(`E2E setup: ${method ?? 'GET'} ${path} failed (${response.status}): ${decodedMessage}`)
       }
       return text ? JSON.parse(text) : null
     },
@@ -100,6 +112,74 @@ export async function fetchOwnUserId(page: Page): Promise<number> {
   return me.id
 }
 
+/** 氏名/メールアドレスで社員を検索し、`user_id`を取得する(管理者/人事担当者でログイン済みであること)。 */
+export async function fetchUserIdByEmail(page: Page, email: string): Promise<number> {
+  const body = await apiFetch<{ data: Array<{ id: number }> }>(page, `/users?q=${encodeURIComponent(email)}`)
+  const user = body.data?.[0]
+  if (!user) throw new Error(`E2E setup: user not found for ${email}`)
+  return user.id
+}
+
+/**
+ * UC-P003: 有給を申請する(APIを直接叩く版)。scenario-03のUI経由の申請と異なり、
+ * 実在しない未来年月(通年運用シミュレーション等)を対象にする場合、画面上の日付入力より
+ * 直接APIを叩く方が確実なため用意する。
+ */
+export async function requestPaidLeave(
+  page: Page,
+  input: { targetDate: string; leaveType: 'full' | 'am_half' | 'pm_half' | 'hourly'; hours?: number; approverUserId: number; reason?: string },
+): Promise<{ id: number }> {
+  return apiFetch(page, '/paid-leave/requests', {
+    method: 'POST',
+    body: {
+      target_date: input.targetDate,
+      leave_type: input.leaveType,
+      hours: input.hours,
+      approver_user_id: input.approverUserId,
+      reason: input.reason ?? 'E2Eテスト用有給申請',
+    },
+  })
+}
+
+/** UC-P004: 有給申請を承認する(承認者でログイン済みの`page`から呼び出す)。 */
+export async function approvePaidLeaveRequest(page: Page, requestId: number): Promise<void> {
+  await apiFetch(page, `/paid-leave/requests/${requestId}/approve`, { method: 'POST' })
+}
+
+/**
+ * 有給を任意の付与日・失効日で付与する(`grantAdditionalPaidLeave`とは異なり、実際の
+ * 「今日」基準ではなく任意の年月を対象にした検証(通年運用シミュレーション等)向け)。
+ * 呼び出し前に管理者/人事担当者でログイン済みであること。
+ */
+export async function createPaidLeaveGrant(
+  page: Page,
+  input: { userId: number; grantedOn: string; expiresOn: string; days: number; reason: string },
+): Promise<{ id: number }> {
+  return apiFetch(page, '/paid-leave/grants', {
+    method: 'POST',
+    body: {
+      user_id: input.userId,
+      granted_on: input.grantedOn,
+      expires_on: input.expiresOn,
+      granted_days: input.days,
+      grant_reason: input.reason,
+    },
+  })
+}
+
+/** UC-P002: 対象社員の有給付与一覧を取得する(管理者/人事担当者限定)。 */
+export async function fetchPaidLeaveGrantsForUser(
+  page: Page,
+  userId: number,
+): Promise<Array<{ id: number; granted_on: string; expires_on: string; granted_days: number; used_days: number; remaining_days: number }>> {
+  return apiFetch(page, `/paid-leave/grants/user/${userId}`)
+}
+
+/** UC-P002: 社員の入社日を設定する(管理者/人事担当者限定)。年次自動付与の起算日になる。 */
+export async function setUserHireDate(page: Page, userId: number, hireDate: string): Promise<void> {
+  await apiFetch(page, `/users/${userId}/hire-date`, { method: 'PUT', body: { hire_date: hireDate } })
+}
+
 /**
  * UC-A012: 打刻ログを記録する。専用の打刻端末/画面がまだ無いため、APIを直接叩く。
  * 打刻ログは矛盾があっても常に記録される(1日分の勤務として組み立てられる場合のみ
@@ -149,6 +229,42 @@ export async function fetchAttendanceDay(
 
 export async function fetchEmploymentCategories(page: Page): Promise<Array<{ id: number; code: string; name: string }>> {
   return apiFetch(page, '/employment-categories')
+}
+
+/**
+ * UC-C001: 年度カレンダーを作成する。専用の画面(`/admin/work-calendars`)はscenario-00で
+ * 確認済みだが、通年運用シミュレーション(scenario-08)のように実在の暦年と衝突しない
+ * `fiscal_year`を指定しつつ`starts_on`/`ends_on`は実在の日付にしたい場合、フォーム経由より
+ * APIを直接叩く方が確実なため用意する。
+ */
+export async function createWorkCalendar(
+  page: Page,
+  input: { name: string; fiscalYear: number; startsOn: string; endsOn: string; weekStartsOn?: number },
+): Promise<{ id: number }> {
+  return apiFetch(page, '/work-calendars', {
+    method: 'POST',
+    body: {
+      name: input.name,
+      fiscal_year: input.fiscalYear,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      week_starts_on: input.weekStartsOn ?? 1,
+    },
+  })
+}
+
+/** UC-C001: カレンダーの日別設定(休日区分)をまとめて登録する。 */
+export async function putWorkCalendarDays(
+  page: Page,
+  calendarId: number,
+  days: Array<{ date: string; day_type: string; is_working_day: boolean; is_legal_holiday: boolean; is_company_holiday: boolean }>,
+): Promise<void> {
+  await apiFetch(page, `/work-calendars/${calendarId}/days`, { method: 'PUT', body: { days } })
+}
+
+/** UC-C001: カレンダーを公開する。公開前は勤務形態から参照できない。 */
+export async function publishWorkCalendar(page: Page, calendarId: number): Promise<void> {
+  await apiFetch(page, `/work-calendars/${calendarId}/publish`, { method: 'POST' })
 }
 
 /** UC-C003: 会社カレンダーの日区分をもとに、指定期間分の勤務予定を一括生成する。 */
@@ -370,6 +486,52 @@ export async function submitApproveAndCloseCurrentMonth(
 export async function fetchMonthStatus(page: Page, yearMonth: string): Promise<string | undefined> {
   const months = await apiFetch<MonthSummary[]>(page, '/attendance/months/mine')
   return months.find((m) => m.year_month === yearMonth)?.status
+}
+
+/**
+ * 対象月の日次内訳・9区分の月合計(`monthly_calculation_totals`、月60時間超残業判定含む)を
+ * 取得する。提出前でも都度計算されるため、月次提出を待たずに集計結果を確認できる
+ * (`GET /attendance/months/{yearMonth}`)。
+ */
+export async function fetchAttendanceMonthDetail(
+  page: Page,
+  yearMonth: string,
+): Promise<{
+  month: { id: number; status: string } | null
+  monthly_calculation_totals: {
+    work_minutes: number
+    statutory_excess_overtime_minutes: number
+    statutory_excess_overtime_within_60h_minutes: number
+    statutory_excess_overtime_over_60h_minutes: number
+    paid_leave_days: number
+  }
+}> {
+  return apiFetch(page, `/attendance/months/${yearMonth}`)
+}
+
+/**
+ * UC-A008: 指定した年月の勤怠月次を提出のみ行う(承認は行わない)。`submitAndApproveMonth`と
+ * 異なり、複数社員分をまとめて「提出済み」状態にしてから承認者側の一覧・絞り込みを確認したい
+ * ケース(§5-15、複数の労働時間制度が混在する月の月次締め)向け。既に提出済み以降のステータス
+ * であれば何もしない(冪等)。
+ */
+export async function submitMonth(employeePage: Page, approverUserId: number, yearMonth: string): Promise<{ monthId: number }> {
+  const findMonth = (months: MonthSummary[]) => months.find((m) => m.year_month === yearMonth)
+
+  let months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+  let month = findMonth(months)
+
+  if (!month || month.status === 'not_submitted' || month.status === 'returned') {
+    await apiFetch(employeePage, `/attendance/months/${yearMonth}/submit`, {
+      method: 'POST',
+      body: { approver_user_id: approverUserId },
+    })
+    months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')
+    month = findMonth(months)
+  }
+  if (!month) throw new Error(`E2E setup: month ${yearMonth} not found after submit`)
+
+  return { monthId: month.id }
 }
 
 /**
