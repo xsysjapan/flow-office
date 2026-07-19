@@ -78,6 +78,9 @@
 
 - `device.registered` (共有端末の登録、または個人端末の本人登録)
 - `device.paired` (ペアリングコード/QRコードによる端末鍵確立の完了)
+- `device.pairing_reissued` (ペアリング済み(active)端末に対する再ペアリング用claim tokenの
+  再発行。Androidアプリの削除等で端末が打刻できなくなった場合の復旧手段。端末は一旦
+  `pending_pairing`に戻り、再ペアリング完了で`device.paired`が改めて記録される)
 - `device.disabled` (管理者・本人による一時停止)
 - `device.revoked` (紛失・盗難等による失効。再度使うには新規登録が必要)
 - `device.deleted` (停止・失効済み端末の一覧からの論理削除。監査証跡は`stored_events`に残る)

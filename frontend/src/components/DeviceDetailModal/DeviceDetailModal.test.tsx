@@ -86,6 +86,43 @@ describe('DeviceDetailModal', () => {
     expect(screen.getByRole('img', { name: '端末ペアリング用QRコード' })).toBeInTheDocument()
   })
 
+  it('lets the admin re-pair an already active device after confirming', async () => {
+    const user = userEvent.setup()
+    const issueSpy = vi.spyOn(devicesApi, 'issueDevicePairingClaim').mockResolvedValue({
+      device: { ...device, status: 'pending_pairing' },
+      claim_token: '1|resecret',
+    })
+    renderModal({ status: 'active' })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.click(screen.getByRole('button', { name: '再ペアリング用QRを発行' }))
+    expect(await screen.findByText('端末を再ペアリングしますか?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '発行する' }))
+
+    expect(issueSpy).toHaveBeenCalledWith(1)
+    expect(await screen.findByText('1|resecret')).toBeInTheDocument()
+  })
+
+  it('lets the admin disable an active device', async () => {
+    const user = userEvent.setup()
+    const disableSpy = vi.spyOn(devicesApi, 'disableDevice').mockResolvedValue({ ...device, status: 'disabled' })
+    renderModal({ status: 'active' })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.click(screen.getByRole('button', { name: '停止する' }))
+
+    expect(disableSpy).toHaveBeenCalledWith(1)
+  })
+
+  it('shows a heartbeat staleness badge for an active device with an old last_seen_at', async () => {
+    const user = userEvent.setup()
+    renderModal({ status: 'active', last_seen_at: '2000-01-01T00:00:00+09:00' })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+
+    expect(screen.getByText('疎通途絶(30分以上応答なし)')).toBeInTheDocument()
+  })
+
   it('shows granted scopes and lets the admin grant a new one', async () => {
     const user = userEvent.setup()
     const grantSpy = vi.spyOn(devicesApi, 'grantDeviceScope').mockResolvedValue({
@@ -102,6 +139,25 @@ describe('DeviceDetailModal', () => {
     await user.click(screen.getByRole('button', { name: '付与する' }))
 
     expect(grantSpy).toHaveBeenCalledWith(1, 'admin:mode')
+  })
+
+  it('shows the same role checkboxes offered at registration and lets the admin change them', async () => {
+    const user = userEvent.setup()
+    const updateRolesSpy = vi
+      .spyOn(devicesApi, 'updateDeviceRoles')
+      .mockResolvedValue({ ...device, roles: ['attendance_reader', 'access_control'] })
+    renderModal({ roles: ['attendance_reader'] })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+
+    expect(screen.getByRole('checkbox', { name: '打刻リーダー' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '認証端末' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '入退室管理' })).not.toBeChecked()
+
+    await user.click(screen.getByRole('checkbox', { name: '入退室管理' }))
+    await user.click(screen.getByRole('button', { name: '役割を保存する' }))
+
+    expect(updateRolesSpy).toHaveBeenCalledWith(1, ['attendance_reader', 'access_control'])
   })
 
   it('submits updated settings', async () => {

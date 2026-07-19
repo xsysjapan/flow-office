@@ -7,20 +7,12 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DeviceDetailModal } from '../../components/DeviceDetailModal/DeviceDetailModal'
-import { DevicePairingQr } from '../../components/DevicePairingQr/DevicePairingQr'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import {
-  useDeleteDevice,
-  useDevices,
-  useDisableDevice,
-  useIssueDevicePairingClaim,
-  useRegisterDevice,
-  useRevokeDevice,
-} from '../../hooks/useDevices'
+import { useDeleteDevice, useDevices, useRegisterDevice, useRevokeDevice } from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -65,10 +57,22 @@ const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
 
 const REGISTERABLE_ROLE_TYPES: DeviceRoleType[] = ['attendance_reader', 'authentication_device', 'access_control']
 
+// 打刻リーダーは10分に1回heartbeatを送信する想定のため、最終通信からこれ以上経過した
+// 稼働中(active)端末は「現在は動いていない」とみなす(status自体は変更しない)。
+const HEARTBEAT_STALE_AFTER_MINUTES = 30
+
+function isHeartbeatStale(device: Device): boolean {
+  if (device.status !== 'active') return false
+  if (!device.last_seen_at) return true
+  return Date.now() - new Date(device.last_seen_at).getTime() > HEARTBEAT_STALE_AFTER_MINUTES * 60 * 1000
+}
+
 /**
- * UC-D001〜UC-D005: 共有端末(打刻レコーダー等)の登録・ペアリングコード発行・停止/失効を行う。
+ * UC-D001〜UC-D005: 共有端末(打刻レコーダー等)の一覧・登録・失効・削除を行う。
  * 個人端末(owner_type=personal)は本人が/users/me/devicesから登録するため、ここでは
- * 組織共有端末(owner_type=organization_shared)のみを扱う。
+ * 組織共有端末(owner_type=organization_shared)のみを扱う。一覧行から直接行える操作は
+ * 詳細へ遷移(行クリックでも可)・失効・削除のみとし、ペアリングQR表示・停止・再ペアリングは
+ * DeviceDetailModal(詳細画面)に集約する。
  */
 export function DeviceListPage() {
   const [page, setPage] = useState(1)
@@ -79,8 +83,6 @@ export function DeviceListPage() {
     withTrashed: showDeleted,
   })
   const registerDevice = useRegisterDevice()
-  const issuePairingClaim = useIssueDevicePairingClaim()
-  const disableDevice = useDisableDevice()
   const deleteDevice = useDeleteDevice()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -89,7 +91,7 @@ export function DeviceListPage() {
   const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(['attendance_reader'])
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
-  const [claimTokenByDevice, setClaimTokenByDevice] = useState<Record<number, string>>({})
+  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null)
 
   const toggleShowDeleted = () => {
     setShowDeleted((v) => !v)
@@ -126,18 +128,11 @@ export function DeviceListPage() {
     )
   }
 
-  const handleIssuePairingClaim = (device: Device) => {
-    issuePairingClaim.mutate(device.id, {
-      onSuccess: (result) => {
-        setClaimTokenByDevice((prev) => ({ ...prev, [device.id]: result.claim_token }))
-      },
-    })
-  }
-
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="端末一覧の取得に失敗しました。" />
 
   const list = devices?.data ?? []
+  const selectedDevice = list.find((device) => device.id === selectedDeviceId) ?? null
 
   return (
     <Card
@@ -154,8 +149,6 @@ export function DeviceListPage() {
       }
     >
       {registerDevice.error && <ErrorMessage error={registerDevice.error} />}
-      {issuePairingClaim.error && <ErrorMessage error={issuePairingClaim.error} />}
-      {disableDevice.error && <ErrorMessage error={disableDevice.error} />}
       {deleteDevice.error && <ErrorMessage error={deleteDevice.error} />}
 
       {isFormOpen && (
@@ -246,7 +239,13 @@ export function DeviceListPage() {
               {list.map((device) => {
                 const isDeleted = device.deleted_at !== null
                 return (
-                  <TableRow key={device.id}>
+                  <TableRow
+                    key={device.id}
+                    className={isDeleted ? undefined : 'cursor-pointer'}
+                    onClick={() => {
+                      if (!isDeleted) setSelectedDeviceId(device.id)
+                    }}
+                  >
                     <TableCell className="font-medium text-foreground">{device.name}</TableCell>
                     <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
                     <TableCell className="text-muted-foreground">{device.location_name ?? '-'}</TableCell>
@@ -256,6 +255,7 @@ export function DeviceListPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         <Badge tone={DEVICE_STATUS_TONE[device.status]}>{DEVICE_STATUS_LABELS[device.status]}</Badge>
+                        {isHeartbeatStale(device) && <Badge tone="warning">疎通途絶</Badge>}
                         {isDeleted && <Badge tone="danger">削除済み</Badge>}
                       </div>
                     </TableCell>
@@ -266,42 +266,10 @@ export function DeviceListPage() {
                       {isDeleted ? (
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
-                        <div className="flex flex-col items-start gap-2">
-                          <DeviceDetailModal device={device} />
-                          {device.status === 'pending_pairing' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              isLoading={issuePairingClaim.isPending}
-                              onClick={() => handleIssuePairingClaim(device)}
-                            >
-                              ペアリング用QRを発行
-                            </Button>
-                          )}
-                          {claimTokenByDevice[device.id] && (
-                            <div className="max-w-xs text-xs text-foreground">
-                              <DevicePairingQr claimToken={claimTokenByDevice[device.id]} />
-                              <div className="mt-2 flex items-center gap-2">
-                                <span className="break-all font-mono">{claimTokenByDevice[device.id]}</span>
-                                <CopyClaimTokenButton token={claimTokenByDevice[device.id]} />
-                              </div>
-                              <p className="mt-1">
-                                (一度のみ表示・5分で失効します。端末アプリでQRコードを読み取るか、
-                                カメラのない端末はこの文字列をコピーしてセットアップ画面に貼り付けて
-                                ください。画面を撮影・共有しないでください)
-                              </p>
-                            </div>
-                          )}
-                          {device.status === 'active' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              isLoading={disableDevice.isPending}
-                              onClick={() => disableDevice.mutate(device.id)}
-                            >
-                              停止する
-                            </Button>
-                          )}
+                        <div className="flex flex-wrap items-start gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button size="sm" variant="secondary" onClick={() => setSelectedDeviceId(device.id)}>
+                            詳細
+                          </Button>
                           {device.status !== 'revoked' && <RevokeDeviceDialog device={device} />}
                           {(device.status === 'disabled' || device.status === 'revoked') && (
                             <DeleteDeviceDialog device={device} />
@@ -324,23 +292,17 @@ export function DeviceListPage() {
           )}
         </>
       )}
+
+      {selectedDevice && (
+        <DeviceDetailModal
+          device={selectedDevice}
+          open={selectedDeviceId !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedDeviceId(null)
+          }}
+        />
+      )}
     </Card>
-  )
-}
-
-function CopyClaimTokenButton({ token }: { token: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(token)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <Button size="sm" variant="secondary" onClick={handleCopy}>
-      {copied ? 'コピーしました' : 'コピー'}
-    </Button>
   )
 }
 

@@ -200,6 +200,97 @@ class DeviceRegistrationTest extends TestCase
         $this->withToken($claimToken)->postJson('/api/devices/pairing/claim')->assertUnauthorized();
     }
 
+    public function test_admin_can_reissue_pairing_for_an_already_paired_device(): void
+    {
+        $admin = $this->admin();
+        $response = $this->actingAs($admin)->postJson('/api/devices', [
+            'name' => '本社2階受付',
+            'device_type' => DeviceType::ANDROID,
+            'role_types' => [DeviceRoleType::ATTENDANCE_READER],
+        ]);
+        $deviceId = $response->json('id');
+
+        $firstPairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $firstClaimToken = $firstPairing->json('claim_token');
+        $this->app['auth']->forgetGuards();
+        $this->withToken($firstClaimToken)->postJson('/api/devices/pairing/claim')->assertSuccessful();
+
+        $device = Device::query()->findOrFail($deviceId);
+        $this->assertSame(DeviceStatus::ACTIVE, $device->status);
+
+        // Androidアプリを削除した等の理由で本トークンを失った場合でも、activeのまま
+        // 再度ペアリング用トークンを発行し直せる。
+        $this->app['auth']->forgetGuards();
+        $reissue = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $reissue->assertSuccessful();
+        $secondClaimToken = $reissue->json('claim_token');
+        $this->assertNotEmpty($secondClaimToken);
+        $this->assertNotSame($firstClaimToken, $secondClaimToken);
+
+        $device->refresh();
+        $this->assertSame(DeviceStatus::PENDING_PAIRING, $device->status);
+        $this->assertDatabaseHas('stored_events', [
+            'aggregate_type' => 'device',
+            'aggregate_id' => (string) $device->id,
+            'event_type' => 'device.pairing_reissued',
+        ]);
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($secondClaimToken)->postJson('/api/devices/pairing/claim')->assertSuccessful();
+
+        $device->refresh();
+        $this->assertSame(DeviceStatus::ACTIVE, $device->status);
+    }
+
+    public function test_disabled_or_revoked_device_cannot_reissue_pairing(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'status' => DeviceStatus::DISABLED,
+            'disabled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->postJson("/api/devices/{$device->id}/pairing")->assertUnprocessable();
+    }
+
+    public function test_admin_can_update_device_roles(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
+        $device->roles()->create(['role_type' => DeviceRoleType::ATTENDANCE_READER]);
+
+        $response = $this->actingAs($admin)->patchJson("/api/devices/{$device->id}/roles", [
+            'role_types' => [DeviceRoleType::AUTHENTICATION_DEVICE, DeviceRoleType::ACCESS_CONTROL],
+        ]);
+
+        $response->assertSuccessful();
+        $this->assertEqualsCanonicalizing(
+            [DeviceRoleType::AUTHENTICATION_DEVICE, DeviceRoleType::ACCESS_CONTROL],
+            $response->json('roles'),
+        );
+
+        $device->refresh()->load('roles');
+        $this->assertFalse($device->hasRole(DeviceRoleType::ATTENDANCE_READER));
+        $this->assertTrue($device->hasRole(DeviceRoleType::AUTHENTICATION_DEVICE));
+        $this->assertTrue($device->hasRole(DeviceRoleType::ACCESS_CONTROL));
+        $this->assertDatabaseHas('stored_events', [
+            'aggregate_type' => 'device',
+            'aggregate_id' => (string) $device->id,
+            'event_type' => 'device.role_assigned',
+        ]);
+    }
+
+    public function test_device_roles_cannot_be_emptied(): void
+    {
+        $admin = $this->admin();
+        $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
+
+        $this->actingAs($admin)->patchJson("/api/devices/{$device->id}/roles", [
+            'role_types' => [],
+        ])->assertUnprocessable();
+    }
+
     public function test_admin_can_delete_a_disabled_or_revoked_device(): void
     {
         $admin = $this->admin();

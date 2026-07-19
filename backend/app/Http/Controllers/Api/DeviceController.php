@@ -9,6 +9,7 @@ use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Commands\UpdateDeviceRoles;
 use App\Domain\Device\Commands\UpdateDeviceSettings;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
@@ -205,6 +206,26 @@ class DeviceController extends Controller
             allowOffline: $data['allow_offline'] ?? true,
             requireLocation: $data['require_location'] ?? false,
             autoDetectPunchType: $data['auto_detect_punch_type'] ?? false,
+            updatedByUserId: $request->user()->id,
+        ));
+
+        return new DeviceResource($device);
+    }
+
+    /**
+     * 共有端末の役割(device_roles)を、登録時と同じ選択肢の集合に入れ替える。
+     */
+    #[OA\Patch(path: '/devices/{device}/roles', operationId: 'devices.updateRoles', summary: '端末の役割を変更する', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function updateRoles(Request $request, Device $device, CommandBus $commandBus): DeviceResource
+    {
+        $data = $request->validate([
+            'role_types' => ['required', 'array', 'min:1'],
+            'role_types.*' => [Rule::in(DeviceRoleType::values())],
+        ]);
+
+        $device = $commandBus->dispatch(new UpdateDeviceRoles(
+            deviceId: $device->id,
+            roleTypes: $data['role_types'],
             updatedByUserId: $request->user()->id,
         ));
 

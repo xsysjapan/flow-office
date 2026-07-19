@@ -74,6 +74,11 @@ export function grantDeviceScope(deviceId: number, scope: DeviceScopeType): Prom
   return apiFetch(`/devices/${deviceId}/scopes`, { method: 'POST', body: { scope } })
 }
 
+// 共有端末の役割(device_roles)を、登録時に選べる役割と同じ選択肢の集合で入れ替える。
+export function updateDeviceRoles(deviceId: number, roleTypes: DeviceRoleType[]): Promise<Device> {
+  return apiFetch(`/devices/${deviceId}/roles`, { method: 'PATCH', body: { role_types: roleTypes } })
+}
+
 // UC-D005: 停止・失効済みの端末を一覧から論理削除する(管理者)。監査証跡は
 // バックエンド側でstored_eventsに残り続けるため、フロントは削除操作の起点にすぎない。
 export function deleteDevice(deviceId: number): Promise<void> {

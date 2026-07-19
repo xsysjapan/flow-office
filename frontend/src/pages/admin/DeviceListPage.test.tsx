@@ -87,28 +87,34 @@ describe('DeviceListPage', () => {
     expect(screen.getByText('ペアリング待ち')).toBeInTheDocument()
   })
 
-  it('shows a pairing-claim button only for devices pending pairing', async () => {
+  it('only offers navigate-to-detail, revoke, and delete as row actions', async () => {
     renderPage()
 
     await screen.findByText('本社1階受付')
 
-    expect(screen.getAllByRole('button', { name: 'ペアリング用QRを発行' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '詳細' })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'ペアリング用QRを発行' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '停止する' })).not.toBeInTheDocument()
   })
 
-  it('issues a pairing claim token and displays it once', async () => {
+  it('opens the device detail modal when a row is clicked', async () => {
     const user = userEvent.setup()
-    vi.spyOn(devicesApi, 'issueDevicePairingClaim').mockResolvedValue({
-      device: devices[1],
-      claim_token: '1|abc123secret',
-    })
+    renderPage()
+
+    await screen.findByText('本社1階受付')
+    await user.click(screen.getByText('本社1階受付'))
+
+    expect(await screen.findByRole('heading', { name: '本社1階受付' })).toBeInTheDocument()
+  })
+
+  it('opens the device detail modal from the 詳細 button', async () => {
+    const user = userEvent.setup()
     renderPage()
 
     await screen.findByText('大阪支店リーダー')
-    await user.click(screen.getByRole('button', { name: 'ペアリング用QRを発行' }))
+    await user.click(screen.getAllByRole('button', { name: '詳細' })[1])
 
-    expect(await screen.findByText('1|abc123secret')).toBeInTheDocument()
-    // カメラのない端末向けに、claim tokenをコピーできるボタンも表示する。
-    expect(screen.getByRole('button', { name: 'コピー' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '大阪支店リーダー' })).toBeInTheDocument()
   })
 
   it('opens the registration form and submits a new device', async () => {

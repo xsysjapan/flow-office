@@ -8,12 +8,13 @@ import {
   issueDevicePairingClaim,
   registerDevice,
   revokeDevice,
+  updateDeviceRoles,
   updateDeviceSettings,
   type FetchDevicesOptions,
   type RegisterDeviceInput,
   type UpdateDeviceSettingsInput,
 } from '../api/devices'
-import type { DeviceScopeType } from '../api/types'
+import type { DeviceRoleType, DeviceScopeType } from '../api/types'
 
 export function useDevices({ ownerType, page = 1, withTrashed = false }: FetchDevicesOptions = {}) {
   return useQuery({
@@ -92,6 +93,19 @@ export function useUpdateDeviceSettings() {
   return useMutation({
     mutationFn: ({ deviceId, input }: { deviceId: number; input: UpdateDeviceSettingsInput }) =>
       updateDeviceSettings(deviceId, input),
+    onSuccess: (device) => {
+      void queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.setQueryData(['devices', 'detail', device.id], device)
+    },
+  })
+}
+
+export function useUpdateDeviceRoles() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ deviceId, roleTypes }: { deviceId: number; roleTypes: DeviceRoleType[] }) =>
+      updateDeviceRoles(deviceId, roleTypes),
     onSuccess: (device) => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
       queryClient.setQueryData(['devices', 'detail', device.id], device)
