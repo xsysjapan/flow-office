@@ -83,6 +83,10 @@ echo ""
 export VITE_BASE_PATH="/flow-office/"
 export VITE_API_BASE_URL="$PUBLIC_URL/flow-office/api"
 export MCP_PUBLIC_APP_URL="$PUBLIC_URL/flow-office/mcp"
+# backend/はAPP_API_PREFIX='api'のままなので、APP_URLには'/api'を含めない
+# (Caddyfileが'/flow-office'だけを剥がして転送するため、'/api'以降はbackend自身の
+# ルーティングに任せる。含めると生成されるURLで/api/apiのように二重になる)。
+export BACKEND_PUBLIC_APP_URL="$PUBLIC_URL/flow-office"
 
 cd "$REPO_ROOT"
 docker compose up --build

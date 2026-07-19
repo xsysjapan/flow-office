@@ -26,6 +26,14 @@ if [ ! -f database/database.sqlite ]; then
   touch database/database.sqlite
 fi
 
+# scripts/start-ngrok.sh(ホスト側)からngrok公開時のみBACKEND_PUBLIC_APP_URLが渡される。
+# 未設定時は書き換えない(APP_API_PREFIX等、他の.env値はcp .env.exampleの既定のまま
+# ローカル既定のAPP_URL=http://localhost:8000を使う)。mcpと同様の理由([.env直接書き換え]
+# 参照、下記mcpセクションのコメント)でシェル変数ではなく.env自体を書き換える。
+if [ -n "${BACKEND_PUBLIC_APP_URL:-}" ]; then
+  sed -i "s#^APP_URL=.*#APP_URL=${BACKEND_PUBLIC_APP_URL}#" .env
+fi
+
 php artisan migrate --seed
 php artisan l5-swagger:generate
 

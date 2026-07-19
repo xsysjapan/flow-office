@@ -14,7 +14,9 @@ use App\Models\AttendanceDay;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use SocialiteProviders\Azure\AzureExtendSocialite;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -61,5 +63,20 @@ class AppServiceProvider extends ServiceProvider
         // 単体リソースを "data" キーで包まない(ページネーション付きコレクションは
         // Laravel側の制約で data/links/meta を維持する)。APIレスポンスをシンプルにするため。
         JsonResource::withoutWrapping();
+
+        // ローカル開発(Caddy+ngrok, docs/27-release-runbook.md)ではリバースプロキシが
+        // マウントパス('/flow-office')を剥がしてからこのアプリへ転送するため、
+        // 生のリクエストURLにはマウントパスの情報が含まれない。route()/redirect()->route()は
+        // APP_URLを起点にURLを生成するよう強制する。
+        if ($url = config('app.url')) {
+            URL::forceRootUrl($url);
+
+            // ページネーションの next_page_url/prev_page_url はURL facadeを経由せず
+            // 生のリクエストURLから組み立てられる(Illuminate\Pagination\PaginationState)ため、
+            // 上記のforceRootUrlだけでは直らない。APP_URL起点で組み立て直す。
+            Paginator::currentPathResolver(
+                fn () => rtrim($url, '/').'/'.ltrim(request()->path(), '/')
+            );
+        }
     }
 }
