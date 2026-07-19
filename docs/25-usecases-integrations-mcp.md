@@ -64,17 +64,26 @@
 
 ## MCPサーバーの責務
 
-MCPサーバーは、ClaudeなどのAIアプリへ勤怠操作用ツールを提供する**別プロセス/別リポジトリの
-クライアントアプリケーション**であり、本リポジトリ(backend/)の勤怠管理APIを、UC-I001で
-発行した個人連携のアクセストークンを使って呼び出すだけの立場とする。**MCPサーバー内に
-勤怠計算ロジックを重複実装しない**(docs/03-architecture.md 3.5/3.7)。
+MCPサーバー(本リポジトリの `mcp/`)は、ClaudeなどのAIアプリへ勤怠操作用ツールを提供する
+**backend/とは別のLaravelアプリ(別のcomposer.json・別のDB)**であり、本リポジトリ
+(backend/)の勤怠管理APIを、UC-I001で発行した個人連携のアクセストークンを使って呼び出す
+だけの立場とする。backend/のDBには一切アクセスしない。**MCPサーバー内に勤怠計算ロジック
+を重複実装しない**(docs/03-architecture.md 3.5/3.7)。
+
+エンドポイントは `/mcp`(MCPのJSON-RPC 2.0、Streamable HTTP)。ClaudeなどのMCPクライアント
+との認可はmcp/自身が実装するOAuth2認可サーバー(Dynamic Client Registration、RFC 7591
+対応)で行い、backend/に新しい認可サーバーを追加することはしない(backend/は引き続き
+Sanctumの個人アクセストークンのみを持つ)。人間の識別・backendトークンとの紐付けは、
+mcp/が独自に持つ`mcp_users`/`mcp_user_backend_tokens`(mcp/のDB。backendのDBとは別)で
+管理する。詳細は `mcp/README.md` を参照。
 
 ### MCPサーバーが担当する処理
 
-- MCPクライアント(Claude等)との接続、ユーザー認証・OAuth/アクセストークン検証、
-  スコープ確認
+- MCPクライアント(Claude等)との接続、Dynamic Client Registration、OAuth2認可(認可コード
+  +PKCE)・アクセストークン発行/検証、スコープ確認
 - MCPツール定義、入力値の基本バリデーション
-- 勤怠管理API(本リポジトリのbackend API)の呼び出し
+- 勤怠管理API(本リポジトリのbackend API)の呼び出し(backendの個人連携Sanctumトークンを
+  Bearerとして使う)
 - APIレスポンスのAI向け整形、監査用クライアント情報の付加、エラーの説明可能な形式への変換
 
 ### MCPサーバーが担当しない処理(すべて勤怠管理API側で行う)
@@ -84,10 +93,11 @@ MCPサーバーは、ClaudeなどのAIアプリへ勤怠操作用ツールを提
 
 ### MCP認可
 
-MCPサーバーはClaudeそのものを信用せず、ユーザーのアクセストークン(UC-I001で発行した
-Sanctumトークン、またはOAuthアクセストークン)を毎回検証する。確認する項目:
-トークンの有効性・有効期限・発行先・ユーザー・スコープ・クライアントID・失効状態
-(`application_integrations.status`)。
+MCPサーバー(mcp/)はClaudeそのものを信用せず、mcp/自身が発行したOAuth2アクセストークン
+(JWT)を毎回検証し(有効性・有効期限・発行先クライアント・スコープ・失効状態)、そのうえで
+紐付けられたbackendの個人連携Sanctumトークン(UC-I001で発行、`application_integrations.status`)
+を使ってbackend APIを呼び出す。mcp/が発行するOAuthスコープは、backendの個人連携トークンに
+付与されたスコープを超えることはできない(認可時にmcp/側で照合する)。
 
 ### MCPツール一覧(最低限)
 
