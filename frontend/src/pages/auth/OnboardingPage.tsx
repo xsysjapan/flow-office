@@ -1,56 +1,80 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../../api/client'
-import { submitOnboarding } from '../../api/onboarding'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
-import { Checkbox } from '../../components/ui/checkbox'
+import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Input } from '../../components/ui/input'
+import { useCompleteOnboardingLocal, useStartOnboardingSso } from '../../hooks/useOnboarding'
+
+type OnboardingMode = 'sso' | 'local'
+
+const DEFAULT_MS365_VALUE: Ms365CredentialsFieldsValue = {
+  tenantId: '',
+  clientId: '',
+  clientSecret: '',
+  redirectUri: `${API_BASE_URL.replace(/\/$/, '')}/auth/microsoft/callback`,
+  mockEnabled: false,
+}
 
 /**
- * 初回オンボーディング(docs/06-usecases-auth.md): Microsoft 365連携設定(Entra ID
- * アプリ登録の資格情報)を登録し、最初の管理者ユーザーを作成する。認証はEntra ID SSOのみ
- * のため、この設定自体が空の間は誰もログインできない。完了すると作成した管理者で
- * そのままログイン済みになる(実際のSSO往復は待たない)。
+ * 初回オンボーディング(docs/06-usecases-auth.md UC-000): Microsoft 365(Entra ID)連携設定を
+ * 登録するSSOモードと、その場でパスワード付き管理者を作成するローカルモードを選べる。
+ * SSOモードでは管理者になるユーザーを事前入力しない。設定を保存した直後に実際のEntra ID
+ * ログイン画面へ遷移し、そのOIDC認証結果(ユーザーID・メール・表示名)だけを使って
+ * 管理者ユーザーを作成・リンクする。
  */
 export function OnboardingPage() {
   const { applySession } = useAuth()
   const navigate = useNavigate()
+  const startSso = useStartOnboardingSso()
+  const completeLocal = useCompleteOnboardingLocal()
+
+  const [mode, setMode] = useState<OnboardingMode>('sso')
+  const [ms365Value, setMs365Value] = useState<Ms365CredentialsFieldsValue>(DEFAULT_MS365_VALUE)
 
   const [adminName, setAdminName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
-  const [tenantId, setTenantId] = useState('')
-  const [clientId, setClientId] = useState('')
-  const [clientSecret, setClientSecret] = useState('')
-  const [redirectUri, setRedirectUri] = useState(`${API_BASE_URL.replace(/\/$/, '')}/auth/microsoft/callback`)
-  const [mockEnabled, setMockEnabled] = useState(false)
-  const [error, setError] = useState<unknown>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminPasswordConfirmation, setAdminPasswordConfirmation] = useState('')
 
-  const isValid = adminName && adminEmail && tenantId && clientId && clientSecret && redirectUri
+  const isSsoValid = ms365Value.tenantId && ms365Value.clientId && ms365Value.clientSecret && ms365Value.redirectUri
+  const isLocalValid =
+    adminName &&
+    adminEmail &&
+    adminPassword.length >= 8 &&
+    adminPassword === adminPasswordConfirmation
 
-  const handleSubmit = async () => {
-    setError(null)
-    setIsSubmitting(true)
-    try {
-      const { token, user } = await submitOnboarding({
-        admin_name: adminName,
-        admin_email: adminEmail,
-        m365_tenant_id: tenantId,
-        m365_client_id: clientId,
-        m365_client_secret: clientSecret,
-        m365_redirect_uri: redirectUri,
-        m365_mock_enabled: mockEnabled,
-      })
-      applySession(token, user)
-      navigate('/', { replace: true })
-    } catch (err) {
-      setError(err)
-      setIsSubmitting(false)
-    }
+  const handleSubmitSso = () => {
+    startSso.mutate(
+      {
+        m365_tenant_id: ms365Value.tenantId,
+        m365_client_id: ms365Value.clientId,
+        m365_client_secret: ms365Value.clientSecret,
+        m365_redirect_uri: ms365Value.redirectUri,
+        m365_mock_enabled: ms365Value.mockEnabled,
+      },
+      {
+        onSuccess: ({ redirect_url: redirectUrl }) => {
+          window.location.href = redirectUrl
+        },
+      },
+    )
+  }
+
+  const handleSubmitLocal = () => {
+    completeLocal.mutate(
+      { admin_name: adminName, admin_email: adminEmail, admin_password: adminPassword },
+      {
+        onSuccess: ({ token, user }) => {
+          applySession(token, user)
+          navigate('/', { replace: true })
+        },
+      },
+    )
   }
 
   return (
@@ -58,51 +82,88 @@ export function OnboardingPage() {
       <div className="w-full max-w-lg">
         <Card title="初回セットアップ">
           <p className="mb-4 text-sm text-muted-foreground">
-            Microsoft 365(Entra ID)との連携設定と、最初の管理者アカウントを登録します。
+            Microsoft 365(Entra ID)との連携を設定するか、ローカルパスワードで管理者アカウントを
+            作成してください。
           </p>
 
-          {error != null && <ErrorMessage error={error} fallback="セットアップに失敗しました。" />}
+          <div className="mb-6 flex gap-2">
+            <Button
+              variant={mode === 'sso' ? 'primary' : 'secondary'}
+              aria-pressed={mode === 'sso'}
+              onClick={() => setMode('sso')}
+            >
+              Microsoft 365 SSOを設定する
+            </Button>
+            <Button
+              variant={mode === 'local' ? 'primary' : 'secondary'}
+              aria-pressed={mode === 'local'}
+              onClick={() => setMode('local')}
+            >
+              ローカルパスワードで作成する
+            </Button>
+          </div>
 
-          <h3 className="mb-3 text-sm font-semibold text-foreground">管理者アカウント</h3>
-          <FormField label="氏名" htmlFor="onboarding-admin-name" required>
-            <Input id="onboarding-admin-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
-          </FormField>
-          <FormField label="メールアドレス" htmlFor="onboarding-admin-email" required>
-            <Input
-              id="onboarding-admin-email"
-              type="email"
-              value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
-            />
-          </FormField>
+          {mode === 'sso' && (
+            <>
+              {startSso.error != null && <ErrorMessage error={startSso.error} fallback="設定の保存に失敗しました。" />}
+              <p className="mb-4 text-sm text-muted-foreground">
+                保存すると、そのままMicrosoftのログイン画面へ遷移します。ログインに成功した
+                アカウントがそのまま管理者になります(氏名・メールアドレスの事前入力は不要です)。
+              </p>
+              <Ms365CredentialsFields idPrefix="onboarding-sso" value={ms365Value} onChange={setMs365Value} required />
+              <Button
+                className="w-full"
+                disabled={!isSsoValid}
+                isLoading={startSso.isPending}
+                onClick={handleSubmitSso}
+              >
+                保存してMicrosoftにログインする
+              </Button>
+            </>
+          )}
 
-          <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>
-          <FormField label="テナントID" htmlFor="onboarding-tenant-id" required>
-            <Input id="onboarding-tenant-id" value={tenantId} onChange={(e) => setTenantId(e.target.value)} />
-          </FormField>
-          <FormField label="クライアントID" htmlFor="onboarding-client-id" required>
-            <Input id="onboarding-client-id" value={clientId} onChange={(e) => setClientId(e.target.value)} />
-          </FormField>
-          <FormField label="クライアントシークレット" htmlFor="onboarding-client-secret" required>
-            <Input
-              id="onboarding-client-secret"
-              type="password"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-            />
-          </FormField>
-          <FormField label="リダイレクトURI" htmlFor="onboarding-redirect-uri" required>
-            <Input id="onboarding-redirect-uri" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} />
-          </FormField>
-
-          <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-            <Checkbox checked={mockEnabled} onCheckedChange={(checked) => setMockEnabled(checked === true)} />
-            ローカル開発用モックOIDC(mock-oidc)を使う
-          </label>
-
-          <Button className="w-full" disabled={!isValid} isLoading={isSubmitting} onClick={() => void handleSubmit()}>
-            セットアップを完了する
-          </Button>
+          {mode === 'local' && (
+            <>
+              {completeLocal.error != null && (
+                <ErrorMessage error={completeLocal.error} fallback="セットアップに失敗しました。" />
+              )}
+              <FormField label="氏名" htmlFor="onboarding-local-name" required>
+                <Input id="onboarding-local-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
+              </FormField>
+              <FormField label="メールアドレス" htmlFor="onboarding-local-email" required>
+                <Input
+                  id="onboarding-local-email"
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                />
+              </FormField>
+              <FormField label="パスワード(8文字以上)" htmlFor="onboarding-local-password" required>
+                <Input
+                  id="onboarding-local-password"
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                />
+              </FormField>
+              <FormField label="パスワード(確認)" htmlFor="onboarding-local-password-confirmation" required>
+                <Input
+                  id="onboarding-local-password-confirmation"
+                  type="password"
+                  value={adminPasswordConfirmation}
+                  onChange={(e) => setAdminPasswordConfirmation(e.target.value)}
+                />
+              </FormField>
+              <Button
+                className="w-full"
+                disabled={!isLocalValid}
+                isLoading={completeLocal.isPending}
+                onClick={handleSubmitLocal}
+              >
+                セットアップを完了する
+              </Button>
+            </>
+          )}
         </Card>
       </div>
     </main>

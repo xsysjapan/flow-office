@@ -37,6 +37,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - entra_user_id
 - name
 - email
+- password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
+  パスワードログイン用。`hashed`キャストで自動ハッシュ化して保存する。SSOでログインする
+  ユーザーはnullのまま)
 - department
 - job_title
 - employment_status
@@ -67,8 +70,12 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   未認証の初回オンボーディングからも書き込める値のため、DBの値だけに依存せず
   `Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が`local`/`testing`の場合のみtrueを返す
   ように強制する。本番・検証環境ではこの列の値に関わらず常にfalse扱いになる)
+- onboarding_started_at (nullable。初回オンボーディング(UC-000)のSSOモードが開始済みかどうか。
+  `onboarding_completed_at`とは別に持つことで、設定保存→実際のEntra IDログイン待ち、という
+  2リクエストにまたがる状態を表現する。開始から10分経っても完了していなければ再クレームを
+  許可する)
 - onboarding_completed_at (nullable。初回オンボーディング(UC-000)が完了済みかどうか。
-  未設定の間のみ`POST /api/onboarding`を未認証で受け付ける)
+  未設定の間のみ`POST /api/onboarding/sso`・`POST /api/onboarding/local`を未認証で受け付ける)
 - notification_mail_enabled (メール通知の有効/無効。falseまたはm365資格情報・送信元アドレスが
   未設定の場合は送信しない)
 - notification_mail_sender_address / notification_mail_sender_name (送信元メールボックス)
@@ -76,8 +83,13 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 
 常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから
 直接更新する([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezone等を管理する))。
-ただし初回作成(`m365_*`・`onboarding_completed_at`)は[UC-000](./06-usecases-auth.md#uc-000-初回オンボーディングを実行する)
-経由(未認証で呼べる`CompleteOnboarding`コマンド)で行う。
+初回作成(`m365_*`・`onboarding_started_at`・`onboarding_completed_at`)は
+[UC-000](./06-usecases-auth.md#uc-000-初回オンボーディングを実行する)経由(未認証で呼べる
+`StartOnboardingSso`/`CompleteOnboardingWithLocalPassword`コマンド)で行う。これらのコマンドは
+「読んでから書く」二段階処理によるレース条件を避けるため、`SystemSetting::claimOnboarding()`/
+`completeOnboarding()`という単一UPDATE文で条件判定と書き込みを同時に行うヘルパーを使う
+(通常のEloquentモデル経由の更新のようにmutator/castsを自動適用しないクエリビルダ直書きの
+ため、`encrypted`キャストの列は`SystemSetting`側で自前で暗号化してから書き込む)。
 
 日次勤怠の入力画面で、打刻・勤務予定のいずれも無い日の初期値(「システムの初期設定」)は、
 `system_settings`自体に列を追加せず、`default_work_style_id`が指すデフォルト働き方の

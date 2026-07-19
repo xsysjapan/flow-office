@@ -9,6 +9,11 @@ export function exchangeCodeForToken(code: string): Promise<{ token: string; use
   return apiFetch('/auth/token', { method: 'POST', body: { code } })
 }
 
+/** SSOを設定しなかった場合のローカルパスワードログイン(docs/06-usecases-auth.md UC-000)。 */
+export function localLogin(email: string, password: string): Promise<{ token: string; user: User }> {
+  return apiFetch('/auth/local-login', { method: 'POST', body: { email, password } })
+}
+
 export function fetchCurrentUser(): Promise<User> {
   return apiFetch('/auth/me')
 }

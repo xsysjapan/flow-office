@@ -4,6 +4,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
@@ -21,11 +22,13 @@ export function SystemSettingsPage() {
   const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
   const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
   const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<number | null>(null)
-  const [m365TenantId, setM365TenantId] = useState('')
-  const [m365ClientId, setM365ClientId] = useState('')
-  const [m365ClientSecret, setM365ClientSecret] = useState('')
-  const [m365RedirectUri, setM365RedirectUri] = useState('')
-  const [m365MockEnabled, setM365MockEnabled] = useState(false)
+  const [ms365Value, setMs365Value] = useState<Ms365CredentialsFieldsValue>({
+    tenantId: '',
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+    mockEnabled: false,
+  })
   const [notificationMailEnabled, setNotificationMailEnabled] = useState(false)
   const [notificationMailSenderAddress, setNotificationMailSenderAddress] = useState('')
   const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
@@ -37,10 +40,13 @@ export function SystemSettingsPage() {
     setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
     setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
     setDefaultWorkStyleId(data.default_work_style_id)
-    setM365TenantId(data.m365_tenant_id ?? '')
-    setM365ClientId(data.m365_client_id ?? '')
-    setM365RedirectUri(data.m365_redirect_uri ?? '')
-    setM365MockEnabled(data.m365_mock_enabled)
+    setMs365Value({
+      tenantId: data.m365_tenant_id ?? '',
+      clientId: data.m365_client_id ?? '',
+      clientSecret: '',
+      redirectUri: data.m365_redirect_uri ?? '',
+      mockEnabled: data.m365_mock_enabled,
+    })
     setNotificationMailEnabled(data.notification_mail_enabled)
     setNotificationMailSenderAddress(data.notification_mail_sender_address ?? '')
     setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
@@ -59,12 +65,12 @@ export function SystemSettingsPage() {
         // 既定の働き方は管理メニューの勤務形態画面(デフォルトに設定)で変更する。
         // ここでは読み込んだ値をそのまま送り返し、上書きしないようにする。
         default_work_style_id: defaultWorkStyleId,
-        m365_tenant_id: m365TenantId || null,
-        m365_client_id: m365ClientId || null,
+        m365_tenant_id: ms365Value.tenantId || null,
+        m365_client_id: ms365Value.clientId || null,
         // 空欄のままなら送らない(既存のシークレットを変更しない)。
-        ...(m365ClientSecret ? { m365_client_secret: m365ClientSecret } : {}),
-        m365_redirect_uri: m365RedirectUri || null,
-        m365_mock_enabled: m365MockEnabled,
+        ...(ms365Value.clientSecret ? { m365_client_secret: ms365Value.clientSecret } : {}),
+        m365_redirect_uri: ms365Value.redirectUri || null,
+        m365_mock_enabled: ms365Value.mockEnabled,
         notification_mail_enabled: notificationMailEnabled,
         notification_mail_sender_address: notificationMailSenderAddress || null,
         notification_mail_sender_name: notificationMailSenderName || null,
@@ -72,7 +78,7 @@ export function SystemSettingsPage() {
       {
         onSuccess: () => {
           setSavedMessage(true)
-          setM365ClientSecret('')
+          setMs365Value((current) => ({ ...current, clientSecret: '' }))
         },
       },
     )
@@ -148,66 +154,15 @@ export function SystemSettingsPage() {
         Entra IDアプリ登録の資格情報。初回オンボーディングで登録済みだが、ここから変更できる。
       </p>
 
-      <FormField label="テナントID" htmlFor="system-settings-m365-tenant-id">
-        <Input
-          id="system-settings-m365-tenant-id"
-          value={m365TenantId}
-          onChange={(e) => {
-            setM365TenantId(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <FormField label="クライアントID" htmlFor="system-settings-m365-client-id">
-        <Input
-          id="system-settings-m365-client-id"
-          value={m365ClientId}
-          onChange={(e) => {
-            setM365ClientId(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <FormField label="クライアントシークレット" htmlFor="system-settings-m365-client-secret">
-        <Input
-          id="system-settings-m365-client-secret"
-          type="password"
-          placeholder={data?.m365_client_secret_configured ? '設定済み(変更する場合のみ入力)' : '未設定'}
-          value={m365ClientSecret}
-          onChange={(e) => {
-            setM365ClientSecret(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <FormField label="リダイレクトURI" htmlFor="system-settings-m365-redirect-uri">
-        <Input
-          id="system-settings-m365-redirect-uri"
-          value={m365RedirectUri}
-          onChange={(e) => {
-            setM365RedirectUri(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={m365MockEnabled}
-          onCheckedChange={(checked) => {
-            setM365MockEnabled(checked === true)
-            setSavedMessage(false)
-          }}
-        />
-        ローカル開発用モックOIDC(mock-oidc)を使う
-      </label>
-      <p className="mb-4 text-xs text-muted-foreground">
-        本番・検証環境では有効にしないこと。有効にすると開発専用の危険なエンドポイント
-        (DB初期化)も到達可能になる。
-      </p>
+      <Ms365CredentialsFields
+        idPrefix="system-settings-m365"
+        value={ms365Value}
+        onChange={(value) => {
+          setMs365Value(value)
+          setSavedMessage(false)
+        }}
+        clientSecretConfigured={data?.m365_client_secret_configured}
+      />
 
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">メール通知設定</h3>
       <p className="mb-4 text-sm text-muted-foreground">

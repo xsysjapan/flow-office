@@ -17,6 +17,11 @@ use App\Support\LocalDateTime;
  * Entra IDのユーザーID・メール・表示名を取得し、初回ログインならアプリ側ユーザーを作成、
  * 既存ユーザーなら最終ログイン日時を更新する。
  *
+ * 初回オンボーディング(UC-000)でのSSO連携済み管理者作成は
+ * `CompleteOnboardingSsoLinkHandler`が別途担当するため、ここでは`entra_user_id`未設定行への
+ * リンクのような特別扱いは行わない(entra_user_idで見つからなければ常に新規=employeeロール
+ * として作成する)。
+ *
  * @implements CommandHandler<RecordSsoLogin>
  */
 class RecordSsoLoginHandler implements CommandHandler
@@ -35,31 +40,15 @@ class RecordSsoLoginHandler implements CommandHandler
         $defaultTimezone = SystemSetting::current()->default_timezone;
 
         if ($user === null) {
-            // 初回オンボーディング(CompleteOnboardingHandler)で作成された管理者は、この時点では
-            // entra_user_idが未設定のまま登録されている。メールが一致する未リンクの行があれば
-            // 新規作成せずそこにentra_user_idをバックフィルし、付与済みの管理者ロールを維持する。
-            $unlinkedUser = $command->email !== null
-                ? User::query()->whereNull('entra_user_id')->where('email', $command->email)->first()
-                : null;
+            $user = User::query()->create([
+                'entra_user_id' => $command->entraUserId,
+                'name' => $command->name ?? $command->email,
+                'email' => $command->email,
+                'employment_status' => 'active',
+                'timezone' => $defaultTimezone,
+            ]);
 
-            if ($unlinkedUser !== null) {
-                $unlinkedUser->entra_user_id = $command->entraUserId;
-                if ($command->name !== null) {
-                    $unlinkedUser->name = $command->name;
-                }
-                $user = $unlinkedUser;
-                $wasFirstLogin = false;
-            } else {
-                $user = User::query()->create([
-                    'entra_user_id' => $command->entraUserId,
-                    'name' => $command->name ?? $command->email,
-                    'email' => $command->email,
-                    'employment_status' => 'active',
-                    'timezone' => $defaultTimezone,
-                ]);
-
-                $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
-            }
+            $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
         }
 
         $user->last_login_at = LocalDateTime::now($defaultTimezone);

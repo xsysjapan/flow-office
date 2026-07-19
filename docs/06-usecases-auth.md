@@ -2,41 +2,77 @@
 
 ## UC-000: 初回オンボーディングを実行する
 
-認証はMicrosoft Entra ID SSOのみ(`users`テーブルはローカルパスワードを持たない)。
-Microsoft 365連携設定(下記UC-001・UC-002・UC-N001が共有するEntra ID資格情報)が
-未設定の間は誰もSSOログインできず、管理画面(UC-003のシステム設定含む)にも到達できない。
+認証は原則Microsoft Entra ID SSOだが、初回オンボーディングでSSOを設定しなかった場合に
+限り`users.password`によるローカルパスワードログインも許可する。いずれの認証方式も
+未設定の間は誰もログインできず、管理画面(UC-003のシステム設定含む)にも到達できない。
 この「鶏と卵」を解消するため、未認証で呼び出せる初回オンボーディングを用意する。
+SSOモードとローカルパスワードモードの2つから選べる。
 
-1. `GET /api/onboarding/status` で`needs_onboarding`(=`system_settings.onboarding_completed_at`
-   が未設定か)を確認する。trueならフロントエンドはログイン画面の代わりに
-   オンボーディング画面を表示する。
-2. 管理者になる人が、氏名・メールアドレスと、Entra IDアプリ登録の資格情報
-   (テナントID・クライアントID・クライアントシークレット・リダイレクトURI、必要なら
-   ローカル開発用モックOIDC切替)を入力する。
-3. `POST /api/onboarding`でCommandBus経由の`CompleteOnboarding`を発行する。
-   - `system_settings`にEntra ID資格情報を保存する(`onboarding_completed_at`も設定)。
-   - 入力されたメールアドレスで`users`に管理者ユーザーを作成し、`admin`ロールを付与する。
-     この時点では`entra_user_id`は未設定のまま(実際のSSOでの初回ログインを経ていないため)。
-   - 作成した管理者をそのままSanctumトークンでログイン済みにする(実際のSSO往復を待たない)。
-4. 既に完了済み(`onboarding_completed_at`設定済み)の状態で`POST /api/onboarding`を
-   呼ぶと422を返し、二度目以降の実行は拒否する。
-5. その後、この管理者が実際にEntra IDでSSOログインすると(UC-001)、`entra_user_id`が
-   未設定かつメールが一致するこの行にバックフィルされ、新規ユーザーとして重複作成されない
-   (付与済みの`admin`ロールも維持される)。
+`GET /api/onboarding/status`は`needs_onboarding`(=`system_settings.onboarding_completed_at`
+が未設定か)と`sso_configured`(=Entra ID資格情報が設定済みか)を返す。`needs_onboarding`が
+trueならフロントエンドはログイン画面の代わりにオンボーディング画面を表示し、完了後は
+`sso_configured`を見てログイン画面がMicrosoftボタン(true)かローカルパスワードフォーム
+(false)のどちらを出すか決める。
 
-関連イベント: `user.onboarded_as_admin`
+### SSOモード
+
+管理者になるユーザーを事前入力しない。実際にEntra IDへログインした結果(OIDCの認証済み
+ユーザーID・メール・表示名)だけを使って管理者を作成・リンクする。メールアドレスの
+文字列一致には一切依存しない。
+
+1. Entra IDアプリ登録の資格情報(テナントID・クライアントID・クライアントシークレット・
+   リダイレクトURI、必要ならローカル開発用モックOIDC切替)を入力し、
+   `POST /api/onboarding/sso`を呼ぶ(`StartOnboardingSso`)。
+   - `system_settings`にEntra ID資格情報を保存し、`onboarding_started_at`を設定する
+     (`SystemSetting::claimOnboarding()`による単一UPDATE文での原子的クレーム。
+     `onboarding_completed_at`が未設定かつ`onboarding_started_at`が未設定または開始から
+     10分以上経過している場合のみ成功する。この10分の猶予は、SSOログインを最後まで
+     やり切らずに離脱した場合に永久ロックしないためのセーフティネット)。
+   - まだユーザーは作成しない。管理者になる人はまだ確定していないため。
+   - レスポンスとしてMicrosoftログイン画面へのリダイレクトURLを返す
+     (`Socialite::stateless()->with(['state' => 'onboarding-sso-link'])`で、通常のSSO
+     ログイン(UC-001)と区別するための目印を付ける)。
+2. ブラウザがそのままMicrosoftのログイン画面へ遷移する。
+3. ログイン成功後、`GET /api/auth/microsoft/callback`(UC-001と共通のコールバック)が
+   `state`パラメータでオンボーディングのSSOリンクだと判定し、`CompleteOnboardingSsoLink`を
+   発行する。
+   - `onboarding_started_at`が未設定、または既に`onboarding_completed_at`が設定済みなら
+     422で拒否する。
+   - 同じ`email`または`entra_user_id`のユーザーが既に存在する場合も422で拒否する
+     (既存アカウントの乗っ取り・意図しない上書きを防ぐ)。
+   - Socialiteが返した`entra_user_id`/`name`/`email`をそのまま使って`users`に管理者
+     ユーザーを作成し、`admin`ロールを付与する。
+   - `system_settings.onboarding_completed_at`を設定する(こちらも原子的UPDATE)。
+   - 通常のSSOログイン(UC-001)と同じ交換コード方式でフロントエンドへリダイレクトし、
+     そのままログイン済みにする。
+
+### ローカルパスワードモード
+
+Microsoft 365を設定しない場合、その場でパスワード付きの管理者ユーザーを作成する。
+
+1. 氏名・メールアドレス・パスワードを入力し、`POST /api/onboarding/local`を呼ぶ
+   (`CompleteOnboardingWithLocalPassword`)。
+2. 同じ`email`のユーザーが既に存在する場合は422で拒否する。
+3. `onboarding_started_at`と`onboarding_completed_at`を同時に原子的コミットし(1リクエストで
+   完結するモードのため)、パスワード(`users.password`、`hashed`キャストで自動ハッシュ化)を
+   持つ管理者ユーザーを作成、`admin`ロールを付与する。
+4. その場でSanctumトークンを発行しログイン済みにする。
+5. 以後は`POST /api/auth/local-login`(email + password、ブルートフォース対策として
+   1分あたり5回に制限)でログインできる。
+
+関連イベント: `user.onboarded_as_admin`(`auth_method`が`sso`または`local`)
 関連テーブル: `system_settings`, `users`
 
-**注意**: 未認証で呼び出せるため、`onboarding_completed_at`が未設定の間は誰でも自分を
-管理者として登録できてしまう(いわゆる「先に完了させたもの勝ち」)。セットアップトークン等の
-追加保護は設けていないため、デプロイ直後にオンボーディングを完了させる運用を前提とする。
-この「先に完了させたもの勝ち」のリスクは、`onboarding_completed_at`が設定された瞬間に
-`POST /onboarding`自体が422で拒否されるようになるため、デプロイ直後の一時的な窓のみに
-限定される。
+**注意**: 未認証で呼び出せるため、`onboarding_completed_at`が未設定の間は誰でも初回
+オンボーディングを実行できてしまう(いわゆる「先に完了させたもの勝ち」)。セットアップ
+トークン等の追加保護は設けていないため、デプロイ直後にオンボーディングを完了させる運用を
+前提とする。このリスクは、`onboarding_completed_at`が設定された瞬間に
+`POST /api/onboarding/sso`・`POST /api/onboarding/local`のいずれも422で拒否されるように
+なるため、デプロイ直後の一時的な窓のみに限定される。
 
-一方、`m365_mock_enabled`(ローカル開発用モックOIDC切替)はこのオンボーディングのボディで
-送信できるDB値のため、この一時的な窓を過ぎた後も値が残り続ける(通常のシステム設定と
-同様、システム設定画面から誤って有効化される可能性もある)。この値は開発専用の危険な
+一方、`m365_mock_enabled`(ローカル開発用モックOIDC切替)はSSOモードのボディで送信できる
+DB値のため、この一時的な窓を過ぎた後も値が残り続ける(通常のシステム設定と同様、
+システム設定画面から誤って有効化される可能性もある)。この値は開発専用の危険な
 エンドポイント(`DevDatabaseResetController`、DB全体を初期化する)のゲートも兼ねるため、
 DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が`local`/`testing`の
 場合のみtrueを返すようにしている。本番・検証環境ではDBの値に関わらず常にfalseになり、
@@ -46,13 +82,21 @@ DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が
 
 1. ユーザーがアプリにアクセスする
 2. Microsoft Entra ID のログイン画面へ遷移する
-3. 認証成功後、アプリに戻る
+3. 認証成功後、アプリに戻る(`GET /api/auth/microsoft/callback`)
 4. Entra ID のユーザーID、メール、表示名を取得する
-5. 初回ログインならアプリ側ユーザーを作成する
+5. 初回ログインならアプリ側ユーザーを作成する(`employee`ロール)
 6. 既存ユーザーなら最終ログイン日時を更新する
+
+コールバックはUC-000のSSOモードのオンボーディングリンク完了とも共通で、`state`
+パラメータで判定する(`AuthController::callback()`)。通常ログインの`RecordSsoLoginHandler`は
+`entra_user_id`一致のみで判定するシンプルなロジックで、オンボーディング固有の特別扱いは
+持たない(UC-000のSSOモードは別のCommand/Handlerが担当するため)。
 
 関連イベント: `user.logged_in`
 関連テーブル: `users`
+
+初回オンボーディング(UC-000)でSSOを設定しなかった場合は、代わりに`POST /auth/local-login`
+(メールアドレス + パスワード)でログインする。
 
 ## UC-002: MS365ユーザーを同期する
 

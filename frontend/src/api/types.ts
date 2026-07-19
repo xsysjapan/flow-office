@@ -20,20 +20,33 @@ export interface Role {
   name: string
 }
 
-/** 初回オンボーディング(docs/06-usecases-auth.md)が必要かどうか。 */
+/** 初回オンボーディング(docs/06-usecases-auth.md UC-000)が必要かどうか。 */
 export interface OnboardingStatus {
   needs_onboarding: boolean
+  /** Microsoft 365連携設定(SSO)が既に設定済みか。falseならログイン画面はローカルパスワード
+   *  フォームを表示する。 */
+  sso_configured: boolean
 }
 
-/** 初回オンボーディングの入力: Microsoft 365連携設定 + 最初の管理者ユーザー情報。 */
-export interface OnboardingInput {
-  admin_name: string
-  admin_email: string
+/** 初回オンボーディング(SSOモード)の入力: Microsoft 365連携設定のみ。管理者になる
+ *  ユーザーは事前入力せず、実際のEntra IDログイン結果で決まる。 */
+export interface OnboardingSsoInput {
   m365_tenant_id: string
   m365_client_id: string
   m365_client_secret: string
   m365_redirect_uri: string
   m365_mock_enabled?: boolean
+}
+
+export interface OnboardingSsoStartResult {
+  redirect_url: string
+}
+
+/** 初回オンボーディング(ローカルパスワードモード)の入力。 */
+export interface OnboardingLocalInput {
+  admin_name: string
+  admin_email: string
+  admin_password: string
 }
 
 export interface OnboardingResult {

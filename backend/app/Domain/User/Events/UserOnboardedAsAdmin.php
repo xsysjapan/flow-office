@@ -12,7 +12,9 @@ class UserOnboardedAsAdmin implements DomainEvent
     public function __construct(
         public readonly int $userId,
         public readonly string $name,
-        public readonly string $email,
+        public readonly ?string $email,
+        /** 'sso' または 'local'。docs/06-usecases-auth.md UC-000参照。 */
+        public readonly string $authMethod,
     ) {}
 
     public function eventType(): string
@@ -26,6 +28,7 @@ class UserOnboardedAsAdmin implements DomainEvent
             'user_id' => $this->userId,
             'name' => $this->name,
             'email' => $this->email,
+            'auth_method' => $this->authMethod,
         ];
     }
 }

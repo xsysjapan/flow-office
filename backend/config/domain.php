@@ -148,16 +148,22 @@ use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
-use App\Domain\User\Commands\CompleteOnboarding;
+use App\Domain\User\Commands\CompleteOnboardingSsoLink;
+use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
+use App\Domain\User\Commands\RecordLocalLogin;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SetUserTerminationDate;
+use App\Domain\User\Commands\StartOnboardingSso;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
-use App\Domain\User\Handlers\CompleteOnboardingHandler;
+use App\Domain\User\Handlers\CompleteOnboardingSsoLinkHandler;
+use App\Domain\User\Handlers\CompleteOnboardingWithLocalPasswordHandler;
+use App\Domain\User\Handlers\RecordLocalLoginHandler;
 use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
 use App\Domain\User\Handlers\SetUserTerminationDateHandler;
+use App\Domain\User\Handlers\StartOnboardingSsoHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
@@ -215,7 +221,10 @@ return [
         SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
         RecordSsoLogin::class => RecordSsoLoginHandler::class,
-        CompleteOnboarding::class => CompleteOnboardingHandler::class,
+        RecordLocalLogin::class => RecordLocalLoginHandler::class,
+        StartOnboardingSso::class => StartOnboardingSsoHandler::class,
+        CompleteOnboardingSsoLink::class => CompleteOnboardingSsoLinkHandler::class,
+        CompleteOnboardingWithLocalPassword::class => CompleteOnboardingWithLocalPasswordHandler::class,
 
         DraftWorkflowRequest::class => DraftWorkflowRequestHandler::class,
         SubmitWorkflowRequest::class => SubmitWorkflowRequestHandler::class,

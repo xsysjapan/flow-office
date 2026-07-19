@@ -7,9 +7,9 @@
 
 - `user.logged_in`
 - `user.synced_from_ms365`
-- `user.onboarded_as_admin` (初回オンボーディングでの管理者作成。docs/06-usecases-auth.md
-  「初回オンボーディング」参照。この時点では`entra_user_id`は未設定で、その後の実際のSSO
-  初回ログイン時に`user.logged_in`側でメール一致によりバックフィルされる)
+- `user.onboarded_as_admin` (初回オンボーディング(UC-000)での管理者作成。payloadの
+  `auth_method`が`sso`(実際のEntra IDログイン結果で作成、entra_user_id設定済み)か
+  `local`(ローカルパスワードで作成)かを区別する)
 - `user.roles_changed` (UC-M001 権限を設定する)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.termination_date_set` (退社日を設定または解除する)
