@@ -34,7 +34,7 @@ class MetadataController extends Controller
         $base = rtrim(config('app.url'), '/');
 
         return response()->json([
-            'resource' => "{$base}/mcp",
+            'resource' => $base,
             'authorization_servers' => [$base],
         ]);
     }

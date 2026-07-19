@@ -77,6 +77,19 @@ if [ ! -f public/build/manifest.json ]; then
   npm run build
 fi
 
+# scripts/start-ngrok.sh(ホスト側)からngrok公開時のみMCP_PUBLIC_APP_URLが渡される。
+# mcpだけのAPP_URLを上書きしないと、OAuth2メタデータ(issuer等)が/flow-office/mcpを
+# 含まない誤ったURLを返し、外部のMCPクライアントからの接続が壊れる。
+# シェルの環境変数としてAPP_URLを渡すだけだと、phpdotenvの「既存の環境変数は
+# 上書きしない」判定が$_ENV/$_SERVER基準で行われ、getenv()レベルでは値が見えていても
+# 反映されないことがある(variables_order次第)。確実に反映させるため、mcp/.envの
+# APP_URL行自体を直接書き換えてから起動する(backend側の.envには触れない)。
+if [ -n "${MCP_PUBLIC_APP_URL:-}" ]; then
+  sed -i "s#^APP_URL=.*#APP_URL=${MCP_PUBLIC_APP_URL}#" .env
+else
+  sed -i 's#^APP_URL=.*#APP_URL=http://localhost#' .env
+fi
+php artisan config:clear >/dev/null 2>&1 || true
 php artisan serve --host=0.0.0.0 --port=8090 &
 
 wait -n

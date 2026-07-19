@@ -19,7 +19,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 # Caddy (frontend/backend/mcpを/flow-office配下にパスベースでまとめるローカルリバースプロキシ)
 # と ngrok CLI (そのプロキシをインターネットに公開するトンネル)。
-# .devcontainer/tunnel/ 参照。ngrok自体の認証は各自の`ngrok config add-authtoken <token>`で行う。
+# 通常はホスト側で scripts/start-ngrok.sh を使う (scripts/tunnel/ 参照) ため、
+# コンテナ内のこれらのバイナリは基本的に使わない。devcontainer内で同じ構成を試したい
+# 場合のために残してあるだけなので、不要なら以下のRUNブロックごと削除して構わない。
+# ngrok自体の認証は各自の`ngrok config add-authtoken <token>`で行う。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \

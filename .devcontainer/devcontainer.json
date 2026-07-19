@@ -21,5 +21,5 @@
     }
   },
   "postCreateCommand": "sh .devcontainer/post-create.sh",
-  "postStartCommand": "echo 'devcontainer起動時にbackend/frontend/mcpは自動起動しません。'; echo '手動起動: cd backend && php artisan serve --host=0.0.0.0 --port=8000'; echo '別ターミナルで: cd frontend && npm run dev -- --host 0.0.0.0'; echo '別ターミナルで: cd mcp && php artisan serve --host=0.0.0.0 --port=8090'; echo 'Mock Entra ID login: http://localhost:9000 (backend/.envのMICROSOFT_MOCK_ENABLED=trueで有効)'; echo '/flow-office配下でまとめてngrok公開する場合: .devcontainer/tunnel/start-tunnel.sh (詳細はmcp/README.md参照)'"
+  "postStartCommand": "echo 'devcontainer起動時にbackend/frontend/mcpは自動起動しません。'; echo '手動起動: cd backend && php artisan serve --host=0.0.0.0 --port=8000'; echo '別ターミナルで: cd frontend && npm run dev -- --host 0.0.0.0'; echo '別ターミナルで: cd mcp && php artisan serve --host=0.0.0.0 --port=8090'; echo 'Mock Entra ID login: http://localhost:9000 (backend/.envのMICROSOFT_MOCK_ENABLED=trueで有効)'; echo '/flow-office配下でまとめてngrok公開する場合: devcontainerではなくホスト側のターミナルで scripts/start-ngrok.sh を実行 (詳細はmcp/README.md参照)'"
 }

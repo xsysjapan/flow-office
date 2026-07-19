@@ -72,7 +72,7 @@ class McpControllerTest extends TestCase
             '*/auth/me' => Http::response(['id' => 1, 'email' => 'yuto.nagano@xsys.co.jp', 'name' => '永野ゆうと'], 200),
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/call',
@@ -93,7 +93,7 @@ class McpControllerTest extends TestCase
             '*/attendance/clock-in' => Http::response(['message' => '既に出勤済みです。'], 409),
         ]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/call',
@@ -109,7 +109,7 @@ class McpControllerTest extends TestCase
     {
         $accessToken = $this->obtainAccessToken(['profile:self:read']);
 
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/call',
@@ -125,7 +125,7 @@ class McpControllerTest extends TestCase
     {
         $accessToken = $this->obtainAccessToken(['profile:self:read']);
 
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/list',
@@ -140,7 +140,7 @@ class McpControllerTest extends TestCase
 
     public function test_mcp_endpoint_rejects_requests_without_a_bearer_token(): void
     {
-        $response = $this->postJson('/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list']);
+        $response = $this->postJson('/', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list']);
 
         $response->assertStatus(401);
     }

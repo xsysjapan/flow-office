@@ -96,7 +96,7 @@ class AuthorizationFlowTest extends TestCase
         ]);
 
         $mcpResponse = $this->withHeader('Authorization', "Bearer {$accessToken}")
-            ->postJson('/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list']);
+            ->postJson('/', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list']);
 
         $mcpResponse->assertOk();
         $toolNames = collect($mcpResponse->json('result.tools'))->pluck('name');

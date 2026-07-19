@@ -10,8 +10,18 @@ services:
     ports:
       - "8000:8000"
       - "5173:5173"
+      - "8090:8090"
     environment:
-      MICROSOFT_MOCK_INTERNAL_BASE_URL: http://mock-oidc:9000
+      - MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000
+      # 以下3つはscripts/start-ngrok.sh がホスト側のシェルでexportした状態で
+      # `docker compose up`を起動した場合のみ渡される(値を書かない場合、docker composeは
+      # ホスト側のシェルから同名の変数をそのまま渡す。ホスト側で未設定なら、空文字ではなく
+      # コンテナ内でも未設定のままになり、ローカル既定値が使われる)。
+      # frontend(Vite)はVITE_接頭辞のためprocess.envから自動的に読み込まれる。
+      # MCP_PUBLIC_APP_URLは.devcontainer/start.shがmcpの起動時にだけ参照する。
+      - VITE_BASE_PATH
+      - VITE_API_BASE_URL
+      - MCP_PUBLIC_APP_URL
     depends_on:
       - mock-oidc
 

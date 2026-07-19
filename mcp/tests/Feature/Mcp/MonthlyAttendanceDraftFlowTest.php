@@ -67,7 +67,7 @@ class MonthlyAttendanceDraftFlowTest extends TestCase
 
     private function callTool(string $accessToken, string $name, array $arguments = []): array
     {
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/call',
@@ -165,7 +165,7 @@ class MonthlyAttendanceDraftFlowTest extends TestCase
         $this->callTool($accessToken, 'preview_attendance_import', ['session_id' => $session['id']]);
         $applied = $this->callTool($accessToken, 'apply_import_to_monthly_draft', ['session_id' => $session['id']]);
 
-        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/mcp', [
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,
             'method' => 'tools/call',

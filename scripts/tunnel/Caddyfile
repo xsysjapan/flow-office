@@ -1,0 +1,53 @@
+{
+	admin off
+}
+
+# backend(8000)・frontend(5173)・mcp(8090)を/flow-office配下にパスベースでまとめる
+# ローカルリバースプロキシ。本番XSERVERでのAlias構成(docs/27-release-runbook.md)を
+# ローカルの開発サーバー向けに再現したもの。scripts/start-ngrok.sh から使う。
+# (ホスト側で起動する。docker composeが127.0.0.1へ公開している各ポートへ転送する。)
+:8080 {
+	# mcpのJSON-RPCエンドポイントの実体はPOST /(mcp/routes/api.php参照)。マウントパス
+	# 直下がそのままエンドポイントになるため、resource/issuerは常にマウントパスの
+	# /flow-office/mcpそのものになり、backend/apiと同じ形でMCPクライアントに登録できる。
+	#
+	# bare "/flow-office/mcp"(末尾スラッシュ無し)はhandle_pathの"/flow-office/mcp/*"に
+	# マッチしないため、先に末尾スラッシュを補ってから渡す(HTTPリダイレクトではなく
+	# 内部書き換えなので、POSTのメソッド・ボディもそのまま維持される)。
+	rewrite /flow-office/mcp /flow-office/mcp/
+
+	# mcpは自身でパスprefixを持たない(APP_API_PREFIX相当が常に空)ため、
+	# "/flow-office/mcp" を丸ごと剥がして転送する
+	# (JSON-RPCエンドポイントは相対/、OAuth関連は/oauth/*, /link, /.well-known/*)。
+	handle_path /flow-office/mcp/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	# OAuth discovery (RFC 8414 / RFC 9728)。クライアント(mcp-remote等)は
+	# "/.well-known/..."をオリジン直下+resource/issuerのパス(=マウントパスの
+	# /flow-office/mcp)を付けた形で問い合わせてくる。これは上のhandle_pathが拾う
+	# "/flow-office/mcp/.well-known/..."とは別物で、何も転送先を用意しないと
+	# Caddyの既定404(空ボディ)が返り、クライアント側でJSONパースエラーになる。
+	# mcp/routes/api.phpが実装しているbareのルートに合わせて書き換えてから転送する。
+	rewrite /.well-known/oauth-protected-resource/flow-office/mcp /.well-known/oauth-protected-resource
+	rewrite /.well-known/oauth-authorization-server/flow-office/mcp /.well-known/oauth-authorization-server
+	handle /.well-known/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	# backendはローカル開発では既定のAPP_API_PREFIX='api'のままなので、
+	# "/flow-office" だけを剥がして "/api/..." は残したまま転送する。
+	handle /flow-office/api/* {
+		uri strip_prefix /flow-office
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# frontend(Vite dev server)。VITE_BASE_PATH=/flow-office/ を指定して起動する前提
+	# なのでパスは書き換えずそのまま転送する(HMR用WebSocketも自動でプロキシされる)。
+	# Viteのallowed-hosts検査を通すため、Host以下をlocalhostに書き換えて転送する。
+	handle /flow-office* {
+		reverse_proxy 127.0.0.1:5173 {
+			header_up Host localhost:5173
+		}
+	}
+}
