@@ -25,6 +25,7 @@ function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes
     status: 'authenticated',
     login: vi.fn(),
     completeLogin: vi.fn(),
+    applySession: vi.fn(),
     logout,
   }
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })

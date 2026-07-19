@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\User\Ms365ConfigResolver;
 use App\Domain\User\SsoAuthenticator;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -39,6 +40,8 @@ class AuthController extends Controller
     )]
     public function redirect(): JsonResponse
     {
+        Ms365ConfigResolver::applyToSocialiteConfig();
+
         $url = Socialite::driver('azure')->stateless()->redirect()->getTargetUrl();
 
         return response()->json(['url' => $url]);
@@ -53,6 +56,8 @@ class AuthController extends Controller
     )]
     public function callback(SsoAuthenticator $authenticator): RedirectResponse
     {
+        Ms365ConfigResolver::applyToSocialiteConfig();
+
         $ssoUser = Socialite::driver('azure')->stateless()->user();
         $user = $authenticator->handle($ssoUser);
 

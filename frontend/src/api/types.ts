@@ -20,6 +20,27 @@ export interface Role {
   name: string
 }
 
+/** 初回オンボーディング(docs/06-usecases-auth.md)が必要かどうか。 */
+export interface OnboardingStatus {
+  needs_onboarding: boolean
+}
+
+/** 初回オンボーディングの入力: Microsoft 365連携設定 + 最初の管理者ユーザー情報。 */
+export interface OnboardingInput {
+  admin_name: string
+  admin_email: string
+  m365_tenant_id: string
+  m365_client_id: string
+  m365_client_secret: string
+  m365_redirect_uri: string
+  m365_mock_enabled?: boolean
+}
+
+export interface OnboardingResult {
+  token: string
+  user: User
+}
+
 /** UC-003: 新規作成ユーザーの既定タイムゾーンなど、システム全体の設定。 */
 export interface SystemSettings {
   default_timezone: string
@@ -30,21 +51,25 @@ export interface SystemSettings {
   attendance_submission_deadline_day: number
   /** UC-N001「月次締め前警告」の基準(前月分を締めるべき当月の日)。 */
   attendance_month_close_deadline_day: number
-  /** UC-N001: メール通知(Microsoft Graph API sendMail)の設定。有効かつ全項目設定済みの場合のみ送信する。 */
-  notification_mail_enabled: boolean
-  notification_mail_tenant_id: string | null
-  notification_mail_client_id: string | null
+  /** SSOログイン・MS365ユーザー同期・Graphメール送信で共有するEntra ID資格情報。 */
+  m365_tenant_id: string | null
+  m365_client_id: string | null
   /** クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。 */
-  notification_mail_client_secret_configured: boolean
+  m365_client_secret_configured: boolean
+  m365_redirect_uri: string | null
+  /** ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。本番では有効にしない。 */
+  m365_mock_enabled: boolean
+  /** UC-N001: メール通知(Microsoft Graph API sendMail)の設定。有効かつm365資格情報・送信元アドレス設定済みの場合のみ送信する。 */
+  notification_mail_enabled: boolean
   notification_mail_sender_address: string | null
   notification_mail_sender_name: string | null
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
 export interface UpdateSystemSettingsInput
-  extends Omit<SystemSettings, 'default_work_style' | 'notification_mail_client_secret_configured'> {
+  extends Omit<SystemSettings, 'default_work_style' | 'm365_client_secret_configured'> {
   /** 省略すると既存のシークレットを変更しない。 */
-  notification_mail_client_secret?: string
+  m365_client_secret?: string
 }
 
 export interface RequestType {

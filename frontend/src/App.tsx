@@ -4,6 +4,7 @@ import { AdminLayout } from './components/AdminLayout/AdminLayout'
 import { RequireAuth } from './auth/RequireAuth'
 import { AuthCallbackPage } from './pages/auth/AuthCallbackPage'
 import { LoginPage } from './pages/auth/LoginPage'
+import { OnboardingPage } from './pages/auth/OnboardingPage'
 import { TodayAttendancePage } from './pages/attendance/TodayAttendancePage'
 import { WeekAttendancePage } from './pages/attendance/WeekAttendancePage'
 import { AttendanceDayPage } from './pages/attendance/AttendanceDayPage'
@@ -48,6 +49,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route
         path="/"

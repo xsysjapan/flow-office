@@ -148,11 +148,13 @@ use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
+use App\Domain\User\Commands\CompleteOnboarding;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SetUserTerminationDate;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
+use App\Domain\User\Handlers\CompleteOnboardingHandler;
 use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
 use App\Domain\User\Handlers\SetUserTerminationDateHandler;
@@ -213,6 +215,7 @@ return [
         SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
         RecordSsoLogin::class => RecordSsoLoginHandler::class,
+        CompleteOnboarding::class => CompleteOnboardingHandler::class,
 
         DraftWorkflowRequest::class => DraftWorkflowRequestHandler::class,
         SubmitWorkflowRequest::class => SubmitWorkflowRequestHandler::class,

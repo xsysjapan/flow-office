@@ -35,20 +35,35 @@ class RecordSsoLoginHandler implements CommandHandler
         $defaultTimezone = SystemSetting::current()->default_timezone;
 
         if ($user === null) {
-            $user = User::query()->create([
-                'entra_user_id' => $command->entraUserId,
-                'name' => $command->name ?? $command->email,
-                'email' => $command->email,
-                'employment_status' => 'active',
-                'timezone' => $defaultTimezone,
-                'last_login_at' => LocalDateTime::now($defaultTimezone),
-            ]);
+            // 初回オンボーディング(CompleteOnboardingHandler)で作成された管理者は、この時点では
+            // entra_user_idが未設定のまま登録されている。メールが一致する未リンクの行があれば
+            // 新規作成せずそこにentra_user_idをバックフィルし、付与済みの管理者ロールを維持する。
+            $unlinkedUser = $command->email !== null
+                ? User::query()->whereNull('entra_user_id')->where('email', $command->email)->first()
+                : null;
 
-            $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
-        } else {
-            $user->last_login_at = LocalDateTime::now($defaultTimezone);
-            $user->save();
+            if ($unlinkedUser !== null) {
+                $unlinkedUser->entra_user_id = $command->entraUserId;
+                if ($command->name !== null) {
+                    $unlinkedUser->name = $command->name;
+                }
+                $user = $unlinkedUser;
+                $wasFirstLogin = false;
+            } else {
+                $user = User::query()->create([
+                    'entra_user_id' => $command->entraUserId,
+                    'name' => $command->name ?? $command->email,
+                    'email' => $command->email,
+                    'employment_status' => 'active',
+                    'timezone' => $defaultTimezone,
+                ]);
+
+                $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
+            }
         }
+
+        $user->last_login_at = LocalDateTime::now($defaultTimezone);
+        $user->save();
 
         $this->eventStore->append(
             aggregateType: 'user',

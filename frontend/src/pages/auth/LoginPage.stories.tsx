@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import { fn } from 'storybook/test'
 import { AuthContext } from '../../auth/AuthContext'
 import { LoginPage } from './LoginPage'
@@ -6,11 +7,13 @@ import { LoginPage } from './LoginPage'
 function withAuth(login: () => Promise<void>) {
   return function Decorator() {
     return (
-      <AuthContext.Provider
-        value={{ user: null, status: 'unauthenticated', login, completeLogin: fn(), logout: fn() }}
-      >
-        <LoginPage />
-      </AuthContext.Provider>
+      <MemoryRouter initialEntries={['/login']}>
+        <AuthContext.Provider
+          value={{ user: null, status: 'unauthenticated', login, completeLogin: fn(), applySession: fn(), logout: fn() }}
+        >
+          <LoginPage />
+        </AuthContext.Provider>
+      </MemoryRouter>
     )
   }
 }

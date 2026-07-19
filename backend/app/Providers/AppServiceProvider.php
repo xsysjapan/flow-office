@@ -9,6 +9,7 @@ use App\Domain\Notification\Notifier;
 use App\Domain\User\Graph\HttpMicrosoftGraphClient;
 use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\LocalAzureProvider;
+use App\Domain\User\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -42,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
         //
         // ローカル開発でモックOIDC(mock-oidc/)を使う場合は、実際のEntra IDドライバの代わりに
         // LocalAzureProviderを "azure" ドライバとして登録する(docs/06-usecases-auth.md UC-001)。
-        if (config('services.azure.mock_enabled')) {
+        if (Ms365ConfigResolver::mockEnabled()) {
             Event::listen(
                 SocialiteWasCalled::class,
                 fn (SocialiteWasCalled $event) => $event->extendSocialite('azure', LocalAzureProvider::class)

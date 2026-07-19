@@ -21,7 +21,7 @@ Teams通知に集中する。
 | 3 | [03-architecture.md](./03-architecture.md) | アーキテクチャ方針 (CQRS + Event Sourcing) |
 | 4 | [04-domains.md](./04-domains.md) | 主要ドメイン一覧 |
 | 5 | [05-user-roles.md](./05-user-roles.md) | ユーザー種別 |
-| 6 | [06-usecases-auth.md](./06-usecases-auth.md) | 認証・ユーザー連携ユースケース (UC-001~) |
+| 6 | [06-usecases-auth.md](./06-usecases-auth.md) | 認証・ユーザー連携ユースケース (UC-000~) |
 | 7 | [07-usecases-attendance.md](./07-usecases-attendance.md) | 勤怠管理ユースケース (UC-A001~) |
 | 8 | [08-usecases-calendar-shift.md](./08-usecases-calendar-shift.md) | カレンダー・勤務形態・シフト管理ユースケース (UC-C001~) |
 | 9 | [09-usecases-paid-leave.md](./09-usecases-paid-leave.md) | 有給管理ユースケース (UC-P001~) |

@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\User\Ms365ConfigResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Artisan;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * E2Eテスト(Playwright, frontend/e2e/)の実行開始時にDBを既知の初期状態へ戻すための
  * 開発専用エンドポイント。`MockOidcUserController`と全く同じ考え方
- * (`config('services.azure.mock_enabled')`がfalseなら404)で本番・検証環境からは
+ * (`Ms365ConfigResolver::mockEnabled()`がfalseなら404)で本番・検証環境からは
  * 到達不能にする。
  *
  * `migrate:fresh --seed`でスキーマと`DatabaseSeeder`分(ロール・申請種別マスタ・
@@ -32,7 +33,7 @@ class DevDatabaseResetController extends Controller
     )]
     public function __invoke(): JsonResponse
     {
-        if (! config('services.azure.mock_enabled')) {
+        if (! Ms365ConfigResolver::mockEnabled()) {
             throw new NotFoundHttpException;
         }
 

@@ -56,15 +56,26 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - default_work_style_id (nullable。`work_styles`への外部キー。`user_work_style_monthly_assignments`
   にも該当月の割当が無いユーザーの勤怠計算で使うフォールバック用の働き方)
 - attendance_submission_deadline_day / attendance_month_close_deadline_day (docs/13-usecases-notification.md UC-N001)
-- notification_mail_enabled (メール通知の有効/無効。falseまたは下記項目が未設定の場合は送信しない)
-- notification_mail_tenant_id / notification_mail_client_id / notification_mail_client_secret
-  (Microsoft Graph API `sendMail`用アプリ専用トークンのクライアントクレデンシャル。
-  `notification_mail_client_secret`は平文で保持せず暗号化して保存する)
+- m365_tenant_id / m365_client_id / m365_client_secret (SSOログイン(UC-001)・MS365ユーザー
+  同期(UC-002)・Graphメール送信(UC-N001)で共有するEntra IDアプリ登録の資格情報。
+  `m365_client_secret`は平文で保持せず暗号化して保存する。初回オンボーディング(UC-000)で
+  登録し、以後はUC-003のシステム設定画面から変更できる)
+- m365_redirect_uri (SSOコールバックのリダイレクトURI。環境ごとに異なる値を初回
+  オンボーディングで登録する)
+- m365_mock_enabled (ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。本番・検証環境では
+  falseのままにする。この値はモックサーバーへの切替だけでなく、開発専用の危険なエンドポイント
+  (DB初期化)のゲートも兼ねる)
+- onboarding_completed_at (nullable。初回オンボーディング(UC-000)が完了済みかどうか。
+  未設定の間のみ`POST /api/onboarding`を未認証で受け付ける)
+- notification_mail_enabled (メール通知の有効/無効。falseまたはm365資格情報・送信元アドレスが
+  未設定の場合は送信しない)
 - notification_mail_sender_address / notification_mail_sender_name (送信元メールボックス)
 - created_at / updated_at
 
 常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから
-直接更新する([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezoneを管理する))。
+直接更新する([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezone等を管理する))。
+ただし初回作成(`m365_*`・`onboarding_completed_at`)は[UC-000](./06-usecases-auth.md#uc-000-初回オンボーディングを実行する)
+経由(未認証で呼べる`CompleteOnboarding`コマンド)で行う。
 
 日次勤怠の入力画面で、打刻・勤務予定のいずれも無い日の初期値(「システムの初期設定」)は、
 `system_settings`自体に列を追加せず、`default_work_style_id`が指すデフォルト働き方の

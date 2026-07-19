@@ -31,6 +31,7 @@ const authValue: AuthContextValue = {
   status: 'authenticated',
   login: fn(),
   completeLogin: fn(),
+  applySession: fn(),
   logout: fn(),
 }
 

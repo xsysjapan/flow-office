@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -34,6 +35,13 @@ use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
 use App\Http\Controllers\Api\WorkStyleController;
 use Illuminate\Support\Facades\Route;
+
+// --- 初回オンボーディング (docs/06-usecases-auth.md) ---
+// Entra ID SSO自体がまだ設定されていない状態でも呼べる必要があるため認証不要。
+// 完了済み(system_settings.onboarding_completed_at設定済み)なら2回目以降は422を返す
+// (OnboardingController・CompleteOnboardingHandler参照)。
+Route::get('/onboarding/status', [OnboardingController::class, 'status']);
+Route::post('/onboarding', [OnboardingController::class, 'store']);
 
 // --- 認証 (docs/06-usecases-auth.md) ---
 Route::prefix('auth')->group(function () {

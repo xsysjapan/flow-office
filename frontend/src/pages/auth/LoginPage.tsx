@@ -1,11 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { fetchOnboardingStatus } from '../../api/onboarding'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/Button/Button'
 
 export function LoginPage() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchOnboardingStatus()
+      .then(({ needs_onboarding: needsOnboarding }) => {
+        if (needsOnboarding) {
+          navigate('/onboarding', { replace: true })
+        }
+      })
+      .catch(() => {
+        // ステータス取得に失敗しても通常のログイン画面はそのまま表示する。
+      })
+  }, [navigate])
 
   const handleLogin = async () => {
     setError(null)

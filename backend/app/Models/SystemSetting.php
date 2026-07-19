@@ -12,8 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'default_timezone', 'default_work_style_id', 'attendance_submission_deadline_day', 'attendance_month_close_deadline_day',
-    'notification_mail_enabled', 'notification_mail_tenant_id', 'notification_mail_client_id',
-    'notification_mail_client_secret', 'notification_mail_sender_address', 'notification_mail_sender_name',
+    'notification_mail_enabled', 'notification_mail_sender_address', 'notification_mail_sender_name',
+    'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_redirect_uri', 'm365_mock_enabled',
+    'onboarding_completed_at',
 ])]
 class SystemSetting extends Model
 {
@@ -21,13 +22,21 @@ class SystemSetting extends Model
     {
         return [
             'notification_mail_enabled' => 'boolean',
+            'm365_mock_enabled' => 'boolean',
             // クライアントシークレットは平文でDBに保持しない (Laravelのencrypted castで暗号化する)。
-            'notification_mail_client_secret' => 'encrypted',
+            'm365_client_secret' => 'encrypted',
+            'onboarding_completed_at' => 'datetime',
         ];
     }
 
     /**
      * 常に存在する1行を返す。存在しない場合は既定値で作成する。
+     *
+     * m365_*・onboarding_completed_atの初期値は`.env`(services.azure.*、ローカル開発用
+     * mock-oidc設定)からのフォールバックとする。本番環境では通常これらが未設定のため
+     * onboarding_completed_atはnullのままとなり、初回オンボーディング(docs/06-usecases-auth.md)
+     * が必須になる。devcontainer/docker-compose/CIのようにmock_enabledが`.env`で有効な
+     * 環境は、初回`migrate --seed`だけでオンボーディング済み状態になる。
      */
     public static function current(): self
     {
@@ -35,7 +44,23 @@ class SystemSetting extends Model
             'default_timezone' => 'Asia/Tokyo',
             'attendance_submission_deadline_day' => 5,
             'attendance_month_close_deadline_day' => 10,
+            'm365_mock_enabled' => (bool) config('services.azure.mock_enabled'),
+            'm365_tenant_id' => config('services.azure.tenant'),
+            'm365_client_id' => config('services.azure.client_id'),
+            'm365_client_secret' => config('services.azure.client_secret'),
+            'm365_redirect_uri' => config('services.azure.redirect'),
+            'onboarding_completed_at' => config('services.azure.mock_enabled') ? now() : null,
         ]);
+    }
+
+    /**
+     * SSO・MS365同期・Graphメール送信で共有するEntra ID資格情報が全て設定済みか。
+     */
+    public function m365Configured(): bool
+    {
+        return (bool) $this->m365_tenant_id
+            && (bool) $this->m365_client_id
+            && (bool) $this->m365_client_secret;
     }
 
     /**
@@ -44,9 +69,7 @@ class SystemSetting extends Model
     public function notificationMailReady(): bool
     {
         return $this->notification_mail_enabled
-            && (bool) $this->notification_mail_tenant_id
-            && (bool) $this->notification_mail_client_id
-            && (bool) $this->notification_mail_client_secret
+            && $this->m365Configured()
             && (bool) $this->notification_mail_sender_address;
     }
 

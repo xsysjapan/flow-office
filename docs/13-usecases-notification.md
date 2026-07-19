@@ -63,10 +63,13 @@ CommandHandler側で判定する(原則9・11: 判定ロジックはAPI側に集
 - メール送信はSMTPではなく**Microsoft Graph API (`sendMail`)** を使う。Exchange OnlineはSMTP
   AUTH(Basic認証)の廃止を進めているため、アプリ専用トークン(クライアントクレデンシャル)で
   HTTPS経由により送信する。本文はHTML。
-- メール送信の設定(`notification_mail_enabled`・テナントID・クライアントID/シークレット・
-  送信元アドレス)は`.env`ではなく`system_settings`(管理者専用API、UC-003)で管理する。
-  `notification_mail_enabled`がfalse、または必須項目が未設定の場合はメール通知自体を送らず、
-  ログ出力のみに留める(通知処理自体は失敗させない)。
+- 送信に使うテナントID・クライアントID/シークレットは、SSOログイン(UC-001)・MS365ユーザー
+  同期(UC-002)と共有する`system_settings.m365_tenant_id`/`m365_client_id`/`m365_client_secret`
+  を使う(初回オンボーディングUC-000で登録)。メール通知固有の設定は`notification_mail_enabled`
+  (有効/無効)と送信元アドレス/表示名のみで、`.env`ではなく`system_settings`(管理者専用API、
+  UC-003)で管理する。`notification_mail_enabled`がfalse、またはm365資格情報・送信元アドレスの
+  いずれかが未設定の場合はメール通知自体を送らず、ログ出力のみに留める(通知処理自体は
+  失敗させない)。
 - **実装状況**: 宛先ユーザーを指定してのメール送信基盤(`GraphMailNotifier`・
   `SendNotificationJob`・システム設定)は実装済み。「打刻不備」「36協定超過」「承認依頼の滞留」の
   日次バッチ検知、および個人通知一覧・確認機能(`notifications` Projection、
