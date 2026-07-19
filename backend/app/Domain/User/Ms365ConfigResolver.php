@@ -33,12 +33,20 @@ class Ms365ConfigResolver
 
     /**
      * ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。この値は開発専用エンドポイント
-     * (MockOidcUserController・DevDatabaseResetController)のゲートも兼ねるため、マイグレーション前
-     * (`system_settings`テーブル未作成時)やDB接続不可時は安全側(false=本物のEntra IDを使う)
-     * にフォールバックする。
+     * (MockOidcUserController・DevDatabaseResetController、後者はDB全体を初期化する破壊的な
+     * エンドポイント)のゲートも兼ねる。`system_settings.m365_mock_enabled`は初回オンボーディング
+     * (未認証で呼べるPOST /onboarding)からも書き込めるDB値であり、本番・検証環境で誤って
+     * (または悪意を持って)trueにされる可能性を完全には排除できないため、DBの値だけに頼らず
+     * `APP_ENV`が`local`/`testing`の場合のみtrueを返せるようにする(本番・検証環境では
+     * DB値に関わらず常にfalse)。マイグレーション前(`system_settings`テーブル未作成時)や
+     * DB接続不可時も安全側(false=本物のEntra IDを使う)にフォールバックする。
      */
     public static function mockEnabled(): bool
     {
+        if (! app()->environment('local', 'testing')) {
+            return false;
+        }
+
         try {
             if (! Schema::hasTable('system_settings')) {
                 return false;

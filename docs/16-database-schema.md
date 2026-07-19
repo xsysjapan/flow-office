@@ -62,9 +62,11 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   登録し、以後はUC-003のシステム設定画面から変更できる)
 - m365_redirect_uri (SSOコールバックのリダイレクトURI。環境ごとに異なる値を初回
   オンボーディングで登録する)
-- m365_mock_enabled (ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。本番・検証環境では
-  falseのままにする。この値はモックサーバーへの切替だけでなく、開発専用の危険なエンドポイント
-  (DB初期化)のゲートも兼ねる)
+- m365_mock_enabled (ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。この値はモック
+  サーバーへの切替だけでなく、開発専用の危険なエンドポイント(DB初期化)のゲートも兼ねる。
+  未認証の初回オンボーディングからも書き込める値のため、DBの値だけに依存せず
+  `Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が`local`/`testing`の場合のみtrueを返す
+  ように強制する。本番・検証環境ではこの列の値に関わらず常にfalse扱いになる)
 - onboarding_completed_at (nullable。初回オンボーディング(UC-000)が完了済みかどうか。
   未設定の間のみ`POST /api/onboarding`を未認証で受け付ける)
 - notification_mail_enabled (メール通知の有効/無効。falseまたはm365資格情報・送信元アドレスが
