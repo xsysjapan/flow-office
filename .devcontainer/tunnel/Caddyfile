@@ -1,0 +1,32 @@
+{
+	admin off
+}
+
+# backend(8000)・frontend(5173)・mcp(8090)を/flow-office配下にパスベースでまとめる
+# ローカルリバースプロキシ。本番XSERVERでのAlias構成(docs/27-release-runbook.md)を
+# ローカルの開発サーバー向けに再現したもの。start-tunnel.sh から使う。
+:8080 {
+	# mcpは自身でパスprefixを持たない(APP_API_PREFIX相当が常に空)ため、
+	# "/flow-office/mcp" を丸ごと剥がして転送する
+	# (JSON-RPCエンドポイントは相対/mcp、OAuth関連は/oauth/*, /link, /.well-known/*)。
+	handle_path /flow-office/mcp/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	redir /flow-office/mcp /flow-office/mcp/ 308
+
+	# backendはローカル開発では既定のAPP_API_PREFIX='api'のままなので、
+	# "/flow-office" だけを剥がして "/api/..." は残したまま転送する。
+	handle /flow-office/api/* {
+		uri strip_prefix /flow-office
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# frontend(Vite dev server)。VITE_BASE_PATH=/flow-office/ を指定して起動する前提
+	# なのでパスは書き換えずそのまま転送する(HMR用WebSocketも自動でプロキシされる)。
+	# Viteのallowed-hosts検査を通すため、Host以下をlocalhostに書き換えて転送する。
+	handle /flow-office* {
+		reverse_proxy 127.0.0.1:5173 {
+			header_up Host localhost:5173
+		}
+	}
+}

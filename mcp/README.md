@@ -104,6 +104,55 @@ discoveryメタデータ(RFC 8414 / RFC 9728)は以下で取得できる。
 - `GET /.well-known/oauth-authorization-server`
 - `GET /.well-known/oauth-protected-resource`
 
+### devcontainer上でmcp/を動かす
+
+`.devcontainer/start.sh`(`docker compose up`単体で使う場合)は`backend`・`frontend`に加えて
+`mcp`もセットアップ・起動する(`php artisan serve --port=8090`)。VS Code Dev Containersで
+開いた場合は自動起動しないため、`postStartCommand`の案内通り手動で起動する。
+
+```
+cd mcp
+php artisan serve --host=0.0.0.0 --port=8090
+```
+
+### frontend/backend/mcpをまとめてngrokで公開する(/flow-office配下)
+
+実際のMCPクライアント(Claude等)からDynamic Client Registration・OAuth2認可コードフローを
+インターネット経由でテストしたい場合など、本番(`docs/27-release-runbook.md`)と同じ
+`/flow-office/`(frontend)・`/flow-office/api`(backend)・`/flow-office/mcp`(mcp)の
+パス構成のまま、devcontainerをngrokで公開できる。
+
+前提: 各自のngrokアカウントで一度だけ認証しておく。
+
+```
+ngrok config add-authtoken <自分のngrokアカウントのトークン>
+```
+
+`backend`(:8000)・`frontend`(:5173)・`mcp`(:8090)を起動した状態で以下を実行すると、
+Caddy(ローカルリバースプロキシ、:8080)経由でパスをまとめ、ngrokトンネルを張る。
+
+```
+.devcontainer/tunnel/start-tunnel.sh
+```
+
+表示された公開URLをもとに、frontendとmcpは以下のように**環境変数を付けて起動し直す**
+(すでに起動している`npm run dev`/`php artisan serve`は一旦止める。backendはそのままでよい)。
+
+```
+# frontend: ViteのbaseとAPIの向き先を/flow-office配下に合わせる
+cd frontend
+VITE_BASE_PATH=/flow-office/ VITE_API_BASE_URL=https://xxxx.ngrok-free.app/flow-office/api \
+  npm run dev -- --host 0.0.0.0
+
+# mcp: APP_URLを上書きしないとOAuth2メタデータ(issuer等)が/flow-office/mcpを含まない
+# 誤ったURLになり、外部のMCPクライアントからの接続が壊れる
+cd mcp
+APP_URL=https://xxxx.ngrok-free.app/flow-office/mcp \
+  php artisan serve --host=0.0.0.0 --port=8090
+```
+
+MCPクライアントへの登録URLは `https://xxxx.ngrok-free.app/flow-office/mcp/mcp` になる。
+
 ## ツール一覧
 
 docs/25-usecases-integrations-mcp.md「MCPツール一覧」に対応する。
