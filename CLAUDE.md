@@ -8,9 +8,11 @@
 ```
 backend/     Laravel API (Sanctumトークン認証)。実装の詳細は backend/CLAUDE.md を参照
 frontend/    Vite + React + TypeScript のSPA。Storybook導入済み
-mcp-server/  ClaudeなどのAIアプリへ勤怠操作ツールを提供するMCPサーバー(TypeScript)。
-             backend/のAPIを呼び出すクライアントであり、勤怠計算ロジックは持たない
-             (docs/25-usecases-integrations-mcp.md)。詳細は mcp-server/README.md を参照
+mcp/         ClaudeなどのAIアプリへ勤怠操作ツールを提供するMCPサーバー。backend/とは別の
+             Laravelアプリ(独立したcomposer.json・DB)として実装し、backend/のDBには
+             アクセスしない。/mcp をエンドポイントとし、認可はOAuth2(Dynamic Client
+             Registration対応)で行う(docs/25-usecases-integrations-mcp.md)。詳細は
+             mcp/README.md を参照
 docs/        設計ドキュメント(全体の目次は docs/README.md)
 .claude/     開発でよく使うパターンをまとめたスキル
 ```
@@ -114,3 +116,20 @@ npm run build-storybook
 - `add-api-hook` — 新しいbackend APIエンドポイントに対応する型・APIクライアント関数・
   React Queryフックを追加する
 - `add-page` — 新しい画面(ルーティング込み)を追加する
+
+## MCPサーバー (mcp/)
+
+backend/とは別のLaravelアプリ(独立したcomposer.json・DB)。backend/のDBには一切アクセス
+せず、backendの個人連携Sanctumトークン(UC-I001)を使ってHTTP経由でAPIを呼び出すだけの
+クライアントである。詳細は mcp/README.md と docs/25-usecases-integrations-mcp.md を参照。
+
+```
+cd mcp
+composer install
+cp .env.example .env && php artisan key:generate
+php artisan mcp:oauth-keys      # OAuth2アクセストークン署名用のRSA鍵ペアを生成する
+touch database/database.sqlite
+php artisan migrate
+php artisan serve --port=8090
+php artisan test
+```
