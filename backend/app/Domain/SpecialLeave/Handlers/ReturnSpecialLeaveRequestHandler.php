@@ -8,9 +8,10 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -48,11 +49,15 @@ class ReturnSpecialLeaveRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '特別休暇申請の差戻し',
-            summary: "{$request->target_date->toDateString()} の特別休暇申請が差し戻されました: {$command->comment}",
-            detailUrl: null,
-        );
+        $applicant = User::find($request->user_id);
+        if ($applicant !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $applicant,
+                title: '特別休暇申請の差戻し',
+                summary: "{$request->target_date->toDateString()} の特別休暇申請が差し戻されました: {$command->comment}",
+                detailUrl: null,
+            );
+        }
 
         return $request;
     }

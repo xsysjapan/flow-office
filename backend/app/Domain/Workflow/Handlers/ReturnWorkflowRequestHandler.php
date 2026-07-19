@@ -8,7 +8,8 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
+use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 
@@ -43,11 +44,15 @@ class ReturnWorkflowRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '差戻し',
-            summary: "「{$workflowRequest->title}」が差し戻されました: {$command->comment}",
-            detailUrl: null,
-        );
+        $applicant = User::find($workflowRequest->applicant_user_id);
+        if ($applicant !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $applicant,
+                title: '差戻し',
+                summary: "「{$workflowRequest->title}」が差し戻されました: {$command->comment}",
+                detailUrl: null,
+            );
+        }
 
         return $workflowRequest->refresh();
     }

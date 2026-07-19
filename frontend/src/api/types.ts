@@ -30,6 +30,21 @@ export interface SystemSettings {
   attendance_submission_deadline_day: number
   /** UC-N001「月次締め前警告」の基準(前月分を締めるべき当月の日)。 */
   attendance_month_close_deadline_day: number
+  /** UC-N001: メール通知(Microsoft Graph API sendMail)の設定。有効かつ全項目設定済みの場合のみ送信する。 */
+  notification_mail_enabled: boolean
+  notification_mail_tenant_id: string | null
+  notification_mail_client_id: string | null
+  /** クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。 */
+  notification_mail_client_secret_configured: boolean
+  notification_mail_sender_address: string | null
+  notification_mail_sender_name: string | null
+}
+
+/** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
+export interface UpdateSystemSettingsInput
+  extends Omit<SystemSettings, 'default_work_style' | 'notification_mail_client_secret_configured'> {
+  /** 省略すると既存のシークレットを変更しない。 */
+  notification_mail_client_secret?: string
 }
 
 export interface RequestType {

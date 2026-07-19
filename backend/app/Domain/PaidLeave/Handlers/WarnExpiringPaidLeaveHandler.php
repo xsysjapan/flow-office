@@ -7,13 +7,13 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-P005: 有給消滅警告を出す。有効期限90日以内・残日数ありの付与を対象に、
- * 社員および管理部(Teams通知チャンネル)へ通知する。同一付与に重複して通知しないよう
+ * 本人へ通知する。同一付与に重複して通知しないよう
  * `paid_leave_grants.expiry_warned_at` で警告済みを記録する。
  *
  * @implements CommandHandler<WarnExpiringPaidLeave>
@@ -46,7 +46,8 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
             $message = "{$grant->user->name}さんの有給休暇 {$grant->remaining_days}日が".
                 "{$grant->expires_on->toDateString()}に失効します。";
 
-            SendTeamsNotificationJob::enqueue(
+            SendNotificationJob::enqueue(
+                recipient: $grant->user,
                 title: '有給休暇の失効警告',
                 summary: $message,
                 detailUrl: null,

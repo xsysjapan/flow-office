@@ -12,7 +12,7 @@ Artisan::command('inspire', function () {
 // crontab には `* * * * * php artisan schedule:run` のみを登録し、
 // 実際のジョブ実行はここで定義するスケジュールに委ねる。
 
-// Teams通知など、DBキューに積まれたジョブを1分ごとに捌く。
+// メール通知など、DBキューに積まれたジョブを1分ごとに捌く。
 Schedule::command('queue:work --stop-when-empty --max-time=50')
     ->everyMinute()
     ->withoutOverlapping();

@@ -55,6 +55,12 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - default_timezone (新規作成ユーザーの初期タイムゾーン。既定値 `Asia/Tokyo`)
 - default_work_style_id (nullable。`work_styles`への外部キー。`user_work_style_monthly_assignments`
   にも該当月の割当が無いユーザーの勤怠計算で使うフォールバック用の働き方)
+- attendance_submission_deadline_day / attendance_month_close_deadline_day (docs/13-usecases-notification.md UC-N001)
+- notification_mail_enabled (メール通知の有効/無効。falseまたは下記項目が未設定の場合は送信しない)
+- notification_mail_tenant_id / notification_mail_client_id / notification_mail_client_secret
+  (Microsoft Graph API `sendMail`用アプリ専用トークンのクライアントクレデンシャル。
+  `notification_mail_client_secret`は平文で保持せず暗号化して保存する)
+- notification_mail_sender_address / notification_mail_sender_name (送信元メールボックス)
 - created_at / updated_at
 
 常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから

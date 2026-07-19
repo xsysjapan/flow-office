@@ -4,6 +4,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
 
@@ -18,6 +19,12 @@ export function SystemSettingsPage() {
   const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
   const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
   const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<number | null>(null)
+  const [notificationMailEnabled, setNotificationMailEnabled] = useState(false)
+  const [notificationMailTenantId, setNotificationMailTenantId] = useState('')
+  const [notificationMailClientId, setNotificationMailClientId] = useState('')
+  const [notificationMailClientSecret, setNotificationMailClientSecret] = useState('')
+  const [notificationMailSenderAddress, setNotificationMailSenderAddress] = useState('')
+  const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -26,6 +33,11 @@ export function SystemSettingsPage() {
     setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
     setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
     setDefaultWorkStyleId(data.default_work_style_id)
+    setNotificationMailEnabled(data.notification_mail_enabled)
+    setNotificationMailTenantId(data.notification_mail_tenant_id ?? '')
+    setNotificationMailClientId(data.notification_mail_client_id ?? '')
+    setNotificationMailSenderAddress(data.notification_mail_sender_address ?? '')
+    setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -41,8 +53,20 @@ export function SystemSettingsPage() {
         // 既定の働き方は管理メニューの勤務形態画面(デフォルトに設定)で変更する。
         // ここでは読み込んだ値をそのまま送り返し、上書きしないようにする。
         default_work_style_id: defaultWorkStyleId,
+        notification_mail_enabled: notificationMailEnabled,
+        notification_mail_tenant_id: notificationMailTenantId || null,
+        notification_mail_client_id: notificationMailClientId || null,
+        // 空欄のままなら送らない(既存のシークレットを変更しない)。
+        ...(notificationMailClientSecret ? { notification_mail_client_secret: notificationMailClientSecret } : {}),
+        notification_mail_sender_address: notificationMailSenderAddress || null,
+        notification_mail_sender_name: notificationMailSenderName || null,
       },
-      { onSuccess: () => setSavedMessage(true) },
+      {
+        onSuccess: () => {
+          setSavedMessage(true)
+          setNotificationMailClientSecret('')
+        },
+      },
     )
   }
 
@@ -108,6 +132,81 @@ export function SystemSettingsPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           この日の3日前になっても前月分の月次勤怠が締められていない場合に通知する。
         </p>
+      </FormField>
+
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">メール通知設定</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        通知はMicrosoft Graph API(<code>sendMail</code>)経由で送信する。ここが未設定、または
+        「メール通知を有効にする」がオフの場合、通知メールは送信されない(ログにのみ記録される)。
+      </p>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={notificationMailEnabled}
+          onCheckedChange={(checked) => {
+            setNotificationMailEnabled(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        メール通知を有効にする
+      </label>
+
+      <FormField label="テナントID" htmlFor="system-settings-mail-tenant-id">
+        <Input
+          id="system-settings-mail-tenant-id"
+          value={notificationMailTenantId}
+          onChange={(e) => {
+            setNotificationMailTenantId(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+      </FormField>
+
+      <FormField label="クライアントID" htmlFor="system-settings-mail-client-id">
+        <Input
+          id="system-settings-mail-client-id"
+          value={notificationMailClientId}
+          onChange={(e) => {
+            setNotificationMailClientId(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+      </FormField>
+
+      <FormField label="クライアントシークレット" htmlFor="system-settings-mail-client-secret">
+        <Input
+          id="system-settings-mail-client-secret"
+          type="password"
+          placeholder={data?.notification_mail_client_secret_configured ? '設定済み(変更する場合のみ入力)' : '未設定'}
+          value={notificationMailClientSecret}
+          onChange={(e) => {
+            setNotificationMailClientSecret(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+      </FormField>
+
+      <FormField label="送信元メールアドレス" htmlFor="system-settings-mail-sender-address">
+        <Input
+          id="system-settings-mail-sender-address"
+          type="email"
+          value={notificationMailSenderAddress}
+          onChange={(e) => {
+            setNotificationMailSenderAddress(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
+      </FormField>
+
+      <FormField label="送信元表示名" htmlFor="system-settings-mail-sender-name">
+        <Input
+          id="system-settings-mail-sender-name"
+          value={notificationMailSenderName}
+          onChange={(e) => {
+            setNotificationMailSenderName(e.target.value)
+            setSavedMessage(false)
+          }}
+        />
       </FormField>
 
       <Button

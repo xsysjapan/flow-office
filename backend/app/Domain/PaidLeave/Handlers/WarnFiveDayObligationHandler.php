@@ -7,15 +7,14 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-P006: 年5日取得義務を警告する。年10日以上付与された付与単位ごとに、取得義務期間
  * (付与日から1年)の終了が近づいても取得日数が5日未満の場合に警告する。「承認者」は
- * 有給申請ごとに都度指定されるため固定の宛先を持たず、社員本人と管理部(Teams通知チャンネル)
- * へ通知する。
+ * 有給申請ごとに都度指定されるため固定の宛先を持たず、社員本人へ通知する。
  *
  * @implements CommandHandler<WarnFiveDayObligation>
  */
@@ -61,7 +60,8 @@ class WarnFiveDayObligationHandler implements CommandHandler
             $message = "{$grant->user->name}さんは年5日の有給取得義務(期限: ".
                 "{$obligationDeadline->toDateString()})に対し、現在{$usedDays}日しか取得していません。";
 
-            SendTeamsNotificationJob::enqueue(
+            SendNotificationJob::enqueue(
+                recipient: $grant->user,
                 title: '有給休暇 年5日取得義務の警告',
                 summary: $message,
                 detailUrl: null,

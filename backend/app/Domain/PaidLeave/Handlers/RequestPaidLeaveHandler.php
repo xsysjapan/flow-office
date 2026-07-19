@@ -8,7 +8,7 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
@@ -16,6 +16,7 @@ use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -97,11 +98,15 @@ class RequestPaidLeaveHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '有給申請の承認依頼',
-            summary: "{$command->targetDate} の有給申請が提出されました。",
-            detailUrl: null,
-        );
+        $approver = User::find($command->approverUserId);
+        if ($approver !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $approver,
+                title: '有給申請の承認依頼',
+                summary: "{$command->targetDate} の有給申請が提出されました。",
+                detailUrl: null,
+            );
+        }
 
         return $request;
     }

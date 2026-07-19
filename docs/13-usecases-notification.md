@@ -60,5 +60,14 @@ CommandHandler側で判定する(原則9・11: 判定ロジックはAPI側に集
   を持たせ、個人通知一覧のProjectionをここから再生成できるようにする(原則1・2)。
 - 36協定の上限値は `agreement_36_rules` マスタで管理し、コードにハードコードしない
   (原則8)。最終的な閾値・特別条項の扱いは社労士確認を前提とする(docs/08・docs/20と同様)。
-- メール送信自体はSMTP設定(`.env`)に依存する。未設定環境ではログ出力のみに留め、
-  通知処理自体は失敗させない(既存Teams Webhook未設定時の扱いを踏襲)。
+- メール送信はSMTPではなく**Microsoft Graph API (`sendMail`)** を使う。Exchange OnlineはSMTP
+  AUTH(Basic認証)の廃止を進めているため、アプリ専用トークン(クライアントクレデンシャル)で
+  HTTPS経由により送信する。本文はHTML。
+- メール送信の設定(`notification_mail_enabled`・テナントID・クライアントID/シークレット・
+  送信元アドレス)は`.env`ではなく`system_settings`(管理者専用API、UC-003)で管理する。
+  `notification_mail_enabled`がfalse、または必須項目が未設定の場合はメール通知自体を送らず、
+  ログ出力のみに留める(通知処理自体は失敗させない)。
+- **実装状況**: 宛先ユーザーを指定してのメール送信基盤(`GraphMailNotifier`・
+  `SendNotificationJob`・システム設定)は実装済み。「打刻不備」「36協定超過」「承認依頼の滞留」の
+  日次バッチ検知、および個人通知一覧・確認機能(`notifications` Projection、
+  `notification.confirmed`)は今後の実装対象として設計のみ済み。

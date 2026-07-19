@@ -4,8 +4,8 @@ namespace App\Providers;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\EventStore;
+use App\Domain\Notification\GraphMailNotifier;
 use App\Domain\Notification\Notifier;
-use App\Domain\Notification\TeamsWebhookNotifier;
 use App\Domain\User\Graph\HttpMicrosoftGraphClient;
 use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\LocalAzureProvider;
@@ -28,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(EventStore::class);
         $this->app->singleton(CommandBus::class);
         $this->app->bind(MicrosoftGraphClient::class, HttpMicrosoftGraphClient::class);
-        $this->app->bind(Notifier::class, TeamsWebhookNotifier::class);
+        $this->app->bind(Notifier::class, GraphMailNotifier::class);
     }
 
     /**

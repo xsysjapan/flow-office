@@ -8,13 +8,14 @@ use App\Domain\Attendance\Services\ShiftScheduleReviewService;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-C004 手順6: 3交代制シフト表を公開する。下書き中(is_published=false)の
- * シフトパターン割当を対象社員へ公開し、Teams通知する(add-teams-notification スキル参照)。
+ * シフトパターン割当を対象社員へ公開し、メール通知する。
  * 手順5の警告(法定休日不足・連続勤務・月間予定時間)は公開をブロックしない。
  *
  * @implements CommandHandler<PublishEmployeeShiftAssignments>
@@ -61,7 +62,13 @@ class PublishEmployeeShiftAssignmentsHandler implements CommandHandler
         }
 
         foreach ($assignments->groupBy('user_id') as $userId => $userAssignments) {
-            SendTeamsNotificationJob::enqueue(
+            $recipient = User::find($userId);
+            if ($recipient === null) {
+                continue;
+            }
+
+            SendNotificationJob::enqueue(
+                recipient: $recipient,
                 title: 'シフト表公開',
                 summary: "{$command->yearMonth}のシフト表が公開されました({$userAssignments->count()}日分)。",
                 detailUrl: null,

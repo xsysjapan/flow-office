@@ -22,6 +22,13 @@ class SystemSettingResource extends JsonResource
             ]),
             'attendance_submission_deadline_day' => $this->attendance_submission_deadline_day,
             'attendance_month_close_deadline_day' => $this->attendance_month_close_deadline_day,
+            'notification_mail_enabled' => $this->notification_mail_enabled,
+            'notification_mail_tenant_id' => $this->notification_mail_tenant_id,
+            'notification_mail_client_id' => $this->notification_mail_client_id,
+            // クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。
+            'notification_mail_client_secret_configured' => $this->notification_mail_client_secret !== null,
+            'notification_mail_sender_address' => $this->notification_mail_sender_address,
+            'notification_mail_sender_name' => $this->notification_mail_sender_name,
         ];
     }
 }

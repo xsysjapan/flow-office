@@ -11,6 +11,12 @@ const settings: SystemSettings = {
   default_work_style_id: 3,
   attendance_submission_deadline_day: 5,
   attendance_month_close_deadline_day: 10,
+  notification_mail_enabled: false,
+  notification_mail_tenant_id: null,
+  notification_mail_client_id: null,
+  notification_mail_client_secret_configured: false,
+  notification_mail_sender_address: null,
+  notification_mail_sender_name: null,
 }
 
 function renderPage() {
@@ -49,6 +55,11 @@ describe('SystemSettingsPage', () => {
         attendance_submission_deadline_day: 5,
         attendance_month_close_deadline_day: 10,
         default_work_style_id: 3,
+        notification_mail_enabled: false,
+        notification_mail_tenant_id: null,
+        notification_mail_client_id: null,
+        notification_mail_sender_address: null,
+        notification_mail_sender_name: null,
       }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()

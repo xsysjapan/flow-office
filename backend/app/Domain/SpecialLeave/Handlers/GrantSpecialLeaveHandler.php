@@ -7,9 +7,10 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveType;
+use App\Models\User;
 
 /**
  * @implements CommandHandler<GrantSpecialLeave>
@@ -49,11 +50,15 @@ class GrantSpecialLeaveHandler implements CommandHandler
         $typeName = SpecialLeaveType::query()->find($command->specialLeaveTypeId)?->name ?? '特別休暇';
         $expiryText = $command->expiresOn !== null ? "(有効期限: {$command->expiresOn})" : '(失効しない付与)';
 
-        SendTeamsNotificationJob::enqueue(
-            title: '特別休暇付与',
-            summary: "{$typeName}が{$command->grantedDays}日付与されました{$expiryText}。",
-            detailUrl: null,
-        );
+        $user = User::find($command->userId);
+        if ($user !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $user,
+                title: '特別休暇付与',
+                summary: "{$typeName}が{$command->grantedDays}日付与されました{$expiryText}。",
+                detailUrl: null,
+            );
+        }
 
         return $grant;
     }

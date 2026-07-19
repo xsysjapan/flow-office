@@ -8,9 +8,10 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -49,11 +50,15 @@ class ApproveAttendanceMonthHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '月次勤怠が承認されました',
-            summary: "{$month->year_month} の月次勤怠が承認されました。バックオフィス確認対象になります。",
-            detailUrl: null,
-        );
+        $applicant = User::find($month->user_id);
+        if ($applicant !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $applicant,
+                title: '月次勤怠が承認されました',
+                summary: "{$month->year_month} の月次勤怠が承認されました。バックオフィス確認対象になります。",
+                detailUrl: null,
+            );
+        }
 
         return $month;
     }
