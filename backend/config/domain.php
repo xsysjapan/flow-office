@@ -91,6 +91,7 @@ use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
 use App\Domain\Device\Commands\RevokeDevice;
+use App\Domain\Device\Commands\UpdateDeviceRoles;
 use App\Domain\Device\Commands\UpdateDeviceSettings;
 use App\Domain\Device\Commands\WarnStaleDevices;
 use App\Domain\Device\Handlers\ClaimDevicePairingHandler;
@@ -100,6 +101,7 @@ use App\Domain\Device\Handlers\GrantDeviceScopeHandler;
 use App\Domain\Device\Handlers\IssueDevicePairingClaimHandler;
 use App\Domain\Device\Handlers\RegisterDeviceHandler;
 use App\Domain\Device\Handlers\RevokeDeviceHandler;
+use App\Domain\Device\Handlers\UpdateDeviceRolesHandler;
 use App\Domain\Device\Handlers\UpdateDeviceSettingsHandler;
 use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
 use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
@@ -187,6 +189,7 @@ return [
         DeleteDevice::class => DeleteDeviceHandler::class,
         GrantDeviceScope::class => GrantDeviceScopeHandler::class,
         UpdateDeviceSettings::class => UpdateDeviceSettingsHandler::class,
+        UpdateDeviceRoles::class => UpdateDeviceRolesHandler::class,
         WarnStaleDevices::class => WarnStaleDevicesHandler::class,
 
         StartDeviceAdminSession::class => StartDeviceAdminSessionHandler::class,

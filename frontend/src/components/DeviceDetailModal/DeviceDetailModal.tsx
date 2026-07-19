@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
+import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
 import { DevicePairingQr } from '../DevicePairingQr/DevicePairingQr'
@@ -8,7 +9,13 @@ import { Checkbox } from '../ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
-import { useGrantDeviceScope, useIssueDevicePairingClaim, useUpdateDeviceSettings } from '../../hooks/useDevices'
+import {
+  useDisableDevice,
+  useGrantDeviceScope,
+  useIssueDevicePairingClaim,
+  useUpdateDeviceRoles,
+  useUpdateDeviceSettings,
+} from '../../hooks/useDevices'
 import type { Device, DeviceRoleType, DeviceScopeType, DeviceStatus, DeviceType, WorkLocationType } from '../../api/types'
 import { WORK_LOCATION_TYPE_OPTIONS } from '../../utils/statusLabels'
 
@@ -62,8 +69,22 @@ const DEVICE_SCOPE_LABELS: Record<DeviceScopeType, string> = {
 
 const GRANTABLE_DEVICE_SCOPES = Object.keys(DEVICE_SCOPE_LABELS) as DeviceScopeType[]
 
+// 端末新規登録時に選べる役割と同じ選択肢(DeviceListPage.REGISTERABLE_ROLE_TYPESと揃える)。
+const EDITABLE_ROLE_TYPES: DeviceRoleType[] = ['attendance_reader', 'authentication_device', 'access_control']
+
+// 打刻リーダーは10分に1回heartbeatを送信する想定のため、最終通信からこれ以上経過した
+// 稼働中(active)端末は「現在は動いていない」とみなして詳細画面に表示する(実際の
+// 稼働状態(status)自体はサーバー側のイベント駆動のまま変更しない)。
+const HEARTBEAT_STALE_AFTER_MINUTES = 30
+
 function formatDateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString('ja-JP') : '-'
+}
+
+function isHeartbeatStale(device: Device): boolean {
+  if (device.status !== 'active') return false
+  if (!device.last_seen_at) return true
+  return Date.now() - new Date(device.last_seen_at).getTime() > HEARTBEAT_STALE_AFTER_MINUTES * 60 * 1000
 }
 
 export interface DeviceDetailModalProps {
@@ -75,8 +96,8 @@ export interface DeviceDetailModalProps {
 
 /**
  * 端末詳細をモーダルで表示する(docs/23-usecases-devices.md「端末管理画面(UI)」)。
- * ペアリング用QRの表示・再発行と、設置場所などの設定変更をここに集約する。
- * 役割・スコープの付与、停止・失効は既存の専用操作(DeviceListPage側)のまま扱う。
+ * ペアリング用QR・再ペアリングの発行、設置場所などの設定変更、役割・スコープの付与、
+ * 稼働中の端末の停止をここに集約する。失効・削除は一覧側の専用操作(DeviceListPage)のまま扱う。
  */
 export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }: DeviceDetailModalProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -85,11 +106,17 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
 
   const issuePairingClaim = useIssueDevicePairingClaim()
   const updateSettings = useUpdateDeviceSettings()
+  const updateRoles = useUpdateDeviceRoles()
   const grantScope = useGrantDeviceScope()
+  const disableDevice = useDisableDevice()
 
   const grantedScopes = device.scopes ?? []
   const ungrantedScopes = GRANTABLE_DEVICE_SCOPES.filter((scope) => !grantedScopes.includes(scope))
   const [scopeToGrant, setScopeToGrant] = useState<DeviceScopeType | ''>('')
+
+  const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(
+    (device.roles ?? []).filter((role) => EDITABLE_ROLE_TYPES.includes(role)),
+  )
 
   const [name, setName] = useState(device.name)
   const [locationName, setLocationName] = useState(device.location_name ?? '')
@@ -112,9 +139,12 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
       setAllowOffline(device.allow_offline)
       setRequireLocation(device.require_location)
       setAutoDetectPunchType(device.auto_detect_punch_type)
+      setRoleTypes((device.roles ?? []).filter((role) => EDITABLE_ROLE_TYPES.includes(role)))
       updateSettings.reset()
       issuePairingClaim.reset()
       grantScope.reset()
+      disableDevice.reset()
+      updateRoles.reset()
       setScopeToGrant('')
     }
   }
@@ -127,6 +157,17 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     )
   }
 
+  const toggleRoleType = (roleType: DeviceRoleType) => {
+    setRoleTypes((prev) => (prev.includes(roleType) ? prev.filter((r) => r !== roleType) : [...prev, roleType]))
+  }
+
+  const handleSaveRoles = () => {
+    // 一覧の登録フォームでは選べない役割(admin_operation等)がもし付与済みでも、
+    // このチェックボックスの対象外として維持する(意図せず剥奪しない)。
+    const preservedRoles = (device.roles ?? []).filter((role) => !EDITABLE_ROLE_TYPES.includes(role))
+    updateRoles.mutate({ deviceId: device.id, roleTypes: [...roleTypes, ...preservedRoles] })
+  }
+
   // device propが差し替わる(親のクエリが最新化する)たびにフォームへ反映する。
   useEffect(() => {
     if (!isOpen) return
@@ -137,6 +178,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
     setAllowOffline(device.allow_offline)
     setRequireLocation(device.require_location)
     setAutoDetectPunchType(device.auto_detect_punch_type)
+    setRoleTypes((device.roles ?? []).filter((role) => EDITABLE_ROLE_TYPES.includes(role)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id])
 
@@ -169,6 +211,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={DEVICE_STATUS_TONE[device.status]}>{DEVICE_STATUS_LABELS[device.status]}</Badge>
+          {isHeartbeatStale(device) && <Badge tone="warning">疎通途絶(30分以上応答なし)</Badge>}
           <span className="text-sm text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</span>
           <span className="text-sm text-muted-foreground">
             {(device.roles ?? []).map((role) => DEVICE_ROLE_LABELS[role]).join(' / ') || '役割未設定'}
@@ -184,9 +227,43 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
           <dd className="text-foreground">{device.app_version ?? '-'}</dd>
         </dl>
 
-        {device.status === 'pending_pairing' && (
+        <div className="rounded-md border border-border p-3">
+          <p className="mb-3 text-sm font-medium text-foreground">役割</p>
+          {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
+          {updateRoles.isSuccess && <p className="mb-2 text-sm text-success">役割を保存しました。</p>}
+
+          <fieldset className="mb-3">
+            <div className="flex flex-wrap gap-4">
+              {EDITABLE_ROLE_TYPES.map((roleType) => (
+                <label key={roleType} className="flex items-center gap-2 text-sm text-foreground">
+                  <Checkbox checked={roleTypes.includes(roleType)} onCheckedChange={() => toggleRoleType(roleType)} />
+                  {DEVICE_ROLE_LABELS[roleType]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <Button
+            size="sm"
+            isLoading={updateRoles.isPending}
+            disabled={roleTypes.length === 0}
+            onClick={handleSaveRoles}
+          >
+            役割を保存する
+          </Button>
+        </div>
+
+        {(device.status === 'pending_pairing' || device.status === 'active') && (
           <div className="rounded-md border border-border p-3">
-            <p className="mb-2 text-sm font-medium text-foreground">ペアリング用QR</p>
+            <p className="mb-2 text-sm font-medium text-foreground">
+              {device.status === 'active' ? '再ペアリング' : 'ペアリング用QR'}
+            </p>
+            {device.status === 'active' && !issuePairingClaim.data && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Androidアプリを削除した場合など、この端末を再ペアリングできます。QRを発行すると
+                現在のトークンは失効し、ペアリングが完了するまでこの端末は打刻できなくなります。
+              </p>
+            )}
             {issuePairingClaim.error && <ErrorMessage error={issuePairingClaim.error} />}
             {issuePairingClaim.data ? (
               <div className="max-w-xs text-xs text-foreground">
@@ -196,6 +273,16 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
                   (一度のみ表示・5分で失効します。画面を撮影・共有しないでください)
                 </p>
               </div>
+            ) : device.status === 'active' ? (
+              <ConfirmActionDialog
+                triggerLabel="再ペアリング用QRを発行"
+                triggerVariant="secondary"
+                title="端末を再ペアリングしますか?"
+                description={`「${device.name}」の現在のトークンを失効させ、新しい再ペアリング用QRを発行します。ペアリングが完了するまでこの端末は打刻できません。`}
+                confirmLabel="発行する"
+                isPending={issuePairingClaim.isPending}
+                onConfirm={() => issuePairingClaim.mutate(device.id)}
+              />
             ) : (
               <Button
                 size="sm"
@@ -206,6 +293,21 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
                 ペアリング用QRを発行
               </Button>
             )}
+          </div>
+        )}
+
+        {device.status === 'active' && (
+          <div className="rounded-md border border-border p-3">
+            <p className="mb-2 text-sm font-medium text-foreground">稼働状態</p>
+            {disableDevice.error && <ErrorMessage error={disableDevice.error} />}
+            <Button
+              size="sm"
+              variant="secondary"
+              isLoading={disableDevice.isPending}
+              onClick={() => disableDevice.mutate(device.id)}
+            >
+              停止する
+            </Button>
           </div>
         )}
 
