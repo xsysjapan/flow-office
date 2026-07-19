@@ -42,6 +42,7 @@ Teams通知に集中する。
 | 24 | [24-usecases-authentication-keys.md](./24-usecases-authentication-keys.md) | 認証キー管理ユースケース (UC-K001~) |
 | 25 | [25-usecases-integrations-mcp.md](./25-usecases-integrations-mcp.md) | API・MCP連携ユースケース (UC-I001~) |
 | 26 | [26-usecases-monthly-import.md](./26-usecases-monthly-import.md) | 作業報告書からの月次勤怠作成ユースケース (UC-R001~) |
+| 27 | [27-release-runbook.md](./27-release-runbook.md) | 本番(XSERVER)リリース手順 |
 
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。

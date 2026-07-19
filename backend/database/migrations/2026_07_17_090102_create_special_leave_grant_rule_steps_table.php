@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedTinyInteger('grant_days');
             $table->timestamps();
 
-            $table->unique(['rule_id', 'continuous_service_months']);
+            $table->unique(['rule_id', 'continuous_service_months'], 'special_leave_grant_rule_steps_rule_months_unique');
         });
     }
 

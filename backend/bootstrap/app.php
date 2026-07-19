@@ -11,10 +11,22 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
+// withRouting()のapiPrefixはこのファイルの実行時(Laravel標準の.env読み込み
+// ブートストラッパーより前)に評価されるため、通常のenv()では.envの値を参照できない
+// (configキャッシュの有無に関わらず常に既定値にフォールバックしてしまう)。
+// そのため明示的に先読みする。
+if (file_exists(dirname(__DIR__).'/.env')) {
+    \Dotenv\Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
+}
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
+        // 本番(XSERVER)では/flow-office/apiにドキュメントルートをマウントするため、
+        // そのマウントパス自体が'api'セグメントを兼ねる。APP_API_PREFIXを空にして
+        // 二重の/api/apiを避ける(.env参照)。ローカル開発・CI・既存テストは既定値'api'のまま。
+        apiPrefix: env('APP_API_PREFIX', 'api'),
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )

@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('grant_reason')->nullable();
             $table->timestamps();
 
-            $table->index(['user_id', 'special_leave_type_id', 'expires_on']);
+            $table->index(['user_id', 'special_leave_type_id', 'expires_on'], 'special_leave_grants_user_type_expires_index');
         });
     }
 
