@@ -10,14 +10,13 @@ return new class extends Migration
     {
         Schema::create('attendance_import_sessions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->constrained('mcp_users');
             $table->string('target_month');
             $table->string('status')->default('created');
             $table->string('source_type')->nullable();
             $table->string('source_file_name')->nullable();
             $table->string('source_file_hash')->nullable();
             $table->string('client_type')->nullable();
-            $table->foreignId('integration_id')->nullable()->constrained('application_integrations')->nullOnDelete();
             $table->foreignId('monthly_attendance_draft_id')->nullable()->constrained('monthly_attendance_drafts')->nullOnDelete();
             $table->timestamps();
 

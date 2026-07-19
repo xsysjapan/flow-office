@@ -41,6 +41,7 @@ class AttendanceDifferenceDetector
         $existing = null;
         if ($day !== null) {
             $existing = [
+                'id' => $day->id,
                 'start_time' => $day->actual_start_at?->format('H:i'),
                 'end_time' => $day->actual_end_at?->format('H:i'),
                 'breaks' => $day->breaks->map(fn ($break) => [

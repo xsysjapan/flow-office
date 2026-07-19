@@ -10,8 +10,8 @@ use Illuminate\Support\Collection;
 
 /**
  * 各入力項目の値の出所(docs/26-usecases-monthly-import.md、docs/03-architecture.md 3.7)。
- * `entity_type`/`entity_id`は独自の緩いポリモーフィック参照であり、Eloquentの
- * morphMap(クラス名解決)は使わない単純な文字列で管理する。
+ * `entity_type`/`entity_id`は独自の緩いポリモーフィック参照であり、Eloquentのmorphmapは
+ * 使わない単純な文字列で管理する。
  */
 #[Fillable([
     'entity_type', 'entity_id', 'field_name', 'source_type', 'source_reference_json',
@@ -38,18 +38,16 @@ class FieldProvenance extends Model
     }
 
     /**
-     * @return BelongsTo<User, $this>
+     * @return BelongsTo<McpUser, $this>
      */
     public function confirmedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'confirmed_by_user_id');
+        return $this->belongsTo(McpUser::class, 'confirmed_by_user_id');
     }
 
     /**
      * 指定エンティティの各field_nameについて、最新の記録のみを取得する
      * (同じ項目が複数回追記されうるため。docs/26「AI生成値の出所管理」)。
-     * ValidateMonthlyAttendanceDraftHandler・SubmitMonthlyAttendanceDraftHandler・
-     * MonthlyAttendanceDraftController::fields()から共通利用する。
      *
      * @return Collection<int, FieldProvenance>
      */

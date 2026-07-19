@@ -27,8 +27,9 @@ Bearerトークン方式(Cookieベースではない)。
 2. **Projectionは再生成可能な派生データ**: 画面表示用テーブルはイベントから再生成できる
    前提で設計する。Projectionを直接手で書き換えない。
 3. **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /
-   `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。月次勤怠
-   (`attendance_months`)は集計結果であり、直接入力させない。
+   `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。入力・編集は必ず
+   日次単位で行わせ、`attendance_months`はその日次実績を集計・確定した結果であり、
+   月次側の項目を直接入力させない。
 4. **週次勤怠は日次勤怠の編集ビュー**: 独立データとして持たない。保存時は日次単位の
    編集イベントに分解する。
 5. **承認者は都度指定**: 固定承認ルートに加え、申請時に任意の社員を承認者に指定できる

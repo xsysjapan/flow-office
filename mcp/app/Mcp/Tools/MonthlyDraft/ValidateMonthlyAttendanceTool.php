@@ -5,6 +5,9 @@ namespace App\Mcp\Tools\MonthlyDraft;
 use App\Mcp\Contracts\Tool;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use App\Models\FieldProvenance;
+use App\Models\MonthlyAttendanceDraft;
+use App\Models\MonthlyDraftStatus;
 
 class ValidateMonthlyAttendanceTool implements Tool
 {
@@ -35,6 +38,20 @@ class ValidateMonthlyAttendanceTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->post("/attendance/monthly-drafts/{$arguments['draft_id']}/validate"));
+        return ToolResult::run(function () use ($arguments) {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+            $draft = MonthlyAttendanceDraft::query()->where('user_id', $mcpUserId)->findOrFail($arguments['draft_id']);
+
+            $unconfirmed = FieldProvenance::latestForEntity(FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT, $draft->id)
+                ->filter(fn (FieldProvenance $provenance) => $provenance->isImportantAndUnconfirmed());
+
+            $draft->status = $unconfirmed->isNotEmpty() ? MonthlyDraftStatus::NEEDS_REVIEW : MonthlyDraftStatus::READY_TO_SUBMIT;
+            $draft->save();
+
+            return [
+                'draft' => $draft->toArray(),
+                'unconfirmed_fields' => $unconfirmed->pluck('field_name')->values()->all(),
+            ];
+        });
     }
 }

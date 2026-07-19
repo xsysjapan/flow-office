@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
-use App\Http\Controllers\Api\AttendanceImportSessionController;
+use App\Http\Controllers\Api\AttendanceImportPreviewController;
 use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
@@ -20,7 +20,6 @@ use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
-use App\Http\Controllers\Api\MonthlyAttendanceDraftController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -166,24 +165,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware('ability:attendance:self:submit');
     });
 
-    // --- 月次勤怠下書き・作業報告書インポート (docs/26-usecases-monthly-import.md UC-R001〜UC-R002) ---
-    Route::prefix('attendance/monthly-drafts')->group(function () {
-        Route::get('/mine', [MonthlyAttendanceDraftController::class, 'indexMine'])->middleware('ability:attendance:self:read');
-        Route::post('/', [MonthlyAttendanceDraftController::class, 'store'])->middleware('ability:attendance:self:draft');
-        Route::get('/{monthlyAttendanceDraft}', [MonthlyAttendanceDraftController::class, 'show'])->middleware('ability:attendance:self:read');
-        Route::get('/{monthlyAttendanceDraft}/fields', [MonthlyAttendanceDraftController::class, 'fields'])->middleware('ability:attendance:self:read');
-        Route::put('/{monthlyAttendanceDraft}/days', [MonthlyAttendanceDraftController::class, 'bulkUpdateDays'])->middleware('ability:attendance:self:update');
-        Route::post('/{monthlyAttendanceDraft}/validate', [MonthlyAttendanceDraftController::class, 'validateDraft'])->middleware('ability:attendance:self:validate');
-        Route::post('/{monthlyAttendanceDraft}/submit', [MonthlyAttendanceDraftController::class, 'submit'])->middleware('ability:attendance:self:submit');
-        Route::post('/{monthlyAttendanceDraft}/fields/{fieldProvenance}/confirm', [MonthlyAttendanceDraftController::class, 'confirmField'])->middleware('ability:attendance:self:update');
-    });
-    Route::prefix('attendance/import-sessions')->group(function () {
-        Route::post('/', [AttendanceImportSessionController::class, 'store'])->middleware('ability:report:self:import');
-        Route::get('/{importSession}', [AttendanceImportSessionController::class, 'show'])->middleware('ability:report:self:import');
-        Route::post('/{importSession}/data', [AttendanceImportSessionController::class, 'uploadData'])->middleware('ability:report:self:import');
-        Route::post('/{importSession}/preview', [AttendanceImportSessionController::class, 'preview'])->middleware('ability:report:self:import');
-        Route::post('/{importSession}/apply', [AttendanceImportSessionController::class, 'apply'])->middleware('ability:report:self:import');
-    });
+    // --- 作業報告書インポートの差異検出 (docs/26-usecases-monthly-import.md UC-R001) ---
+    // ステートレス(何も保存しない)。下書き・インポートセッション自体の保持はmcp/自身のDBで
+    // 行う(CLAUDE.mdの設計原則9)。
+    Route::post('/attendance/import-preview', [AttendanceImportPreviewController::class, 'check'])
+        ->middleware('ability:report:self:import');
 
     // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012〜UC-A014) ---
     Route::prefix('attendance-punches')->group(function () {

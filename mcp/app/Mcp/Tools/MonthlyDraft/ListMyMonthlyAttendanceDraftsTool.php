@@ -5,6 +5,7 @@ namespace App\Mcp\Tools\MonthlyDraft;
 use App\Mcp\Contracts\Tool;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use App\Models\MonthlyAttendanceDraft;
 
 class ListMyMonthlyAttendanceDraftsTool implements Tool
 {
@@ -30,6 +31,14 @@ class ListMyMonthlyAttendanceDraftsTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->get('/attendance/monthly-drafts/mine'));
+        return ToolResult::run(function () {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+
+            return MonthlyAttendanceDraft::query()
+                ->where('user_id', $mcpUserId)
+                ->orderByDesc('id')
+                ->get()
+                ->toArray();
+        });
     }
 }

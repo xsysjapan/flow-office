@@ -4,7 +4,7 @@ namespace App\Models;
 
 /**
  * field_provenances.source_type。各入力項目の値の出所(docs/26-usecases-monthly-import.md
- * 「AI生成値の出所管理」、docs/03-architecture.md 3.7)。
+ * 「AI生成値の出所管理」)。
  */
 final class FieldSourceType
 {

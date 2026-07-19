@@ -31,6 +31,21 @@ mcp/は2つの顔を持つ。
   自前で実装する(`league/oauth2-server`を使用)。
 - `backend/`に対しては**単なるSanctum Bearerクライアント**(DBアクセスなし)。
 
+## 作業報告書インポート・月次勤怠下書き(docs/26参照)のデータ保持
+
+作業報告書から月次勤怠を作成する機能(docs/26-usecases-monthly-import.md)の下書き・
+インポートセッションのデータは、**mcp/自身のDBにのみ保持し、backend/には一切書き込まない**。
+MCP連携特有の一時的な業務(下書き作成・差異照合・AI推定値の出所管理)をbackend/の本来の
+勤怠データベースに持ち込まないため(CLAUDE.mdの設計原則9)。
+
+- `attendance_import_sessions` / `attendance_import_items` / `monthly_attendance_drafts` /
+  `field_provenances` — いずれもmcp/自身のDB(旧`oauth_*`, `mcp_users`,
+  `mcp_user_backend_tokens`と同じ場所)に持つテーブル。カラム定義はdocs/26参照
+- ユーザーが「申請して」と明示的に指示した時点でのみ、`mcp/`がbackend/の既存API
+  (日次編集の一括版・UC-A008月次提出)を呼び出し、backend/側の正データ
+  (`attendance_days`/`attendance_months`)を作成する。それ以外は`mcp/`のDB内で完結し、
+  backend/はこの機能専用のテーブル・エンドポイントを一切持たない
+
 ## セットアップ
 
 ```

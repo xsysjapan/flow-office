@@ -5,6 +5,8 @@ namespace App\Mcp\Tools\MonthlyDraft;
 use App\Mcp\Contracts\Tool;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use App\Models\FieldProvenance;
+use App\Models\MonthlyAttendanceDraft;
 
 class ConfirmAttendanceDraftFieldTool implements Tool
 {
@@ -40,8 +42,26 @@ class ConfirmAttendanceDraftFieldTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->post(
-            "/attendance/monthly-drafts/{$arguments['draft_id']}/fields/{$arguments['field_provenance_id']}/confirm"
-        ));
+        return ToolResult::run(function () use ($arguments) {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+            $draft = MonthlyAttendanceDraft::query()->where('user_id', $mcpUserId)->findOrFail($arguments['draft_id']);
+            $provenance = FieldProvenance::query()->findOrFail($arguments['field_provenance_id']);
+
+            abort_unless(
+                $provenance->entity_type === FieldProvenance::ENTITY_MONTHLY_ATTENDANCE_DRAFT
+                    && $provenance->entity_id === $draft->id,
+                404,
+                'この下書きに属さない項目です。',
+            );
+
+            $provenance->confirmed_at = now();
+            $provenance->confirmed_by_user_id = $mcpUserId;
+            $provenance->save();
+
+            return [
+                'field_name' => $provenance->field_name,
+                'confirmed_at' => $provenance->confirmed_at?->toIso8601String(),
+            ];
+        });
     }
 }

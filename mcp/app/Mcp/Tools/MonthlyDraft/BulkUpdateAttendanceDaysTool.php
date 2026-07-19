@@ -3,8 +3,10 @@
 namespace App\Mcp\Tools\MonthlyDraft;
 
 use App\Mcp\Contracts\Tool;
+use App\Mcp\Support\AttendanceDraftDayApplier;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use Illuminate\Support\Collection;
 
 class BulkUpdateAttendanceDaysTool implements Tool
 {
@@ -42,15 +44,26 @@ class BulkUpdateAttendanceDaysTool implements Tool
     public function handle(array $arguments, BackendApiClient $client): array
     {
         return ToolResult::run(function () use ($arguments, $client) {
-            $headers = isset($arguments['idempotency_key'])
-                ? ['Idempotency-Key' => $arguments['idempotency_key']]
-                : [];
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
 
-            return $client->put(
-                "/attendance/monthly-drafts/{$arguments['draft_id']}/days",
-                ['expected_version' => $arguments['expected_version'], 'days' => $arguments['days']],
-                $headers,
+            $applier = new AttendanceDraftDayApplier;
+            $result = $applier->apply(
+                $client,
+                $arguments['draft_id'],
+                $mcpUserId,
+                $arguments['expected_version'],
+                $arguments['days'],
+                $arguments['idempotency_key'] ?? null,
+                $mcpUserId,
             );
+
+            $rejected = Collection::make($result['results'])->contains(fn ($r) => $r['status'] === 'REJECTED');
+
+            return [
+                'status' => $rejected ? 'PARTIALLY_ACCEPTED' : 'ACCEPTED',
+                'draft' => $result['draft']->toArray(),
+                'results' => $result['results'],
+            ];
         });
     }
 }
