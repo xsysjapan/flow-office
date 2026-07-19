@@ -12,6 +12,9 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
+  // 本番(XSERVER)では/flow-officeサブパスに配置するため、ビルド時にVITE_BASE_PATHで
+  // '/flow-office/'を指定する。未指定時(ローカル開発・Storybook・テスト)はルート'/'のまま。
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [react(), tailwindcss()],
   test: {
     projects: [{
