@@ -798,12 +798,51 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - file_size
 - created_at / updated_at
 
+## agreement_36_rules (36協定ルールマスタ)
+
+- id
+- name
+- monthly_limit_minutes (原則: 月45時間=2700分)
+- monthly_limit_with_special_clause_minutes (特別条項発動時の月間上限。例: 100時間=6000分)
+- yearly_limit_minutes (年間上限。例: 720時間=43200分)
+- special_clause_max_times_per_year (特別条項を適用できる回数の上限。例: 6回)
+- effective_from / effective_to
+- created_at / updated_at
+
+法定外残業の月次累計に対する警告閾値の判定に使う (docs/13-usecases-notification.md UC-N001)。
+値は法令・労使協定の内容に応じて変わるため、`MonthlyOvertimeCalculator`の月60時間
+(労基法37条の割増率区分、docs/07-usecases-attendance.md)とは別のマスタとして扱う。
+最終的な数値設定は社労士確認を前提とする (docs/08-usecases-calendar-shift.md、
+docs/20-implementation-notes.md と同様の注記)。
+
+## notifications (通知一覧のProjection)
+
+- id
+- recipient_user_id
+- notification_type (`approval_request` / `return` / `approval_completed` /
+  `backoffice_task_assigned` / `paid_leave_expiry_warning` / `five_day_obligation_warning` /
+  `month_end_unsubmitted` / `month_close_deadline_warning` / `punch_inconsistency` /
+  `overtime_36agreement` / `pending_approval_reminder`)
+- subject_type / subject_id (対象への参照。例: `attendance_day` / `workflow_request`)
+- title
+- summary
+- detail_url
+- queued_at
+- sent_at (nullable)
+- confirmed_at (nullable。本人が通知一覧またはメールのリンクから確認した日時)
+- resolved_at (nullable。対象の不備・申請そのものが解消された日時。confirmed_atとは独立に更新される)
+- created_at / updated_at
+
+`stored_events`の`notification.queued` / `notification.sent` / `notification.confirmed`
+イベントから再生成できるProjection (docs/13-usecases-notification.md)。`resolved_at`は
+対象ドメイン側の状態変化(日次編集の完了、申請の承認等)をトリガーに更新する。
+
 ## テーブル分類の考え方
 
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes` | 管理者が設定する参照データ。 |
+| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `attendance_months`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。`attendance_months`はProjectorを持たず、CommandHandlerが直接書き込む。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+| Projection (再生成可能) | `attendance_daily_calculations`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |

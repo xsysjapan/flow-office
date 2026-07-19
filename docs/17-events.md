@@ -136,8 +136,10 @@
 
 - `attachment.uploaded`
 - `attachment.downloaded` (UC-F002: 閲覧ログを監査ログに残す)
-- `notification.queued`
+- `notification.queued` (payloadに`recipientUserId`/`notificationType`/`subjectType`/
+  `subjectId`/`title`/`summary`/`detailUrl`を持つ。docs/13-usecases-notification.md)
 - `notification.sent`
+- `notification.confirmed` (本人が通知一覧またはメール内リンクから確認した)
 - `export.created`
 
 ## 命名規則

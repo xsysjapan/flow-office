@@ -7,7 +7,7 @@
 - **Batch**: cron から `php artisan schedule:run`
 - **Auth**: Microsoft Entra ID SSO
 - **User Integration**: Microsoft Graph によるユーザー参照または同期
-- **Notification**: Teams Webhook または Graph API
+- **Notification**: メール(Laravel Mail、SMTP)
 - **Architecture**: CQRS + Event Sourcing 風設計
 - **API Docs**: darkaonline/l5-swagger (zircote/swagger-php) による PHP属性ベースの
   コードファーストOpenAPI定義。ローカル開発では Swagger UI (`/api/documentation`) を提供
