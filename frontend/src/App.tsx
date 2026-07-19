@@ -42,6 +42,7 @@ import { DeviceListPage } from './pages/admin/DeviceListPage'
 import { MyIntegrationsPage } from './pages/integrations/MyIntegrationsPage'
 import { MyMonthlyAttendanceDraftsPage } from './pages/attendance/MyMonthlyAttendanceDraftsPage'
 import { MonthlyAttendanceDraftReviewPage } from './pages/attendance/MonthlyAttendanceDraftReviewPage'
+import { NotificationsPage } from './pages/notifications/NotificationsPage'
 
 function App() {
   return (
@@ -77,6 +78,7 @@ function App() {
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<UserListPage />} />

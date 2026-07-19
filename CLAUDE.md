@@ -82,7 +82,7 @@ php artisan test
 - `add-domain-event` — 新しいドメインイベント(Command/Event/Projector反映)を追加する
 - `add-projection` — 新しいProjection Table + Projector + 再生成コマンドを追加する
 - `add-workflow-request-type` — 新しい汎用申請種別(申請種別マスタ)を追加する
-- `add-teams-notification` — 新しいTeams通知種別をDBキュー経由で追加する
+- `add-notification` — 新しいメール通知種別をDBキュー経由で追加する
 - `attendance-calc-review` — 勤怠集計ロジック変更時のセルフレビューチェックリスト
 
 ### 常駐プロセスを前提にしない

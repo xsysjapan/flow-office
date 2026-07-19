@@ -7,8 +7,10 @@ use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Domain\Notification\NotificationRecipients;
+use App\Jobs\SendNotificationJob;
 use App\Models\BackOfficeTask;
+use App\Models\Role;
 use App\Models\WorkflowRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -55,12 +57,18 @@ class CreateBackOfficeTaskFromApprovalHandler implements CommandHandler
         );
 
         $task = BackOfficeTask::query()->findOrFail($backOfficeTaskId);
+        $summary = "「{$task->title}」が{$task->assigned_department}の未担当タスクに追加されました。";
 
-        SendTeamsNotificationJob::enqueue(
-            title: 'バックオフィスタスク作成',
-            summary: "「{$task->title}」が{$task->assigned_department}の未担当タスクに追加されました。",
-            detailUrl: null,
-        );
+        // まだ個人には割り当てられていない(UC-B002で割当時に本人へ通知する)ため、
+        // バックオフィス担当ロール全体へ通知する。
+        foreach (NotificationRecipients::byRoles([Role::BACKOFFICE_STAFF]) as $recipient) {
+            SendNotificationJob::enqueue(
+                recipient: $recipient,
+                title: 'バックオフィスタスク作成',
+                summary: $summary,
+                detailUrl: null,
+            );
+        }
 
         return $task;
     }

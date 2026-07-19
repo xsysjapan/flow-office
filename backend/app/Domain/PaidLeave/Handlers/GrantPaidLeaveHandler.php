@@ -7,8 +7,9 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Events\PaidLeaveGranted;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
+use App\Models\User;
 
 /**
  * @implements CommandHandler<GrantPaidLeave>
@@ -43,11 +44,15 @@ class GrantPaidLeaveHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '有給付与',
-            summary: "有給休暇が{$command->grantedDays}日付与されました(有効期限: {$command->expiresOn})。",
-            detailUrl: null,
-        );
+        $user = User::find($command->userId);
+        if ($user !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $user,
+                title: '有給付与',
+                summary: "有給休暇が{$command->grantedDays}日付与されました(有効期限: {$command->expiresOn})。",
+                detailUrl: null,
+            );
+        }
 
         return $grant;
     }

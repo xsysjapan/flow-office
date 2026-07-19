@@ -8,7 +8,8 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
+use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Validation\ValidationException;
@@ -53,11 +54,15 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '承認依頼',
-            summary: "「{$workflowRequest->title}」の承認依頼が届いています。",
-            detailUrl: null,
-        );
+        $approver = User::find($approverUserId);
+        if ($approver !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $approver,
+                title: '承認依頼',
+                summary: "「{$workflowRequest->title}」の承認依頼が届いています。",
+                detailUrl: null,
+            );
+        }
 
         return $workflowRequest->refresh();
     }

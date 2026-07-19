@@ -5,7 +5,7 @@ namespace App\Domain\Attendance\Handlers;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\SystemSetting;
@@ -46,10 +46,11 @@ class WarnUnsubmittedAttendanceHandler implements CommandHandler
         $unsubmittedUsers = User::query()
             ->where('employment_status', 'active')
             ->whereNotIn('id', $submittedUserIds)
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'email']);
 
         foreach ($unsubmittedUsers as $user) {
-            SendTeamsNotificationJob::enqueue(
+            SendNotificationJob::enqueue(
+                recipient: $user,
                 title: '勤怠未提出',
                 summary: "{$user->name}さんの{$targetYearMonth}分の勤怠がまだ提出されていません。",
                 detailUrl: null,

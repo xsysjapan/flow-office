@@ -58,9 +58,4 @@ return [
         'client_secret' => env('MS_GRAPH_CLIENT_SECRET'),
     ],
 
-    // Teams通知 (docs/13-usecases-notification.md UC-N001)
-    'teams' => [
-        'webhook_url' => env('TEAMS_WEBHOOK_URL'),
-    ],
-
 ];

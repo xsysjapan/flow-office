@@ -5,14 +5,16 @@ namespace App\Domain\Device\Handlers;
 use App\Domain\Device\Commands\WarnStaleDevices;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Domain\Notification\NotificationRecipients;
+use App\Jobs\SendNotificationJob;
 use App\Models\Device;
 use App\Models\DeviceStatus;
+use App\Models\Role;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * docs/23-usecases-devices.md「端末管理画面」の「最終通信確認」: 一定時間ハートビートが
- * 無い有効な端末をTeamsへ警告する。cronから毎日実行する想定(add-teams-notification参照)。
+ * 無い有効な端末をADMINロールの各ユーザーへメールで警告する。cronから毎日実行する想定。
  *
  * @implements CommandHandler<WarnStaleDevices>
  */
@@ -38,12 +40,16 @@ class WarnStaleDevicesHandler implements CommandHandler
         }
 
         $names = $staleDevices->pluck('name')->implode('、');
+        $summary = "{$staleDevices->count()}件の端末が{$command->staleAfterHours}時間以上疎通していません: {$names}";
 
-        SendTeamsNotificationJob::enqueue(
-            title: '端末の疎通が途絶えています',
-            summary: "{$staleDevices->count()}件の端末が{$command->staleAfterHours}時間以上疎通していません: {$names}",
-            detailUrl: null,
-        );
+        foreach (NotificationRecipients::byRoles([Role::ADMIN]) as $recipient) {
+            SendNotificationJob::enqueue(
+                recipient: $recipient,
+                title: '端末の疎通が途絶えています',
+                summary: $summary,
+                detailUrl: null,
+            );
+        }
 
         return $staleDevices;
     }

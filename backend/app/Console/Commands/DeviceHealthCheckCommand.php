@@ -9,14 +9,14 @@ use Illuminate\Console\Command;
 /**
  * docs/23-usecases-devices.md「端末管理画面(UI)」の「最終通信確認」を補助する運用強化コマンド。
  * 一定期間ハートビート(POST /devices/heartbeat)が届いていない有効な端末を検出し、
- * ログ出力に加えTeamsへも警告する(add-teams-notificationスキル)。常駐workerを前提と
+ * ログ出力に加えADMINロールの各ユーザーへメールでも警告する。常駐workerを前提と
  * しないため(docs/02-tech-stack.md)、cronから毎日実行する想定。
  */
 class DeviceHealthCheckCommand extends Command
 {
     protected $signature = 'devices:health-check {--stale-after-hours=48}';
 
-    protected $description = '一定時間ハートビートが無い有効な端末を検出しTeamsへ警告する';
+    protected $description = '一定時間ハートビートが無い有効な端末を検出しメールで警告する';
 
     public function handle(CommandBus $commandBus): int
     {

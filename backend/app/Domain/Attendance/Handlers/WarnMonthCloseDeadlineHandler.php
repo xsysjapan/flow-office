@@ -5,15 +5,18 @@ namespace App\Domain\Attendance\Handlers;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Domain\Notification\NotificationRecipients;
+use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\Role;
 use App\Models\SystemSetting;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-N001「月次締め前警告」: 前月分の月次勤怠がまだ締められていない場合、締め期限
- * (`system_settings.attendance_month_close_deadline_day`、当月の日)が近づいたら管理部へ警告する。
+ * (`system_settings.attendance_month_close_deadline_day`、当月の日)が近づいたら管理部
+ * (ADMIN/GENERAL_AFFAIRS_STAFFロールの各ユーザー)へ警告する。
  * 提出済み(submitted)・承認済み(approved)のいずれもまだ「締め」(closed)ではないため対象になる。
  *
  * @implements CommandHandler<WarnMonthCloseDeadline>
@@ -49,12 +52,17 @@ class WarnMonthCloseDeadlineHandler implements CommandHandler
             return 0;
         }
 
-        SendTeamsNotificationJob::enqueue(
-            title: '月次締め前警告',
-            summary: "{$targetYearMonth}分の月次勤怠が{$notClosedCount}件、締め切り(当月{$deadlineDay}日)".
-                'までにまだ締められていません。',
-            detailUrl: null,
-        );
+        $summary = "{$targetYearMonth}分の月次勤怠が{$notClosedCount}件、締め切り(当月{$deadlineDay}日)".
+            'までにまだ締められていません。';
+
+        foreach (NotificationRecipients::byRoles([Role::ADMIN, Role::GENERAL_AFFAIRS_STAFF]) as $recipient) {
+            SendNotificationJob::enqueue(
+                recipient: $recipient,
+                title: '月次締め前警告',
+                summary: $summary,
+                detailUrl: null,
+            );
+        }
 
         return $notClosedCount;
     }

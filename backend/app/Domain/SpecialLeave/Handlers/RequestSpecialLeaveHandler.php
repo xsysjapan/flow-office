@@ -8,7 +8,7 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
@@ -17,6 +17,7 @@ use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -92,11 +93,15 @@ class RequestSpecialLeaveHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '特別休暇申請の承認依頼',
-            summary: "{$command->targetDate} の{$specialLeaveType->name}の申請が提出されました。",
-            detailUrl: null,
-        );
+        $approver = User::find($command->approverUserId);
+        if ($approver !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $approver,
+                title: '特別休暇申請の承認依頼',
+                summary: "{$command->targetDate} の{$specialLeaveType->name}の申請が提出されました。",
+                detailUrl: null,
+            );
+        }
 
         return $request;
     }

@@ -8,9 +8,10 @@ use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -48,11 +49,15 @@ class ReturnPaidLeaveRequestHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '有給申請の差戻し',
-            summary: "{$request->target_date->toDateString()} の有給申請が差し戻されました: {$command->comment}",
-            detailUrl: null,
-        );
+        $applicant = User::find($request->user_id);
+        if ($applicant !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $applicant,
+                title: '有給申請の差戻し',
+                summary: "{$request->target_date->toDateString()} の有給申請が差し戻されました: {$command->comment}",
+                detailUrl: null,
+            );
+        }
 
         return $request;
     }

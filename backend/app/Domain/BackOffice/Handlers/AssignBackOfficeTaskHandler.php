@@ -7,8 +7,9 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\BackOfficeTask;
+use App\Models\User;
 
 /**
  * UC-B002: 担当者を割り当てる。
@@ -37,11 +38,15 @@ class AssignBackOfficeTaskHandler implements CommandHandler
 
         $task->refresh();
 
-        SendTeamsNotificationJob::enqueue(
-            title: 'タスク割当',
-            summary: "「{$task->title}」が割り当てられました。",
-            detailUrl: null,
-        );
+        $assignee = User::find($command->assignedUserId);
+        if ($assignee !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $assignee,
+                title: 'タスク割当',
+                summary: "「{$task->title}」が割り当てられました。",
+                detailUrl: null,
+            );
+        }
 
         return $task;
     }

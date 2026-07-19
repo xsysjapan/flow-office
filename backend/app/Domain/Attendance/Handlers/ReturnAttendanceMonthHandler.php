@@ -8,9 +8,10 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendTeamsNotificationJob;
+use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 
 /**
@@ -50,11 +51,15 @@ class ReturnAttendanceMonthHandler implements CommandHandler
             ),
         );
 
-        SendTeamsNotificationJob::enqueue(
-            title: '月次勤怠が差戻されました',
-            summary: "{$month->year_month} の月次勤怠が差し戻されました: {$command->comment}",
-            detailUrl: null,
-        );
+        $applicant = User::find($month->user_id);
+        if ($applicant !== null) {
+            SendNotificationJob::enqueue(
+                recipient: $applicant,
+                title: '月次勤怠が差戻されました',
+                summary: "{$month->year_month} の月次勤怠が差し戻されました: {$command->comment}",
+                detailUrl: null,
+            );
+        }
 
         return $month;
     }

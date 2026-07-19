@@ -4,7 +4,9 @@ namespace Tests\Feature\Device;
 
 use App\Models\Device;
 use App\Models\DeviceStatus;
+use App\Models\Role;
 use App\Models\StoredEvent;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -40,8 +42,11 @@ class DeviceHealthCheckCommandTest extends TestCase
             ->assertExitCode(0);
     }
 
-    public function test_it_queues_a_teams_notification_when_devices_are_stale(): void
+    public function test_it_queues_a_notification_when_devices_are_stale(): void
     {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
         Device::factory()->create([
             'name' => '疎通が途絶えた端末',
             'status' => DeviceStatus::ACTIVE,
@@ -61,7 +66,7 @@ class DeviceHealthCheckCommandTest extends TestCase
         $this->assertStringContainsString('疎通が途絶えた端末', $notification->payload['summary']);
     }
 
-    public function test_it_does_not_queue_a_teams_notification_when_all_devices_are_healthy(): void
+    public function test_it_does_not_queue_a_notification_when_all_devices_are_healthy(): void
     {
         Device::factory()->create(['status' => DeviceStatus::ACTIVE, 'last_seen_at' => Carbon::now()]);
 
