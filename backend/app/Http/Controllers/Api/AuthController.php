@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\User\Commands\CompleteOnboardingSsoLink;
+use App\Domain\User\Commands\RecordLocalLogin;
+use App\Domain\User\Ms365ConfigResolver;
 use App\Domain\User\SsoAuthenticator;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
@@ -10,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use OpenApi\Attributes as OA;
@@ -24,8 +29,12 @@ use OpenApi\Attributes as OA;
  * 3. フロントエンドは POST /auth/token で exchange code をSanctumトークンに交換する
  *
  * これにより、長期利用可能なAPIトークンがURLに直接載ることを避ける。
+ *
+ * `callback()`は初回オンボーディングのSSOモード(UC-000、`OnboardingController::SSO_LINK_STATE`)
+ * からも呼ばれる共通の入口。`state`クエリパラメータでどちらの経路かを判定する
+ * (`OnboardingController::storeSso()`が`Socialite::with(['state' => ...])`で付与する)。
  */
-#[OA\Tag(name: '認証', description: 'Microsoft SSOとSanctumトークン認証')]
+#[OA\Tag(name: '認証', description: 'Microsoft SSO・ローカルパスワード・Sanctumトークン認証')]
 class AuthController extends Controller
 {
     private const EXCHANGE_CACHE_PREFIX = 'sso-exchange:';
@@ -39,6 +48,8 @@ class AuthController extends Controller
     )]
     public function redirect(): JsonResponse
     {
+        Ms365ConfigResolver::applyToSocialiteConfig();
+
         $url = Socialite::driver('azure')->stateless()->redirect()->getTargetUrl();
 
         return response()->json(['url' => $url]);
@@ -51,10 +62,21 @@ class AuthController extends Controller
         tags: ['認証'],
         responses: [new OA\Response(response: 302, description: 'Redirect response'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function callback(SsoAuthenticator $authenticator): RedirectResponse
+    public function callback(SsoAuthenticator $authenticator, CommandBus $commandBus, Request $request): RedirectResponse
     {
+        Ms365ConfigResolver::applyToSocialiteConfig();
+
         $ssoUser = Socialite::driver('azure')->stateless()->user();
-        $user = $authenticator->handle($ssoUser);
+
+        if ($request->query('state') === OnboardingController::SSO_LINK_STATE) {
+            $user = $commandBus->dispatch(new CompleteOnboardingSsoLink(
+                entraUserId: $ssoUser->getId(),
+                name: $ssoUser->getName() ?? $ssoUser->getNickname() ?? $ssoUser->getEmail(),
+                email: $ssoUser->getEmail(),
+            ));
+        } else {
+            $user = $authenticator->handle($ssoUser);
+        }
 
         $exchangeCode = Str::random(40);
         Cache::put(self::EXCHANGE_CACHE_PREFIX.$exchangeCode, $user->id, now()->addSeconds(60));
@@ -89,6 +111,45 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'user' => new UserResource($user),
+        ]);
+    }
+
+    #[OA\Post(
+        path: '/auth/local-login',
+        operationId: 'auth.localLogin',
+        summary: 'ローカルパスワードでログインする(SSOを設定していない場合)',
+        tags: ['認証'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email', 'password'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string'),
+                    new OA\Property(property: 'password', type: 'string'),
+                ],
+            ),
+        ),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function localLogin(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $user = User::query()->where('email', $data['email'])->first();
+
+        if ($user === null || $user->password === null || ! Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'メールアドレスまたはパスワードが正しくありません。'], 422);
+        }
+
+        $user = $commandBus->dispatch(new RecordLocalLogin(userId: $user->id));
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user' => new UserResource($user->load('roles')),
         ]);
     }
 

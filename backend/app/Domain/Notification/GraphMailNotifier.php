@@ -80,7 +80,7 @@ class GraphMailNotifier implements Notifier
      */
     private function resolveAccessToken(SystemSetting $settings): ?string
     {
-        $cacheKey = self::TOKEN_CACHE_KEY_PREFIX.$settings->notification_mail_tenant_id.':'.$settings->notification_mail_client_id;
+        $cacheKey = self::TOKEN_CACHE_KEY_PREFIX.$settings->m365_tenant_id.':'.$settings->m365_client_id;
 
         $cached = Cache::get($cacheKey);
         if (is_string($cached)) {
@@ -88,10 +88,10 @@ class GraphMailNotifier implements Notifier
         }
 
         $response = Http::asForm()->post(
-            "https://login.microsoftonline.com/{$settings->notification_mail_tenant_id}/oauth2/v2.0/token",
+            "https://login.microsoftonline.com/{$settings->m365_tenant_id}/oauth2/v2.0/token",
             [
-                'client_id' => $settings->notification_mail_client_id,
-                'client_secret' => $settings->notification_mail_client_secret,
+                'client_id' => $settings->m365_client_id,
+                'client_secret' => $settings->m365_client_secret,
                 'scope' => 'https://graph.microsoft.com/.default',
                 'grant_type' => 'client_credentials',
             ],

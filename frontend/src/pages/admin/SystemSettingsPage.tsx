@@ -4,13 +4,16 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Ms365CredentialsFields, type Ms365CredentialsFieldsValue } from '../../components/Ms365CredentialsFields/Ms365CredentialsFields'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { useSystemSettings, useUpdateSystemSettings } from '../../hooks/useSystemSettings'
 
 /**
- * UC-003: システム設定(default_timezone)を管理する。
+ * UC-003: システム設定(default_timezone等)を管理する。
  * 新規作成されるユーザーの既定タイムゾーンを変更する(既存ユーザーには影響しない)。
+ * Microsoft 365連携設定(Entra ID資格情報)は初回オンボーディングで登録済みだが、
+ * この画面から後で更新することもできる。
  */
 export function SystemSettingsPage() {
   const { data, isLoading, error } = useSystemSettings()
@@ -19,10 +22,14 @@ export function SystemSettingsPage() {
   const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
   const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
   const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<number | null>(null)
+  const [ms365Value, setMs365Value] = useState<Ms365CredentialsFieldsValue>({
+    tenantId: '',
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+    mockEnabled: false,
+  })
   const [notificationMailEnabled, setNotificationMailEnabled] = useState(false)
-  const [notificationMailTenantId, setNotificationMailTenantId] = useState('')
-  const [notificationMailClientId, setNotificationMailClientId] = useState('')
-  const [notificationMailClientSecret, setNotificationMailClientSecret] = useState('')
   const [notificationMailSenderAddress, setNotificationMailSenderAddress] = useState('')
   const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
   const [savedMessage, setSavedMessage] = useState(false)
@@ -33,9 +40,14 @@ export function SystemSettingsPage() {
     setSubmissionDeadlineDay(String(data.attendance_submission_deadline_day))
     setMonthCloseDeadlineDay(String(data.attendance_month_close_deadline_day))
     setDefaultWorkStyleId(data.default_work_style_id)
+    setMs365Value({
+      tenantId: data.m365_tenant_id ?? '',
+      clientId: data.m365_client_id ?? '',
+      clientSecret: '',
+      redirectUri: data.m365_redirect_uri ?? '',
+      mockEnabled: data.m365_mock_enabled,
+    })
     setNotificationMailEnabled(data.notification_mail_enabled)
-    setNotificationMailTenantId(data.notification_mail_tenant_id ?? '')
-    setNotificationMailClientId(data.notification_mail_client_id ?? '')
     setNotificationMailSenderAddress(data.notification_mail_sender_address ?? '')
     setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
   }, [data])
@@ -53,18 +65,20 @@ export function SystemSettingsPage() {
         // 既定の働き方は管理メニューの勤務形態画面(デフォルトに設定)で変更する。
         // ここでは読み込んだ値をそのまま送り返し、上書きしないようにする。
         default_work_style_id: defaultWorkStyleId,
-        notification_mail_enabled: notificationMailEnabled,
-        notification_mail_tenant_id: notificationMailTenantId || null,
-        notification_mail_client_id: notificationMailClientId || null,
+        m365_tenant_id: ms365Value.tenantId || null,
+        m365_client_id: ms365Value.clientId || null,
         // 空欄のままなら送らない(既存のシークレットを変更しない)。
-        ...(notificationMailClientSecret ? { notification_mail_client_secret: notificationMailClientSecret } : {}),
+        ...(ms365Value.clientSecret ? { m365_client_secret: ms365Value.clientSecret } : {}),
+        m365_redirect_uri: ms365Value.redirectUri || null,
+        m365_mock_enabled: ms365Value.mockEnabled,
+        notification_mail_enabled: notificationMailEnabled,
         notification_mail_sender_address: notificationMailSenderAddress || null,
         notification_mail_sender_name: notificationMailSenderName || null,
       },
       {
         onSuccess: () => {
           setSavedMessage(true)
-          setNotificationMailClientSecret('')
+          setMs365Value((current) => ({ ...current, clientSecret: '' }))
         },
       },
     )
@@ -134,10 +148,27 @@ export function SystemSettingsPage() {
         </p>
       </FormField>
 
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        SSOログイン・MS365ユーザー同期・メール通知(Graph API <code>sendMail</code>)で共有する
+        Entra IDアプリ登録の資格情報。初回オンボーディングで登録済みだが、ここから変更できる。
+      </p>
+
+      <Ms365CredentialsFields
+        idPrefix="system-settings-m365"
+        value={ms365Value}
+        onChange={(value) => {
+          setMs365Value(value)
+          setSavedMessage(false)
+        }}
+        clientSecretConfigured={data?.m365_client_secret_configured}
+      />
+
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">メール通知設定</h3>
       <p className="mb-4 text-sm text-muted-foreground">
-        通知はMicrosoft Graph API(<code>sendMail</code>)経由で送信する。ここが未設定、または
-        「メール通知を有効にする」がオフの場合、通知メールは送信されない(ログにのみ記録される)。
+        通知はMicrosoft Graph API(<code>sendMail</code>)経由で送信する。上記のMicrosoft 365
+        連携設定が未設定、または「メール通知を有効にする」がオフの場合、通知メールは送信されない
+        (ログにのみ記録される)。
       </p>
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
@@ -150,41 +181,6 @@ export function SystemSettingsPage() {
         />
         メール通知を有効にする
       </label>
-
-      <FormField label="テナントID" htmlFor="system-settings-mail-tenant-id">
-        <Input
-          id="system-settings-mail-tenant-id"
-          value={notificationMailTenantId}
-          onChange={(e) => {
-            setNotificationMailTenantId(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <FormField label="クライアントID" htmlFor="system-settings-mail-client-id">
-        <Input
-          id="system-settings-mail-client-id"
-          value={notificationMailClientId}
-          onChange={(e) => {
-            setNotificationMailClientId(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
-
-      <FormField label="クライアントシークレット" htmlFor="system-settings-mail-client-secret">
-        <Input
-          id="system-settings-mail-client-secret"
-          type="password"
-          placeholder={data?.notification_mail_client_secret_configured ? '設定済み(変更する場合のみ入力)' : '未設定'}
-          value={notificationMailClientSecret}
-          onChange={(e) => {
-            setNotificationMailClientSecret(e.target.value)
-            setSavedMessage(false)
-          }}
-        />
-      </FormField>
 
       <FormField label="送信元メールアドレス" htmlFor="system-settings-mail-sender-address">
         <Input

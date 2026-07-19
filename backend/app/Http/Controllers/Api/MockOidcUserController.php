@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\User\Ms365ConfigResolver;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * mock-oidc(ローカル開発用OIDCモックサーバー、mock-oidc/server.js)がログイン画面の
  * ユーザー選択肢をDBから動的に取得するための開発専用エンドポイント。
- * `MICROSOFT_MOCK_ENABLED=true` の時のみ有効(本番・検証環境では404)。認証は不要
- * (ログイン前のモック認可画面から呼ばれるため)。
+ * `system_settings.m365_mock_enabled` (`Ms365ConfigResolver::mockEnabled()`) が
+ * trueの時のみ有効(本番・検証環境では404)。認証は不要(ログイン前のモック認可画面から
+ * 呼ばれるため)。
  */
 #[OA\Tag(name: '開発用認証', description: 'ローカルOIDCモック用API')]
 class MockOidcUserController extends Controller
@@ -26,7 +28,7 @@ class MockOidcUserController extends Controller
     )]
     public function index(): JsonResponse
     {
-        if (! config('services.azure.mock_enabled')) {
+        if (! Ms365ConfigResolver::mockEnabled()) {
             throw new NotFoundHttpException;
         }
 

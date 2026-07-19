@@ -22,6 +22,7 @@ function renderLayout(user: User = mockUser) {
     status: 'authenticated',
     login: vi.fn(),
     completeLogin: vi.fn(),
+    applySession: vi.fn(),
     logout: vi.fn(),
   }
 

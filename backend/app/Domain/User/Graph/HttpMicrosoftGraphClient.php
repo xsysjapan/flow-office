@@ -2,11 +2,13 @@
 
 namespace App\Domain\User\Graph;
 
+use App\Models\SystemSetting;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * Microsoft Graph API (v1.0) を呼び出す実装。MS_GRAPH_* の環境変数が必要。
+ * Microsoft Graph API (v1.0) を呼び出す実装。SSOログイン(UC-001)・Graphメール送信
+ * (UC-N001)と共有する`system_settings`のEntra ID資格情報を使う。
  * クライアントクレデンシャルフロー(アプリ権限 User.Read.All)を前提にする。
  */
 class HttpMicrosoftGraphClient implements MicrosoftGraphClient
@@ -41,11 +43,11 @@ class HttpMicrosoftGraphClient implements MicrosoftGraphClient
 
     private function fetchAccessToken(): string
     {
-        $tenantId = config('services.microsoft_graph.tenant_id');
+        $settings = SystemSetting::current();
 
-        $response = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
-            'client_id' => config('services.microsoft_graph.client_id'),
-            'client_secret' => config('services.microsoft_graph.client_secret'),
+        $response = Http::asForm()->post("https://login.microsoftonline.com/{$settings->m365_tenant_id}/oauth2/v2.0/token", [
+            'client_id' => $settings->m365_client_id,
+            'client_secret' => $settings->m365_client_secret,
             'scope' => 'https://graph.microsoft.com/.default',
             'grant_type' => 'client_credentials',
         ]);

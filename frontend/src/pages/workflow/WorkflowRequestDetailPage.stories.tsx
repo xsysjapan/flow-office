@@ -79,6 +79,7 @@ function withSeeded(request: WorkflowRequest, viewer: User) {
     status: 'authenticated',
     login: fn(),
     completeLogin: fn(),
+    applySession: fn(),
     logout: fn(),
   }
 

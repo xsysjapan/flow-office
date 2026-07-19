@@ -12,6 +12,11 @@ export interface AuthContextValue {
   login: () => Promise<void>
   /** UC-001手順4〜6: コールバックのワンタイムコードをSanctumトークンに交換する。 */
   completeLogin: (code: string) => Promise<void>
+  /**
+   * 発行済みのSanctumトークン+ユーザーでログイン状態にする。初回オンボーディング完了時
+   * (docs/06-usecases-auth.md)、実際のSSO往復を待たずにそのままログイン済みにするために使う。
+   */
+  applySession: (token: string, user: User) => void
   logout: () => Promise<void>
 }
 
@@ -43,12 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = url
   }, [])
 
-  const completeLogin = useCallback(async (code: string) => {
-    const { token, user: loggedInUser } = await exchangeCodeForToken(code)
+  const applySession = useCallback((token: string, loggedInUser: User) => {
     setToken(token)
     setUser(loggedInUser)
     setStatus('authenticated')
   }, [])
+
+  const completeLogin = useCallback(
+    async (code: string) => {
+      const { token, user: loggedInUser } = await exchangeCodeForToken(code)
+      applySession(token, loggedInUser)
+    },
+    [applySession],
+  )
 
   const logout = useCallback(async () => {
     try {
@@ -61,8 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, status, login, completeLogin, logout }),
-    [user, status, login, completeLogin, logout],
+    () => ({ user, status, login, completeLogin, applySession, logout }),
+    [user, status, login, completeLogin, applySession, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

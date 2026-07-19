@@ -22,11 +22,14 @@ class SystemSettingResource extends JsonResource
             ]),
             'attendance_submission_deadline_day' => $this->attendance_submission_deadline_day,
             'attendance_month_close_deadline_day' => $this->attendance_month_close_deadline_day,
-            'notification_mail_enabled' => $this->notification_mail_enabled,
-            'notification_mail_tenant_id' => $this->notification_mail_tenant_id,
-            'notification_mail_client_id' => $this->notification_mail_client_id,
+            // SSOログイン・MS365ユーザー同期・Graphメール送信で共有するEntra ID資格情報。
+            'm365_tenant_id' => $this->m365_tenant_id,
+            'm365_client_id' => $this->m365_client_id,
             // クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。
-            'notification_mail_client_secret_configured' => $this->notification_mail_client_secret !== null,
+            'm365_client_secret_configured' => $this->m365_client_secret !== null,
+            'm365_redirect_uri' => $this->m365_redirect_uri,
+            'm365_mock_enabled' => $this->m365_mock_enabled,
+            'notification_mail_enabled' => $this->notification_mail_enabled,
             'notification_mail_sender_address' => $this->notification_mail_sender_address,
             'notification_mail_sender_name' => $this->notification_mail_sender_name,
         ];

@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -35,11 +36,22 @@ use App\Http\Controllers\Api\WorkflowRequestController;
 use App\Http\Controllers\Api\WorkStyleController;
 use Illuminate\Support\Facades\Route;
 
+// --- 初回オンボーディング (docs/06-usecases-auth.md UC-000) ---
+// Entra ID SSO自体がまだ設定されていない状態でも呼べる必要があるため認証不要。
+// 完了済み(system_settings.onboarding_completed_at設定済み)なら以後は422を返す
+// (OnboardingController・StartOnboardingSsoHandler/CompleteOnboardingWithLocalPasswordHandler参照)。
+Route::get('/onboarding/status', [OnboardingController::class, 'status']);
+Route::post('/onboarding/sso', [OnboardingController::class, 'storeSso']);
+Route::post('/onboarding/local', [OnboardingController::class, 'storeLocal']);
+
 // --- 認証 (docs/06-usecases-auth.md) ---
 Route::prefix('auth')->group(function () {
     Route::get('/microsoft/redirect', [AuthController::class, 'redirect']);
     Route::get('/microsoft/callback', [AuthController::class, 'callback']);
     Route::post('/token', [AuthController::class, 'token']);
+    // SSOを設定しなかった場合のローカルパスワードログイン。ブルートフォース対策として
+    // 1分あたり5回に制限する(このアプリで初めてパスワード認証を扱うため)。
+    Route::post('/local-login', [AuthController::class, 'localLogin'])->middleware('throttle:5,1');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me'])->middleware('ability:profile:self:read');

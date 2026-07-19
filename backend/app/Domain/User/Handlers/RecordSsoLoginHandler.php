@@ -17,6 +17,11 @@ use App\Support\LocalDateTime;
  * Entra IDのユーザーID・メール・表示名を取得し、初回ログインならアプリ側ユーザーを作成、
  * 既存ユーザーなら最終ログイン日時を更新する。
  *
+ * 初回オンボーディング(UC-000)でのSSO連携済み管理者作成は
+ * `CompleteOnboardingSsoLinkHandler`が別途担当するため、ここでは`entra_user_id`未設定行への
+ * リンクのような特別扱いは行わない(entra_user_idで見つからなければ常に新規=employeeロール
+ * として作成する)。
+ *
  * @implements CommandHandler<RecordSsoLogin>
  */
 class RecordSsoLoginHandler implements CommandHandler
@@ -41,14 +46,13 @@ class RecordSsoLoginHandler implements CommandHandler
                 'email' => $command->email,
                 'employment_status' => 'active',
                 'timezone' => $defaultTimezone,
-                'last_login_at' => LocalDateTime::now($defaultTimezone),
             ]);
 
             $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
-        } else {
-            $user->last_login_at = LocalDateTime::now($defaultTimezone);
-            $user->save();
         }
+
+        $user->last_login_at = LocalDateTime::now($defaultTimezone);
+        $user->save();
 
         $this->eventStore->append(
             aggregateType: 'user',
