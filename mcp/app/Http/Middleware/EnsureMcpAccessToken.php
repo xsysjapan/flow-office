@@ -58,6 +58,7 @@ class EnsureMcpAccessToken
 
         $request->attributes->set('mcp_oauth_scopes', $scopes);
         $request->attributes->set('mcp_backend_token', $backendToken->getPlainToken());
+        $request->attributes->set('mcp_user_id', $mcpUserId);
 
         return $next($request);
     }

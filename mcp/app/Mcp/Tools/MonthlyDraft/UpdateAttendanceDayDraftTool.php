@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools\MonthlyDraft;
 
 use App\Mcp\Contracts\Tool;
+use App\Mcp\Support\AttendanceDraftDayApplier;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
 
@@ -39,9 +40,21 @@ class UpdateAttendanceDayDraftTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->put("/attendance/monthly-drafts/{$arguments['draft_id']}/days", [
-            'expected_version' => $arguments['expected_version'],
-            'days' => [$arguments['day']],
-        ]));
+        return ToolResult::run(function () use ($arguments, $client) {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+
+            $applier = new AttendanceDraftDayApplier;
+            $result = $applier->apply(
+                $client,
+                $arguments['draft_id'],
+                $mcpUserId,
+                $arguments['expected_version'],
+                [$arguments['day']],
+                null,
+                $mcpUserId,
+            );
+
+            return ['draft' => $result['draft']->toArray(), 'results' => $result['results']];
+        });
     }
 }

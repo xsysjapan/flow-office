@@ -5,6 +5,7 @@ namespace App\Mcp\Tools\ImportSession;
 use App\Mcp\Contracts\Tool;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use App\Models\AttendanceImportSession;
 
 class CompareImportWithExistingAttendanceTool implements Tool
 {
@@ -36,6 +37,14 @@ class CompareImportWithExistingAttendanceTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->get("/attendance/import-sessions/{$arguments['session_id']}"));
+        return ToolResult::run(function () use ($arguments) {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+
+            return AttendanceImportSession::query()
+                ->where('user_id', $mcpUserId)
+                ->with('items')
+                ->findOrFail($arguments['session_id'])
+                ->toArray();
+        });
     }
 }

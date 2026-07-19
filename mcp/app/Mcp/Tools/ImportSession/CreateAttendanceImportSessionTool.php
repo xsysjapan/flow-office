@@ -5,6 +5,8 @@ namespace App\Mcp\Tools\ImportSession;
 use App\Mcp\Contracts\Tool;
 use App\Mcp\Support\BackendApiClient;
 use App\Mcp\Support\ToolResult;
+use App\Models\AttendanceImportSession;
+use App\Models\ImportSessionStatus;
 
 class CreateAttendanceImportSessionTool implements Tool
 {
@@ -15,7 +17,8 @@ class CreateAttendanceImportSessionTool implements Tool
 
     public function description(): string
     {
-        return '作業報告書インポートセッションを作成する(docs/26 UC-R001手順3)。';
+        return '作業報告書インポートセッションを作成する(docs/26 UC-R001手順3)。'.
+            'mcp/自身のDBに保持し、backend/には書き込まない。';
     }
 
     public function inputSchema(): array
@@ -39,11 +42,20 @@ class CreateAttendanceImportSessionTool implements Tool
 
     public function handle(array $arguments, BackendApiClient $client): array
     {
-        return ToolResult::run(fn () => $client->post('/attendance/import-sessions', [
-            'target_month' => $arguments['target_month'],
-            'source_type' => 'work_report',
-            'source_file_name' => $arguments['source_file_name'] ?? null,
-            'source_file_hash' => $arguments['source_file_hash'] ?? null,
-        ]));
+        return ToolResult::run(function () use ($arguments) {
+            $mcpUserId = (int) request()->attributes->get('mcp_user_id');
+
+            $session = AttendanceImportSession::query()->create([
+                'user_id' => $mcpUserId,
+                'target_month' => $arguments['target_month'],
+                'status' => ImportSessionStatus::CREATED,
+                'source_type' => 'work_report',
+                'source_file_name' => $arguments['source_file_name'] ?? null,
+                'source_file_hash' => $arguments['source_file_hash'] ?? null,
+                'client_type' => 'ai_application',
+            ]);
+
+            return $session->toArray();
+        });
     }
 }

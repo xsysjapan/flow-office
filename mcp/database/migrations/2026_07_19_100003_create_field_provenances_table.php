@@ -5,9 +5,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 各入力項目の値の出所(docs/26-usecases-monthly-import.md「AI生成値の出所管理」、
- * docs/03-architecture.md 3.7)。ポリモーフィックにmonthly_attendance_drafts/
- * attendance_import_items等を指す。
+ * 各入力項目の値の出所(docs/26-usecases-monthly-import.md「AI生成値の出所管理」)。
+ * ポリモーフィックにmonthly_attendance_drafts等を指す(Eloquentのmorphmapは使わず、
+ * entity_type/entity_idの単純な文字列参照)。
  */
 return new class extends Migration
 {
@@ -22,7 +22,7 @@ return new class extends Migration
             $table->json('source_reference_json')->nullable();
             $table->string('confidence')->nullable();
             $table->text('previous_value')->nullable();
-            $table->foreignId('confirmed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('confirmed_by_user_id')->nullable()->constrained('mcp_users')->nullOnDelete();
             $table->dateTime('confirmed_at')->nullable();
             $table->timestamp('created_at')->nullable();
 
