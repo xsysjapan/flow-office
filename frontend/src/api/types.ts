@@ -790,6 +790,17 @@ export interface FieldProvenance {
   created_at: string | null
 }
 
+/** UC-N001: 自分宛て通知。confirmed_atがnullなら未読。 */
+export interface Notification {
+  id: string
+  title: string
+  summary: string
+  detail_url: string | null
+  queued_at: string
+  sent_at: string | null
+  confirmed_at: string | null
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {

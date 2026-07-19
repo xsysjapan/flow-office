@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
@@ -82,6 +83,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return']);
     Route::post('/workflow-requests/{workflowRequest}/cancel', [WorkflowRequestController::class, 'cancel']);
     Route::get('/workflow-requests/{workflowRequest}/history', [WorkflowRequestController::class, 'history']);
+
+    // --- 通知 (docs/13-usecases-notification.md UC-N001) ---
+    Route::get('/notifications/mine', [NotificationController::class, 'indexMine']);
+    Route::post('/notifications/{notification}/confirm', [NotificationController::class, 'confirm']);
 
     // --- 添付ファイル (docs/12-usecases-attachment.md) ---
     Route::get('/attachments', [AttachmentController::class, 'index']);

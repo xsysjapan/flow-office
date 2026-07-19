@@ -116,6 +116,9 @@ use App\Domain\Integration\Commands\RevokeIntegration;
 use App\Domain\Integration\Handlers\RegisterIntegrationHandler;
 use App\Domain\Integration\Handlers\ReissueIntegrationTokenHandler;
 use App\Domain\Integration\Handlers\RevokeIntegrationHandler;
+use App\Domain\Notification\Commands\ConfirmNotification;
+use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
+use App\Domain\Notification\Projectors\NotificationProjector;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -202,6 +205,8 @@ return [
         RegisterIntegration::class => RegisterIntegrationHandler::class,
         RevokeIntegration::class => RevokeIntegrationHandler::class,
         ReissueIntegrationToken::class => ReissueIntegrationTokenHandler::class,
+
+        ConfirmNotification::class => ConfirmNotificationHandler::class,
 
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
@@ -295,6 +300,7 @@ return [
         AttendanceDailyCalculationProjector::class,
         WorkflowRequestProjector::class,
         BackOfficeTaskProjector::class,
+        NotificationProjector::class,
     ],
 
 ];

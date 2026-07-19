@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
 import { formatDate } from '../../utils/weekDates'
 import { Button } from '../Button/Button'
+import { NotificationBell } from '../NotificationBell/NotificationBell'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet'
 
@@ -215,20 +216,23 @@ export function AppLayout() {
               <MobileNav groups={visibleGroups} user={user} onLogout={() => void logout()} />
               <span className="text-sm font-semibold text-foreground">flow-office</span>
             </div>
-            <div className="hidden items-center gap-3 sm:flex">
-              {user && (
-                <div className="flex flex-col items-end leading-tight">
-                  <span className="text-sm text-muted-foreground">{user.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
-                      .filter(Boolean)
-                      .join(' ・ ')}
-                  </span>
-                </div>
-              )}
-              <Button variant="secondary" onClick={() => void logout()}>
-                ログアウト
-              </Button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <NotificationBell />
+              <div className="hidden items-center gap-3 sm:flex">
+                {user && (
+                  <div className="flex flex-col items-end leading-tight">
+                    <span className="text-sm text-muted-foreground">{user.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                        .filter(Boolean)
+                        .join(' ・ ')}
+                    </span>
+                  </div>
+                )}
+                <Button variant="secondary" onClick={() => void logout()}>
+                  ログアウト
+                </Button>
+              </div>
             </div>
           </div>
           <nav className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="メインナビゲーション">
