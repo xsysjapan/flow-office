@@ -154,6 +154,12 @@ class DeviceController extends Controller
         return response()->json([
             'device' => new DeviceResource($result['device']),
             'claim_token' => $result['claimToken'],
+            // 端末アプリ(QRコード)へ渡すペアリング交換APIの絶対URL。フロントエンドが
+            // 自身のAPIベースURLから組み立てるのではなく、サーバー側(APP_URL・
+            // APP_API_PREFIXを踏まえたroute())で確定させる。サブパス配置
+            // (例: https://example.com/flow-office/api)でもこのURLだけで完結させるため
+            // (docs/23-usecases-devices.md UC-D002)。
+            'claim_url' => route('devices.pairing.claim'),
         ]);
     }
 

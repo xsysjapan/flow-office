@@ -52,6 +52,10 @@ class DeviceRegistrationTest extends TestCase
         $pairing->assertSuccessful();
         $claimToken = $pairing->json('claim_token');
         $this->assertNotEmpty($claimToken);
+        // QRコードはclaim_urlに?claim_token=を付与した単純なURLとしてエンコードする
+        // (docs/23-usecases-devices.md UC-D002)。JSONではなくURL自体で完結させるため、
+        // このURLはサーバー(APP_URL/APP_API_PREFIX)側で確定させたものが返る。
+        $pairing->assertJsonPath('claim_url', route('devices.pairing.claim'));
 
         // actingAs()で設定したセッション認証(webガード)がSanctumガードのフォールバックとして
         // 残り続け、以降のBearerトークンでの認証を上書きしてしまうため、テスト内で明示的に

@@ -41,9 +41,16 @@
    (`POST /devices/{device}/pairing`。`role:admin`ミドルウェアで保護。管理者本人の
    トークンをそのまま端末へ渡すのではなく、`device:claim-pairing`abilityのみを持つ
    5分間有効なSanctumトークンを新たに発行する。`IssueDevicePairingClaimHandler`)
-2. 管理者の画面がclaim tokenをQRコード(`{url, claim_token}`等)として表示する。端末IDは
-   QRに含めない(サーバー発行のdevice_id(内部PK)をQR/人手で運ばせない。claim token自体が
-   Sanctumの`personal_access_tokens`に紐づく識別子を兼ねる)
+2. 管理者の画面がclaim tokenをQRコード(`<claim_url>?claim_token=<token>`という単純な
+   URL+クエリ文字列)として表示する。端末IDはQRに含めない(サーバー発行のdevice_id
+   (内部PK)をQR/人手で運ばせない。claim token自体がSanctumの`personal_access_tokens`に
+   紐づく識別子を兼ねる)。JSON形式(`{url, claim_token}`)にすると、汎用のQRリーダー
+   (iOSカメラ等)が中のURL部分だけを検出して開こうとし、claim_tokenが失われることが
+   あるため、URL自体にクエリ文字列として含める形式にしている。`claim_url`は
+   `POST /devices/{device}/pairing`のレスポンスにサーバー側(`APP_URL`・
+   `APP_API_PREFIX`を踏まえた`route()`)で確定させた絶対URLとして含まれる。フロント
+   エンドが自身の`VITE_API_BASE_URL`から組み立てるわけではないため、サブパス配置
+   (例: `https://example.com/flow-office/api`)でも常に正しいURLになる
 3. Androidアプリ(または対象端末)がQRを読み取り、`Authorization: Bearer <claim_token>`を
    付けて`POST /devices/pairing/claim`を呼ぶ(`auth:sanctum`+
    `ability:device:claim-pairing`で保護。呼び出し元が有効なclaim tokenの持ち主で

@@ -263,7 +263,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // 業務用の本トークンに交換する。呼び出し元はこの時点でその一時トークンの持ち主自身
     // (Device)であることが認証済みのため、role:adminではなくabilityで絞る。
     Route::post('/devices/pairing/claim', [DeviceController::class, 'claimPairing'])
-        ->middleware('ability:device:claim-pairing');
+        ->middleware('ability:device:claim-pairing')
+        ->name('devices.pairing.claim');
     Route::middleware('role:admin')->group(function () {
         Route::get('/devices', [DeviceController::class, 'index']);
         Route::post('/devices', [DeviceController::class, 'store']);
