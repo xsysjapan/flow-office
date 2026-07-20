@@ -784,50 +784,6 @@ export interface ApplicationIntegration {
   created_at: string | null
 }
 
-export type MonthlyDraftStatus =
-  | 'draft'
-  | 'validating'
-  | 'needs_review'
-  | 'ready_to_submit'
-  | 'submitted'
-  | 'approved'
-  | 'rejected'
-  | 'locked'
-
-export interface MonthlyAttendanceDraft {
-  id: number
-  user_id: number
-  target_month: string
-  status: MonthlyDraftStatus
-  version: number
-  source_type: string | null
-  source_reference: string | null
-  submitted_at: string | null
-  created_at: string | null
-}
-
-export type FieldSourceType =
-  | 'source_document'
-  | 'existing_clock_event'
-  | 'existing_attendance'
-  | 'work_schedule'
-  | 'employment_rule'
-  | 'ai_inferred'
-  | 'user_confirmed'
-  | 'user_manual_input'
-  | 'admin_correction'
-
-export interface FieldProvenance {
-  id: number
-  field_name: string
-  source_type: FieldSourceType
-  confidence: string | null
-  previous_value: string | null
-  confirmed_by_user_id: number | null
-  confirmed_at: string | null
-  created_at: string | null
-}
-
 /** UC-N001: 自分宛て通知。confirmed_atがnullなら未読。 */
 export interface Notification {
   id: string
