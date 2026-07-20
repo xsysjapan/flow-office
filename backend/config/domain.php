@@ -150,6 +150,7 @@ use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\CompleteOnboardingSsoLink;
 use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
+use App\Domain\User\Commands\LinkSsoAccount;
 use App\Domain\User\Commands\RecordLocalLogin;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
@@ -159,6 +160,7 @@ use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
 use App\Domain\User\Handlers\CompleteOnboardingSsoLinkHandler;
 use App\Domain\User\Handlers\CompleteOnboardingWithLocalPasswordHandler;
+use App\Domain\User\Handlers\LinkSsoAccountHandler;
 use App\Domain\User\Handlers\RecordLocalLoginHandler;
 use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
@@ -225,6 +227,7 @@ return [
         StartOnboardingSso::class => StartOnboardingSsoHandler::class,
         CompleteOnboardingSsoLink::class => CompleteOnboardingSsoLinkHandler::class,
         CompleteOnboardingWithLocalPassword::class => CompleteOnboardingWithLocalPasswordHandler::class,
+        LinkSsoAccount::class => LinkSsoAccountHandler::class,
 
         DraftWorkflowRequest::class => DraftWorkflowRequestHandler::class,
         SubmitWorkflowRequest::class => SubmitWorkflowRequestHandler::class,

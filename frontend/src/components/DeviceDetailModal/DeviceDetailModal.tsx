@@ -267,7 +267,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
             {issuePairingClaim.error && <ErrorMessage error={issuePairingClaim.error} />}
             {issuePairingClaim.data ? (
               <div className="max-w-xs text-xs text-foreground">
-                <DevicePairingQr claimToken={issuePairingClaim.data.claim_token} />
+                <DevicePairingQr claimToken={issuePairingClaim.data.claim_token} claimUrl={issuePairingClaim.data.claim_url} />
                 <p className="mt-2 break-all font-mono">{issuePairingClaim.data.claim_token}</p>
                 <p className="mt-1">
                   (一度のみ表示・5分で失効します。画面を撮影・共有しないでください)

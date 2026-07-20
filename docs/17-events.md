@@ -13,6 +13,8 @@
 - `user.roles_changed` (UC-M001 権限を設定する)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.termination_date_set` (退社日を設定または解除する)
+- `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
+  Microsoft 365アカウントを紐づける)
 
 ## Workflow (汎用申請)
 

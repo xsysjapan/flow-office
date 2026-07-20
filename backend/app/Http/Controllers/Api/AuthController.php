@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\User\Commands\CompleteOnboardingSsoLink;
+use App\Domain\User\Commands\LinkSsoAccount;
 use App\Domain\User\Commands\RecordLocalLogin;
 use App\Domain\User\Ms365ConfigResolver;
 use App\Domain\User\SsoAuthenticator;
@@ -14,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -39,6 +41,9 @@ class AuthController extends Controller
 {
     private const EXCHANGE_CACHE_PREFIX = 'sso-exchange:';
 
+    /** UC-004: state値のプレフィックス。後続の暗号化文字列にログイン中ユーザーのIDを載せる。 */
+    private const SSO_LINK_STATE_PREFIX = 'link-sso:';
+
     #[OA\Get(
         path: '/auth/microsoft/redirect',
         operationId: 'auth.microsoft.redirect',
@@ -56,6 +61,30 @@ class AuthController extends Controller
     }
 
     #[OA\Get(
+        path: '/auth/microsoft/link-redirect',
+        operationId: 'auth.microsoft.linkRedirect',
+        summary: 'ログイン中ユーザーにMicrosoft 365アカウントを紐づけるためのログインURLを取得する(UC-004)',
+        tags: ['認証'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function linkRedirect(Request $request): JsonResponse
+    {
+        Ms365ConfigResolver::applyToSocialiteConfig();
+
+        // 紐づけ対象のユーザーIDを暗号化してstateに載せる。OAuthリダイレクトを挟んで
+        // 戻ってきた際、フロントエンドのセッション情報には頼れないため
+        // (callback()はSanctum認証されていないリクエストとして届く)。
+        $state = self::SSO_LINK_STATE_PREFIX.Crypt::encryptString((string) $request->user()->id);
+
+        $url = Socialite::driver('azure')->stateless()
+            ->with(['state' => $state])
+            ->redirect()
+            ->getTargetUrl();
+
+        return response()->json(['url' => $url]);
+    }
+
+    #[OA\Get(
         path: '/auth/microsoft/callback',
         operationId: 'auth.microsoft.callback',
         summary: 'Microsoftログイン後のコールバックを処理する',
@@ -67,12 +96,19 @@ class AuthController extends Controller
         Ms365ConfigResolver::applyToSocialiteConfig();
 
         $ssoUser = Socialite::driver('azure')->stateless()->user();
+        $state = $request->query('state');
 
-        if ($request->query('state') === OnboardingController::SSO_LINK_STATE) {
+        if ($state === OnboardingController::SSO_LINK_STATE) {
             $user = $commandBus->dispatch(new CompleteOnboardingSsoLink(
                 entraUserId: $ssoUser->getId(),
                 name: $ssoUser->getName() ?? $ssoUser->getNickname() ?? $ssoUser->getEmail(),
                 email: $ssoUser->getEmail(),
+            ));
+        } elseif (is_string($state) && str_starts_with($state, self::SSO_LINK_STATE_PREFIX)) {
+            $userId = (int) Crypt::decryptString(substr($state, strlen(self::SSO_LINK_STATE_PREFIX)));
+            $user = $commandBus->dispatch(new LinkSsoAccount(
+                userId: $userId,
+                entraUserId: $ssoUser->getId(),
             ));
         } else {
             $user = $authenticator->handle($ssoUser);

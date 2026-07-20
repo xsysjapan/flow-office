@@ -56,6 +56,9 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me'])->middleware('ability:profile:self:read');
         Route::post('/logout', [AuthController::class, 'logout']);
+        // UC-004: ローカルパスワードでログイン中のユーザーが、任意のタイミングで自分の
+        // アカウントにMicrosoft 365アカウントを紐づける。
+        Route::get('/microsoft/link-redirect', [AuthController::class, 'linkRedirect']);
     });
 });
 
@@ -260,7 +263,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // 業務用の本トークンに交換する。呼び出し元はこの時点でその一時トークンの持ち主自身
     // (Device)であることが認証済みのため、role:adminではなくabilityで絞る。
     Route::post('/devices/pairing/claim', [DeviceController::class, 'claimPairing'])
-        ->middleware('ability:device:claim-pairing');
+        ->middleware('ability:device:claim-pairing')
+        ->name('devices.pairing.claim');
     Route::middleware('role:admin')->group(function () {
         Route::get('/devices', [DeviceController::class, 'index']);
         Route::post('/devices', [DeviceController::class, 'store']);

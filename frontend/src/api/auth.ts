@@ -5,6 +5,11 @@ export function fetchMicrosoftRedirectUrl(): Promise<{ url: string }> {
   return apiFetch('/auth/microsoft/redirect')
 }
 
+/** ローカルパスワードユーザーが任意のタイミングでMicrosoft 365アカウントを紐づける(docs/06-usecases-auth.md UC-004)。 */
+export function fetchMicrosoftLinkRedirectUrl(): Promise<{ url: string }> {
+  return apiFetch('/auth/microsoft/link-redirect')
+}
+
 export function exchangeCodeForToken(code: string): Promise<{ token: string; user: User }> {
   return apiFetch('/auth/token', { method: 'POST', body: { code } })
 }
