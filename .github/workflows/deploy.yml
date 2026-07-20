@@ -67,6 +67,11 @@ jobs:
           npm ci
           npm run build
 
+      - name: Add SPA fallback and robots.txt to frontend build
+        run: |
+          cp deploy/static/frontend.htaccess frontend/dist/.htaccess
+          cp deploy/static/frontend-robots.txt frontend/dist/robots.txt
+
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh

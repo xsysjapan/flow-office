@@ -27,6 +27,7 @@ ssh sshuser@ssh.example.com -p 10022
     │   │   ├── mcp/               同上
     │   │   └── frontend/dist/
     │   │       ├── index.html, assets/...
+    │   │       ├── .htaccess, robots.txt        (deploy/static/からビルド時にコピー)
     │   │       ├── api -> ../../backend/public   (相対シンボリックリンク)
     │   │       └── mcp -> ../../mcp/public       (相対シンボリックリンク)
     │   └── (直近5世代を保持し、古いものは自動削除)
@@ -47,6 +48,29 @@ ssh sshuser@ssh.example.com -p 10022
   途中で失敗した場合は本番に影響が出ない(旧リリースが動き続ける)。
 - ロールバックは `ln -sfn releases/<過去のタイムスタンプ> current` を実行するだけでよい
   (直近5世代は自動的に残してある)。
+
+### 1.1 SPAのフォールバック(直接アクセス・リロード対策)
+
+frontendはReact Router(`/login`・`/auth/callback`等)でルーティングしているため、これらの
+パスへの直接アクセスやブラウザリロード時、Apache上に対応する実ファイルが無いと404になって
+しまう。共有ホスティングでApache本体の設定(`docs/27-release-runbook.md`の`FallbackResource`
+相当)を編集できない前提のため、`deploy/static/frontend.htaccess` を「Build frontend」ステップ
+後に `frontend/dist/.htaccess` としてコピーし、mod_rewriteで実ファイル・実ディレクトリ以外を
+`index.html`にフォールバックさせる。`api/`・`mcp/`はシンボリックリンク(実ディレクトリ)として
+存在するため、この判定で自動的に除外され、それぞれの`public/.htaccess`が引き続き適用される。
+
+### 1.2 検索エンジンからの非公開
+
+社内システムのため検索エンジンにインデックスさせない。frontend/backend/mcpそれぞれの
+`robots.txt`(`Disallow: /`)に加え、`.htaccess`で`X-Robots-Tag: noindex, nofollow`ヘッダーを
+付与している。ただし**`robots.txt`はドメインルート(`public_html/robots.txt`)でしか
+クローラーに解釈されない**ため、`/flow-office/robots.txt`単体では効果が保証されない。
+既存ホームページの`public_html/robots.txt`はこのデプロイの管理外(触らない)なので、確実に
+除外したい場合はそのファイルへ手動で以下を追記すること。
+
+```
+Disallow: /flow-office/
+```
 
 ## 2. 一度だけ行う手動セットアップ
 
