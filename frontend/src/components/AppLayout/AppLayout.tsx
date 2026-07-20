@@ -58,7 +58,10 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
   {
     label: '連携',
     icon: Plug,
-    items: [{ to: '/integrations', label: 'API・MCP連携' }],
+    items: [
+      { to: '/account', label: 'アカウント設定' },
+      { to: '/integrations', label: 'API・MCP連携' },
+    ],
   },
   {
     label: 'バックオフィス',

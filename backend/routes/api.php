@@ -56,6 +56,9 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me'])->middleware('ability:profile:self:read');
         Route::post('/logout', [AuthController::class, 'logout']);
+        // UC-004: ローカルパスワードでログイン中のユーザーが、任意のタイミングで自分の
+        // アカウントにMicrosoft 365アカウントを紐づける。
+        Route::get('/microsoft/link-redirect', [AuthController::class, 'linkRedirect']);
     });
 });
 

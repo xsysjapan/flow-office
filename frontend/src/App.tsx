@@ -42,6 +42,7 @@ import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { DeviceListPage } from './pages/admin/DeviceListPage'
 import { MyIntegrationsPage } from './pages/integrations/MyIntegrationsPage'
 import { NotificationsPage } from './pages/notifications/NotificationsPage'
+import { AccountSettingsPage } from './pages/account/AccountSettingsPage'
 
 function App() {
   return (
@@ -75,6 +76,7 @@ function App() {
         <Route path="special-leave/to-approve" element={<SpecialLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
+        <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="admin" element={<AdminLayout />}>

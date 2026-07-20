@@ -12,6 +12,8 @@ export interface User {
   termination_date?: string | null
   roles?: string[]
   last_login_at: string | null
+  /** Microsoft 365(Entra ID)アカウントと連携済みかどうか(docs/06-usecases-auth.md UC-004)。 */
+  sso_linked?: boolean
 }
 
 export interface Role {
