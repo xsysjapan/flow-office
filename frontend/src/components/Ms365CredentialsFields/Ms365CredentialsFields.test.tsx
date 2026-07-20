@@ -7,7 +7,6 @@ const emptyValue: Ms365CredentialsFieldsValue = {
   tenantId: '',
   clientId: '',
   clientSecret: '',
-  redirectUri: '',
   mockEnabled: false,
 }
 

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE_URL } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
