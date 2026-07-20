@@ -3,9 +3,7 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
-  FieldSourceType,
   LegalHolidayWarning,
-  MonthlyDraftStatus,
   PaidLeaveRequestStatus,
   PaidLeaveType,
   PunchStatus,
@@ -67,52 +65,6 @@ const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
   shipped: { label: '発送済み', tone: 'success' },
   completed: { label: '完了', tone: 'success' },
   cancelled: { label: '取消', tone: 'danger' },
-}
-
-const monthlyDraftStatusMeta: Record<MonthlyDraftStatus, StatusMeta> = {
-  draft: { label: '下書き', tone: 'neutral' },
-  validating: { label: '検証中', tone: 'info' },
-  needs_review: { label: '要確認', tone: 'warning' },
-  ready_to_submit: { label: '申請可能', tone: 'success' },
-  submitted: { label: '提出済み', tone: 'info' },
-  approved: { label: '承認済み', tone: 'success' },
-  rejected: { label: '却下', tone: 'danger' },
-  locked: { label: 'ロック済み', tone: 'neutral' },
-}
-
-const fieldSourceTypeMeta: Record<FieldSourceType, StatusMeta> = {
-  source_document: { label: '作業報告書から読み取り', tone: 'info' },
-  existing_clock_event: { label: '既存の打刻から算出', tone: 'info' },
-  existing_attendance: { label: '既存の勤怠から算出', tone: 'info' },
-  work_schedule: { label: '勤務予定から算出', tone: 'info' },
-  employment_rule: { label: '勤務ルールから算出', tone: 'info' },
-  ai_inferred: { label: 'AI推定(要確認)', tone: 'warning' },
-  user_confirmed: { label: '本人確認済み', tone: 'success' },
-  user_manual_input: { label: '本人入力', tone: 'success' },
-  admin_correction: { label: '管理者修正', tone: 'success' },
-}
-
-const fieldNameLabels: Record<string, string> = {
-  start_time: '出勤時刻',
-  end_time: '退勤時刻',
-}
-
-export function monthlyDraftStatusLabel(status: MonthlyDraftStatus): StatusMeta {
-  return monthlyDraftStatusMeta[status]
-}
-
-export function fieldSourceTypeLabel(sourceType: FieldSourceType): StatusMeta {
-  return fieldSourceTypeMeta[sourceType]
-}
-
-/** field_provenances.field_name(`"{日付}:{項目名}"`形式)を日付と日本語ラベルに分解する。 */
-export function parseFieldProvenanceName(fieldName: string): { date: string; fieldLabel: string } {
-  const separatorIndex = fieldName.lastIndexOf(':')
-  if (separatorIndex === -1) return { date: fieldName, fieldLabel: fieldName }
-
-  const date = fieldName.slice(0, separatorIndex)
-  const field = fieldName.slice(separatorIndex + 1)
-  return { date, fieldLabel: fieldNameLabels[field] ?? field }
 }
 
 export function workflowRequestStatusLabel(status: WorkflowRequestStatus): StatusMeta {
