@@ -1,0 +1,53 @@
+APP_NAME="flow-office-mcp"
+APP_ENV=production
+APP_KEY=${MCP_APP_KEY}
+APP_DEBUG=false
+APP_URL=${MCP_APP_URL}
+
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=en_US
+
+APP_MAINTENANCE_DRIVER=file
+
+BCRYPT_ROUNDS=12
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=error
+
+DB_CONNECTION=mysql
+DB_HOST=${MCP_DB_HOST}
+DB_PORT=3306
+DB_DATABASE=${MCP_DB_DATABASE}
+DB_USERNAME=${MCP_DB_USERNAME}
+DB_PASSWORD=${MCP_DB_PASSWORD}
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+
+CACHE_STORE=database
+
+MAIL_MAILER=log
+
+VITE_APP_NAME="${APP_NAME}"
+
+# backend/ のAPIベースURL。mcp/はこのAPIのクライアントであり、DBへは直接アクセスしない。
+MCP_BACKEND_API_BASE_URL=${MCP_BACKEND_API_BASE_URL}
+
+# OAuth2アクセストークン(JWT)の署名鍵。初回デプロイ時にactivate-release.shがサーバー上で
+# `php artisan mcp:oauth-keys` を実行して生成し、shared/mcp/storageに永続化する
+# (devの鍵を使い回さないこと。docs/27-release-runbook.md参照)。
+MCP_OAUTH_PRIVATE_KEY_PATH=storage/oauth-private.key
+MCP_OAUTH_PUBLIC_KEY_PATH=storage/oauth-public.key
+MCP_OAUTH_ACCESS_TOKEN_TTL_MINUTES=60
+MCP_OAUTH_REFRESH_TOKEN_TTL_DAYS=30
+MCP_OAUTH_AUTH_CODE_TTL_MINUTES=10
