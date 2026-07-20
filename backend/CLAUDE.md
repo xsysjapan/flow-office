@@ -63,6 +63,16 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 - CommandHandlerは検証の上で必ず1つ以上のイベントを`stored_events`に追記する。イベントを
   書かない状態変更は作らない。
 
+## 効率的なコード参照
+
+- 「〇〇ドメインを直す」場合は`app/Domain/<DomainName>/`配下の対象イベント1本分
+  (Command/Event/Handler、該当すればProjector)だけを読めば足りる。他ドメインの
+  `Domain/`は基本的に読まなくてよい。
+- ルーティング・レスポンス形状の確認は`routes/api.php`と該当`Http/Controllers/Api/`
+  1ファイルに絞る。
+- 横断的な調査(「このイベントを発行している箇所を全部探す」等)はGrepで
+  `event_type`文字列を検索する。範囲が広がりそうならExploreサブエージェントに委譲する。
+
 ## テスト
 
 - `tests/Feature/<DomainName>/`は`app/Domain/<DomainName>/`のグルーピングに合わせる。
