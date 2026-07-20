@@ -40,15 +40,19 @@ class RecordSsoLoginHandler implements CommandHandler
         $defaultTimezone = SystemSetting::current()->default_timezone;
 
         if ($user === null) {
-            $user = User::query()->create([
-                'entra_user_id' => $command->entraUserId,
-                'name' => $command->name ?? $command->email,
-                'email' => $command->email,
-                'employment_status' => 'active',
-                'timezone' => $defaultTimezone,
-            ]);
-
-            $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
+            $user = User::query()->where('email', $command->email)->first();
+            if ($user === null) {
+                $user = User::query()->create([
+                    'entra_user_id' => $command->entraUserId,
+                    'name' => $command->name ?? $command->email,
+                    'email' => $command->email,
+                    'employment_status' => 'active',
+                    'timezone' => $defaultTimezone,
+                ]);
+                $user->roles()->attach(Role::query()->where('code', Role::EMPLOYEE)->first());
+            } else {
+                $user->entra_user_id = $command->entraUserId;
+            }
         }
 
         $user->last_login_at = LocalDateTime::now($defaultTimezone);

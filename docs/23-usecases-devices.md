@@ -47,11 +47,9 @@
    紐づく識別子を兼ねる)。JSON形式(`{url, claim_token}`)にすると、汎用のQRリーダー
    (iOSカメラ等)が中のURL部分だけを検出して開こうとし、claim_tokenが失われることが
    あるため、URL自体にクエリ文字列として含める形式にしている。`claim_url`は
-   `POST /devices/{device}/pairing`のレスポンスにサーバー側(`APP_URL`・
-   `APP_API_PREFIX`を踏まえた`route()`)で確定させた絶対URLとして含まれる。フロント
+   `POST /devices/{device}/pairing`のレスポンスに含まれる。フロント
    エンドが自身の`VITE_API_BASE_URL`から組み立てるわけではないため、サブパス配置
-   (例: `https://example.com/flow-office/api`)でも常に正しいURLになる。同レスポンスには
-   `api_base_url`(`claim_url`から`/devices/pairing/claim`を除いた部分)も含まれる。
+   (例: `https://example.com/flow-office/api`)でも常に正しいURLになる。
    端末アプリがQRのURL文字列からどこまでがAPIのベースかを自力で判別しなくて済むように
    するためで、以後のheartbeat・打刻等のAPIコール先として使う
 3. Androidアプリ(または対象端末)がQRを読み取り、`Authorization: Bearer <claim_token>`を
@@ -65,7 +63,7 @@
    自体も含め、この端末の既存トークンはすべて入れ替える(`ClaimDevicePairingHandler`)
 5. 平文の本トークンは端末アプリへの応答として一度だけ返す(以降、端末はこのトークンを
    `Authorization: Bearer`として全リクエストに付与する)。この時点で`status=active`にする。
-   このレスポンスにも`api_base_url`を含め、ペアリング完了後の端末アプリが以後の
+   このレスポンスに`api_base_url`を含め、ペアリング完了後の端末アプリが以後の
    APIコール先を確実に把握できるようにする
 6. `device.paired`イベントを記録する
 7. 以降、端末アプリは`POST /devices/heartbeat`を10分に1回程度の間隔で送り、定期的に疎通確認

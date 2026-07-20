@@ -16,8 +16,7 @@
 	# 内部書き換えなので、POSTのメソッド・ボディもそのまま維持される)。
 	rewrite /flow-office/mcp /flow-office/mcp/
 
-	# mcpは自身でパスprefixを持たない(APP_API_PREFIX相当が常に空)ため、
-	# "/flow-office/mcp" を丸ごと剥がして転送する
+	# mcpは自身でパスprefixを持たないため、"/flow-office/mcp" を丸ごと剥がして転送する
 	# (JSON-RPCエンドポイントは相対/、OAuth関連は/oauth/*, /link, /.well-known/*)。
 	handle_path /flow-office/mcp/* {
 		reverse_proxy 127.0.0.1:8090
@@ -35,10 +34,9 @@
 		reverse_proxy 127.0.0.1:8090
 	}
 
-	# backendはローカル開発では既定のAPP_API_PREFIX='api'のままなので、
-	# "/flow-office" だけを剥がして "/api/..." は残したまま転送する。
+	# backendはローカル開発では既定の "/flow-office/api" を剥がして転送する。
 	handle /flow-office/api/* {
-		uri strip_prefix /flow-office
+		uri strip_prefix /flow-office/api
 		reverse_proxy 127.0.0.1:8000
 	}
 

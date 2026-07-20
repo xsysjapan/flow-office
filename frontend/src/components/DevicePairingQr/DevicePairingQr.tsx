@@ -11,8 +11,7 @@ export interface DevicePairingQrProps {
  * 単純なURL+クエリ文字列としてQRエンコードする(device_idはQRに含めない。claim token
  * 自体がpersonal_access_tokensに紐づく識別子を兼ねるため)。JSON形式にすると、汎用の
  * QRリーダー(iOSカメラ等)がURL部分だけを抜き出して開こうとし、claim_tokenが失われる
- * ことがあるため、URL自体にクエリ文字列として含める。`claimUrl`はサーバー(APP_URL・
- * APP_API_PREFIXを踏まえた`route()`)が返す絶対URLをそのまま使う(サブパス配置対応)。
+ * ことがあるため、URL自体にクエリ文字列として含める。
  */
 export function DevicePairingQr({ claimToken, claimUrl, size = 176 }: DevicePairingQrProps) {
   const payload = `${claimUrl}?claim_token=${encodeURIComponent(claimToken)}`

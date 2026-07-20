@@ -21,14 +21,16 @@ class Ms365ConfigResolver
      */
     public static function applyToSocialiteConfig(): void
     {
-        $base = rtrim(config('app.url'), '/');
         $settings = SystemSetting::current();
+
+        $base = rtrim(config('app.url'), '/');
+        $base = rtrim("$base/".config('app.api_prefix', ''), '/');
 
         config([
             'services.azure.client_id' => $settings->m365_client_id,
             'services.azure.client_secret' => $settings->m365_client_secret,
             'services.azure.tenant' => $settings->m365_tenant_id ?: 'common',
-            'services.azure.redirect' => "{$base}/api/auth/microsoft/callback",
+            'services.azure.redirect' => "{$base}/auth/microsoft/callback",
         ]);
     }
 

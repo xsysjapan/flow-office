@@ -54,7 +54,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertNotEmpty($claimToken);
         // QRコードはclaim_urlに?claim_token=を付与した単純なURLとしてエンコードする
         // (docs/23-usecases-devices.md UC-D002)。JSONではなくURL自体で完結させるため、
-        // このURLはサーバー(APP_URL/APP_API_PREFIX)側で確定させたものが返る。
+        // このURLはサーバー側で確定させたものが返る。
         $pairing->assertJsonPath('claim_url', route('devices.pairing.claim'));
         // 端末アプリが以後のAPIコール(heartbeat・打刻等)先を自力でclaim_urlから
         // 切り出さなくて済むよう、APIベースURLも別途返す。

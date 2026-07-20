@@ -23,8 +23,9 @@ services:
       # mcp/backendの起動時にだけ参照する。
       - VITE_BASE_PATH
       - VITE_API_BASE_URL
-      - MCP_PUBLIC_APP_URL
+      - FRONTEND_PUBLIC_APP_URL
       - BACKEND_PUBLIC_APP_URL
+      - MCP_PUBLIC_APP_URL
     depends_on:
       - mock-oidc
 

@@ -154,15 +154,7 @@ class DeviceController extends Controller
         return response()->json([
             'device' => new DeviceResource($result['device']),
             'claim_token' => $result['claimToken'],
-            // 端末アプリ(QRコード)へ渡すペアリング交換APIの絶対URL。フロントエンドが
-            // 自身のAPIベースURLから組み立てるのではなく、サーバー側(APP_URL・
-            // APP_API_PREFIXを踏まえたroute())で確定させる。サブパス配置
-            // (例: https://example.com/flow-office/api)でもこのURLだけで完結させるため
-            // (docs/23-usecases-devices.md UC-D002)。
             'claim_url' => route('devices.pairing.claim'),
-            // 端末アプリが後続のAPIコール(heartbeat・打刻等)をどこへ送ればよいか、
-            // claim_urlの文字列から自力で切り出させないよう別途明示する。
-            'api_base_url' => self::apiBaseUrl(),
         ]);
     }
 
@@ -180,23 +172,16 @@ class DeviceController extends Controller
 
         $result = $commandBus->dispatch(new ClaimDevicePairing(deviceId: $device->id));
 
+        $base = rtrim(config('app.url'), '/');
+        $base = rtrim("$base/".config('app.api_prefix', ''), '/');
+
         return response()->json([
             'device' => new DeviceResource($result['device']),
             'token' => $result['plainTextToken'],
             // ペアリング完了後、端末アプリが以後のAPIコール(heartbeat・打刻等)に使う
             // ベースURL。claim_urlと同じくAPP_URL・APP_API_PREFIXを踏まえて確定させる。
-            'api_base_url' => self::apiBaseUrl(),
+            'api_base_url' => $base,
         ]);
-    }
-
-    /**
-     * サブパス配置(例: https://example.com/flow-office/api)でも端末アプリが後続の
-     * APIコール先を組み立てられるよう、`route()`が確定させた絶対URLからAPIのベース
-     * URL(`.../devices/pairing/claim`より前の部分)を切り出す。
-     */
-    private static function apiBaseUrl(): string
-    {
-        return preg_replace('#/devices/pairing/claim$#', '', route('devices.pairing.claim'));
     }
 
     /**

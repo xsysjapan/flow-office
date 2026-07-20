@@ -52,11 +52,8 @@ export function updateDeviceSettings(deviceId: number, input: UpdateDeviceSettin
 export interface IssuePairingClaimResult {
   device: Device
   claim_token: string
-  // サブパス配置(例: /flow-office/api)でも組み立てられるよう、サーバー側で確定した
   // ペアリング交換APIの絶対URL(docs/23-usecases-devices.md UC-D002)。
   claim_url: string
-  // 端末アプリが以後のAPIコール(heartbeat・打刻等)に使うベースURL。
-  api_base_url: string
 }
 
 // 一時ペアリングトークン(claim token)を発行する。管理者の認証済みトークンだけを

@@ -27,12 +27,22 @@ if [ ! -f database/database.sqlite ]; then
 fi
 
 # scripts/start-ngrok.sh(ホスト側)からngrok公開時のみBACKEND_PUBLIC_APP_URLが渡される。
-# 未設定時は書き換えない(APP_API_PREFIX等、他の.env値はcp .env.exampleの既定のまま
+# 未設定時は書き換えない(他の.env値はcp .env.exampleの既定のまま
 # ローカル既定のAPP_URL=http://localhost:8000を使う)。mcpと同様の理由([.env直接書き換え]
 # 参照、下記mcpセクションのコメント)でシェル変数ではなく.env自体を書き換える。
 if [ -n "${BACKEND_PUBLIC_APP_URL:-}" ]; then
   sed -i "s#^APP_URL=.*#APP_URL=${BACKEND_PUBLIC_APP_URL}#" .env
-  sed -i "s#^FRONTEND_URL=.*#FRONTEND_URL=${BACKEND_PUBLIC_APP_URL}#" .env
+
+  # BACKEND_PUBLIC_APP_URL が /apiで終わる場合
+  if [[ "${BACKEND_PUBLIC_APP_URL}" == */api ]]; then
+    sed -i "s#^APP_API_PREFIX=.*#APP_API_PREFIX=#" .env
+  else
+    sed -i "s#^APP_API_PREFIX=.*#APP_API_PREFIX=api#" .env
+  fi
+fi
+
+if [ -n "${FRONTEND_PUBLIC_APP_URL:-}" ]; then
+  sed -i "s#^FRONTEND_URL=.*#FRONTEND_URL=${FRONTEND_PUBLIC_APP_URL}#" .env
 fi
 
 php artisan migrate --seed

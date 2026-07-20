@@ -23,10 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
-        // 本番(XSERVER)では/flow-office/apiにドキュメントルートをマウントするため、
-        // そのマウントパス自体が'api'セグメントを兼ねる。APP_API_PREFIXを空にして
-        // 二重の/api/apiを避ける(.env参照)。ローカル開発・CI・既存テストは既定値'api'のまま。
-        apiPrefix: env('APP_API_PREFIX', 'api'),
+        apiPrefix: env('APP_API_PREFIX', ''),
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -52,20 +49,23 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
-        );
+        $exceptions->shouldRenderJsonWhen(function (Request $request) {
+            $apiPrefix = config('app.api_prefix', '');
+            return $request->is($apiPrefix.'/*');
+        });
 
         // CommandHandlerが検知した業務ルール違反はクライアント起因のエラーとして422で返す。
         $exceptions->render(function (DomainRuleException $e, Request $request) {
-            if ($request->is('api/*')) {
+            $apiPrefix = config('app.api_prefix', '');
+            if ($request->is($apiPrefix.'/*')) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
         });
 
         // 楽観ロック競合(docs/26-usecases-monthly-import.md「楽観ロック」)はHTTP 409で返す。
         $exceptions->render(function (ConcurrencyException $e, Request $request) {
-            if ($request->is('api/*')) {
+            $apiPrefix = config('app.api_prefix', '');
+            if ($request->is($apiPrefix.'/*')) {
                 return response()->json(['message' => $e->getMessage(), 'code' => 'ATTENDANCE_VERSION_CONFLICT'], 409);
             }
         });
