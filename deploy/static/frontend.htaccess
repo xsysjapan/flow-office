@@ -1,0 +1,24 @@
+# frontend(SPA)用の.htaccess。ビルド時(GitHub Actionsの「Build frontend」ステップ)に
+# frontend/dist/.htaccess としてコピーされ、rsyncでそのままデプロイされる。
+#
+# React Routerのフロントエンドルーティング(/login, /auth/callback 等)へ直接アクセス・
+# リロードした際、Apache上に対応する実ファイルが存在せず404になってしまうのを防ぐため、
+# 実ファイル・実ディレクトリ以外のリクエストをすべて index.html にフォールバックさせる。
+# api/・mcp/ はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
+# 下記の-f/-d判定で自動的に除外され、それぞれのpublic/.htaccessが引き続き適用される。
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# 検索エンジンに拾われないようにする(社内システムのため)。ドメインルートのrobots.txtは
+# 既存ホームページのものでこのデプロイの管理外なので、HTTPヘッダーでも明示しておく
+# (docs/28-github-actions-deploy.md参照)。
+<IfModule mod_headers.c>
+    Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>

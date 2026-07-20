@@ -1,0 +1,135 @@
+name: Deploy (XSERVER)
+
+# 本番(XSERVER)へbackend・mcp・frontendを一括デプロイする。
+# 配置構成・シンボリックリンク戦略の詳細は docs/28-github-actions-deploy.md、
+# 手動デプロイの一般的な考え方は docs/27-release-runbook.md を参照。
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同時に複数のデプロイが走ってcurrentの切替が競合しないようにする
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_BASE_DIR: ${{ secrets.DEPLOY_BASE_DIR }}
+  DEPLOY_PUBLIC_HTML_LINK: ${{ secrets.DEPLOY_PUBLIC_HTML_LINK }}
+  DEPLOY_PHP_BIN: ${{ secrets.DEPLOY_PHP_BIN }}
+  SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+  SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+  SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Determine release name
+        run: echo "RELEASE=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, bcmath, intl, gd
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Build backend
+        working-directory: backend
+        run: composer install --prefer-dist --no-dev --optimize-autoloader --no-interaction
+
+      - name: Build mcp
+        working-directory: mcp
+        run: |
+          composer install --prefer-dist --no-dev --optimize-autoloader --no-interaction
+          npm ci
+          npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_BASE_PATH: /flow-office/
+          VITE_API_BASE_URL: ${{ secrets.APP_PUBLIC_URL }}/api
+        run: |
+          npm ci
+          npm run build
+
+      - name: Add SPA fallback and robots.txt to frontend build
+        run: |
+          cp deploy/static/frontend.htaccess frontend/dist/.htaccess
+          cp deploy/static/frontend-robots.txt frontend/dist/robots.txt
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          {
+            echo "Host deploy-target"
+            echo "  HostName $SSH_HOST"
+            echo "  Port $SSH_PORT"
+            echo "  User $SSH_USER"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Create remote release directories
+        run: |
+          ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
+
+      - name: Upload backend
+        run: |
+          rsync -az --delete \
+            --exclude='.git' --exclude='.env' \
+            --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
+            -e "ssh -F ~/.ssh/config" \
+            backend/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/backend/"
+
+      - name: Upload mcp
+        run: |
+          rsync -az --delete \
+            --exclude='.git' --exclude='.env' \
+            --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
+            -e "ssh -F ~/.ssh/config" \
+            mcp/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/mcp/"
+
+      - name: Upload frontend
+        run: |
+          rsync -az --delete \
+            -e "ssh -F ~/.ssh/config" \
+            frontend/dist/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/frontend/dist/"
+
+      - name: Activate release
+        run: |
+          scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
+          ssh deploy-target "chmod +x /tmp/activate-release.sh && /tmp/activate-release.sh '$DEPLOY_BASE_DIR' '$RELEASE' '$DEPLOY_PUBLIC_HTML_LINK' '$DEPLOY_PHP_BIN' 5 && rm -f /tmp/activate-release.sh"
+
+      - name: Health check
+        run: |
+          set -e
+          BASE_URL="${{ secrets.APP_PUBLIC_URL }}"
+          curl -fsS -o /dev/null "$BASE_URL/"
+          curl -fsS "$BASE_URL/api/onboarding/status" > /dev/null
+          curl -fsS -o /dev/null "$BASE_URL/mcp/link"
+          curl -fsS "$BASE_URL/mcp/.well-known/oauth-authorization-server" > /dev/null
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/mcp")
+          if [ "$status" != "401" ]; then
+            echo "expected 401 from POST $BASE_URL/mcp, got $status" >&2
+            exit 1
+          fi
