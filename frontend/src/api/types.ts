@@ -36,7 +36,6 @@ export interface OnboardingSsoInput {
   m365_tenant_id: string
   m365_client_id: string
   m365_client_secret: string
-  m365_redirect_uri: string
   m365_mock_enabled?: boolean
 }
 
@@ -71,7 +70,6 @@ export interface SystemSettings {
   m365_client_id: string | null
   /** クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。 */
   m365_client_secret_configured: boolean
-  m365_redirect_uri: string | null
   /** ローカル開発用モックOIDC(mock-oidc/)を使うかどうか。本番では有効にしない。 */
   m365_mock_enabled: boolean
   /** UC-N001: メール通知(Microsoft Graph API sendMail)の設定。有効かつm365資格情報・送信元アドレス設定済みの場合のみ送信する。 */

@@ -26,7 +26,6 @@ export function SystemSettingsPage() {
     tenantId: '',
     clientId: '',
     clientSecret: '',
-    redirectUri: '',
     mockEnabled: false,
   })
   const [notificationMailEnabled, setNotificationMailEnabled] = useState(false)
@@ -44,7 +43,6 @@ export function SystemSettingsPage() {
       tenantId: data.m365_tenant_id ?? '',
       clientId: data.m365_client_id ?? '',
       clientSecret: '',
-      redirectUri: data.m365_redirect_uri ?? '',
       mockEnabled: data.m365_mock_enabled,
     })
     setNotificationMailEnabled(data.notification_mail_enabled)
@@ -69,7 +67,6 @@ export function SystemSettingsPage() {
         m365_client_id: ms365Value.clientId || null,
         // 空欄のままなら送らない(既存のシークレットを変更しない)。
         ...(ms365Value.clientSecret ? { m365_client_secret: ms365Value.clientSecret } : {}),
-        m365_redirect_uri: ms365Value.redirectUri || null,
         m365_mock_enabled: ms365Value.mockEnabled,
         notification_mail_enabled: notificationMailEnabled,
         notification_mail_sender_address: notificationMailSenderAddress || null,

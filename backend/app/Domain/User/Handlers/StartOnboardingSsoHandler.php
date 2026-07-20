@@ -21,7 +21,6 @@ class StartOnboardingSsoHandler implements CommandHandler
             'm365_tenant_id' => $command->m365TenantId,
             'm365_client_id' => $command->m365ClientId,
             'm365_client_secret' => $command->m365ClientSecret,
-            'm365_redirect_uri' => $command->m365RedirectUri,
             'm365_mock_enabled' => $command->m365MockEnabled,
             'onboarding_started_at' => now(),
         ]);

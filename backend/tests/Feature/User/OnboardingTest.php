@@ -176,7 +176,6 @@ class OnboardingTest extends TestCase
             'm365_tenant_id' => 'tenant-1',
             'm365_client_id' => 'client-1',
             'm365_client_secret' => 'secret-1',
-            'm365_redirect_uri' => 'http://localhost:8000/api/auth/microsoft/callback',
         ]);
     }
 

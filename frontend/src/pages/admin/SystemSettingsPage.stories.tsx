@@ -11,7 +11,6 @@ const settings: SystemSettings = {
   m365_tenant_id: null,
   m365_client_id: null,
   m365_client_secret_configured: false,
-  m365_redirect_uri: null,
   m365_mock_enabled: false,
   notification_mail_enabled: false,
   notification_mail_sender_address: null,

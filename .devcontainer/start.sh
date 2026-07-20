@@ -32,10 +32,14 @@ fi
 # 参照、下記mcpセクションのコメント)でシェル変数ではなく.env自体を書き換える。
 if [ -n "${BACKEND_PUBLIC_APP_URL:-}" ]; then
   sed -i "s#^APP_URL=.*#APP_URL=${BACKEND_PUBLIC_APP_URL}#" .env
+  sed -i "s#^FRONTEND_URL=.*#FRONTEND_URL=${BACKEND_PUBLIC_APP_URL}#" .env
 fi
 
 php artisan migrate --seed
 php artisan l5-swagger:generate
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
 
 php artisan serve --host=0.0.0.0 --port=8000 &
 
@@ -45,9 +49,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
-if [ ! -d node_modules ]; then
-  npm install
-fi
+npm install
 
 npm run dev -- --host 0.0.0.0 &
 

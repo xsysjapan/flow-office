@@ -15,7 +15,6 @@ class StartOnboardingSso implements Command
         public readonly string $m365TenantId,
         public readonly string $m365ClientId,
         public readonly string $m365ClientSecret,
-        public readonly string $m365RedirectUri,
         public readonly bool $m365MockEnabled,
     ) {}
 }

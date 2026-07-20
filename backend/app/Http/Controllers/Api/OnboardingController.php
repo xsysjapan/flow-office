@@ -60,12 +60,11 @@ class OnboardingController extends Controller
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['m365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_redirect_uri'],
+                required: ['m365_tenant_id', 'm365_client_id', 'm365_client_secret'],
                 properties: [
                     new OA\Property(property: 'm365_tenant_id', type: 'string'),
                     new OA\Property(property: 'm365_client_id', type: 'string'),
                     new OA\Property(property: 'm365_client_secret', type: 'string'),
-                    new OA\Property(property: 'm365_redirect_uri', type: 'string'),
                     new OA\Property(property: 'm365_mock_enabled', type: 'boolean'),
                 ],
             ),
@@ -81,7 +80,6 @@ class OnboardingController extends Controller
             'm365_tenant_id' => ['required', 'string'],
             'm365_client_id' => ['required', 'string'],
             'm365_client_secret' => ['required', 'string'],
-            'm365_redirect_uri' => ['required', 'string'],
             'm365_mock_enabled' => ['boolean'],
         ]);
 
@@ -89,7 +87,6 @@ class OnboardingController extends Controller
             m365TenantId: $data['m365_tenant_id'],
             m365ClientId: $data['m365_client_id'],
             m365ClientSecret: $data['m365_client_secret'],
-            m365RedirectUri: $data['m365_redirect_uri'],
             m365MockEnabled: $data['m365_mock_enabled'] ?? false,
         ));
 

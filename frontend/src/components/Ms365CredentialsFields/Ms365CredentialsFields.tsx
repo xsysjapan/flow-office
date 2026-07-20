@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../api/client'
 import { FormField } from '../FormField/FormField'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
@@ -6,7 +7,6 @@ export interface Ms365CredentialsFieldsValue {
   tenantId: string
   clientId: string
   clientSecret: string
-  redirectUri: string
   mockEnabled: boolean
 }
 
@@ -61,11 +61,11 @@ export function Ms365CredentialsFields({
         />
       </FormField>
 
-      <FormField label="リダイレクトURI" htmlFor={`${idPrefix}-redirect-uri`} required={required}>
+      <FormField label="リダイレクトURI" htmlFor={`${idPrefix}-redirect-uri`}>
         <Input
           id={`${idPrefix}-redirect-uri`}
-          value={value.redirectUri}
-          onChange={(e) => onChange({ ...value, redirectUri: e.target.value })}
+          value={`${API_BASE_URL.replace(/\/$/, '')}/auth/microsoft/callback`}
+          readOnly
         />
       </FormField>
 

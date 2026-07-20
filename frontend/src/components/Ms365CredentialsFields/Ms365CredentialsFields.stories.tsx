@@ -7,7 +7,6 @@ function StatefulFields(props: { required?: boolean; clientSecretConfigured?: bo
     tenantId: '',
     clientId: '',
     clientSecret: '',
-    redirectUri: 'http://localhost:8000/api/auth/microsoft/callback',
     mockEnabled: false,
   })
 

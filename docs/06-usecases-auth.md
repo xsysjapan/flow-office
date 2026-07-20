@@ -123,7 +123,7 @@ DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が
 
 同じ画面で、UC-000で登録したMicrosoft 365連携設定(SSOログイン・MS365ユーザー同期・
 メール通知が共有するEntra ID資格情報: `m365_tenant_id`/`m365_client_id`/
-`m365_client_secret`/`m365_redirect_uri`/`m365_mock_enabled`)も後から変更できる。
+`m365_client_secret`/`m365_mock_enabled`)も後から変更できる。
 `m365_client_secret`は`encrypted`キャストでDBに暗号化して保存し、画面には平文を返さず
 設定済みかどうか(`m365_client_secret_configured`)のみ返す。空欄のまま保存すると
 既存のシークレットは変更されない。

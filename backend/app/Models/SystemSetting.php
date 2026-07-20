@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Crypt;
 #[Fillable([
     'default_timezone', 'default_work_style_id', 'attendance_submission_deadline_day', 'attendance_month_close_deadline_day',
     'notification_mail_enabled', 'notification_mail_sender_address', 'notification_mail_sender_name',
-    'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_redirect_uri', 'm365_mock_enabled',
+    'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_mock_enabled',
     'onboarding_started_at', 'onboarding_completed_at',
 ])]
 class SystemSetting extends Model
@@ -59,7 +59,6 @@ class SystemSetting extends Model
             'm365_tenant_id' => config('services.azure.tenant'),
             'm365_client_id' => config('services.azure.client_id'),
             'm365_client_secret' => config('services.azure.client_secret'),
-            'm365_redirect_uri' => config('services.azure.redirect'),
             'onboarding_completed_at' => config('services.azure.mock_enabled') ? now() : null,
         ]);
 

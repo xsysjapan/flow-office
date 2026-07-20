@@ -16,7 +16,6 @@ const DEFAULT_MS365_VALUE: Ms365CredentialsFieldsValue = {
   tenantId: '',
   clientId: '',
   clientSecret: '',
-  redirectUri: `${API_BASE_URL.replace(/\/$/, '')}/auth/microsoft/callback`,
   mockEnabled: false,
 }
 
@@ -41,7 +40,7 @@ export function OnboardingPage() {
   const [adminPassword, setAdminPassword] = useState('')
   const [adminPasswordConfirmation, setAdminPasswordConfirmation] = useState('')
 
-  const isSsoValid = ms365Value.tenantId && ms365Value.clientId && ms365Value.clientSecret && ms365Value.redirectUri
+  const isSsoValid = ms365Value.tenantId && ms365Value.clientId && ms365Value.clientSecret
   const isLocalValid =
     adminName &&
     adminEmail &&
@@ -54,7 +53,6 @@ export function OnboardingPage() {
         m365_tenant_id: ms365Value.tenantId,
         m365_client_id: ms365Value.clientId,
         m365_client_secret: ms365Value.clientSecret,
-        m365_redirect_uri: ms365Value.redirectUri,
         m365_mock_enabled: ms365Value.mockEnabled,
       },
       {

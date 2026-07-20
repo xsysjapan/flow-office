@@ -27,7 +27,6 @@ class SystemSettingResource extends JsonResource
             'm365_client_id' => $this->m365_client_id,
             // クライアントシークレットは平文を返さず、設定済みかどうかのみ返す。
             'm365_client_secret_configured' => $this->m365_client_secret !== null,
-            'm365_redirect_uri' => $this->m365_redirect_uri,
             'm365_mock_enabled' => $this->m365_mock_enabled,
             'notification_mail_enabled' => $this->notification_mail_enabled,
             'notification_mail_sender_address' => $this->notification_mail_sender_address,
