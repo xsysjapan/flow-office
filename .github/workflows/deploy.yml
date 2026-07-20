@@ -26,7 +26,14 @@ env:
   SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
 
 jobs:
+  test-backend:
+    uses: ./.github/workflows/tests.yml
+
+  test-frontend:
+    uses: ./.github/workflows/frontend.yml
+
   deploy:
+    needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -86,16 +93,22 @@ jobs:
             echo "  User $SSH_USER"
             echo "  IdentityFile ~/.ssh/id_deploy"
             echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+            echo "  ConnectTimeout 15"
+            echo "  ConnectionAttempts 3"
+            echo "  ServerAliveInterval 15"
+            echo "  ServerAliveCountMax 3"
           } >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Create remote release directories
         run: |
-          ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
+          source deploy/scripts/ci-retry.sh
+          retry ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
 
       - name: Upload backend
         run: |
-          rsync -az --delete \
+          source deploy/scripts/ci-retry.sh
+          retry rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
@@ -103,7 +116,8 @@ jobs:
 
       - name: Upload mcp
         run: |
-          rsync -az --delete \
+          source deploy/scripts/ci-retry.sh
+          retry rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
@@ -111,13 +125,15 @@ jobs:
 
       - name: Upload frontend
         run: |
-          rsync -az --delete \
+          source deploy/scripts/ci-retry.sh
+          retry rsync -az --delete \
             -e "ssh -F ~/.ssh/config" \
             frontend/dist/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/frontend/dist/"
 
       - name: Activate release
         run: |
-          scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
+          source deploy/scripts/ci-retry.sh
+          retry scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
           ssh deploy-target "chmod +x /tmp/activate-release.sh && /tmp/activate-release.sh '$DEPLOY_BASE_DIR' '$RELEASE' '$DEPLOY_PUBLIC_HTML_LINK' '$DEPLOY_PHP_BIN' 5 && rm -f /tmp/activate-release.sh"
 
       - name: Health check
