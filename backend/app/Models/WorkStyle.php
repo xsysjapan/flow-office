@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
  * 勤務形態 (docs/08-usecases-calendar-shift.md UC-C002)。
  * 所定労働時間・残業計算の基準となるため、ここをマスタ化しハードコードしない。
  */
-#[Fillable(['code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'default_break_start_time', 'default_break_end_time', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
+#[Fillable(['code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'default_break_start_time', 'default_break_end_time', 'auto_break_enabled', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
 class WorkStyle extends Model
 {
     /** 毎週少なくとも1日の法定休日を与える(労働基準法 原則)。 */
@@ -53,6 +53,7 @@ class WorkStyle extends Model
             'is_shift_based' => 'boolean',
             'is_default' => 'boolean',
             'system_generated' => 'boolean',
+            'auto_break_enabled' => 'boolean',
             'core_time_enabled' => 'boolean',
             'four_week_period_start_date' => 'date',
         ];

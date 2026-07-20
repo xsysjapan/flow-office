@@ -59,6 +59,10 @@
 - `attendance.clocked_in`
 - `attendance.break_started`
 - `attendance.break_ended`
+- `attendance.break_auto_inserted` (退勤時、働き方のauto_break_enabledが有効かつその日に
+  休憩が1件も記録されていない場合に、標準休憩(default_break_start_time〜
+  default_break_end_time)を自動でattendance_breaksへ補完する。実際に打刻・編集された
+  休憩を上書きすることはない)
 - `attendance.clocked_out`
 - `attendance.day_created` (UC-A016 出勤日を新規作成する)
 - `attendance.day_edited`
