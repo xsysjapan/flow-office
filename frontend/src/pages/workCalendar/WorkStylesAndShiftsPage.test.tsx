@@ -36,6 +36,7 @@ const workStyle: WorkStyle = {
   rounding_unit_minutes: null,
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
+  auto_break_enabled: false,
   calendar_id: 1,
   is_shift_based: false,
   is_default: true,
@@ -206,11 +207,36 @@ describe('WorkStylesAndShiftsPage', () => {
         default_start_time: undefined,
         default_end_time: undefined,
         default_break_minutes: undefined,
+        default_break_start_time: undefined,
+        default_break_end_time: undefined,
+        auto_break_enabled: false,
         calendar_id: 1,
         is_shift_based: false,
         legal_holiday_rule: undefined,
         four_week_period_start_date: undefined,
       }),
+    )
+  })
+
+  it('creates a work style with auto break enabled when the checkbox is checked', async () => {
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 5, code: 'auto-break' })
+    renderPage()
+
+    await userEvent.type(await screen.findByLabelText('コード'), 'auto-break')
+    await userEvent.type(screen.getByLabelText('名称'), '休憩自動補完勤務')
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '通常勤務')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
+    await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
+    await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
+    await userEvent.click(screen.getByLabelText('退勤時に標準休憩を自動で記録する'))
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auto_break_enabled: true,
+        }),
+      ),
     )
   })
 

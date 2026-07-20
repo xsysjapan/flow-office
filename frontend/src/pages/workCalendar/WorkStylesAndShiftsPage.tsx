@@ -201,6 +201,7 @@ function WorkStyleFormCard() {
   const [roundingUnitMinutes, setRoundingUnitMinutes] = useState('')
   const [defaultBreakStartTime, setDefaultBreakStartTime] = useState('')
   const [defaultBreakEndTime, setDefaultBreakEndTime] = useState('')
+  const [autoBreakEnabled, setAutoBreakEnabled] = useState(false)
   const [calendarId, setCalendarId] = useState('')
   const [isShiftBased, setIsShiftBased] = useState(false)
   const [legalHolidayRule, setLegalHolidayRule] = useState<LegalHolidayRule>('weekly')
@@ -229,6 +230,7 @@ function WorkStyleFormCard() {
         rounding_unit_minutes: roundingUnitMinutes ? Number(roundingUnitMinutes) : undefined,
         default_break_start_time: defaultBreakStartTime || undefined,
         default_break_end_time: defaultBreakEndTime || undefined,
+        auto_break_enabled: autoBreakEnabled,
         calendar_id: Number(calendarId),
         is_shift_based: isShiftBased,
         legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
@@ -256,6 +258,7 @@ function WorkStyleFormCard() {
           setRoundingUnitMinutes('')
           setDefaultBreakStartTime('')
           setDefaultBreakEndTime('')
+          setAutoBreakEnabled(false)
           setCalendarId('')
           setIsShiftBased(false)
           setLegalHolidayRule('weekly')
@@ -292,6 +295,7 @@ function WorkStyleFormCard() {
                 <span className="text-muted-foreground">{workTimeSystemLabel(style.work_time_system)}</span>
                 <span className="text-muted-foreground">{style.prescribed_daily_minutes}分/日</span>
                 <span className="text-muted-foreground">{style.is_shift_based ? 'シフト制' : '固定制'}</span>
+                {style.auto_break_enabled && <Badge tone="info">休憩自動補完</Badge>}
                 {style.is_shift_based && (
                   <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
                 )}
@@ -445,6 +449,16 @@ function WorkStyleFormCard() {
           </NativeSelect>
         </FormField>
       </div>
+
+      <label className="my-4 flex items-center gap-2 text-sm font-medium text-foreground">
+        <Checkbox checked={autoBreakEnabled} onCheckedChange={(checked) => setAutoBreakEnabled(checked === true)} />
+        退勤時に標準休憩を自動で記録する
+      </label>
+      <p className="-mt-3 mb-4 text-xs text-muted-foreground">
+        その日に休憩が1件も打刻・記録されておらず、実働時間が6時間以上、かつ標準休憩の時間帯が実働時間内に
+        収まる場合に限り、標準休憩開始・終了時刻を自動でその日の休憩として記録する。実際に打刻・編集された
+        休憩がある日には影響しない。
+      </p>
 
       <label className="my-4 flex items-center gap-2 text-sm font-medium text-foreground">
         <Checkbox checked={isShiftBased} onCheckedChange={(checked) => setIsShiftBased(checked === true)} />

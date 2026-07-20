@@ -510,6 +510,9 @@ export interface WorkStyle {
   /** 標準休憩の開始・終了時刻。勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。 */
   default_break_start_time: string | null
   default_break_end_time: string | null
+  /** 退勤時、休憩が1件も記録されていない日に標準休憩(default_break_start_time〜
+   *  default_break_end_time)を自動でattendance_breaksへ補完するかどうか。 */
+  auto_break_enabled: boolean
   calendar_id: number
   is_shift_based: boolean
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
