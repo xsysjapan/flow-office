@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
+use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\AuthenticationKey\Services\AuthenticationKeyResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendancePunchResource;
+use App\Models\AttendanceDay;
+use App\Models\AttendanceDayStatus;
 use App\Models\Device;
 use App\Models\DeviceOwnerType;
 use App\Models\PunchType;
@@ -33,8 +36,12 @@ class DevicePunchController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at'], properties: [new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'authentication_key_value', type: 'string', nullable: true), new OA\Property(property: 'offline', type: 'boolean', nullable: true), new OA\Property(property: 'idempotency_key', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function store(Request $request, CommandBus $commandBus, AuthenticationKeyResolver $resolver): AttendancePunchResource
-    {
+    public function store(
+        Request $request,
+        CommandBus $commandBus,
+        AuthenticationKeyResolver $resolver,
+        AttendanceCalculator $attendanceCalculator,
+    ): AttendancePunchResource {
         $device = $request->user();
         abort_unless($device instanceof Device, 401);
 
@@ -73,6 +80,34 @@ class DevicePunchController extends Controller
             requestId: $request->header('X-Request-Id'),
         ));
 
-        return new AttendancePunchResource($punch);
+        $punch->loadMissing('user');
+        $attendanceDay = AttendanceDay::query()
+            ->where('user_id', $targetUserId)
+            ->whereDate('work_date', $data['work_date'])
+            ->first();
+        $missingPunchCount = AttendanceDay::query()
+            ->where('user_id', $targetUserId)
+            ->whereDate('work_date', '>=', $punch->work_date->copy()->subDays(31))
+            ->whereDate('work_date', '<', $punch->work_date)
+            ->where('status', '!=', AttendanceDayStatus::CLOCKED_OUT)
+            ->whereDoesntHave('calculation', fn ($query) => $query->where('absence_minutes', '>', 0))
+            ->count();
+        $workMinutes = null;
+        if ($data['punch_type'] === PunchType::CLOCK_OUT && $attendanceDay?->status === AttendanceDayStatus::CLOCKED_OUT) {
+            $calculation = $attendanceCalculator->calculate(
+                $attendanceDay->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+            );
+            $workMinutes = $calculation['work_minutes'];
+        }
+
+        return (new AttendancePunchResource($punch))->additional([
+            'user_name' => $punch->user?->name,
+            'attendance_summary' => [
+                'work_minutes' => $workMinutes,
+                'missing_punch_count' => $missingPunchCount,
+                'current_day_incomplete' => $data['punch_type'] === PunchType::CLOCK_OUT
+                    && $attendanceDay?->status !== AttendanceDayStatus::CLOCKED_OUT,
+            ],
+        ]);
     }
 }

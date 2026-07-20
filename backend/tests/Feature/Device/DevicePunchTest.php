@@ -51,6 +51,9 @@ class DevicePunchTest extends TestCase
         ]);
 
         $response->assertSuccessful();
+        $response->assertJsonPath('user_name', $employee->name);
+        $response->assertJsonPath('attendance_summary.missing_punch_count', 0);
+        $response->assertJsonPath('attendance_summary.current_day_incomplete', false);
         $punch = AttendancePunch::query()->firstOrFail();
         $this->assertSame($employee->id, $punch->user_id);
         $this->assertSame($device->id, $punch->device_id);
@@ -106,7 +109,7 @@ class DevicePunchTest extends TestCase
             'punched_at' => '2026-07-18T09:00:00+09:00',
             'authentication_key_value' => 'NFC-UID-003',
         ])->assertSuccessful();
-        $this->postJson('/api/device-punches', [
+        $clockOutResponse = $this->postJson('/api/device-punches', [
             'work_date' => '2026-07-18',
             'punch_type' => 'clock_out',
             'punched_at' => '2026-07-18T18:00:00+09:00',
@@ -115,6 +118,7 @@ class DevicePunchTest extends TestCase
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-07-18')->firstOrFail();
         $this->assertSame('client_site', $day->work_location_type);
+        $clockOutResponse->assertJsonPath('attendance_summary.work_minutes', 540);
     }
 
     public function test_idempotency_key_prevents_duplicate_punches_on_retry(): void

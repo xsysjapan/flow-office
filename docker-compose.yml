@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/workspaces/flow-office:cached
+      - /workspaces/flow-office/frontend/node_modules
     working_dir: /workspaces/flow-office
     command: .devcontainer/start.sh
     ports:
