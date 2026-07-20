@@ -77,6 +77,7 @@ describe('DeviceDetailModal', () => {
       device: { ...device, status: 'pending_pairing' },
       claim_token: '1|abc123secret',
       claim_url: 'https://example.com/flow-office/api/devices/pairing/claim',
+      api_base_url: 'https://example.com/flow-office/api',
     })
     renderModal({ status: 'pending_pairing' })
 
@@ -93,6 +94,7 @@ describe('DeviceDetailModal', () => {
       device: { ...device, status: 'pending_pairing' },
       claim_token: '1|resecret',
       claim_url: 'https://example.com/flow-office/api/devices/pairing/claim',
+      api_base_url: 'https://example.com/flow-office/api',
     })
     renderModal({ status: 'active' })
 
