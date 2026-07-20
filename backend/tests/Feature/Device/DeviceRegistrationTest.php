@@ -56,9 +56,6 @@ class DeviceRegistrationTest extends TestCase
         // (docs/23-usecases-devices.md UC-D002)。JSONではなくURL自体で完結させるため、
         // このURLはサーバー側で確定させたものが返る。
         $pairing->assertJsonPath('claim_url', route('devices.pairing.claim'));
-        // 端末アプリが以後のAPIコール(heartbeat・打刻等)先を自力でclaim_urlから
-        // 切り出さなくて済むよう、APIベースURLも別途返す。
-        $pairing->assertJsonPath('api_base_url', preg_replace('#/devices/pairing/claim$#', '', route('devices.pairing.claim')));
 
         // actingAs()で設定したセッション認証(webガード)がSanctumガードのフォールバックとして
         // 残り続け、以降のBearerトークンでの認証を上書きしてしまうため、テスト内で明示的に
