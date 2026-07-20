@@ -84,30 +84,6 @@ jobs:
           } >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: Render .env files
-        env:
-          BACKEND_APP_KEY: ${{ secrets.BACKEND_APP_KEY }}
-          BACKEND_APP_URL: ${{ secrets.APP_PUBLIC_URL }}/api
-          FRONTEND_URL: ${{ secrets.APP_PUBLIC_URL }}
-          BACKEND_DB_HOST: ${{ secrets.BACKEND_DB_HOST }}
-          BACKEND_DB_DATABASE: ${{ secrets.BACKEND_DB_DATABASE }}
-          BACKEND_DB_USERNAME: ${{ secrets.BACKEND_DB_USERNAME }}
-          BACKEND_DB_PASSWORD: ${{ secrets.BACKEND_DB_PASSWORD }}
-          MCP_APP_KEY: ${{ secrets.MCP_APP_KEY }}
-          MCP_APP_URL: ${{ secrets.APP_PUBLIC_URL }}/mcp
-          MCP_DB_HOST: ${{ secrets.MCP_DB_HOST }}
-          MCP_DB_DATABASE: ${{ secrets.MCP_DB_DATABASE }}
-          MCP_DB_USERNAME: ${{ secrets.MCP_DB_USERNAME }}
-          MCP_DB_PASSWORD: ${{ secrets.MCP_DB_PASSWORD }}
-          MCP_BACKEND_API_BASE_URL: ${{ secrets.APP_PUBLIC_URL }}/api/
-        run: |
-          envsubst \
-            '${BACKEND_APP_KEY} ${BACKEND_APP_URL} ${FRONTEND_URL} ${BACKEND_DB_HOST} ${BACKEND_DB_DATABASE} ${BACKEND_DB_USERNAME} ${BACKEND_DB_PASSWORD}' \
-            < deploy/env/backend.env.tpl > backend/.env.production
-          envsubst \
-            '${MCP_APP_KEY} ${MCP_APP_URL} ${MCP_DB_HOST} ${MCP_DB_DATABASE} ${MCP_DB_USERNAME} ${MCP_DB_PASSWORD} ${MCP_BACKEND_API_BASE_URL}' \
-            < deploy/env/mcp.env.tpl > mcp/.env.production
-
       - name: Create remote release directories
         run: |
           ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
@@ -115,7 +91,7 @@ jobs:
       - name: Upload backend
         run: |
           rsync -az --delete \
-            --exclude='.git' --exclude='.env' --exclude='.env.production' \
+            --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
             backend/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/backend/"
@@ -123,7 +99,7 @@ jobs:
       - name: Upload mcp
         run: |
           rsync -az --delete \
-            --exclude='.git' --exclude='.env' --exclude='.env.production' \
+            --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
             mcp/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/mcp/"
@@ -133,11 +109,6 @@ jobs:
           rsync -az --delete \
             -e "ssh -F ~/.ssh/config" \
             frontend/dist/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/frontend/dist/"
-
-      - name: Upload rendered .env files
-        run: |
-          scp -F ~/.ssh/config backend/.env.production deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/backend/.env"
-          scp -F ~/.ssh/config mcp/.env.production deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/mcp/.env"
 
       - name: Activate release
         run: |

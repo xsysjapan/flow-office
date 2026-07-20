@@ -38,10 +38,11 @@ ssh xsys@sv8141.xserver.jp -p 10022
 
 - `public_html/flow-office` のシンボリックリンクは**初回デプロイ時に1度だけ**作られ、以後は
   向き先(`current`)の中身が変わるだけなので触らない。
-- `.env` はGitHub Secretsから毎回テンプレート(`deploy/env/*.tpl`)を`envsubst`でレンダリングして
-  各リリースディレクトリに配置する(サーバー上で手動管理しない)。
-- `storage/` だけは`shared/`に永続化し、リリースディレクトリからシンボリックリンクする
-  (デプロイのたびにセッション・ログ・添付ファイル・mcpのOAuth鍵を失わないため)。
+- `.env` と `storage/` はどちらも`shared/`に永続化し、リリースディレクトリからシンボリックリンク
+  する。`.env`はGitHub Actionsからは一切生成・上書きしない。初回セットアップ時に
+  `deploy/env/*.env.production.example` を元に**サーバー上で手動作成**し(2.3節)、以後の
+  デプロイはそれをそのまま使い回す。`storage/`はセッション・ログ・添付ファイル・mcpのOAuth鍵を
+  デプロイのたびに失わないための永続化。
 - 3アプリの`migrate`・`*:cache`がすべて成功してから最後に`current`を張り替えるため、
   途中で失敗した場合は本番に影響が出ない(旧リリースが動き続ける)。
 - ロールバックは `ln -sfn releases/<過去のタイムスタンプ> current` を実行するだけでよい
@@ -71,14 +72,24 @@ SSHで確認しておく(`docs/27-release-runbook.md` 8節の既知課題参照)
 ssh xsys@sv8141.xserver.jp -p 10022 'which php8.4 || ls /usr/bin/php*'
 ```
 
-### 2.3 APP_KEY の固定生成
+### 2.3 .env の作成(サーバー上、手動、初回のみ)
 
-`.env`は毎回再生成されるが、`APP_KEY`は暗号化データ(セッション等)の整合性のため
-**一度生成したら固定**する。ローカルのbackend/mcpでそれぞれ生成し、値をSecretsに登録する。
+`.env`はGitHub Actionsからは生成しない。`deploy/env/backend.env.production.example`・
+`deploy/env/mcp.env.production.example` を元に、サーバー上で直接作成する。
 
 ```
-cd backend && php artisan key:generate --show   # → BACKEND_APP_KEY
-cd mcp     && php artisan key:generate --show   # → MCP_APP_KEY
+ssh xsys@sv8141.xserver.jp -p 10022
+mkdir -p /home/xsys/xsys.co.jp/flow-office/shared/backend
+mkdir -p /home/xsys/xsys.co.jp/flow-office/shared/mcp
+vi /home/xsys/xsys.co.jp/flow-office/shared/backend/.env   # backend.env.production.exampleを元に作成
+vi /home/xsys/xsys.co.jp/flow-office/shared/mcp/.env       # mcp.env.production.exampleを元に作成
+```
+
+`APP_KEY`は暗号化データ(セッション等)の整合性のため、`.env`作成時に一度生成したら
+以後は変更しない。
+
+```
+php artisan key:generate --show   # backend/mcp それぞれのディレクトリで実行し、.envのAPP_KEYに設定
 ```
 
 ### 2.4 データベース
@@ -87,6 +98,8 @@ cd mcp     && php artisan key:generate --show   # → MCP_APP_KEY
 - mcp用: backend/とは別データベースが必要(`mcp/README.md`参照)。XSERVERのサーバーパネル
   (MySQL管理)で新規データベース・ユーザーを作成する(例: `xsys_db_mcp`)。GitHub Actionsから
   DB作成は行わない(XSERVERのMySQL管理はSSHではなくサーバーパネル経由のため)。
+  作成したホスト・DB名・ユーザー・パスワードは2.3節の`shared/mcp/.env`に直接書く
+  (GitHub Secretsには含めない)。
 
 ### 2.5 cron設定
 
@@ -113,21 +126,12 @@ cd mcp     && php artisan key:generate --show   # → MCP_APP_KEY
 | `DEPLOY_BASE_DIR` | `/home/xsys/xsys.co.jp/flow-office` | Web非公開のリリース領域 |
 | `DEPLOY_PUBLIC_HTML_LINK` | `/home/xsys/xsys.co.jp/public_html/flow-office` | 公開ドキュメントルートのリンク先パス |
 | `DEPLOY_PHP_BIN` | `/usr/bin/php8.4` | 2.2で確認した実パス |
-| `APP_PUBLIC_URL` | `https://xsys.co.jp/flow-office` | 公開URL(末尾スラッシュなし)。`/api`・`/mcp`はワークフロー側で付与 |
-| `BACKEND_APP_KEY` | `base64:...` | 2.3で生成(固定値) |
-| `MCP_APP_KEY` | `base64:...` | 2.3で生成(固定値) |
-| `BACKEND_DB_HOST` | `mysql8015.xserver.jp` | backend用DBホスト |
-| `BACKEND_DB_DATABASE` | `xsys_db` | backend用DB名 |
-| `BACKEND_DB_USERNAME` | `xsys_user` | backend用DBユーザー |
-| `BACKEND_DB_PASSWORD` | (秘密) | backend用DBパスワード |
-| `MCP_DB_HOST` | `mysql8015.xserver.jp` | mcp用DBホスト |
-| `MCP_DB_DATABASE` | `xsys_db_mcp` | 2.4で作成したmcp用DB名 |
-| `MCP_DB_USERNAME` | (2.4で作成) | mcp用DBユーザー |
-| `MCP_DB_PASSWORD` | (秘密) | mcp用DBパスワード |
+| `APP_PUBLIC_URL` | `https://xsys.co.jp/flow-office` | 公開URL(末尾スラッシュなし)。frontendのビルド(`VITE_API_BASE_URL`)と疎通確認のcurlにのみ使う |
 
-Entra ID(Microsoft Client ID/Secret等)は`system_settings`テーブルで管理するため、Secretsには
-含めない(初回オンボーディング画面 `POST /api/onboarding` から登録する。
-`docs/06-usecases-auth.md`参照)。
+`APP_KEY`・DB接続情報・Entra ID資格情報はいずれもGitHub Secretsには置かない。前者2つは
+2.3節でサーバー上の`.env`に直接書き、Entra ID(Microsoft Client ID/Secret等)は
+`system_settings`テーブルで管理する(初回オンボーディング画面 `POST /api/onboarding` から
+登録する。`docs/06-usecases-auth.md`参照)。
 
 ## 4. デプロイの流れ
 
@@ -135,12 +139,14 @@ Entra ID(Microsoft Client ID/Secret等)は`system_settings`テーブルで管理
 起動する。
 
 1. backend(`composer install --no-dev`)・mcp(同左 + `npm run build`)・frontend
-   (`npm run build`、`VITE_BASE_PATH=/flow-office/`)をGitHub Actionsランナー上でビルドする。
-2. Secretsから`.env`を`deploy/env/*.tpl`経由でレンダリングする。
-3. `releases/<タイムスタンプ>-<sha>/` へrsyncで転送する。
-4. `deploy/scripts/activate-release.sh` をサーバー上で実行し、storage永続化・
-   `migrate --force`・各種`*:cache`・`current`切替・古いリリースの整理を行う。
-5. `docs/27-release-runbook.md` 7節と同じ疎通確認(frontend/backend/mcpのcurl)を行う。
+   (`npm run build`、`VITE_BASE_PATH=/flow-office/`)をGitHub Actionsランナー上でビルドする
+   (`.env`はここでは一切生成しない)。
+2. `releases/<タイムスタンプ>-<sha>/` へrsyncで転送する(`.env`は含まれない)。
+3. SSHでサーバーに入り、`deploy/scripts/activate-release.sh` を実行する。このスクリプトが
+   `shared/backend/.env`・`shared/mcp/.env`(2.3節で作成済みのもの)をリリースディレクトリへ
+   シンボリックリンクし、**backend・mcp両方について**`migrate --force`と各種`*:cache`を実行、
+   最後に`current`を一括切替、古いリリースを整理する。
+4. `docs/27-release-runbook.md` 7節と同じ疎通確認(frontend/backend/mcpのcurl)を行う。
 
 ## 5. ロールバック
 

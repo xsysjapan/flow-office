@@ -19,10 +19,20 @@ if [ ! -d "$RELEASE_DIR/backend" ] || [ ! -d "$RELEASE_DIR/mcp" ] || [ ! -d "$RE
   exit 1
 fi
 
-# storage/ は shared/ に永続化し、リリースディレクトリからシンボリックリンクする
-# (セッション・ログ・添付ファイル・mcpのOAuth鍵をデプロイのたびに失わないため)。
+# .env と storage/ は shared/ に永続化し、リリースディレクトリからシンボリックリンクする。
+# .envはCIからは生成せず、初回セットアップ時にサーバー上で手動作成したものをデプロイの
+# たびに使い回す(docs/28-github-actions-deploy.md参照)。storageはセッション・ログ・
+# 添付ファイル・mcpのOAuth鍵をデプロイのたびに失わないため。
 for app in backend mcp; do
-  SHARED_STORAGE="$BASE_DIR/shared/$app/storage"
+  SHARED_DIR="$BASE_DIR/shared/$app"
+  SHARED_ENV="$SHARED_DIR/.env"
+  SHARED_STORAGE="$SHARED_DIR/storage"
+
+  if [ ! -f "$SHARED_ENV" ]; then
+    echo "missing $SHARED_ENV - create it manually before the first deploy (see docs/28-github-actions-deploy.md)" >&2
+    exit 1
+  fi
+
   mkdir -p "$SHARED_STORAGE"
   if [ ! -d "$SHARED_STORAGE/framework" ]; then
     # 初回のみ、リリース同梱のstorageスケルトン(framework/cache等の空ディレクトリ構成)をコピーする
@@ -30,6 +40,9 @@ for app in backend mcp; do
   fi
   rm -rf "$RELEASE_DIR/$app/storage"
   ln -sfn "$SHARED_STORAGE" "$RELEASE_DIR/$app/storage"
+
+  rm -f "$RELEASE_DIR/$app/.env"
+  ln -sfn "$SHARED_ENV" "$RELEASE_DIR/$app/.env"
 done
 
 # frontend/dist内に、backend・mcpのpublic/への相対シンボリックリンクを張る
