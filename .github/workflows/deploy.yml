@@ -109,7 +109,7 @@ jobs:
           rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
-            -e "ssh -F ~/.ssh/config" \
+            -e "ssh -F $HOME/.ssh/config" \
             backend/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/backend/"
 
       - name: Upload mcp
@@ -117,18 +117,18 @@ jobs:
           rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
-            -e "ssh -F ~/.ssh/config" \
+            -e "ssh -F $HOME/.ssh/config" \
             mcp/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/mcp/"
 
       - name: Upload frontend
         run: |
           rsync -az --delete \
-            -e "ssh -F ~/.ssh/config" \
+            -e "ssh -F $HOME/.ssh/config" \
             frontend/dist/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/frontend/dist/"
 
       - name: Activate release
         run: |
-          scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
+          scp -F "$HOME/.ssh/config" deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
           ssh deploy-target "chmod +x /tmp/activate-release.sh && /tmp/activate-release.sh '$DEPLOY_BASE_DIR' '$RELEASE' '$DEPLOY_PUBLIC_HTML_LINK' '$DEPLOY_PHP_BIN' 5 && rm -f /tmp/activate-release.sh"
 
       - name: Health check
