@@ -22,12 +22,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // apiPrefixを空にしているため(/mcp, /oauth/registerをルート直下に置くため)、
-        // パスの'api/*'一致では判定できない。DCR・MCPエンドポイントは常にJSON、
-        // /oauth/authorize・/link はブラウザ向けなので通常のリダイレクト挙動のままにする。
+        // apiPrefixを空にしているため(JSON-RPCエンドポイント・/oauth/registerをルート
+        // 直下に置くため)、パスの'api/*'一致では判定できない。DCR・MCPエンドポイントは
+        // 常にJSON、/oauth/authorize・/link はブラウザ向けなので通常のリダイレクト挙動の
+        // ままにする。MCPのJSON-RPCエンドポイントはアプリのルート('/'、mcp/routes/api.php)
+        // に登録されているため、'mcp'ではなく'/'で判定する。
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->expectsJson()
                 || $request->is('oauth/register')
-                || $request->is('mcp'),
+                || $request->is('/'),
         );
     })->create();

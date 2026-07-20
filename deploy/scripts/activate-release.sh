@@ -70,7 +70,11 @@ echo "== mcp: migrate & cache =="
 cd "$RELEASE_DIR/mcp"
 "$PHP_BIN" artisan migrate --force
 "$PHP_BIN" artisan config:cache
-"$PHP_BIN" artisan route:cache
+# route:cacheは実行しない: mcp/はJSON-RPCエンドポイントをアプリのルート('/'、
+# mcp/routes/api.php)に持ち、/flow-office/mcpのようなURLサブパスにマウントする
+# (basePathが空でなくなる)。この組み合わせでroute:cacheを使うと、Laravel/Symfonyの
+# 既知の問題でルート'/'へのリクエストが誤って405になる(docs/27-release-runbook.md
+# 「8. リハーサルで発見した注意点」参照)。route:cacheを使わなければ再現しない。
 "$PHP_BIN" artisan view:cache
 
 # 3アプリの準備が整ってから一括切替(このシンボリックリンク1本の張替えがアトミック)。
