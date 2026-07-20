@@ -102,13 +102,11 @@ jobs:
 
       - name: Create remote release directories
         run: |
-          source deploy/scripts/ci-retry.sh
-          retry ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
+          ssh deploy-target "mkdir -p '$DEPLOY_BASE_DIR/releases/$RELEASE/backend' '$DEPLOY_BASE_DIR/releases/$RELEASE/mcp' '$DEPLOY_BASE_DIR/releases/$RELEASE/frontend'"
 
       - name: Upload backend
         run: |
-          source deploy/scripts/ci-retry.sh
-          retry rsync -az --delete \
+          rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
@@ -116,8 +114,7 @@ jobs:
 
       - name: Upload mcp
         run: |
-          source deploy/scripts/ci-retry.sh
-          retry rsync -az --delete \
+          rsync -az --delete \
             --exclude='.git' --exclude='.env' \
             --exclude='database/database.sqlite' --exclude='tests' --exclude='node_modules' \
             -e "ssh -F ~/.ssh/config" \
@@ -125,15 +122,13 @@ jobs:
 
       - name: Upload frontend
         run: |
-          source deploy/scripts/ci-retry.sh
-          retry rsync -az --delete \
+          rsync -az --delete \
             -e "ssh -F ~/.ssh/config" \
             frontend/dist/ deploy-target:"$DEPLOY_BASE_DIR/releases/$RELEASE/frontend/dist/"
 
       - name: Activate release
         run: |
-          source deploy/scripts/ci-retry.sh
-          retry scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
+          scp -F ~/.ssh/config deploy/scripts/activate-release.sh deploy-target:/tmp/activate-release.sh
           ssh deploy-target "chmod +x /tmp/activate-release.sh && /tmp/activate-release.sh '$DEPLOY_BASE_DIR' '$RELEASE' '$DEPLOY_PUBLIC_HTML_LINK' '$DEPLOY_PHP_BIN' 5 && rm -f /tmp/activate-release.sh"
 
       - name: Health check
