@@ -32,11 +32,13 @@ class AuditLogTest extends TestCase
         ]);
         StoredEvent::query()->create([
             'event_id' => (string) Str::uuid(),
-            'aggregate_type' => 'attendance_day',
+            'aggregate_type' => 'attendance_punch',
             'aggregate_id' => '1',
             'version' => 1,
-            'event_type' => 'attendance.clocked_in',
-            'payload' => ['user_id' => 99],
+            'event_type' => 'attendance_punch.recorded',
+            'payload' => [
+                'attendance_punch_id' => 1,
+            ],
             'occurred_at' => now(),
         ]);
 
