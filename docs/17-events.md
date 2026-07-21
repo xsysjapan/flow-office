@@ -78,6 +78,9 @@
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
 - `attendance_punch.deleted` (UC-A014 打刻ログを削除する)
 - `attendance_day.synced_from_punches`
+- `attendance_day.live_status_synced` (打刻ログがまだ矛盾なく1日分の勤務として組み立て
+  られない間(出勤のみ・休憩開始のみ等)に、画面の出退勤操作と同様、最新の打刻から
+  `attendance_days.status`のみを反映する。既に退勤済みの日には発生しない)
 - `attendance.month_submitted`
 - `attendance.month_approved`
 - `attendance.month_returned`

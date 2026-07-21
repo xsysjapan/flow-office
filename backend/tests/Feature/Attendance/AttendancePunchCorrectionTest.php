@@ -64,12 +64,15 @@ class AttendancePunchCorrectionTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        // 打刻漏れ・重複を想定し、clock_inが2件記録されている(矛盾あり、日次未反映)。
+        // 打刻漏れ・重複を想定し、clock_inが2件記録されている(矛盾あり、実績・日次計算は未反映)。
         $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T09:00:00+09:00')->assertSuccessful();
         $mistakenId = $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T18:05:00+09:00')
             ->assertSuccessful()->json('id');
 
-        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first());
+        $dayBeforeCorrection = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $this->assertNotNull($dayBeforeCorrection);
+        $this->assertSame('working', $dayBeforeCorrection->status);
+        $this->assertNull($dayBeforeCorrection->calculation);
 
         // 2件目は本来clock_outだった。訂正すると矛盾が解消され、日次勤怠に反映される。
         $this->actingAs($employee)->putJson("/api/attendance-punches/{$mistakenId}", [
@@ -95,7 +98,10 @@ class AttendancePunchCorrectionTest extends TestCase
             ->assertSuccessful()->json('id');
         $this->recordPunch($employee, $workDate, 'clock_out', '2026-07-09T18:00:00+09:00')->assertSuccessful();
 
-        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first());
+        $dayBeforeDeletion = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $this->assertNotNull($dayBeforeDeletion);
+        $this->assertSame('working', $dayBeforeDeletion->status);
+        $this->assertNull($dayBeforeDeletion->calculation);
 
         $response = $this->actingAs($employee)->deleteJson("/api/attendance-punches/{$duplicateId}", [
             'reason' => '二重打刻の削除',

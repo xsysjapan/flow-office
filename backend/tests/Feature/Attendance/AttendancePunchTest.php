@@ -72,11 +72,18 @@ class AttendancePunchTest extends TestCase
         $workDate = '2026-07-09';
 
         // 出勤と退勤で異なるオフセットが混在する場合、壁時計時刻どうしの前後比較に意味がなく
-        // なるため矛盾ありとし、日次勤怠には反映しない。
+        // なるため矛盾ありとし、実績時刻・日次計算には反映しない。
         $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T09:00:00+09:00')->assertSuccessful();
         $this->recordPunch($employee, $workDate, 'clock_out', '2026-07-09T09:00:00-05:00')->assertSuccessful();
 
-        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first());
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+
+        // ただし出勤打刻の時点で「勤務中」の状態自体は画面操作と同様に反映済みのため、
+        // 矛盾ありと判定された退勤打刻ではこの状態を変えない(実績・計算は反映されない)。
+        $this->assertNotNull($day);
+        $this->assertSame('working', $day->status);
+        $this->assertNull($day->actual_end_at);
+        $this->assertNull($day->calculation);
     }
 
     public function test_overnight_shift_punches_belong_to_the_explicit_work_date(): void
@@ -96,7 +103,7 @@ class AttendancePunchTest extends TestCase
         $this->assertSame(540, $day->calculation->work_minutes);
     }
 
-    public function test_inconsistent_punches_are_recorded_but_do_not_touch_the_attendance_day(): void
+    public function test_inconsistent_punches_are_recorded_but_do_not_touch_the_attendance_day_calculation(): void
     {
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
@@ -106,7 +113,15 @@ class AttendancePunchTest extends TestCase
         $this->recordPunch($employee, $workDate, 'clock_in', '2026-07-09T09:05:00+09:00')->assertSuccessful();
 
         $this->assertSame(2, AttendancePunch::query()->where('user_id', $employee->id)->count());
-        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first());
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+
+        // 最初の出勤打刻の時点で「勤務中」の状態は反映されるが、矛盾があるため
+        // 実績時刻・日次計算には反映しない(矛盾の解消はUC-A005の日次編集で行う)。
+        $this->assertNotNull($day);
+        $this->assertSame('working', $day->status);
+        $this->assertNull($day->actual_end_at);
+        $this->assertNull($day->calculation);
     }
 
     public function test_punches_do_not_overwrite_a_day_already_recorded_via_the_live_clock_flow(): void

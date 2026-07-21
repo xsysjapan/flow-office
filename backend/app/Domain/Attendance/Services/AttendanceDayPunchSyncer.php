@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
+use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\EventSourcing\EventStore;
 use App\Models\AttendanceDay;
@@ -11,12 +12,19 @@ use App\Models\AttendanceDayStatus;
 use App\Models\AttendancePunch;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PunchStatus;
+use App\Models\PunchType;
 use App\Support\LocalDateTime;
+use Illuminate\Support\Collection;
 
 /**
  * UC-A012〜UC-A014: 有効な打刻ログ(`status=active`)を集めて、矛盾なく1日分の勤務として
  * 組み立てられる場合のみ attendance_days / attendance_breaks に反映する。打刻の記録・訂正・
  * 削除のいずれの後にも同じ規則で呼び出される。
+ *
+ * 1日分として矛盾なく組み立てられない間(出勤のみ・休憩開始のみ等)も、画面の出退勤操作と
+ * 同様に最新の打刻から`attendance_days.status`だけは反映する(社員本人・管理者が「今の状態」を
+ * 見て取れるようにするため)。ただし既に退勤済みの日は、以降の打刻では状態を変えない
+ * (矛盾の解消はUC-A005の日次編集で行う)。
  */
 class AttendanceDayPunchSyncer
 {
@@ -37,11 +45,6 @@ class AttendanceDayPunchSyncer
             ->with('device')
             ->get();
 
-        $reconciled = $this->reconciler->reconcile($punches);
-        if ($reconciled === null) {
-            return;
-        }
-
         $day = AttendanceDay::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
@@ -52,25 +55,26 @@ class AttendanceDayPunchSyncer
             return;
         }
 
+        if ($day !== null && $day->status === AttendanceDayStatus::CLOCKED_OUT) {
+            // 既に退勤済みの日は、以降の打刻ログでは状態を変えない。
+            return;
+        }
+
         if (! $this->guard->isMutable($day, $userId, $workDate)) {
             // 締め後にロック済み、または承認済み・締め済みの月に属する日は、
             // 打刻の記録・訂正・削除では上書きしない(修正申請ワークフローを使う)。
             return;
         }
 
-        if ($day === null) {
-            $shiftAssignment = EmployeeShiftAssignment::query()
-                ->where('user_id', $userId)
-                ->whereDate('work_date', $workDate)
-                ->first();
+        $reconciled = $this->reconciler->reconcile($punches);
+        if ($reconciled === null) {
+            $this->syncLiveStatus($day, $userId, $workDate, $punches);
 
-            $day = AttendanceDay::query()->create([
-                'user_id' => $userId,
-                'work_date' => $workDate,
-                'shift_assignment_id' => $shiftAssignment?->id,
-                'status' => AttendanceDayStatus::NOT_STARTED,
-                'source' => AttendanceDaySource::PUNCH,
-            ]);
+            return;
+        }
+
+        if ($day === null) {
+            $day = $this->findOrCreateDay($userId, $workDate);
         }
 
         $day->actual_start_at = $reconciled['clock_in'];
@@ -122,5 +126,76 @@ class AttendanceDayPunchSyncer
                 calculation: $calculation,
             ),
         );
+    }
+
+    /**
+     * 1日分として矛盾なく組み立てられない間、最新の有効な打刻から`status`だけを反映する。
+     * 出勤・休憩終了は「勤務中」、休憩開始は「休憩中」に対応させる。単独の退勤打刻は
+     * (出勤打刻との対応が取れていないため)状態を変えない。
+     *
+     * @param  Collection<int, AttendancePunch>  $punches  同一user_id・work_dateのpunched_at昇順の打刻一覧
+     */
+    private function syncLiveStatus(?AttendanceDay $day, int $userId, string $workDate, Collection $punches): void
+    {
+        $latestPunch = $punches->last();
+        if ($latestPunch === null) {
+            return;
+        }
+
+        $status = match ($latestPunch->punch_type) {
+            PunchType::CLOCK_IN, PunchType::BREAK_END => AttendanceDayStatus::WORKING,
+            PunchType::BREAK_START => AttendanceDayStatus::ON_BREAK,
+            default => null,
+        };
+
+        if ($status === null) {
+            return;
+        }
+
+        if ($day === null) {
+            $day = $this->findOrCreateDay($userId, $workDate);
+        }
+
+        if ($day->status === $status) {
+            return;
+        }
+
+        $day->status = $status;
+        $day->source = AttendanceDaySource::PUNCH;
+
+        if ($status === AttendanceDayStatus::WORKING && $day->actual_start_at === null) {
+            $firstClockIn = $punches->firstWhere('punch_type', PunchType::CLOCK_IN);
+            if ($firstClockIn !== null) {
+                $day->actual_start_at = $firstClockIn->punched_at;
+                $day->utc_offset_minutes = $firstClockIn->utc_offset_minutes;
+            }
+        }
+
+        $day->save();
+
+        $this->eventStore->append(
+            aggregateType: 'attendance_day',
+            aggregateId: (string) $day->id,
+            event: new AttendanceDayLiveStatusSynced(
+                attendanceDayId: $day->id,
+                status: $status,
+            ),
+        );
+    }
+
+    private function findOrCreateDay(int $userId, string $workDate): AttendanceDay
+    {
+        $shiftAssignment = EmployeeShiftAssignment::query()
+            ->where('user_id', $userId)
+            ->whereDate('work_date', $workDate)
+            ->first();
+
+        return AttendanceDay::query()->create([
+            'user_id' => $userId,
+            'work_date' => $workDate,
+            'shift_assignment_id' => $shiftAssignment?->id,
+            'status' => AttendanceDayStatus::NOT_STARTED,
+            'source' => AttendanceDaySource::PUNCH,
+        ]);
     }
 }
