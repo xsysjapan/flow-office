@@ -5,35 +5,46 @@
 1. 社員が今日の勤怠画面を開く
 2. 今日の勤務予定を表示する
 3. 「出勤」ボタンを押す
-4. 出勤日時を記録する
-5. 日次勤怠ステータスを勤務中にする
-6. `attendance.clocked_in` イベントを記録する
+4. 出勤済み・日次編集済み等でないことを検証する(`WebPunchDispatcher`)
+5. 端末等と共通の`RecordAttendancePunch`(UC-A012)コマンドを`source: 'web'`で発行し、
+   出勤日時を打刻ログに記録する
+6. `attendance_punch.recorded` イベントを記録する
+7. 矛盾なく1日分として組み立てられない間は、最新の打刻(出勤)から日次勤怠ステータスを
+   勤務中にする(`attendance_day.live_status_synced`、UC-A012手順7参照)
 
 「今日」の判定は、サーバーやUTCの日付ではなく **その社員自身の `users.timezone` における
 現在の日付** を基準に行う(休憩開始・休憩終了・退勤・打刻ログの業務日判定も同様)。理由は
 docs/03-architecture.md 3.4 を参照。
 
+WEB画面の出退勤ボタン(UC-A001〜A004)は、共有Android打刻リーダー・個人端末等と全く同じ
+`RecordAttendancePunch`コマンド・`AttendanceDayPunchSyncer`を経由する。入口(Controller・
+認証層)だけがWeb固有で、状態遷移・休憩の組み立て・標準休憩の自動補完・日次計算のロジックは
+1つに保たれている(docs/03-architecture.md 3.5「操作経路と業務ロジックを分離する」)。
+Web画面固有の事前検証(「本日は既に出勤処理済みです」等、UC-A001〜A004の各手順4)は
+Handler側で行い、打刻自体は必ず成功させるUC-A012の原則とは独立させている。
+
 ## UC-A002: 休憩開始する
 
 1. 社員が「休憩開始」を押す
-2. 休憩開始日時を記録する
-3. ステータスを休憩中にする
-4. `attendance.break_started` イベントを記録する
+2. 勤務中でないこと(休憩開始できない状態)を検証する
+3. `RecordAttendancePunch`を`source: 'web'`・`punch_type: break_start`で発行する
+4. 矛盾なく組み立てられない間は、最新の打刻から日次勤怠ステータスを休憩中にする
 
 ## UC-A003: 休憩終了する
 
 1. 社員が「休憩終了」を押す
-2. 休憩終了日時を記録する
-3. ステータスを勤務中に戻す
-4. `attendance.break_ended` イベントを記録する
+2. 休憩中でないことを検証する
+3. `RecordAttendancePunch`を`source: 'web'`・`punch_type: break_end`で発行する
+4. 矛盾なく組み立てられない間は、最新の打刻から日次勤怠ステータスを勤務中に戻す
 
 ## UC-A004: 退勤する
 
 1. 社員が「退勤」を押す
-2. 退勤日時を記録する
-3. 休憩時間、労働時間、深夜時間、休日労働時間、残業時間を再計算する
-4. ステータスを退勤済みにする
-5. `attendance.clocked_out` イベントを記録する
+2. 勤務中でないことを検証する
+3. `RecordAttendancePunch`を`source: 'web'`・`punch_type: clock_out`で発行する
+4. 出勤・退勤・休憩が矛盾なく1日分として組み立てられる場合、休憩時間、労働時間、
+   深夜時間、休日労働時間、残業時間を再計算し、ステータスを退勤済みにする
+   (`attendance_day.synced_from_punches`・`attendance.day_calculated`、UC-A012手順6参照)
 
 ## UC-A005: 日次勤怠を編集する
 

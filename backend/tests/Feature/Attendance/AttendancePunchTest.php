@@ -124,24 +124,30 @@ class AttendancePunchTest extends TestCase
         $this->assertNull($day->calculation);
     }
 
-    public function test_punches_do_not_overwrite_a_day_already_recorded_via_the_live_clock_flow(): void
+    public function test_punches_do_not_overwrite_a_day_already_clocked_out_via_the_web_flow(): void
     {
         $employee = User::factory()->create();
         $today = Carbon::today($employee->timezone)->toDateString();
 
+        Carbon::setTestNow(Carbon::parse("{$today} 09:00:00", $employee->timezone));
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        Carbon::setTestNow(Carbon::parse("{$today} 18:00:00", $employee->timezone));
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        Carbon::setTestNow();
 
-        $liveDay = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $today)->first();
-        $liveActualStart = $liveDay->actual_start_at->toIso8601String();
+        $webDay = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $today)->first();
+        $webActualStart = $webDay->actual_start_at->toIso8601String();
 
-        // 同じ日に対して(矛盾のない)打刻が別途届いても、liveで確定済みの日は上書きしない。
+        // 同じ日に対して(矛盾のない)打刻が別途届いても、WEB画面の出退勤操作で既に
+        // 退勤済みとして確定した日は上書きしない(WEB・端末のどちらの打刻経由でも
+        // source='punch'に統一されているが、退勤済みの日を保護する規則は変わらない)。
         $this->recordPunch($employee, $today, 'clock_in', "{$today}T21:00:00+09:00")->assertSuccessful();
         $this->recordPunch($employee, $today, 'clock_out', "{$today}T23:00:00+09:00")->assertSuccessful();
 
-        $liveDay->refresh();
-        $this->assertSame('live', $liveDay->source);
-        $this->assertSame($liveActualStart, $liveDay->actual_start_at->toIso8601String());
+        $webDay->refresh();
+        $this->assertSame('punch', $webDay->source);
+        $this->assertSame('clocked_out', $webDay->status);
+        $this->assertSame($webActualStart, $webDay->actual_start_at->toIso8601String());
     }
 
     public function test_live_clock_actions_are_listed_as_web_punches_for_the_attendance_day(): void

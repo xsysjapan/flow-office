@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
@@ -99,9 +100,15 @@ class AttendanceDayDeletionTest extends TestCase
     public function test_projections_rebuild_survives_a_deleted_day_that_still_has_calculated_events(): void
     {
         $employee = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
 
+        // 出勤・退勤が矛盾なく組み立てられるよう、退勤時刻を出勤より確実に後にずらす。
+        Carbon::setTestNow($today->copy()->setTime(9, 0));
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        Carbon::setTestNow($today->copy()->setTime(18, 0));
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        Carbon::setTestNow();
+
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
         $this->assertNotNull(AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->first());
 

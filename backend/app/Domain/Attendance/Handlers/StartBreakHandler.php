@@ -3,67 +3,50 @@
 namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Commands\StartBreak;
-use App\Domain\Attendance\Events\AttendanceBreakStarted;
-use App\Domain\Attendance\Services\LiveAttendancePunchRecorder;
+use App\Domain\Attendance\Services\WebPunchDispatcher;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\PunchType;
 use App\Models\User;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-A002: 休憩開始する。「今日」の判定と記録する時刻は、社員本人のタイムゾーンを基準にする。
+ * Web画面固有の事前検証のみを行い、実際の記録・日次勤怠への反映は端末等と共通の
+ * `RecordAttendancePunch`(UC-A012)に委譲する(docs/03-architecture.md 3.5)。
  *
  * @implements CommandHandler<StartBreak>
  */
 class StartBreakHandler implements CommandHandler
 {
-    public function __construct(
-        private readonly EventStore $eventStore,
-        private readonly LiveAttendancePunchRecorder $punchRecorder,
-    ) {}
+    public function __construct(private readonly WebPunchDispatcher $webPunchDispatcher) {}
 
     public function handle(Command $command): AttendanceDay
     {
         assert($command instanceof StartBreak);
 
         $user = User::query()->findOrFail($command->userId);
-        $day = $this->findTodayWorkingDay($user);
+        $today = Carbon::today($user->timezone);
 
-        $break = $day->breaks()->create(['break_start_at' => LocalDateTime::now($user->timezone)]);
-        $day->status = AttendanceDayStatus::ON_BREAK;
-        $day->save();
-
-        $this->punchRecorder->record($day, 'break_start', $break->break_start_at);
-
-        $this->eventStore->append(
-            aggregateType: 'attendance_day',
-            aggregateId: (string) $day->id,
-            event: new AttendanceBreakStarted(
-                attendanceDayId: $day->id,
-                attendanceBreakId: $break->id,
-                breakStartAt: LocalDateTime::formatWithOffsetMinutes($break->break_start_at, $day->utc_offset_minutes),
-            ),
-        );
-
-        return $day;
-    }
-
-    private function findTodayWorkingDay(User $user): AttendanceDay
-    {
         $day = AttendanceDay::query()
-            ->where('user_id', $user->id)
-            ->whereDate('work_date', Carbon::today($user->timezone)->toDateString())
+            ->where('user_id', $command->userId)
+            ->whereDate('work_date', $today->toDateString())
             ->first();
 
         if ($day === null || $day->status !== AttendanceDayStatus::WORKING) {
             throw new DomainRuleException('勤務中の場合のみ休憩を開始できます。');
         }
 
-        return $day;
+        return $this->webPunchDispatcher->dispatch(
+            $day,
+            $command->userId,
+            $today->toDateString(),
+            PunchType::BREAK_START,
+            LocalDateTime::now($user->timezone),
+        );
     }
 }
