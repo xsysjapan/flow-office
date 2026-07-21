@@ -141,6 +141,12 @@ Controller/認証層を用意すること自体は構わないが、その先で
 複製・分岐させない(`docs/23-usecases-devices.md` の端末ドメイン、`docs/25-usecases-integrations-mcp.md`
 のMCPサーバーの責務を参照)。
 
+具体例: WEB画面の出退勤ボタン(UC-A001〜A004)も、共有端末・個人端末(UC-A020)と同じ
+`RecordAttendancePunch`コマンド・`AttendanceDayPunchSyncer`を経由する(`WebPunchDispatcher`)。
+WEB画面のControllerフォームHandlerで持つのは「本日は既に出勤処理済み」等の画面固有の事前
+検証のみで、状態遷移・休憩の組み立て・標準休憩の自動補完・日次計算のロジックは
+`AttendanceDayPunchSyncer`の1箇所に保つ。
+
 操作主体(誰が)と操作経路(どこから)・対象ユーザー(誰の勤怠か)は、`attendance_punches`
 その他の正データ・イベントpayloadに常に区別して記録する(3.7節、`docs/17-events.md`参照)。
 共有端末では認証キーから解決した本人が操作主体、管理者が代理操作した場合は管理者が操作主体、

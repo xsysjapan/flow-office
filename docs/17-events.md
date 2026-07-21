@@ -56,14 +56,21 @@
 
 ## Attendance
 
-- `attendance.clocked_in`
-- `attendance.break_started`
-- `attendance.break_ended`
-- `attendance.break_auto_inserted` (退勤時、働き方のauto_break_enabledが有効かつその日に
-  休憩が1件も記録されていない場合に、標準休憩(default_break_start_time〜
-  default_break_end_time)を自動でattendance_breaksへ補完する。実際に打刻・編集された
-  休憩を上書きすることはない)
-- `attendance.clocked_out`
+- `attendance.clocked_in` / `attendance.break_started` / `attendance.break_ended` /
+  `attendance.clocked_out` (**廃止済み。現在は発生しない**。WEB画面の出退勤操作
+  (UC-A001〜A004)は端末等と共通の`RecordAttendancePunch`(UC-A012)コマンドに一本化され、
+  `attendance_punch.recorded` + `attendance_day.live_status_synced` /
+  `attendance_day.synced_from_punches` + `attendance.day_calculated`に置き換わった
+  (docs/03-architecture.md 3.5)。過去に記録された行は
+  `php artisan attendance:rewrite-legacy-live-events`(手動実行、`app/Console/Commands/
+  RewriteLegacyAttendanceLiveEventsCommand.php`)で置き換え先のイベント種別・payloadへ
+  書き換えられる。`stored_events`本来の「追記のみ」原則(StoredEventモデル参照)に対する
+  例外的な一度きりの手動移行であり、この4種別以外には適用しない)
+- `attendance.break_auto_inserted` (1日分の勤務が矛盾なく組み立てられた際、働き方の
+  auto_break_enabledが有効かつその日に休憩が1件も記録されていない場合に、標準休憩
+  (default_break_start_time〜default_break_end_time)を自動でattendance_breaksへ
+  補完する。実際に打刻・編集された休憩を上書きすることはない。WEB・端末のどちらの
+  経路でも`AttendanceDayPunchSyncer`が同じ規則で発生させる)
 - `attendance.day_created` (UC-A016 出勤日を新規作成する)
 - `attendance.day_edited`
 - `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
@@ -78,6 +85,9 @@
 - `attendance_punch.corrected` (UC-A013 打刻ログを訂正する)
 - `attendance_punch.deleted` (UC-A014 打刻ログを削除する)
 - `attendance_day.synced_from_punches`
+- `attendance_day.live_status_synced` (打刻ログがまだ矛盾なく1日分の勤務として組み立て
+  られない間(出勤のみ・休憩開始のみ等)に、最新の打刻から`attendance_days.status`のみを
+  反映する。WEB画面・端末のどちらの打刻でも発生しうる。既に退勤済みの日には発生しない)
 - `attendance.month_submitted`
 - `attendance.month_approved`
 - `attendance.month_returned`

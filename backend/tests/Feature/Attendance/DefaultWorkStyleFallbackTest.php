@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,13 @@ class DefaultWorkStyleFallbackTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     private function createWorkStyle(string $code, int $prescribedDailyMinutes): WorkStyle
     {
         return WorkStyle::query()->create([
@@ -29,12 +37,27 @@ class DefaultWorkStyleFallbackTest extends TestCase
         ]);
     }
 
+    /**
+     * 出勤・退勤が矛盾なく1日分として組み立てられるよう、退勤打刻の時刻を出勤より
+     * 確実に後にずらす(打刻はwork_dateの壁時計時刻を秒単位で保持するため、同一秒内に
+     * 連続して打刻すると出勤・退勤が同時刻になり矛盾ありと判定されてしまう)。
+     */
+    private function clockInThenOut(User $employee): void
+    {
+        $today = Carbon::today($employee->timezone);
+
+        Carbon::setTestNow($today->copy()->setTime(9, 0));
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+
+        Carbon::setTestNow($today->copy()->setTime(18, 0));
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+    }
+
     public function test_a_day_with_no_shift_assignment_and_no_default_has_zero_prescribed_minutes(): void
     {
         $employee = User::factory()->create();
 
-        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
-        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $this->clockInThenOut($employee);
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
         $calculation = AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->firstOrFail();
@@ -47,8 +70,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
         $workStyle = $this->createWorkStyle('standard', 480);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
-        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
-        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $this->clockInThenOut($employee);
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
         $calculation = AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->firstOrFail();
@@ -68,8 +90,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
             'work_style_id' => $shiftWorkStyle->id, 'assigned_by_user_id' => $employee->id,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
-        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $this->clockInThenOut($employee);
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
         $calculation = AttendanceDailyCalculation::query()->where('attendance_day_id', $dayId)->firstOrFail();

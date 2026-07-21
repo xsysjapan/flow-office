@@ -177,6 +177,80 @@ class DevicePunchTest extends TestCase
         $this->assertSame($employeeA->id, AttendancePunch::query()->firstOrFail()->user_id);
     }
 
+    public function test_a_single_clock_in_punch_immediately_switches_the_attendance_day_to_working(): void
+    {
+        $employee = User::factory()->create();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::PERSONAL,
+            'owner_user_id' => $employee->id,
+        ]);
+        Sanctum::actingAs($device, ['punch:self']);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-07-18T09:00:00+09:00',
+        ])->assertSuccessful();
+
+        // WEBの出勤操作と同様、退勤を待たず即座に「勤務中」へ状態が変わる。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-07-18')->firstOrFail();
+        $this->assertSame('working', $day->status);
+        $this->assertNotNull($day->actual_start_at);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'break_start',
+            'punched_at' => '2026-07-18T12:00:00+09:00',
+        ])->assertSuccessful();
+        $this->assertSame('on_break', $day->refresh()->status);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'break_end',
+            'punched_at' => '2026-07-18T13:00:00+09:00',
+        ])->assertSuccessful();
+        $this->assertSame('working', $day->refresh()->status);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_out',
+            'punched_at' => '2026-07-18T18:00:00+09:00',
+        ])->assertSuccessful();
+        $this->assertSame('clocked_out', $day->refresh()->status);
+    }
+
+    public function test_a_stray_device_punch_after_clock_out_does_not_change_the_finished_status(): void
+    {
+        $employee = User::factory()->create();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::PERSONAL,
+            'owner_user_id' => $employee->id,
+        ]);
+        Sanctum::actingAs($device, ['punch:self']);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-07-18T09:00:00+09:00',
+        ])->assertSuccessful();
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_out',
+            'punched_at' => '2026-07-18T18:00:00+09:00',
+        ])->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-07-18')->firstOrFail();
+        $this->assertSame('clocked_out', $day->status);
+
+        // 退勤済みの日に誤ってもう一度出勤打刻が届いても、状態は退勤済みのまま変えない。
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-07-18',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-07-18T19:00:00+09:00',
+        ])->assertSuccessful();
+        $this->assertSame('clocked_out', $day->refresh()->status);
+    }
+
     public function test_personal_device_punches_as_its_own_owner_without_an_authentication_key(): void
     {
         $employee = User::factory()->create();
