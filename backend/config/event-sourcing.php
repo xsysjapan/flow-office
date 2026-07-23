@@ -71,6 +71,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use App\Domain\User\Events\UserCreatedFromSsoLogin;
 use App\Domain\User\Events\UserHireDateSet;
 use App\Domain\User\Events\UserLoggedIn;
+use App\Domain\User\Events\UserMigratedFromLegacy;
 use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Domain\User\Events\UserRolesChanged;
 use App\Domain\User\Events\UserSsoAccountLinked;
@@ -289,6 +290,7 @@ return [
         'user.roles_changed' => UserRolesChanged::class,
         'user.hire_date_set' => UserHireDateSet::class,
         'user.termination_date_set' => UserTerminationDateSet::class,
+        'user.migrated_from_legacy' => UserMigratedFromLegacy::class,
 
         'backoffice_task.created' => BackOfficeTaskCreated::class,
         'backoffice_task.assigned' => BackOfficeTaskAssigned::class,

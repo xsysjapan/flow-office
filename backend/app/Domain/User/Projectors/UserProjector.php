@@ -2,9 +2,11 @@
 
 namespace App\Domain\User\Projectors;
 
+use App\Domain\LegacyMigration;
 use App\Domain\User\Events\UserCreatedFromSsoLogin;
 use App\Domain\User\Events\UserHireDateSet;
 use App\Domain\User\Events\UserLoggedIn;
+use App\Domain\User\Events\UserMigratedFromLegacy;
 use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Domain\User\Events\UserRolesChanged;
 use App\Domain\User\Events\UserSsoAccountLinked;
@@ -102,6 +104,15 @@ class UserProjector extends Projector
 
         $roleIds = Role::query()->whereIn('code', $event->newRoleCodes)->pluck('id');
         $user->roles()->sync($roleIds);
+    }
+
+    /** @see LegacyMigration 本番カットオーバー移行専用(docs/30-legacy-data-migration.md)。 */
+    public function onUserMigratedFromLegacy(UserMigratedFromLegacy $event): void
+    {
+        User::query()->updateOrCreate(
+            ['id' => $event->aggregateRootUuid()],
+            $event->attributes,
+        );
     }
 
     public function onUserHireDateSet(UserHireDateSet $event): void

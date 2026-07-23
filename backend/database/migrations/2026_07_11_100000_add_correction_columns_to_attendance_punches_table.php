@@ -20,7 +20,7 @@ return new class extends Migration
             $table->text('correction_reason')->nullable()->after('status');
             $table->foreignUuid('corrected_by_user_id')->nullable()->after('correction_reason')->constrained('users');
             $table->timestamp('corrected_at')->nullable()->after('corrected_by_user_id');
-            $table->foreignId('superseded_by_punch_id')->nullable()->after('corrected_at')
+            $table->foreignUuid('superseded_by_punch_id')->nullable()->after('corrected_at')
                 ->constrained('attendance_punches');
         });
     }

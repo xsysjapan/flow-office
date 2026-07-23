@@ -25,7 +25,7 @@ return new class extends Migration
             $table->text('comment')->nullable();
             $table->timestamp('occurred_at');
 
-            $table->index(['workflow_request_id', 'occurred_at']);
+            $table->index(['workflow_request_id', 'occurred_at'], 'workflow_request_history_entries_request_occurred_index');
         });
     }
 
