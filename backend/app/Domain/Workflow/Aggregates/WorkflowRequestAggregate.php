@@ -25,10 +25,10 @@ class WorkflowRequestAggregate extends AggregateRoot
     public function draft(
         int $requestTypeId,
         string $requestTypeCode,
-        int $applicantUserId,
+        string $applicantUserId,
         string $title,
         array $formData,
-        ?int $approverUserId,
+        ?string $approverUserId,
     ): self {
         $this->recordThat(new WorkflowRequestDrafted(
             requestTypeId: $requestTypeId,
@@ -42,7 +42,7 @@ class WorkflowRequestAggregate extends AggregateRoot
         return $this;
     }
 
-    public function submit(int $approverUserId, int $submittedByUserId): self
+    public function submit(string $approverUserId, string $submittedByUserId): self
     {
         $this->recordThat(new WorkflowRequestSubmitted(
             approverUserId: $approverUserId,
@@ -52,21 +52,21 @@ class WorkflowRequestAggregate extends AggregateRoot
         return $this;
     }
 
-    public function approve(int $approvedByUserId): self
+    public function approve(string $approvedByUserId): self
     {
         $this->recordThat(new WorkflowRequestApproved(approvedByUserId: $approvedByUserId));
 
         return $this;
     }
 
-    public function returnRequest(int $returnedByUserId, string $comment): self
+    public function returnRequest(string $returnedByUserId, string $comment): self
     {
         $this->recordThat(new WorkflowRequestReturned(returnedByUserId: $returnedByUserId, comment: $comment));
 
         return $this;
     }
 
-    public function cancel(int $cancelledByUserId, string $reason): self
+    public function cancel(string $cancelledByUserId, string $reason): self
     {
         $this->recordThat(new WorkflowRequestCancelled(cancelledByUserId: $cancelledByUserId, reason: $reason));
 

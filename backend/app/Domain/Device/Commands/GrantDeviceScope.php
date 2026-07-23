@@ -12,6 +12,6 @@ class GrantDeviceScope implements Command
     public function __construct(
         public readonly string $deviceId,
         public readonly string $scope,
-        public readonly int $grantedByUserId,
+        public readonly string $grantedByUserId,
     ) {}
 }

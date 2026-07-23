@@ -8,6 +8,6 @@ class SetDefaultWorkStyle implements Command
 {
     public function __construct(
         public readonly int $workStyleId,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
     ) {}
 }

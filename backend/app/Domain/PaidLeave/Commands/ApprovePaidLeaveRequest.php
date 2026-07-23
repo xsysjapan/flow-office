@@ -11,6 +11,6 @@ class ApprovePaidLeaveRequest implements Command
 {
     public function __construct(
         public readonly string $paidLeaveRequestId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

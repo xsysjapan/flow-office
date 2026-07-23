@@ -12,6 +12,6 @@ class CreateWorkCalendar implements Command
         public readonly string $startsOn,
         public readonly string $endsOn,
         public readonly int $weekStartsOn,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 }

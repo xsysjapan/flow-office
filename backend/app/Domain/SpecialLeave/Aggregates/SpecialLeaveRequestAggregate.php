@@ -16,13 +16,13 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class SpecialLeaveRequestAggregate extends AggregateRoot
 {
     public function request(
-        int $userId,
+        string $userId,
         int $specialLeaveTypeId,
         string $targetDate,
         string $leaveType,
         ?float $hours,
         float $requestedDays,
-        int $approverUserId,
+        string $approverUserId,
         ?string $reason,
     ): self {
         $this->recordThat(new SpecialLeaveRequested(
@@ -39,21 +39,21 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
         return $this;
     }
 
-    public function approve(int $approvedByUserId): self
+    public function approve(string $approvedByUserId): self
     {
         $this->recordThat(new SpecialLeaveRequestApproved(approvedByUserId: $approvedByUserId));
 
         return $this;
     }
 
-    public function returnRequest(int $returnedByUserId, string $comment): self
+    public function returnRequest(string $returnedByUserId, string $comment): self
     {
         $this->recordThat(new SpecialLeaveRequestReturned(returnedByUserId: $returnedByUserId, comment: $comment));
 
         return $this;
     }
 
-    public function cancel(int $cancelledByUserId): self
+    public function cancel(string $cancelledByUserId): self
     {
         $this->recordThat(new SpecialLeaveRequestCancelled(cancelledByUserId: $cancelledByUserId));
 

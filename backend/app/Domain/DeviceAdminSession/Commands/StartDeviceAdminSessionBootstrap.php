@@ -13,6 +13,6 @@ class StartDeviceAdminSessionBootstrap implements Command
 {
     public function __construct(
         public readonly string $deviceId,
-        public readonly ?int $targetAdminUserId,
+        public readonly ?string $targetAdminUserId,
     ) {}
 }

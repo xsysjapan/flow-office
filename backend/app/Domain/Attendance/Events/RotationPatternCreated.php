@@ -18,7 +18,7 @@ class RotationPatternCreated implements DomainEvent
         public readonly string $name,
         public readonly int $cycleLength,
         public readonly array $items,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 
     public function eventType(): string

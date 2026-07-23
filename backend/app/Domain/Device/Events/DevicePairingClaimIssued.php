@@ -13,7 +13,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class DevicePairingClaimIssued extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $issuedByUserId,
+        public readonly string $issuedByUserId,
         public readonly bool $wasReissued,
     ) {}
 }

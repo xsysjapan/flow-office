@@ -16,6 +16,6 @@ class UpdateShiftPattern implements Command
         public readonly ?string $breakStartTime,
         public readonly ?string $breakEndTime,
         public readonly int $prescribedWorkMinutes,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }

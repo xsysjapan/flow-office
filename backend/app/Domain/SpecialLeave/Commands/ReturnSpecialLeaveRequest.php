@@ -8,7 +8,7 @@ class ReturnSpecialLeaveRequest implements Command
 {
     public function __construct(
         public readonly string $specialLeaveRequestId,
-        public readonly int $returnedByUserId,
+        public readonly string $returnedByUserId,
         public readonly string $comment,
     ) {}
 }

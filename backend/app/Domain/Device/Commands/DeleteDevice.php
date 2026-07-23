@@ -11,6 +11,6 @@ class DeleteDevice implements Command
 {
     public function __construct(
         public readonly string $deviceId,
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
     ) {}
 }

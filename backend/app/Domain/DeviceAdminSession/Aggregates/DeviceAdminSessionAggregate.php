@@ -14,7 +14,7 @@ class DeviceAdminSessionAggregate extends AggregateRoot
 {
     public function start(
         string $deviceId,
-        int $adminUserId,
+        string $adminUserId,
         ?string $authenticationKeyId,
         string $source,
         string $startedAt,

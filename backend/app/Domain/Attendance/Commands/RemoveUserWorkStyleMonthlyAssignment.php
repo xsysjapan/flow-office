@@ -8,6 +8,6 @@ class RemoveUserWorkStyleMonthlyAssignment implements Command
 {
     public function __construct(
         public readonly int $assignmentId,
-        public readonly int $removedByUserId,
+        public readonly string $removedByUserId,
     ) {}
 }

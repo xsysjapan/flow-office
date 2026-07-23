@@ -16,9 +16,9 @@ class WorkflowRequestDrafted extends ShouldBeStored
     public function __construct(
         public readonly int $requestTypeId,
         public readonly string $requestTypeCode,
-        public readonly int $applicantUserId,
+        public readonly string $applicantUserId,
         public readonly string $title,
         public readonly array $formData,
-        public readonly ?int $approverUserId,
+        public readonly ?string $approverUserId,
     ) {}
 }

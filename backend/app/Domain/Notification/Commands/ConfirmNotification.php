@@ -11,6 +11,6 @@ class ConfirmNotification implements Command
 {
     public function __construct(
         public readonly string $notificationId,
-        public readonly int $confirmedByUserId,
+        public readonly string $confirmedByUserId,
     ) {}
 }

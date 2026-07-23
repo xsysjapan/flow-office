@@ -8,6 +8,6 @@ class CancelPaidLeaveRequest implements Command
 {
     public function __construct(
         public readonly string $paidLeaveRequestId,
-        public readonly int $cancelledByUserId,
+        public readonly string $cancelledByUserId,
     ) {}
 }

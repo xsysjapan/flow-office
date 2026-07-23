@@ -37,13 +37,13 @@ class ApplicationIntegrationAggregate extends AggregateRoot
      */
     public function register(
         string $ownerType,
-        int $ownerUserId,
+        string $ownerUserId,
         string $clientType,
         string $clientName,
         ?string $purpose,
         int $personalAccessTokenId,
         array $scopes,
-        int $registeredByUserId,
+        string $registeredByUserId,
     ): self {
         $this->recordThat(new ApplicationIntegrationRegistered(
             ownerType: $ownerType,
@@ -59,7 +59,7 @@ class ApplicationIntegrationAggregate extends AggregateRoot
         return $this;
     }
 
-    public function reissueToken(int $personalAccessTokenId, int $reissuedByUserId): self
+    public function reissueToken(int $personalAccessTokenId, string $reissuedByUserId): self
     {
         $this->recordThat(new ApplicationIntegrationTokenReissued(
             personalAccessTokenId: $personalAccessTokenId,
@@ -69,7 +69,7 @@ class ApplicationIntegrationAggregate extends AggregateRoot
         return $this;
     }
 
-    public function revoke(int $revokedByUserId): self
+    public function revoke(string $revokedByUserId): self
     {
         $this->recordThat(new ApplicationIntegrationRevoked(
             revokedByUserId: $revokedByUserId,

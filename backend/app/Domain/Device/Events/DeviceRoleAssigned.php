@@ -11,6 +11,6 @@ class DeviceRoleAssigned extends ShouldBeStored
      */
     public function __construct(
         public readonly array $roleTypes,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }

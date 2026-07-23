@@ -11,7 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveUsed extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $paidLeaveRequestId,
         public readonly int $attendanceDayId,
         public readonly string $usedOn,

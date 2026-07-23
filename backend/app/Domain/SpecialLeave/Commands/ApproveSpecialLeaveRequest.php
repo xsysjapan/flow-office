@@ -8,6 +8,6 @@ class ApproveSpecialLeaveRequest implements Command
 {
     public function __construct(
         public readonly string $specialLeaveRequestId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

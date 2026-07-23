@@ -12,12 +12,12 @@ use App\Domain\EventSourcing\Contracts\DomainEvent;
 class LegalHolidayDesignated implements DomainEvent
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $weekStartDate,
         public readonly ?string $previousDesignatedDate,
         public readonly string $designatedDate,
         public readonly string $reason,
-        public readonly int $designatedByUserId,
+        public readonly string $designatedByUserId,
     ) {}
 
     public function eventType(): string

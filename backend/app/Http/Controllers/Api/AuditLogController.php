@@ -49,7 +49,7 @@ class AuditLogController extends Controller
         operationId: 'auditLog.index',
         summary: '監査ログを検索する',
         tags: ['監査ログ'],
-        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
@@ -75,7 +75,7 @@ class AuditLogController extends Controller
         operationId: 'auditLog.exportCsv',
         summary: '監査ログCSVを出力する',
         tags: ['監査ログ'],
-        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'aggregate_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'aggregate_id', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'event_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function exportCsv(Request $request): StreamedResponse
@@ -109,7 +109,7 @@ class AuditLogController extends Controller
             'aggregate_type' => ['nullable', 'string'],
             'aggregate_id' => ['nullable', 'string'],
             'event_type' => ['nullable', 'string'],
-            'user_id' => ['nullable', 'integer'],
+            'user_id' => ['nullable', 'string'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
         ]);
@@ -137,10 +137,10 @@ class AuditLogController extends Controller
         }
 
         if (isset($data['user_id'])) {
-            $userId = (int) $data['user_id'];
+            $userId = $data['user_id'];
             $query->where(function (Builder $sub) use ($userId) {
                 foreach (self::ACTOR_KEYS as $key) {
-                    $sub->orWhere('event_properties', 'like', '%"'.Str::camel($key).'":'.$userId.'%');
+                    $sub->orWhere('event_properties', 'like', '%"'.Str::camel($key).'":"'.$userId.'"%');
                 }
             });
         }

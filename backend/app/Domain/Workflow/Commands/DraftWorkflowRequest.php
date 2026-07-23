@@ -14,9 +14,9 @@ class DraftWorkflowRequest implements Command
      */
     public function __construct(
         public readonly string $requestTypeCode,
-        public readonly int $applicantUserId,
+        public readonly string $applicantUserId,
         public readonly string $title,
         public readonly array $formData,
-        public readonly ?int $approverUserId = null,
+        public readonly ?string $approverUserId = null,
     ) {}
 }

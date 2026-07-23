@@ -159,10 +159,10 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.grants.forUser',
         summary: '社員の特別休暇残数を取得する',
         tags: ['特別休暇'],
-        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function grantsForUser(int $userId): AnonymousResourceCollection
+    public function grantsForUser(string $userId): AnonymousResourceCollection
     {
         $grants = SpecialLeaveGrant::query()
             ->with('specialLeaveType')
@@ -179,13 +179,13 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.grants.store',
         summary: '特別休暇を手動付与する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'special_leave_type_id', 'granted_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'special_leave_type_id', 'granted_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function grant(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'special_leave_type_id' => ['required', 'integer', 'exists:special_leave_types,id'],
             'granted_on' => ['required', 'date'],
             'expires_on' => ['nullable', 'date', 'after:granted_on'],
@@ -210,7 +210,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.requests.store',
         summary: '特別休暇を申請する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'integer'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
@@ -220,7 +220,7 @@ class SpecialLeaveController extends Controller
             'target_date' => ['required', 'date'],
             'leave_type' => ['required', Rule::in(PaidLeaveType::values())],
             'hours' => ['nullable', 'numeric', 'min:0.5'],
-            'approver_user_id' => ['required', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['required', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
         ]);
 
@@ -339,10 +339,10 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.history.forUser',
         summary: '社員の特別休暇履歴を取得する',
         tags: ['特別休暇'],
-        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function historyForUser(int $userId): AnonymousResourceCollection
+    public function historyForUser(string $userId): AnonymousResourceCollection
     {
         return $this->historyResponse($userId);
     }
@@ -351,7 +351,7 @@ class SpecialLeaveController extends Controller
      * `special_leave_grant`/`special_leave_request` それぞれの集約に属するイベントを
      * 時系列で返す(LeaveHistoryQuery参照。有給・特別休暇で共通の読み取り専用Query)。
      */
-    private function historyResponse(int $userId): AnonymousResourceCollection
+    private function historyResponse(string $userId): AnonymousResourceCollection
     {
         $events = LeaveHistoryQuery::eventsForUser(
             userId: $userId,

@@ -19,7 +19,7 @@ class DeleteAttendanceDay implements Command
     public function __construct(
         public readonly int $attendanceDayId,
         public readonly string $reason,
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
         public readonly string $punchLogAction = self::LEAVE_PUNCHES,
     ) {}
 }

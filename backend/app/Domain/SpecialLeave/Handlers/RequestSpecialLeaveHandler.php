@@ -98,7 +98,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
      * attendance_days.work_typeは1日1件しか値を持てないため、どちらの休暇であっても
      * 二重申請を防ぐ必要がある。
      */
-    private function alreadyHasLeaveOnDate(int $userId, string $targetDate): bool
+    private function alreadyHasLeaveOnDate(string $userId, string $targetDate): bool
     {
         $activeStatuses = [PaidLeaveRequestStatus::SUBMITTED, PaidLeaveRequestStatus::APPROVED];
 

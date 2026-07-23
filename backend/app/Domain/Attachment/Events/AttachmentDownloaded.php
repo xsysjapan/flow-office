@@ -12,6 +12,6 @@ class AttachmentDownloaded extends ShouldBeStored
 {
     public function __construct(
         public readonly string $attachmentId,
-        public readonly int $downloadedByUserId,
+        public readonly string $downloadedByUserId,
     ) {}
 }

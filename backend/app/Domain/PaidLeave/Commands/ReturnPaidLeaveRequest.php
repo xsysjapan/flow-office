@@ -8,7 +8,7 @@ class ReturnPaidLeaveRequest implements Command
 {
     public function __construct(
         public readonly string $paidLeaveRequestId,
-        public readonly int $returnedByUserId,
+        public readonly string $returnedByUserId,
         public readonly string $comment,
     ) {}
 }

@@ -16,6 +16,6 @@ class PublishEmployeeShiftAssignments implements Command
     public function __construct(
         public readonly array $userIds,
         public readonly string $yearMonth,
-        public readonly int $publishedByUserId,
+        public readonly string $publishedByUserId,
     ) {}
 }

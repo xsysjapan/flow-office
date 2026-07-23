@@ -13,7 +13,7 @@ class EmployeeShiftAssigned implements DomainEvent
 {
     public function __construct(
         public readonly int $employeeShiftAssignmentId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $workDate,
         public readonly ?int $workStyleId,
         public readonly ?int $shiftPatternId,
@@ -26,7 +26,7 @@ class EmployeeShiftAssigned implements DomainEvent
         public readonly int $plannedBreakMinutes,
         public readonly ?string $plannedBreakStartAt,
         public readonly ?string $plannedBreakEndAt,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedByUserId,
     ) {}
 
     public function eventType(): string

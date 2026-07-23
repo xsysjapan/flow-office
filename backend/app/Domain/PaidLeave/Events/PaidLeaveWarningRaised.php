@@ -10,7 +10,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveWarningRaised extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $warningType,
         public readonly string $message,
     ) {}

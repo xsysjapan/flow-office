@@ -15,10 +15,10 @@ class AttendanceDayCreated implements DomainEvent
 {
     public function __construct(
         public readonly int $attendanceDayId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $workDate,
         public readonly string $reason,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 
     public function eventType(): string

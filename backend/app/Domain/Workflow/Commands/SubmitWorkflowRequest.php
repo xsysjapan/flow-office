@@ -11,7 +11,7 @@ class SubmitWorkflowRequest implements Command
 {
     public function __construct(
         public readonly string $workflowRequestId,
-        public readonly int $submittedByUserId,
-        public readonly ?int $approverUserId = null,
+        public readonly string $submittedByUserId,
+        public readonly ?string $approverUserId = null,
     ) {}
 }

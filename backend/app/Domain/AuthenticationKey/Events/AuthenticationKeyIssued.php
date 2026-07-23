@@ -11,14 +11,14 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class AuthenticationKeyIssued extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $keyType,
         public readonly string $displayName,
         public readonly string $keyHash,
         public readonly ?string $validFrom,
         public readonly ?string $validUntil,
         public readonly ?array $metadata,
-        public readonly int $registeredByUserId,
+        public readonly string $registeredByUserId,
         public readonly string $registeredAt,
     ) {}
 }

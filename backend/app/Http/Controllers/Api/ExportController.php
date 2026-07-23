@@ -12,8 +12,8 @@ use App\Models\WorkflowRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * UC-E001: 勤怠CSVを出力する / UC-E002: 経費CSVを出力する / UC-B004 step5 (会計・振込CSV)。
@@ -29,7 +29,7 @@ class ExportController extends Controller
         operationId: 'exports.attendance',
         summary: '勤怠CSVを出力する',
         tags: ['CSV出力'],
-        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'integer')), style: 'form', explode: true)],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function attendance(Request $request, EventStore $eventStore): StreamedResponse
@@ -37,7 +37,7 @@ class ExportController extends Controller
         $data = $request->validate([
             'year_month' => ['required', 'date_format:Y-m'],
             'user_id' => ['nullable', 'array'],
-            'user_id.*' => ['integer', 'exists:users,id'],
+            'user_id.*' => ['string', 'exists:users,id'],
         ]);
 
         $months = AttendanceMonth::query()

@@ -81,7 +81,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.store',
         summary: '申請の下書きを作成する',
         tags: ['汎用申請'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_type_code', 'title', 'form_data'], properties: [new OA\Property(property: 'request_type_code', type: 'string'), new OA\Property(property: 'title', type: 'string'), new OA\Property(property: 'form_data', type: 'object'), new OA\Property(property: 'approver_user_id', type: 'integer', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_type_code', 'title', 'form_data'], properties: [new OA\Property(property: 'request_type_code', type: 'string'), new OA\Property(property: 'title', type: 'string'), new OA\Property(property: 'form_data', type: 'object'), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -90,7 +90,7 @@ class WorkflowRequestController extends Controller
             'request_type_code' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'form_data' => ['present', 'array'],
-            'approver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['nullable', 'string', 'exists:users,id'],
         ]);
 
         $workflowRequest = $commandBus->dispatch(new DraftWorkflowRequest(
@@ -112,13 +112,13 @@ class WorkflowRequestController extends Controller
         summary: '申請を提出する',
         tags: ['汎用申請'],
         parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'approver_user_id', type: 'integer', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function submit(Request $request, WorkflowRequest $workflowRequest, CommandBus $commandBus): WorkflowRequestResource
     {
         $data = $request->validate([
-            'approver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['nullable', 'string', 'exists:users,id'],
         ]);
 
         $commandBus->dispatch(new SubmitWorkflowRequest(

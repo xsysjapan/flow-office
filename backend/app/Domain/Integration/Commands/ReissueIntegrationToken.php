@@ -11,6 +11,6 @@ class ReissueIntegrationToken implements Command
 {
     public function __construct(
         public readonly string $integrationId,
-        public readonly int $reissuedByUserId,
+        public readonly string $reissuedByUserId,
     ) {}
 }

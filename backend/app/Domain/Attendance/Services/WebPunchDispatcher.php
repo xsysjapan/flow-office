@@ -27,7 +27,7 @@ class WebPunchDispatcher
      * @param  AttendanceDay|null  $day  呼び出し元(各Handler)が独自の状態遷移検証のために
      *                                   既に取得済みの当日分。ここで取り直さず再利用する。
      */
-    public function dispatch(?AttendanceDay $day, int $userId, string $workDate, string $punchType, Carbon $punchedAt): AttendanceDay
+    public function dispatch(?AttendanceDay $day, string $userId, string $workDate, string $punchType, Carbon $punchedAt): AttendanceDay
     {
         if ($day !== null && $day->source !== AttendanceDaySource::PUNCH) {
             // 日次編集(UC-A005)・出勤日新規作成(UC-A016)等で既に確定した日は、

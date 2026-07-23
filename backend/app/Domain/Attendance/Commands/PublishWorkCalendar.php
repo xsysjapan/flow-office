@@ -8,6 +8,6 @@ class PublishWorkCalendar implements Command
 {
     public function __construct(
         public readonly int $workCalendarId,
-        public readonly int $publishedByUserId,
+        public readonly string $publishedByUserId,
     ) {}
 }

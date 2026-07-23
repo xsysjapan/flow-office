@@ -13,6 +13,6 @@ class CreateRotationPattern implements Command
         public readonly int $workStyleId,
         public readonly string $name,
         public readonly array $items,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 }

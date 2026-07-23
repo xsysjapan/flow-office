@@ -11,7 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class NotificationConfirmed extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $confirmedByUserId,
+        public readonly string $confirmedByUserId,
         public readonly string $confirmedAt,
     ) {}
 }

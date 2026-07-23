@@ -11,6 +11,6 @@ class DisableDevice implements Command
 {
     public function __construct(
         public readonly string $deviceId,
-        public readonly int $disabledByUserId,
+        public readonly string $disabledByUserId,
     ) {}
 }

@@ -11,6 +11,6 @@ class CloseAttendanceMonth implements Command
 {
     public function __construct(
         public readonly int $attendanceMonthId,
-        public readonly int $closedByUserId,
+        public readonly string $closedByUserId,
     ) {}
 }

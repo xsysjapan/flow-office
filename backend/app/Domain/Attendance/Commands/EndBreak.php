@@ -9,5 +9,5 @@ use App\Domain\EventSourcing\Contracts\Command;
  */
 class EndBreak implements Command
 {
-    public function __construct(public readonly int $userId) {}
+    public function __construct(public readonly string $userId) {}
 }

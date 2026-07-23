@@ -14,14 +14,14 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class AuthenticationKeyAggregate extends AggregateRoot
 {
     public function issue(
-        int $userId,
+        string $userId,
         string $keyType,
         string $displayName,
         string $keyHash,
         ?string $validFrom,
         ?string $validUntil,
         ?array $metadata,
-        int $registeredByUserId,
+        string $registeredByUserId,
         string $registeredAt,
     ): self {
         $this->recordThat(new AuthenticationKeyIssued(
@@ -39,7 +39,7 @@ class AuthenticationKeyAggregate extends AggregateRoot
         return $this;
     }
 
-    public function disable(int $disabledByUserId, string $disabledAt): self
+    public function disable(string $disabledByUserId, string $disabledAt): self
     {
         $this->recordThat(new AuthenticationKeyDisabled(
             disabledByUserId: $disabledByUserId,

@@ -31,7 +31,7 @@ class SendNotificationJob implements ShouldQueue
 
     public function __construct(
         public readonly string $notificationId,
-        public readonly int $recipientUserId,
+        public readonly string $recipientUserId,
         public readonly string $title,
         public readonly string $summary,
         public readonly ?string $detailUrl = null,

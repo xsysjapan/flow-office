@@ -12,10 +12,10 @@ class UserWorkStyleMonthlyAssignmentRemoved implements DomainEvent
 {
     public function __construct(
         public readonly int $assignmentId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $yearMonth,
         public readonly int $previousWorkStyleId,
-        public readonly int $removedByUserId,
+        public readonly string $removedByUserId,
     ) {}
 
     public function eventType(): string

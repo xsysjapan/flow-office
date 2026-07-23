@@ -22,7 +22,7 @@ class EditAttendanceDay implements Command
         public readonly ?string $note,
         public readonly array $leaveSegments,
         public readonly string $reason,
-        public readonly int $editedByUserId,
+        public readonly string $editedByUserId,
         public readonly ?string $workLocationType = null,
         /**
          * work_location_typeがリクエストに含まれていたか。falseの場合、Handlerは

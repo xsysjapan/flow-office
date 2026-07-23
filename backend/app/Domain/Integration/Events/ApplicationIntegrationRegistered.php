@@ -15,12 +15,12 @@ class ApplicationIntegrationRegistered extends ShouldBeStored
      */
     public function __construct(
         public readonly string $ownerType,
-        public readonly int $ownerUserId,
+        public readonly string $ownerUserId,
         public readonly string $clientType,
         public readonly string $clientName,
         public readonly ?string $purpose,
         public readonly int $personalAccessTokenId,
         public readonly array $scopes,
-        public readonly int $registeredByUserId,
+        public readonly string $registeredByUserId,
     ) {}
 }

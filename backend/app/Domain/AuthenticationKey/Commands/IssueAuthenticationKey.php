@@ -10,13 +10,13 @@ use App\Domain\EventSourcing\Contracts\Command;
 class IssueAuthenticationKey implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $keyType,
         public readonly string $displayName,
         public readonly string $rawKeyValue,
         public readonly ?string $validFrom,
         public readonly ?string $validUntil,
         public readonly ?array $metadata,
-        public readonly int $registeredByUserId,
+        public readonly string $registeredByUserId,
     ) {}
 }

@@ -11,6 +11,6 @@ class RevokeIntegration implements Command
 {
     public function __construct(
         public readonly string $integrationId,
-        public readonly int $revokedByUserId,
+        public readonly string $revokedByUserId,
     ) {}
 }

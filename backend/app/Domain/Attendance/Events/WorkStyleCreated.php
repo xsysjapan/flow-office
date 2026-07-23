@@ -15,7 +15,7 @@ class WorkStyleCreated implements DomainEvent
     public function __construct(
         public readonly int $workStyleId,
         public readonly array $attributes,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 
     public function eventType(): string

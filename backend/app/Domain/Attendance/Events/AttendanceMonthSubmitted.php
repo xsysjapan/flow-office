@@ -8,9 +8,9 @@ class AttendanceMonthSubmitted implements DomainEvent
 {
     public function __construct(
         public readonly int $attendanceMonthId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $yearMonth,
-        public readonly int $approverUserId,
+        public readonly string $approverUserId,
     ) {}
 
     public function eventType(): string

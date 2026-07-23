@@ -8,7 +8,7 @@ class AttendanceDayEdited implements DomainEvent
 {
     public function __construct(
         public readonly int $attendanceDayId,
-        public readonly int $editedByUserId,
+        public readonly string $editedByUserId,
         public readonly string $reason,
     ) {}
 

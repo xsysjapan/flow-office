@@ -11,11 +11,11 @@ class EmployeeRotationAssigned implements DomainEvent
 {
     public function __construct(
         public readonly int $employeeRotationAssignmentId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly int $rotationPatternId,
         public readonly string $rotationStartDate,
         public readonly int $rotationStartPosition,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedByUserId,
     ) {}
 
     public function eventType(): string

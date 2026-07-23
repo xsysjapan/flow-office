@@ -33,7 +33,7 @@ final class LeaveHistoryQuery
      * @return Collection<int, object>
      */
     public static function eventsForUser(
-        int $userId,
+        string $userId,
         string $grantModelClass,
         string $requestModelClass,
     ): Collection {

@@ -11,7 +11,7 @@ class RevokeDevice implements Command
 {
     public function __construct(
         public readonly string $deviceId,
-        public readonly int $revokedByUserId,
+        public readonly string $revokedByUserId,
         public readonly ?string $reason,
     ) {}
 }

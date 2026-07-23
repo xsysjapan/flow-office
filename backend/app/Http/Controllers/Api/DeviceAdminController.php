@@ -65,7 +65,7 @@ class DeviceAdminController extends Controller
         operationId: 'devices.admin.bootstrapRegisterKey',
         summary: 'ブートストラップ経路で管理者ICカードを登録する(UC-D006)',
         tags: ['端末管理者モード'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['key_type', 'display_name', 'raw_key_value'], properties: [new OA\Property(property: 'admin_user_id', type: 'integer', nullable: true), new OA\Property(property: 'key_type', type: 'string'), new OA\Property(property: 'display_name', type: 'string'), new OA\Property(property: 'raw_key_value', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['key_type', 'display_name', 'raw_key_value'], properties: [new OA\Property(property: 'admin_user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'key_type', type: 'string'), new OA\Property(property: 'display_name', type: 'string'), new OA\Property(property: 'raw_key_value', type: 'string')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function bootstrapRegisterKey(Request $request, CommandBus $commandBus): JsonResponse
@@ -73,7 +73,7 @@ class DeviceAdminController extends Controller
         $device = $this->currentDevice($request);
 
         $data = $request->validate([
-            'admin_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'admin_user_id' => ['nullable', 'string', 'exists:users,id'],
             'key_type' => ['required', Rule::in(AuthenticationKeyType::values())],
             'display_name' => ['required', 'string', 'max:255'],
             'raw_key_value' => ['required', 'string'],

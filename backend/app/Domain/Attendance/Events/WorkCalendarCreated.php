@@ -16,7 +16,7 @@ class WorkCalendarCreated implements DomainEvent
         public readonly string $startsOn,
         public readonly string $endsOn,
         public readonly int $weekStartsOn,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 
     public function eventType(): string

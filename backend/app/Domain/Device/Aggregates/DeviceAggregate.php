@@ -30,7 +30,7 @@ class DeviceAggregate extends AggregateRoot
      */
     public function register(
         string $ownerType,
-        ?int $ownerUserId,
+        ?string $ownerUserId,
         string $name,
         string $deviceType,
         array $roleTypes,
@@ -42,7 +42,7 @@ class DeviceAggregate extends AggregateRoot
         bool $allowOffline,
         bool $requireLocation,
         bool $autoDetectPunchType,
-        int $registeredByUserId,
+        string $registeredByUserId,
     ): self {
         $this->recordThat(new DeviceRegistered(
             ownerType: $ownerType,
@@ -74,28 +74,28 @@ class DeviceAggregate extends AggregateRoot
         return $this;
     }
 
-    public function issuePairingClaim(int $issuedByUserId, bool $wasReissued): self
+    public function issuePairingClaim(string $issuedByUserId, bool $wasReissued): self
     {
         $this->recordThat(new DevicePairingClaimIssued(issuedByUserId: $issuedByUserId, wasReissued: $wasReissued));
 
         return $this;
     }
 
-    public function disable(int $disabledByUserId, string $disabledAt): self
+    public function disable(string $disabledByUserId, string $disabledAt): self
     {
         $this->recordThat(new DeviceDisabled(disabledByUserId: $disabledByUserId, disabledAt: $disabledAt));
 
         return $this;
     }
 
-    public function revoke(int $revokedByUserId, ?string $reason, string $revokedAt): self
+    public function revoke(string $revokedByUserId, ?string $reason, string $revokedAt): self
     {
         $this->recordThat(new DeviceRevoked(revokedByUserId: $revokedByUserId, reason: $reason, revokedAt: $revokedAt));
 
         return $this;
     }
 
-    public function delete(int $deletedByUserId, string $deletedAt): self
+    public function delete(string $deletedByUserId, string $deletedAt): self
     {
         $this->recordThat(new DeviceDeleted(deletedByUserId: $deletedByUserId, deletedAt: $deletedAt));
 
@@ -105,14 +105,14 @@ class DeviceAggregate extends AggregateRoot
     /**
      * @param  array<int, string>  $roleTypes
      */
-    public function assignRoles(array $roleTypes, int $updatedByUserId): self
+    public function assignRoles(array $roleTypes, string $updatedByUserId): self
     {
         $this->recordThat(new DeviceRoleAssigned(roleTypes: $roleTypes, updatedByUserId: $updatedByUserId));
 
         return $this;
     }
 
-    public function grantScope(string $scope, int $grantedByUserId): self
+    public function grantScope(string $scope, string $grantedByUserId): self
     {
         $this->recordThat(new DeviceScopeGranted(scope: $scope, grantedByUserId: $grantedByUserId));
 
@@ -132,7 +132,7 @@ class DeviceAggregate extends AggregateRoot
         bool $allowOffline,
         bool $requireLocation,
         bool $autoDetectPunchType,
-        int $updatedByUserId,
+        string $updatedByUserId,
     ): self {
         $this->recordThat(new DeviceSettingsUpdated(
             name: $name,

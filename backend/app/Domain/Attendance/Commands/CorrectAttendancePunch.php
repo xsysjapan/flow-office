@@ -15,6 +15,6 @@ class CorrectAttendancePunch implements Command
         public readonly string $punchType,
         public readonly string $punchedAt,
         public readonly string $reason,
-        public readonly int $correctedByUserId,
+        public readonly string $correctedByUserId,
     ) {}
 }

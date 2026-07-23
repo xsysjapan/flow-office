@@ -15,7 +15,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class SpecialLeaveGrantAggregate extends AggregateRoot
 {
     public function grant(
-        int $userId,
+        string $userId,
         int $specialLeaveTypeId,
         string $grantedOn,
         ?string $expiresOn,
@@ -35,7 +35,7 @@ class SpecialLeaveGrantAggregate extends AggregateRoot
     }
 
     public function use(
-        int $userId,
+        string $userId,
         string $specialLeaveRequestId,
         int $attendanceDayId,
         string $usedOn,

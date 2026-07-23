@@ -7,6 +7,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class SpecialLeaveRequestCancelled extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $cancelledByUserId,
+        public readonly string $cancelledByUserId,
     ) {}
 }

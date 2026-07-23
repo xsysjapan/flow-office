@@ -102,10 +102,10 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.grants.forUser',
         summary: '社員の有給残数を取得する',
         tags: ['有給休暇'],
-        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function grantsForUser(int $userId): AnonymousResourceCollection
+    public function grantsForUser(string $userId): AnonymousResourceCollection
     {
         $grants = PaidLeaveGrant::query()
             ->where('user_id', $userId)
@@ -123,13 +123,13 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.grants.store',
         summary: '有給を手動付与する',
         tags: ['有給休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'granted_on', 'expires_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date'), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'granted_on', 'expires_on', 'granted_days'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'granted_on', type: 'string', format: 'date'), new OA\Property(property: 'expires_on', type: 'string', format: 'date'), new OA\Property(property: 'granted_days', type: 'number'), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function grant(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'granted_on' => ['required', 'date'],
             'expires_on' => ['required', 'date', 'after:granted_on'],
             'granted_days' => ['required', 'numeric', 'min:0.5'],
@@ -155,7 +155,7 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.requests.store',
         summary: '有給を申請する',
         tags: ['有給休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'integer'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
@@ -164,7 +164,7 @@ class PaidLeaveController extends Controller
             'target_date' => ['required', 'date'],
             'leave_type' => ['required', Rule::in(PaidLeaveType::values())],
             'hours' => ['nullable', 'numeric', 'min:0.5'],
-            'approver_user_id' => ['required', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['required', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
         ]);
 
@@ -295,10 +295,10 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.history.forUser',
         summary: '社員の有給履歴を取得する',
         tags: ['有給休暇'],
-        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function historyForUser(int $userId): AnonymousResourceCollection
+    public function historyForUser(string $userId): AnonymousResourceCollection
     {
         return $this->historyResponse($userId);
     }
@@ -307,7 +307,7 @@ class PaidLeaveController extends Controller
      * `paid_leave_grant`/`paid_leave_request` それぞれの集約に属するイベントを時系列で返す
      * (LeaveHistoryQuery参照。有給・特別休暇で共通の読み取り専用Query)。
      */
-    private function historyResponse(int $userId): AnonymousResourceCollection
+    private function historyResponse(string $userId): AnonymousResourceCollection
     {
         $events = LeaveHistoryQuery::eventsForUser(
             userId: $userId,

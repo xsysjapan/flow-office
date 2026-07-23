@@ -11,6 +11,6 @@ class ApproveAttendanceMonth implements Command
 {
     public function __construct(
         public readonly int $attendanceMonthId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

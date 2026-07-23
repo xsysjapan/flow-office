@@ -15,7 +15,7 @@ class AttachmentUploaded extends ShouldBeStored
         public readonly string $attachmentId,
         public readonly string $ownerType,
         public readonly int|string $ownerId,
-        public readonly int $uploadedByUserId,
+        public readonly string $uploadedByUserId,
         public readonly string $storedPath,
         public readonly string $fileName,
         public readonly string $mimeType,

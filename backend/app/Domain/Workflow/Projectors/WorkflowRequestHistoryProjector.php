@@ -45,7 +45,7 @@ class WorkflowRequestHistoryProjector extends Projector
         $this->record($event, WorkflowRequestHistoryAction::CANCELLED, $event->cancelledByUserId, $event->reason);
     }
 
-    private function record(ShouldBeStored $event, string $action, ?int $actorUserId, ?string $comment = null): void
+    private function record(ShouldBeStored $event, string $action, ?string $actorUserId, ?string $comment = null): void
     {
         WorkflowRequestHistoryEntry::query()->updateOrCreate(
             ['stored_event_id' => $event->storedEventId()],

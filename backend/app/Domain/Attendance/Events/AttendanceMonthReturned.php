@@ -8,7 +8,7 @@ class AttendanceMonthReturned implements DomainEvent
 {
     public function __construct(
         public readonly int $attendanceMonthId,
-        public readonly int $returnedByUserId,
+        public readonly string $returnedByUserId,
         public readonly string $comment,
     ) {}
 

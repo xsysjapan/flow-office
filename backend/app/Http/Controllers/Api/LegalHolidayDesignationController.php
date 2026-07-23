@@ -23,13 +23,13 @@ class LegalHolidayDesignationController extends Controller
         operationId: 'legalHolidayDesignations.store',
         summary: '週の法定休日を指定する',
         tags: ['法定休日指定'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'week_start_date', 'designated_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'week_start_date', type: 'string', format: 'date'), new OA\Property(property: 'designated_date', type: 'string', format: 'date'), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'week_start_date', 'designated_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'week_start_date', type: 'string', format: 'date'), new OA\Property(property: 'designated_date', type: 'string', format: 'date'), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'week_start_date' => ['required', 'date'],
             'designated_date' => ['required', 'date'],
             'reason' => ['required', 'string'],

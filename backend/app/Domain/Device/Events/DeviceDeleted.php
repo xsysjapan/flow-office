@@ -11,7 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class DeviceDeleted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
         public readonly string $deletedAt,
     ) {}
 }

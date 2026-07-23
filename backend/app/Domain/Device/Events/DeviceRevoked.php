@@ -7,7 +7,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class DeviceRevoked extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $revokedByUserId,
+        public readonly string $revokedByUserId,
         public readonly ?string $reason,
         public readonly string $revokedAt,
     ) {}

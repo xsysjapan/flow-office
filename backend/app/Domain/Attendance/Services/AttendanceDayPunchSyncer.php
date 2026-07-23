@@ -43,7 +43,7 @@ class AttendanceDayPunchSyncer
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
     ) {}
 
-    public function sync(int $userId, string $workDate): void
+    public function sync(string $userId, string $workDate): void
     {
         $punches = AttendancePunch::query()
             ->where('user_id', $userId)
@@ -145,7 +145,7 @@ class AttendanceDayPunchSyncer
      *
      * @param  Collection<int, AttendancePunch>  $punches  同一user_id・work_dateのpunched_at昇順の打刻一覧
      */
-    private function syncLiveStatus(?AttendanceDay $day, int $userId, string $workDate, Collection $punches): void
+    private function syncLiveStatus(?AttendanceDay $day, string $userId, string $workDate, Collection $punches): void
     {
         $latestPunch = $punches->last();
         if ($latestPunch === null) {
@@ -193,7 +193,7 @@ class AttendanceDayPunchSyncer
         );
     }
 
-    private function findOrCreateDay(int $userId, string $workDate): AttendanceDay
+    private function findOrCreateDay(string $userId, string $workDate): AttendanceDay
     {
         $shiftAssignment = EmployeeShiftAssignment::query()
             ->where('user_id', $userId)

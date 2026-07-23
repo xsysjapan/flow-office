@@ -12,6 +12,6 @@ class CreateDefaultWorkStyle implements Command
      */
     public function __construct(
         public readonly array $overrides,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 }

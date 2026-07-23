@@ -16,6 +16,6 @@ class UpdateDeviceRoles implements Command
     public function __construct(
         public readonly string $deviceId,
         public readonly array $roleTypes,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }

@@ -11,7 +11,7 @@ class ReturnWorkflowRequest implements Command
 {
     public function __construct(
         public readonly string $workflowRequestId,
-        public readonly int $returnedByUserId,
+        public readonly string $returnedByUserId,
         public readonly string $comment,
     ) {}
 }

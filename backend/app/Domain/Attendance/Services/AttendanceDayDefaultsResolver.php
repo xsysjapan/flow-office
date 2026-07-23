@@ -30,7 +30,7 @@ class AttendanceDayDefaultsResolver
     /**
      * @return array{source: string, actual_start_at: ?string, actual_end_at: ?string, breaks: array<int, array{start: string, end: ?string}>}
      */
-    public function resolve(int $userId, string $workDate): array
+    public function resolve(string $userId, string $workDate): array
     {
         $workDateCarbon = Carbon::parse($workDate);
 
@@ -61,7 +61,7 @@ class AttendanceDayDefaultsResolver
      * @param  Collection<int, AttendancePunch>  $punches
      * @return array{source: string, actual_start_at: ?string, actual_end_at: ?string, breaks: array<int, array{start: string, end: ?string}>}
      */
-    private function resolveFromPunches(int $userId, Carbon $workDate, $punches): array
+    private function resolveFromPunches(string $userId, Carbon $workDate, $punches): array
     {
         $shift = EmployeeShiftAssignment::query()
             ->where('user_id', $userId)
@@ -127,7 +127,7 @@ class AttendanceDayDefaultsResolver
     /**
      * @return array{source: string, actual_start_at: ?string, actual_end_at: ?string, breaks: array<int, array{start: string, end: ?string}>}
      */
-    private function resolveFromSystemDefault(int $userId, Carbon $workDate): array
+    private function resolveFromSystemDefault(string $userId, Carbon $workDate): array
     {
         $workStyle = $this->workStyleFallbackResolver->resolveForUser($userId, $workDate);
 

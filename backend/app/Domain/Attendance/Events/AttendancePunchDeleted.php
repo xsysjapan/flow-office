@@ -9,7 +9,7 @@ class AttendancePunchDeleted implements DomainEvent
     public function __construct(
         public readonly int $attendancePunchId,
         public readonly string $reason,
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
     ) {}
 
     public function eventType(): string

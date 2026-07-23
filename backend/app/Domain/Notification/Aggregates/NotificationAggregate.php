@@ -14,7 +14,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  */
 class NotificationAggregate extends AggregateRoot
 {
-    public function queue(int $recipientUserId, string $title, string $summary, ?string $detailUrl, string $queuedAt): self
+    public function queue(string $recipientUserId, string $title, string $summary, ?string $detailUrl, string $queuedAt): self
     {
         $this->recordThat(new NotificationQueued(
             recipientUserId: $recipientUserId,
@@ -34,7 +34,7 @@ class NotificationAggregate extends AggregateRoot
         return $this;
     }
 
-    public function confirm(int $confirmedByUserId, string $confirmedAt): self
+    public function confirm(string $confirmedByUserId, string $confirmedAt): self
     {
         $this->recordThat(new NotificationConfirmed(confirmedByUserId: $confirmedByUserId, confirmedAt: $confirmedAt));
 

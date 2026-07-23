@@ -149,14 +149,14 @@ class AttendanceController extends Controller
         operationId: 'attendance.week',
         summary: '週次勤怠を取得する',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'start_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'start_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function week(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
             'start_date' => ['required', 'date'],
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'string', 'exists:users,id'],
         ]);
         $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の週次勤怠を閲覧する権限がありません。');
         $requestedDate = Carbon::parse($data['start_date']);
@@ -184,7 +184,7 @@ class AttendanceController extends Controller
      * と同じ基準(勤務形態に紐づくカレンダーの`week_starts_on`)に揃える。勤務予定が
      * まだ無い場合はカレンダーの既定値と同じ月曜(ISO: 1)を使う。
      */
-    private function resolveWeekStartsOn(int $userId, Carbon $referenceDate): int
+    private function resolveWeekStartsOn(string $userId, Carbon $referenceDate): int
     {
         $workStyle = EmployeeShiftAssignment::query()
             ->where('user_id', $userId)
@@ -223,13 +223,13 @@ class AttendanceController extends Controller
         operationId: 'attendance.dayDefaults',
         summary: '日次勤怠入力の初期値を取得する',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'work_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'work_date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function dayDefaults(Request $request, AttendanceDayDefaultsResolver $resolver): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'work_date' => ['required', 'date'],
         ]);
 
@@ -247,13 +247,13 @@ class AttendanceController extends Controller
         operationId: 'attendance.days.store',
         summary: '日次勤怠を作成する',
         tags: ['勤怠'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'leave_segments', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'actual_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'actual_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'breaks', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'work_type', type: 'string', nullable: true), new OA\Property(property: 'note', type: 'string', nullable: true), new OA\Property(property: 'leave_segments', type: 'array', items: new OA\Items(type: 'object')), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeDay(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'work_date' => ['required', 'date'],
             'actual_start_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
             'actual_end_at' => ['nullable', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],
@@ -426,12 +426,12 @@ class AttendanceController extends Controller
         operationId: 'attendance.months.show',
         summary: '月次勤怠を取得する',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadminのみ', schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function month(Request $request, string $yearMonth): array
     {
-        $data = $request->validate(['user_id' => ['nullable', 'integer', 'exists:users,id']]);
+        $data = $request->validate(['user_id' => ['nullable', 'string', 'exists:users,id']]);
         $userId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の月次勤怠を閲覧する権限がありません。');
 
         $days = AttendanceDay::query()
@@ -464,12 +464,12 @@ class AttendanceController extends Controller
         summary: '月次勤怠を提出する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'yearMonth', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['approver_user_id'], properties: [new OA\Property(property: 'approver_user_id', type: 'integer')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['approver_user_id'], properties: [new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function submitMonth(Request $request, string $yearMonth, CommandBus $commandBus): AttendanceMonthResource
     {
-        $data = $request->validate(['approver_user_id' => ['required', 'integer', 'exists:users,id']]);
+        $data = $request->validate(['approver_user_id' => ['required', 'string', 'exists:users,id']]);
 
         $month = $commandBus->dispatch(new SubmitAttendanceMonth(
             userId: $request->user()->id,
@@ -558,10 +558,10 @@ class AttendanceController extends Controller
         operationId: 'attendance.months.forUser',
         summary: '指定した社員の月次勤怠一覧を取得する(管理者のみ)',
         tags: ['勤怠'],
-        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function monthsForUser(int $userId): AnonymousResourceCollection
+    public function monthsForUser(string $userId): AnonymousResourceCollection
     {
         $months = AttendanceMonth::query()
             ->with('approver')

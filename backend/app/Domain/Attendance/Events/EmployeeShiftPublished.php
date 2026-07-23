@@ -12,9 +12,9 @@ class EmployeeShiftPublished implements DomainEvent
 {
     public function __construct(
         public readonly int $employeeShiftAssignmentId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $workDate,
-        public readonly int $publishedByUserId,
+        public readonly string $publishedByUserId,
     ) {}
 
     public function eventType(): string

@@ -16,7 +16,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class PaidLeaveGrantAggregate extends AggregateRoot
 {
     public function grant(
-        int $userId,
+        string $userId,
         string $grantedOn,
         string $expiresOn,
         float $grantedDays,
@@ -34,7 +34,7 @@ class PaidLeaveGrantAggregate extends AggregateRoot
     }
 
     public function use(
-        int $userId,
+        string $userId,
         string $paidLeaveRequestId,
         int $attendanceDayId,
         string $usedOn,
@@ -55,7 +55,7 @@ class PaidLeaveGrantAggregate extends AggregateRoot
         return $this;
     }
 
-    public function raiseWarning(int $userId, string $warningType, string $message): self
+    public function raiseWarning(string $userId, string $warningType, string $message): self
     {
         $this->recordThat(new PaidLeaveWarningRaised(userId: $userId, warningType: $warningType, message: $message));
 

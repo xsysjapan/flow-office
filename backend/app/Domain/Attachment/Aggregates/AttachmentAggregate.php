@@ -15,7 +15,7 @@ class AttachmentAggregate extends AggregateRoot
     public function uploadAttachment(
         string $ownerType,
         int|string $ownerId,
-        int $uploadedByUserId,
+        string $uploadedByUserId,
         string $storedPath,
         string $fileName,
         string $mimeType,
@@ -35,7 +35,7 @@ class AttachmentAggregate extends AggregateRoot
         return $this;
     }
 
-    public function downloadAttachment(int $downloadedByUserId): self
+    public function downloadAttachment(string $downloadedByUserId): self
     {
         $this->recordThat(new AttachmentDownloaded(
             attachmentId: $this->uuid(),

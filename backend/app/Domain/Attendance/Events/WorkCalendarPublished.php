@@ -11,7 +11,7 @@ class WorkCalendarPublished implements DomainEvent
 {
     public function __construct(
         public readonly int $workCalendarId,
-        public readonly int $publishedByUserId,
+        public readonly string $publishedByUserId,
     ) {}
 
     public function eventType(): string

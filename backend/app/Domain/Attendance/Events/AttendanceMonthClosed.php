@@ -8,7 +8,7 @@ class AttendanceMonthClosed implements DomainEvent
 {
     public function __construct(
         public readonly int $attendanceMonthId,
-        public readonly int $closedByUserId,
+        public readonly string $closedByUserId,
     ) {}
 
     public function eventType(): string

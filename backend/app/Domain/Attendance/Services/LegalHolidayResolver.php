@@ -43,7 +43,7 @@ class LegalHolidayResolver
      * 指定した週(week_start_dateからの7日間)の法定休日の日付を解決する。
      * undetermined以外のルールでは呼び出し側が使わない想定(常にnullを返す)。
      */
-    public function resolveDateForWeek(int $userId, Carbon $weekStart): ?Carbon
+    public function resolveDateForWeek(string $userId, Carbon $weekStart): ?Carbon
     {
         $designation = LegalHolidayDesignation::query()
             ->where('user_id', $userId)
@@ -57,7 +57,7 @@ class LegalHolidayResolver
         return $this->autoDetect($userId, $weekStart);
     }
 
-    private function autoDetect(int $userId, Carbon $weekStart): ?Carbon
+    private function autoDetect(string $userId, Carbon $weekStart): ?Carbon
     {
         $weekEnd = $weekStart->copy()->addDays(6);
 

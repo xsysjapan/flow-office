@@ -74,7 +74,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
     /**
      * @return array<string, mixed>
      */
-    private function buildSnapshot(int $userId, string $yearMonth): array
+    private function buildSnapshot(string $userId, string $yearMonth): array
     {
         $dayCount = AttendanceDay::query()
             ->where('user_id', $userId)

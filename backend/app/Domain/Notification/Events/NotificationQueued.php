@@ -12,7 +12,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class NotificationQueued extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $recipientUserId,
+        public readonly string $recipientUserId,
         public readonly string $title,
         public readonly string $summary,
         public readonly ?string $detailUrl,

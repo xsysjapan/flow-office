@@ -22,6 +22,6 @@ class UpdateDeviceSettings implements Command
         public readonly bool $allowOffline,
         public readonly bool $requireLocation,
         public readonly bool $autoDetectPunchType,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }

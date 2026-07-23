@@ -11,6 +11,6 @@ class DisableAuthenticationKey implements Command
 {
     public function __construct(
         public readonly string $authenticationKeyId,
-        public readonly int $disabledByUserId,
+        public readonly string $disabledByUserId,
     ) {}
 }

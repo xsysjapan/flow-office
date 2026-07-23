@@ -13,7 +13,7 @@ class WorkStyleDefaultChanged implements DomainEvent
     public function __construct(
         public readonly int $workStyleId,
         public readonly ?int $previousDefaultWorkStyleId,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
     ) {}
 
     public function eventType(): string

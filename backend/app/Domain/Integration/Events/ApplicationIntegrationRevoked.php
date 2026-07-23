@@ -7,6 +7,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class ApplicationIntegrationRevoked extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $revokedByUserId,
+        public readonly string $revokedByUserId,
     ) {}
 }

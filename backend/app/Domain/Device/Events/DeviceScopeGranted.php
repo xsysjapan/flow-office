@@ -8,6 +8,6 @@ class DeviceScopeGranted extends ShouldBeStored
 {
     public function __construct(
         public readonly string $scope,
-        public readonly int $grantedByUserId,
+        public readonly string $grantedByUserId,
     ) {}
 }

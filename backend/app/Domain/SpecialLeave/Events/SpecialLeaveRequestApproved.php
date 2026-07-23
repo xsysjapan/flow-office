@@ -7,6 +7,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class SpecialLeaveRequestApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

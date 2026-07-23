@@ -9,7 +9,7 @@ class BackOfficeTaskStatusChanged extends ShouldBeStored
     public function __construct(
         public readonly string $previousStatus,
         public readonly string $newStatus,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
         public readonly ?string $comment,
     ) {}
 }

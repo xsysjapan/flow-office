@@ -7,7 +7,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class WorkflowRequestCancelled extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $cancelledByUserId,
+        public readonly string $cancelledByUserId,
         public readonly string $reason,
     ) {}
 }

@@ -10,12 +10,12 @@ use App\Domain\EventSourcing\Contracts\Command;
 class AssignShiftPatternDay implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $workDate,
         public readonly int $workStyleId,
         public readonly int $shiftPatternId,
         public readonly bool $isLegalHoliday,
         public readonly bool $isCompanyHoliday,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedByUserId,
     ) {}
 }

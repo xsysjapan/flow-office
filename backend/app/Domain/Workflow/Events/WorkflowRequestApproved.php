@@ -11,6 +11,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class WorkflowRequestApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

@@ -88,7 +88,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
         return $designation;
     }
 
-    private function resolveWorkStyle(int $userId, Carbon $weekStart, Carbon $weekEnd): ?WorkStyle
+    private function resolveWorkStyle(string $userId, Carbon $weekStart, Carbon $weekEnd): ?WorkStyle
     {
         return EmployeeShiftAssignment::query()
             ->where('user_id', $userId)
@@ -100,7 +100,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
             ?->workStyle;
     }
 
-    private function recalculateWeek(int $userId, Carbon $weekStart, Carbon $weekEnd): void
+    private function recalculateWeek(string $userId, Carbon $weekStart, Carbon $weekEnd): void
     {
         $days = AttendanceDay::query()
             ->where('user_id', $userId)

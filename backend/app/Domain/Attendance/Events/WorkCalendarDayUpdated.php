@@ -18,7 +18,7 @@ class WorkCalendarDayUpdated implements DomainEvent
         public readonly bool $isLegalHoliday,
         public readonly bool $isCompanyHoliday,
         public readonly ?string $note,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 
     public function eventType(): string

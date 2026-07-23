@@ -27,13 +27,13 @@ class EmployeeRotationAssignmentController extends Controller
         operationId: 'employeeRotationAssignments.show',
         summary: '社員のローテーション割当を取得する',
         tags: ['ローテーション割当'],
-        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function show(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
         ]);
 
         $assignment = EmployeeRotationAssignment::query()
@@ -49,13 +49,13 @@ class EmployeeRotationAssignmentController extends Controller
         operationId: 'employeeRotationAssignments.store',
         summary: '社員にローテーションを割り当てる',
         tags: ['ローテーション割当'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'rotation_pattern_id', type: 'integer'), new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'rotation_pattern_id', type: 'integer'), new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'rotation_pattern_id' => ['required', 'integer', 'exists:rotation_patterns,id'],
             'rotation_start_date' => ['required', 'date'],
             'rotation_start_position' => ['required', 'integer', 'min:0'],
@@ -88,13 +88,13 @@ class EmployeeRotationAssignmentController extends Controller
         operationId: 'employeeRotationAssignments.generate',
         summary: 'ローテーションから勤務予定を生成する',
         tags: ['ローテーション割当'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to'], properties: [new OA\Property(property: 'user_id', type: 'integer'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function generate(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'exists:users,id'],
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
             'overwrite_mode' => ['nullable', Rule::in([

@@ -16,6 +16,6 @@ class EditEmployeeShiftAssignment implements Command
         public readonly ?string $plannedEndAt,
         public readonly int $plannedBreakMinutes,
         public readonly string $reason,
-        public readonly int $editedByUserId,
+        public readonly string $editedByUserId,
     ) {}
 }

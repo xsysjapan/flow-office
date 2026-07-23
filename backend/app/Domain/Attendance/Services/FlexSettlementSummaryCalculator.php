@@ -28,7 +28,7 @@ class FlexSettlementSummaryCalculator
     /**
      * @return array{settlement_period_start: string, settlement_period_end: string, required_minutes: int, actual_minutes: int, remaining_minutes: int, remaining_working_days: int, per_day_required_minutes: int, core_time_violation_days: int, late_night_work_minutes: int, legal_holiday_work_minutes: int}|null
      */
-    public function calculateForMonth(int $userId, string $yearMonth): ?array
+    public function calculateForMonth(string $userId, string $yearMonth): ?array
     {
         $workStyle = $this->resolveWorkStyle($userId, $yearMonth);
 
@@ -79,7 +79,7 @@ class FlexSettlementSummaryCalculator
      * 働き方 → システムのデフォルト働き方)。清算期間ダッシュボードは月単位の働き方を前提とする
      * ため、日別のシフト割当由来の働き方は見ない。
      */
-    private function resolveWorkStyle(int $userId, string $yearMonth): ?WorkStyle
+    private function resolveWorkStyle(string $userId, string $yearMonth): ?WorkStyle
     {
         $monthlyAssignment = UserWorkStyleMonthlyAssignment::query()
             ->where('user_id', $userId)

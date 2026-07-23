@@ -12,10 +12,10 @@ class UserWorkStyleAssignedForMonth implements DomainEvent
 {
     public function __construct(
         public readonly int $userWorkStyleMonthlyAssignmentId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $yearMonth,
         public readonly int $workStyleId,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedByUserId,
     ) {}
 
     public function eventType(): string

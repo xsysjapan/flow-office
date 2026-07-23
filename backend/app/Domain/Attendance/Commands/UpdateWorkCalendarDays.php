@@ -12,6 +12,6 @@ class UpdateWorkCalendarDays implements Command
     public function __construct(
         public readonly int $workCalendarId,
         public readonly array $days,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }
