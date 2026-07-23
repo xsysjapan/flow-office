@@ -81,7 +81,7 @@ class DeviceDetailAndSettingsTest extends TestCase
             'location_name' => '倉庫入口',
         ])->assertSuccessful();
 
-        $this->assertDatabaseHas('stored_events', [
+        $this->assertDatabaseHas('legacy_stored_events', [
             'aggregate_type' => 'device',
             'aggregate_id' => (string) $device->id,
             'event_type' => 'device.settings_updated',

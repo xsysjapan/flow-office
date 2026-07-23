@@ -641,7 +641,7 @@ export interface ShiftScheduleReview {
 }
 
 export interface Attachment {
-  id: number
+  id: string
   file_name: string
   mime_type: string
   file_size: number

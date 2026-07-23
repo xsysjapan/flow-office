@@ -5,12 +5,12 @@ namespace Tests\Feature\Attachment;
 use App\Models\AttendanceDay;
 use App\Models\BackOfficeTask;
 use App\Models\RequestType;
-use App\Models\StoredEvent;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -53,9 +53,9 @@ class AttachmentTest extends TestCase
         $response->assertCreated();
         $attachmentId = $response->json('id');
 
-        $event = StoredEvent::query()->where('aggregate_type', 'attachment')->where('aggregate_id', (string) $attachmentId)->first();
+        $event = EloquentStoredEvent::query()->where('aggregate_uuid', $attachmentId)->first();
         $this->assertNotNull($event);
-        $this->assertSame('attachment.uploaded', $event->event_type);
+        $this->assertSame('attachment.uploaded', $event->event_class);
     }
 
     public function test_upload_is_rejected_when_it_exceeds_the_request_types_max_size(): void
@@ -110,11 +110,11 @@ class AttachmentTest extends TestCase
 
         $this->actingAs($approver)->get("/api/attachments/{$attachmentId}/download")->assertSuccessful();
 
-        $downloadedEvent = StoredEvent::query()
-            ->where('aggregate_type', 'attachment')->where('aggregate_id', (string) $attachmentId)
-            ->where('event_type', 'attachment.downloaded')->first();
+        $downloadedEvent = EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $attachmentId)
+            ->where('event_class', 'attachment.downloaded')->first();
         $this->assertNotNull($downloadedEvent);
-        $this->assertSame($approver->id, $downloadedEvent->payload['downloaded_by_user_id']);
+        $this->assertSame($approver->id, $downloadedEvent->event_properties['downloadedByUserId']);
     }
 
     public function test_assigned_backoffice_staff_can_download_an_attachment_on_their_task(): void

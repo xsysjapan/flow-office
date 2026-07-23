@@ -234,7 +234,7 @@ class DeviceRegistrationTest extends TestCase
 
         $device->refresh();
         $this->assertSame(DeviceStatus::PENDING_PAIRING, $device->status);
-        $this->assertDatabaseHas('stored_events', [
+        $this->assertDatabaseHas('legacy_stored_events', [
             'aggregate_type' => 'device',
             'aggregate_id' => (string) $device->id,
             'event_type' => 'device.pairing_reissued',
@@ -279,7 +279,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertFalse($device->hasRole(DeviceRoleType::ATTENDANCE_READER));
         $this->assertTrue($device->hasRole(DeviceRoleType::AUTHENTICATION_DEVICE));
         $this->assertTrue($device->hasRole(DeviceRoleType::ACCESS_CONTROL));
-        $this->assertDatabaseHas('stored_events', [
+        $this->assertDatabaseHas('legacy_stored_events', [
             'aggregate_type' => 'device',
             'aggregate_id' => (string) $device->id,
             'event_type' => 'device.role_assigned',
@@ -308,7 +308,7 @@ class DeviceRegistrationTest extends TestCase
         $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
 
         $this->assertSoftDeleted('devices', ['id' => $device->id]);
-        $this->assertDatabaseHas('stored_events', [
+        $this->assertDatabaseHas('legacy_stored_events', [
             'aggregate_type' => 'device',
             'aggregate_id' => (string) $device->id,
             'event_type' => 'device.deleted',

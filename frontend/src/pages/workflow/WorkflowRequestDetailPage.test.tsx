@@ -144,7 +144,7 @@ describe('WorkflowRequestDetailPage', () => {
 
   it('uploads a selected file as an attachment', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
-      id: 1,
+      id: 'attachment-1',
       file_name: 'receipt.pdf',
       mime_type: 'application/pdf',
       file_size: 100,
@@ -168,11 +168,11 @@ describe('WorkflowRequestDetailPage', () => {
     vi.spyOn(attachmentsApi, 'downloadAttachment').mockResolvedValue(undefined)
 
     renderPage(submittedRequest, [
-      { id: 9, file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 1, created_at: null },
+      { id: 'attachment-9', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 1, created_at: null },
     ])
 
     await userEvent.click(await screen.findByRole('button', { name: 'ダウンロード' }))
 
-    await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith(9, 'receipt.pdf'))
+    await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith('attachment-9', 'receipt.pdf'))
   })
 })

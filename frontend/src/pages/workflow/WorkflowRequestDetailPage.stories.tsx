@@ -42,7 +42,7 @@ const submittedRequest: WorkflowRequest = {
 }
 
 const sampleAttachments: Attachment[] = [
-  { id: 1, file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 20480, uploaded_by: 1, created_at: null },
+  { id: 'attachment-1', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 20480, uploaded_by: 1, created_at: null },
 ]
 
 const sampleHistory: StoredEvent[] = [
