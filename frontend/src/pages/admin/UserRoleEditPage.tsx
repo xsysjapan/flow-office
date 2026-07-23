@@ -29,7 +29,7 @@ type WorkStyleMode = 'default' | 'specify'
  */
 export function UserRoleEditPage() {
   const { id } = useParams<{ id: string }>()
-  const userId = Number(id)
+  const userId = id ?? ''
   const { data: user, isLoading: isLoadingUser, error: userError } = useUser(userId)
   const { data: roles, isLoading: isLoadingRoles, error: rolesError } = useRoles()
   const { data: workStyles } = useWorkStyles()

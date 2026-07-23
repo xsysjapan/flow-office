@@ -11,7 +11,7 @@ import { formatDate } from '../../utils/weekDates'
 const date = '2026-07-06'
 
 const currentUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,
@@ -26,7 +26,7 @@ vi.mock('../../auth/useAuth', () => ({
 
 const recordedDay: AttendanceDay = {
   id: 1,
-  user_id: 1,
+  user_id: 'user-1',
   work_date: date,
   status: 'clocked_out',
   actual_start_at: `${date}T09:00:00+09:00`,
@@ -141,7 +141,7 @@ describe('AttendanceDayPage', () => {
   it('shows the punch log and corrects an active punch (UC-A013)', async () => {
     const punch: AttendancePunch = {
       id: 10,
-      user_id: 1,
+      user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
       punched_at: `${date}T09:30:00+09:00`,
@@ -176,7 +176,7 @@ describe('AttendanceDayPage', () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'createPunch').mockResolvedValue({
       id: 10,
-      user_id: 1,
+      user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
       punched_at: `${date}T09:00:00+09:00`,
@@ -211,7 +211,7 @@ describe('AttendanceDayPage', () => {
   it('shows only active punches by default and marks a corrected replacement as edited', async () => {
     const originalPunch: AttendancePunch = {
       id: 10,
-      user_id: 1,
+      user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
       punched_at: `${date}T09:30:00+09:00`,
@@ -219,7 +219,7 @@ describe('AttendanceDayPage', () => {
       note: null,
       status: 'corrected',
       correction_reason: '打刻時刻の入力ミス',
-      corrected_by_user_id: 1,
+      corrected_by_user_id: 'user-1',
       corrected_at: `${date}T10:00:00+09:00`,
       superseded_by_punch_id: 11,
       created_at: null,
@@ -250,7 +250,7 @@ describe('AttendanceDayPage', () => {
   it('cancels an in-progress punch correction when returning to view mode', async () => {
     const punch: AttendancePunch = {
       id: 10,
-      user_id: 1,
+      user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
       punched_at: `${date}T09:30:00+09:00`,
@@ -295,7 +295,7 @@ describe('AttendanceDayPage', () => {
 
     await waitFor(() =>
       expect(attendanceApi.createAttendanceDay).toHaveBeenCalledWith(
-        expect.objectContaining({ user_id: 1, work_date: date, reason: '実績の入力漏れ' }),
+        expect.objectContaining({ user_id: 'user-1', work_date: date, reason: '実績の入力漏れ' }),
       ),
     )
   })

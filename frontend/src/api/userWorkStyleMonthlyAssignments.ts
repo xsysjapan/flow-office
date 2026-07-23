@@ -1,12 +1,12 @@
 import { apiFetch } from './client'
 import type { UserWorkStyleMonthlyAssignment } from './types'
 
-export function fetchUserWorkStyleMonthlyAssignments(userId: number): Promise<UserWorkStyleMonthlyAssignment[]> {
+export function fetchUserWorkStyleMonthlyAssignments(userId: string): Promise<UserWorkStyleMonthlyAssignment[]> {
   return apiFetch('/user-work-style-monthly-assignments', { query: { user_id: userId } })
 }
 
 export interface AssignUserWorkStyleForMonthInput {
-  user_id: number
+  user_id: string
   year_month: string
   work_style_id: number
 }

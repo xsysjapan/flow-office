@@ -5,7 +5,7 @@ import type { BackOfficeTask } from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee = {
-  id: 2,
+  id: 'assignee-1',
   name: '担当者花子',
   email: 'hanako@example.com',
   department: null,

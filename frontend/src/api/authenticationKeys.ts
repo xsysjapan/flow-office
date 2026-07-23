@@ -1,12 +1,12 @@
 import { apiFetch } from './client'
 import type { AuthenticationKey, AuthenticationKeyType } from './types'
 
-export function fetchAuthenticationKeysForUser(userId: number): Promise<AuthenticationKey[]> {
+export function fetchAuthenticationKeysForUser(userId: string): Promise<AuthenticationKey[]> {
   return apiFetch(`/users/${userId}/authentication-keys`)
 }
 
 export interface IssueAuthenticationKeyInput {
-  user_id?: number
+  user_id?: string
   key_type: AuthenticationKeyType
   display_name: string
   raw_key_value: string

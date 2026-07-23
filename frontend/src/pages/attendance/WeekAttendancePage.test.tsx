@@ -12,7 +12,7 @@ const weekStart = formatDate(mondayOf(new Date()))
 
 const mondayRecord: AttendanceDay = {
   id: 1,
-  user_id: 1,
+  user_id: '11111111-1111-1111-1111-111111111111',
   work_date: weekStart,
   status: 'clocked_out',
   actual_start_at: `${weekStart}T09:00:00+09:00`,

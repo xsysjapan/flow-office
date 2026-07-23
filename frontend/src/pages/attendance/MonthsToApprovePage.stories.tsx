@@ -6,7 +6,7 @@ import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { MonthsToApprovePage } from './MonthsToApprovePage'
 
 const approverUser: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -18,7 +18,7 @@ const approverUser: User = {
 
 const hrStaffUser: User = {
   ...approverUser,
-  id: 3,
+  id: 'hr-1',
   name: '人事一郎',
   roles: ['hr_staff'],
 }
@@ -26,7 +26,7 @@ const hrStaffUser: User = {
 const months: AttendanceMonth[] = [
   {
     id: 1,
-    user_id: 1,
+    user_id: 'user-1',
     year_month: '2026-07',
     status: 'submitted',
     approver: approverUser,
@@ -39,7 +39,7 @@ const months: AttendanceMonth[] = [
   },
   {
     id: 2,
-    user_id: 4,
+    user_id: 'user-4',
     year_month: '2026-06',
     status: 'approved',
     approver: approverUser,

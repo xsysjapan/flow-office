@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
 export interface UserPickerProps {
   id: string
-  value: number | undefined
-  onChange: (userId: number | undefined) => void
+  value: string | undefined
+  onChange: (userId: string | undefined) => void
   placeholder?: string
 }
 

@@ -26,7 +26,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
 
 const notStartedDay: AttendanceDay = {
   id: 1,
-  user_id: 1,
+  user_id: '11111111-1111-1111-1111-111111111111',
   work_date: '2026-07-09',
   status: 'not_started',
   actual_start_at: null,

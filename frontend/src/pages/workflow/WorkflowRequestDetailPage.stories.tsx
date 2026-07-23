@@ -7,7 +7,7 @@ import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
-  id: 1,
+  id: 'applicant-1',
   name: '申請者太郎',
   email: 'taro@example.com',
   department: null,
@@ -17,7 +17,7 @@ const applicant: User = {
 }
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -42,21 +42,21 @@ const submittedRequest: WorkflowRequest = {
 }
 
 const sampleAttachments: Attachment[] = [
-  { id: 'attachment-1', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 20480, uploaded_by: 1, created_at: null },
+  { id: 'attachment-1', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 20480, uploaded_by: 'applicant-1', created_at: null },
 ]
 
 const sampleHistory: WorkflowRequestHistoryEntry[] = [
   {
     id: 1,
     action: 'drafted',
-    actor_user_id: 1,
+    actor_user_id: 'applicant-1',
     comment: null,
     occurred_at: '2026-07-01T00:00:00+09:00',
   },
   {
     id: 2,
     action: 'submitted',
-    actor_user_id: 1,
+    actor_user_id: 'applicant-1',
     comment: null,
     occurred_at: '2026-07-01T01:00:00+09:00',
   },

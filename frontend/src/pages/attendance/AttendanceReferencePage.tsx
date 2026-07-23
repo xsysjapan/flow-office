@@ -67,7 +67,7 @@ function ReadOnlyDayRow({ date, day }: { date: string; day: AttendanceDay | unde
   )
 }
 
-function MonthlyReferenceView({ userId }: { userId: number }) {
+function MonthlyReferenceView({ userId }: { userId: string }) {
   const [yearMonth, setYearMonth] = useState(() => formatDate(new Date()).slice(0, 7))
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
@@ -142,7 +142,7 @@ function MonthlyReferenceView({ userId }: { userId: number }) {
   )
 }
 
-function WeeklyReferenceView({ userId }: { userId: number }) {
+function WeeklyReferenceView({ userId }: { userId: string }) {
   const [weekStart, setWeekStart] = useState(() => formatDate(mondayOf(new Date())))
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const { data, isLoading, error } = useWeek(weekStart, userId)
@@ -202,7 +202,7 @@ function WeeklyReferenceView({ userId }: { userId: number }) {
   )
 }
 
-function DailyReferenceView({ userId }: { userId: number }) {
+function DailyReferenceView({ userId }: { userId: string }) {
   const [date, setDate] = useState(() => formatDate(new Date()))
   const today = formatDate(new Date())
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
@@ -311,7 +311,7 @@ function DailyReferenceView({ userId }: { userId: number }) {
  * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。
  */
 export function AttendanceReferencePage() {
-  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
   const [viewMode, setViewMode] = useState<ViewMode>('month')
 
   return (

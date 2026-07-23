@@ -56,7 +56,7 @@ export function useSubmitWorkflowRequest() {
   const invalidate = useInvalidateWorkflowRequests()
 
   return useMutation({
-    mutationFn: ({ id, approverUserId }: { id: string; approverUserId?: number }) =>
+    mutationFn: ({ id, approverUserId }: { id: string; approverUserId?: string }) =>
       submitWorkflowRequest(id, approverUserId),
     onSuccess: (_data, { id }) => invalidate(id),
   })

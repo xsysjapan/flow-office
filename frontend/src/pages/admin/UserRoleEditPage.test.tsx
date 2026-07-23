@@ -12,7 +12,7 @@ import { formatDate } from '../../utils/weekDates'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
 const targetUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '山田太郎',
   email: 'yamada@example.com',
   department: '総務部',
@@ -114,7 +114,7 @@ describe('UserRoleEditPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() =>
-      expect(usersApi.updateUserRoles).toHaveBeenCalledWith(1, ['employee', 'general_affairs_staff', 'admin']),
+      expect(usersApi.updateUserRoles).toHaveBeenCalledWith('user-1', ['employee', 'general_affairs_staff', 'admin']),
     )
     expect(await screen.findByText('保存しました')).toBeInTheDocument()
   })
@@ -128,7 +128,7 @@ describe('UserRoleEditPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() =>
-      expect(usersApi.updateUserRoles).toHaveBeenCalledWith(1, ['general_affairs_staff']),
+      expect(usersApi.updateUserRoles).toHaveBeenCalledWith('user-1', ['general_affairs_staff']),
     )
   })
 
@@ -147,7 +147,7 @@ describe('UserRoleEditPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '入社日を保存する' }))
 
     await waitFor(() =>
-      expect(usersApi.updateUserHireDate).toHaveBeenCalledWith(1, '2024-04-01'),
+      expect(usersApi.updateUserHireDate).toHaveBeenCalledWith('user-1', '2024-04-01'),
     )
   })
 
@@ -159,7 +159,7 @@ describe('UserRoleEditPage', () => {
     await userEvent.clear(screen.getByLabelText('退社日(未設定なら在籍中)'))
     await userEvent.click(screen.getByRole('button', { name: '退社日を保存する' }))
 
-    await waitFor(() => expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith(1, null))
+    await waitFor(() => expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith('user-1', null))
   })
 
   it('defaults to using the company default work style when no monthly assignment exists', async () => {
@@ -173,11 +173,11 @@ describe('UserRoleEditPage', () => {
   it('assigns a specific work style for the current month', async () => {
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
       id: 10,
-      user_id: 1,
+      user_id: 'user-1',
       year_month: formatDate(new Date()).slice(0, 7),
       work_style_id: 2,
       work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
-      assigned_by_user_id: 99,
+      assigned_by_user_id: 'admin-1',
     })
     renderPage(targetUser)
 
@@ -187,7 +187,7 @@ describe('UserRoleEditPage', () => {
 
     await waitFor(() =>
       expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
-        user_id: 1,
+        user_id: 'user-1',
         year_month: formatDate(new Date()).slice(0, 7),
         work_style_id: 2,
       }),
@@ -201,11 +201,11 @@ describe('UserRoleEditPage', () => {
       workStyleHistory: [
         {
           id: 42,
-          user_id: 1,
+          user_id: 'user-1',
           year_month: currentYearMonth,
           work_style_id: 2,
           work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
-          assigned_by_user_id: 99,
+          assigned_by_user_id: 'admin-1',
         },
       ],
     })

@@ -12,7 +12,7 @@ const types: SpecialLeaveType[] = [
 const grants: SpecialLeaveGrant[] = [
   {
     id: 'grant-1',
-    user_id: 1,
+    user_id: '11111111-1111-1111-1111-111111111111',
     special_leave_type_id: 1,
     special_leave_type_name: '誕生日休暇',
     granted_on: '2026-07-01',
@@ -24,7 +24,7 @@ const grants: SpecialLeaveGrant[] = [
   },
   {
     id: 'grant-2',
-    user_id: 1,
+    user_id: '11111111-1111-1111-1111-111111111111',
     special_leave_type_id: 2,
     special_leave_type_name: 'リフレッシュ休暇',
     granted_on: '2026-04-01',
@@ -39,7 +39,7 @@ const grants: SpecialLeaveGrant[] = [
 const requests: SpecialLeaveRequest[] = [
   {
     id: 'request-1',
-    user_id: 1,
+    user_id: '11111111-1111-1111-1111-111111111111',
     special_leave_type_id: 1,
     special_leave_type_name: '誕生日休暇',
     status: 'submitted',

@@ -5,7 +5,7 @@ import type { Role, User, WorkStyle } from '../../api/types'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
 const targetUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '山田太郎',
   email: 'yamada@example.com',
   department: '総務部',

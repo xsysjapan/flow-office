@@ -9,7 +9,7 @@ import type { Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } f
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
-  id: 1,
+  id: 'applicant-1',
   name: '申請者太郎',
   email: 'taro@example.com',
   department: null,
@@ -19,7 +19,7 @@ const applicant: User = {
 }
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -51,7 +51,7 @@ const submittedRequest: WorkflowRequest = {
 const historyEntry: WorkflowRequestHistoryEntry = {
   id: 1,
   action: 'drafted',
-  actor_user_id: 1,
+  actor_user_id: 'applicant-1',
   comment: null,
   occurred_at: '2026-07-01T00:00:00+09:00',
 }
@@ -145,7 +145,7 @@ describe('WorkflowRequestDetailPage', () => {
       file_name: 'receipt.pdf',
       mime_type: 'application/pdf',
       file_size: 100,
-      uploaded_by: 1,
+      uploaded_by: 'applicant-1',
       created_at: null,
     })
 
@@ -165,7 +165,7 @@ describe('WorkflowRequestDetailPage', () => {
     vi.spyOn(attachmentsApi, 'downloadAttachment').mockResolvedValue(undefined)
 
     renderPage(submittedRequest, [
-      { id: 'attachment-9', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 1, created_at: null },
+      { id: 'attachment-9', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 'applicant-1', created_at: null },
     ])
 
     await userEvent.click(await screen.findByRole('button', { name: 'ダウンロード' }))

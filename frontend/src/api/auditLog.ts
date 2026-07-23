@@ -5,7 +5,7 @@ export interface AuditLogFilters {
   aggregate_type?: string
   aggregate_id?: string
   event_type?: string
-  user_id?: number
+  user_id?: string
   from?: string
   to?: string
   [key: string]: string | number | boolean | undefined

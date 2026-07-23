@@ -35,7 +35,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
 }
 
 const currentUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,
@@ -50,7 +50,7 @@ vi.mock('../../auth/useAuth', () => ({
 }))
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -67,7 +67,7 @@ const paginatedApprover: Paginated<User> = {
 
 const notSubmittedMonth: AttendanceMonth = {
   id: 1,
-  user_id: 1,
+  user_id: 'user-1',
   year_month: yearMonth,
   status: 'not_submitted',
   submitted_at: null,
@@ -80,7 +80,7 @@ const notSubmittedMonth: AttendanceMonth = {
 
 const dayRecord: AttendanceDay = {
   id: 1,
-  user_id: 1,
+  user_id: 'user-1',
   work_date: '2026-07-01',
   status: 'clocked_out',
   actual_start_at: '2026-07-01T09:00:00+09:00',
@@ -230,7 +230,7 @@ describe('AttendanceMonthDetailPage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
     await userEvent.click(screen.getByRole('button', { name: '提出する' }))
 
-    await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith(yearMonth, 2))
+    await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith(yearMonth, 'approver-1'))
   })
 
   it('shows legal holiday warning badges', async () => {

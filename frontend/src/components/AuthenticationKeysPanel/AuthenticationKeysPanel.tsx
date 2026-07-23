@@ -41,7 +41,7 @@ const KEY_STATUS_LABELS: Record<AuthenticationKeyStatus, string> = {
 }
 
 export interface AuthenticationKeysPanelProps {
-  userId: number
+  userId: string
 }
 
 /**
@@ -174,7 +174,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
   )
 }
 
-function DisableAuthenticationKeyDialog({ authKey, userId }: { authKey: AuthenticationKey; userId: number }) {
+function DisableAuthenticationKeyDialog({ authKey, userId }: { authKey: AuthenticationKey; userId: string }) {
   const disableKey = useDisableAuthenticationKey()
 
   return (

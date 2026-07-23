@@ -35,7 +35,7 @@ describe('ApprovalsPage', () => {
           title: 'タクシー代',
           status: 'submitted',
           form_data: {},
-          applicant: { id: 1, name: '申請者太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null },
+          applicant: { id: 'applicant-1', name: '申請者太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null },
           submitted_at: null,
           approved_at: null,
           returned_at: null,

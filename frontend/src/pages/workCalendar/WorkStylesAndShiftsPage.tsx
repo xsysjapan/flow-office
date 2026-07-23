@@ -594,14 +594,14 @@ function WorkStyleFormCard() {
 
 function ShiftGenerationCard() {
   const { data: workStyles } = useWorkStyles()
-  const [shiftUserId, setShiftUserId] = useState<number | undefined>(undefined)
+  const [shiftUserId, setShiftUserId] = useState<string | undefined>(undefined)
   const [shiftWorkStyleId, setShiftWorkStyleId] = useState('')
   const [shiftFrom, setShiftFrom] = useState('')
   const [shiftTo, setShiftTo] = useState('')
 
   const generateShifts = useGenerateShiftAssignments()
   const { data: shiftAssignments, isLoading: isLoadingShifts } = useShiftAssignments(
-    shiftUserId ?? NaN,
+    shiftUserId ?? '',
     shiftFrom,
     shiftTo,
   )
@@ -688,13 +688,13 @@ function ShiftGenerationCard() {
  */
 function MonthlyWorkStyleAssignmentCard() {
   const { data: workStyles } = useWorkStyles()
-  const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
+  const [targetUserId, setTargetUserId] = useState<string | undefined>(undefined)
   const [yearMonth, setYearMonth] = useState('')
   const [workStyleId, setWorkStyleId] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
   const [autoGenerateShifts, setAutoGenerateShifts] = useState(false)
 
-  const { data: targetUser } = useUser(targetUserId ?? NaN)
+  const { data: targetUser } = useUser(targetUserId ?? '')
   const { data: history, isLoading: isLoadingHistory } = useUserWorkStyleMonthlyAssignments(targetUserId)
   const assignForMonth = useAssignUserWorkStyleForMonth()
   const generateShifts = useGenerateShiftAssignments()
@@ -702,7 +702,7 @@ function MonthlyWorkStyleAssignmentCard() {
   const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
   const selectedWorkStyle = workStyles?.find((style) => String(style.id) === workStyleId)
 
-  const handleUserChange = (userId: number | undefined) => {
+  const handleUserChange = (userId: string | undefined) => {
     setTargetUserId(userId)
     setIsConfirming(false)
   }
@@ -1120,7 +1120,7 @@ function RotationPatternFormCard() {
  */
 function RotationAssignmentCard() {
   const { data: rotationPatterns } = useRotationPatterns()
-  const [targetUserId, setTargetUserId] = useState<number | undefined>(undefined)
+  const [targetUserId, setTargetUserId] = useState<string | undefined>(undefined)
   const [rotationPatternId, setRotationPatternId] = useState('')
   const [rotationStartDate, setRotationStartDate] = useState('')
   const [rotationStartPosition, setRotationStartPosition] = useState('0')
@@ -1310,7 +1310,7 @@ function ShiftScheduleBoardCard() {
   const { data: workStyles } = useWorkStyles()
   const { data: patterns } = useShiftPatterns()
 
-  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
   const [workStyleId, setWorkStyleId] = useState('')
   const [workDate, setWorkDate] = useState('')
   const [shiftPatternId, setShiftPatternId] = useState('')

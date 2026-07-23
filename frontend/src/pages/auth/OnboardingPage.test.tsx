@@ -76,7 +76,7 @@ describe('OnboardingPage', () => {
   })
 
   it('switches to local mode and submits a local admin, then logs in', async () => {
-    const user = { id: 1, name: 'テスト管理者', email: 'admin@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }
+    const user = { id: 'user-1', name: 'テスト管理者', email: 'admin@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }
     vi.spyOn(onboardingApi, 'completeOnboardingLocal').mockResolvedValue({ token: 'test-token', user })
 
     renderPage()

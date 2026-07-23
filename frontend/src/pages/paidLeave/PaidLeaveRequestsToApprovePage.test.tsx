@@ -8,9 +8,9 @@ import { PaidLeaveRequestsToApprovePage } from './PaidLeaveRequestsToApprovePage
 
 const request: PaidLeaveRequest = {
   id: 'request-1',
-  user_id: 1,
+  user_id: 'user-1',
   user: {
-    id: 1,
+    id: 'user-1',
     name: '申請者太郎',
     email: 'taro@example.com',
     department: null,

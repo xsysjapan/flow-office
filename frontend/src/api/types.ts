@@ -1,5 +1,5 @@
 export interface User {
-  id: number
+  id: string
   name: string
   email: string
   department: string | null
@@ -245,7 +245,7 @@ export interface AttendanceLeaveSegment {
 
 export interface AttendanceDay {
   id: number
-  user_id: number
+  user_id: string
   work_date: string
   status: AttendanceDayStatus
   source?: AttendanceDaySource
@@ -274,7 +274,7 @@ export type PunchStatus = 'active' | 'corrected' | 'deleted'
  *  打刻ログも行を保持したまま参照できる(status/correction_reason等)。 */
 export interface AttendancePunch {
   id: number
-  user_id: number
+  user_id: string
   work_date: string
   punch_type: PunchType
   punched_at: string
@@ -282,7 +282,7 @@ export interface AttendancePunch {
   note: string | null
   status: PunchStatus
   correction_reason: string | null
-  corrected_by_user_id: number | null
+  corrected_by_user_id: string | null
   corrected_at: string | null
   superseded_by_punch_id: number | null
   created_at: string | null
@@ -303,7 +303,7 @@ export interface LegalHolidayWarning {
 
 export interface AttendanceMonth {
   id: number
-  user_id: number
+  user_id: string
   year_month: string
   status: AttendanceMonthStatus
   approver?: User
@@ -332,7 +332,7 @@ export interface FlexSettlementSummary {
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
 export interface AttendanceExportFilters {
   year_month: string
-  user_id?: number
+  user_id?: string
 }
 
 export type BackOfficeTaskStatus =
@@ -362,7 +362,7 @@ export interface BackOfficeTask {
 
 export interface PaidLeaveGrant {
   id: string
-  user_id: number
+  user_id: string
   granted_on: string
   expires_on: string
   granted_days: number
@@ -382,7 +382,7 @@ export type PaidLeaveRequestStatus = 'submitted' | 'approved' | 'returned' | 'ca
 
 export interface PaidLeaveRequest {
   id: string
-  user_id: number
+  user_id: string
   user?: User
   approver?: User
   status: PaidLeaveRequestStatus
@@ -419,7 +419,7 @@ export interface SpecialLeaveType {
 /** 特別休暇の取得単位(全休/半休/時間休)は有給と同じ概念のためPaidLeaveTypeを再利用する。 */
 export interface SpecialLeaveGrant {
   id: string
-  user_id: number
+  user_id: string
   special_leave_type_id: number
   special_leave_type_name?: string
   granted_on: string
@@ -453,7 +453,7 @@ export interface SpecialLeaveGrantRule {
 
 export interface SpecialLeaveRequest {
   id: string
-  user_id: number
+  user_id: string
   user?: User
   approver?: User
   special_leave_type_id: number
@@ -541,16 +541,16 @@ export interface WorkStyle {
  *  シフト勤務のように月ごとに切り替えても過去月の履歴が残る。 */
 export interface UserWorkStyleMonthlyAssignment {
   id: number
-  user_id: number
+  user_id: string
   year_month: string
   work_style_id: number
   work_style?: Pick<WorkStyle, 'id' | 'code' | 'name'>
-  assigned_by_user_id: number
+  assigned_by_user_id: string
 }
 
 export interface EmployeeShiftAssignment {
   id: number
-  user_id: number
+  user_id: string
   work_date: string
   work_style_id: number
   /** UC-C004: 3交代制シフトパターンからの割当の場合のみ設定される。 */
@@ -615,7 +615,7 @@ export interface RotationPreviewDay {
 /** 指示書 8.5節: 社員ごとのローテーション開始基準。 */
 export interface EmployeeRotationAssignment {
   id: number
-  user_id: number
+  user_id: string
   rotation_pattern_id: number
   rotation_pattern_name: string | null
   rotation_start_date: string
@@ -624,16 +624,16 @@ export interface EmployeeRotationAssignment {
 
 /** UC-C004 手順5: シフト表公開前の警告(法定休日不足・連続勤務・月間予定時間)。 */
 export interface ShiftScheduleReview {
-  legal_holiday_shortages: Array<LegalHolidayWarning & { user_id: number }>
+  legal_holiday_shortages: Array<LegalHolidayWarning & { user_id: string }>
   consecutive_work_violations: Array<{
-    user_id: number
+    user_id: string
     period_start: string
     period_end: string
     consecutive_days: number
     max_allowed: number
   }>
   monthly_hours_over_cap: Array<{
-    user_id: number
+    user_id: string
     year_month: string
     planned_minutes: number
     statutory_cap_minutes: number
@@ -645,7 +645,7 @@ export interface Attachment {
   file_name: string
   mime_type: string
   file_size: number
-  uploaded_by: number
+  uploaded_by: string
   created_at: string | null
 }
 
@@ -663,7 +663,7 @@ export interface StoredEvent {
 export interface WorkflowRequestHistoryEntry {
   id: number
   action: 'drafted' | 'submitted' | 'approved' | 'returned' | 'cancelled'
-  actor_user_id: number | null
+  actor_user_id: string | null
   comment: string | null
   occurred_at: string
 }
@@ -715,7 +715,7 @@ export type WorkLocationType =
 export interface Device {
   id: string
   owner_type: DeviceOwnerType
-  owner_user_id: number | null
+  owner_user_id: string | null
   name: string
   device_type: DeviceType
   status: DeviceStatus
@@ -754,13 +754,13 @@ export type AuthenticationKeyStatus = 'active' | 'suspended' | 'disabled'
 
 export interface AuthenticationKey {
   id: string
-  user_id: number
+  user_id: string
   key_type: AuthenticationKeyType
   display_name: string
   status: AuthenticationKeyStatus
   valid_from: string | null
   valid_until: string | null
-  registered_by_user_id: number | null
+  registered_by_user_id: string | null
   registered_at: string | null
   disabled_at: string | null
 }
@@ -785,7 +785,7 @@ export type IntegrationScopeType =
 export interface ApplicationIntegration {
   id: string
   owner_type: 'personal' | 'organization'
-  owner_user_id: number | null
+  owner_user_id: string | null
   client_type: IntegrationClientType
   client_name: string
   purpose: string | null

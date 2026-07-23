@@ -27,11 +27,11 @@ export function useMyPaidLeaveGrants() {
   return useQuery({ queryKey: MY_GRANTS_KEY, queryFn: fetchMyPaidLeaveGrants })
 }
 
-export function usePaidLeaveGrantsForUser(userId: number) {
+export function usePaidLeaveGrantsForUser(userId: string) {
   return useQuery({
     queryKey: ['paid-leave', 'grants', 'user', userId],
     queryFn: () => fetchPaidLeaveGrantsForUser(userId),
-    enabled: Number.isFinite(userId),
+    enabled: Boolean(userId),
   })
 }
 
@@ -121,10 +121,10 @@ export function useMyPaidLeaveHistory() {
   return useQuery({ queryKey: ['paid-leave', 'history', 'mine'], queryFn: fetchMyPaidLeaveHistory })
 }
 
-export function usePaidLeaveHistoryForUser(userId: number) {
+export function usePaidLeaveHistoryForUser(userId: string) {
   return useQuery({
     queryKey: ['paid-leave', 'history', 'user', userId],
     queryFn: () => fetchPaidLeaveHistoryForUser(userId),
-    enabled: Number.isFinite(userId),
+    enabled: Boolean(userId),
   })
 }

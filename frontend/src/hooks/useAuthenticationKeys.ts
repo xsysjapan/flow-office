@@ -6,11 +6,11 @@ import {
   type IssueAuthenticationKeyInput,
 } from '../api/authenticationKeys'
 
-export function useAuthenticationKeysForUser(userId: number) {
+export function useAuthenticationKeysForUser(userId: string) {
   return useQuery({
     queryKey: ['authentication-keys', userId],
     queryFn: () => fetchAuthenticationKeysForUser(userId),
-    enabled: Number.isFinite(userId),
+    enabled: Boolean(userId),
   })
 }
 
@@ -29,7 +29,7 @@ export function useDisableAuthenticationKey() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id }: { id: string; userId: number }) => disableAuthenticationKey(id),
+    mutationFn: ({ id }: { id: string; userId: string }) => disableAuthenticationKey(id),
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['authentication-keys', variables.userId] })
     },

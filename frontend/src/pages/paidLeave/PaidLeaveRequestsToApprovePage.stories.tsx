@@ -4,7 +4,7 @@ import type { PaidLeaveRequest, User } from '../../api/types'
 import { PaidLeaveRequestsToApprovePage } from './PaidLeaveRequestsToApprovePage'
 
 const applicant: User = {
-  id: 1,
+  id: 'user-1',
   name: '申請者太郎',
   email: 'taro@example.com',
   department: null,
@@ -16,7 +16,7 @@ const applicant: User = {
 const requests: PaidLeaveRequest[] = [
   {
     id: 'request-1',
-    user_id: 1,
+    user_id: 'user-1',
     user: applicant,
     status: 'submitted',
     leave_type: 'full',
@@ -31,7 +31,7 @@ const requests: PaidLeaveRequest[] = [
   },
   {
     id: 'request-2',
-    user_id: 1,
+    user_id: 'user-1',
     user: applicant,
     status: 'submitted',
     leave_type: 'hourly',

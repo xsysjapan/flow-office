@@ -7,8 +7,8 @@ import * as usersApi from '../../api/users'
 import type { Paginated, User } from '../../api/types'
 import { UserPicker } from './UserPicker'
 
-function ControlledUserPicker({ onChange }: { onChange: (userId: number | undefined) => void }) {
-  const [value, setValue] = useState<number | undefined>(undefined)
+function ControlledUserPicker({ onChange }: { onChange: (userId: string | undefined) => void }) {
+  const [value, setValue] = useState<string | undefined>(undefined)
 
   return (
     <UserPicker
@@ -24,7 +24,7 @@ function ControlledUserPicker({ onChange }: { onChange: (userId: number | undefi
 
 const users: User[] = [
   {
-    id: 1,
+    id: 'approver-1',
     name: '承認者花子',
     email: 'hanako@example.com',
     department: null,
@@ -70,7 +70,7 @@ describe('UserPicker', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
 
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('approver-1'))
     expect(screen.queryByRole('option', { name: '承認者花子(hanako@example.com)' })).not.toBeInTheDocument()
     expect(screen.getByRole('combobox')).toHaveTextContent('承認者花子(hanako@example.com)')
   })

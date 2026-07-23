@@ -278,7 +278,7 @@ function SpecialLeaveGrantRulesCard() {
 
 function ManualGrantCard() {
   const { data: types } = useSpecialLeaveTypes()
-  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
   const [specialLeaveTypeId, setSpecialLeaveTypeId] = useState<number | undefined>(undefined)
   const [grantedOn, setGrantedOn] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
@@ -286,7 +286,7 @@ function ManualGrantCard() {
   const [grantReason, setGrantReason] = useState('')
 
   const grantSpecialLeave = useGrantSpecialLeave()
-  const { data: userGrants, isLoading: isLoadingUserGrants } = useSpecialLeaveGrantsForUser(userId ?? NaN)
+  const { data: userGrants, isLoading: isLoadingUserGrants } = useSpecialLeaveGrantsForUser(userId ?? '')
 
   const handleGrant = () => {
     if (!userId || !specialLeaveTypeId) return

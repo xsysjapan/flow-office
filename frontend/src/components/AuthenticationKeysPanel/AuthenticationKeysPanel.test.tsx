@@ -9,25 +9,25 @@ import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
 const keys: AuthenticationKey[] = [
   {
     id: 'auth-key-1',
-    user_id: 42,
+    user_id: '11111111-1111-1111-1111-111111111111',
     key_type: 'nfc_uid',
     display_name: '本社ICカード',
     status: 'active',
     valid_from: null,
     valid_until: null,
-    registered_by_user_id: 42,
+    registered_by_user_id: '11111111-1111-1111-1111-111111111111',
     registered_at: '2026-07-01T09:00:00+09:00',
     disabled_at: null,
   },
   {
     id: 'auth-key-2',
-    user_id: 42,
+    user_id: '11111111-1111-1111-1111-111111111111',
     key_type: 'fingerprint_external_id',
     display_name: '右手人差し指',
     status: 'disabled',
     valid_from: null,
     valid_until: null,
-    registered_by_user_id: 42,
+    registered_by_user_id: '11111111-1111-1111-1111-111111111111',
     registered_at: '2026-06-01T09:00:00+09:00',
     disabled_at: '2026-06-15T09:00:00+09:00',
   },
@@ -39,7 +39,7 @@ function renderPanel() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthenticationKeysPanel userId={42} />
+      <AuthenticationKeysPanel userId="11111111-1111-1111-1111-111111111111" />
     </QueryClientProvider>,
   )
 }
@@ -74,7 +74,7 @@ describe('AuthenticationKeysPanel', () => {
     await user.click(screen.getByRole('button', { name: '発行する' }))
 
     expect(issueSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: 42, display_name: '来客用QR', raw_key_value: 'abc123' }),
+      expect.objectContaining({ user_id: '11111111-1111-1111-1111-111111111111', display_name: '来客用QR', raw_key_value: 'abc123' }),
     )
   })
 

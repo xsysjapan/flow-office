@@ -10,11 +10,11 @@ import {
   type ShiftScheduleTarget,
 } from '../api/employeeShiftAssignments'
 
-export function useShiftAssignments(userId: number, from: string, to: string) {
+export function useShiftAssignments(userId: string, from: string, to: string) {
   return useQuery({
     queryKey: ['employee-shift-assignments', userId, from, to],
     queryFn: () => fetchShiftAssignments(userId, from, to),
-    enabled: Number.isFinite(userId) && !!from && !!to,
+    enabled: Boolean(userId) && !!from && !!to,
   })
 }
 

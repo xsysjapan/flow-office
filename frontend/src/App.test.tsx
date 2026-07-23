@@ -44,7 +44,7 @@ describe('App routing (authenticated)', () => {
   it('shows the app layout and today attendance page for an authenticated user', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue({
       id: 1,
-      user_id: 1,
+      user_id: 'user-1',
       work_date: '2026-07-09',
       status: 'not_started',
       actual_start_at: null,
@@ -58,7 +58,7 @@ describe('App routing (authenticated)', () => {
 
     localStorage.setItem('flow-office.token', 'existing-token')
     vi.spyOn(await import('./api/auth'), 'fetchCurrentUser').mockResolvedValue({
-      id: 1,
+      id: 'user-1',
       name: '山田 太郎',
       email: 'yamada@example.com',
       department: null,

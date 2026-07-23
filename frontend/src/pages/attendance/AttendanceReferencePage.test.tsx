@@ -9,7 +9,7 @@ import { formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
 const targetUser: User = {
-  id: 3,
+  id: 'user-3',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,

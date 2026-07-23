@@ -17,14 +17,14 @@ export interface CreateWorkflowRequestInput {
   request_type_code: string
   title: string
   form_data: Record<string, unknown>
-  approver_user_id?: number
+  approver_user_id?: string
 }
 
 export function createWorkflowRequest(input: CreateWorkflowRequestInput): Promise<WorkflowRequest> {
   return apiFetch('/workflow-requests', { method: 'POST', body: input })
 }
 
-export function submitWorkflowRequest(id: string, approverUserId?: number): Promise<WorkflowRequest> {
+export function submitWorkflowRequest(id: string, approverUserId?: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/submit`, {
     method: 'POST',
     body: { approver_user_id: approverUserId },

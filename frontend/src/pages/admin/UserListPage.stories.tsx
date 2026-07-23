@@ -6,7 +6,7 @@ import { UserListPage } from './UserListPage'
 
 const sample: User[] = [
   {
-    id: 1,
+    id: 'user-1',
     name: '山田太郎',
     email: 'yamada@example.com',
     department: '総務部',
@@ -16,7 +16,7 @@ const sample: User[] = [
     last_login_at: '2026-07-08T09:00:00+09:00',
   },
   {
-    id: 2,
+    id: 'user-2',
     name: '佐藤花子',
     email: 'sato@example.com',
     department: '人事部',

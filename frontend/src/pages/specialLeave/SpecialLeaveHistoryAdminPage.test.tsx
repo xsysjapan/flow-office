@@ -8,7 +8,7 @@ import type { Paginated, StoredEvent, User } from '../../api/types'
 import { SpecialLeaveHistoryAdminPage } from './SpecialLeaveHistoryAdminPage'
 
 const targetUser: User = {
-  id: 3,
+  id: 'user-3',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -63,6 +63,6 @@ describe('SpecialLeaveHistoryAdminPage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
 
     expect(await screen.findByText('3日を付与(有効期限なし)')).toBeInTheDocument()
-    expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith(3)
+    expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

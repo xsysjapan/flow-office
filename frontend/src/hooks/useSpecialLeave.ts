@@ -60,11 +60,11 @@ export function useMySpecialLeaveGrants() {
   return useQuery({ queryKey: MY_GRANTS_KEY, queryFn: fetchMySpecialLeaveGrants })
 }
 
-export function useSpecialLeaveGrantsForUser(userId: number) {
+export function useSpecialLeaveGrantsForUser(userId: string) {
   return useQuery({
     queryKey: ['special-leave', 'grants', 'user', userId],
     queryFn: () => fetchSpecialLeaveGrantsForUser(userId),
-    enabled: Number.isFinite(userId),
+    enabled: Boolean(userId),
   })
 }
 
@@ -154,10 +154,10 @@ export function useMySpecialLeaveHistory() {
   return useQuery({ queryKey: ['special-leave', 'history', 'mine'], queryFn: fetchMySpecialLeaveHistory })
 }
 
-export function useSpecialLeaveHistoryForUser(userId: number) {
+export function useSpecialLeaveHistoryForUser(userId: string) {
   return useQuery({
     queryKey: ['special-leave', 'history', 'user', userId],
     queryFn: () => fetchSpecialLeaveHistoryForUser(userId),
-    enabled: Number.isFinite(userId),
+    enabled: Boolean(userId),
   })
 }

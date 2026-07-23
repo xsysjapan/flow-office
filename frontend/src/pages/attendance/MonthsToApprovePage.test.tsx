@@ -7,7 +7,7 @@ import type { AttendanceMonth, User } from '../../api/types'
 import { MonthsToApprovePage } from './MonthsToApprovePage'
 
 const approverUser: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -19,7 +19,7 @@ const approverUser: User = {
 
 const hrStaffUser: User = {
   ...approverUser,
-  id: 3,
+  id: 'hr-1',
   name: '人事一郎',
   roles: ['hr_staff'],
 }
@@ -32,7 +32,7 @@ vi.mock('../../auth/useAuth', () => ({
 
 const submittedMonth: AttendanceMonth = {
   id: 1,
-  user_id: 1,
+  user_id: 'user-1',
   year_month: '2026-07',
   status: 'submitted',
   approver: approverUser,
@@ -150,15 +150,15 @@ describe('MonthsToApprovePage', () => {
   })
 
   it('bulk-approves selected submitted months', async () => {
-    const secondSubmittedMonth: AttendanceMonth = { ...submittedMonth, id: 4, year_month: '2026-06', user_id: 2 }
+    const secondSubmittedMonth: AttendanceMonth = { ...submittedMonth, id: 4, year_month: '2026-06', user_id: 'user-2' }
     vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue([submittedMonth, secondSubmittedMonth])
     const approveSpy = vi.spyOn(attendanceApi, 'approveMonth').mockResolvedValue({ ...submittedMonth, status: 'approved' })
 
     renderPage()
     await screen.findByText('2026-07')
 
-    await userEvent.click(screen.getByRole('checkbox', { name: '2026-07(社員ID: 1)を選択' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: '2026-06(社員ID: 2)を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-07(社員ID: user-1)を選択' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-06(社員ID: user-2)を選択' }))
     expect(screen.getByText('2件を選択中')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'まとめて承認する' }))

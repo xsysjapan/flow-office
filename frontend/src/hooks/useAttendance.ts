@@ -41,7 +41,7 @@ export function useTodayAttendance() {
 
 /** userIdを指定すると自分以外の社員の週次勤怠を参照できる(adminのみ)。既存のキャッシュキーと
  *  互換性を保つため、userId未指定時は末尾に付与しない。 */
-export function useWeek(startDate: string, userId?: number) {
+export function useWeek(startDate: string, userId?: string) {
   return useQuery({
     queryKey: userId === undefined ? [...WEEK_KEY, startDate] : [...WEEK_KEY, startDate, userId],
     queryFn: () => (userId === undefined ? fetchWeek(startDate) : fetchWeek(startDate, userId)),
@@ -49,10 +49,10 @@ export function useWeek(startDate: string, userId?: number) {
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値。userId/workDateが揃うまでは取得しない。 */
-export function useAttendanceDayDefaults(userId: number | undefined, workDate: string | undefined) {
+export function useAttendanceDayDefaults(userId: string | undefined, workDate: string | undefined) {
   return useQuery({
     queryKey: ['attendance', 'day-defaults', userId, workDate],
-    queryFn: () => fetchAttendanceDayDefaults(userId as number, workDate as string),
+    queryFn: () => fetchAttendanceDayDefaults(userId as string, workDate as string),
     enabled: Boolean(userId && workDate),
   })
 }
@@ -187,7 +187,7 @@ export function useDeletePunch() {
 
 /** userIdを指定すると自分以外の社員の月次勤怠を参照できる(adminのみ)。既存のキャッシュキーと
  *  互換性を保つため、userId未指定時は末尾に付与しない。 */
-export function useAttendanceMonth(yearMonth: string, userId?: number) {
+export function useAttendanceMonth(yearMonth: string, userId?: string) {
   return useQuery({
     queryKey: userId === undefined ? ['attendance', 'month', yearMonth] : ['attendance', 'month', yearMonth, userId],
     queryFn: () => (userId === undefined ? fetchMonth(yearMonth) : fetchMonth(yearMonth, userId)),
@@ -198,7 +198,7 @@ export function useSubmitMonth(yearMonth: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (approverUserId: number) => submitMonth(yearMonth, approverUserId),
+    mutationFn: (approverUserId: string) => submitMonth(yearMonth, approverUserId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', yearMonth] })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'months', 'mine'] })
@@ -218,10 +218,10 @@ export function useMonthsToApprove() {
 }
 
 /** 管理者が対象社員を選んで月次勤怠一覧(月の選択画面)を確認する。userId未確定の間は取得しない。 */
-export function useMonthsForUser(userId: number | undefined) {
+export function useMonthsForUser(userId: string | undefined) {
   return useQuery({
     queryKey: ['attendance', 'months', 'user', userId],
-    queryFn: () => fetchMonthsForUser(userId as number),
+    queryFn: () => fetchMonthsForUser(userId as string),
     enabled: userId !== undefined,
   })
 }

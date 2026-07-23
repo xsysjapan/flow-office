@@ -27,7 +27,7 @@ export function fetchMySpecialLeaveGrants(): Promise<SpecialLeaveGrant[]> {
   return apiFetch('/special-leave/grants/mine')
 }
 
-export function fetchSpecialLeaveGrantsForUser(userId: number): Promise<SpecialLeaveGrant[]> {
+export function fetchSpecialLeaveGrantsForUser(userId: string): Promise<SpecialLeaveGrant[]> {
   return apiFetch(`/special-leave/grants/user/${userId}`)
 }
 
@@ -52,7 +52,7 @@ export function createSpecialLeaveGrantRule(input: CreateSpecialLeaveGrantRuleIn
 }
 
 export interface GrantSpecialLeaveInput {
-  user_id: number
+  user_id: string
   special_leave_type_id: number
   granted_on: string
   /** 未指定の場合は失効しない付与になる。 */
@@ -78,7 +78,7 @@ export interface CreateSpecialLeaveRequestInput {
   target_date: string
   leave_type: PaidLeaveType
   hours?: number
-  approver_user_id: number
+  approver_user_id: string
   reason?: string
 }
 
@@ -104,6 +104,6 @@ export function fetchMySpecialLeaveHistory(): Promise<StoredEvent[]> {
 }
 
 /** 管理者・人事担当者が対象社員の特別休暇履歴を取得する。 */
-export function fetchSpecialLeaveHistoryForUser(userId: number): Promise<StoredEvent[]> {
+export function fetchSpecialLeaveHistoryForUser(userId: string): Promise<StoredEvent[]> {
   return apiFetch(`/special-leave/history/user/${userId}`)
 }

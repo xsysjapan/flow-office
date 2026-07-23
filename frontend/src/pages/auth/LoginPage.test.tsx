@@ -94,7 +94,7 @@ describe('LoginPage', () => {
       needs_onboarding: false,
       sso_configured: false,
     })
-    const user = { id: 1, name: 'テスト太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }
+    const user = { id: 'user-1', name: 'テスト太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null }
     vi.spyOn(authApi, 'localLogin').mockResolvedValue({ token: 'test-token', user })
     const applySession = vi.fn()
 

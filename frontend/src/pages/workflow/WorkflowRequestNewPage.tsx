@@ -21,7 +21,7 @@ export function WorkflowRequestNewPage() {
   const [requestTypeCode, setRequestTypeCode] = useState('')
   const [title, setTitle] = useState('')
   const [formValues, setFormValues] = useState<Record<string, string>>({})
-  const [approverUserId, setApproverUserId] = useState<number | undefined>(undefined)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
   const createRequest = useCreateWorkflowRequest()
   const submitRequest = useSubmitWorkflowRequest()

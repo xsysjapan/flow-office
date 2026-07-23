@@ -7,7 +7,7 @@ import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { AttendanceDayPage } from './AttendanceDayPage'
 
 const currentUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,
@@ -29,7 +29,7 @@ const date = '2026-07-06'
 
 const recordedDay: AttendanceDay = {
   id: 1,
-  user_id: 1,
+  user_id: 'user-1',
   work_date: date,
   status: 'clocked_out',
   actual_start_at: `${date}T09:00:00+09:00`,
@@ -59,7 +59,7 @@ const recordedDay: AttendanceDay = {
 
 const punch: AttendancePunch = {
   id: 10,
-  user_id: 1,
+  user_id: 'user-1',
   work_date: date,
   punch_type: 'clock_in',
   punched_at: `${date}T09:00:00+09:00`,

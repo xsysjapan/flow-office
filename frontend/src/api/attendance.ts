@@ -23,12 +23,12 @@ export function fetchToday(): Promise<AttendanceDay> {
 
 /** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。userIdを指定すると自分以外の社員を
  *  参照できる(adminのみ)。 */
-export function fetchWeek(startDate: string, userId?: number): Promise<AttendanceDay[]> {
+export function fetchWeek(startDate: string, userId?: string): Promise<AttendanceDay[]> {
   return apiFetch('/attendance/week', { query: { start_date: startDate, user_id: userId } })
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
-export function fetchAttendanceDayDefaults(userId: number, workDate: string): Promise<AttendanceDayDefaults> {
+export function fetchAttendanceDayDefaults(userId: string, workDate: string): Promise<AttendanceDayDefaults> {
   return apiFetch('/attendance/day-defaults', { query: { user_id: userId, work_date: workDate } })
 }
 
@@ -75,7 +75,7 @@ export function adjustAttendanceDailyCalculation(
 }
 
 export interface CreateAttendanceDayInput {
-  user_id: number
+  user_id: string
   work_date: string
   actual_start_at?: string | null
   actual_end_at?: string | null
@@ -138,7 +138,7 @@ export function deletePunch(id: number, reason: string): Promise<AttendancePunch
 }
 
 /** UC-A007: 月次勤怠。userIdを指定すると自分以外の社員を参照できる(adminのみ)。 */
-export function fetchMonth(yearMonth: string, userId?: number): Promise<{
+export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   days: AttendanceDay[]
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
@@ -147,7 +147,7 @@ export function fetchMonth(yearMonth: string, userId?: number): Promise<{
   return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }
 
-export function submitMonth(yearMonth: string, approverUserId: number): Promise<AttendanceMonth> {
+export function submitMonth(yearMonth: string, approverUserId: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance/months/${yearMonth}/submit`, {
     method: 'POST',
     body: { approver_user_id: approverUserId },
@@ -159,7 +159,7 @@ export function fetchMyMonths(): Promise<AttendanceMonth[]> {
 }
 
 /** 管理者が対象社員を選んで月次勤怠一覧(月次・週次・日次の勤怠参照)を確認する。 */
-export function fetchMonthsForUser(userId: number): Promise<AttendanceMonth[]> {
+export function fetchMonthsForUser(userId: string): Promise<AttendanceMonth[]> {
   return apiFetch(`/attendance/months/user/${userId}`)
 }
 
