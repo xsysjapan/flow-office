@@ -44,7 +44,7 @@ describe('PaidLeaveHistoryAdminPage', () => {
       links: { next: null, prev: null },
     }
     const event: StoredEvent = {
-      id: 1,
+      id: 'evt-1',
       event_id: 'evt-1',
       aggregate_type: 'paid_leave_grant',
       aggregate_id: '1',

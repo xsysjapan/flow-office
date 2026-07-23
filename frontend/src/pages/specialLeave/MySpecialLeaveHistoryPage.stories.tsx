@@ -5,7 +5,7 @@ import { MySpecialLeaveHistoryPage } from './MySpecialLeaveHistoryPage'
 
 const events: StoredEvent[] = [
   {
-    id: 2,
+    id: 'evt-2',
     event_id: 'evt-2',
     aggregate_type: 'special_leave_request',
     aggregate_id: '1',
@@ -15,7 +15,7 @@ const events: StoredEvent[] = [
     occurred_at: '2026-08-05T09:00:00+09:00',
   },
   {
-    id: 1,
+    id: 'evt-1',
     event_id: 'evt-1',
     aggregate_type: 'special_leave_grant',
     aggregate_id: '1',

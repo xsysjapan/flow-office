@@ -39,9 +39,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ProjectStoredEvent / CreateBackOfficeTaskOnApproval は app/Listeners配下にあり、
-        // handle()の型ヒットからLaravelのイベント自動検出で登録されるため、ここで
-        // 明示登録すると二重登録になる。ここでは自動検出の対象外(vendor配下)のみ登録する。
+        // ProjectStoredEvent は app/Listeners配下にあり、handle()の型ヒットからLaravelの
+        // イベント自動検出で登録されるため、ここで明示登録すると二重登録になる
+        // (未移行ドメイン向け。移行済みドメインのProjector/ReactorはSpatie側の
+        // auto_discover_projectors_and_reactorsで自動検出される。docs/29参照)。
+        // ここでは自動検出の対象外(vendor配下)のみ登録する。
         //
         // ローカル開発でモックOIDC(mock-oidc/)を使う場合は、実際のEntra IDドライバの代わりに
         // LocalAzureProviderを "azure" ドライバとして登録する(docs/06-usecases-auth.md UC-001)。

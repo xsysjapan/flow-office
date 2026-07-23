@@ -83,7 +83,6 @@ use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
-use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -176,7 +175,6 @@ use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\SubmitWorkflowRequestHandler;
-use App\Domain\Workflow\Projectors\WorkflowRequestProjector;
 
 return [
 
@@ -304,22 +302,15 @@ return [
     | 再生成対象ではない(承認1件が複数集約にまたがる副作用を持つなど、単純な
     | イベント→行の対応関係に収まらないため)。
     |
-    | workflow_requests / backoffice_tasks は主キーをコマンド側生成のUUIDにしたことで、
-    | 行の新規作成を含めて完全にProjector化している(DB採番PKだと集約IDが確定する前に
-    | イベントを書けず、作成イベントだけはProjector化できないため)。
-    | (.claude/skills/add-projection 参照)
-    |
     | 注意: spatie/laravel-event-sourcingに移行済みのドメイン(Attachment/Integration/
-    | AuthenticationKey/Device/DeviceAdminSession/Notification)のProjectorはここに登録しない。
-    | それらはSpatie\EventSourcing\EventHandlers\Projectors\Projectorのサブクラスであり、
-    | config/event-sourcing.phpのauto_discover_projectors_and_reactorsで自動検出される
-    | (docs/29-event-sourcing-framework-migration.md参照)。
+    | AuthenticationKey/Device/DeviceAdminSession/Notification/Workflow/BackOffice)の
+    | ProjectorはここではなくSpatie\EventSourcing\EventHandlers\Projectors\Projectorの
+    | サブクラスとして実装し、config/event-sourcing.phpのauto_discover_projectors_and_reactors
+    | で自動検出させる(docs/29-event-sourcing-framework-migration.md参照)。
     |
     */
     'projectors' => [
         AttendanceDailyCalculationProjector::class,
-        WorkflowRequestProjector::class,
-        BackOfficeTaskProjector::class,
     ],
 
 ];

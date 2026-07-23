@@ -2,37 +2,29 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\EventSourcing\Support\EventHistoryQuery;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StoredEventResource;
-use App\Models\StoredEvent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use OpenApi\Attributes as OA;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * UC-M003: 監査ログを確認する。EventStore(stored_events)を正の記録として直接検索する。
- * Projectionを別に持たない(stored_events自体が既に検索可能なテーブルであるため)。
+ * UC-M003: 監査ログを確認する。EventStore(legacy_stored_events / stored_events)を
+ * 正の記録として直接検索する。Projectionを別に持たない(EventStore自体が既に検索可能な
+ * テーブルであるため)。ドメインの移行状況によりテーブルが2系統に分かれているため、
+ * 検索自体はApp\Domain\EventSourcing\Support\EventHistoryQueryに委ねる
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[OA\Tag(name: '監査ログ', description: 'EventStoreの監査ログ検索')]
 class AuditLogController extends Controller
 {
-    /**
-     * ペイロード中でユーザーIDを表す代表的なキー。JSON列に対する厳密検索がDBに依らず
-     * 使えるよう、'"key":<id>' 形式のLIKE検索で近似する(完全な保証はしない簡易実装)。
-     *
-     * @var array<int, string>
-     */
-    private const ACTOR_KEYS = [
-        'user_id', 'applicant_user_id', 'approver_user_id', 'approved_by_user_id',
-        'submitted_by_user_id', 'returned_by_user_id', 'cancelled_by_user_id',
-        'changed_by_user_id', 'assigned_by_user_id', 'assigned_user_id', 'edited_by_user_id',
-        'closed_by_user_id', 'requested_by_user_id',
-        // 端末・認証キー・API/MCP連携・月次一括作成(docs/23〜docs/26)。
-        'owner_user_id', 'registered_by_user_id', 'issued_by_user_id', 'disabled_by_user_id',
-        'revoked_by_user_id', 'granted_by_user_id', 'actor_user_id', 'created_by_user_id',
-        'updated_by_user_id', 'applied_by_user_id', 'confirmed_by_user_id', 'reissued_by_user_id',
-    ];
+    private const PER_PAGE = 50;
+
+    public function __construct(private readonly EventHistoryQuery $historyQuery) {}
 
     #[OA\Get(
         path: '/audit-log',
@@ -44,11 +36,20 @@ class AuditLogController extends Controller
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
-        $events = $this->filteredQuery($request)
-            ->orderByDesc('occurred_at')
-            ->paginate(50);
+        $events = $this->search($request);
 
-        return StoredEventResource::collection($events);
+        $page = (int) $request->query('page', 1);
+        $items = $events->forPage($page, self::PER_PAGE)->values();
+
+        $paginator = new LengthAwarePaginator(
+            $items,
+            $events->count(),
+            self::PER_PAGE,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        return StoredEventResource::collection($paginator);
     }
 
     #[OA\Get(
@@ -61,7 +62,7 @@ class AuditLogController extends Controller
     )]
     public function exportCsv(Request $request): StreamedResponse
     {
-        $events = $this->filteredQuery($request)->orderByDesc('occurred_at')->get();
+        $events = $this->search($request);
 
         return response()->streamDownload(function () use ($events) {
             $handle = fopen('php://output', 'w');
@@ -81,7 +82,10 @@ class AuditLogController extends Controller
         }, 'audit_log.csv', ['Content-Type' => 'text/csv']);
     }
 
-    private function filteredQuery(Request $request)
+    /**
+     * @return Collection<int, object>
+     */
+    private function search(Request $request): Collection
     {
         $data = $request->validate([
             'aggregate_type' => ['nullable', 'string'],
@@ -92,38 +96,13 @@ class AuditLogController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        $query = StoredEvent::query();
-
-        if (! empty($data['aggregate_type'])) {
-            $query->where('aggregate_type', $data['aggregate_type']);
-        }
-
-        if (! empty($data['aggregate_id'])) {
-            $query->where('aggregate_id', $data['aggregate_id']);
-        }
-
-        if (! empty($data['event_type'])) {
-            $query->where('event_type', $data['event_type']);
-        }
-
-        if (! empty($data['from'])) {
-            $query->where('occurred_at', '>=', $data['from']);
-        }
-
-        if (! empty($data['to'])) {
-            $query->where('occurred_at', '<=', $data['to']);
-        }
-
-        if (! empty($data['user_id'])) {
-            $userId = (int) $data['user_id'];
-            $query->where(function ($sub) use ($userId) {
-                foreach (self::ACTOR_KEYS as $key) {
-                    $sub->orWhere('payload', 'like', '%"'.$key.'":'.$userId.'%');
-                }
-                $sub->orWhere(fn ($q) => $q->where('aggregate_type', 'user')->where('aggregate_id', (string) $userId));
-            });
-        }
-
-        return $query;
+        return $this->historyQuery->search(
+            aggregateType: $data['aggregate_type'] ?? null,
+            aggregateId: $data['aggregate_id'] ?? null,
+            eventType: $data['event_type'] ?? null,
+            userId: isset($data['user_id']) ? (int) $data['user_id'] : null,
+            from: $data['from'] ?? null,
+            to: $data['to'] ?? null,
+        );
     }
 }

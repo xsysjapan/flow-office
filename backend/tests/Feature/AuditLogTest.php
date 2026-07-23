@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\RequestType;
 use App\Models\Role;
 use App\Models\StoredEvent;
 use App\Models\User;
@@ -55,5 +56,38 @@ class AuditLogTest extends TestCase
         $employee = User::factory()->create();
 
         $this->actingAs($employee)->getJson('/api/audit-log')->assertForbidden();
+    }
+
+    /**
+     * Workflowはspatie/laravel-event-sourcingへ移行済みのため、新しいstored_eventsテーブルに
+     * 書き込まれる。監査ログがそちら側も検索できていることを確認する
+     * (docs/29-event-sourcing-framework-migration.md参照)。
+     */
+    public function test_admin_can_see_events_from_a_migrated_domain(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $applicant = User::factory()->create();
+
+        $requestType = RequestType::query()->create([
+            'code' => 'expense_reimbursement',
+            'name' => '経費精算',
+            'form_schema' => [],
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => 'タクシー代',
+            'form_data' => [],
+        ])->assertCreated();
+
+        $response = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=workflow_request');
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame('workflow_request.drafted', $data[0]['event_type']);
+        $this->assertSame('タクシー代', $data[0]['payload']['title']);
     }
 }

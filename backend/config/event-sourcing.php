@@ -4,6 +4,10 @@ use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
+use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
+use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
+use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
+use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
 use App\Domain\Device\Events\DevicePaired;
@@ -21,6 +25,11 @@ use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use App\Domain\Notification\Events\NotificationConfirmed;
 use App\Domain\Notification\Events\NotificationQueued;
 use App\Domain\Notification\Events\NotificationSent;
+use App\Domain\Workflow\Events\WorkflowRequestApproved;
+use App\Domain\Workflow\Events\WorkflowRequestCancelled;
+use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestReturned;
+use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use Spatie\EventSourcing\EventSerializers\JsonEventSerializer;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshot;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshotRepository;
@@ -158,6 +167,17 @@ return [
         'notification.queued' => NotificationQueued::class,
         'notification.sent' => NotificationSent::class,
         'notification.confirmed' => NotificationConfirmed::class,
+
+        'workflow_request.drafted' => WorkflowRequestDrafted::class,
+        'workflow_request.submitted' => WorkflowRequestSubmitted::class,
+        'workflow_request.approved' => WorkflowRequestApproved::class,
+        'workflow_request.returned' => WorkflowRequestReturned::class,
+        'workflow_request.cancelled' => WorkflowRequestCancelled::class,
+
+        'backoffice_task.created' => BackOfficeTaskCreated::class,
+        'backoffice_task.assigned' => BackOfficeTaskAssigned::class,
+        'backoffice_task.completed' => BackOfficeTaskCompleted::class,
+        'backoffice_task.status_changed' => BackOfficeTaskStatusChanged::class,
     ],
 
     /*

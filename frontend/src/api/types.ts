@@ -650,7 +650,7 @@ export interface Attachment {
 }
 
 export interface StoredEvent {
-  id: number
+  id: string
   event_id: string
   aggregate_type: string
   aggregate_id: string

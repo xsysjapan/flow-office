@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Support\EventHistoryQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -11,7 +12,6 @@ use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StoredEventResource;
 use App\Http\Resources\WorkflowRequestResource;
-use App\Models\StoredEvent;
 use App\Models\WorkflowRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -182,7 +182,7 @@ class WorkflowRequestController extends Controller
         parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function history(Request $request, WorkflowRequest $workflowRequest): AnonymousResourceCollection
+    public function history(Request $request, WorkflowRequest $workflowRequest, EventHistoryQuery $historyQuery): AnonymousResourceCollection
     {
         $user = $request->user();
 
@@ -194,11 +194,10 @@ class WorkflowRequestController extends Controller
             'この申請の履歴を閲覧する権限がありません。'
         );
 
-        $events = StoredEvent::query()
-            ->where('aggregate_type', 'workflow_request')
-            ->where('aggregate_id', (string) $workflowRequest->id)
-            ->orderBy('occurred_at')
-            ->get();
+        $events = $historyQuery
+            ->search(aggregateType: 'workflow_request', aggregateId: (string) $workflowRequest->id)
+            ->sortBy('occurred_at')
+            ->values();
 
         return StoredEventResource::collection($events);
     }

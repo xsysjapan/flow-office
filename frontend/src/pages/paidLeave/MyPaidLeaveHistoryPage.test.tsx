@@ -26,7 +26,7 @@ describe('MyPaidLeaveHistoryPage', () => {
   it('shows each history event with its label and detail', async () => {
     renderPage([
       {
-        id: 1,
+        id: 'evt-1',
         event_id: 'evt-1',
         aggregate_type: 'paid_leave_grant',
         aggregate_id: '1',

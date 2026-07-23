@@ -2,11 +2,10 @@
 
 namespace App\Domain\BackOffice\Handlers;
 
+use App\Domain\BackOffice\Aggregates\BackOfficeTaskAggregate;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
-use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Jobs\SendNotificationJob;
 use App\Models\BackOfficeTask;
 use App\Models\User;
@@ -18,23 +17,15 @@ use App\Models\User;
  */
 class AssignBackOfficeTaskHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): BackOfficeTask
     {
         assert($command instanceof AssignBackOfficeTask);
 
         $task = BackOfficeTask::query()->findOrFail($command->backOfficeTaskId);
 
-        $this->eventStore->append(
-            aggregateType: 'backoffice_task',
-            aggregateId: (string) $task->id,
-            event: new BackOfficeTaskAssigned(
-                backOfficeTaskId: $task->id,
-                assignedUserId: $command->assignedUserId,
-                assignedByUserId: $command->assignedByUserId,
-            ),
-        );
+        BackOfficeTaskAggregate::retrieve($task->id)
+            ->assign($command->assignedUserId, $command->assignedByUserId)
+            ->persist();
 
         $task->refresh();
 

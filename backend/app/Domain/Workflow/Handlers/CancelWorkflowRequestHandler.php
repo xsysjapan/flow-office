@@ -4,10 +4,9 @@ namespace App\Domain\Workflow\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Workflow\Aggregates\WorkflowRequestAggregate;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
-use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
@@ -18,8 +17,6 @@ use App\Models\WorkflowRequestStatus;
  */
 class CancelWorkflowRequestHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkflowRequest
     {
         assert($command instanceof CancelWorkflowRequest);
@@ -34,15 +31,9 @@ class CancelWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException('この申請は現在のステータスからは取り消せません。');
         }
 
-        $this->eventStore->append(
-            aggregateType: 'workflow_request',
-            aggregateId: (string) $workflowRequest->id,
-            event: new WorkflowRequestCancelled(
-                workflowRequestId: $workflowRequest->id,
-                cancelledByUserId: $command->cancelledByUserId,
-                reason: $command->reason,
-            ),
-        );
+        WorkflowRequestAggregate::retrieve($workflowRequest->id)
+            ->cancel($command->cancelledByUserId, $command->reason)
+            ->persist();
 
         if ($workflowRequest->approver_user_id !== null) {
             $approver = User::find($workflowRequest->approver_user_id);
