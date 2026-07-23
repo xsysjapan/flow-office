@@ -355,7 +355,7 @@ describe('AttendanceDayPage', () => {
 
     await waitFor(() =>
       expect(attendanceApi.adjustAttendanceDailyCalculation).toHaveBeenCalledWith(
-        1,
+        'day-1',
         expect.objectContaining({ statutory_within_overtime_minutes: 30, reason: '休憩の取り方を考慮して補正' }),
       ),
     )

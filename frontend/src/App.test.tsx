@@ -43,7 +43,7 @@ describe('App routing', () => {
 describe('App routing (authenticated)', () => {
   it('shows the app layout and today attendance page for an authenticated user', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue({
-      id: 1,
+      id: 'day-1',
       user_id: 'user-1',
       work_date: '2026-07-09',
       status: 'not_started',

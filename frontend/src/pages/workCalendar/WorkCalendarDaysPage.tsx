@@ -32,8 +32,7 @@ const emptyRow: DayRowData = {
  * 日単位の取得APIはないため、入力した内容をまとめて `PUT /work-calendars/:id/days` に送る。
  */
 export function WorkCalendarDaysPage() {
-  const { id } = useParams<{ id: string }>()
-  const calendarId = id
+  const { id: calendarId } = useParams<{ id: string }>()
   const { data: calendars, isLoading, error } = useWorkCalendars()
   const putDays = usePutWorkCalendarDays()
 
@@ -43,7 +42,7 @@ export function WorkCalendarDaysPage() {
   if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
 
   const calendar = calendars?.find((c) => c.id === calendarId)
-  if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
+  if (!calendar || !calendarId) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
 
   const handleSave = () => {
     putDays.mutate({
