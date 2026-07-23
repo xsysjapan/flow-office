@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as workflowRequestsApi from '../../api/workflowRequests'
-import type { Attachment, StoredEvent, User, WorkflowRequest } from '../../api/types'
+import type { Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
@@ -48,21 +48,18 @@ const submittedRequest: WorkflowRequest = {
   created_at: '2026-07-01T00:00:00+09:00',
 }
 
-const historyEvent: StoredEvent = {
+const historyEntry: WorkflowRequestHistoryEntry = {
   id: 1,
-  event_id: 'evt-1',
-  aggregate_type: 'workflow_request',
-  aggregate_id: '1',
-  version: 1,
-  event_type: 'workflow_request.drafted',
-  payload: {},
+  action: 'drafted',
+  actor_user_id: 1,
+  comment: null,
   occurred_at: '2026-07-01T00:00:00+09:00',
 }
 
 function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(request)
-  vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEvent])
+  vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEntry])
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue(attachments)
 
   return render(

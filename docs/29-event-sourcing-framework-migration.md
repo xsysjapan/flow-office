@@ -321,6 +321,39 @@ spatieの自動検出に委ねた。
   この仕組みは移行途中の一時的なものであり、全ドメイン移行後のバックフィル完了後は
   `legacy_stored_events`側の検索を削除できる。
 
+## 監査ログ・申請履歴の再設計(`EventHistoryQuery`廃止)
+
+上記の`EventHistoryQuery`(legacy/新テーブルの横断検索)は、Reactorの副作用漏れと同様に
+「本番リリース前の移行期間だけの問題を、恒久的な二重検索の仕組みで解決してしまっていた」
+ため、以下の通り作り直した。
+
+- **`AuditLogController`は`stored_events`(新テーブル)のみを検索する形に単純化した**:
+  `legacy_stored_events`に残っている未移行ドメインのイベントは、このリファクタリングが
+  完了して全ドメインが移行し終わるまで本番投入する予定がないため、移行期間中に限り
+  監査ログの対象外としても実害がない。`EventHistoryQuery`クラスは削除し、
+  `AuditLogController`が直接`EloquentStoredEvent`を検索する(ロジック自体は
+  旧`migratedQuery()`と同じ)。全ドメイン移行後のバックフィル完了後は
+  この制限も自然になくなる。
+- **`WorkflowRequestController::history()`はEventStoreを直接見るのをやめ、専用の
+  履歴Projection(`workflow_request_history_entries`)を新設して参照する形にした**:
+  従来は`stored_events`の生イベント(`event_class`・`event_properties`)をそのまま
+  APIレスポンスにしていたため、イベントクラス名やプロパティ名(camelCase)の変更が
+  そのままAPI・フロントエンドの表示仕様に影響してしまう(Projectionは再生成可能な
+  派生データとして扱う、という設計原則にも反する)。
+  - `App\Domain\Workflow\Projectors\WorkflowRequestHistoryProjector`が
+    `workflow_request.*`イベントから`workflow_request_history_entries`
+    (`workflow_request_id` / `action` / `actor_user_id` / `comment` / `occurred_at`)
+    を作成する。`action`は`drafted`/`submitted`/`approved`/`returned`/`cancelled`の
+    固定値で、イベントクラス名やペイロードの生の形に依存しない。
+  - 冪等性は`stored_events.id`(`$event->storedEventId()`)を`stored_event_id`列に
+    ユニーク制約付きで保持し、`updateOrCreate`することで担保する(申請は差戻し・再提出を
+    繰り返せるため、`workflow_request_id` + `action`の組だけではキーにならない)。
+  - `App\Http\Resources\WorkflowRequestHistoryEntryResource`がこのProjectionを
+    レスポンス整形する。フロントエンドは`StoredEvent`型・`event_type`ではなく
+    `WorkflowRequestHistoryEntry`型・`action`を参照する形に合わせて変更した
+    (`frontend/src/api/workflowRequests.ts` / `WorkflowRequestDetailPage.tsx` /
+    `utils/statusLabels.ts`の`workflowRequestHistoryActionLabel`)。
+
 ## 最終的なデータ移行(全ドメイン移行後)
 
 全ドメインの移行が完了したら、`legacy_stored_events`に残っている過去イベントを新しい

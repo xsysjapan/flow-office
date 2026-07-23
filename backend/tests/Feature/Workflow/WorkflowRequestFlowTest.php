@@ -142,10 +142,13 @@ class WorkflowRequestFlowTest extends TestCase
 
         $history = $this->actingAs($applicant)->getJson("/api/workflow-requests/{$draft['id']}/history");
         $history->assertOk();
-        $eventTypes = collect($history->json())->pluck('event_type');
-        $this->assertContains('workflow_request.drafted', $eventTypes);
-        $this->assertContains('workflow_request.submitted', $eventTypes);
-        $this->assertContains('workflow_request.returned', $eventTypes);
+        $actions = collect($history->json())->pluck('action');
+        $this->assertContains('drafted', $actions);
+        $this->assertContains('submitted', $actions);
+        $this->assertContains('returned', $actions);
+
+        $returned = collect($history->json())->firstWhere('action', 'returned');
+        $this->assertSame('不備があります', $returned['comment']);
 
         $this->actingAs($approver)->getJson("/api/workflow-requests/{$draft['id']}/history")->assertOk();
         $this->actingAs($stranger)->getJson("/api/workflow-requests/{$draft['id']}/history")->assertForbidden();

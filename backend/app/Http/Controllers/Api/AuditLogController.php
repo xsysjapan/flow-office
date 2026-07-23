@@ -2,21 +2,26 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\EventSourcing\Support\EventHistoryQuery;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StoredEventResource;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * UC-M003: 監査ログを確認する。EventStore(legacy_stored_events / stored_events)を
- * 正の記録として直接検索する。Projectionを別に持たない(EventStore自体が既に検索可能な
- * テーブルであるため)。ドメインの移行状況によりテーブルが2系統に分かれているため、
- * 検索自体はApp\Domain\EventSourcing\Support\EventHistoryQueryに委ねる
+ * UC-M003: 監査ログを確認する。EventStore(stored_events)を正の記録として直接検索する。
+ * Projectionを別に持たない(EventStore自体が既に検索可能なテーブルであるため)。
+ *
+ * spatie/laravel-event-sourcingへの移行が完了するまでの間、未移行ドメインは
+ * legacy_stored_eventsに書き込まれるが、本番リリース前の移行期間中であるため
+ * ここでは追わず、移行済みドメイン(stored_events)のみを検索対象にする
  * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[OA\Tag(name: '監査ログ', description: 'EventStoreの監査ログ検索')]
@@ -24,7 +29,20 @@ class AuditLogController extends Controller
 {
     private const PER_PAGE = 50;
 
-    public function __construct(private readonly EventHistoryQuery $historyQuery) {}
+    /**
+     * ペイロード中でユーザーIDを表す代表的なキー(event_propertiesのcamelCase表記に変換して使う)。
+     *
+     * @var array<int, string>
+     */
+    private const ACTOR_KEYS = [
+        'user_id', 'applicant_user_id', 'approver_user_id', 'approved_by_user_id',
+        'submitted_by_user_id', 'returned_by_user_id', 'cancelled_by_user_id',
+        'changed_by_user_id', 'assigned_by_user_id', 'assigned_user_id', 'edited_by_user_id',
+        'closed_by_user_id', 'requested_by_user_id',
+        'owner_user_id', 'registered_by_user_id', 'issued_by_user_id', 'disabled_by_user_id',
+        'revoked_by_user_id', 'granted_by_user_id', 'actor_user_id', 'created_by_user_id',
+        'updated_by_user_id', 'applied_by_user_id', 'confirmed_by_user_id', 'reissued_by_user_id',
+    ];
 
     #[OA\Get(
         path: '/audit-log',
@@ -96,13 +114,47 @@ class AuditLogController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        return $this->historyQuery->search(
-            aggregateType: $data['aggregate_type'] ?? null,
-            aggregateId: $data['aggregate_id'] ?? null,
-            eventType: $data['event_type'] ?? null,
-            userId: isset($data['user_id']) ? (int) $data['user_id'] : null,
-            from: $data['from'] ?? null,
-            to: $data['to'] ?? null,
-        );
+        $query = EloquentStoredEvent::query();
+
+        if (isset($data['aggregate_type'])) {
+            $query->where('event_class', 'like', $data['aggregate_type'].'.%');
+        }
+
+        if (isset($data['aggregate_id'])) {
+            $query->where('aggregate_uuid', $data['aggregate_id']);
+        }
+
+        if (isset($data['event_type'])) {
+            $query->where('event_class', $data['event_type']);
+        }
+
+        if (isset($data['from'])) {
+            $query->where('created_at', '>=', $data['from']);
+        }
+
+        if (isset($data['to'])) {
+            $query->where('created_at', '<=', $data['to']);
+        }
+
+        if (isset($data['user_id'])) {
+            $userId = (int) $data['user_id'];
+            $query->where(function (Builder $sub) use ($userId) {
+                foreach (self::ACTOR_KEYS as $key) {
+                    $sub->orWhere('event_properties', 'like', '%"'.Str::camel($key).'":'.$userId.'%');
+                }
+            });
+        }
+
+        return $query->orderByDesc('id')->get()
+            ->map(fn (EloquentStoredEvent $event) => (object) [
+                'id' => $event->id,
+                'event_id' => (string) $event->id,
+                'aggregate_type' => Str::before($event->event_class, '.'),
+                'aggregate_id' => $event->aggregate_uuid,
+                'version' => $event->aggregate_version,
+                'event_type' => $event->event_class,
+                'payload' => $event->event_properties,
+                'occurred_at' => Carbon::parse($event->created_at),
+            ]);
     }
 }

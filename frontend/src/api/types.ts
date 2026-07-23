@@ -660,6 +660,14 @@ export interface StoredEvent {
   occurred_at: string
 }
 
+export interface WorkflowRequestHistoryEntry {
+  id: number
+  action: 'drafted' | 'submitted' | 'approved' | 'returned' | 'cancelled'
+  actor_user_id: number | null
+  comment: string | null
+  occurred_at: string
+}
+
 export type DeviceOwnerType = 'organization_shared' | 'personal'
 
 export type DeviceType =
