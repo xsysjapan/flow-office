@@ -2,16 +2,16 @@
 
 namespace App\Domain\AuthenticationKey\Handlers;
 
+use App\Domain\AuthenticationKey\Aggregates\AuthenticationKeyAggregate;
 use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
-use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use App\Domain\AuthenticationKey\Services\AuthenticationKeyHasher;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AuthenticationKey;
 use App\Models\AuthenticationKeyStatus;
 use App\Models\AuthenticationKeyType;
+use Illuminate\Support\Str;
 
 /**
  * UC-K001/UC-K002: 認証キーを登録する。生の値は保存せずHMAC-SHA256のハッシュ値のみ保存する。
@@ -23,7 +23,6 @@ use App\Models\AuthenticationKeyType;
 class IssueAuthenticationKeyHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AuthenticationKeyHasher $hasher,
     ) {}
 
@@ -47,31 +46,22 @@ class IssueAuthenticationKeyHandler implements CommandHandler
             throw new DomainRuleException('この認証キーは既に他のユーザーに登録されています。');
         }
 
-        $key = AuthenticationKey::query()->create([
-            'user_id' => $command->userId,
-            'key_type' => $command->keyType,
-            'display_name' => $command->displayName,
-            'key_hash' => $keyHash,
-            'status' => AuthenticationKeyStatus::ACTIVE,
-            'valid_from' => $command->validFrom,
-            'valid_until' => $command->validUntil,
-            'metadata_json' => $command->metadata,
-            'registered_by_user_id' => $command->registeredByUserId,
-            'registered_at' => now(),
-        ]);
+        $aggregateUuid = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'authentication_key',
-            aggregateId: (string) $key->id,
-            event: new AuthenticationKeyIssued(
-                authenticationKeyId: $key->id,
+        AuthenticationKeyAggregate::retrieve($aggregateUuid)
+            ->issue(
                 userId: $command->userId,
                 keyType: $command->keyType,
                 displayName: $command->displayName,
+                keyHash: $keyHash,
+                validFrom: $command->validFrom,
+                validUntil: $command->validUntil,
+                metadata: $command->metadata,
                 registeredByUserId: $command->registeredByUserId,
-            ),
-        );
+                registeredAt: now()->format('Y-m-d H:i:s'),
+            )
+            ->persist();
 
-        return $key;
+        return AuthenticationKey::query()->where('aggregate_uuid', $aggregateUuid)->firstOrFail();
     }
 }

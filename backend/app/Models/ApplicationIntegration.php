@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAggregateUuid;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,9 @@ use Laravel\Sanctum\PersonalAccessToken;
  * 個人/組織のAPI・MCP連携(docs/25-usecases-integrations-mcp.md)。実際の認証キーの実体は
  * Sanctumの`personal_access_tokens`に委譲し、ここは「誰が・どの用途で・いつ発行したか」の
  * 台帳として機能する(devices/authentication_keysと同じ考え方)。
+ *
+ * 主キーは連番int。ESの集約ストリーム識別子は別列aggregate_uuidで持つ
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[Fillable([
     'aggregate_uuid', 'owner_type', 'owner_user_id', 'client_type', 'client_name', 'purpose',
@@ -19,6 +23,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 ])]
 class ApplicationIntegration extends Model
 {
+    use HasAggregateUuid;
+
     protected function casts(): array
     {
         return [

@@ -2,6 +2,8 @@
 
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
+use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
+use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -122,6 +124,9 @@ return [
         'application_integration.registered' => ApplicationIntegrationRegistered::class,
         'application_integration.token_reissued' => ApplicationIntegrationTokenReissued::class,
         'application_integration.revoked' => ApplicationIntegrationRevoked::class,
+
+        'authentication_key.issued' => AuthenticationKeyIssued::class,
+        'authentication_key.disabled' => AuthenticationKeyDisabled::class,
     ],
 
     /*

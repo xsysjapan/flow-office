@@ -2,25 +2,12 @@
 
 namespace App\Domain\AuthenticationKey\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AuthenticationKeyDisabled implements DomainEvent
+class AuthenticationKeyDisabled extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $authenticationKeyId,
         public readonly int $disabledByUserId,
+        public readonly string $disabledAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'authentication_key.disabled';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'authentication_key_id' => $this->authenticationKeyId,
-            'disabled_by_user_id' => $this->disabledByUserId,
-        ];
-    }
 }

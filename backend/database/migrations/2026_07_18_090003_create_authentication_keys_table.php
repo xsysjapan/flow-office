@@ -14,6 +14,10 @@ return new class extends Migration
     {
         Schema::create('authentication_keys', function (Blueprint $table) {
             $table->id();
+            // ESの集約ストリームID。device_admin_sessions.authentication_key_id等が主キー
+            // (連番int)を参照しているため主キー自体はUUID化せず、別列でストリーム識別子を持つ
+            // (docs/29-event-sourcing-framework-migration.md「集約IDのUUID化方針」(a)参照)。
+            $table->uuid('aggregate_uuid')->unique();
             $table->foreignId('user_id')->constrained();
             $table->string('key_type');
             $table->string('display_name');
