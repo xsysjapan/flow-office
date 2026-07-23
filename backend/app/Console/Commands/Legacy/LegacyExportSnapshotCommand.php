@@ -29,8 +29,17 @@ class LegacyExportSnapshotCommand extends Command
             mkdir($path, 0755, true);
         }
 
-        $definitions = config('legacy_migration.tables');
-        $tablesToExport = [];
+        $definitions = config('legacy_migration.aggregates');
+        $tablesToExport = [
+            // 旧イベントストア本体。集約ごとの実際の履歴イベントを読むために必須
+            // (docs/30-legacy-data-migration.md「できる限りイベントを復元する」参照)。
+            'stored_events' => true,
+            // ロール割り当ては user.roles_changed イベントを持たないユーザー(初期admin等、
+            // 旧システムでコマンド経由でなく直接付与されたロール)が存在しうるため、
+            // イベント変換とは別に現在のピボット行そのものをバックフィル対象として書き出す
+            // (legacy:backfill-roles参照)。
+            'role_user' => true,
+        ];
 
         foreach (config('legacy_migration.plain_copy_tables', []) as $table) {
             $tablesToExport[$table] = true;

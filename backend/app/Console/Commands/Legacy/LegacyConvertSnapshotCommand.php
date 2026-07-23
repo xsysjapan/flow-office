@@ -10,8 +10,22 @@ use stdClass;
 
 /**
  * 本番カットオーバー移行(docs/30-legacy-data-migration.md)手順2: `legacy:export`が
- * 書き出したJSONスナップショットを読み、`config/legacy_migration.php`の定義に従って
- * 新スキーマのUUIDへ変換した`stored_events`行を直接INSERTする。
+ * 書き出したJSONスナップショット(旧`stored_events`本体を含む)を読み、
+ * `config/legacy_migration.php`の`aggregates`定義に従って、各集約の**実際の履歴イベントを
+ * できる限り忠実に**新スキーマの`stored_events`へ変換してINSERTする。
+ *
+ * 集約ごとの処理:
+ * 1. 旧`stored_events`から、その集約(aggregate_type)の全イベントを対象のaggregate_id
+ *    (旧int)ごとにグルーピングし、versionの昇順に並べる。
+ * 2. `always_genesis`が真、またはその集約に旧イベントが1件も無い場合、`genesis`クロージャで
+ *    「移行時点で分かる最も古い状態」を最初のイベントとして合成する(旧システムでは
+ *    エンティティの新規作成自体がイベント化されていないドメイン(User等)がこれに該当する)。
+ * 3. 旧イベントを1件ずつ、`events[旧event_type]`クロージャで新イベントへ変換する。
+ *    クロージャは`$state`(このイベントストリームを通して引き継がれる可変の連想配列)を
+ *    受け取り更新できる。旧`user.synced_from_ms365`(差分のみを持つ)のように、旧payload
+ *    だけでは新イベントに必要な全フィールドを復元できない場合、`$state`に前回までの
+ *    既知の値を積み上げて補う。マッピングが無い・対応不能なイベント種別はスキップし、
+ *    警告を出す(移行全体を止めない)。
  *
  * このコマンドは新DB(デフォルト接続)にのみ書き込む。実行前に`stored_events`が空である
  * ことを前提とする(`--force`を付けない限り、既に行があれば中断する)。
@@ -29,6 +43,9 @@ class LegacyConvertSnapshotCommand extends Command
 
     protected $description = 'legacy:exportのスナップショットをstored_events用のイベントへ変換してINSERTする';
 
+    /** @var array<int, string> スキップしたイベントの内訳(--dry-run/実行後に表示する) */
+    private array $skipped = [];
+
     public function handle(): int
     {
         $path = $this->option('path') ?: storage_path('app/legacy-migration/snapshot');
@@ -42,7 +59,7 @@ class LegacyConvertSnapshotCommand extends Command
         }
 
         $config = config('legacy_migration');
-        $definitions = $config['tables'];
+        $definitions = $config['aggregates'];
         $order = $this->resolveOrder($definitions);
 
         if (! $dryRun) {
@@ -50,6 +67,9 @@ class LegacyConvertSnapshotCommand extends Command
         }
 
         $uuidMap = UuidMap::load($mapPath);
+
+        // 旧stored_events本体を、aggregate_type ごとにグルーピングして読み込む。
+        $legacyEventsByAggregateType = $this->loadLegacyEvents($path);
 
         $rowsByTable = [];
         foreach ($order as $key) {
@@ -71,61 +91,110 @@ class LegacyConvertSnapshotCommand extends Command
 
         $events = [];
 
-        foreach ($order as $key) {
-            $definition = $definitions[$key];
-            $rows = $rowsByTable[$definition['table']];
+        foreach ($order as $aggregateType) {
+            $definition = $definitions[$aggregateType];
+            $currentRows = $rowsByTable[$definition['table']];
+            $currentRowsById = [];
+            foreach ($currentRows as $row) {
+                $currentRowsById[(string) $row->id] = $row;
+            }
 
             $childrenByParentId = [];
             foreach ($definition['children'] ?? [] as $childKey => $child) {
                 $childrenByParentId[$childKey] = [];
                 foreach ($rowsByTable[$child['table']] as $childRow) {
-                    $parentId = $childRow->{$child['parent_column']};
+                    $parentId = (string) $childRow->{$child['parent_column']};
                     $childrenByParentId[$childKey][$parentId][] = $childRow;
                 }
             }
 
+            $oldEventsByAggregateId = $legacyEventsByAggregateType[$aggregateType] ?? [];
+
+            $allIds = array_unique(array_merge(array_keys($currentRowsById), array_keys($oldEventsByAggregateId)));
+            sort($allIds, SORT_STRING);
+
             $count = 0;
-            foreach ($rows as $row) {
-                $newUuid = $uuidMap->resolve($definition['table'], $row->id);
+            foreach ($allIds as $legacyId) {
+                $newUuid = $uuidMap->resolve($definition['table'], $legacyId);
+                $currentRow = $currentRowsById[$legacyId] ?? null;
 
                 $children = [];
                 foreach (array_keys($definition['children'] ?? []) as $childKey) {
-                    $children[$childKey] = $childrenByParentId[$childKey][$row->id] ?? [];
+                    $children[$childKey] = $childrenByParentId[$childKey][$legacyId] ?? [];
                 }
 
-                $properties = ($definition['map'])($row, $uuidMap, $actorUuid, $children);
-                $version = 1;
+                $oldEvents = $oldEventsByAggregateId[$legacyId] ?? [];
+                $state = [];
+                $version = 0;
+                $needsGenesis = ($definition['always_genesis'] ?? false) || $oldEvents === [];
 
-                $events[] = $this->buildEventRow(
-                    $newUuid,
-                    $version,
-                    $this->shortEventClass($definition['event_class']),
-                    $properties,
-                    $definition['table'],
-                    $row->id,
-                    $row->created_at ?? now(),
-                );
-                $count++;
-
-                foreach (($definition['extra_events'] ?? fn () => [])($row, $uuidMap, $actorUuid, $children) as $extra) {
+                if ($needsGenesis && isset($definition['genesis'])) {
+                    $result = ($definition['genesis'])($currentRow, $uuidMap, $actorUuid, $state);
+                    $state = $result['state'] ?? $state;
                     $version++;
                     $events[] = $this->buildEventRow(
                         $newUuid,
                         $version,
-                        $this->shortEventClass($extra['event_class']),
-                        $extra['properties'],
-                        $definition['table'],
-                        $row->id,
-                        $row->created_at ?? now(),
+                        $this->shortEventClass($result['event_class']),
+                        $result['properties'],
+                        $aggregateType,
+                        $legacyId,
+                        $currentRow->created_at ?? now(),
+                    );
+                    $count++;
+                }
+
+                foreach ($oldEvents as $oldEvent) {
+                    $mapper = $definition['events'][$oldEvent->event_type] ?? null;
+                    if ($mapper === null) {
+                        $this->skipped[] = "{$aggregateType}#{$legacyId} v{$oldEvent->version} ({$oldEvent->event_type}): マッピング未定義";
+
+                        continue;
+                    }
+
+                    $payload = json_decode($oldEvent->payload, true) ?? [];
+                    $result = $mapper($payload, $uuidMap, $currentRow, $actorUuid, $oldEvent->occurred_at, $state, $children);
+
+                    if ($result === null) {
+                        $this->skipped[] = "{$aggregateType}#{$legacyId} v{$oldEvent->version} ({$oldEvent->event_type}): 変換不能としてスキップ";
+
+                        continue;
+                    }
+
+                    $state = $result['state'] ?? $state;
+                    if (! isset($result['properties'])) {
+                        // このイベント自体は新イベントを生まない(stateの更新のみ)。
+                        continue;
+                    }
+
+                    $version++;
+                    $events[] = $this->buildEventRow(
+                        $newUuid,
+                        $version,
+                        $this->shortEventClass($result['event_class']),
+                        $result['properties'],
+                        $aggregateType,
+                        $legacyId,
+                        $oldEvent->occurred_at,
                     );
                     $count++;
                 }
             }
 
-            $this->info("{$definition['table']}: {$count}件 -> {$definition['event_class']}");
+            $this->info("{$aggregateType}: {$count}件のイベント (対象{$definition['table']}: ".count($allIds).'件)');
         }
 
         $uuidMap->save();
+
+        if ($this->skipped !== []) {
+            $this->warn(count($this->skipped).'件のイベントをマッピング未対応としてスキップしました:');
+            foreach (array_slice($this->skipped, 0, 50) as $line) {
+                $this->line("  - {$line}");
+            }
+            if (count($this->skipped) > 50) {
+                $this->line('  ...(以下省略)');
+            }
+        }
 
         if ($dryRun) {
             $this->info('--dry-run のためDBへは書き込んでいません。合計 '.count($events).' 件のイベントを生成しました。');
@@ -144,6 +213,31 @@ class LegacyConvertSnapshotCommand extends Command
     }
 
     /**
+     * 旧`stored_events`スナップショットを読み、aggregate_type -> aggregate_id(文字列) ->
+     * version昇順のイベント配列、という形にグルーピングする。
+     *
+     * @return array<string, array<string, array<int, stdClass>>>
+     */
+    private function loadLegacyEvents(string $path): array
+    {
+        $rows = $this->readSnapshot($path, 'stored_events');
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[$row->aggregate_type][(string) $row->aggregate_id][] = $row;
+        }
+
+        foreach ($grouped as $aggregateType => $byId) {
+            foreach ($byId as $id => $events) {
+                usort($events, fn (stdClass $a, stdClass $b) => $a->version <=> $b->version);
+                $grouped[$aggregateType][$id] = $events;
+            }
+        }
+
+        return $grouped;
+    }
+
+    /**
      * @param  array<string, mixed>  $properties
      * @return array<string, mixed>
      */
@@ -152,7 +246,7 @@ class LegacyConvertSnapshotCommand extends Command
         int $version,
         string $shortEventClass,
         array $properties,
-        string $legacyTable,
+        string $legacyAggregateType,
         int|string $legacyId,
         mixed $createdAt,
     ): array {
@@ -166,7 +260,7 @@ class LegacyConvertSnapshotCommand extends Command
                 'aggregate-root-uuid' => $aggregateUuid,
                 'aggregate-root-version' => $version,
                 'legacy_migration' => [
-                    'table' => $legacyTable,
+                    'aggregate_type' => $legacyAggregateType,
                     'legacy_id' => $legacyId,
                 ],
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -227,7 +321,7 @@ class LegacyConvertSnapshotCommand extends Command
                 return;
             }
             if (isset($visiting[$key])) {
-                throw new RuntimeException("legacy_migration.tables に循環依存があります: {$key}");
+                throw new RuntimeException("legacy_migration.aggregates に循環依存があります: {$key}");
             }
             $visiting[$key] = true;
 

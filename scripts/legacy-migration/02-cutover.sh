@@ -65,6 +65,9 @@ php artisan legacy:convert --path="${SNAPSHOT_DIR}" --map="${SNAPSHOT_DIR}/uuid-
 echo "== 4. 全Projectionを再生成する =="
 echo "yes" | php artisan event-sourcing:replay
 
+echo "== 5. イベント化されていなかったロール割り当てをバックフィルする =="
+php artisan legacy:backfill-roles --path="${SNAPSHOT_DIR}" --map="${SNAPSHOT_DIR}/uuid-map.json"
+
 echo "== 完了。次のステップ =="
 echo "1. 主要テーブルの件数を旧DBのバックアップと照合する。"
 echo "2. アプリを一時的に起動して主要画面(ログイン・今日の勤怠・管理画面)を確認する。"

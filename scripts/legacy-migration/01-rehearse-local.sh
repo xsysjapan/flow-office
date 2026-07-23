@@ -44,5 +44,8 @@ php artisan legacy:convert --path="${SNAPSHOT_DIR}" --map="${SNAPSHOT_DIR}/uuid-
 echo "== 4. 全Projectionを再生成する =="
 echo "yes" | php artisan event-sourcing:replay
 
+echo "== 5. イベント化されていなかったロール割り当てをバックフィルする =="
+php artisan legacy:backfill-roles --path="${SNAPSHOT_DIR}" --map="${SNAPSHOT_DIR}/uuid-map.json"
+
 echo "== 完了 =="
 echo "移行先DB(flow_office_new相当)を確認してください。UUID対応表: ${SNAPSHOT_DIR}/uuid-map.json"
