@@ -2,11 +2,10 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\WorkCalendarAggregate;
 use App\Domain\Attendance\Commands\PublishWorkCalendar;
-use App\Domain\Attendance\Events\WorkCalendarPublished;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\WorkCalendar;
 
 /**
@@ -16,24 +15,16 @@ use App\Models\WorkCalendar;
  */
 class PublishWorkCalendarHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkCalendar
     {
         assert($command instanceof PublishWorkCalendar);
 
-        $calendar = WorkCalendar::query()->findOrFail($command->workCalendarId);
-        $calendar->update(['status' => 'published']);
+        WorkCalendar::query()->findOrFail($command->workCalendarId);
 
-        $this->eventStore->append(
-            aggregateType: 'work_calendar',
-            aggregateId: (string) $calendar->id,
-            event: new WorkCalendarPublished(
-                workCalendarId: $calendar->id,
-                publishedByUserId: $command->publishedByUserId,
-            ),
-        );
+        WorkCalendarAggregate::retrieve($command->workCalendarId)
+            ->publish(publishedByUserId: $command->publishedByUserId)
+            ->persist();
 
-        return $calendar;
+        return WorkCalendar::query()->findOrFail($command->workCalendarId);
     }
 }

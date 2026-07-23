@@ -11,7 +11,7 @@ class GenerateEmployeeShiftAssignments implements Command
 {
     public function __construct(
         public readonly string $userId,
-        public readonly int $workStyleId,
+        public readonly string $workStyleId,
         public readonly string $from,
         public readonly string $to,
         public readonly string $generatedByUserId,

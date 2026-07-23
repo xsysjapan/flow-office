@@ -2,12 +2,11 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\EmployeeShiftAssignmentAggregate;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
-use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\EmployeeShiftAssignment;
@@ -33,7 +32,6 @@ use Illuminate\Support\Carbon;
 class EditEmployeeShiftAssignmentHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceEditGuard $guard,
     ) {}
 
@@ -66,16 +64,8 @@ class EditEmployeeShiftAssignmentHandler implements CommandHandler
         $previousPlannedEndAt = $assignment->planned_end_at?->toIso8601String();
         $previousPlannedBreakMinutes = $assignment->planned_break_minutes;
 
-        $assignment->planned_start_at = $plannedStartAt;
-        $assignment->planned_end_at = $plannedEndAt;
-        $assignment->planned_break_minutes = $command->plannedBreakMinutes;
-        $assignment->save();
-
-        $this->eventStore->append(
-            aggregateType: 'employee_shift_assignment',
-            aggregateId: (string) $assignment->id,
-            event: new EmployeeShiftPlanChanged(
-                employeeShiftAssignmentId: $assignment->id,
+        EmployeeShiftAssignmentAggregate::retrieve($assignment->id)
+            ->changePlan(
                 previousPlannedStartAt: $previousPlannedStartAt,
                 previousPlannedEndAt: $previousPlannedEndAt,
                 previousPlannedBreakMinutes: $previousPlannedBreakMinutes,
@@ -84,10 +74,10 @@ class EditEmployeeShiftAssignmentHandler implements CommandHandler
                 plannedBreakMinutes: $command->plannedBreakMinutes,
                 reason: $command->reason,
                 editedByUserId: $command->editedByUserId,
-            ),
-        );
+            )
+            ->persist();
 
-        return $assignment;
+        return $assignment->refresh();
     }
 
     private function assertWithinVariablePeriodCap(

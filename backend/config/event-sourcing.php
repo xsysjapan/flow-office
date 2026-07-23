@@ -17,6 +17,16 @@ use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
+use App\Domain\Attendance\Events\EmployeeShiftAssigned;
+use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
+use App\Domain\Attendance\Events\EmployeeShiftPublished;
+use App\Domain\Attendance\Events\ShiftPatternCreated;
+use App\Domain\Attendance\Events\ShiftPatternUpdated;
+use App\Domain\Attendance\Events\WorkCalendarCreated;
+use App\Domain\Attendance\Events\WorkCalendarDaysUpdated;
+use App\Domain\Attendance\Events\WorkCalendarPublished;
+use App\Domain\Attendance\Events\WorkStyleCreated;
+use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
@@ -197,6 +207,20 @@ return [
         'attendance_month.approved' => AttendanceMonthApproved::class,
         'attendance_month.returned' => AttendanceMonthReturned::class,
         'attendance_month.closed' => AttendanceMonthClosed::class,
+
+        'work_calendar.created' => WorkCalendarCreated::class,
+        'work_calendar.days_updated' => WorkCalendarDaysUpdated::class,
+        'work_calendar.published' => WorkCalendarPublished::class,
+
+        'work_style.created' => WorkStyleCreated::class,
+        'work_style.default_changed' => WorkStyleDefaultChanged::class,
+
+        'shift_pattern.created' => ShiftPatternCreated::class,
+        'shift_pattern.updated' => ShiftPatternUpdated::class,
+
+        'employee_shift.assigned' => EmployeeShiftAssigned::class,
+        'employee_shift.plan_changed' => EmployeeShiftPlanChanged::class,
+        'employee_shift.published' => EmployeeShiftPublished::class,
 
         'application_integration.registered' => ApplicationIntegrationRegistered::class,
         'application_integration.token_reissued' => ApplicationIntegrationTokenReissued::class,

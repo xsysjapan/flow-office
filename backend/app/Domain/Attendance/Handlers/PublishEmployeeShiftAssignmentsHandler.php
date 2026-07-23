@@ -2,12 +2,11 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\EmployeeShiftAssignmentAggregate;
 use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
-use App\Domain\Attendance\Events\EmployeeShiftPublished;
 use App\Domain\Attendance\Services\ShiftScheduleReviewService;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\User;
@@ -23,7 +22,6 @@ use Illuminate\Support\Carbon;
 class PublishEmployeeShiftAssignmentsHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly ShiftScheduleReviewService $reviewService,
     ) {}
 
@@ -47,18 +45,13 @@ class PublishEmployeeShiftAssignmentsHandler implements CommandHandler
             ->get();
 
         foreach ($assignments as $assignment) {
-            $assignment->update(['is_published' => true]);
-
-            $this->eventStore->append(
-                aggregateType: 'employee_shift_assignment',
-                aggregateId: (string) $assignment->id,
-                event: new EmployeeShiftPublished(
-                    employeeShiftAssignmentId: $assignment->id,
+            EmployeeShiftAssignmentAggregate::retrieve($assignment->id)
+                ->publish(
                     userId: $assignment->user_id,
                     workDate: $assignment->work_date->toDateString(),
                     publishedByUserId: $command->publishedByUserId,
-                ),
-            );
+                )
+                ->persist();
         }
 
         foreach ($assignments->groupBy('user_id') as $userId => $userAssignments) {

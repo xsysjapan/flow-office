@@ -68,7 +68,7 @@ class WorkCalendarController extends Controller
         operationId: 'workCalendars.publish',
         summary: '勤務カレンダーを公開する',
         tags: ['勤務カレンダー'],
-        parameters: [new OA\Parameter(name: 'workCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function publish(Request $request, WorkCalendar $workCalendar, CommandBus $commandBus): WorkCalendarResource
@@ -89,7 +89,7 @@ class WorkCalendarController extends Controller
         operationId: 'workCalendars.putDays',
         summary: '勤務カレンダーの日別設定を更新する',
         tags: ['勤務カレンダー'],
-        parameters: [new OA\Parameter(name: 'workCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['days'], properties: [new OA\Property(property: 'days', type: 'array', items: new OA\Items(type: 'object'))])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

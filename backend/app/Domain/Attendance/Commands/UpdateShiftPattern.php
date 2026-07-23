@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class UpdateShiftPattern implements Command
 {
     public function __construct(
-        public readonly int $shiftPatternId,
+        public readonly string $shiftPatternId,
         public readonly string $name,
         public readonly ?string $startTime,
         public readonly ?string $endTime,

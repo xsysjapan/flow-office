@@ -193,7 +193,7 @@ class WorkStyleController extends Controller
         operationId: 'workStyles.setDefault',
         summary: '勤務形態をデフォルトに設定する',
         tags: ['勤務形態'],
-        parameters: [new OA\Parameter(name: 'workStyle', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'workStyle', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function setDefault(Request $request, WorkStyle $workStyle, CommandBus $commandBus): WorkStyleResource

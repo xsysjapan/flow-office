@@ -63,14 +63,14 @@ class EmployeeShiftAssignmentController extends Controller
         operationId: 'employeeShiftAssignments.generate',
         summary: '勤務予定を一括生成する',
         tags: ['勤務予定'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_style_id', 'from', 'to'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_style_id', type: 'integer'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_style_id', 'from', 'to'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function generate(Request $request, CommandBus $commandBus): AnonymousResourceCollection
     {
         $data = $request->validate([
             'user_id' => ['required', 'string', 'exists:users,id'],
-            'work_style_id' => ['required', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['required', 'string', 'exists:work_styles,id'],
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
@@ -94,16 +94,16 @@ class EmployeeShiftAssignmentController extends Controller
         operationId: 'employeeShiftAssignments.assignPattern',
         summary: 'シフトパターンを日別に割り当てる',
         tags: ['勤務予定'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_style_id', 'work_date', 'shift_pattern_id'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_style_id', type: 'integer'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'shift_pattern_id', type: 'integer'), new OA\Property(property: 'is_legal_holiday', type: 'boolean'), new OA\Property(property: 'is_company_holiday', type: 'boolean')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_style_id', 'work_date', 'shift_pattern_id'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'shift_pattern_id', type: 'string', format: 'uuid'), new OA\Property(property: 'is_legal_holiday', type: 'boolean'), new OA\Property(property: 'is_company_holiday', type: 'boolean')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function assignPattern(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'string', 'exists:users,id'],
-            'work_style_id' => ['required', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['required', 'string', 'exists:work_styles,id'],
             'work_date' => ['required', 'date'],
-            'shift_pattern_id' => ['required', 'integer', 'exists:shift_patterns,id'],
+            'shift_pattern_id' => ['required', 'string', 'exists:shift_patterns,id'],
             'is_legal_holiday' => ['boolean'],
             'is_company_holiday' => ['boolean'],
         ]);
@@ -186,7 +186,7 @@ class EmployeeShiftAssignmentController extends Controller
         operationId: 'employeeShiftAssignments.update',
         summary: '勤務予定を編集する',
         tags: ['勤務予定'],
-        parameters: [new OA\Parameter(name: 'employeeShiftAssignment', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'employeeShiftAssignment', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['planned_break_minutes', 'reason'], properties: [new OA\Property(property: 'planned_start_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'planned_end_at', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'planned_break_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

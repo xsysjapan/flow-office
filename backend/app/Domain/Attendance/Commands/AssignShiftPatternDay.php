@@ -12,8 +12,8 @@ class AssignShiftPatternDay implements Command
     public function __construct(
         public readonly string $userId,
         public readonly string $workDate,
-        public readonly int $workStyleId,
-        public readonly int $shiftPatternId,
+        public readonly string $workStyleId,
+        public readonly string $shiftPatternId,
         public readonly bool $isLegalHoliday,
         public readonly bool $isCompanyHoliday,
         public readonly string $assignedByUserId,

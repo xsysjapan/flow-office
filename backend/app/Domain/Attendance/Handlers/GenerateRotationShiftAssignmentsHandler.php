@@ -2,18 +2,18 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\EmployeeShiftAssignmentAggregate;
 use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
-use App\Domain\Attendance\Events\EmployeeShiftAssigned;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\EmployeeRotationAssignment;
 use App\Models\EmployeeShiftAssignment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * 指示書 8.7節・8.8節: 社員に割り当てられたローテーション基準から、指定期間分の勤務予定を
@@ -30,7 +30,6 @@ use Illuminate\Support\Collection;
 class GenerateRotationShiftAssignmentsHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceEditGuard $guard,
     ) {}
 
@@ -103,50 +102,30 @@ class GenerateRotationShiftAssignmentsHandler implements CommandHandler
                 $plannedBreakEndAt = $plannedBreakEndAt->addDay();
             }
 
-            $assignment = $existing ?? new EmployeeShiftAssignment([
-                'user_id' => $command->userId,
-                'work_date' => $date->toDateString(),
-            ]);
+            $id = $existing?->id ?? (string) Str::uuid();
 
-            $assignment->fill([
-                'work_style_id' => $pattern->work_style_id,
-                'shift_pattern_id' => $shiftPattern->id,
-                'day_type' => $shiftPattern->code,
-                'is_working_day' => $shiftPattern->isWorkingPattern(),
-                'is_legal_holiday' => false,
-                'is_company_holiday' => ! $shiftPattern->isWorkingPattern(),
-                'planned_start_at' => $plannedStartAt,
-                'planned_end_at' => $plannedEndAt,
-                'planned_break_minutes' => $shiftPattern->break_minutes,
-                'planned_break_start_at' => $plannedBreakStartAt,
-                'planned_break_end_at' => $plannedBreakEndAt,
-                'is_published' => false,
-                'is_manually_overridden' => false,
-            ])->save();
-
-            $this->eventStore->append(
-                aggregateType: 'employee_shift_assignment',
-                aggregateId: (string) $assignment->id,
-                event: new EmployeeShiftAssigned(
-                    employeeShiftAssignmentId: $assignment->id,
-                    userId: $assignment->user_id,
-                    workDate: $assignment->work_date->toDateString(),
+            EmployeeShiftAssignmentAggregate::retrieve($id)
+                ->assign(
+                    userId: $command->userId,
+                    workDate: $date->toDateString(),
                     workStyleId: $pattern->work_style_id,
                     shiftPatternId: $shiftPattern->id,
-                    dayType: $assignment->day_type,
-                    isWorkingDay: $assignment->is_working_day,
-                    isLegalHoliday: $assignment->is_legal_holiday,
-                    isCompanyHoliday: $assignment->is_company_holiday,
+                    dayType: $shiftPattern->code,
+                    isWorkingDay: $shiftPattern->isWorkingPattern(),
+                    isLegalHoliday: false,
+                    isCompanyHoliday: ! $shiftPattern->isWorkingPattern(),
                     plannedStartAt: $plannedStartAt?->toIso8601String(),
                     plannedEndAt: $plannedEndAt?->toIso8601String(),
                     plannedBreakMinutes: $shiftPattern->break_minutes,
                     plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
                     plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
+                    isPublished: false,
+                    isManuallyOverridden: false,
                     assignedByUserId: $command->generatedByUserId,
-                ),
-            );
+                )
+                ->persist();
 
-            $generated->push($assignment);
+            $generated->push(EmployeeShiftAssignment::query()->findOrFail($id));
         }
 
         return ['generated' => $generated, 'skipped_dates' => $skipped];

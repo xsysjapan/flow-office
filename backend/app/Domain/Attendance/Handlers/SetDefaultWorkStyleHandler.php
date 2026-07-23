@@ -2,11 +2,10 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\WorkStyleAggregate;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
-use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\SystemSetting;
 use App\Models\WorkStyle;
 use Illuminate\Validation\ValidationException;
@@ -21,8 +20,6 @@ use Illuminate\Validation\ValidationException;
  */
 class SetDefaultWorkStyleHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkStyle
     {
         assert($command instanceof SetDefaultWorkStyle);
@@ -38,22 +35,13 @@ class SetDefaultWorkStyleHandler implements CommandHandler
         }
 
         $previousDefault = WorkStyle::query()->where('is_default', true)->first();
-        $previousDefault?->update(['is_default' => false]);
 
-        $workStyle->update(['is_default' => true]);
+        WorkStyleAggregate::retrieve($workStyle->id)
+            ->changeDefault($previousDefault?->id, $command->changedByUserId)
+            ->persist();
 
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
-        $this->eventStore->append(
-            aggregateType: 'work_style',
-            aggregateId: (string) $workStyle->id,
-            event: new WorkStyleDefaultChanged(
-                workStyleId: $workStyle->id,
-                previousDefaultWorkStyleId: $previousDefault?->id,
-                changedByUserId: $command->changedByUserId,
-            ),
-        );
-
-        return $workStyle;
+        return WorkStyle::query()->findOrFail($workStyle->id);
     }
 }
