@@ -107,7 +107,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.grantRules.store',
         summary: '特別休暇付与ルールを作成する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'name'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'work_style_id', type: 'integer', nullable: true), new OA\Property(property: 'min_attendance_rate', type: 'integer'), new OA\Property(property: 'first_grant_after_months', type: 'integer'), new OA\Property(property: 'grant_cycle_months', type: 'integer'), new OA\Property(property: 'expires_after_months', type: 'integer', nullable: true), new OA\Property(property: 'is_active', type: 'boolean'), new OA\Property(property: 'steps', type: 'array', items: new OA\Items(type: 'object'))])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'name'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'min_attendance_rate', type: 'integer'), new OA\Property(property: 'first_grant_after_months', type: 'integer'), new OA\Property(property: 'grant_cycle_months', type: 'integer'), new OA\Property(property: 'expires_after_months', type: 'integer', nullable: true), new OA\Property(property: 'is_active', type: 'boolean'), new OA\Property(property: 'steps', type: 'array', items: new OA\Items(type: 'object'))])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRule(Request $request): JsonResponse
@@ -115,7 +115,7 @@ class SpecialLeaveController extends Controller
         $data = $request->validate([
             'special_leave_type_id' => ['required', 'integer', 'exists:special_leave_types,id'],
             'name' => ['required', 'string', 'max:100'],
-            'work_style_id' => ['nullable', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['nullable', 'string', 'exists:work_styles,id'],
             'min_attendance_rate' => ['integer', 'between:0,100'],
             'first_grant_after_months' => ['integer', 'min:0'],
             'grant_cycle_months' => ['integer', 'min:1'],
