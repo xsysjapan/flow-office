@@ -40,7 +40,7 @@ class ClaimDevicePairingHandler implements CommandHandler
         $device->tokens()->delete();
         $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->pair($abilities, now()->format('Y-m-d H:i:s'))
             ->persist();
 

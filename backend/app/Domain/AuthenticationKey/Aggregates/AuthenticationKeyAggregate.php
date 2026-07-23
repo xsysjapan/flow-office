@@ -7,9 +7,9 @@ use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * authentication_key集約。主キーは連番int(device_admin_sessions.authentication_key_id等が
- * 参照するため)のままなので、集約の識別はuuid(このAggregateRootのuuid =
- * authentication_keys.aggregate_uuid)で行う(docs/29-event-sourcing-framework-migration.md参照)。
+ * authentication_key集約。主キーがコマンド側生成のUUID(このAggregateRootのuuid =
+ * authentication_keys.id)のため、行の新規作成自体もAuthenticationKeyProjectorに委ねられる
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 class AuthenticationKeyAggregate extends AggregateRoot
 {

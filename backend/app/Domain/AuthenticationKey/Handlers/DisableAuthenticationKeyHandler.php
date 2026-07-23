@@ -19,7 +19,7 @@ class DisableAuthenticationKeyHandler implements CommandHandler
 
         $key = AuthenticationKey::query()->findOrFail($command->authenticationKeyId);
 
-        AuthenticationKeyAggregate::retrieve($key->aggregate_uuid)
+        AuthenticationKeyAggregate::retrieve($key->id)
             ->disable($command->disabledByUserId, now()->format('Y-m-d H:i:s'))
             ->persist();
 

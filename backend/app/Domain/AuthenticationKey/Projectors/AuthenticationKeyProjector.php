@@ -9,8 +9,8 @@ use App\Models\AuthenticationKeyStatus;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * authentication_key.* イベントから authentication_keys を作成・更新する。主キーは連番int
- * のままのため、集約UUID(event->aggregateRootUuid())をキーにupdateOrCreateする
+ * authentication_key.* イベントから authentication_keys を作成・更新する。主キーがコマンド側
+ * 生成のUUID(event->aggregateRootUuid())のため、行の新規作成自体もこのProjectorが担う
  * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 class AuthenticationKeyProjector extends Projector
@@ -18,7 +18,7 @@ class AuthenticationKeyProjector extends Projector
     public function onAuthenticationKeyIssued(AuthenticationKeyIssued $event): void
     {
         AuthenticationKey::query()->updateOrCreate(
-            ['aggregate_uuid' => $event->aggregateRootUuid()],
+            ['id' => $event->aggregateRootUuid()],
             [
                 'user_id' => $event->userId,
                 'key_type' => $event->keyType,
@@ -37,7 +37,7 @@ class AuthenticationKeyProjector extends Projector
     public function onAuthenticationKeyDisabled(AuthenticationKeyDisabled $event): void
     {
         AuthenticationKey::query()
-            ->where('aggregate_uuid', $event->aggregateRootUuid())
+            ->whereKey($event->aggregateRootUuid())
             ->update([
                 'status' => AuthenticationKeyStatus::DISABLED,
                 'disabled_at' => $event->disabledAt,

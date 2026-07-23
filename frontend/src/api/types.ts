@@ -705,7 +705,7 @@ export type WorkLocationType =
   | 'other'
 
 export interface Device {
-  id: number
+  id: string
   owner_type: DeviceOwnerType
   owner_user_id: number | null
   name: string
@@ -745,7 +745,7 @@ export type AuthenticationKeyType =
 export type AuthenticationKeyStatus = 'active' | 'suspended' | 'disabled'
 
 export interface AuthenticationKey {
-  id: number
+  id: string
   user_id: number
   key_type: AuthenticationKeyType
   display_name: string
@@ -775,7 +775,7 @@ export type IntegrationScopeType =
   | 'report:self:import'
 
 export interface ApplicationIntegration {
-  id: number
+  id: string
   owner_type: 'personal' | 'organization'
   owner_user_id: number | null
   client_type: IntegrationClientType

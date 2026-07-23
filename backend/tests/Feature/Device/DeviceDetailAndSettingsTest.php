@@ -84,7 +84,7 @@ class DeviceDetailAndSettingsTest extends TestCase
 
         $this->assertTrue(
             EloquentStoredEvent::query()
-                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('aggregate_uuid', $device->id)
                 ->where('event_class', 'device.settings_updated')
                 ->exists(),
         );

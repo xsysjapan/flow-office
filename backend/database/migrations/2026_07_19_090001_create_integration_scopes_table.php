@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('integration_scopes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('integration_id')->constrained('application_integrations')->cascadeOnDelete();
+            $table->foreignUuid('integration_id')->constrained('application_integrations')->cascadeOnDelete();
             $table->string('scope');
             $table->timestamps();
 

@@ -14,9 +14,8 @@ use App\Domain\Device\Events\DeviceSettingsUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * device集約。主キーは連番int(attendance_punches.device_id等が参照するため)のままなので、
- * 集約の識別はuuid(このAggregateRootのuuid = devices.aggregate_uuid)で行う
- * (docs/29-event-sourcing-framework-migration.md参照)。
+ * device集約。主キーがコマンド側生成のUUID(このAggregateRootのuuid = devices.id)のため、
+ * 行の新規作成自体もDeviceProjectorに委ねられる(docs/29-event-sourcing-framework-migration.md参照)。
  *
  * ステータス等の業務ルール判定はこの集約の再生状態ではなく、Handlerがdevices(Projection)の
  * 現在値を読んで行う。テストファクトリ等でdevicesの行を直接作成するケース(イベントを

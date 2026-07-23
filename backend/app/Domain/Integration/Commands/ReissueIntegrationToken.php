@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class ReissueIntegrationToken implements Command
 {
     public function __construct(
-        public readonly int $integrationId,
+        public readonly string $integrationId,
         public readonly int $reissuedByUserId,
     ) {}
 }

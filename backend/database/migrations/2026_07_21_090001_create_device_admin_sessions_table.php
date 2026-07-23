@@ -19,9 +19,9 @@ return new class extends Migration
             // コマンド側で生成するUUIDを主キーにする(他テーブルから参照されないため、
             // Attachment/WorkflowRequestと同じ(b)方式。docs/29-event-sourcing-framework-migration.md参照)。
             $table->uuid('id')->primary();
-            $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
+            $table->foreignUuid('device_id')->constrained('devices')->cascadeOnDelete();
             $table->foreignId('admin_user_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('authentication_key_id')->nullable()->constrained('authentication_keys')->nullOnDelete();
+            $table->foreignUuid('authentication_key_id')->nullable()->constrained('authentication_keys')->nullOnDelete();
             $table->string('source');
             $table->dateTime('started_at');
             $table->dateTime('expires_at');

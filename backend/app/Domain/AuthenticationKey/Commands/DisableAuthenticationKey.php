@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class DisableAuthenticationKey implements Command
 {
     public function __construct(
-        public readonly int $authenticationKeyId,
+        public readonly string $authenticationKeyId,
         public readonly int $disabledByUserId,
     ) {}
 }

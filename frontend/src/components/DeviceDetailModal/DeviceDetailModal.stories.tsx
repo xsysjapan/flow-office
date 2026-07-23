@@ -4,7 +4,7 @@ import type { Device } from '../../api/types'
 import { DeviceDetailModal } from './DeviceDetailModal'
 
 const baseDevice: Device = {
-  id: 1,
+  id: 'device-1',
   owner_type: 'organization_shared',
   owner_user_id: null,
   name: '本社1階受付',

@@ -5,7 +5,7 @@ import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
 
 const keys: AuthenticationKey[] = [
   {
-    id: 1,
+    id: 'auth-key-1',
     user_id: 42,
     key_type: 'nfc_uid',
     display_name: '本社ICカード',
@@ -17,7 +17,7 @@ const keys: AuthenticationKey[] = [
     disabled_at: null,
   },
   {
-    id: 2,
+    id: 'auth-key-2',
     user_id: 42,
     key_type: 'fingerprint_external_id',
     display_name: '右手人差し指',

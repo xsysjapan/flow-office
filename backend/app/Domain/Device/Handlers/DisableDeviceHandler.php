@@ -23,7 +23,7 @@ class DisableDeviceHandler implements CommandHandler
         // 復活してしまうことを防ぐ。
         $device->tokens()->delete();
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->disable($command->disabledByUserId, now()->format('Y-m-d H:i:s'))
             ->persist();
 

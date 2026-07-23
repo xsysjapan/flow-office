@@ -14,13 +14,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('application_integrations', function (Blueprint $table) {
-            $table->id();
-            // ESの集約ストリームID。attendance_punches.integration_idが主キー(連番int)を
-            // 参照しているため主キー自体はUUID化せず、別列でストリーム識別子を持つ
-            // (docs/29-event-sourcing-framework-migration.md「集約IDのUUID化方針」(a)参照)。
-            // ApplicationIntegrationAggregateが発番し、行の新規作成含めてIntegrationProjectorが
-            // このUUIDをキーに作成・更新する。
-            $table->uuid('aggregate_uuid')->unique();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする。ApplicationIntegrationAggregateが発番し、
+            // 行の新規作成含めてIntegrationProjectorがこのUUIDをキーに作成・更新する
+            // (docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->string('owner_type');
             $table->foreignId('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('client_type');

@@ -26,7 +26,7 @@ class ReissueIntegrationTokenHandler implements CommandHandler
 
         $integration = ApplicationIntegration::query()->with(['owner', 'scopes'])->findOrFail($command->integrationId);
 
-        $aggregate = ApplicationIntegrationAggregate::retrieve($integration->aggregate_uuid);
+        $aggregate = ApplicationIntegrationAggregate::retrieve($integration->id);
 
         if ($aggregate->status() !== 'active') {
             throw new DomainRuleException('無効化済みの連携はトークンを再発行できません。');

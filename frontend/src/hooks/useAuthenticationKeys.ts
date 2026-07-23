@@ -29,7 +29,7 @@ export function useDisableAuthenticationKey() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id }: { id: number; userId: number }) => disableAuthenticationKey(id),
+    mutationFn: ({ id }: { id: string; userId: number }) => disableAuthenticationKey(id),
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['authentication-keys', variables.userId] })
     },

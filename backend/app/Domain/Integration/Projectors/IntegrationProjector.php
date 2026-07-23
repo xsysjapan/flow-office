@@ -10,15 +10,15 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
  * application_integration.* イベントから application_integrations / integration_scopes を
- * 作成・更新する。主キーは連番intのままのため、集約UUID(event->aggregateRootUuid())をキーに
- * updateOrCreateする(docs/29-event-sourcing-framework-migration.md参照)。
+ * 作成・更新する。主キーがコマンド側生成のUUID(event->aggregateRootUuid())のため、行の
+ * 新規作成自体もこのProjectorが担う(docs/29-event-sourcing-framework-migration.md参照)。
  */
 class IntegrationProjector extends Projector
 {
     public function onApplicationIntegrationRegistered(ApplicationIntegrationRegistered $event): void
     {
         $integration = ApplicationIntegration::query()->updateOrCreate(
-            ['aggregate_uuid' => $event->aggregateRootUuid()],
+            ['id' => $event->aggregateRootUuid()],
             [
                 'owner_type' => $event->ownerType,
                 'owner_user_id' => $event->ownerUserId,
@@ -39,14 +39,14 @@ class IntegrationProjector extends Projector
     public function onApplicationIntegrationTokenReissued(ApplicationIntegrationTokenReissued $event): void
     {
         ApplicationIntegration::query()
-            ->where('aggregate_uuid', $event->aggregateRootUuid())
+            ->whereKey($event->aggregateRootUuid())
             ->update(['personal_access_token_id' => $event->personalAccessTokenId]);
     }
 
     public function onApplicationIntegrationRevoked(ApplicationIntegrationRevoked $event): void
     {
         ApplicationIntegration::query()
-            ->where('aggregate_uuid', $event->aggregateRootUuid())
+            ->whereKey($event->aggregateRootUuid())
             ->update(['status' => 'revoked']);
     }
 }

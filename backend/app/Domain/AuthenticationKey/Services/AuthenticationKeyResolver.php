@@ -13,7 +13,7 @@ class AuthenticationKeyResolver
 {
     public function __construct(private readonly AuthenticationKeyHasher $hasher) {}
 
-    public function resolve(string $rawKeyValue, ?int $deviceId): AuthenticationKey
+    public function resolve(string $rawKeyValue, ?string $deviceId): AuthenticationKey
     {
         $keyHash = $this->hasher->hash($rawKeyValue);
 

@@ -53,7 +53,7 @@ export function MyIntegrationsPage() {
   const [clientName, setClientName] = useState('')
   const [purpose, setPurpose] = useState('')
   const [scopes, setScopes] = useState<IntegrationScopeType[]>([])
-  const [issuedToken, setIssuedToken] = useState<{ integrationId: number; token: string } | null>(null)
+  const [issuedToken, setIssuedToken] = useState<{ integrationId: string; token: string } | null>(null)
 
   const toggleScope = (scope: IntegrationScopeType) => {
     setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]))

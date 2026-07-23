@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('device_scopes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('device_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('device_id')->constrained()->cascadeOnDelete();
             $table->string('scope');
             $table->timestamps();
 

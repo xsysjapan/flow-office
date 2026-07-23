@@ -18,6 +18,6 @@ export function issueAuthenticationKey(input: IssueAuthenticationKeyInput): Prom
   return apiFetch('/users/me/authentication-keys', { method: 'POST', body: input })
 }
 
-export function disableAuthenticationKey(id: number): Promise<AuthenticationKey> {
+export function disableAuthenticationKey(id: string): Promise<AuthenticationKey> {
   return apiFetch(`/authentication-keys/${id}/disable`, { method: 'POST' })
 }

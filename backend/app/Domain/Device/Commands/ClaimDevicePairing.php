@@ -12,6 +12,6 @@ use App\Domain\EventSourcing\Contracts\Command;
 class ClaimDevicePairing implements Command
 {
     public function __construct(
-        public readonly int $deviceId,
+        public readonly string $deviceId,
     ) {}
 }

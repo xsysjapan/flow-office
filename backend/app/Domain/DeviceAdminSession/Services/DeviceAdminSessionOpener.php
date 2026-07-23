@@ -19,7 +19,7 @@ class DeviceAdminSessionOpener
 {
     private const SESSION_MINUTES = 30;
 
-    public function open(Device $device, User $adminUser, string $source, ?int $authenticationKeyId): DeviceAdminSession
+    public function open(Device $device, User $adminUser, string $source, ?string $authenticationKeyId): DeviceAdminSession
     {
         $aggregatesToPersist = [];
 

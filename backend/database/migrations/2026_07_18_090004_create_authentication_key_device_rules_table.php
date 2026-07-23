@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('authentication_key_device_rules', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('authentication_key_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('device_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->foreignUuid('authentication_key_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('device_id')->nullable()->constrained()->cascadeOnDelete();
             $table->string('site_id')->nullable();
             $table->boolean('allow')->default(true);
             $table->timestamps();

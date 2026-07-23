@@ -22,7 +22,7 @@ class UpdateDeviceSettingsHandler implements CommandHandler
 
         $device = Device::query()->findOrFail($command->deviceId);
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->updateSettings(
                 name: $command->name,
                 siteId: $command->siteId,

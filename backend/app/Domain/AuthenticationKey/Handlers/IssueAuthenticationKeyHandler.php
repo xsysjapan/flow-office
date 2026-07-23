@@ -62,6 +62,6 @@ class IssueAuthenticationKeyHandler implements CommandHandler
             )
             ->persist();
 
-        return AuthenticationKey::query()->where('aggregate_uuid', $aggregateUuid)->firstOrFail();
+        return AuthenticationKey::query()->findOrFail($aggregateUuid);
     }
 }

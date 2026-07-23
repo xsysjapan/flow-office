@@ -65,7 +65,7 @@ class DeviceAdminSession extends Model
         return $this->ended_at === null && $this->expires_at->isFuture();
     }
 
-    public static function activeForDevice(int $deviceId): ?self
+    public static function activeForDevice(string $deviceId): ?self
     {
         return self::query()
             ->where('device_id', $deviceId)

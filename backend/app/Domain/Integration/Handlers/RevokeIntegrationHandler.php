@@ -20,7 +20,7 @@ class RevokeIntegrationHandler implements CommandHandler
         $integration = ApplicationIntegration::query()->findOrFail($command->integrationId);
         $integration->personalAccessToken?->delete();
 
-        ApplicationIntegrationAggregate::retrieve($integration->aggregate_uuid)
+        ApplicationIntegrationAggregate::retrieve($integration->id)
             ->revoke($command->revokedByUserId)
             ->persist();
 

@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\HasAggregateUuid;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,16 +13,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 外部利用者ID・QR・FIDO等をユーザーに紐付ける。生の値は保存せず`key_hash`のみ保存する
  * (CLAUDE.mdの設計原則12、生体情報そのものを保存しない)。
  *
- * 主キーは連番int。ESの集約ストリーム識別子は別列aggregate_uuidで持つ
+ * 主キーはUUID(HasUuids)。AuthenticationKeyAggregateが発番し、行の新規作成含めて
+ * AuthenticationKeyProjectorがstored_eventsから作成・更新する
  * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[Fillable([
-    'aggregate_uuid', 'user_id', 'key_type', 'display_name', 'key_hash', 'status', 'valid_from', 'valid_until',
+    'id', 'user_id', 'key_type', 'display_name', 'key_hash', 'status', 'valid_from', 'valid_until',
     'metadata_json', 'registered_by_user_id', 'registered_at', 'disabled_at',
 ])]
 class AuthenticationKey extends Model
 {
-    use HasAggregateUuid;
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     protected function casts(): array
     {
@@ -75,7 +80,7 @@ class AuthenticationKey extends Model
      * (または所属事業所)に一致するルールが無い限り拒否する(default-deny)。
      * device_id/site_idが共にnullのルールは、特定の端末・事業所を問わない全体ルールとして扱う。
      */
-    public function isUsableOnDevice(?int $deviceId): bool
+    public function isUsableOnDevice(?string $deviceId): bool
     {
         $rules = $this->deviceRules;
         if ($rules->isEmpty()) {

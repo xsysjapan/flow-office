@@ -70,7 +70,7 @@ class RegisterIntegrationHandler implements CommandHandler
             )
             ->persist();
 
-        $integration = ApplicationIntegration::query()->where('aggregate_uuid', $aggregateUuid)->firstOrFail();
+        $integration = ApplicationIntegration::query()->findOrFail($aggregateUuid);
 
         return ['integration' => $integration->load('scopes'), 'plainTextToken' => $plainTextToken];
     }

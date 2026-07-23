@@ -8,9 +8,9 @@ use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * application_integration集約。主キーは連番int(attendance_punches.integration_idが参照する
- * ため)のままなので、集約の識別はuuid(このAggregateRootのuuid = application_integrations.
- * aggregate_uuid)で行う(docs/29-event-sourcing-framework-migration.md参照)。
+ * application_integration集約。主キーがコマンド側生成のUUID(このAggregateRootのuuid =
+ * application_integrations.id)のため、行の新規作成自体もIntegrationProjectorに委ねられる
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 class ApplicationIntegrationAggregate extends AggregateRoot
 {

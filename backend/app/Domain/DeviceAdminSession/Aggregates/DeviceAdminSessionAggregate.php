@@ -13,9 +13,9 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class DeviceAdminSessionAggregate extends AggregateRoot
 {
     public function start(
-        int $deviceId,
+        string $deviceId,
         int $adminUserId,
-        ?int $authenticationKeyId,
+        ?string $authenticationKeyId,
         string $source,
         string $startedAt,
         string $expiresAt,

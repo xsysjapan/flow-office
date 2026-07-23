@@ -8,7 +8,7 @@ import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
 
 const keys: AuthenticationKey[] = [
   {
-    id: 1,
+    id: 'auth-key-1',
     user_id: 42,
     key_type: 'nfc_uid',
     display_name: '本社ICカード',
@@ -20,7 +20,7 @@ const keys: AuthenticationKey[] = [
     disabled_at: null,
   },
   {
-    id: 2,
+    id: 'auth-key-2',
     user_id: 42,
     key_type: 'fingerprint_external_id',
     display_name: '右手人差し指',
@@ -91,7 +91,7 @@ describe('AuthenticationKeysPanel', () => {
     const buttons = await screen.findAllByRole('button', { name: '無効化する' })
     await user.click(buttons[buttons.length - 1])
 
-    expect(disableSpy).toHaveBeenCalledWith(1)
+    expect(disableSpy).toHaveBeenCalledWith('auth-key-1')
   })
 
   it('opens a confirmation dialog before disabling a key', async () => {

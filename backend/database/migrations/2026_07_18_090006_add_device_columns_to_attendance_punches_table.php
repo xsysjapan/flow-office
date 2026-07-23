@@ -14,10 +14,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('attendance_punches', function (Blueprint $table) {
-            $table->foreignId('device_id')->nullable()->after('source')->constrained()->nullOnDelete();
-            $table->foreignId('authentication_key_id')->nullable()->after('device_id')->constrained()->nullOnDelete();
+            $table->foreignUuid('device_id')->nullable()->after('source')->constrained()->nullOnDelete();
+            $table->foreignUuid('authentication_key_id')->nullable()->after('device_id')->constrained()->nullOnDelete();
             $table->foreignId('actor_user_id')->nullable()->after('authentication_key_id')->constrained('users')->nullOnDelete();
-            $table->foreignId('integration_id')->nullable()->after('actor_user_id');
+            $table->uuid('integration_id')->nullable()->after('actor_user_id');
             $table->boolean('offline')->default(false)->after('integration_id');
             $table->string('idempotency_key')->nullable()->unique()->after('offline');
             $table->string('request_id')->nullable()->after('idempotency_key');

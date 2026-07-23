@@ -11,9 +11,9 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class DeviceAdminSessionStarted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceId,
+        public readonly string $deviceId,
         public readonly int $adminUserId,
-        public readonly ?int $authenticationKeyId,
+        public readonly ?string $authenticationKeyId,
         public readonly string $source,
         public readonly string $startedAt,
         public readonly string $expiresAt,

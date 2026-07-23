@@ -11,7 +11,7 @@ export function fetchDevices({ ownerType, page, withTrashed }: FetchDevicesOptio
   return apiFetch('/devices', { query: { owner_type: ownerType, page, with_trashed: withTrashed } })
 }
 
-export function fetchDevice(deviceId: number): Promise<Device> {
+export function fetchDevice(deviceId: string): Promise<Device> {
   return apiFetch(`/devices/${deviceId}`)
 }
 
@@ -45,7 +45,7 @@ export interface UpdateDeviceSettingsInput {
 
 // 設置場所・自動反映する勤務形態区分などの端末設定を変更する(管理者)。役割・スコープ・
 // 稼働状態(停止/失効)は別のAPI(grantDeviceScope/disableDevice/revokeDevice)で扱う。
-export function updateDeviceSettings(deviceId: number, input: UpdateDeviceSettingsInput): Promise<Device> {
+export function updateDeviceSettings(deviceId: string, input: UpdateDeviceSettingsInput): Promise<Device> {
   return apiFetch(`/devices/${deviceId}`, { method: 'PATCH', body: input })
 }
 
@@ -60,29 +60,29 @@ export interface IssuePairingClaimResult {
 // 認可根拠にする(匿名のペアリングコード交換APIは持たない)。この一時トークンは
 // device:claim-pairingのみのabilityを持つ短命なSanctumトークンで、QRコードとして
 // 端末アプリへ渡す想定。
-export function issueDevicePairingClaim(deviceId: number): Promise<IssuePairingClaimResult> {
+export function issueDevicePairingClaim(deviceId: string): Promise<IssuePairingClaimResult> {
   return apiFetch(`/devices/${deviceId}/pairing`, { method: 'POST' })
 }
 
-export function disableDevice(deviceId: number): Promise<Device> {
+export function disableDevice(deviceId: string): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/disable`, { method: 'POST' })
 }
 
-export function revokeDevice(deviceId: number, reason?: string): Promise<Device> {
+export function revokeDevice(deviceId: string, reason?: string): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/revoke`, { method: 'POST', body: { reason } })
 }
 
-export function grantDeviceScope(deviceId: number, scope: DeviceScopeType): Promise<Device> {
+export function grantDeviceScope(deviceId: string, scope: DeviceScopeType): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/scopes`, { method: 'POST', body: { scope } })
 }
 
 // 共有端末の役割(device_roles)を、登録時に選べる役割と同じ選択肢の集合で入れ替える。
-export function updateDeviceRoles(deviceId: number, roleTypes: DeviceRoleType[]): Promise<Device> {
+export function updateDeviceRoles(deviceId: string, roleTypes: DeviceRoleType[]): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/roles`, { method: 'PATCH', body: { role_types: roleTypes } })
 }
 
 // UC-D005: 停止・失効済みの端末を一覧から論理削除する(管理者)。監査証跡は
 // バックエンド側でstored_eventsに残り続けるため、フロントは削除操作の起点にすぎない。
-export function deleteDevice(deviceId: number): Promise<void> {
+export function deleteDevice(deviceId: string): Promise<void> {
   return apiFetch(`/devices/${deviceId}`, { method: 'DELETE' })
 }

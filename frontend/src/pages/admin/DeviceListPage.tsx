@@ -91,7 +91,7 @@ export function DeviceListPage() {
   const [roleTypes, setRoleTypes] = useState<DeviceRoleType[]>(['attendance_reader'])
   const [locationName, setLocationName] = useState('')
   const [defaultWorkLocationType, setDefaultWorkLocationType] = useState<WorkLocationType | ''>('')
-  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
 
   const toggleShowDeleted = () => {
     setShowDeleted((v) => !v)

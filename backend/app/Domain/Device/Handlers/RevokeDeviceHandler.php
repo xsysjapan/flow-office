@@ -23,7 +23,7 @@ class RevokeDeviceHandler implements CommandHandler
         // 復活してしまうことを防ぐ。
         $device->tokens()->delete();
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->revoke($command->revokedByUserId, $command->reason, now()->format('Y-m-d H:i:s'))
             ->persist();
 

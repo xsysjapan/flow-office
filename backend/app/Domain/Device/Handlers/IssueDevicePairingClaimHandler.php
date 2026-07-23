@@ -57,7 +57,7 @@ class IssueDevicePairingClaimHandler implements CommandHandler
 
         // 誰の管理者権限でこの端末がアクティベーションされたかを記録する(管理者ICカードの
         // 初回登録・ブートストラップ判定に使う。docs/23-usecases-devices.md UC-D006)。
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->issuePairingClaim($command->issuedByUserId, $wasReissued)
             ->persist();
 

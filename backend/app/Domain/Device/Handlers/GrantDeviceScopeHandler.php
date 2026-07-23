@@ -28,7 +28,7 @@ class GrantDeviceScopeHandler implements CommandHandler
 
         $device = Device::query()->findOrFail($command->deviceId);
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->grantScope($command->scope, $command->grantedByUserId)
             ->persist();
 

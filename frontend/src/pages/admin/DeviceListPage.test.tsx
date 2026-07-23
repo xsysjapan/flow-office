@@ -9,7 +9,7 @@ import { DeviceListPage } from './DeviceListPage'
 
 const devices: Device[] = [
   {
-    id: 1,
+    id: 'device-1',
     owner_type: 'organization_shared',
     owner_user_id: null,
     name: '本社1階受付',
@@ -34,7 +34,7 @@ const devices: Device[] = [
     created_at: '2026-07-01T00:00:00+09:00',
   },
   {
-    id: 2,
+    id: 'device-2',
     owner_type: 'organization_shared',
     owner_user_id: null,
     name: '大阪支店リーダー',

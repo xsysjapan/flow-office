@@ -24,10 +24,10 @@ export function useDevices({ ownerType, page = 1, withTrashed = false }: FetchDe
   })
 }
 
-export function useDevice(deviceId: number | undefined) {
+export function useDevice(deviceId: string | undefined) {
   return useQuery({
     queryKey: ['devices', 'detail', deviceId],
-    queryFn: () => fetchDevice(deviceId as number),
+    queryFn: () => fetchDevice(deviceId as string),
     enabled: deviceId !== undefined,
   })
 }
@@ -47,7 +47,7 @@ export function useIssueDevicePairingClaim() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (deviceId: number) => issueDevicePairingClaim(deviceId),
+    mutationFn: (deviceId: string) => issueDevicePairingClaim(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
@@ -58,7 +58,7 @@ export function useDisableDevice() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (deviceId: number) => disableDevice(deviceId),
+    mutationFn: (deviceId: string) => disableDevice(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
@@ -69,7 +69,7 @@ export function useRevokeDevice() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ deviceId, reason }: { deviceId: number; reason?: string }) => revokeDevice(deviceId, reason),
+    mutationFn: ({ deviceId, reason }: { deviceId: string; reason?: string }) => revokeDevice(deviceId, reason),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
@@ -80,7 +80,7 @@ export function useDeleteDevice() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (deviceId: number) => deleteDevice(deviceId),
+    mutationFn: (deviceId: string) => deleteDevice(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
@@ -91,7 +91,7 @@ export function useUpdateDeviceSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ deviceId, input }: { deviceId: number; input: UpdateDeviceSettingsInput }) =>
+    mutationFn: ({ deviceId, input }: { deviceId: string; input: UpdateDeviceSettingsInput }) =>
       updateDeviceSettings(deviceId, input),
     onSuccess: (device) => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
@@ -104,7 +104,7 @@ export function useUpdateDeviceRoles() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ deviceId, roleTypes }: { deviceId: number; roleTypes: DeviceRoleType[] }) =>
+    mutationFn: ({ deviceId, roleTypes }: { deviceId: string; roleTypes: DeviceRoleType[] }) =>
       updateDeviceRoles(deviceId, roleTypes),
     onSuccess: (device) => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
@@ -117,7 +117,7 @@ export function useGrantDeviceScope() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ deviceId, scope }: { deviceId: number; scope: DeviceScopeType }) =>
+    mutationFn: ({ deviceId, scope }: { deviceId: string; scope: DeviceScopeType }) =>
       grantDeviceScope(deviceId, scope),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })

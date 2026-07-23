@@ -57,7 +57,7 @@ class RegisterDeviceHandler implements CommandHandler
         );
         $aggregate->persist();
 
-        $device = Device::query()->where('aggregate_uuid', $aggregateUuid)->firstOrFail();
+        $device = Device::query()->findOrFail($aggregateUuid);
 
         $plainTextToken = null;
 

@@ -35,7 +35,7 @@ class UpdateDeviceRolesHandler implements CommandHandler
 
         $device = Device::query()->findOrFail($command->deviceId);
 
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->assignRoles($command->roleTypes, $command->updatedByUserId)
             ->persist();
 

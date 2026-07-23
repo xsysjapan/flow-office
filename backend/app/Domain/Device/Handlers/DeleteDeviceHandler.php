@@ -27,7 +27,7 @@ class DeleteDeviceHandler implements CommandHandler
 
         // 監査証跡(stored_events、UC-M003)は残すため物理削除はせず、論理削除のみ行う
         // (DeviceProjectorがdeleted_atを設定する)。
-        DeviceAggregate::retrieve($device->aggregate_uuid)
+        DeviceAggregate::retrieve($device->id)
             ->delete($command->deletedByUserId, now()->format('Y-m-d H:i:s'))
             ->persist();
 

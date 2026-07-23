@@ -237,7 +237,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSame(DeviceStatus::PENDING_PAIRING, $device->status);
         $this->assertTrue(
             EloquentStoredEvent::query()
-                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('aggregate_uuid', $device->id)
                 ->where('event_class', 'device.pairing_claim_issued')
                 ->exists(),
         );
@@ -283,7 +283,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertTrue($device->hasRole(DeviceRoleType::ACCESS_CONTROL));
         $this->assertTrue(
             EloquentStoredEvent::query()
-                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('aggregate_uuid', $device->id)
                 ->where('event_class', 'device.role_assigned')
                 ->exists(),
         );
@@ -313,7 +313,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSoftDeleted('devices', ['id' => $device->id]);
         $this->assertTrue(
             EloquentStoredEvent::query()
-                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('aggregate_uuid', $device->id)
                 ->where('event_class', 'device.deleted')
                 ->exists(),
         );

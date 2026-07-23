@@ -16,16 +16,16 @@ use App\Models\DeviceStatus;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * device.* イベントから devices / device_roles / device_scopes を作成・更新する。主キーは
- * 連番intのままのため、集約UUID(event->aggregateRootUuid())をキーにupdateOrCreateする
- * (docs/29-event-sourcing-framework-migration.md参照)。
+ * device.* イベントから devices / device_roles / device_scopes を作成・更新する。主キーが
+ * コマンド側生成のUUID(event->aggregateRootUuid())のため、行の新規作成自体もこのProjectorが
+ * 担う(docs/29-event-sourcing-framework-migration.md参照)。
  */
 class DeviceProjector extends Projector
 {
     public function onDeviceRegistered(DeviceRegistered $event): void
     {
         $device = Device::query()->updateOrCreate(
-            ['aggregate_uuid' => $event->aggregateRootUuid()],
+            ['id' => $event->aggregateRootUuid()],
             [
                 'owner_type' => $event->ownerType,
                 'owner_user_id' => $event->ownerUserId,
@@ -87,7 +87,7 @@ class DeviceProjector extends Projector
     {
         // 監査証跡(stored_events)は残すため物理削除はせず、論理削除のみ行う。
         Device::withTrashed()
-            ->where('aggregate_uuid', $event->aggregateRootUuid())
+            ->whereKey($event->aggregateRootUuid())
             ->update(['deleted_at' => $event->deletedAt]);
     }
 
@@ -123,6 +123,6 @@ class DeviceProjector extends Projector
 
     private function device(?string $aggregateUuid): Device
     {
-        return Device::query()->where('aggregate_uuid', $aggregateUuid)->firstOrFail();
+        return Device::query()->findOrFail($aggregateUuid);
     }
 }
