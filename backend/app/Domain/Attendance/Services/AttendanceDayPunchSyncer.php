@@ -18,19 +18,25 @@ use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * UC-A001〜A004・UC-A012〜UC-A014: 有効な打刻ログ(`status=active`)を集めて、矛盾なく
- * 1日分の勤務として組み立てられる場合のみ attendance_days / attendance_breaks に反映する。
- * Web画面の出退勤操作(`WebPunchDispatcher`経由)・共有端末・個人端末のいずれからの打刻も、
- * 記録・訂正・削除の後に必ずこの1つの規則を通る(経路ごとに計算ロジックを複製しない。
- * docs/03-architecture.md 3.5)。
+ * UC-A001〜A004・UC-A012〜UC-A014: 有効な打刻ログ(`status=active`)を集めて、
+ * `AttendancePunchReconciler::classify()`の判定結果に応じて attendance_days /
+ * attendance_breaks に反映する。Web画面の出退勤操作(`WebPunchDispatcher`経由)・共有端末・
+ * 個人端末のいずれからの打刻も、記録・訂正・削除の後に必ずこの1つの規則を通る
+ * (経路ごとに計算ロジックを複製しない。docs/03-architecture.md 3.5)。
  *
- * 1日分として矛盾なく組み立てられない間(出勤のみ・休憩開始のみ等)も、最新の打刻から
- * `attendance_days.status`だけは反映する(社員本人・管理者が「今の状態」を見て取れるように
- * するため)。ただし既に退勤済みの日は、以降の打刻では状態を変えない
- * (矛盾の解消はUC-A005の日次編集で行う)。
+ * - Complete(出勤〜退勤まで矛盾なく組み立てられる): 実績を確定し、日次計算も行う。
+ * - InProgress(まだ退勤していないが、ここまでの打刻に矛盾はない): 最新の打刻から
+ *   `attendance_days.status`だけを反映する(社員本人・管理者が「今の状態」を見て取れる
+ *   ようにするため)。
+ * - Contradictory(出勤・退勤の重複や順序の矛盾など): `attendance_days`は更新せず、
+ *   ログに警告を残すだけに留める。打刻ログ自体は矛盾があっても常に記録済みであり
+ *   (UC-A012)、矛盾の解消(実績の最終判断)はUC-A005の日次編集でユーザー自身が行う。
+ *
+ * 既に退勤済みの日は、以降の打刻では状態を変えない(矛盾の解消はUC-A005の日次編集で行う)。
  *
  * 打刻(attendance_punch集約)と日次勤怠(attendance_day集約)は別の集約ストリームだが、
  * 1回の打刻操作で両方に書き込みが生じるケースがあるため、このサービスはイベントを
@@ -70,6 +76,10 @@ class AttendanceDayPunchSyncer
             ->with('device')
             ->get();
 
+        if ($punches->isEmpty()) {
+            return null;
+        }
+
         $day = AttendanceDay::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
@@ -91,15 +101,29 @@ class AttendanceDayPunchSyncer
             return null;
         }
 
+        $result = $this->reconciler->classify($punches);
+
+        if ($result->outcome === PunchLogOutcome::Contradictory) {
+            // 打刻ログ自体は既に記録済み(UC-A012)。矛盾がある間はattendance_daysを
+            // 更新せず、ログに警告を残すだけに留める(最終判断はUC-A005の日次編集で
+            // ユーザー自身に委ねる)。
+            Log::warning('打刻ログに矛盾があるため、日次実績への反映をスキップしました。', [
+                'user_id' => $userId,
+                'work_date' => $workDate,
+                'reason' => $result->reason,
+            ]);
+
+            return null;
+        }
+
         $dayId = $day->id ?? (string) Str::uuid();
         $aggregate = AttendanceDayAggregate::retrieve($dayId);
 
-        $reconciled = $this->reconciler->reconcile($punches);
-        if ($reconciled === null) {
+        if ($result->outcome === PunchLogOutcome::InProgress) {
             return $this->syncLiveStatus($aggregate, $day, $userId, $workDate, $punches);
         }
 
-        return $this->syncFromPunches($aggregate, $day, $userId, $workDate, $reconciled, $punches);
+        return $this->syncFromPunches($aggregate, $day, $userId, $workDate, $result->reconciled, $punches);
     }
 
     /**
