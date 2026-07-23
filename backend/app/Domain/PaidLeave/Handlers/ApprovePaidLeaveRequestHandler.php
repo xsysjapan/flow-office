@@ -9,9 +9,9 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
+use App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
-use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
-use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
@@ -20,12 +20,18 @@ use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
-use App\Models\PaidLeaveUsage;
-use Illuminate\Support\Carbon;
+use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
  * UC-P004: 有給を承認する。承認時に (1) 有効期限が近い付与分から消化し、
  * (2) 対象日の勤怠(attendance_days.work_type)に有給区分を反映する。
+ *
+ * 承認1件で「paid_leave_request集約の承認」と「1件以上のpaid_leave_grant集約の消化」に
+ * またがるため、`AggregateRoot::persistInTransaction()`で1トランザクションにまとめて記録する
+ * (DeviceAdminSessionOpenerに次ぐ2例目の複数集約トランザクション。
+ * docs/29-event-sourcing-framework-migration.md参照)。消費計画(planConsumption)を
+ * 先に確定させ、残数不足なら集約を一切記録せずに例外を投げる形にしたため、
+ * 旧実装にあった「不足判定前に一部grantへ消化を反映してしまう」不整合も併せて解消した。
  *
  * @implements CommandHandler<ApprovePaidLeaveRequest>
  */
@@ -53,20 +59,29 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
 
         $day = $this->reflectOnAttendanceDay($request);
 
-        $request->status = PaidLeaveRequestStatus::APPROVED;
-        $request->approved_at = Carbon::now();
-        $request->save();
+        $plan = $this->planConsumption($request);
 
-        $this->eventStore->append(
-            aggregateType: 'paid_leave_request',
-            aggregateId: (string) $request->id,
-            event: new PaidLeaveRequestApproved(
+        $usedMinutes = $request->hours !== null ? (int) round($request->hours * 60) : null;
+
+        $aggregates = [
+            PaidLeaveRequestAggregate::retrieve($request->id)->approve($command->approvedByUserId),
+        ];
+
+        foreach ($plan as ['grant' => $grant, 'amount' => $amount]) {
+            $aggregates[] = PaidLeaveGrantAggregate::retrieve($grant->id)->use(
+                userId: $request->user_id,
                 paidLeaveRequestId: $request->id,
-                approvedByUserId: $command->approvedByUserId,
-            ),
-        );
+                attendanceDayId: $day->id,
+                usedOn: $request->target_date->toDateString(),
+                usedDays: $amount,
+                usedMinutes: $usedMinutes,
+                usageType: $request->leave_type,
+            );
+        }
 
-        $this->consumeGrants($request, $day->id);
+        AggregateRoot::persistInTransaction(...$aggregates);
+
+        $request = PaidLeaveRequest::query()->findOrFail($request->id);
 
         $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
 
@@ -116,9 +131,16 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
         return $day;
     }
 
-    private function consumeGrants(PaidLeaveRequest $request, int $attendanceDayId): void
+    /**
+     * 消化計画を確定する。この時点ではまだイベントを記録しない
+     * (残数不足の場合に一部だけ記録されてしまう不整合を避けるため)。
+     *
+     * @return array<int, array{grant: PaidLeaveGrant, amount: float}>
+     */
+    private function planConsumption(PaidLeaveRequest $request): array
     {
         $remainingToConsume = (float) $request->requested_days;
+        $plan = [];
 
         $grants = PaidLeaveGrant::query()
             ->where('user_id', $request->user_id)
@@ -133,40 +155,14 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
             }
 
             $consume = min((float) $grant->remaining_days, $remainingToConsume);
-
-            $grant->used_days = (float) $grant->used_days + $consume;
-            $grant->remaining_days = (float) $grant->remaining_days - $consume;
-            $grant->save();
-
-            $usage = PaidLeaveUsage::query()->create([
-                'user_id' => $request->user_id,
-                'attendance_day_id' => $attendanceDayId,
-                'paid_leave_grant_id' => $grant->id,
-                'paid_leave_request_id' => $request->id,
-                'used_on' => $request->target_date,
-                'used_days' => $consume,
-                'used_minutes' => $request->hours !== null ? (int) round($request->hours * 60) : null,
-                'usage_type' => $request->leave_type,
-            ]);
-
-            $this->eventStore->append(
-                aggregateType: 'paid_leave_grant',
-                aggregateId: (string) $grant->id,
-                event: new PaidLeaveUsed(
-                    paidLeaveUsageId: $usage->id,
-                    userId: $request->user_id,
-                    paidLeaveGrantId: $grant->id,
-                    paidLeaveRequestId: $request->id,
-                    usedOn: $request->target_date->toDateString(),
-                    usedDays: $consume,
-                ),
-            );
-
+            $plan[] = ['grant' => $grant, 'amount' => $consume];
             $remainingToConsume -= $consume;
         }
 
         if ($remainingToConsume > 0) {
             throw new DomainRuleException('有給残数が不足しているため承認できません。');
         }
+
+        return $plan;
     }
 }

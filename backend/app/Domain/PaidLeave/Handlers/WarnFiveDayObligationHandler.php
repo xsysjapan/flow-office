@@ -4,9 +4,8 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
+use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
-use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use Illuminate\Support\Carbon;
@@ -25,8 +24,6 @@ class WarnFiveDayObligationHandler implements CommandHandler
     private const REQUIRED_USED_DAYS = 5;
 
     private const WARNING_WINDOW_DAYS = 60;
-
-    public function __construct(private readonly EventStore $eventStore) {}
 
     /**
      * @return int 警告を発行した件数
@@ -67,19 +64,9 @@ class WarnFiveDayObligationHandler implements CommandHandler
                 detailUrl: null,
             );
 
-            $grant->five_day_obligation_warned_at = Carbon::now();
-            $grant->save();
-
-            $this->eventStore->append(
-                aggregateType: 'paid_leave_grant',
-                aggregateId: (string) $grant->id,
-                event: new PaidLeaveWarningRaised(
-                    paidLeaveGrantId: $grant->id,
-                    userId: $grant->user_id,
-                    warningType: 'five_day_obligation',
-                    message: $message,
-                ),
-            );
+            PaidLeaveGrantAggregate::retrieve($grant->id)
+                ->raiseWarning($grant->user_id, 'five_day_obligation', $message)
+                ->persist();
 
             $warnedCount++;
         }

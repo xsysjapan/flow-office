@@ -7,7 +7,7 @@ import type { SpecialLeaveRequest } from '../../api/types'
 import { SpecialLeaveRequestsToApprovePage } from './SpecialLeaveRequestsToApprovePage'
 
 const request: SpecialLeaveRequest = {
-  id: 1,
+  id: 'request-1',
   user_id: 1,
   user: {
     id: 1,

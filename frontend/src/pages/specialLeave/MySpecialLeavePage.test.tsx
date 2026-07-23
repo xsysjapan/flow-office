@@ -27,7 +27,7 @@ const approverSearchResult: Paginated<User> = {
 const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
 
 const submittedRequest: SpecialLeaveRequest = {
-  id: 1,
+  id: 'request-1',
   user_id: 1,
   special_leave_type_id: birthdayType.id,
   special_leave_type_name: birthdayType.name,
@@ -74,7 +74,7 @@ describe('MySpecialLeavePage', () => {
   it('shows the remaining days grouped by special leave type', async () => {
     const grants: SpecialLeaveGrant[] = [
       {
-        id: 1,
+        id: 'grant-1',
         user_id: 1,
         special_leave_type_id: birthdayType.id,
         special_leave_type_name: birthdayType.name,

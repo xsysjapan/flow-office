@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('paid_leave_grants', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする。行の新規作成自体もPaidLeaveGrantProjector
+            // 経由で行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->foreignId('user_id')->constrained();
             $table->date('granted_on');
             $table->date('expires_on');

@@ -4,45 +4,35 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
+use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
-use App\Domain\PaidLeave\Events\PaidLeaveGranted;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * @implements CommandHandler<GrantPaidLeave>
  */
 class GrantPaidLeaveHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): PaidLeaveGrant
     {
         assert($command instanceof GrantPaidLeave);
 
-        $grant = PaidLeaveGrant::query()->create([
-            'user_id' => $command->userId,
-            'granted_on' => $command->grantedOn,
-            'expires_on' => $command->expiresOn,
-            'granted_days' => $command->grantedDays,
-            'used_days' => 0,
-            'remaining_days' => $command->grantedDays,
-            'grant_reason' => $command->grantReason,
-        ]);
+        $grantId = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'paid_leave_grant',
-            aggregateId: (string) $grant->id,
-            event: new PaidLeaveGranted(
-                paidLeaveGrantId: $grant->id,
+        PaidLeaveGrantAggregate::retrieve($grantId)
+            ->grant(
                 userId: $command->userId,
                 grantedOn: $command->grantedOn,
                 expiresOn: $command->expiresOn,
                 grantedDays: $command->grantedDays,
-            ),
-        );
+                grantReason: $command->grantReason,
+            )
+            ->persist();
+
+        $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
         $user = User::find($command->userId);
         if ($user !== null) {

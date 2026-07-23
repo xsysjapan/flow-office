@@ -86,15 +86,15 @@ export function createSpecialLeaveRequest(input: CreateSpecialLeaveRequestInput)
   return apiFetch('/special-leave/requests', { method: 'POST', body: input })
 }
 
-export function approveSpecialLeaveRequest(id: number): Promise<SpecialLeaveRequest> {
+export function approveSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/approve`, { method: 'POST' })
 }
 
-export function returnSpecialLeaveRequest(id: number, comment: string): Promise<SpecialLeaveRequest> {
+export function returnSpecialLeaveRequest(id: string, comment: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function cancelSpecialLeaveRequest(id: number): Promise<SpecialLeaveRequest> {
+export function cancelSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/cancel`, { method: 'POST' })
 }
 

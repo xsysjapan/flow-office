@@ -59,15 +59,15 @@ export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Prom
   return apiFetch('/paid-leave/requests', { method: 'POST', body: input })
 }
 
-export function approvePaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+export function approvePaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/approve`, { method: 'POST' })
 }
 
-export function returnPaidLeaveRequest(id: number, comment: string): Promise<PaidLeaveRequest> {
+export function returnPaidLeaveRequest(id: string, comment: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function cancelPaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+export function cancelPaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/cancel`, { method: 'POST' })
 }
 

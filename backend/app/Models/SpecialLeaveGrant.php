@@ -4,17 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * 特別休暇の付与(PaidLeaveGrantと同じ形)。有給と異なり法定の時効がないため、
- * expires_onはnullable(null=失効しない)。
+ * expires_onはnullable(null=失効しない)。主キーはUUID(HasUuids)。理由はPaidLeaveGrantと
+ * 同じ(この行自体もSpecialLeaveGrantProjectorがstored_eventsから作成・更新する)。
  */
-#[Fillable(['user_id', 'special_leave_type_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason'])]
+#[Fillable(['id', 'user_id', 'special_leave_type_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason'])]
 class SpecialLeaveGrant extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

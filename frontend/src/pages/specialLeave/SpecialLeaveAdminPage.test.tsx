@@ -104,7 +104,7 @@ describe('SpecialLeaveAdminPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(specialLeaveApi, 'grantSpecialLeave').mockResolvedValue({
-      id: 1,
+      id: 'grant-1',
       user_id: 3,
       special_leave_type_id: birthdayType.id,
       special_leave_type_name: birthdayType.name,

@@ -2,25 +2,11 @@
 
 namespace App\Domain\PaidLeave\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class PaidLeaveRequestCancelled implements DomainEvent
+class PaidLeaveRequestCancelled extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $paidLeaveRequestId,
         public readonly int $cancelledByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'paid_leave.request_cancelled';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'paid_leave_request_id' => $this->paidLeaveRequestId,
-            'cancelled_by_user_id' => $this->cancelledByUserId,
-        ];
-    }
 }

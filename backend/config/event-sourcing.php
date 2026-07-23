@@ -25,6 +25,19 @@ use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use App\Domain\Notification\Events\NotificationConfirmed;
 use App\Domain\Notification\Events\NotificationQueued;
 use App\Domain\Notification\Events\NotificationSent;
+use App\Domain\PaidLeave\Events\PaidLeaveGranted;
+use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
+use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
+use App\Domain\PaidLeave\Events\PaidLeaveRequested;
+use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
+use App\Domain\PaidLeave\Events\PaidLeaveUsed;
+use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
+use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -173,6 +186,21 @@ return [
         'workflow_request.approved' => WorkflowRequestApproved::class,
         'workflow_request.returned' => WorkflowRequestReturned::class,
         'workflow_request.cancelled' => WorkflowRequestCancelled::class,
+
+        'paid_leave.granted' => PaidLeaveGranted::class,
+        'paid_leave.requested' => PaidLeaveRequested::class,
+        'paid_leave.request_approved' => PaidLeaveRequestApproved::class,
+        'paid_leave.request_returned' => PaidLeaveRequestReturned::class,
+        'paid_leave.request_cancelled' => PaidLeaveRequestCancelled::class,
+        'paid_leave.used' => PaidLeaveUsed::class,
+        'paid_leave.warning_raised' => PaidLeaveWarningRaised::class,
+
+        'special_leave.granted' => SpecialLeaveGranted::class,
+        'special_leave.requested' => SpecialLeaveRequested::class,
+        'special_leave.request_approved' => SpecialLeaveRequestApproved::class,
+        'special_leave.request_returned' => SpecialLeaveRequestReturned::class,
+        'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
+        'special_leave.used' => SpecialLeaveUsed::class,
 
         'backoffice_task.created' => BackOfficeTaskCreated::class,
         'backoffice_task.assigned' => BackOfficeTaskAssigned::class,

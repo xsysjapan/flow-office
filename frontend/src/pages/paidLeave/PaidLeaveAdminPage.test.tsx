@@ -75,7 +75,7 @@ describe('PaidLeaveAdminPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(paidLeaveApi, 'grantPaidLeave').mockResolvedValue({
-      id: 1,
+      id: 'grant-1',
       user_id: 3,
       granted_on: '2026-07-01',
       expires_on: '2027-06-30',

@@ -225,7 +225,7 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.requests.approve',
         summary: '有給申請を承認する',
         tags: ['有給休暇'],
-        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function approveRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
@@ -240,7 +240,7 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.requests.return',
         summary: '有給申請を差し戻す',
         tags: ['有給休暇'],
-        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -258,7 +258,7 @@ class PaidLeaveController extends Controller
         operationId: 'paidLeave.requests.cancel',
         summary: '有給申請を取り消す',
         tags: ['有給休暇'],
-        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function cancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
@@ -312,9 +312,7 @@ class PaidLeaveController extends Controller
         $events = LeaveHistoryQuery::eventsForUser(
             userId: $userId,
             grantModelClass: PaidLeaveGrant::class,
-            grantAggregateType: 'paid_leave_grant',
             requestModelClass: PaidLeaveRequest::class,
-            requestAggregateType: 'paid_leave_request',
         );
 
         return StoredEventResource::collection($events);

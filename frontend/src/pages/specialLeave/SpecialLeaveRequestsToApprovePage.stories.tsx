@@ -15,7 +15,7 @@ const applicant: User = {
 
 const requests: SpecialLeaveRequest[] = [
   {
-    id: 1,
+    id: 'request-1',
     user_id: 1,
     user: applicant,
     special_leave_type_id: 1,
@@ -32,7 +32,7 @@ const requests: SpecialLeaveRequest[] = [
     cancelled_at: null,
   },
   {
-    id: 2,
+    id: 'request-2',
     user_id: 1,
     user: applicant,
     special_leave_type_id: 2,

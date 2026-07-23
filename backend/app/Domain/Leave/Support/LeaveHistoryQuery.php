@@ -2,8 +2,11 @@
 
 namespace App\Domain\Leave\Support;
 
-use App\Models\StoredEvent;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 
 /**
  * 有給休暇・特別休暇はビジネスロジック(Command/Handler)を完全に分けて実装するが、
@@ -13,35 +16,46 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * `request_approved`/`request_returned`/`request_cancelled`のpayloadには実行者
  * (承認者等)のIDのみが含まれ申請者本人のuser_idを含まないため、payloadの内容ではなく
- * 対象社員が実際に持つgrant/requestのid(=aggregate_id)で絞り込む必要がある点に注意する。
+ * 対象社員が実際に持つgrant/requestのid(=aggregate_uuid)で絞り込む必要がある点に注意する。
+ *
+ * PaidLeave/SpecialLeaveは共にspatie/laravel-event-sourcingへ移行済みのため、新テーブル
+ * (stored_events)のみを検索する。新テーブル側は集約ごとのevent_class接頭辞を持たない
+ * (例: paid_leave_grant/paid_leave_requestどちらも"paid_leave."で始まる)ため、
+ * aggregate_uuidのみで絞り込む。またevent_propertiesはイベントクラスの公開プロパティ名
+ * (camelCase)のままなので、レスポンス形状を変えないよう旧payload(snake_case)のキーに変換する
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 final class LeaveHistoryQuery
 {
     /**
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $grantModelClass
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $requestModelClass
-     * @return Collection<int, StoredEvent>
+     * @param  class-string<Model>  $grantModelClass
+     * @param  class-string<Model>  $requestModelClass
+     * @return Collection<int, object>
      */
     public static function eventsForUser(
         int $userId,
         string $grantModelClass,
-        string $grantAggregateType,
         string $requestModelClass,
-        string $requestAggregateType,
     ): Collection {
-        $grantIds = $grantModelClass::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
-        $requestIds = $requestModelClass::query()->where('user_id', $userId)->pluck('id')->map(fn ($id) => (string) $id);
+        $grantIds = $grantModelClass::query()->where('user_id', $userId)->pluck('id');
+        $requestIds = $requestModelClass::query()->where('user_id', $userId)->pluck('id');
+        $aggregateIds = $grantIds->merge($requestIds);
 
-        return StoredEvent::query()
-            ->where(function ($query) use ($grantIds, $grantAggregateType, $requestIds, $requestAggregateType) {
-                $query->where(fn ($q) => $q->where('aggregate_type', $grantAggregateType)->whereIn('aggregate_id', $grantIds))
-                    ->orWhere(fn ($q) => $q->where('aggregate_type', $requestAggregateType)->whereIn('aggregate_id', $requestIds));
-            })
-            // occurred_atは秒単位までしか保持しないため、同一リクエスト内で複数イベントが
-            // 記録された場合に順序が曖昧にならないよう、idを副次的な並び順として使う
-            // (idは常に記録順に単調増加するため)。
-            ->orderByDesc('occurred_at')
+        return EloquentStoredEvent::query()
+            ->whereIn('aggregate_uuid', $aggregateIds)
             ->orderByDesc('id')
-            ->get();
+            ->get()
+            ->map(fn (EloquentStoredEvent $event) => (object) [
+                'id' => $event->id,
+                'event_id' => (string) $event->id,
+                'aggregate_type' => Str::before($event->event_class, '.'),
+                'aggregate_id' => $event->aggregate_uuid,
+                'version' => $event->aggregate_version,
+                'event_type' => $event->event_class,
+                'payload' => collect($event->event_properties)
+                    ->mapWithKeys(fn ($value, string $key) => [Str::snake($key) => $value])
+                    ->all(),
+                'occurred_at' => Carbon::parse($event->created_at),
+            ]);
     }
 }

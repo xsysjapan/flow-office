@@ -279,7 +279,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.requests.approve',
         summary: '特別休暇申請を承認する',
         tags: ['特別休暇'],
-        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function approveRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
@@ -294,7 +294,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.requests.return',
         summary: '特別休暇申請を差し戻す',
         tags: ['特別休暇'],
-        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
@@ -312,7 +312,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.requests.cancel',
         summary: '特別休暇申請を取り消す',
         tags: ['特別休暇'],
-        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function cancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
@@ -356,9 +356,7 @@ class SpecialLeaveController extends Controller
         $events = LeaveHistoryQuery::eventsForUser(
             userId: $userId,
             grantModelClass: SpecialLeaveGrant::class,
-            grantAggregateType: 'special_leave_grant',
             requestModelClass: SpecialLeaveRequest::class,
-            requestAggregateType: 'special_leave_request',
         );
 
         return StoredEventResource::collection($events);

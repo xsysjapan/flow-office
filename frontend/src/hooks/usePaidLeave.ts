@@ -94,7 +94,7 @@ export function useApprovePaidLeaveRequest() {
   const invalidate = useInvalidatePaidLeaveRequests()
 
   return useMutation({
-    mutationFn: (id: number) => approvePaidLeaveRequest(id),
+    mutationFn: (id: string) => approvePaidLeaveRequest(id),
     onSuccess: () => invalidate(),
   })
 }
@@ -103,7 +103,7 @@ export function useReturnPaidLeaveRequest() {
   const invalidate = useInvalidatePaidLeaveRequests()
 
   return useMutation({
-    mutationFn: ({ id, comment }: { id: number; comment: string }) => returnPaidLeaveRequest(id, comment),
+    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnPaidLeaveRequest(id, comment),
     onSuccess: () => invalidate(),
   })
 }
@@ -112,7 +112,7 @@ export function useCancelPaidLeaveRequest() {
   const invalidate = useInvalidatePaidLeaveRequests()
 
   return useMutation({
-    mutationFn: (id: number) => cancelPaidLeaveRequest(id),
+    mutationFn: (id: string) => cancelPaidLeaveRequest(id),
     onSuccess: () => invalidate(),
   })
 }

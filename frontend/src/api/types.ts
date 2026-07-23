@@ -361,7 +361,7 @@ export interface BackOfficeTask {
 }
 
 export interface PaidLeaveGrant {
-  id: number
+  id: string
   user_id: number
   granted_on: string
   expires_on: string
@@ -381,7 +381,7 @@ export type PaidLeaveType = 'full' | 'am_half' | 'pm_half' | 'hourly'
 export type PaidLeaveRequestStatus = 'submitted' | 'approved' | 'returned' | 'cancelled'
 
 export interface PaidLeaveRequest {
-  id: number
+  id: string
   user_id: number
   user?: User
   approver?: User
@@ -418,7 +418,7 @@ export interface SpecialLeaveType {
 
 /** 特別休暇の取得単位(全休/半休/時間休)は有給と同じ概念のためPaidLeaveTypeを再利用する。 */
 export interface SpecialLeaveGrant {
-  id: number
+  id: string
   user_id: number
   special_leave_type_id: number
   special_leave_type_name?: string
@@ -452,7 +452,7 @@ export interface SpecialLeaveGrantRule {
 }
 
 export interface SpecialLeaveRequest {
-  id: number
+  id: string
   user_id: number
   user?: User
   approver?: User
