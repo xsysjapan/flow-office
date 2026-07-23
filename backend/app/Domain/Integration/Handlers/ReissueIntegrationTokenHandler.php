@@ -4,10 +4,9 @@ namespace App\Domain\Integration\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Integration\Aggregates\ApplicationIntegrationAggregate;
 use App\Domain\Integration\Commands\ReissueIntegrationToken;
-use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use App\Models\ApplicationIntegration;
 
 /**
@@ -18,8 +17,6 @@ use App\Models\ApplicationIntegration;
  */
 class ReissueIntegrationTokenHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     /**
      * @return array{integration: ApplicationIntegration, plainTextToken: string}
      */
@@ -29,27 +26,21 @@ class ReissueIntegrationTokenHandler implements CommandHandler
 
         $integration = ApplicationIntegration::query()->with(['owner', 'scopes'])->findOrFail($command->integrationId);
 
-        if ($integration->status !== 'active') {
+        $aggregate = ApplicationIntegrationAggregate::retrieve($integration->aggregate_uuid);
+
+        if ($aggregate->status() !== 'active') {
             throw new DomainRuleException('無効化済みの連携はトークンを再発行できません。');
         }
 
         $integration->personalAccessToken?->delete();
 
-        $scopes = $integration->scopes->pluck('scope')->all();
-        $newToken = $integration->owner->createToken($integration->client_name, $scopes);
+        $newToken = $integration->owner->createToken($integration->client_name, $aggregate->scopes());
 
-        $integration->personal_access_token_id = $newToken->accessToken->id;
-        $integration->save();
+        $aggregate->reissueToken($newToken->accessToken->id, $command->reissuedByUserId)->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'application_integration',
-            aggregateId: (string) $integration->id,
-            event: new ApplicationIntegrationTokenReissued(
-                integrationId: $integration->id,
-                reissuedByUserId: $command->reissuedByUserId,
-            ),
-        );
-
-        return ['integration' => $integration, 'plainTextToken' => $newToken->plainTextToken];
+        return [
+            'integration' => $integration->refresh(),
+            'plainTextToken' => $newToken->plainTextToken,
+        ];
     }
 }

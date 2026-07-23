@@ -14,7 +14,7 @@ use Laravel\Sanctum\PersonalAccessToken;
  * 台帳として機能する(devices/authentication_keysと同じ考え方)。
  */
 #[Fillable([
-    'owner_type', 'owner_user_id', 'client_type', 'client_name', 'purpose',
+    'aggregate_uuid', 'owner_type', 'owner_user_id', 'client_type', 'client_name', 'purpose',
     'personal_access_token_id', 'status', 'last_used_at', 'expires_at', 'registered_by_user_id',
 ])]
 class ApplicationIntegration extends Model

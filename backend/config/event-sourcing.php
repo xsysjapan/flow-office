@@ -2,6 +2,9 @@
 
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
+use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
+use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
+use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
 use Spatie\EventSourcing\EventSerializers\JsonEventSerializer;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshot;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshotRepository;
@@ -115,6 +118,10 @@ return [
     'event_class_map' => [
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
+
+        'application_integration.registered' => ApplicationIntegrationRegistered::class,
+        'application_integration.token_reissued' => ApplicationIntegrationTokenReissued::class,
+        'application_integration.revoked' => ApplicationIntegrationRevoked::class,
     ],
 
     /*
