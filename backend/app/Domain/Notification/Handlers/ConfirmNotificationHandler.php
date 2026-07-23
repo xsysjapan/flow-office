@@ -4,19 +4,17 @@ namespace App\Domain\Notification\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Notification\Aggregates\NotificationAggregate;
 use App\Domain\Notification\Commands\ConfirmNotification;
-use App\Domain\Notification\Events\NotificationConfirmed;
 use App\Models\Notification;
+use Illuminate\Support\Carbon;
 
 /**
  * @implements CommandHandler<ConfirmNotification>
  */
 class ConfirmNotificationHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): Notification
     {
         assert($command instanceof ConfirmNotification);
@@ -31,14 +29,9 @@ class ConfirmNotificationHandler implements CommandHandler
             return $notification;
         }
 
-        $this->eventStore->append(
-            aggregateType: 'notification',
-            aggregateId: $notification->id,
-            event: new NotificationConfirmed(
-                notificationId: $notification->id,
-                confirmedByUserId: $command->confirmedByUserId,
-            ),
-        );
+        NotificationAggregate::retrieve($notification->id)
+            ->confirm($command->confirmedByUserId, Carbon::now()->format('Y-m-d H:i:s'))
+            ->persist();
 
         return $notification->refresh();
     }

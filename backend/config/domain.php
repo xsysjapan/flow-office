@@ -118,7 +118,6 @@ use App\Domain\Integration\Handlers\ReissueIntegrationTokenHandler;
 use App\Domain\Integration\Handlers\RevokeIntegrationHandler;
 use App\Domain\Notification\Commands\ConfirmNotification;
 use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
-use App\Domain\Notification\Projectors\NotificationProjector;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -310,12 +309,17 @@ return [
     | イベントを書けず、作成イベントだけはProjector化できないため)。
     | (.claude/skills/add-projection 参照)
     |
+    | 注意: spatie/laravel-event-sourcingに移行済みのドメイン(Attachment/Integration/
+    | AuthenticationKey/Device/DeviceAdminSession/Notification)のProjectorはここに登録しない。
+    | それらはSpatie\EventSourcing\EventHandlers\Projectors\Projectorのサブクラスであり、
+    | config/event-sourcing.phpのauto_discover_projectors_and_reactorsで自動検出される
+    | (docs/29-event-sourcing-framework-migration.md参照)。
+    |
     */
     'projectors' => [
         AttendanceDailyCalculationProjector::class,
         WorkflowRequestProjector::class,
         BackOfficeTaskProjector::class,
-        NotificationProjector::class,
     ],
 
 ];

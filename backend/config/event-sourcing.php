@@ -13,9 +13,14 @@ use App\Domain\Device\Events\DeviceRevoked;
 use App\Domain\Device\Events\DeviceRoleAssigned;
 use App\Domain\Device\Events\DeviceScopeGranted;
 use App\Domain\Device\Events\DeviceSettingsUpdated;
+use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionEnded;
+use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionStarted;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
+use App\Domain\Notification\Events\NotificationConfirmed;
+use App\Domain\Notification\Events\NotificationQueued;
+use App\Domain\Notification\Events\NotificationSent;
 use Spatie\EventSourcing\EventSerializers\JsonEventSerializer;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshot;
 use Spatie\EventSourcing\Snapshots\EloquentSnapshotRepository;
@@ -146,6 +151,13 @@ return [
         'device.role_assigned' => DeviceRoleAssigned::class,
         'device.scope_granted' => DeviceScopeGranted::class,
         'device.settings_updated' => DeviceSettingsUpdated::class,
+
+        'device_admin_session.started' => DeviceAdminSessionStarted::class,
+        'device_admin_session.ended' => DeviceAdminSessionEnded::class,
+
+        'notification.queued' => NotificationQueued::class,
+        'notification.sent' => NotificationSent::class,
+        'notification.confirmed' => NotificationConfirmed::class,
     ],
 
     /*

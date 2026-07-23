@@ -2,29 +2,20 @@
 
 namespace App\Domain\DeviceAdminSession\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceAdminSessionStarted implements DomainEvent
+/**
+ * device_admin_session.started。DeviceAdminSessionProjectorが集約UUID
+ * (aggregateRootUuid() = device_admin_sessions.id)をキーに行を新規作成する。
+ */
+class DeviceAdminSessionStarted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceAdminSessionId,
         public readonly int $deviceId,
         public readonly int $adminUserId,
+        public readonly ?int $authenticationKeyId,
         public readonly string $source,
+        public readonly string $startedAt,
+        public readonly string $expiresAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device_admin_session.started';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_admin_session_id' => $this->deviceAdminSessionId,
-            'device_id' => $this->deviceId,
-            'admin_user_id' => $this->adminUserId,
-            'source' => $this->source,
-        ];
-    }
 }

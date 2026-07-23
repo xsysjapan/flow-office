@@ -2,9 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Domain\EventSourcing\EventStore;
-use App\Domain\Notification\Events\NotificationQueued;
-use App\Domain\Notification\Events\NotificationSent;
+use App\Domain\Notification\Aggregates\NotificationAggregate;
 use App\Domain\Notification\Notifier;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -12,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -42,16 +41,14 @@ class SendNotificationJob implements ShouldQueue
     {
         $notificationId = (string) Str::uuid();
 
-        app(EventStore::class)->append(
-            aggregateType: 'notification',
-            aggregateId: $notificationId,
-            event: new NotificationQueued($notificationId, $recipient->id, $title, $summary, $detailUrl),
-        );
+        NotificationAggregate::retrieve($notificationId)
+            ->queue($recipient->id, $title, $summary, $detailUrl, Carbon::now()->format('Y-m-d H:i:s'))
+            ->persist();
 
         self::dispatch($notificationId, $recipient->id, $title, $summary, $detailUrl);
     }
 
-    public function handle(Notifier $notifier, EventStore $eventStore): void
+    public function handle(Notifier $notifier): void
     {
         $recipient = User::find($this->recipientUserId);
 
@@ -68,10 +65,8 @@ class SendNotificationJob implements ShouldQueue
             return;
         }
 
-        $eventStore->append(
-            aggregateType: 'notification',
-            aggregateId: $this->notificationId,
-            event: new NotificationSent($this->notificationId, $this->recipientUserId, $this->title),
-        );
+        NotificationAggregate::retrieve($this->notificationId)
+            ->send(Carbon::now()->format('Y-m-d H:i:s'))
+            ->persist();
     }
 }
