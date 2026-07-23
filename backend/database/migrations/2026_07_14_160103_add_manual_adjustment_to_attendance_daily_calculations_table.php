@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::table('attendance_daily_calculations', function (Blueprint $table) {
             $table->boolean('is_manually_adjusted')->default(false);
-            $table->foreignId('adjusted_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignUuid('adjusted_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->dateTime('adjusted_at')->nullable();
         });
     }

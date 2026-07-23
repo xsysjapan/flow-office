@@ -21,7 +21,7 @@ return new class extends Migration
             $table->unsignedBigInteger('stored_event_id')->unique();
             $table->uuid('workflow_request_id');
             $table->string('action');
-            $table->foreignId('actor_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('actor_user_id')->nullable()->constrained('users');
             $table->text('comment')->nullable();
             $table->timestamp('occurred_at');
 

@@ -4,21 +4,19 @@ namespace App\Domain\User\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\User\Aggregates\UserAggregate;
 use App\Domain\User\Commands\CompleteOnboardingSsoLink;
-use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * @implements CommandHandler<CompleteOnboardingSsoLink>
  */
 class CompleteOnboardingSsoLinkHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): User
     {
         assert($command instanceof CompleteOnboardingSsoLink);
@@ -43,31 +41,18 @@ class CompleteOnboardingSsoLinkHandler implements CommandHandler
             throw new DomainRuleException('管理者ロールが未作成のため、オンボーディングを完了できません。ロールマスタの初期化(シード)を確認してください。');
         }
 
-        $user = User::query()->create([
-            'entra_user_id' => $command->entraUserId,
-            'name' => $command->name,
-            'email' => $command->email,
-            'employment_status' => 'active',
-            'timezone' => $settings->default_timezone,
-        ]);
-
-        $user->roles()->attach($adminRole);
-
+        // 完了フラグの原子的なコミットを先に確定させ、失敗する場合はユーザー行を
+        // 作らない(先にユーザーを作ってしまうと、完了フラグの競合時に孤立行が残るため)。
         if (! SystemSetting::completeOnboarding()) {
             throw new DomainRuleException('初回オンボーディングは既に完了しています。');
         }
 
-        $this->eventStore->append(
-            aggregateType: 'user',
-            aggregateId: (string) $user->id,
-            event: new UserOnboardedAsAdmin(
-                userId: $user->id,
-                name: $user->name,
-                email: $user->email,
-                authMethod: 'sso',
-            ),
-        );
+        $userId = (string) Str::uuid();
 
-        return $user;
+        UserAggregate::retrieve($userId)
+            ->onboardAsAdmin($command->entraUserId, $command->name, $command->email, 'sso')
+            ->persist();
+
+        return User::query()->findOrFail($userId);
     }
 }

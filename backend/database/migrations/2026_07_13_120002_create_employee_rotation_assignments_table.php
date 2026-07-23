@@ -15,11 +15,11 @@ return new class extends Migration
     {
         Schema::create('employee_rotation_assignments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->unique()->constrained();
+            $table->foreignUuid('user_id')->unique()->constrained();
             $table->foreignId('rotation_pattern_id')->constrained();
             $table->date('rotation_start_date');
             $table->unsignedSmallInteger('rotation_start_position');
-            $table->foreignId('assigned_by_user_id')->constrained('users');
+            $table->foreignUuid('assigned_by_user_id')->constrained('users');
             $table->timestamps();
         });
     }

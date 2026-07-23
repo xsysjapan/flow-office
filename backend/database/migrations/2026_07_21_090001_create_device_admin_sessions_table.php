@@ -20,7 +20,7 @@ return new class extends Migration
             // Attachment/WorkflowRequestと同じ(b)方式。docs/29-event-sourcing-framework-migration.md参照)。
             $table->uuid('id')->primary();
             $table->foreignUuid('device_id')->constrained('devices')->cascadeOnDelete();
-            $table->foreignId('admin_user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignUuid('admin_user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignUuid('authentication_key_id')->nullable()->constrained('authentication_keys')->nullOnDelete();
             $table->string('source');
             $table->dateTime('started_at');

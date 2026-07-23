@@ -18,7 +18,7 @@ return new class extends Migration
             // 行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
             $table->uuid('id')->primary();
             $table->string('owner_type');
-            $table->foreignId('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignUuid('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('name');
             $table->string('device_type');
             $table->string('status')->default('pending_pairing');

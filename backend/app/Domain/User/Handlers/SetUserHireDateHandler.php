@@ -4,10 +4,9 @@ namespace App\Domain\User\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\User\Aggregates\UserAggregate;
 use App\Domain\User\Commands\SetUserHireDate;
-use App\Domain\User\Events\UserHireDateSet;
 use App\Models\User;
 
 /**
@@ -15,8 +14,6 @@ use App\Models\User;
  */
 class SetUserHireDateHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): User
     {
         assert($command instanceof SetUserHireDate);
@@ -25,19 +22,9 @@ class SetUserHireDateHandler implements CommandHandler
         if ($user->termination_date !== null && $user->termination_date->toDateString() < $command->hireDate) {
             throw new DomainRuleException('入社日は退社日以前の日付を指定してください。');
         }
-        $user->hire_date = $command->hireDate;
-        $user->save();
 
-        $this->eventStore->append(
-            aggregateType: 'user',
-            aggregateId: (string) $user->id,
-            event: new UserHireDateSet(
-                userId: $user->id,
-                hireDate: $command->hireDate,
-                changedByUserId: $command->changedByUserId,
-            ),
-        );
+        UserAggregate::retrieve($user->id)->setHireDate($command->hireDate, $command->changedByUserId)->persist();
 
-        return $user;
+        return $user->refresh();
     }
 }

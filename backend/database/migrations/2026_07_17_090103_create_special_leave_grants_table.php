@@ -18,7 +18,7 @@ return new class extends Migration
             // コマンド側で生成するUUIDを主キーにする。行の新規作成自体もSpecialLeaveGrantProjector
             // 経由で行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
             $table->uuid('id')->primary();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->foreignId('special_leave_type_id')->constrained();
             $table->date('granted_on');
             $table->date('expires_on')->nullable();

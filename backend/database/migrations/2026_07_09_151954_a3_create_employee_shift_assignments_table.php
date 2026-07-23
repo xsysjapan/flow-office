@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('employee_shift_assignments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->date('work_date');
             $table->foreignId('work_style_id')->constrained();
             $table->string('day_type');

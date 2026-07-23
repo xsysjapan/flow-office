@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::create('legal_holiday_designations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->date('week_start_date');
             $table->date('designated_date');
             $table->text('reason');
-            $table->foreignId('designated_by')->constrained('users');
+            $table->foreignUuid('designated_by')->constrained('users');
             $table->timestamps();
 
             $table->unique(['user_id', 'week_start_date']);

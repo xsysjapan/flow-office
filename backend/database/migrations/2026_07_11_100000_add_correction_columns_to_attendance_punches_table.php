@@ -18,7 +18,7 @@ return new class extends Migration
         Schema::table('attendance_punches', function (Blueprint $table) {
             $table->string('status')->default('active')->after('note'); // active, corrected, deleted
             $table->text('correction_reason')->nullable()->after('status');
-            $table->foreignId('corrected_by_user_id')->nullable()->after('correction_reason')->constrained('users');
+            $table->foreignUuid('corrected_by_user_id')->nullable()->after('correction_reason')->constrained('users');
             $table->timestamp('corrected_at')->nullable()->after('corrected_by_user_id');
             $table->foreignId('superseded_by_punch_id')->nullable()->after('corrected_at')
                 ->constrained('attendance_punches');

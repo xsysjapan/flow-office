@@ -11,5 +11,5 @@ use App\Domain\EventSourcing\Contracts\Command;
  */
 class RecordLocalLogin implements Command
 {
-    public function __construct(public readonly int $userId) {}
+    public function __construct(public readonly string $userId) {}
 }

@@ -17,7 +17,7 @@ return new class extends Migration
             // コマンド側で生成するUUIDを主キーにする。行の新規作成自体もAuthenticationKeyProjector
             // 経由で行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
             $table->uuid('id')->primary();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->string('key_type');
             $table->string('display_name');
             $table->string('key_hash', 64);
@@ -25,7 +25,7 @@ return new class extends Migration
             $table->dateTime('valid_from')->nullable();
             $table->dateTime('valid_until')->nullable();
             $table->json('metadata_json')->nullable();
-            $table->foreignId('registered_by_user_id')->constrained('users');
+            $table->foreignUuid('registered_by_user_id')->constrained('users');
             $table->dateTime('registered_at');
             $table->dateTime('disabled_at')->nullable();
             $table->timestamps();

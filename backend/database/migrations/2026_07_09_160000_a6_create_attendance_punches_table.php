@@ -17,7 +17,7 @@ return new class extends Migration
     {
         Schema::create('attendance_punches', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->date('work_date');
             $table->string('punch_type');
             $table->dateTime('punched_at');

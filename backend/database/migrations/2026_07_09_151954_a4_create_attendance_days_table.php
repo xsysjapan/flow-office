@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('attendance_days', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->date('work_date');
             $table->foreignId('shift_assignment_id')->nullable()->constrained('employee_shift_assignments');
             $table->string('status')->default('not_started'); // not_started, working, on_break, clocked_out

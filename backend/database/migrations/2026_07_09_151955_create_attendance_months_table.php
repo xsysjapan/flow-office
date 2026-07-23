@@ -13,10 +13,10 @@ return new class extends Migration
     {
         Schema::create('attendance_months', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->string('year_month', 7); // YYYY-MM
             $table->string('status')->default('not_submitted'); // not_submitted, submitted, approved, returned, closed
-            $table->foreignId('approver_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('approver_user_id')->nullable()->constrained('users');
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('returned_at')->nullable();

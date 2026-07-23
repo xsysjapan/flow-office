@@ -20,7 +20,7 @@ return new class extends Migration
             // ポリモーフィックな所有者のID。attendance_day は数値ID、workflow_request は
             // UUID なので string にする(混在するため型を固定できない)。
             $table->string('owner_id');
-            $table->foreignId('uploaded_by')->constrained('users');
+            $table->foreignUuid('uploaded_by')->constrained('users');
             $table->string('file_name');
             $table->string('stored_path');
             $table->string('mime_type');

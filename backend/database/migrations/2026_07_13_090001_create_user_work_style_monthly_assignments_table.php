@@ -15,10 +15,10 @@ return new class extends Migration
     {
         Schema::create('user_work_style_monthly_assignments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->string('year_month', 7); // 'YYYY-MM'
             $table->foreignId('work_style_id')->constrained();
-            $table->foreignId('assigned_by_user_id')->constrained('users');
+            $table->foreignUuid('assigned_by_user_id')->constrained('users');
             $table->timestamps();
 
             $table->unique(['user_id', 'year_month']);

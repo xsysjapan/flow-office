@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,12 +22,21 @@ use Laravel\Sanctum\HasApiTokens;
  * システム設定のデフォルトタイムゾーンで設定する (docs/06-usecases-auth.md UC-003)。
  * hire_date (入社日) とtermination_date (退社日) はMS365に対応する属性がないため同期対象外で、管理者が個別に設定する
  * (docs/09-usecases-paid-leave.md UC-P002: 継続勤務期間の計算に使う)。
+ *
+ * 主キーはUUID(HasUuids)。DB採番だと集約IDがINSERTするまで確定せずProjectorで作成できないため、
+ * コマンド側で生成できるUUIDにしている(.claude/skills/add-projection「集約ルートのUUID化」参照)。
+ * この行自体もUserProjectorがstored_eventsから作成・更新する
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['entra_user_id', 'name', 'email', 'password', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'last_login_at'])]
+#[Fillable(['id', 'entra_user_id', 'name', 'email', 'password', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'last_login_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, HasUuids, Notifiable;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /** @var list<string> */
     protected $hidden = ['password'];

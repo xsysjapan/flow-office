@@ -13,8 +13,8 @@ class AssignUserRoles implements Command
      * @param  array<int, string>  $roleCodes
      */
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly array $roleCodes,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
     ) {}
 }

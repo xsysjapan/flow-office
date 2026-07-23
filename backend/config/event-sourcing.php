@@ -38,6 +38,14 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
+use App\Domain\User\Events\UserCreatedFromSsoLogin;
+use App\Domain\User\Events\UserHireDateSet;
+use App\Domain\User\Events\UserLoggedIn;
+use App\Domain\User\Events\UserOnboardedAsAdmin;
+use App\Domain\User\Events\UserRolesChanged;
+use App\Domain\User\Events\UserSsoAccountLinked;
+use App\Domain\User\Events\UserSyncedFromMs365;
+use App\Domain\User\Events\UserTerminationDateSet;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -201,6 +209,15 @@ return [
         'special_leave.request_returned' => SpecialLeaveRequestReturned::class,
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+
+        'user.onboarded_as_admin' => UserOnboardedAsAdmin::class,
+        'user.created_from_sso_login' => UserCreatedFromSsoLogin::class,
+        'user.synced_from_ms365' => UserSyncedFromMs365::class,
+        'user.sso_account_linked' => UserSsoAccountLinked::class,
+        'user.logged_in' => UserLoggedIn::class,
+        'user.roles_changed' => UserRolesChanged::class,
+        'user.hire_date_set' => UserHireDateSet::class,
+        'user.termination_date_set' => UserTerminationDateSet::class,
 
         'backoffice_task.created' => BackOfficeTaskCreated::class,
         'backoffice_task.assigned' => BackOfficeTaskAssigned::class,
