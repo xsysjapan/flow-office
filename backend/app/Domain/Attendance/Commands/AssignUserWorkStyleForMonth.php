@@ -9,7 +9,7 @@ class AssignUserWorkStyleForMonth implements Command
     public function __construct(
         public readonly string $userId,
         public readonly string $yearMonth,
-        public readonly int $workStyleId,
+        public readonly string $workStyleId,
         public readonly string $assignedByUserId,
     ) {}
 }

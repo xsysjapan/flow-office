@@ -17,11 +17,16 @@ use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
+use App\Domain\Attendance\Events\EmployeeRotationAssigned;
 use App\Domain\Attendance\Events\EmployeeShiftAssigned;
 use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
 use App\Domain\Attendance\Events\EmployeeShiftPublished;
+use App\Domain\Attendance\Events\LegalHolidayDesignated;
+use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternUpdated;
+use App\Domain\Attendance\Events\UserWorkStyleAssignedForMonth;
+use App\Domain\Attendance\Events\UserWorkStyleMonthlyAssignmentRemoved;
 use App\Domain\Attendance\Events\WorkCalendarCreated;
 use App\Domain\Attendance\Events\WorkCalendarDaysUpdated;
 use App\Domain\Attendance\Events\WorkCalendarPublished;
@@ -221,6 +226,15 @@ return [
         'employee_shift.assigned' => EmployeeShiftAssigned::class,
         'employee_shift.plan_changed' => EmployeeShiftPlanChanged::class,
         'employee_shift.published' => EmployeeShiftPublished::class,
+
+        'rotation_pattern.created' => RotationPatternCreated::class,
+
+        'employee_rotation.assigned' => EmployeeRotationAssigned::class,
+
+        'user_work_style_monthly_assignment.assigned' => UserWorkStyleAssignedForMonth::class,
+        'user_work_style_monthly_assignment.removed' => UserWorkStyleMonthlyAssignmentRemoved::class,
+
+        'attendance.legal_holiday_designated' => LegalHolidayDesignated::class,
 
         'application_integration.registered' => ApplicationIntegrationRegistered::class,
         'application_integration.token_reissued' => ApplicationIntegrationTokenReissued::class,

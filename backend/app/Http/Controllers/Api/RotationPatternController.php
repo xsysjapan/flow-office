@@ -27,13 +27,13 @@ class RotationPatternController extends Controller
         operationId: 'rotationPatterns.index',
         summary: 'ローテーションパターン一覧を取得する',
         tags: ['ローテーションパターン'],
-        parameters: [new OA\Parameter(name: 'work_style_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'work_style_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
-            'work_style_id' => ['nullable', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['nullable', 'string', 'exists:work_styles,id'],
         ]);
 
         $query = RotationPattern::query()->with('items.shiftPattern')->orderBy('name');
@@ -50,17 +50,17 @@ class RotationPatternController extends Controller
         operationId: 'rotationPatterns.store',
         summary: 'ローテーションパターンを作成する',
         tags: ['ローテーションパターン'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_style_id', 'name', 'items'], properties: [new OA\Property(property: 'work_style_id', type: 'integer'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'items', type: 'array', items: new OA\Items(type: 'object'))])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_style_id', 'name', 'items'], properties: [new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid'), new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'items', type: 'array', items: new OA\Items(type: 'object'))])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'work_style_id' => ['required', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['required', 'string', 'exists:work_styles,id'],
             'name' => ['required', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.sequence' => ['required', 'integer', 'min:0'],
-            'items.*.shift_pattern_id' => ['required', 'integer', 'exists:shift_patterns,id'],
+            'items.*.shift_pattern_id' => ['required', 'string', 'exists:shift_patterns,id'],
         ]);
 
         $workStyle = WorkStyle::query()->findOrFail($data['work_style_id']);
@@ -92,7 +92,7 @@ class RotationPatternController extends Controller
         operationId: 'rotationPatterns.preview',
         summary: 'ローテーション展開をプレビューする',
         tags: ['ローテーションパターン'],
-        parameters: [new OA\Parameter(name: 'rotationPattern', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'rotationPattern', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['rotation_start_date', 'rotation_start_position', 'from', 'to'], properties: [new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

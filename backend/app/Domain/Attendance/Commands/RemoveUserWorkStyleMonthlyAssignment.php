@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class RemoveUserWorkStyleMonthlyAssignment implements Command
 {
     public function __construct(
-        public readonly int $assignmentId,
+        public readonly string $assignmentId,
         public readonly string $removedByUserId,
     ) {}
 }

@@ -8,7 +8,7 @@ class AssignEmployeeRotation implements Command
 {
     public function __construct(
         public readonly string $userId,
-        public readonly int $rotationPatternId,
+        public readonly string $rotationPatternId,
         public readonly string $rotationStartDate,
         public readonly int $rotationStartPosition,
         public readonly string $assignedByUserId,

@@ -2,35 +2,19 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
  * user_work_style_monthly_assignment.removed (指示書 13章: 「会社のデフォルトを使用」に
- * 戻すため、対象月の個別割当を取り消す)。
+ * 戻すため、対象月の個別割当を取り消す)。集約ID(user_work_style_monthly_assignments.id)は
+ * `aggregateRootUuid()`から取得する。
  */
-class UserWorkStyleMonthlyAssignmentRemoved implements DomainEvent
+class UserWorkStyleMonthlyAssignmentRemoved extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $assignmentId,
         public readonly string $userId,
         public readonly string $yearMonth,
-        public readonly int $previousWorkStyleId,
+        public readonly string $previousWorkStyleId,
         public readonly string $removedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'user_work_style_monthly_assignment.removed';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'assignment_id' => $this->assignmentId,
-            'user_id' => $this->userId,
-            'year_month' => $this->yearMonth,
-            'previous_work_style_id' => $this->previousWorkStyleId,
-            'removed_by_user_id' => $this->removedByUserId,
-        ];
-    }
 }

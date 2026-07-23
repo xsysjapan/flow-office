@@ -2,35 +2,19 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
  * user_work_style_monthly_assignment.assigned
  * 指定した月にユーザーが属する働き方(work_style)を割り当てる、または変更する。
+ * 集約ID(user_work_style_monthly_assignments.id)は`aggregateRootUuid()`から取得する。
  */
-class UserWorkStyleAssignedForMonth implements DomainEvent
+class UserWorkStyleAssignedForMonth extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $userWorkStyleMonthlyAssignmentId,
         public readonly string $userId,
         public readonly string $yearMonth,
-        public readonly int $workStyleId,
+        public readonly string $workStyleId,
         public readonly string $assignedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'user_work_style_monthly_assignment.assigned';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'user_work_style_monthly_assignment_id' => $this->userWorkStyleMonthlyAssignmentId,
-            'user_id' => $this->userId,
-            'year_month' => $this->yearMonth,
-            'work_style_id' => $this->workStyleId,
-            'assigned_by_user_id' => $this->assignedByUserId,
-        ];
-    }
 }

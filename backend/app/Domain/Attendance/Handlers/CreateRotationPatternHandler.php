@@ -2,12 +2,12 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\RotationPatternAggregate;
 use App\Domain\Attendance\Commands\CreateRotationPattern;
-use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\RotationPattern;
+use Illuminate\Support\Str;
 
 /**
  * 指示書 8.4節: 交代制勤務のローテーションパターン(A勤・B勤・C勤・休の繰り返し周期)を
@@ -17,38 +17,21 @@ use App\Models\RotationPattern;
  */
 class CreateRotationPatternHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): RotationPattern
     {
         assert($command instanceof CreateRotationPattern);
 
-        $pattern = RotationPattern::query()->create([
-            'work_style_id' => $command->workStyleId,
-            'name' => $command->name,
-            'cycle_length' => count($command->items),
-        ]);
+        $id = (string) Str::uuid();
 
-        foreach ($command->items as $item) {
-            $pattern->items()->create([
-                'sequence' => $item['sequence'],
-                'shift_pattern_id' => $item['shift_pattern_id'],
-            ]);
-        }
-
-        $this->eventStore->append(
-            aggregateType: 'rotation_pattern',
-            aggregateId: (string) $pattern->id,
-            event: new RotationPatternCreated(
-                rotationPatternId: $pattern->id,
+        RotationPatternAggregate::retrieve($id)
+            ->create(
                 workStyleId: $command->workStyleId,
                 name: $command->name,
-                cycleLength: $pattern->cycle_length,
                 items: $command->items,
                 createdByUserId: $command->createdByUserId,
-            ),
-        );
+            )
+            ->persist();
 
-        return $pattern->load('items.shiftPattern');
+        return RotationPattern::query()->findOrFail($id)->load('items.shiftPattern');
     }
 }

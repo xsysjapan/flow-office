@@ -49,7 +49,7 @@ class UserWorkStyleMonthlyAssignmentController extends Controller
         operationId: 'userWorkStyleMonthlyAssignments.store',
         summary: '月次勤務形態を割り当てる',
         tags: ['月次勤務形態割当'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'year_month', 'work_style_id'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'year_month', type: 'string'), new OA\Property(property: 'work_style_id', type: 'integer')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'year_month', 'work_style_id'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'year_month', type: 'string'), new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -57,7 +57,7 @@ class UserWorkStyleMonthlyAssignmentController extends Controller
         $data = $request->validate([
             'user_id' => ['required', 'string', 'exists:users,id'],
             'year_month' => ['required', 'date_format:Y-m'],
-            'work_style_id' => ['required', 'integer', 'exists:work_styles,id'],
+            'work_style_id' => ['required', 'string', 'exists:work_styles,id'],
         ]);
 
         $assignment = $commandBus->dispatch(new AssignUserWorkStyleForMonth(
@@ -79,7 +79,7 @@ class UserWorkStyleMonthlyAssignmentController extends Controller
         operationId: 'userWorkStyleMonthlyAssignments.destroy',
         summary: '月次勤務形態割当を削除する',
         tags: ['月次勤務形態割当'],
-        parameters: [new OA\Parameter(name: 'userWorkStyleMonthlyAssignment', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'userWorkStyleMonthlyAssignment', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 204, description: 'No Content'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function destroy(Request $request, UserWorkStyleMonthlyAssignment $userWorkStyleMonthlyAssignment, CommandBus $commandBus): Response

@@ -49,14 +49,14 @@ class EmployeeRotationAssignmentController extends Controller
         operationId: 'employeeRotationAssignments.store',
         summary: '社員にローテーションを割り当てる',
         tags: ['ローテーション割当'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'rotation_pattern_id', type: 'integer'), new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'rotation_pattern_id', type: 'string', format: 'uuid'), new OA\Property(property: 'rotation_start_date', type: 'string', format: 'date'), new OA\Property(property: 'rotation_start_position', type: 'integer')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'string', 'exists:users,id'],
-            'rotation_pattern_id' => ['required', 'integer', 'exists:rotation_patterns,id'],
+            'rotation_pattern_id' => ['required', 'string', 'exists:rotation_patterns,id'],
             'rotation_start_date' => ['required', 'date'],
             'rotation_start_position' => ['required', 'integer', 'min:0'],
         ]);
