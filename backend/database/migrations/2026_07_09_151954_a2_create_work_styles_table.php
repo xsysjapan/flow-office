@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('work_styles', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成できるUUIDにする(WorkStyleProjector経由で行えるようにするため。
+            // docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->string('code')->unique();
             $table->string('name');
             $table->string('work_time_system')->default('fixed'); // fixed, shortened, shift_based 等
@@ -21,7 +24,7 @@ return new class extends Migration
             $table->time('default_start_time')->nullable();
             $table->time('default_end_time')->nullable();
             $table->unsignedSmallInteger('default_break_minutes')->default(60);
-            $table->foreignId('calendar_id')->constrained('work_calendars');
+            $table->foreignUuid('calendar_id')->constrained('work_calendars');
             $table->boolean('is_shift_based')->default(false);
             $table->timestamps();
         });

@@ -2,12 +2,11 @@
 
 namespace App\Domain\PaidLeave\Handlers;
 
-use App\Domain\Attendance\Events\AttendanceDayCalculated;
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate;
@@ -38,7 +37,6 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 class ApprovePaidLeaveRequestHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
     ) {}
@@ -85,14 +83,7 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
 
         $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_day',
-            aggregateId: (string) $day->id,
-            event: new AttendanceDayCalculated(
-                attendanceDayId: $day->id,
-                calculation: $calculation,
-            ),
-        );
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
 
         return $request;
     }

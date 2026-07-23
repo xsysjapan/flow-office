@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class ApproveAttendanceMonth implements Command
 {
     public function __construct(
-        public readonly int $attendanceMonthId,
+        public readonly string $attendanceMonthId,
         public readonly string $approvedByUserId,
     ) {}
 }

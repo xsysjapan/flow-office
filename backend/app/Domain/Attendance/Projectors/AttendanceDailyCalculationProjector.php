@@ -2,27 +2,25 @@
 
 namespace App\Domain\Attendance\Projectors;
 
-use App\Domain\EventSourcing\Contracts\Projector;
+use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
+use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
-use App\Models\StoredEvent;
-use Illuminate\Support\Facades\DB;
+use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * attendance.day_calculated イベントから attendance_daily_calculations を再生成する。
- * (.claude/skills/add-projection 参照)
+ * attendance_day.calculated / attendance_day.daily_calculation_adjusted イベントから
+ * attendance_daily_calculations を再生成する(.claude/skills/add-projection 参照)。
+ *
+ * spatie/laravel-event-sourcing移行(docs/29-event-sourcing-framework-migration.md)により
+ * AttendanceDayAggregateのイベントがShouldBeStoredになったため、旧イベントバス
+ * (config('domain.projectors')経由)ではなくこちらのspatie Projectorが購読する。
  */
-class AttendanceDailyCalculationProjector implements Projector
+class AttendanceDailyCalculationProjector extends Projector
 {
-    public function eventTypes(): array
+    public function onAttendanceDayCalculated(AttendanceDayCalculated $event): void
     {
-        return ['attendance.day_calculated', 'attendance.daily_calculation_adjusted'];
-    }
-
-    public function project(StoredEvent $event): void
-    {
-        $payload = $this->normalizeLegacyPayload($event->payload);
-        $attendanceDayId = $payload['attendance_day_id'];
+        $attendanceDayId = $event->aggregateRootUuid();
 
         // UC-A015で日次勤怠(attendance_days)自体が削除されている場合、そのIDを参照する
         // 過去のイベントは再生成時にスキップする(親行が無い状態でupdateOrCreateすると
@@ -31,29 +29,7 @@ class AttendanceDailyCalculationProjector implements Projector
             return;
         }
 
-        if ($event->event_type === 'attendance.daily_calculation_adjusted') {
-            // 手動補正。実績が再編集され attendance.day_calculated が再発生すると解除される。
-            AttendanceDailyCalculation::query()->updateOrCreate(
-                ['attendance_day_id' => $attendanceDayId],
-                [
-                    'prescribed_work_minutes' => $payload['prescribed_work_minutes'],
-                    'statutory_within_overtime_minutes' => $payload['statutory_within_overtime_minutes'],
-                    'statutory_excess_overtime_minutes' => $payload['statutory_excess_overtime_minutes'],
-                    'late_night_work_minutes' => $payload['late_night_work_minutes'],
-                    'late_night_prescribed_work_minutes' => $payload['late_night_prescribed_work_minutes'] ?? 0,
-                    'late_night_statutory_within_overtime_minutes' => $payload['late_night_statutory_within_overtime_minutes'] ?? 0,
-                    'late_night_statutory_excess_overtime_minutes' => $payload['late_night_statutory_excess_overtime_minutes'] ?? 0,
-                    'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
-                    'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
-                    'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'] ?? 0,
-                    'is_manually_adjusted' => true,
-                    'adjusted_by_user_id' => $payload['adjusted_by_user_id'],
-                    'adjusted_at' => $event->occurred_at,
-                ],
-            );
-
-            return;
-        }
+        $payload = $event->calculation;
 
         AttendanceDailyCalculation::query()->updateOrCreate(
             ['attendance_day_id' => $attendanceDayId],
@@ -86,37 +62,34 @@ class AttendanceDailyCalculationProjector implements Projector
         );
     }
 
-    public function reset(): void
+    public function onAttendanceDailyCalculationAdjusted(AttendanceDailyCalculationAdjusted $event): void
     {
-        DB::table('attendance_daily_calculations')->truncate();
-    }
+        $attendanceDayId = $event->aggregateRootUuid();
 
-    /**
-     * 物理名変更前に保存されたイベントも再生できるよう、新しいpayloadキーへ寄せる。
-     *
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function normalizeLegacyPayload(array $payload): array
-    {
-        $renamedKeys = [
-            'actual_work_minutes' => 'work_minutes',
-            'non_statutory_overtime_minutes' => 'statutory_within_overtime_minutes',
-            'statutory_overtime_minutes' => 'statutory_excess_overtime_minutes',
-            'late_night_minutes' => 'late_night_work_minutes',
-            'regular_work_late_night_minutes' => 'late_night_prescribed_work_minutes',
-            'non_statutory_overtime_late_night_minutes' => 'late_night_statutory_within_overtime_minutes',
-            'statutory_overtime_late_night_minutes' => 'late_night_statutory_excess_overtime_minutes',
-            'company_holiday_work_minutes' => 'prescribed_holiday_work_minutes',
-            'legal_holiday_late_night_minutes' => 'late_night_legal_holiday_work_minutes',
-        ];
-
-        foreach ($renamedKeys as $legacyKey => $newKey) {
-            if (! array_key_exists($newKey, $payload) && array_key_exists($legacyKey, $payload)) {
-                $payload[$newKey] = $payload[$legacyKey];
-            }
+        if (! AttendanceDay::query()->whereKey($attendanceDayId)->exists()) {
+            return;
         }
 
-        return $payload;
+        AttendanceDailyCalculation::query()->updateOrCreate(
+            ['attendance_day_id' => $attendanceDayId],
+            [
+                'prescribed_work_minutes' => $event->prescribedWorkMinutes,
+                'statutory_within_overtime_minutes' => $event->statutoryWithinOvertimeMinutes,
+                'statutory_excess_overtime_minutes' => $event->statutoryExcessOvertimeMinutes,
+                'late_night_work_minutes' => $event->lateNightPrescribedWorkMinutes
+                    + $event->lateNightStatutoryWithinOvertimeMinutes
+                    + $event->lateNightStatutoryExcessOvertimeMinutes
+                    + $event->lateNightLegalHolidayWorkMinutes,
+                'late_night_prescribed_work_minutes' => $event->lateNightPrescribedWorkMinutes,
+                'late_night_statutory_within_overtime_minutes' => $event->lateNightStatutoryWithinOvertimeMinutes,
+                'late_night_statutory_excess_overtime_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
+                'legal_holiday_work_minutes' => $event->legalHolidayWorkMinutes,
+                'prescribed_holiday_work_minutes' => $event->prescribedHolidayWorkMinutes,
+                'late_night_legal_holiday_work_minutes' => $event->lateNightLegalHolidayWorkMinutes,
+                'is_manually_adjusted' => true,
+                'adjusted_by_user_id' => $event->adjustedByUserId,
+                'adjusted_at' => $event->createdAt(),
+            ],
+        );
     }
 }

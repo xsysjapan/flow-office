@@ -22,7 +22,7 @@ return new class extends Migration
             // 直接rowを作成することがあるためnullableにする(その場合は冪等性の対象外)。
             $table->unsignedBigInteger('stored_event_id')->nullable()->unique();
             $table->foreignUuid('user_id')->constrained();
-            $table->foreignId('attendance_day_id')->constrained();
+            $table->foreignUuid('attendance_day_id')->constrained();
             $table->foreignUuid('paid_leave_grant_id')->constrained();
             $table->foreignUuid('paid_leave_request_id')->constrained();
             $table->date('used_on');

@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('legal_holiday_designations', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成できるUUIDにする(LegalHolidayDesignationProjector経由で行える
+            // ようにするため。docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->date('week_start_date');
             $table->date('designated_date');

@@ -13,7 +13,7 @@ class SpecialLeaveUsed extends ShouldBeStored
     public function __construct(
         public readonly string $userId,
         public readonly string $specialLeaveRequestId,
-        public readonly int $attendanceDayId,
+        public readonly string $attendanceDayId,
         public readonly string $usedOn,
         public readonly float $usedDays,
         public readonly ?int $usedMinutes,

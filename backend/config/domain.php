@@ -72,7 +72,6 @@ use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
-use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
 use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
 use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
 use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
@@ -303,14 +302,15 @@ return [
     | イベント→行の対応関係に収まらないため)。
     |
     | 注意: spatie/laravel-event-sourcingに移行済みのドメイン(Attachment/Integration/
-    | AuthenticationKey/Device/DeviceAdminSession/Notification/Workflow/BackOffice)の
-    | ProjectorはここではなくSpatie\EventSourcing\EventHandlers\Projectors\Projectorの
-    | サブクラスとして実装し、config/event-sourcing.phpのauto_discover_projectors_and_reactors
-    | で自動検出させる(docs/29-event-sourcing-framework-migration.md参照)。
+    | AuthenticationKey/Device/DeviceAdminSession/Notification/Workflow/BackOffice/
+    | PaidLeave/SpecialLeave/User/Attendance)のProjectorはここではなく
+    | Spatie\EventSourcing\EventHandlers\Projectors\Projectorのサブクラスとして実装し、
+    | config/event-sourcing.phpのauto_discover_projectors_and_reactorsで自動検出させる
+    | (docs/29-event-sourcing-framework-migration.md参照)。AttendanceDailyCalculationProjector
+    | もAttendanceのspatie移行に伴いこちらへ移設したため、この配列は現時点で空になっている。
     |
     */
     'projectors' => [
-        AttendanceDailyCalculationProjector::class,
     ],
 
 ];

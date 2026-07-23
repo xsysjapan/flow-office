@@ -2,33 +2,27 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AttendancePunchCorrected implements DomainEvent
+/**
+ * attendance_punch.corrected
+ *
+ * UC-A013: 打刻ログを訂正する。打刻ログは追記のみのため、元の打刻(このイベントの集約ルート)は
+ * 書き換えず「訂正済み」として残し、訂正後の値を新しい打刻行(correctedPunchId、別のUUID。
+ * この打刻自身の集約ストリームは持たない)として追記する。AttendancePunchProjectorが
+ * 元の行の状態更新と、新しい訂正後の行の作成の両方を1つのイベントから行う。
+ */
+class AttendancePunchCorrected extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $attendancePunchId,
-        public readonly int $correctedPunchId,
+        public readonly string $correctedPunchId,
+        public readonly string $userId,
+        public readonly string $workDate,
         public readonly string $punchType,
         public readonly string $punchedAt,
+        public readonly string $source,
+        public readonly ?string $note,
         public readonly string $reason,
         public readonly string $correctedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attendance_punch.corrected';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'attendance_punch_id' => $this->attendancePunchId,
-            'corrected_punch_id' => $this->correctedPunchId,
-            'punch_type' => $this->punchType,
-            'punched_at' => $this->punchedAt,
-            'reason' => $this->reason,
-            'corrected_by_user_id' => $this->correctedByUserId,
-        ];
-    }
 }

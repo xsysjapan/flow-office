@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('special_leave_type_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->foreignId('work_style_id')->nullable()->constrained();
+            $table->foreignUuid('work_style_id')->nullable()->constrained();
             $table->unsignedTinyInteger('min_attendance_rate')->default(80);
             $table->unsignedSmallInteger('first_grant_after_months')->default(0);
             $table->unsignedSmallInteger('grant_cycle_months')->default(12);

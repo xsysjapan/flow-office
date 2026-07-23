@@ -14,7 +14,7 @@ class EditAttendanceDay implements Command
      * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
      */
     public function __construct(
-        public readonly int $attendanceDayId,
+        public readonly string $attendanceDayId,
         public readonly ?string $actualStartAt,
         public readonly ?string $actualEndAt,
         public readonly array $breaks,

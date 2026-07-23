@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,10 +16,19 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * `utc_offset_minutes` はその勤務日の actual_start_at/actual_end_at/breaks に適用された
  * UTCオフセット(分)。海外出張などで勤務日ごとに現地時刻が変わるため、users.timezone とは
  * 独立して勤務日単位で保持する (docs/03-architecture.md 3.4)。
+ *
+ * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
+ * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'utc_offset_minutes', 'work_type', 'work_location_type', 'note', 'locked_at'])]
+#[Fillable(['id', 'user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'utc_offset_minutes', 'work_type', 'work_location_type', 'note', 'locked_at'])]
 class AttendanceDay extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

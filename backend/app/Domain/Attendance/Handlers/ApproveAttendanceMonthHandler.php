@@ -2,17 +2,15 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
-use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
-use Illuminate\Support\Carbon;
 
 /**
  * UC-A009: 承認者が月次勤怠を承認する。
@@ -21,8 +19,6 @@ use Illuminate\Support\Carbon;
  */
 class ApproveAttendanceMonthHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): AttendanceMonth
     {
         assert($command instanceof ApproveAttendanceMonth);
@@ -37,18 +33,9 @@ class ApproveAttendanceMonthHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 
-        $month->status = AttendanceMonthStatus::APPROVED;
-        $month->approved_at = Carbon::now();
-        $month->save();
+        AttendanceMonthAggregate::retrieve($month->id)->approve($command->approvedByUserId)->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_month',
-            aggregateId: (string) $month->id,
-            event: new AttendanceMonthApproved(
-                attendanceMonthId: $month->id,
-                approvedByUserId: $command->approvedByUserId,
-            ),
-        );
+        $month = AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
 
         $applicant = User::find($month->user_id);
         if ($applicant !== null) {

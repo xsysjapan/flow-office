@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('system_settings', function (Blueprint $table) {
-            $table->foreignId('default_work_style_id')->nullable()->after('default_timezone')
+            $table->foreignUuid('default_work_style_id')->nullable()->after('default_timezone')
                 ->constrained('work_styles')->nullOnDelete();
         });
     }

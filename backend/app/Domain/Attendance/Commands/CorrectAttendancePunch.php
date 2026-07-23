@@ -11,7 +11,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class CorrectAttendancePunch implements Command
 {
     public function __construct(
-        public readonly int $attendancePunchId,
+        public readonly string $attendancePunchId,
         public readonly string $punchType,
         public readonly string $punchedAt,
         public readonly string $reason,

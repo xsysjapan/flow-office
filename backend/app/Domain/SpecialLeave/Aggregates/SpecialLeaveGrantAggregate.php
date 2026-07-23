@@ -37,7 +37,7 @@ class SpecialLeaveGrantAggregate extends AggregateRoot
     public function use(
         string $userId,
         string $specialLeaveRequestId,
-        int $attendanceDayId,
+        string $attendanceDayId,
         string $usedOn,
         float $usedDays,
         ?int $usedMinutes,

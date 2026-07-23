@@ -2,15 +2,14 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
-use App\Domain\Attendance\Events\AttendanceDayCalculated;
-use App\Domain\Attendance\Events\AttendanceDayCreated;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
@@ -18,6 +17,7 @@ use App\Models\EmployeeShiftAssignment;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * 出勤日(attendance_days)を任意の勤務日に新規作成する。打刻(attendance_punches)とは
@@ -29,7 +29,6 @@ use Illuminate\Support\Carbon;
 class CreateAttendanceDayHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
     ) {}
@@ -56,54 +55,54 @@ class CreateAttendanceDayHandler implements CommandHandler
             ->whereDate('work_date', $command->workDate)
             ->first();
 
-        $day = new AttendanceDay([
-            'user_id' => $command->userId,
-            'work_date' => $command->workDate,
-            'shift_assignment_id' => $shiftAssignment?->id,
-            'status' => $command->actualEndAt !== null ? AttendanceDayStatus::CLOCKED_OUT : AttendanceDayStatus::NOT_STARTED,
-            'source' => AttendanceDaySource::MANUAL,
-            'utc_offset_minutes' => $offsetMinutes,
-            'actual_start_at' => $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null,
-            'actual_end_at' => $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null,
-            'work_type' => $command->workType,
-            'work_location_type' => $command->workLocationType,
-            'note' => $command->note,
-        ]);
-        $day->save();
-
+        $breaksPayload = [];
+        $parsedBreaks = [];
         foreach ($command->breaks as $break) {
-            $day->breaks()->create([
-                'break_start_at' => LocalDateTime::splitOffset($break['start'])[0],
-                'break_end_at' => $break['end'] !== null ? LocalDateTime::splitOffset($break['end'])[0] : null,
-            ]);
+            $start = LocalDateTime::splitOffset($break['start'])[0];
+            $end = $break['end'] !== null ? LocalDateTime::splitOffset($break['end'])[0] : null;
+            $parsedBreaks[] = new AttendanceBreak(['break_start_at' => $start, 'break_end_at' => $end]);
+            $breaksPayload[] = [
+                'start' => LocalDateTime::formatWithOffsetMinutes($start, $offsetMinutes),
+                'end' => $end !== null ? LocalDateTime::formatWithOffsetMinutes($end, $offsetMinutes) : null,
+            ];
         }
 
-        $this->createLeaveSegments($day, $command->leaveSegments);
+        [$leaveSegmentsPayload] = $this->buildLeaveSegments($command->leaveSegments, $parsedBreaks, $offsetMinutes);
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_day',
-            aggregateId: (string) $day->id,
-            event: new AttendanceDayCreated(
-                attendanceDayId: $day->id,
+        $dayId = (string) Str::uuid();
+        $status = $command->actualEndAt !== null ? AttendanceDayStatus::CLOCKED_OUT : AttendanceDayStatus::NOT_STARTED;
+        $actualStartAt = $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null;
+        $actualEndAt = $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null;
+
+        AttendanceDayAggregate::retrieve($dayId)
+            ->create(
                 userId: $command->userId,
                 workDate: $command->workDate,
+                shiftAssignmentId: $shiftAssignment?->id,
+                status: $status,
+                source: AttendanceDaySource::MANUAL,
+                utcOffsetMinutes: $offsetMinutes,
+                actualStartAt: $command->actualStartAt !== null ? LocalDateTime::formatWithOffsetMinutes($actualStartAt, $offsetMinutes) : null,
+                actualEndAt: $command->actualEndAt !== null ? LocalDateTime::formatWithOffsetMinutes($actualEndAt, $offsetMinutes) : null,
+                workType: $command->workType,
+                workLocationType: $command->workLocationType,
+                note: $command->note,
+                breaks: $breaksPayload,
+                leaveSegments: $leaveSegmentsPayload,
                 reason: $command->reason,
                 createdByUserId: $command->createdByUserId,
-            ),
-        );
+            )
+            ->persist();
 
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
+        $day = AttendanceDay::query()->findOrFail($dayId);
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_day',
-            aggregateId: (string) $day->id,
-            event: new AttendanceDayCalculated(
-                attendanceDayId: $day->id,
-                calculation: $calculation,
-            ),
-        );
+        // 計算(AttendanceCalculator)は永続化後の実データから読み直す(通常のDBに保存された
+        // Projectionを使う。これはCreate/Edit時のみの割り切りで、パフォーマンス上問題ない範囲)。
+        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
 
-        return $day;
+        AttendanceDayAggregate::retrieve($dayId)->calculate($calculation)->persist();
+
+        return AttendanceDay::query()->findOrFail($dayId);
     }
 
     /**
@@ -147,9 +146,12 @@ class CreateAttendanceDayHandler implements CommandHandler
      * 過大集計されたりするのを防ぐため許可しない。
      *
      * @param  array<int, array{start: string, end: string, note: string|null}>  $leaveSegments
+     * @param  array<int, AttendanceBreak>  $parsedBreaks
+     * @return array{0: array<int, array{start: string, end: string, note: string|null}>, 1: array<int, array{start: Carbon, end: Carbon}>}
      */
-    private function createLeaveSegments(AttendanceDay $day, array $leaveSegments): void
+    private function buildLeaveSegments(array $leaveSegments, array $parsedBreaks, int $offsetMinutes): array
     {
+        $payload = [];
         /** @var array<int, array{start: Carbon, end: Carbon}> $parsed */
         $parsed = [];
         foreach ($leaveSegments as $segment) {
@@ -164,19 +166,21 @@ class CreateAttendanceDayHandler implements CommandHandler
                     throw new DomainRuleException('遅刻・早退の時間帯が重複しています。');
                 }
             }
-            foreach ($day->breaks as $break) {
+            foreach ($parsedBreaks as $break) {
                 if ($break->break_end_at !== null && $this->intervalsOverlap($start, $end, $break->break_start_at, $break->break_end_at)) {
                     throw new DomainRuleException('遅刻・早退の時間帯が休憩と重複しています。');
                 }
             }
             $parsed[] = ['start' => $start, 'end' => $end];
 
-            $day->leaveSegments()->create([
-                'start_at' => $start,
-                'end_at' => $end,
+            $payload[] = [
+                'start' => LocalDateTime::formatWithOffsetMinutes($start, $offsetMinutes),
+                'end' => LocalDateTime::formatWithOffsetMinutes($end, $offsetMinutes),
                 'note' => $segment['note'] ?? null,
-            ]);
+            ];
         }
+
+        return [$payload, $parsed];
     }
 
     private function intervalsOverlap(Carbon $aStart, Carbon $aEnd, Carbon $bStart, Carbon $bEnd): bool

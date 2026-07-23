@@ -14,7 +14,7 @@ return new class extends Migration
         // Projection: attendance.day_calculated イベントから再生成可能。
         Schema::create('attendance_daily_calculations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('attendance_day_id')->unique()->constrained()->cascadeOnDelete();
+            $table->foreignUuid('attendance_day_id')->unique()->constrained()->cascadeOnDelete();
             $table->unsignedSmallInteger('planned_work_minutes')->default(0);
             $table->unsignedSmallInteger('actual_work_minutes')->default(0);
             $table->unsignedSmallInteger('prescribed_work_minutes')->default(0);

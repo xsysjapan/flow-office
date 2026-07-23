@@ -2,6 +2,21 @@
 
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
+use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
+use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
+use App\Domain\Attendance\Events\AttendanceDayCalculated;
+use App\Domain\Attendance\Events\AttendanceDayCreated;
+use App\Domain\Attendance\Events\AttendanceDayDeleted;
+use App\Domain\Attendance\Events\AttendanceDayEdited;
+use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
+use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
+use App\Domain\Attendance\Events\AttendanceMonthApproved;
+use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthReturned;
+use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
+use App\Domain\Attendance\Events\AttendancePunchCorrected;
+use App\Domain\Attendance\Events\AttendancePunchDeleted;
+use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
@@ -164,6 +179,24 @@ return [
     'event_class_map' => [
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
+
+        'attendance_day.created' => AttendanceDayCreated::class,
+        'attendance_day.edited' => AttendanceDayEdited::class,
+        'attendance_day.calculated' => AttendanceDayCalculated::class,
+        'attendance_day.daily_calculation_adjusted' => AttendanceDailyCalculationAdjusted::class,
+        'attendance_day.deleted' => AttendanceDayDeleted::class,
+        'attendance_day.live_status_synced' => AttendanceDayLiveStatusSynced::class,
+        'attendance_day.synced_from_punches' => AttendanceDaySyncedFromPunches::class,
+        'attendance_day.break_auto_inserted' => AttendanceBreakAutoInserted::class,
+
+        'attendance_punch.recorded' => AttendancePunchRecorded::class,
+        'attendance_punch.corrected' => AttendancePunchCorrected::class,
+        'attendance_punch.deleted' => AttendancePunchDeleted::class,
+
+        'attendance_month.submitted' => AttendanceMonthSubmitted::class,
+        'attendance_month.approved' => AttendanceMonthApproved::class,
+        'attendance_month.returned' => AttendanceMonthReturned::class,
+        'attendance_month.closed' => AttendanceMonthClosed::class,
 
         'application_integration.registered' => ApplicationIntegrationRegistered::class,
         'application_integration.token_reissued' => ApplicationIntegrationTokenReissued::class,

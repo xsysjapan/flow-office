@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class AdjustAttendanceDailyCalculation implements Command
 {
     public function __construct(
-        public readonly int $attendanceDayId,
+        public readonly string $attendanceDayId,
         public readonly int $prescribedWorkMinutes,
         public readonly int $statutoryWithinOvertimeMinutes,
         public readonly int $statutoryExcessOvertimeMinutes,

@@ -36,7 +36,7 @@ class PaidLeaveGrantAggregate extends AggregateRoot
     public function use(
         string $userId,
         string $paidLeaveRequestId,
-        int $attendanceDayId,
+        string $attendanceDayId,
         string $usedOn,
         float $usedDays,
         ?int $usedMinutes,

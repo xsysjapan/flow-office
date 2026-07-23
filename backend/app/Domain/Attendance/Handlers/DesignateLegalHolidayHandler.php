@@ -2,8 +2,8 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
-use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\LegalHolidayDesignated;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
@@ -115,14 +115,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
 
             $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle.calendar'));
 
-            $this->eventStore->append(
-                aggregateType: 'attendance_day',
-                aggregateId: (string) $day->id,
-                event: new AttendanceDayCalculated(
-                    attendanceDayId: $day->id,
-                    calculation: $calculation,
-                ),
-            );
+            AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
         }
     }
 }

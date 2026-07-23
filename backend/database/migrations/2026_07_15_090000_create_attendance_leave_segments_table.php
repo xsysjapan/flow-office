@@ -20,7 +20,7 @@ return new class extends Migration
     {
         Schema::create('attendance_leave_segments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('attendance_day_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('attendance_day_id')->constrained()->cascadeOnDelete();
             $table->string('category'); // absence(欠勤) / special_leave(その他特別休暇)
             $table->dateTime('start_at');
             $table->dateTime('end_at');
