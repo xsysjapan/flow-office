@@ -2,11 +2,10 @@
 
 namespace App\Domain\Device\Handlers;
 
+use App\Domain\Device\Aggregates\DeviceAggregate;
 use App\Domain\Device\Commands\ClaimDevicePairing;
-use App\Domain\Device\Events\DevicePaired;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceStatus;
@@ -20,8 +19,6 @@ use App\Models\DeviceStatus;
  */
 class ClaimDevicePairingHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     /**
      * @return array{device: Device, plainTextToken: string}
      */
@@ -43,16 +40,10 @@ class ClaimDevicePairingHandler implements CommandHandler
         $device->tokens()->delete();
         $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 
-        $device->status = DeviceStatus::ACTIVE;
-        $device->paired_at = now();
-        $device->save();
+        DeviceAggregate::retrieve($device->aggregate_uuid)
+            ->pair($abilities, now()->format('Y-m-d H:i:s'))
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'device',
-            aggregateId: (string) $device->id,
-            event: new DevicePaired(deviceId: $device->id, abilities: $abilities),
-        );
-
-        return ['device' => $device, 'plainTextToken' => $plainTextToken];
+        return ['device' => $device->refresh(), 'plainTextToken' => $plainTextToken];
     }
 }

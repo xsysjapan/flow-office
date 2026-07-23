@@ -2,11 +2,10 @@
 
 namespace App\Domain\Device\Handlers;
 
+use App\Domain\Device\Aggregates\DeviceAggregate;
 use App\Domain\Device\Commands\GrantDeviceScope;
-use App\Domain\Device\Events\DeviceScopeGranted;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceScopeType;
@@ -19,8 +18,6 @@ use App\Models\DeviceScopeType;
  */
 class GrantDeviceScopeHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): Device
     {
         assert($command instanceof GrantDeviceScope);
@@ -31,7 +28,11 @@ class GrantDeviceScopeHandler implements CommandHandler
 
         $device = Device::query()->findOrFail($command->deviceId);
 
-        $device->scopes()->firstOrCreate(['scope' => $command->scope]);
+        DeviceAggregate::retrieve($device->aggregate_uuid)
+            ->grantScope($command->scope, $command->grantedByUserId)
+            ->persist();
+
+        $device->refresh();
 
         foreach ($device->tokens as $token) {
             $abilities = $token->abilities;
@@ -40,16 +41,6 @@ class GrantDeviceScopeHandler implements CommandHandler
             }
         }
 
-        $this->eventStore->append(
-            aggregateType: 'device',
-            aggregateId: (string) $device->id,
-            event: new DeviceScopeGranted(
-                deviceId: $device->id,
-                scope: $command->scope,
-                grantedByUserId: $command->grantedByUserId,
-            ),
-        );
-
-        return $device->refresh()->load('roles', 'scopes');
+        return $device->load('roles', 'scopes');
     }
 }

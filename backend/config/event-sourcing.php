@@ -4,6 +4,15 @@ use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
+use App\Domain\Device\Events\DeviceDeleted;
+use App\Domain\Device\Events\DeviceDisabled;
+use App\Domain\Device\Events\DevicePaired;
+use App\Domain\Device\Events\DevicePairingClaimIssued;
+use App\Domain\Device\Events\DeviceRegistered;
+use App\Domain\Device\Events\DeviceRevoked;
+use App\Domain\Device\Events\DeviceRoleAssigned;
+use App\Domain\Device\Events\DeviceScopeGranted;
+use App\Domain\Device\Events\DeviceSettingsUpdated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -127,6 +136,16 @@ return [
 
         'authentication_key.issued' => AuthenticationKeyIssued::class,
         'authentication_key.disabled' => AuthenticationKeyDisabled::class,
+
+        'device.registered' => DeviceRegistered::class,
+        'device.paired' => DevicePaired::class,
+        'device.pairing_claim_issued' => DevicePairingClaimIssued::class,
+        'device.disabled' => DeviceDisabled::class,
+        'device.revoked' => DeviceRevoked::class,
+        'device.deleted' => DeviceDeleted::class,
+        'device.role_assigned' => DeviceRoleAssigned::class,
+        'device.scope_granted' => DeviceScopeGranted::class,
+        'device.settings_updated' => DeviceSettingsUpdated::class,
     ],
 
     /*

@@ -2,11 +2,10 @@
 
 namespace App\Domain\Device\Handlers;
 
+use App\Domain\Device\Aggregates\DeviceAggregate;
 use App\Domain\Device\Commands\UpdateDeviceRoles;
-use App\Domain\Device\Events\DeviceRoleAssigned;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceRoleType;
@@ -20,8 +19,6 @@ use App\Models\DeviceRoleType;
  */
 class UpdateDeviceRolesHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): Device
     {
         assert($command instanceof UpdateDeviceRoles);
@@ -37,14 +34,12 @@ class UpdateDeviceRolesHandler implements CommandHandler
         }
 
         $device = Device::query()->findOrFail($command->deviceId);
-        $device->load('roles', 'scopes');
 
-        $device->roles()->whereNotIn('role_type', $command->roleTypes)->delete();
-        foreach ($command->roleTypes as $roleType) {
-            $device->roles()->firstOrCreate(['role_type' => $roleType]);
-        }
+        DeviceAggregate::retrieve($device->aggregate_uuid)
+            ->assignRoles($command->roleTypes, $command->updatedByUserId)
+            ->persist();
 
-        $device->load('roles');
+        $device->refresh()->load('roles');
         $abilities = $device->tokenAbilities();
         foreach ($device->tokens as $token) {
             // 一時ペアリングトークン(device:claim-pairingのみのability)は対象外にする。
@@ -54,16 +49,6 @@ class UpdateDeviceRolesHandler implements CommandHandler
             $token->forceFill(['abilities' => $abilities])->save();
         }
 
-        $this->eventStore->append(
-            aggregateType: 'device',
-            aggregateId: (string) $device->id,
-            event: new DeviceRoleAssigned(
-                deviceId: $device->id,
-                roleTypes: $command->roleTypes,
-                updatedByUserId: $command->updatedByUserId,
-            ),
-        );
-
-        return $device->refresh()->load('roles', 'scopes');
+        return $device->load('roles', 'scopes');
     }
 }

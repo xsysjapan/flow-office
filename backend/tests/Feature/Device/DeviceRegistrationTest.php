@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -234,11 +235,12 @@ class DeviceRegistrationTest extends TestCase
 
         $device->refresh();
         $this->assertSame(DeviceStatus::PENDING_PAIRING, $device->status);
-        $this->assertDatabaseHas('legacy_stored_events', [
-            'aggregate_type' => 'device',
-            'aggregate_id' => (string) $device->id,
-            'event_type' => 'device.pairing_reissued',
-        ]);
+        $this->assertTrue(
+            EloquentStoredEvent::query()
+                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('event_class', 'device.pairing_claim_issued')
+                ->exists(),
+        );
 
         $this->app['auth']->forgetGuards();
         $this->withToken($secondClaimToken)->postJson('/api/devices/pairing/claim')->assertSuccessful();
@@ -279,11 +281,12 @@ class DeviceRegistrationTest extends TestCase
         $this->assertFalse($device->hasRole(DeviceRoleType::ATTENDANCE_READER));
         $this->assertTrue($device->hasRole(DeviceRoleType::AUTHENTICATION_DEVICE));
         $this->assertTrue($device->hasRole(DeviceRoleType::ACCESS_CONTROL));
-        $this->assertDatabaseHas('legacy_stored_events', [
-            'aggregate_type' => 'device',
-            'aggregate_id' => (string) $device->id,
-            'event_type' => 'device.role_assigned',
-        ]);
+        $this->assertTrue(
+            EloquentStoredEvent::query()
+                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('event_class', 'device.role_assigned')
+                ->exists(),
+        );
     }
 
     public function test_device_roles_cannot_be_emptied(): void
@@ -308,11 +311,12 @@ class DeviceRegistrationTest extends TestCase
         $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
 
         $this->assertSoftDeleted('devices', ['id' => $device->id]);
-        $this->assertDatabaseHas('legacy_stored_events', [
-            'aggregate_type' => 'device',
-            'aggregate_id' => (string) $device->id,
-            'event_type' => 'device.deleted',
-        ]);
+        $this->assertTrue(
+            EloquentStoredEvent::query()
+                ->where('aggregate_uuid', $device->aggregate_uuid)
+                ->where('event_class', 'device.deleted')
+                ->exists(),
+        );
     }
 
     public function test_active_or_pending_device_cannot_be_deleted(): void

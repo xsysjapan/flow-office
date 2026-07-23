@@ -2,25 +2,16 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceDeleted implements DomainEvent
+/**
+ * 監査証跡(stored_events、UC-M003)は残すため物理削除はせず、DeviceProjectorが
+ * devices.deleted_atを設定する論理削除のみ行う。
+ */
+class DeviceDeleted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceId,
         public readonly int $deletedByUserId,
+        public readonly string $deletedAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.deleted';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'deleted_by_user_id' => $this->deletedByUserId,
-        ];
-    }
 }

@@ -2,33 +2,32 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceRegistered implements DomainEvent
+/**
+ * device.registered。DeviceProjectorが集約UUID(aggregateRootUuid())をキーに
+ * devices / device_rolesの行を新規作成する。
+ */
+class DeviceRegistered extends ShouldBeStored
 {
+    /**
+     * @param  array<int, string>  $roleTypes
+     * @param  array<int, string>|null  $allowedPunchTypes
+     */
     public function __construct(
-        public readonly int $deviceId,
         public readonly string $ownerType,
         public readonly ?int $ownerUserId,
         public readonly string $name,
         public readonly string $deviceType,
+        public readonly array $roleTypes,
+        public readonly ?string $siteId,
+        public readonly ?string $locationName,
+        public readonly ?string $defaultWorkLocationType,
+        public readonly ?string $timezone,
+        public readonly ?array $allowedPunchTypes,
+        public readonly bool $allowOffline,
+        public readonly bool $requireLocation,
+        public readonly bool $autoDetectPunchType,
         public readonly int $registeredByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.registered';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'owner_type' => $this->ownerType,
-            'owner_user_id' => $this->ownerUserId,
-            'name' => $this->name,
-            'device_type' => $this->deviceType,
-            'registered_by_user_id' => $this->registeredByUserId,
-        ];
-    }
 }

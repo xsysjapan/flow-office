@@ -2,25 +2,12 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceDisabled implements DomainEvent
+class DeviceDisabled extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceId,
         public readonly int $disabledByUserId,
+        public readonly string $disabledAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.disabled';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'disabled_by_user_id' => $this->disabledByUserId,
-        ];
-    }
 }

@@ -14,6 +14,10 @@ return new class extends Migration
     {
         Schema::create('devices', function (Blueprint $table) {
             $table->id();
+            // ESの集約ストリームID。attendance_punches.device_id等が主キー(連番int)を
+            // 参照しているため主キー自体はUUID化せず、別列でストリーム識別子を持つ
+            // (docs/29-event-sourcing-framework-migration.md「集約IDのUUID化方針」(a)参照)。
+            $table->uuid('aggregate_uuid')->unique();
             $table->string('owner_type');
             $table->foreignId('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('name');

@@ -2,11 +2,10 @@
 
 namespace App\Domain\Device\Handlers;
 
+use App\Domain\Device\Aggregates\DeviceAggregate;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
-use App\Domain\Device\Events\DevicePairingReissued;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceOwnerType;
@@ -27,8 +26,6 @@ class IssueDevicePairingClaimHandler implements CommandHandler
 {
     private const EXPIRES_IN_MINUTES = 5;
 
-    public function __construct(private readonly EventStore $eventStore) {}
-
     /**
      * @return array{device: Device, claimToken: string}
      */
@@ -46,13 +43,7 @@ class IssueDevicePairingClaimHandler implements CommandHandler
             throw new DomainRuleException('この端末は現在ペアリング(再ペアリング)できない状態です。');
         }
 
-        $isReissueForActiveDevice = $device->status === DeviceStatus::ACTIVE;
-
-        // 誰の管理者権限でこの端末がアクティベーションされたかを記録する(管理者ICカードの
-        // 初回登録・ブートストラップ判定に使う。docs/23-usecases-devices.md UC-D006)。
-        $device->activated_by_user_id = $command->issuedByUserId;
-        $device->status = DeviceStatus::PENDING_PAIRING;
-        $device->save();
+        $wasReissued = $device->status === DeviceStatus::ACTIVE;
 
         // 既に発行済みの未使用トークン、あるいは(再ペアリングの場合)稼働中だった本トークンを
         // 無効化してから発行し直す(QRを表示し直した際に古いトークンが使われてしまうことを防ぐ)。
@@ -64,14 +55,12 @@ class IssueDevicePairingClaimHandler implements CommandHandler
             expiresAt: now()->addMinutes(self::EXPIRES_IN_MINUTES),
         )->plainTextToken;
 
-        if ($isReissueForActiveDevice) {
-            $this->eventStore->append(
-                aggregateType: 'device',
-                aggregateId: (string) $device->id,
-                event: new DevicePairingReissued(deviceId: $device->id, issuedByUserId: $command->issuedByUserId),
-            );
-        }
+        // 誰の管理者権限でこの端末がアクティベーションされたかを記録する(管理者ICカードの
+        // 初回登録・ブートストラップ判定に使う。docs/23-usecases-devices.md UC-D006)。
+        DeviceAggregate::retrieve($device->aggregate_uuid)
+            ->issuePairingClaim($command->issuedByUserId, $wasReissued)
+            ->persist();
 
-        return ['device' => $device, 'claimToken' => $claimToken];
+        return ['device' => $device->refresh(), 'claimToken' => $claimToken];
     }
 }
