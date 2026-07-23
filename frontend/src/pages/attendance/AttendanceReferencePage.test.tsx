@@ -127,7 +127,7 @@ describe('AttendanceReferencePage', () => {
   it('shows the daily record read-only, without edit or delete actions', async () => {
     const today = formatDate(new Date())
     const day: AttendanceDay = {
-      id: 1,
+      id: 'day-1',
       user_id: targetUser.id,
       work_date: today,
       status: 'clocked_out',

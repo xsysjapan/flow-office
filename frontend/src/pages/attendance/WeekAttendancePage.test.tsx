@@ -11,7 +11,7 @@ import { WeekAttendancePage } from './WeekAttendancePage'
 const weekStart = formatDate(mondayOf(new Date()))
 
 const mondayRecord: AttendanceDay = {
-  id: 1,
+  id: 'day-1',
   user_id: '11111111-1111-1111-1111-111111111111',
   work_date: weekStart,
   status: 'clocked_out',
@@ -77,7 +77,7 @@ describe('WeekAttendancePage', () => {
       mondayRecord,
       {
         ...mondayRecord,
-        id: 2,
+        id: 'day-2',
         work_date: addDays(weekStart, 1),
         calculation: {
           ...mondayRecord.calculation!,

@@ -32,7 +32,7 @@ const roles: Role[] = [
 ]
 
 const defaultWorkStyle: WorkStyle = {
-  id: 1,
+  id: 'work-style-1',
   code: 'standard',
   name: '通常勤務',
   work_time_system: 'fixed',
@@ -45,7 +45,7 @@ const defaultWorkStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 1,
+  calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,
@@ -64,7 +64,7 @@ const defaultWorkStyle: WorkStyle = {
   updated_at: null,
 }
 
-const flexWorkStyle: WorkStyle = { ...defaultWorkStyle, id: 2, code: 'flex', name: 'フレックスタイム制', is_default: false }
+const flexWorkStyle: WorkStyle = { ...defaultWorkStyle, id: 'work-style-2', code: 'flex', name: 'フレックスタイム制', is_default: false }
 
 function renderPage(
   user: User,
@@ -172,11 +172,11 @@ describe('UserRoleEditPage', () => {
 
   it('assigns a specific work style for the current month', async () => {
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
-      id: 10,
+      id: 'assignment-10',
       user_id: 'user-1',
       year_month: formatDate(new Date()).slice(0, 7),
-      work_style_id: 2,
-      work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
+      work_style_id: 'work-style-2',
+      work_style: { id: 'work-style-2', code: 'flex', name: 'フレックスタイム制' },
       assigned_by_user_id: 'admin-1',
     })
     renderPage(targetUser)
@@ -189,7 +189,7 @@ describe('UserRoleEditPage', () => {
       expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
         user_id: 'user-1',
         year_month: formatDate(new Date()).slice(0, 7),
-        work_style_id: 2,
+        work_style_id: 'work-style-2',
       }),
     )
   })
@@ -200,11 +200,11 @@ describe('UserRoleEditPage', () => {
     renderPage(targetUser, {
       workStyleHistory: [
         {
-          id: 42,
+          id: 'assignment-42',
           user_id: 'user-1',
           year_month: currentYearMonth,
-          work_style_id: 2,
-          work_style: { id: 2, code: 'flex', name: 'フレックスタイム制' },
+          work_style_id: 'work-style-2',
+          work_style: { id: 'work-style-2', code: 'flex', name: 'フレックスタイム制' },
           assigned_by_user_id: 'admin-1',
         },
       ],
@@ -215,6 +215,6 @@ describe('UserRoleEditPage', () => {
     await userEvent.click(screen.getByRole('radio', { name: /会社のデフォルトを使用/ }))
     await userEvent.click(screen.getByRole('button', { name: '働き方を保存する' }))
 
-    await waitFor(() => expect(userWorkStyleMonthlyAssignmentsApi.removeUserWorkStyleMonthlyAssignment).toHaveBeenCalledWith(42))
+    await waitFor(() => expect(userWorkStyleMonthlyAssignmentsApi.removeUserWorkStyleMonthlyAssignment).toHaveBeenCalledWith('assignment-42'))
   })
 })

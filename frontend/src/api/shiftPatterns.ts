@@ -21,6 +21,6 @@ export function createShiftPattern(input: ShiftPatternInput): Promise<ShiftPatte
   return apiFetch('/shift-patterns', { method: 'POST', body: input })
 }
 
-export function updateShiftPattern(id: number, input: Omit<ShiftPatternInput, 'code'>): Promise<ShiftPattern> {
+export function updateShiftPattern(id: string, input: Omit<ShiftPatternInput, 'code'>): Promise<ShiftPattern> {
   return apiFetch(`/shift-patterns/${id}`, { method: 'PUT', body: input })
 }

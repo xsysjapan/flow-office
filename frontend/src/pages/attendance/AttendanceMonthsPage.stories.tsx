@@ -22,7 +22,7 @@ const emptyUsers: Paginated<User> = {
 
 const months: AttendanceMonth[] = [
   {
-    id: 1,
+    id: 'month-1',
     user_id: 'user-1',
     year_month: '2026-05',
     status: 'closed',
@@ -35,7 +35,7 @@ const months: AttendanceMonth[] = [
     legal_holiday_warnings: [],
   },
   {
-    id: 2,
+    id: 'month-2',
     user_id: 'user-1',
     year_month: '2026-06',
     status: 'returned',
@@ -48,7 +48,7 @@ const months: AttendanceMonth[] = [
     legal_holiday_warnings: [],
   },
   {
-    id: 3,
+    id: 'month-3',
     user_id: 'user-1',
     year_month: '2026-07',
     status: 'not_submitted',

@@ -40,7 +40,7 @@ export function useSetDefaultWorkStyle() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: number) => setDefaultWorkStyle(id),
+    mutationFn: (id: string) => setDefaultWorkStyle(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

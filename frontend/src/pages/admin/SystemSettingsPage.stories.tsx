@@ -5,7 +5,7 @@ import { SystemSettingsPage } from './SystemSettingsPage'
 
 const settings: SystemSettings = {
   default_timezone: 'Asia/Tokyo',
-  default_work_style_id: 1,
+  default_work_style_id: '11111111-1111-1111-1111-111111111111',
   attendance_submission_deadline_day: 5,
   attendance_month_close_deadline_day: 10,
   m365_tenant_id: null,

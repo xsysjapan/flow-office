@@ -25,7 +25,7 @@ vi.mock('../../auth/useAuth', () => ({
 }))
 
 const recordedDay: AttendanceDay = {
-  id: 1,
+  id: 'day-1',
   user_id: 'user-1',
   work_date: date,
   status: 'clocked_out',
@@ -116,7 +116,7 @@ describe('AttendanceDayPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() =>
-      expect(attendanceApi.updateAttendanceDay).toHaveBeenCalledWith(1, expect.objectContaining({ reason: '打刻ミスの修正' })),
+      expect(attendanceApi.updateAttendanceDay).toHaveBeenCalledWith('day-1', expect.objectContaining({ reason: '打刻ミスの修正' })),
     )
   })
 
@@ -131,7 +131,7 @@ describe('AttendanceDayPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '削除する' }))
 
     await waitFor(() =>
-      expect(attendanceApi.deleteAttendanceDay).toHaveBeenCalledWith(1, {
+      expect(attendanceApi.deleteAttendanceDay).toHaveBeenCalledWith('day-1', {
         reason: '二重入力の削除',
         punch_log_action: 'delete_punches',
       }),
@@ -140,7 +140,7 @@ describe('AttendanceDayPage', () => {
 
   it('shows the punch log and corrects an active punch (UC-A013)', async () => {
     const punch: AttendancePunch = {
-      id: 10,
+      id: 'punch-10',
       user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
@@ -155,7 +155,7 @@ describe('AttendanceDayPage', () => {
       created_at: null,
     }
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([punch])
-    vi.spyOn(attendanceApi, 'correctPunch').mockResolvedValue({ ...punch, id: 11, status: 'active' })
+    vi.spyOn(attendanceApi, 'correctPunch').mockResolvedValue({ ...punch, id: 'punch-11', status: 'active' })
     renderPage([recordedDay])
 
     expect(await screen.findByText('有効')).toBeInTheDocument()
@@ -168,14 +168,14 @@ describe('AttendanceDayPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '訂正を保存' }))
 
     await waitFor(() =>
-      expect(attendanceApi.correctPunch).toHaveBeenCalledWith(10, expect.objectContaining({ reason: '打刻時刻の入力ミス' })),
+      expect(attendanceApi.correctPunch).toHaveBeenCalledWith('punch-10', expect.objectContaining({ reason: '打刻時刻の入力ミス' })),
     )
   })
 
   it('adds a punch from the punch log edit mode', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'createPunch').mockResolvedValue({
-      id: 10,
+      id: 'punch-10',
       user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
@@ -210,7 +210,7 @@ describe('AttendanceDayPage', () => {
 
   it('shows only active punches by default and marks a corrected replacement as edited', async () => {
     const originalPunch: AttendancePunch = {
-      id: 10,
+      id: 'punch-10',
       user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
@@ -221,12 +221,12 @@ describe('AttendanceDayPage', () => {
       correction_reason: '打刻時刻の入力ミス',
       corrected_by_user_id: 'user-1',
       corrected_at: `${date}T10:00:00+09:00`,
-      superseded_by_punch_id: 11,
+      superseded_by_punch_id: 'punch-11',
       created_at: null,
     }
     const correctedPunch: AttendancePunch = {
       ...originalPunch,
-      id: 11,
+      id: 'punch-11',
       punched_at: `${date}T09:00:00+09:00`,
       status: 'active',
       correction_reason: null,
@@ -249,7 +249,7 @@ describe('AttendanceDayPage', () => {
 
   it('cancels an in-progress punch correction when returning to view mode', async () => {
     const punch: AttendancePunch = {
-      id: 10,
+      id: 'punch-10',
       user_id: 'user-1',
       work_date: date,
       punch_type: 'clock_in',
@@ -279,7 +279,7 @@ describe('AttendanceDayPage', () => {
 
   it('shows a create form and creates a day when there is no record yet (UC-A016)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 'day-2' })
     vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
       source: 'none',
       actual_start_at: null,
@@ -319,7 +319,7 @@ describe('AttendanceDayPage', () => {
 
   it('warns of insufficient break time before saving, without blocking the save (labor law article 34)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 'day-2' })
     vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
       source: 'none',
       actual_start_at: null,
@@ -382,7 +382,7 @@ describe('AttendanceDayPage', () => {
 
   it('adds an absence segment on the create form and submits it (UC-A016)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
-    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 2 })
+    vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 'day-2' })
     vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockResolvedValue({
       source: 'none',
       actual_start_at: null,

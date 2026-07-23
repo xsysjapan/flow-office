@@ -29,7 +29,7 @@ export function usePublishWorkCalendar() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: number) => publishWorkCalendar(id),
+    mutationFn: (id: string) => publishWorkCalendar(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },
@@ -40,7 +40,7 @@ export function usePutWorkCalendarDays() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, days }: { id: number; days: PutCalendarDayInput[] }) => putWorkCalendarDays(id, days),
+    mutationFn: ({ id, days }: { id: string; days: PutCalendarDayInput[] }) => putWorkCalendarDays(id, days),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

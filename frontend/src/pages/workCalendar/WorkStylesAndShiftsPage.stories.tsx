@@ -4,7 +4,7 @@ import type { Paginated, User, WorkCalendar, WorkStyle } from '../../api/types'
 import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
 
 const calendar: WorkCalendar = {
-  id: 1,
+  id: 'calendar-1',
   name: '2026年度カレンダー',
   fiscal_year: 2026,
   starts_on: '2026-04-01',
@@ -14,7 +14,7 @@ const calendar: WorkCalendar = {
 }
 
 const workStyle: WorkStyle = {
-  id: 1,
+  id: 'work-style-1',
   code: 'standard',
   name: '標準勤務',
   work_time_system: '通常労働時間制',
@@ -27,7 +27,7 @@ const workStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 1,
+  calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,

@@ -31,7 +31,7 @@ vi.mock('../../auth/useAuth', () => ({
 }))
 
 const submittedMonth: AttendanceMonth = {
-  id: 1,
+  id: 'month-1',
   user_id: 'user-1',
   year_month: '2026-07',
   status: 'submitted',
@@ -46,7 +46,7 @@ const submittedMonth: AttendanceMonth = {
 
 const approvedMonth: AttendanceMonth = {
   ...submittedMonth,
-  id: 2,
+  id: 'month-2',
   status: 'approved',
   approved_at: '2026-07-06T00:00:00+09:00',
 }
@@ -90,7 +90,7 @@ describe('MonthsToApprovePage', () => {
     renderPage()
     await userEvent.click(await screen.findByRole('button', { name: '承認する' }))
 
-    await waitFor(() => expect(attendanceApi.approveMonth).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(attendanceApi.approveMonth).toHaveBeenCalledWith('month-1'))
   })
 
   it('disables the return button until a comment is entered', async () => {
@@ -109,7 +109,7 @@ describe('MonthsToApprovePage', () => {
     await userEvent.type(await screen.findByPlaceholderText('差戻しコメント'), '不備があります')
     await userEvent.click(screen.getByRole('button', { name: '差戻す' }))
 
-    await waitFor(() => expect(attendanceApi.returnMonth).toHaveBeenCalledWith(1, '不備があります'))
+    await waitFor(() => expect(attendanceApi.returnMonth).toHaveBeenCalledWith('month-1', '不備があります'))
   })
 
   it('does not show a close button for a regular approver', async () => {
@@ -138,7 +138,7 @@ describe('MonthsToApprovePage', () => {
     renderPage()
     await userEvent.click(await screen.findByRole('button', { name: '締め処理' }))
 
-    await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith('month-2'))
   })
 
   it('shows an error message when the initial fetch fails', async () => {
@@ -150,7 +150,7 @@ describe('MonthsToApprovePage', () => {
   })
 
   it('bulk-approves selected submitted months', async () => {
-    const secondSubmittedMonth: AttendanceMonth = { ...submittedMonth, id: 4, year_month: '2026-06', user_id: 'user-2' }
+    const secondSubmittedMonth: AttendanceMonth = { ...submittedMonth, id: 'month-4', year_month: '2026-06', user_id: 'user-2' }
     vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue([submittedMonth, secondSubmittedMonth])
     const approveSpy = vi.spyOn(attendanceApi, 'approveMonth').mockResolvedValue({ ...submittedMonth, status: 'approved' })
 
@@ -164,8 +164,8 @@ describe('MonthsToApprovePage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'まとめて承認する' }))
 
     await waitFor(() => expect(approveSpy).toHaveBeenCalledTimes(2))
-    expect(approveSpy).toHaveBeenCalledWith(1)
-    expect(approveSpy).toHaveBeenCalledWith(4)
+    expect(approveSpy).toHaveBeenCalledWith('month-1')
+    expect(approveSpy).toHaveBeenCalledWith('month-4')
   })
 
   it('does not show a selection checkbox for an already-approved month', async () => {

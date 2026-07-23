@@ -59,7 +59,7 @@ export interface OnboardingResult {
 export interface SystemSettings {
   default_timezone: string
   /** ユーザーにその月の働き方(UserWorkStyleMonthlyAssignment)が無い場合のフォールバック。 */
-  default_work_style_id: number | null
+  default_work_style_id: string | null
   default_work_style?: Pick<WorkStyle, 'id' | 'code' | 'name'> | null
   /** UC-N001「勤怠未提出」警告の基準(前月分を提出すべき当月の日)。 */
   attendance_submission_deadline_day: number
@@ -244,7 +244,7 @@ export interface AttendanceLeaveSegment {
 }
 
 export interface AttendanceDay {
-  id: number
+  id: string
   user_id: string
   work_date: string
   status: AttendanceDayStatus
@@ -273,7 +273,7 @@ export type PunchStatus = 'active' | 'corrected' | 'deleted'
 /** UC-A012〜UC-A014: 打刻ログ。参考情報であり勤怠の正ではない。訂正・削除された
  *  打刻ログも行を保持したまま参照できる(status/correction_reason等)。 */
 export interface AttendancePunch {
-  id: number
+  id: string
   user_id: string
   work_date: string
   punch_type: PunchType
@@ -284,7 +284,7 @@ export interface AttendancePunch {
   correction_reason: string | null
   corrected_by_user_id: string | null
   corrected_at: string | null
-  superseded_by_punch_id: number | null
+  superseded_by_punch_id: string | null
   created_at: string | null
 }
 
@@ -302,7 +302,7 @@ export interface LegalHolidayWarning {
 }
 
 export interface AttendanceMonth {
-  id: number
+  id: string
   user_id: string
   year_month: string
   status: AttendanceMonthStatus
@@ -400,7 +400,7 @@ export interface PaidLeaveRequest {
 export interface PaidLeaveGrantRule {
   id: number
   name: string
-  work_style_id: number | null
+  work_style_id: string | null
   min_attendance_rate: number
   first_grant_after_months: number
   grant_cycle_months: number
@@ -441,7 +441,7 @@ export interface SpecialLeaveGrantRule {
   special_leave_type_id: number
   special_leave_type_name?: string
   name: string
-  work_style_id: number | null
+  work_style_id: string | null
   min_attendance_rate: number
   first_grant_after_months: number
   grant_cycle_months: number
@@ -483,7 +483,7 @@ export interface WorkCalendarDay {
 export type WorkCalendarStatus = 'draft' | 'published'
 
 export interface WorkCalendar {
-  id: number
+  id: string
   name: string
   fiscal_year: number
   starts_on: string
@@ -493,7 +493,7 @@ export interface WorkCalendar {
 }
 
 export interface WorkStyle {
-  id: number
+  id: string
   code: string
   name: string
   work_time_system: string
@@ -511,7 +511,7 @@ export interface WorkStyle {
   /** 退勤時、休憩が1件も記録されていない日に標準休憩(default_break_start_time〜
    *  default_break_end_time)を自動でattendance_breaksへ補完するかどうか。 */
   auto_break_enabled: boolean
-  calendar_id: number
+  calendar_id: string
   is_shift_based: boolean
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
   is_default: boolean
@@ -540,21 +540,21 @@ export interface WorkStyle {
 /** ユーザーの月次働き方割当(docs/16-database-schema.md)。10月までは通常勤務、11月から
  *  シフト勤務のように月ごとに切り替えても過去月の履歴が残る。 */
 export interface UserWorkStyleMonthlyAssignment {
-  id: number
+  id: string
   user_id: string
   year_month: string
-  work_style_id: number
+  work_style_id: string
   work_style?: Pick<WorkStyle, 'id' | 'code' | 'name'>
   assigned_by_user_id: string
 }
 
 export interface EmployeeShiftAssignment {
-  id: number
+  id: string
   user_id: string
   work_date: string
-  work_style_id: number
+  work_style_id: string
   /** UC-C004: 3交代制シフトパターンからの割当の場合のみ設定される。 */
-  shift_pattern_id: number | null
+  shift_pattern_id: string | null
   day_type: string
   is_working_day: boolean
   is_legal_holiday: boolean
@@ -573,7 +573,7 @@ export interface EmployeeShiftAssignment {
 
 /** UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)。 */
 export interface ShiftPattern {
-  id: number
+  id: string
   code: string
   name: string
   start_time: string | null
@@ -589,15 +589,15 @@ export interface ShiftPattern {
 /** 指示書 8.4節: ローテーションパターンを構成する1つの順序。 */
 export interface RotationPatternItem {
   sequence: number
-  shift_pattern_id: number
+  shift_pattern_id: string
   shift_pattern_name: string | null
   shift_pattern_code: string | null
 }
 
 /** 指示書 8.4節: 交代制勤務のローテーションパターン(A勤・B勤・C勤・休の繰り返し周期)。 */
 export interface RotationPattern {
-  id: number
-  work_style_id: number
+  id: string
+  work_style_id: string
   name: string
   cycle_length: number
   items: RotationPatternItem[]
@@ -607,16 +607,16 @@ export interface RotationPattern {
 export interface RotationPreviewDay {
   date: string
   sequence: number
-  shift_pattern_id: number | null
+  shift_pattern_id: string | null
   shift_pattern_name: string | null
   shift_pattern_code: string | null
 }
 
 /** 指示書 8.5節: 社員ごとのローテーション開始基準。 */
 export interface EmployeeRotationAssignment {
-  id: number
+  id: string
   user_id: string
-  rotation_pattern_id: number
+  rotation_pattern_id: string
   rotation_pattern_name: string | null
   rotation_start_date: string
   rotation_start_position: number

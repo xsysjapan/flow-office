@@ -66,7 +66,7 @@ const paginatedApprover: Paginated<User> = {
 }
 
 const notSubmittedMonth: AttendanceMonth = {
-  id: 1,
+  id: 'month-1',
   user_id: 'user-1',
   year_month: yearMonth,
   status: 'not_submitted',
@@ -79,7 +79,7 @@ const notSubmittedMonth: AttendanceMonth = {
 }
 
 const dayRecord: AttendanceDay = {
-  id: 1,
+  id: 'day-1',
   user_id: 'user-1',
   work_date: '2026-07-01',
   status: 'clocked_out',

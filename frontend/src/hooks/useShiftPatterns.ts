@@ -27,7 +27,7 @@ export function useUpdateShiftPattern() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: Omit<ShiftPatternInput, 'code'> }) => updateShiftPattern(id, input),
+    mutationFn: ({ id, input }: { id: string; input: Omit<ShiftPatternInput, 'code'> }) => updateShiftPattern(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

@@ -31,7 +31,7 @@ export function useRemoveUserWorkStyleMonthlyAssignment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id }: { id: number; userId: string }) => removeUserWorkStyleMonthlyAssignment(id),
+    mutationFn: ({ id }: { id: string; userId: string }) => removeUserWorkStyleMonthlyAssignment(id),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY(variables.userId) })
     },

@@ -26,7 +26,7 @@ export function useCreateRotationPattern() {
 
 export function usePreviewRotationPattern() {
   return useMutation({
-    mutationFn: ({ rotationPatternId, input }: { rotationPatternId: number; input: PreviewRotationPatternInput }) =>
+    mutationFn: ({ rotationPatternId, input }: { rotationPatternId: string; input: PreviewRotationPatternInput }) =>
       previewRotationPattern(rotationPatternId, input),
   })
 }

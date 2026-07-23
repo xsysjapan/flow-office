@@ -21,7 +21,7 @@ export function SystemSettingsPage() {
   const [defaultTimezone, setDefaultTimezone] = useState('')
   const [submissionDeadlineDay, setSubmissionDeadlineDay] = useState('')
   const [monthCloseDeadlineDay, setMonthCloseDeadlineDay] = useState('')
-  const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<number | null>(null)
+  const [defaultWorkStyleId, setDefaultWorkStyleId] = useState<string | null>(null)
   const [ms365Value, setMs365Value] = useState<Ms365CredentialsFieldsValue>({
     tenantId: '',
     clientId: '',

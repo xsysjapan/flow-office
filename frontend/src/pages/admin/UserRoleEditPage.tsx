@@ -65,7 +65,7 @@ export function UserRoleEditPage() {
   useEffect(() => {
     if (currentAssignment) {
       setWorkStyleMode('specify')
-      setSelectedWorkStyleId(String(currentAssignment.work_style_id))
+      setSelectedWorkStyleId(currentAssignment.work_style_id)
     } else {
       setWorkStyleMode('default')
       setSelectedWorkStyleId('')
@@ -88,7 +88,7 @@ export function UserRoleEditPage() {
     assignWorkStyleForMonth.mutate({
       user_id: userId,
       year_month: currentYearMonth,
-      work_style_id: Number(selectedWorkStyleId),
+      work_style_id: selectedWorkStyleId,
     })
   }
 

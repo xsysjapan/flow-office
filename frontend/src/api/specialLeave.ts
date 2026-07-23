@@ -38,7 +38,7 @@ export function fetchSpecialLeaveGrantRules(): Promise<SpecialLeaveGrantRule[]> 
 export interface CreateSpecialLeaveGrantRuleInput {
   special_leave_type_id: number
   name: string
-  work_style_id?: number
+  work_style_id?: string
   min_attendance_rate?: number
   first_grant_after_months?: number
   grant_cycle_months?: number

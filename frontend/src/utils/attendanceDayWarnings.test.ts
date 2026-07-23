@@ -3,7 +3,7 @@ import type { AttendanceDay } from '../api/types'
 import { dayWarnings } from './attendanceDayWarnings'
 
 const baseDay: AttendanceDay = {
-  id: 1,
+  id: 'day-1',
   user_id: '11111111-1111-1111-1111-111111111111',
   work_date: '2026-07-06',
   status: 'clocked_out',

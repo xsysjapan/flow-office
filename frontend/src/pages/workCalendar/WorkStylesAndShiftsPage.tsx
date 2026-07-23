@@ -231,7 +231,7 @@ function WorkStyleFormCard() {
         default_break_start_time: defaultBreakStartTime || undefined,
         default_break_end_time: defaultBreakEndTime || undefined,
         auto_break_enabled: autoBreakEnabled,
-        calendar_id: Number(calendarId),
+        calendar_id: calendarId,
         is_shift_based: isShiftBased,
         legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
         four_week_period_start_date:
@@ -610,7 +610,7 @@ function ShiftGenerationCard() {
     if (!shiftUserId || !shiftWorkStyleId) return
     generateShifts.mutate({
       user_id: shiftUserId,
-      work_style_id: Number(shiftWorkStyleId),
+      work_style_id: shiftWorkStyleId,
       from: shiftFrom,
       to: shiftTo,
     })
@@ -700,7 +700,7 @@ function MonthlyWorkStyleAssignmentCard() {
   const generateShifts = useGenerateShiftAssignments()
 
   const currentAssignment = history?.find((assignment) => assignment.year_month === yearMonth)
-  const selectedWorkStyle = workStyles?.find((style) => String(style.id) === workStyleId)
+  const selectedWorkStyle = workStyles?.find((style) => style.id === workStyleId)
 
   const handleUserChange = (userId: string | undefined) => {
     setTargetUserId(userId)
@@ -720,12 +720,12 @@ function MonthlyWorkStyleAssignmentCard() {
   const handleSave = () => {
     if (!targetUserId || !yearMonth || !workStyleId) return
     assignForMonth.mutate(
-      { user_id: targetUserId, year_month: yearMonth, work_style_id: Number(workStyleId) },
+      { user_id: targetUserId, year_month: yearMonth, work_style_id: workStyleId },
       {
         onSuccess: () => {
           if (autoGenerateShifts) {
             const { from, to } = monthBoundaries(yearMonth)
-            generateShifts.mutate({ user_id: targetUserId, work_style_id: Number(workStyleId), from, to })
+            generateShifts.mutate({ user_id: targetUserId, work_style_id: workStyleId, from, to })
           }
           setYearMonth('')
           setIsConfirming(false)
@@ -1015,9 +1015,9 @@ function RotationPatternFormCard() {
   const handleCreate = () => {
     createRotationPattern.mutate(
       {
-        work_style_id: Number(workStyleId),
+        work_style_id: workStyleId,
         name,
-        items: items.map((shiftPatternId, index) => ({ sequence: index, shift_pattern_id: Number(shiftPatternId) })),
+        items: items.map((shiftPatternId, index) => ({ sequence: index, shift_pattern_id: shiftPatternId })),
       },
       {
         onSuccess: () => {
@@ -1133,13 +1133,13 @@ function RotationAssignmentCard() {
   const previewRotation = usePreviewRotationPattern()
   const generateShifts = useGenerateRotationShiftAssignments()
 
-  const selectedPattern = rotationPatterns?.find((pattern) => String(pattern.id) === rotationPatternId)
+  const selectedPattern = rotationPatterns?.find((pattern) => pattern.id === rotationPatternId)
 
   const handleAssign = () => {
     if (!targetUserId || !rotationPatternId || !rotationStartDate) return
     assignRotation.mutate({
       user_id: targetUserId,
-      rotation_pattern_id: Number(rotationPatternId),
+      rotation_pattern_id: rotationPatternId,
       rotation_start_date: rotationStartDate,
       rotation_start_position: Number(rotationStartPosition),
     })
@@ -1148,7 +1148,7 @@ function RotationAssignmentCard() {
   const handlePreview = () => {
     if (!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) return
     previewRotation.mutate({
-      rotationPatternId: Number(rotationPatternId),
+      rotationPatternId,
       input: {
         rotation_start_date: rotationStartDate,
         rotation_start_position: Number(rotationStartPosition),
@@ -1329,9 +1329,9 @@ function ShiftScheduleBoardCard() {
     if (!userId || !workStyleId || !workDate || !shiftPatternId) return
     assignPattern.mutate({
       user_id: userId,
-      work_style_id: Number(workStyleId),
+      work_style_id: workStyleId,
       work_date: workDate,
-      shift_pattern_id: Number(shiftPatternId),
+      shift_pattern_id: shiftPatternId,
       is_legal_holiday: isLegalHoliday,
     })
   }

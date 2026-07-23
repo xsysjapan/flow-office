@@ -61,14 +61,14 @@ export interface EditAttendanceDayInput {
   reason: string
 }
 
-export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): Promise<AttendanceDay> {
+export function updateAttendanceDay(id: string, input: EditAttendanceDayInput): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
 }
 
 /** 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
  *  実績(出勤・退勤・休憩)が再編集され再計算されるとこの補正は解除される。 */
 export function adjustAttendanceDailyCalculation(
-  id: number,
+  id: string,
   input: AttendanceDailyCalculationAdjustment,
 ): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}/calculation`, { method: 'PUT', body: input })
@@ -100,7 +100,7 @@ export interface DeleteAttendanceDayInput {
 }
 
 /** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
-export function deleteAttendanceDay(id: number, input: DeleteAttendanceDayInput): Promise<{ deleted: boolean }> {
+export function deleteAttendanceDay(id: string, input: DeleteAttendanceDayInput): Promise<{ deleted: boolean }> {
   return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: input })
 }
 
@@ -128,12 +128,12 @@ export interface CorrectAttendancePunchInput {
 }
 
 /** UC-A013: 打刻ログを訂正する。戻り値は訂正後に追記された新しい打刻ログ。 */
-export function correctPunch(id: number, input: CorrectAttendancePunchInput): Promise<AttendancePunch> {
+export function correctPunch(id: string, input: CorrectAttendancePunchInput): Promise<AttendancePunch> {
   return apiFetch(`/attendance-punches/${id}`, { method: 'PUT', body: input })
 }
 
 /** UC-A014: 打刻ログを削除する。戻り値は削除済み状態になった元の打刻ログ。 */
-export function deletePunch(id: number, reason: string): Promise<AttendancePunch> {
+export function deletePunch(id: string, reason: string): Promise<AttendancePunch> {
   return apiFetch(`/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
@@ -167,14 +167,14 @@ export function fetchMonthsToApprove(): Promise<AttendanceMonth[]> {
   return apiFetch('/attendance/months/to-approve')
 }
 
-export function approveMonth(id: number): Promise<AttendanceMonth> {
+export function approveMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/approve`, { method: 'POST' })
 }
 
-export function returnMonth(id: number, comment: string): Promise<AttendanceMonth> {
+export function returnMonth(id: string, comment: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function closeMonth(id: number): Promise<AttendanceMonth> {
+export function closeMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/close`, { method: 'POST' })
 }

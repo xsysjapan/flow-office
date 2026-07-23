@@ -8,7 +8,7 @@ export function fetchUserWorkStyleMonthlyAssignments(userId: string): Promise<Us
 export interface AssignUserWorkStyleForMonthInput {
   user_id: string
   year_month: string
-  work_style_id: number
+  work_style_id: string
 }
 
 export function assignUserWorkStyleForMonth(
@@ -18,6 +18,6 @@ export function assignUserWorkStyleForMonth(
 }
 
 /** 指示書 13章: 個別の働き方指定を取り消し、「会社のデフォルトを使用」の状態に戻す。 */
-export function removeUserWorkStyleMonthlyAssignment(id: number): Promise<void> {
+export function removeUserWorkStyleMonthlyAssignment(id: string): Promise<void> {
   return apiFetch(`/user-work-style-monthly-assignments/${id}`, { method: 'DELETE' })
 }

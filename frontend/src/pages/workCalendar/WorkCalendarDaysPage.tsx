@@ -33,7 +33,7 @@ const emptyRow: DayRowData = {
  */
 export function WorkCalendarDaysPage() {
   const { id } = useParams<{ id: string }>()
-  const calendarId = Number(id)
+  const calendarId = id
   const { data: calendars, isLoading, error } = useWorkCalendars()
   const putDays = usePutWorkCalendarDays()
 

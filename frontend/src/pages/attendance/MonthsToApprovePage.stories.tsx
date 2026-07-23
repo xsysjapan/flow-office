@@ -25,7 +25,7 @@ const hrStaffUser: User = {
 
 const months: AttendanceMonth[] = [
   {
-    id: 1,
+    id: 'month-1',
     user_id: 'user-1',
     year_month: '2026-07',
     status: 'submitted',
@@ -38,7 +38,7 @@ const months: AttendanceMonth[] = [
     legal_holiday_warnings: [],
   },
   {
-    id: 2,
+    id: 'month-2',
     user_id: 'user-4',
     year_month: '2026-06',
     status: 'approved',

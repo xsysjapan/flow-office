@@ -18,7 +18,7 @@ export interface CreateWorkStyleInput {
   default_break_start_time?: string
   default_break_end_time?: string
   auto_break_enabled?: boolean
-  calendar_id: number
+  calendar_id: string
   is_shift_based?: boolean
   legal_holiday_rule?: LegalHolidayRule
   four_week_period_start_date?: string
@@ -43,7 +43,7 @@ export interface CreateDefaultWorkStyleInput {
   default_break_start_time?: string
   default_break_end_time?: string
   auto_break_enabled?: boolean
-  calendar_id?: number
+  calendar_id?: string
 }
 
 /** 初回オンボーディングで「通常勤務」をデフォルト働き方として作成する(指示書 3.1節・12.1節)。 */
@@ -52,6 +52,6 @@ export function createDefaultWorkStyle(input: CreateDefaultWorkStyleInput = {}):
 }
 
 /** 既存の働き方を会社のデフォルトに切り替える(指示書 3.2節)。 */
-export function setDefaultWorkStyle(id: number): Promise<WorkStyle> {
+export function setDefaultWorkStyle(id: string): Promise<WorkStyle> {
   return apiFetch(`/work-styles/${id}/set-default`, { method: 'POST' })
 }

@@ -28,7 +28,7 @@ const authValue: AuthContextValue = {
 const date = '2026-07-06'
 
 const recordedDay: AttendanceDay = {
-  id: 1,
+  id: 'day-1',
   user_id: 'user-1',
   work_date: date,
   status: 'clocked_out',
@@ -58,7 +58,7 @@ const recordedDay: AttendanceDay = {
 }
 
 const punch: AttendancePunch = {
-  id: 10,
+  id: 'punch-10',
   user_id: 'user-1',
   work_date: date,
   punch_type: 'clock_in',

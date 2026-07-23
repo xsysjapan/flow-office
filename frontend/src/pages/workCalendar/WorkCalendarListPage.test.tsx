@@ -8,7 +8,7 @@ import type { WorkCalendar } from '../../api/types'
 import { WorkCalendarListPage } from './WorkCalendarListPage'
 
 const draftCalendar: WorkCalendar = {
-  id: 1,
+  id: 'calendar-1',
   name: '2026年度カレンダー',
   fiscal_year: 2026,
   starts_on: '2026-04-01',
@@ -46,7 +46,7 @@ describe('WorkCalendarListPage', () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
       ...draftCalendar,
-      id: 2,
+      id: 'calendar-2',
     })
 
     renderPage()
@@ -79,7 +79,7 @@ describe('WorkCalendarListPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
 
-    await waitFor(() => expect(workCalendarsApi.publishWorkCalendar).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(workCalendarsApi.publishWorkCalendar).toHaveBeenCalledWith('calendar-1'))
   })
 
   it('navigates to the day editor when the calendar name is clicked', async () => {

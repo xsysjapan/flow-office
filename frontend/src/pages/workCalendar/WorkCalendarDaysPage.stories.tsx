@@ -5,7 +5,7 @@ import type { WorkCalendar } from '../../api/types'
 import { WorkCalendarDaysPage } from './WorkCalendarDaysPage'
 
 const calendar: WorkCalendar = {
-  id: 1,
+  id: 'calendar-1',
   name: '2026年度カレンダー',
   fiscal_year: 2026,
   starts_on: '2026-04-01',
@@ -21,7 +21,7 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/admin/work-calendars/1/days']}>
+        <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/days']}>
           <Routes>
             <Route path="/admin/work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
           </Routes>

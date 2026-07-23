@@ -7,7 +7,7 @@ export function fetchEmployeeRotationAssignment(userId: string): Promise<Employe
 
 export interface AssignEmployeeRotationInput {
   user_id: string
-  rotation_pattern_id: number
+  rotation_pattern_id: string
   rotation_start_date: string
   rotation_start_position: number
 }

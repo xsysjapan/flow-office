@@ -88,7 +88,7 @@ export function useUpdateAttendanceDay() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: EditAttendanceDayInput }) =>
+    mutationFn: ({ id, input }: { id: string; input: EditAttendanceDayInput }) =>
       updateAttendanceDay(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
@@ -102,7 +102,7 @@ export function useAdjustAttendanceDailyCalculation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: AttendanceDailyCalculationAdjustment }) =>
+    mutationFn: ({ id, input }: { id: string; input: AttendanceDailyCalculationAdjustment }) =>
       adjustAttendanceDailyCalculation(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
@@ -129,7 +129,7 @@ export function useDeleteAttendanceDay() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: DeleteAttendanceDayInput }) => deleteAttendanceDay(id, input),
+    mutationFn: ({ id, input }: { id: string; input: DeleteAttendanceDayInput }) => deleteAttendanceDay(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
@@ -149,11 +149,11 @@ export function usePunches(params: { from?: string; to?: string }) {
   })
 }
 
-function usePunchAction<TInput>(action: (id: number, input: TInput) => Promise<unknown>) {
+function usePunchAction<TInput>(action: (id: string, input: TInput) => Promise<unknown>) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: TInput }) => action(id, input),
+    mutationFn: ({ id, input }: { id: string; input: TInput }) => action(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PUNCHES_KEY })
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
@@ -239,7 +239,7 @@ export function useApproveMonth() {
   const invalidate = useInvalidateMonths()
 
   return useMutation({
-    mutationFn: (id: number) => approveMonth(id),
+    mutationFn: (id: string) => approveMonth(id),
     onSuccess: () => invalidate(),
   })
 }
@@ -248,7 +248,7 @@ export function useReturnMonth() {
   const invalidate = useInvalidateMonths()
 
   return useMutation({
-    mutationFn: ({ id, comment }: { id: number; comment: string }) => returnMonth(id, comment),
+    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnMonth(id, comment),
     onSuccess: () => invalidate(),
   })
 }
@@ -257,7 +257,7 @@ export function useCloseMonth() {
   const invalidate = useInvalidateMonths()
 
   return useMutation({
-    mutationFn: (id: number) => closeMonth(id),
+    mutationFn: (id: string) => closeMonth(id),
     onSuccess: () => invalidate(),
   })
 }
