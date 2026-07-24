@@ -5,7 +5,8 @@ namespace App\Domain\User\Events;
 use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
- * user.migrated_from_legacy(本番カットオーバー移行専用。docs/30-legacy-data-migration.md参照)。
+ * user.migrated_from_legacy(本番カットオーバー移行時にusersテーブルの既存行を
+ * 移行時点の状態として記録した合成イベント。移行済み履歴の一部として恒久的に残る)。
  *
  * spatie移行前(main)のusersテーブルに既に存在していた行を、新しいイベントストアへ
  * 「移行時点の状態」として1件のイベントに変換したもの。`UserOnboardedAsAdmin`等の
