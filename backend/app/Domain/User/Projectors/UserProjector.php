@@ -2,7 +2,6 @@
 
 namespace App\Domain\User\Projectors;
 
-use App\Domain\LegacyMigration;
 use App\Domain\User\Events\UserCreatedFromSsoLogin;
 use App\Domain\User\Events\UserHireDateSet;
 use App\Domain\User\Events\UserLoggedIn;
@@ -106,7 +105,7 @@ class UserProjector extends Projector
         $user->roles()->sync($roleIds);
     }
 
-    /** @see LegacyMigration 本番カットオーバー移行専用(docs/30-legacy-data-migration.md)。 */
+    /** 本番カットオーバー移行時にusers行を初期状態として記録した合成イベントの再生用。 */
     public function onUserMigratedFromLegacy(UserMigratedFromLegacy $event): void
     {
         User::query()->updateOrCreate(
