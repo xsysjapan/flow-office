@@ -3,16 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * 有給付与 (docs/03-architecture.md 3.3: 勤怠の正の一つ)。
+ * 有給付与 (docs/03-architecture.md 3.3: 勤怠の正の一つ)。主キーはUUID(HasUuids)。
+ * DB採番だと集約IDがINSERTするまで確定せずProjectorで作成できないため、コマンド側で
+ * 生成できるUUIDにしている(.claude/skills/add-projection「集約ルートのUUID化」参照)。
+ * この行自体もPaidLeaveGrantProjectorがstored_eventsから作成・更新する。
  */
-#[Fillable(['user_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason', 'expiry_warned_at', 'five_day_obligation_warned_at'])]
+#[Fillable(['id', 'user_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason', 'expiry_warned_at', 'five_day_obligation_warned_at'])]
 class PaidLeaveGrant extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

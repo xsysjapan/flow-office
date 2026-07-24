@@ -9,7 +9,7 @@ import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../ap
 import { MyPaidLeavePage } from './MyPaidLeavePage'
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -25,8 +25,8 @@ const approverSearchResult: Paginated<User> = {
 }
 
 const submittedRequest: PaidLeaveRequest = {
-  id: 1,
-  user_id: 1,
+  id: 'request-1',
+  user_id: 'user-1',
   status: 'submitted',
   leave_type: 'full',
   target_date: '2026-08-10',
@@ -69,8 +69,8 @@ describe('MyPaidLeavePage', () => {
   it('shows the total remaining days and each grant', async () => {
     const grants: PaidLeaveGrant[] = [
       {
-        id: 1,
-        user_id: 1,
+        id: 'grant-1',
+        user_id: 'user-1',
         granted_on: '2025-04-01',
         expires_on: '2027-03-31',
         granted_days: 10,
@@ -79,8 +79,8 @@ describe('MyPaidLeavePage', () => {
         grant_reason: '法定付与',
       },
       {
-        id: 2,
-        user_id: 1,
+        id: 'grant-2',
+        user_id: 'user-1',
         granted_on: '2026-04-01',
         expires_on: '2028-03-31',
         granted_days: 11,

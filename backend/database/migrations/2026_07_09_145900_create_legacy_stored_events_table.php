@@ -11,7 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('stored_events', function (Blueprint $table) {
+        // spatie/laravel-event-sourcing 導入(docs/28-event-sourcing-framework-migration.md)に伴い、
+        // 新しい stored_events テーブルは同パッケージのマイグレーションが作成する。旧実装
+        // (App\Domain\EventSourcing\EventStore)が書いていたこのテーブルは legacy_stored_events に
+        // 改名し、未移行ドメインは引き続きこちらに追記する。全ドメイン移行後にバックフィルする。
+        Schema::create('legacy_stored_events', function (Blueprint $table) {
             $table->id();
             $table->uuid('event_id')->unique();
             $table->string('aggregate_type');
@@ -34,6 +38,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('stored_events');
+        Schema::dropIfExists('legacy_stored_events');
     }
 };

@@ -2,36 +2,25 @@
 
 namespace App\Domain\Integration\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class ApplicationIntegrationRegistered implements DomainEvent
+/**
+ * application_integration.registered。IntegrationProjectorが集約UUID(aggregateRootUuid())を
+ * キーにapplication_integrationsの行を新規作成する(docs/29-event-sourcing-framework-migration.md)。
+ */
+class ApplicationIntegrationRegistered extends ShouldBeStored
 {
     /**
      * @param  array<int, string>  $scopes
      */
     public function __construct(
-        public readonly int $integrationId,
-        public readonly int $ownerUserId,
+        public readonly string $ownerType,
+        public readonly string $ownerUserId,
         public readonly string $clientType,
         public readonly string $clientName,
+        public readonly ?string $purpose,
+        public readonly int $personalAccessTokenId,
         public readonly array $scopes,
-        public readonly int $registeredByUserId,
+        public readonly string $registeredByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'application_integration.registered';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'integration_id' => $this->integrationId,
-            'owner_user_id' => $this->ownerUserId,
-            'client_type' => $this->clientType,
-            'client_name' => $this->clientName,
-            'scopes' => $this->scopes,
-            'registered_by_user_id' => $this->registeredByUserId,
-        ];
-    }
 }

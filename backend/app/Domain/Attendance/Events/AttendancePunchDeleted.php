@@ -2,27 +2,18 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AttendancePunchDeleted implements DomainEvent
+/**
+ * attendance_punch.deleted
+ *
+ * UC-A014: 打刻ログを削除する。行は物理削除せず「削除済み」として残す(打刻ログは
+ * 追記のみで、削除自体も操作の履歴として理由・実行者付きで参照できるようにする)。
+ */
+class AttendancePunchDeleted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $attendancePunchId,
         public readonly string $reason,
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attendance_punch.deleted';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'attendance_punch_id' => $this->attendancePunchId,
-            'reason' => $this->reason,
-            'deleted_by_user_id' => $this->deletedByUserId,
-        ];
-    }
 }

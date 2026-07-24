@@ -5,7 +5,7 @@ import type { AttendanceMonth, Paginated, User } from '../../api/types'
 import { AttendanceMonthsPage } from './AttendanceMonthsPage'
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -22,8 +22,8 @@ const emptyUsers: Paginated<User> = {
 
 const months: AttendanceMonth[] = [
   {
-    id: 1,
-    user_id: 1,
+    id: 'month-1',
+    user_id: 'user-1',
     year_month: '2026-05',
     status: 'closed',
     approver,
@@ -35,8 +35,8 @@ const months: AttendanceMonth[] = [
     legal_holiday_warnings: [],
   },
   {
-    id: 2,
-    user_id: 1,
+    id: 'month-2',
+    user_id: 'user-1',
     year_month: '2026-06',
     status: 'returned',
     approver,
@@ -48,8 +48,8 @@ const months: AttendanceMonth[] = [
     legal_holiday_warnings: [],
   },
   {
-    id: 3,
-    user_id: 1,
+    id: 'month-3',
+    user_id: 'user-1',
     year_month: '2026-07',
     status: 'not_submitted',
     submitted_at: null,

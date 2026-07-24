@@ -30,13 +30,13 @@ class AttendancePunchController extends Controller
         operationId: 'attendancePunches.index',
         summary: '打刻ログ一覧を取得する',
         tags: ['打刻ログ'],
-        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'string', 'exists:users,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
         ]);
@@ -59,13 +59,13 @@ class AttendancePunchController extends Controller
         operationId: 'attendancePunches.store',
         summary: '打刻ログを記録する',
         tags: ['打刻ログ'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at', 'source'], properties: [new OA\Property(property: 'user_id', type: 'integer', nullable: true), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'source', type: 'string'), new OA\Property(property: 'note', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['work_date', 'punch_type', 'punched_at', 'source'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'work_date', type: 'string', format: 'date'), new OA\Property(property: 'punch_type', type: 'string'), new OA\Property(property: 'punched_at', type: 'string', format: 'date-time'), new OA\Property(property: 'source', type: 'string'), new OA\Property(property: 'note', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function store(Request $request, CommandBus $commandBus): AttendancePunchResource
     {
         $data = $request->validate([
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'string', 'exists:users,id'],
             'work_date' => ['required', 'date'],
             'punch_type' => ['required', Rule::in(PunchType::values())],
             'punched_at' => ['required', 'date', LocalDateTime::OFFSET_REQUIRED_RULE],

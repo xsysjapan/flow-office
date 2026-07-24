@@ -11,7 +11,7 @@ class CancelWorkflowRequest implements Command
 {
     public function __construct(
         public readonly string $workflowRequestId,
-        public readonly int $cancelledByUserId,
+        public readonly string $cancelledByUserId,
         public readonly string $reason,
     ) {}
 }

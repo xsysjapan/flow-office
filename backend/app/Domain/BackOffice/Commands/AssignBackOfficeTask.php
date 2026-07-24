@@ -11,7 +11,7 @@ class AssignBackOfficeTask implements Command
 {
     public function __construct(
         public readonly string $backOfficeTaskId,
-        public readonly int $assignedUserId,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedUserId,
+        public readonly string $assignedByUserId,
     ) {}
 }

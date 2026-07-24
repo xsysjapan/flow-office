@@ -73,12 +73,12 @@ class BackOfficeTaskController extends Controller
         summary: 'バックオフィスタスク担当者を割り当てる',
         tags: ['バックオフィス処理'],
         parameters: [new OA\Parameter(name: 'backOfficeTask', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['assigned_user_id'], properties: [new OA\Property(property: 'assigned_user_id', type: 'integer')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['assigned_user_id'], properties: [new OA\Property(property: 'assigned_user_id', type: 'string', format: 'uuid')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function assign(Request $request, BackOfficeTask $backOfficeTask, CommandBus $commandBus): BackOfficeTaskResource
     {
-        $data = $request->validate(['assigned_user_id' => ['required', 'integer', 'exists:users,id']]);
+        $data = $request->validate(['assigned_user_id' => ['required', 'string', 'exists:users,id']]);
 
         $commandBus->dispatch(new AssignBackOfficeTask(
             backOfficeTaskId: $backOfficeTask->id,

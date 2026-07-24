@@ -4,21 +4,19 @@ namespace App\Domain\User\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\User\Aggregates\UserAggregate;
 use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
-use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * @implements CommandHandler<CompleteOnboardingWithLocalPassword>
  */
 class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): User
     {
         assert($command instanceof CompleteOnboardingWithLocalPassword);
@@ -40,26 +38,17 @@ class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
             throw new DomainRuleException('初回オンボーディングは既に開始または完了しています。');
         }
 
-        $user = User::query()->create([
-            'name' => $command->adminName,
-            'email' => $command->adminEmail,
-            'password' => $command->adminPassword,
-            'employment_status' => 'active',
-            'timezone' => $settings->default_timezone,
-        ]);
+        $userId = (string) Str::uuid();
 
-        $user->roles()->attach($adminRole);
+        UserAggregate::retrieve($userId)
+            ->onboardAsAdmin(entraUserId: null, name: $command->adminName, email: $command->adminEmail, authMethod: 'local')
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'user',
-            aggregateId: (string) $user->id,
-            event: new UserOnboardedAsAdmin(
-                userId: $user->id,
-                name: $user->name,
-                email: $user->email,
-                authMethod: 'local',
-            ),
-        );
+        // パスワードは平文を永続イベントログに残さないため、イベントには含めず
+        // Projectorが作成した行に対して直接設定する(docs/29-event-sourcing-framework-migration.md参照)。
+        $user = User::query()->findOrFail($userId);
+        $user->password = $command->adminPassword;
+        $user->save();
 
         return $user;
     }

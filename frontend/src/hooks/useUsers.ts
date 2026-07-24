@@ -9,11 +9,11 @@ export function useUsers(query?: string) {
   })
 }
 
-export function useUser(id: number) {
+export function useUser(id: string) {
   return useQuery({
     queryKey: ['users', 'detail', id],
     queryFn: () => fetchUser(id),
-    enabled: Number.isFinite(id),
+    enabled: Boolean(id),
   })
 }
 
@@ -21,7 +21,7 @@ export function useUpdateUserRoles() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, roleCodes }: { id: number; roleCodes: string[] }) => updateUserRoles(id, roleCodes),
+    mutationFn: ({ id, roleCodes }: { id: string; roleCodes: string[] }) => updateUserRoles(id, roleCodes),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] })
       void queryClient.invalidateQueries({ queryKey: ['users', 'detail', id] })
@@ -33,7 +33,7 @@ export function useUpdateUserHireDate() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, hireDate }: { id: number; hireDate: string }) => updateUserHireDate(id, hireDate),
+    mutationFn: ({ id, hireDate }: { id: string; hireDate: string }) => updateUserHireDate(id, hireDate),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] })
       void queryClient.invalidateQueries({ queryKey: ['users', 'detail', id] })
@@ -45,7 +45,7 @@ export function useUpdateUserTerminationDate() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, terminationDate }: { id: number; terminationDate: string | null }) => updateUserTerminationDate(id, terminationDate),
+    mutationFn: ({ id, terminationDate }: { id: string; terminationDate: string | null }) => updateUserTerminationDate(id, terminationDate),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] })
       void queryClient.invalidateQueries({ queryKey: ['users', 'detail', id] })

@@ -5,11 +5,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as workflowRequestsApi from '../../api/workflowRequests'
-import type { Attachment, StoredEvent, User, WorkflowRequest } from '../../api/types'
+import type { Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
-  id: 1,
+  id: 'applicant-1',
   name: '申請者太郎',
   email: 'taro@example.com',
   department: null,
@@ -19,7 +19,7 @@ const applicant: User = {
 }
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -48,21 +48,18 @@ const submittedRequest: WorkflowRequest = {
   created_at: '2026-07-01T00:00:00+09:00',
 }
 
-const historyEvent: StoredEvent = {
+const historyEntry: WorkflowRequestHistoryEntry = {
   id: 1,
-  event_id: 'evt-1',
-  aggregate_type: 'workflow_request',
-  aggregate_id: '1',
-  version: 1,
-  event_type: 'workflow_request.drafted',
-  payload: {},
+  action: 'drafted',
+  actor_user_id: 'applicant-1',
+  comment: null,
   occurred_at: '2026-07-01T00:00:00+09:00',
 }
 
 function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(request)
-  vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEvent])
+  vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestHistory').mockResolvedValue([historyEntry])
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue(attachments)
 
   return render(
@@ -144,11 +141,11 @@ describe('WorkflowRequestDetailPage', () => {
 
   it('uploads a selected file as an attachment', async () => {
     vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
-      id: 1,
+      id: 'attachment-1',
       file_name: 'receipt.pdf',
       mime_type: 'application/pdf',
       file_size: 100,
-      uploaded_by: 1,
+      uploaded_by: 'applicant-1',
       created_at: null,
     })
 
@@ -168,11 +165,11 @@ describe('WorkflowRequestDetailPage', () => {
     vi.spyOn(attachmentsApi, 'downloadAttachment').mockResolvedValue(undefined)
 
     renderPage(submittedRequest, [
-      { id: 9, file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 1, created_at: null },
+      { id: 'attachment-9', file_name: 'receipt.pdf', mime_type: 'application/pdf', file_size: 2048, uploaded_by: 'applicant-1', created_at: null },
     ])
 
     await userEvent.click(await screen.findByRole('button', { name: 'ダウンロード' }))
 
-    await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith(9, 'receipt.pdf'))
+    await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith('attachment-9', 'receipt.pdf'))
   })
 })

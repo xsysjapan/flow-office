@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,10 +11,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * 交代制勤務のローテーションパターン(指示書 8.4節)。A勤・B勤・C勤・休のような
  * 繰り返し周期を1つの働き方の中でまとめて管理する。
+ *
+ * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
+ * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['work_style_id', 'name', 'cycle_length'])]
+#[Fillable(['id', 'work_style_id', 'name', 'cycle_length'])]
 class RotationPattern extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     /**
      * @return BelongsTo<WorkStyle, $this>
      */

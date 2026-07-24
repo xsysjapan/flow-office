@@ -42,7 +42,7 @@ export async function uploadAttachment(
  * ダウンロードはBearerトークン認証のため、通常の<a href>では認可ヘッダーを送れない。
  * fetchでBlobを取得してから合成クリックでダウンロードさせる。
  */
-export async function downloadAttachment(id: number, fileName: string): Promise<void> {
+export async function downloadAttachment(id: string, fileName: string): Promise<void> {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
   const token = getToken()
 

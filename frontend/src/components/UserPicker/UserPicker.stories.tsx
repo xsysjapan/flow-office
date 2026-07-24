@@ -6,7 +6,7 @@ import { UserPicker } from './UserPicker'
 
 const users: User[] = [
   {
-    id: 1,
+    id: 'applicant-1',
     name: '申請者太郎',
     email: 'taro@example.com',
     department: null,
@@ -15,7 +15,7 @@ const users: User[] = [
     last_login_at: null,
   },
   {
-    id: 2,
+    id: 'approver-1',
     name: '承認者花子',
     email: 'hanako@example.com',
     department: null,

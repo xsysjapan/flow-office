@@ -8,6 +8,7 @@ use App\Models\DeviceType;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -81,11 +82,12 @@ class DeviceDetailAndSettingsTest extends TestCase
             'location_name' => '倉庫入口',
         ])->assertSuccessful();
 
-        $this->assertDatabaseHas('stored_events', [
-            'aggregate_type' => 'device',
-            'aggregate_id' => (string) $device->id,
-            'event_type' => 'device.settings_updated',
-        ]);
+        $this->assertTrue(
+            EloquentStoredEvent::query()
+                ->where('aggregate_uuid', $device->id)
+                ->where('event_class', 'device.settings_updated')
+                ->exists(),
+        );
     }
 
     public function test_non_admin_cannot_update_device_settings(): void

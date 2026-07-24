@@ -36,7 +36,7 @@ class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
         return $this->opener->open($device, $adminUser, DeviceAdminSessionSource::BOOTSTRAP, null);
     }
 
-    private function resolveTargetAdmin(Device $device, ?int $targetAdminUserId): User
+    private function resolveTargetAdmin(Device $device, ?string $targetAdminUserId): User
     {
         $activatedBy = $device->activatedByUser;
         if ($activatedBy !== null && $activatedBy->hasRole(Role::ADMIN)) {

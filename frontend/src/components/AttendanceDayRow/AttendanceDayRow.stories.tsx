@@ -4,8 +4,8 @@ import type { AttendanceDay } from '../../api/types'
 import { AttendanceDayRow } from './AttendanceDayRow'
 
 const day: AttendanceDay = {
-  id: 1,
-  user_id: 1,
+  id: '22222222-2222-2222-2222-222222222222',
+  user_id: '11111111-1111-1111-1111-111111111111',
   work_date: '2026-07-06',
   status: 'clocked_out',
   actual_start_at: '2026-07-06T09:00:00+09:00',

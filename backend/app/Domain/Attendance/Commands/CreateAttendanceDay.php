@@ -15,7 +15,7 @@ class CreateAttendanceDay implements Command
      * @param  array<int, array{category: string, start: string, end: string, note: string|null}>  $leaveSegments
      */
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $workDate,
         public readonly ?string $actualStartAt,
         public readonly ?string $actualEndAt,
@@ -24,7 +24,7 @@ class CreateAttendanceDay implements Command
         public readonly ?string $note,
         public readonly array $leaveSegments,
         public readonly string $reason,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
         public readonly ?string $workLocationType = null,
     ) {}
 }

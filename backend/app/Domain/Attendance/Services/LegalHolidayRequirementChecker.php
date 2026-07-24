@@ -30,7 +30,7 @@ class LegalHolidayRequirementChecker
     /**
      * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
      */
-    public function check(int $userId, string $yearMonth): array
+    public function check(string $userId, string $yearMonth): array
     {
         $monthStart = Carbon::createFromFormat('Y-m', $yearMonth)->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
@@ -48,7 +48,7 @@ class LegalHolidayRequirementChecker
         };
     }
 
-    private function resolveWorkStyle(int $userId, Carbon $monthStart, Carbon $monthEnd): ?WorkStyle
+    private function resolveWorkStyle(string $userId, Carbon $monthStart, Carbon $monthEnd): ?WorkStyle
     {
         return EmployeeShiftAssignment::query()
             ->where('user_id', $userId)
@@ -63,7 +63,7 @@ class LegalHolidayRequirementChecker
     /**
      * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
      */
-    private function checkWeekly(int $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
+    private function checkWeekly(string $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
     {
         $weekStartsOn = $workStyle->calendar?->week_starts_on ?? 1; // ISO: 1=月曜
 
@@ -98,7 +98,7 @@ class LegalHolidayRequirementChecker
     /**
      * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
      */
-    private function checkFourWeeksFourDays(int $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
+    private function checkFourWeeksFourDays(string $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
     {
         $anchor = $workStyle->four_week_period_start_date?->copy() ?? $monthStart->copy()->startOfYear();
 
@@ -127,7 +127,7 @@ class LegalHolidayRequirementChecker
         return $violations;
     }
 
-    private function countLegalHolidays(int $userId, Carbon $from, Carbon $to): int
+    private function countLegalHolidays(string $userId, Carbon $from, Carbon $to): int
     {
         return EmployeeShiftAssignment::query()
             ->where('user_id', $userId)
@@ -140,7 +140,7 @@ class LegalHolidayRequirementChecker
     /**
      * @return list<array{rule: string, period_start: string, period_end: string, legal_holiday_count: int, required_count: int}>
      */
-    private function checkUndetermined(int $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
+    private function checkUndetermined(string $userId, WorkStyle $workStyle, Carbon $monthStart, Carbon $monthEnd): array
     {
         $weekStartsOn = $workStyle->calendar?->week_starts_on ?? 1;
 

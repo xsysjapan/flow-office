@@ -206,14 +206,14 @@ export function specialLeaveEventDetail(event: StoredEvent): string {
   return leaveEventDetail(event, '特別休暇')
 }
 
-const workflowRequestEventTypeLabels: Record<string, string> = {
-  'workflow_request.drafted': '下書き作成',
-  'workflow_request.submitted': '提出',
-  'workflow_request.approved': '承認',
-  'workflow_request.returned': '差戻し',
-  'workflow_request.cancelled': '取消',
+const workflowRequestHistoryActionLabels: Record<string, string> = {
+  drafted: '下書き作成',
+  submitted: '提出',
+  approved: '承認',
+  returned: '差戻し',
+  cancelled: '取消',
 }
 
-export function workflowRequestEventTypeLabel(eventType: string): string {
-  return workflowRequestEventTypeLabels[eventType] ?? eventType
+export function workflowRequestHistoryActionLabel(action: string): string {
+  return workflowRequestHistoryActionLabels[action] ?? action
 }

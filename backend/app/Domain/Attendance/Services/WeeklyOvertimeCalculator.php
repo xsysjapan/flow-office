@@ -35,7 +35,7 @@ class WeeklyOvertimeCalculator
     /**
      * @return list<array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}>
      */
-    public function calculateForMonth(int $userId, string $yearMonth): array
+    public function calculateForMonth(string $userId, string $yearMonth): array
     {
         $monthStart = Carbon::createFromFormat('Y-m', $yearMonth)->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
@@ -59,7 +59,7 @@ class WeeklyOvertimeCalculator
     /**
      * @return array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}
      */
-    private function calculateWeek(int $userId, string $weekStartDate, string $weekEndDate): array
+    private function calculateWeek(string $userId, string $weekStartDate, string $weekEndDate): array
     {
         $days = AttendanceDay::query()
             ->where('user_id', $userId)
@@ -107,7 +107,7 @@ class WeeklyOvertimeCalculator
         ];
     }
 
-    private function resolveWeekStartsOn(int $userId, Carbon $monthStart, Carbon $monthEnd): int
+    private function resolveWeekStartsOn(string $userId, Carbon $monthStart, Carbon $monthEnd): int
     {
         $assignment = EmployeeShiftAssignment::query()
             ->where('user_id', $userId)

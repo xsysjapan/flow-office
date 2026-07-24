@@ -15,7 +15,7 @@ class ExportCreated implements DomainEvent
     public function __construct(
         public readonly string $exportType,
         public readonly array $params,
-        public readonly int $requestedByUserId,
+        public readonly string $requestedByUserId,
         public readonly int $rowCount,
     ) {}
 

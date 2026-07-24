@@ -2,14 +2,13 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\WorkStyleAggregate;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
-use App\Domain\Attendance\Events\WorkStyleCreated;
-use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\SystemSetting;
 use App\Models\WorkStyle;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -27,8 +26,6 @@ class CreateDefaultWorkStyleHandler implements CommandHandler
 {
     private const PROTECTED_KEYS = ['is_default', 'system_generated', 'code'];
 
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkStyle
     {
         assert($command instanceof CreateDefaultWorkStyle);
@@ -45,31 +42,19 @@ class CreateDefaultWorkStyleHandler implements CommandHandler
         $attributes['is_default'] = true;
         $attributes['system_generated'] = true;
 
-        $workStyle = WorkStyle::query()->create($attributes);
+        $id = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'work_style',
-            aggregateId: (string) $workStyle->id,
-            event: new WorkStyleCreated(
-                workStyleId: $workStyle->id,
-                attributes: $attributes,
-                createdByUserId: $command->createdByUserId,
-            ),
-        );
+        WorkStyleAggregate::retrieve($id)
+            ->create($attributes, $command->createdByUserId)
+            ->persist();
 
-        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+        SystemSetting::current()->update(['default_work_style_id' => $id]);
 
-        $this->eventStore->append(
-            aggregateType: 'work_style',
-            aggregateId: (string) $workStyle->id,
-            event: new WorkStyleDefaultChanged(
-                workStyleId: $workStyle->id,
-                previousDefaultWorkStyleId: null,
-                changedByUserId: $command->createdByUserId,
-            ),
-        );
+        WorkStyleAggregate::retrieve($id)
+            ->changeDefault(null, $command->createdByUserId)
+            ->persist();
 
-        return $workStyle;
+        return WorkStyle::query()->findOrFail($id);
     }
 
     /**

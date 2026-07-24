@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,15 +11,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 打刻ログ (docs/03-architecture.md 3.3)。勤怠の正ではなく参考情報。
  * 同一user_id・work_dateの打刻群がUC-A012の意味で整合している場合のみ
  * attendance_days / attendance_breaks に反映される。
+ *
+ * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
+ * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[Fillable([
-    'user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note',
+    'id', 'user_id', 'work_date', 'punch_type', 'punched_at', 'utc_offset_minutes', 'source', 'note',
     'status', 'correction_reason', 'corrected_by_user_id', 'corrected_at', 'superseded_by_punch_id',
     'device_id', 'authentication_key_id', 'actor_user_id', 'integration_id', 'offline',
     'idempotency_key', 'request_id', 'metadata_json',
 ])]
 class AttendancePunch extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

@@ -6,7 +6,7 @@ import { WorkCalendarListPage } from './WorkCalendarListPage'
 
 const calendars: WorkCalendar[] = [
   {
-    id: 1,
+    id: 'calendar-1',
     name: '2026年度カレンダー',
     fiscal_year: 2026,
     starts_on: '2026-04-01',
@@ -15,7 +15,7 @@ const calendars: WorkCalendar[] = [
     status: 'published',
   },
   {
-    id: 2,
+    id: 'calendar-2',
     name: '2027年度カレンダー(準備中)',
     fiscal_year: 2027,
     starts_on: '2027-04-01',

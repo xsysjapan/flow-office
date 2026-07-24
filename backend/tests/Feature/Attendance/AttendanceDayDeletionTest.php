@@ -4,8 +4,8 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
-use App\Models\AttendancePunch;
 use App\Models\AttendanceMonth;
+use App\Models\AttendancePunch;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\Role;
@@ -129,8 +129,13 @@ class AttendanceDayDeletionTest extends TestCase
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
 
-        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", ['reason' => '入力し直すため削除'])
-            ->assertOk();
+        // 入力し直す前提のため、旧い打刻ログも一緒に削除する(残したまま(既定値の
+        // `leave_punches`)にすると、この後の出勤打刻と合わせて出勤打刻が2件になり、
+        // 矛盾した打刻として扱われてしまう)。
+        $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", [
+            'reason' => '入力し直すため削除',
+            'punch_log_action' => 'delete_punches',
+        ])->assertOk();
         $this->assertNull(AttendanceDay::query()->find($dayId));
 
         // 同じuser_id・work_dateの組み合わせで再び記録できる(unique制約に抵触しない)。

@@ -10,7 +10,7 @@ import { formatDate } from '../../utils/weekDates'
 import { AppLayout } from './AppLayout'
 
 const mockUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '山田 太郎',
   email: 'yamada@example.com',
   department: '開発部',

@@ -247,7 +247,7 @@ class ScenarioSeeder extends Seeder
         return $users;
     }
 
-    private function generateShiftAssignments(int $userId, WorkStyle $workStyle, Carbon $from, Carbon $to): void
+    private function generateShiftAssignments(string $userId, WorkStyle $workStyle, Carbon $from, Carbon $to): void
     {
         $calendarDaysByDate = $workStyle->calendar->days()->get()->keyBy(fn ($day) => $day->date->toDateString());
 

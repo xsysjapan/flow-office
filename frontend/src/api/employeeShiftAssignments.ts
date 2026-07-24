@@ -1,13 +1,13 @@
 import { apiFetch } from './client'
 import type { EmployeeShiftAssignment, ShiftScheduleReview } from './types'
 
-export function fetchShiftAssignments(userId: number, from: string, to: string): Promise<EmployeeShiftAssignment[]> {
+export function fetchShiftAssignments(userId: string, from: string, to: string): Promise<EmployeeShiftAssignment[]> {
   return apiFetch('/employee-shift-assignments', { query: { user_id: userId, from, to } })
 }
 
 export interface GenerateShiftAssignmentsInput {
-  user_id: number
-  work_style_id: number
+  user_id: string
+  work_style_id: string
   from: string
   to: string
 }
@@ -18,10 +18,10 @@ export function generateShiftAssignments(input: GenerateShiftAssignmentsInput): 
 
 /** UC-C004 手順3〜4: 3交代制シフト表で、社員の特定日にシフトパターンを割り当てる。 */
 export interface AssignShiftPatternDayInput {
-  user_id: number
-  work_style_id: number
+  user_id: string
+  work_style_id: string
   work_date: string
-  shift_pattern_id: number
+  shift_pattern_id: string
   is_legal_holiday?: boolean
   is_company_holiday?: boolean
 }
@@ -32,7 +32,7 @@ export function assignShiftPatternDay(input: AssignShiftPatternDayInput): Promis
 
 export interface ShiftScheduleTarget {
   department?: string
-  user_ids?: number[]
+  user_ids?: string[]
   year_month: string
 }
 

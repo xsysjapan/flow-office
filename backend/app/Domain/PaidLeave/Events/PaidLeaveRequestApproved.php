@@ -2,25 +2,11 @@
 
 namespace App\Domain\PaidLeave\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class PaidLeaveRequestApproved implements DomainEvent
+class PaidLeaveRequestApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $paidLeaveRequestId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'paid_leave.request_approved';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'paid_leave_request_id' => $this->paidLeaveRequestId,
-            'approved_by_user_id' => $this->approvedByUserId,
-        ];
-    }
 }

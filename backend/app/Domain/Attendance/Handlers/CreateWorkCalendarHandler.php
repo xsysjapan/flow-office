@@ -2,12 +2,12 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\WorkCalendarAggregate;
 use App\Domain\Attendance\Commands\CreateWorkCalendar;
-use App\Domain\Attendance\Events\WorkCalendarCreated;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\WorkCalendar;
+use Illuminate\Support\Str;
 
 /**
  * UC-C001 手順1: 年度カレンダーを作成する。
@@ -16,35 +16,23 @@ use App\Models\WorkCalendar;
  */
 class CreateWorkCalendarHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkCalendar
     {
         assert($command instanceof CreateWorkCalendar);
 
-        $calendar = WorkCalendar::query()->create([
-            'name' => $command->name,
-            'fiscal_year' => $command->fiscalYear,
-            'starts_on' => $command->startsOn,
-            'ends_on' => $command->endsOn,
-            'week_starts_on' => $command->weekStartsOn,
-            'status' => 'draft',
-        ]);
+        $id = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'work_calendar',
-            aggregateId: (string) $calendar->id,
-            event: new WorkCalendarCreated(
-                workCalendarId: $calendar->id,
+        WorkCalendarAggregate::retrieve($id)
+            ->create(
                 name: $command->name,
                 fiscalYear: $command->fiscalYear,
                 startsOn: $command->startsOn,
                 endsOn: $command->endsOn,
                 weekStartsOn: $command->weekStartsOn,
                 createdByUserId: $command->createdByUserId,
-            ),
-        );
+            )
+            ->persist();
 
-        return $calendar;
+        return WorkCalendar::query()->findOrFail($id);
     }
 }

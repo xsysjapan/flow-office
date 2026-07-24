@@ -26,7 +26,7 @@ describe('MySpecialLeaveHistoryPage', () => {
   it('shows each history event with its label and detail, including a grant with no expiry', async () => {
     renderPage([
       {
-        id: 1,
+        id: 'evt-1',
         event_id: 'evt-1',
         aggregate_type: 'special_leave_grant',
         aggregate_id: '1',

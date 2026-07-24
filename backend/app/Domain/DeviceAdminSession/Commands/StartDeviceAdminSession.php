@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class StartDeviceAdminSession implements Command
 {
     public function __construct(
-        public readonly int $deviceId,
+        public readonly string $deviceId,
         public readonly string $rawKeyValue,
     ) {}
 }

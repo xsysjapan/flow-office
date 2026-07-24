@@ -18,7 +18,7 @@ import {
   useWorkflowRequest,
   useWorkflowRequestHistory,
 } from '../../hooks/useWorkflowRequests'
-import { workflowRequestEventTypeLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
+import { workflowRequestHistoryActionLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
@@ -145,10 +145,13 @@ export function WorkflowRequestDetailPage() {
             <LoadingState />
           ) : (
             <ul className="flex flex-col gap-1" aria-label="履歴">
-              {history?.map((event) => (
-                <li key={event.id} className="flex gap-3 text-sm">
-                  <span className="min-w-[10rem] text-muted-foreground">{formatDateTime(event.occurred_at)}</span>
-                  <span className="text-foreground">{workflowRequestEventTypeLabel(event.event_type)}</span>
+              {history?.map((entry) => (
+                <li key={entry.id} className="flex gap-3 text-sm">
+                  <span className="min-w-[10rem] text-muted-foreground">{formatDateTime(entry.occurred_at)}</span>
+                  <span className="text-foreground">
+                    {workflowRequestHistoryActionLabel(entry.action)}
+                    {entry.comment ? `: ${entry.comment}` : ''}
+                  </span>
                 </li>
               ))}
             </ul>

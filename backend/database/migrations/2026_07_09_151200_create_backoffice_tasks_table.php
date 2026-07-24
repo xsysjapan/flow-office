@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('title');
             $table->string('status')->default('not_started');
             $table->string('assigned_department')->nullable();
-            $table->foreignId('assigned_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('assigned_user_id')->nullable()->constrained('users');
             $table->date('due_on')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();

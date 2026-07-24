@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,13 +13,23 @@ use Laravel\Sanctum\PersonalAccessToken;
  * 個人/組織のAPI・MCP連携(docs/25-usecases-integrations-mcp.md)。実際の認証キーの実体は
  * Sanctumの`personal_access_tokens`に委譲し、ここは「誰が・どの用途で・いつ発行したか」の
  * 台帳として機能する(devices/authentication_keysと同じ考え方)。
+ *
+ * 主キーはUUID(HasUuids)。ApplicationIntegrationAggregateが発番し、行の新規作成含めて
+ * IntegrationProjectorがstored_eventsから作成・更新する
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[Fillable([
-    'owner_type', 'owner_user_id', 'client_type', 'client_name', 'purpose',
+    'id', 'owner_type', 'owner_user_id', 'client_type', 'client_name', 'purpose',
     'personal_access_token_id', 'status', 'last_used_at', 'expires_at', 'registered_by_user_id',
 ])]
 class ApplicationIntegration extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

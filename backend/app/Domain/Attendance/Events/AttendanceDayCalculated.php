@@ -2,31 +2,20 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
- * attendance.day_calculated
+ * attendance_day.calculated
  *
- * AttendanceDailyCalculationProjectorはこのイベントのpayloadをそのまま
- * attendance_daily_calculationsへ反映する(再計算ロジックはHandler側のみに置く)。
+ * AttendanceDailyCalculationProjector(spatie Projector)がこのイベントのcalculationを
+ * そのままattendance_daily_calculationsへ反映する(再計算ロジックはHandler側のみに置く)。
  */
-class AttendanceDayCalculated implements DomainEvent
+class AttendanceDayCalculated extends ShouldBeStored
 {
     /**
-     * @param  array<string, int|bool|null>  $calculation
+     * @param  array<string, int|bool|float|null>  $calculation
      */
     public function __construct(
-        public readonly int $attendanceDayId,
         public readonly array $calculation,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attendance.day_calculated';
-    }
-
-    public function payload(): array
-    {
-        return array_merge(['attendance_day_id' => $this->attendanceDayId], $this->calculation);
-    }
 }

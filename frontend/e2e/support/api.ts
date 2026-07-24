@@ -107,14 +107,14 @@ export async function fetchExpensesCsv(page: Page, from: string, to: string): Pr
   )
 }
 
-export async function fetchOwnUserId(page: Page): Promise<number> {
-  const me = await apiFetch<{ id: number }>(page, '/auth/me')
+export async function fetchOwnUserId(page: Page): Promise<string> {
+  const me = await apiFetch<{ id: string }>(page, '/auth/me')
   return me.id
 }
 
 /** 氏名/メールアドレスで社員を検索し、`user_id`を取得する(管理者/人事担当者でログイン済みであること)。 */
-export async function fetchUserIdByEmail(page: Page, email: string): Promise<number> {
-  const body = await apiFetch<{ data: Array<{ id: number }> }>(page, `/users?q=${encodeURIComponent(email)}`)
+export async function fetchUserIdByEmail(page: Page, email: string): Promise<string> {
+  const body = await apiFetch<{ data: Array<{ id: string }> }>(page, `/users?q=${encodeURIComponent(email)}`)
   const user = body.data?.[0]
   if (!user) throw new Error(`E2E setup: user not found for ${email}`)
   return user.id
@@ -127,8 +127,8 @@ export async function fetchUserIdByEmail(page: Page, email: string): Promise<num
  */
 export async function requestPaidLeave(
   page: Page,
-  input: { targetDate: string; leaveType: 'full' | 'am_half' | 'pm_half' | 'hourly'; hours?: number; approverUserId: number; reason?: string },
-): Promise<{ id: number }> {
+  input: { targetDate: string; leaveType: 'full' | 'am_half' | 'pm_half' | 'hourly'; hours?: number; approverUserId: string; reason?: string },
+): Promise<{ id: string }> {
   return apiFetch(page, '/paid-leave/requests', {
     method: 'POST',
     body: {
@@ -142,7 +142,7 @@ export async function requestPaidLeave(
 }
 
 /** UC-P004: 有給申請を承認する(承認者でログイン済みの`page`から呼び出す)。 */
-export async function approvePaidLeaveRequest(page: Page, requestId: number): Promise<void> {
+export async function approvePaidLeaveRequest(page: Page, requestId: string): Promise<void> {
   await apiFetch(page, `/paid-leave/requests/${requestId}/approve`, { method: 'POST' })
 }
 
@@ -153,8 +153,8 @@ export async function approvePaidLeaveRequest(page: Page, requestId: number): Pr
  */
 export async function createPaidLeaveGrant(
   page: Page,
-  input: { userId: number; grantedOn: string; expiresOn: string; days: number; reason: string },
-): Promise<{ id: number }> {
+  input: { userId: string; grantedOn: string; expiresOn: string; days: number; reason: string },
+): Promise<{ id: string }> {
   return apiFetch(page, '/paid-leave/grants', {
     method: 'POST',
     body: {
@@ -170,13 +170,13 @@ export async function createPaidLeaveGrant(
 /** UC-P002: 対象社員の有給付与一覧を取得する(管理者/人事担当者限定)。 */
 export async function fetchPaidLeaveGrantsForUser(
   page: Page,
-  userId: number,
-): Promise<Array<{ id: number; granted_on: string; expires_on: string; granted_days: number; used_days: number; remaining_days: number }>> {
+  userId: string,
+): Promise<Array<{ id: string; granted_on: string; expires_on: string; granted_days: number; used_days: number; remaining_days: number }>> {
   return apiFetch(page, `/paid-leave/grants/user/${userId}`)
 }
 
 /** UC-P002: 社員の入社日を設定する(管理者/人事担当者限定)。年次自動付与の起算日になる。 */
-export async function setUserHireDate(page: Page, userId: number, hireDate: string): Promise<void> {
+export async function setUserHireDate(page: Page, userId: string, hireDate: string): Promise<void> {
   await apiFetch(page, `/users/${userId}/hire-date`, { method: 'PUT', body: { hire_date: hireDate } })
 }
 
@@ -207,9 +207,9 @@ export async function fetchAttendancePunches(page: Page, from: string, to: strin
 /** 日次勤怠の詳細(calculation含む)を取得する。UI未表示の内訳項目をAPIで直接確認する用途。 */
 export async function fetchAttendanceDay(
   page: Page,
-  dayId: number,
+  dayId: string,
 ): Promise<{
-  id: number
+  id: string
   actual_start_at: string | null
   actual_end_at: string | null
   calculation: {
@@ -240,7 +240,7 @@ export async function fetchEmploymentCategories(page: Page): Promise<Array<{ id:
 export async function createWorkCalendar(
   page: Page,
   input: { name: string; fiscalYear: number; startsOn: string; endsOn: string; weekStartsOn?: number },
-): Promise<{ id: number }> {
+): Promise<{ id: string }> {
   return apiFetch(page, '/work-calendars', {
     method: 'POST',
     body: {
@@ -256,21 +256,21 @@ export async function createWorkCalendar(
 /** UC-C001: カレンダーの日別設定(休日区分)をまとめて登録する。 */
 export async function putWorkCalendarDays(
   page: Page,
-  calendarId: number,
+  calendarId: string,
   days: Array<{ date: string; day_type: string; is_working_day: boolean; is_legal_holiday: boolean; is_company_holiday: boolean }>,
 ): Promise<void> {
   await apiFetch(page, `/work-calendars/${calendarId}/days`, { method: 'PUT', body: { days } })
 }
 
 /** UC-C001: カレンダーを公開する。公開前は勤務形態から参照できない。 */
-export async function publishWorkCalendar(page: Page, calendarId: number): Promise<void> {
+export async function publishWorkCalendar(page: Page, calendarId: string): Promise<void> {
   await apiFetch(page, `/work-calendars/${calendarId}/publish`, { method: 'POST' })
 }
 
 /** UC-C003: 会社カレンダーの日区分をもとに、指定期間分の勤務予定を一括生成する。 */
 export async function generateShiftAssignments(
   page: Page,
-  input: { userId: number; workStyleId: number; from: string; to: string },
+  input: { userId: string; workStyleId: string; from: string; to: string },
 ): Promise<void> {
   await apiFetch(page, '/employee-shift-assignments/generate', {
     method: 'POST',
@@ -286,14 +286,14 @@ export async function generateShiftAssignments(
 export async function createAttendanceDay(
   page: Page,
   input: {
-    userId: number
+    userId: string
     workDate: string
     actualStartAt?: string
     actualEndAt?: string
     breaks?: Array<{ start: string; end: string }>
     reason: string
   },
-): Promise<{ id: number }> {
+): Promise<{ id: string }> {
   return apiFetch(page, '/attendance/days', {
     method: 'POST',
     body: {
@@ -323,12 +323,12 @@ export async function createWorkStyleViaApi(
     prescribedWeeklyMinutes: number
     deemedDailyMinutes?: number
     variablePeriodStartDay?: number
-    calendarId?: number
+    calendarId?: string
     isShiftBased?: boolean
     legalHolidayRule?: string
     employmentCategoryId?: number
   },
-): Promise<{ id: number }> {
+): Promise<{ id: string }> {
   return apiFetch(page, '/work-styles', {
     method: 'POST',
     body: {
@@ -353,7 +353,7 @@ export async function createWorkStyleViaApi(
  */
 export async function editEmployeeShiftAssignment(
   page: Page,
-  assignmentId: number,
+  assignmentId: string,
   input: { plannedStartAt?: string; plannedEndAt?: string; plannedBreakMinutes: number; reason: string },
 ): Promise<void> {
   await apiFetch(page, `/employee-shift-assignments/${assignmentId}`, {
@@ -369,10 +369,10 @@ export async function editEmployeeShiftAssignment(
 
 export async function fetchShiftAssignment(
   page: Page,
-  userId: number,
+  userId: string,
   workDate: string,
-): Promise<{ id: number } | undefined> {
-  const assignments = await apiFetch<Array<{ id: number; work_date: string }>>(
+): Promise<{ id: string } | undefined> {
+  const assignments = await apiFetch<Array<{ id: string; work_date: string }>>(
     page,
     `/employee-shift-assignments?user_id=${userId}&from=${workDate}&to=${workDate}`,
   )
@@ -385,7 +385,7 @@ export async function fetchShiftAssignment(
  */
 export async function designateLegalHoliday(
   page: Page,
-  input: { userId: number; weekStartDate: string; designatedDate: string; reason: string },
+  input: { userId: string; weekStartDate: string; designatedDate: string; reason: string },
 ): Promise<void> {
   await apiFetch(page, '/attendance/legal-holiday-designations', {
     method: 'POST',
@@ -403,8 +403,8 @@ export async function designateLegalHoliday(
  * 打刻は同じ日に2回出勤できない設計のため(scenario-01参照)、既に出勤・退勤済みなら
  * 何もしない冪等な実装にする。
  */
-export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: number; workDate: string }> {
-  let today = await apiFetch<{ id: number; status: string; work_date: string }>(page, '/attendance/today')
+export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: string; workDate: string }> {
+  let today = await apiFetch<{ id: string; status: string; work_date: string }>(page, '/attendance/today')
 
   if (today.status === 'not_started') {
     await apiFetch(page, '/attendance/clock-in', { method: 'POST' })
@@ -421,7 +421,7 @@ export async function ensureTodayClockedOut(page: Page): Promise<{ dayId: number
   return { dayId: today.id, workDate: today.work_date }
 }
 
-type MonthSummary = { id: number; year_month: string; status: string }
+type MonthSummary = { id: string; year_month: string; status: string }
 
 /**
  * UC-A008〜UC-A009: 指定した年月の月次勤怠を提出〜承認まで進める(締めまでは行わない)。
@@ -434,7 +434,7 @@ export async function submitAndApproveMonth(
   employeePage: Page,
   approverPage: Page,
   yearMonth: string,
-): Promise<{ monthId: number }> {
+): Promise<{ monthId: string }> {
   const approverId = await fetchOwnUserId(approverPage)
   const findMonth = (months: MonthSummary[]) => months.find((m) => m.year_month === yearMonth)
 
@@ -468,7 +468,7 @@ export async function submitApproveAndCloseCurrentMonth(
   employeePage: Page,
   approverPage: Page,
   adminPage: Page,
-): Promise<{ yearMonth: string; monthId: number; dayId: number; workDate: string }> {
+): Promise<{ yearMonth: string; monthId: string; dayId: string; workDate: string }> {
   const { dayId, workDate } = await ensureTodayClockedOut(employeePage)
   const yearMonth = workDate.slice(0, 7)
 
@@ -497,7 +497,7 @@ export async function fetchAttendanceMonthDetail(
   page: Page,
   yearMonth: string,
 ): Promise<{
-  month: { id: number; status: string } | null
+  month: { id: string; status: string } | null
   monthly_calculation_totals: {
     work_minutes: number
     statutory_excess_overtime_minutes: number
@@ -515,7 +515,7 @@ export async function fetchAttendanceMonthDetail(
  * ケース(§5-15、複数の労働時間制度が混在する月の月次締め)向け。既に提出済み以降のステータス
  * であれば何もしない(冪等)。
  */
-export async function submitMonth(employeePage: Page, approverUserId: number, yearMonth: string): Promise<{ monthId: number }> {
+export async function submitMonth(employeePage: Page, approverUserId: string, yearMonth: string): Promise<{ monthId: string }> {
   const findMonth = (months: MonthSummary[]) => months.find((m) => m.year_month === yearMonth)
 
   let months = await apiFetch<MonthSummary[]>(employeePage, '/attendance/months/mine')

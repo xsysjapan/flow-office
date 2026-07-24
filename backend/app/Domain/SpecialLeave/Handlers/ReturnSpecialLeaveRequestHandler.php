@@ -4,23 +4,19 @@ namespace App\Domain\SpecialLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
-use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\User;
-use Illuminate\Support\Carbon;
 
 /**
  * @implements CommandHandler<ReturnSpecialLeaveRequest>
  */
 class ReturnSpecialLeaveRequestHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): SpecialLeaveRequest
     {
         assert($command instanceof ReturnSpecialLeaveRequest);
@@ -35,19 +31,11 @@ class ReturnSpecialLeaveRequestHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
-        $request->status = SpecialLeaveRequestStatus::RETURNED;
-        $request->returned_at = Carbon::now();
-        $request->save();
+        SpecialLeaveRequestAggregate::retrieve($request->id)
+            ->returnRequest($command->returnedByUserId, $command->comment)
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'special_leave_request',
-            aggregateId: (string) $request->id,
-            event: new SpecialLeaveRequestReturned(
-                specialLeaveRequestId: $request->id,
-                returnedByUserId: $command->returnedByUserId,
-                comment: $command->comment,
-            ),
-        );
+        $request = $request->refresh();
 
         $applicant = User::find($request->user_id);
         if ($applicant !== null) {

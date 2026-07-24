@@ -7,12 +7,12 @@ import {
   type GenerateRotationShiftAssignmentsInput,
 } from '../api/employeeRotationAssignments'
 
-const DETAIL_KEY = (userId: number) => ['employee-rotation-assignment', userId]
+const DETAIL_KEY = (userId: string) => ['employee-rotation-assignment', userId]
 
-export function useEmployeeRotationAssignment(userId: number | undefined) {
+export function useEmployeeRotationAssignment(userId: string | undefined) {
   return useQuery({
-    queryKey: DETAIL_KEY(userId ?? 0),
-    queryFn: () => fetchEmployeeRotationAssignment(userId as number),
+    queryKey: DETAIL_KEY(userId ?? ''),
+    queryFn: () => fetchEmployeeRotationAssignment(userId as string),
     enabled: userId !== undefined,
   })
 }

@@ -105,7 +105,7 @@ class AuthController extends Controller
                 email: $ssoUser->getEmail(),
             ));
         } elseif (is_string($state) && str_starts_with($state, self::SSO_LINK_STATE_PREFIX)) {
-            $userId = (int) Crypt::decryptString(substr($state, strlen(self::SSO_LINK_STATE_PREFIX)));
+            $userId = Crypt::decryptString(substr($state, strlen(self::SSO_LINK_STATE_PREFIX)));
             $user = $commandBus->dispatch(new LinkSsoAccount(
                 userId: $userId,
                 entraUserId: $ssoUser->getId(),

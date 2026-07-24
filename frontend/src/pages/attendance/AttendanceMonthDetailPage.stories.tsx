@@ -16,7 +16,7 @@ import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 const yearMonth = '2026-07'
 
 const currentUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,
@@ -36,11 +36,11 @@ const authValue: AuthContextValue = {
 }
 
 const workStyleAssignments: UserWorkStyleMonthlyAssignment[] = ['2026-05', '2026-06', '2026-07', '2026-08'].map((ym, i) => ({
-  id: i + 1,
-  user_id: 1,
+  id: `assignment-${i + 1}`,
+  user_id: 'user-1',
   year_month: ym,
-  work_style_id: 1,
-  assigned_by_user_id: 1,
+  work_style_id: 'work-style-1',
+  assigned_by_user_id: 'admin-1',
 }))
 
 const emptyUsers: Paginated<User> = {
@@ -50,8 +50,8 @@ const emptyUsers: Paginated<User> = {
 }
 
 const month: AttendanceMonth = {
-  id: 1,
-  user_id: 1,
+  id: 'month-1',
+  user_id: 'user-1',
   year_month: yearMonth,
   status: 'not_submitted',
   submitted_at: null,
@@ -81,8 +81,8 @@ const monthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
 
 const days: AttendanceDay[] = [
   {
-    id: 1,
-    user_id: 1,
+    id: 'day-1',
+    user_id: 'user-1',
     work_date: '2026-07-01',
     status: 'clocked_out',
     actual_start_at: '2026-07-01T09:00:00+09:00',

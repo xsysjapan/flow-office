@@ -2,11 +2,10 @@
 
 namespace App\Domain\DeviceAdminSession\Handlers;
 
+use App\Domain\DeviceAdminSession\Aggregates\DeviceAdminSessionAggregate;
 use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
-use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionEnded;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\DeviceAdminSession;
 use Illuminate\Support\Carbon;
@@ -18,8 +17,6 @@ use Illuminate\Support\Carbon;
  */
 class EndDeviceAdminSessionHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): DeviceAdminSession
     {
         assert($command instanceof EndDeviceAdminSession);
@@ -29,18 +26,10 @@ class EndDeviceAdminSessionHandler implements CommandHandler
             throw new DomainRuleException('この端末は現在管理者モードではありません。');
         }
 
-        $session->ended_at = Carbon::now();
-        $session->save();
+        DeviceAdminSessionAggregate::retrieve($session->id)
+            ->end(Carbon::now()->format('Y-m-d H:i:s'))
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'device_admin_session',
-            aggregateId: (string) $session->id,
-            event: new DeviceAdminSessionEnded(
-                deviceAdminSessionId: $session->id,
-                deviceId: $command->deviceId,
-            ),
-        );
-
-        return $session;
+        return $session->refresh();
     }
 }

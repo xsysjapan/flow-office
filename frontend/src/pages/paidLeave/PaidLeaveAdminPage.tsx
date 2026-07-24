@@ -171,14 +171,14 @@ function PaidLeaveGrantRulesCard() {
 }
 
 function ManualGrantCard() {
-  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
   const [grantedOn, setGrantedOn] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
   const [grantedDays, setGrantedDays] = useState('')
   const [grantReason, setGrantReason] = useState('')
 
   const grantPaidLeave = useGrantPaidLeave()
-  const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(userId ?? NaN)
+  const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(userId ?? '')
 
   const handleGrant = () => {
     if (!userId) return

@@ -9,7 +9,7 @@ import type { Paginated, SpecialLeaveGrant, SpecialLeaveRequest, SpecialLeaveTyp
 import { MySpecialLeavePage } from './MySpecialLeavePage'
 
 const approver: User = {
-  id: 2,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -27,8 +27,8 @@ const approverSearchResult: Paginated<User> = {
 const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
 
 const submittedRequest: SpecialLeaveRequest = {
-  id: 1,
-  user_id: 1,
+  id: 'request-1',
+  user_id: 'user-1',
   special_leave_type_id: birthdayType.id,
   special_leave_type_name: birthdayType.name,
   status: 'submitted',
@@ -74,8 +74,8 @@ describe('MySpecialLeavePage', () => {
   it('shows the remaining days grouped by special leave type', async () => {
     const grants: SpecialLeaveGrant[] = [
       {
-        id: 1,
-        user_id: 1,
+        id: 'grant-1',
+        user_id: 'user-1',
         special_leave_type_id: birthdayType.id,
         special_leave_type_name: birthdayType.name,
         granted_on: '2026-07-01',

@@ -2,16 +2,18 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendancePunchAggregate;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
-use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\Attendance\Services\AttendanceDayPunchSyncer;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendancePunch;
+use App\Models\PunchStatus;
 use App\Models\User;
 use App\Support\LocalDateTime;
+use Illuminate\Support\Str;
+use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
  * UC-A012: 打刻ログを記録する。矛盾があっても記録は必ず成功させ、
@@ -21,12 +23,15 @@ use App\Support\LocalDateTime;
  * 社員本人の既定タイムゾーンと異なる場合でも、その打刻が実際に発生した現地時刻を維持する
  * (docs/03-architecture.md 3.4)。
  *
+ * 打刻(attendance_punch集約)と、それによって生じる日次勤怠(attendance_day集約)への反映は
+ * 別の集約ストリームだが、`AggregateRoot::persistInTransaction()`で1トランザクションに
+ * まとめて記録する(docs/29-event-sourcing-framework-migration.md参照)。
+ *
  * @implements CommandHandler<RecordAttendancePunch>
  */
 class RecordAttendancePunchHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceDayPunchSyncer $syncer,
     ) {}
 
@@ -52,45 +57,49 @@ class RecordAttendancePunchHandler implements CommandHandler
         }
 
         $user = User::query()->findOrFail($command->userId);
-        [$punchedAt, $utcOffsetMinutes] = LocalDateTime::splitOffset($command->punchedAt);
+        [$punchedAtNaive, $utcOffsetMinutes] = LocalDateTime::splitOffset($command->punchedAt);
 
-        $punch = AttendancePunch::query()->create([
+        $punchId = (string) Str::uuid();
+        $punchAggregate = AttendancePunchAggregate::retrieve($punchId)->record(
+            userId: $command->userId,
+            workDate: $command->workDate,
+            punchType: $command->punchType,
+            punchedAt: LocalDateTime::formatWithOffsetMinutes($punchedAtNaive, $utcOffsetMinutes),
+            source: $command->source,
+            note: $command->note,
+            deviceId: $command->deviceId,
+            authenticationKeyId: $command->authenticationKeyId,
+            actorUserId: $command->actorUserId ?? $command->userId,
+            offline: $command->offline,
+            idempotencyKey: $command->idempotencyKey,
+            requestId: $command->requestId,
+        );
+
+        // まだ永続化されていない今回の打刻を含めた、有効な打刻の一覧を組み立てる
+        // (AttendanceDayPunchSyncerがDBを再クエリしても今回の打刻はまだ見えないため)。
+        $activePunches = AttendancePunch::query()
+            ->where('user_id', $user->id)
+            ->whereDate('work_date', $command->workDate)
+            ->where('status', PunchStatus::ACTIVE)
+            ->with('device')
+            ->get();
+
+        $pendingPunch = new AttendancePunch([
+            'id' => $punchId,
             'user_id' => $command->userId,
             'work_date' => $command->workDate,
             'punch_type' => $command->punchType,
-            'punched_at' => $punchedAt,
+            'punched_at' => $punchedAtNaive,
             'utc_offset_minutes' => $utcOffsetMinutes,
-            'source' => $command->source,
-            'note' => $command->note,
             'device_id' => $command->deviceId,
-            'authentication_key_id' => $command->authenticationKeyId,
-            'actor_user_id' => $command->actorUserId ?? $command->userId,
-            'offline' => $command->offline,
-            'idempotency_key' => $command->idempotencyKey,
-            'request_id' => $command->requestId,
         ]);
+        $activePunches->push($pendingPunch);
+        $activePunches = $activePunches->sortBy('punched_at')->values();
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_punch',
-            aggregateId: (string) $punch->id,
-            event: new AttendancePunchRecorded(
-                attendancePunchId: $punch->id,
-                userId: $command->userId,
-                workDate: $command->workDate,
-                punchType: $command->punchType,
-                punchedAt: LocalDateTime::formatWithOffsetMinutes($punch->punched_at, $punch->utc_offset_minutes),
-                source: $command->source,
-                deviceId: $command->deviceId,
-                authenticationKeyId: $command->authenticationKeyId,
-                actorUserId: $command->actorUserId ?? $command->userId,
-                offline: $command->offline,
-                idempotencyKey: $command->idempotencyKey,
-                requestId: $command->requestId,
-            ),
-        );
+        $dayAggregate = $this->syncer->prepare($user->id, $command->workDate, $activePunches);
 
-        $this->syncer->sync($user->id, $command->workDate);
+        AggregateRoot::persistInTransaction(...array_filter([$punchAggregate, $dayAggregate]));
 
-        return $punch;
+        return AttendancePunch::query()->findOrFail($punchId);
     }
 }

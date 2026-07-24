@@ -16,6 +16,6 @@ class CreateShiftPattern implements Command
         public readonly ?string $breakStartTime,
         public readonly ?string $breakEndTime,
         public readonly int $prescribedWorkMinutes,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 }

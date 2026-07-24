@@ -6,12 +6,12 @@ import {
   type AssignUserWorkStyleForMonthInput,
 } from '../api/userWorkStyleMonthlyAssignments'
 
-const LIST_KEY = (userId: number) => ['user-work-style-monthly-assignments', userId]
+const LIST_KEY = (userId: string) => ['user-work-style-monthly-assignments', userId]
 
-export function useUserWorkStyleMonthlyAssignments(userId: number | undefined) {
+export function useUserWorkStyleMonthlyAssignments(userId: string | undefined) {
   return useQuery({
-    queryKey: LIST_KEY(userId ?? 0),
-    queryFn: () => fetchUserWorkStyleMonthlyAssignments(userId as number),
+    queryKey: LIST_KEY(userId ?? ''),
+    queryFn: () => fetchUserWorkStyleMonthlyAssignments(userId as string),
     enabled: userId !== undefined,
   })
 }
@@ -31,7 +31,7 @@ export function useRemoveUserWorkStyleMonthlyAssignment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id }: { id: number; userId: number }) => removeUserWorkStyleMonthlyAssignment(id),
+    mutationFn: ({ id }: { id: string; userId: string }) => removeUserWorkStyleMonthlyAssignment(id),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY(variables.userId) })
     },

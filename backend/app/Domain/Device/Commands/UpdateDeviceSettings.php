@@ -12,7 +12,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class UpdateDeviceSettings implements Command
 {
     public function __construct(
-        public readonly int $deviceId,
+        public readonly string $deviceId,
         public readonly string $name,
         public readonly ?string $siteId,
         public readonly ?string $locationName,
@@ -22,6 +22,6 @@ class UpdateDeviceSettings implements Command
         public readonly bool $allowOffline,
         public readonly bool $requireLocation,
         public readonly bool $autoDetectPunchType,
-        public readonly int $updatedByUserId,
+        public readonly string $updatedByUserId,
     ) {}
 }

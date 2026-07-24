@@ -2,15 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Models\RequestType;
 use App\Models\Role;
-use App\Models\StoredEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
  * UC-M003: 監査ログを確認する。
+ *
+ * 監査ログはspatie/laravel-event-sourcingの標準テーブル(stored_events)のみを検索する。
+ * 本番リリースは全ドメインの移行完了後を予定しており、移行期間中に限り
+ * legacy_stored_events(未移行ドメイン)は監査ログの対象外とする
+ * (docs/29-event-sourcing-framework-migration.md参照)。
  */
 class AuditLogTest extends TestCase
 {
@@ -20,34 +24,31 @@ class AuditLogTest extends TestCase
     {
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $applicant = User::factory()->create();
 
-        StoredEvent::query()->create([
-            'event_id' => (string) Str::uuid(),
-            'aggregate_type' => 'workflow_request',
-            'aggregate_id' => '1',
-            'version' => 1,
-            'event_type' => 'workflow_request.drafted',
-            'payload' => ['applicant_user_id' => 42],
-            'occurred_at' => now(),
-        ]);
-        StoredEvent::query()->create([
-            'event_id' => (string) Str::uuid(),
-            'aggregate_type' => 'attendance_punch',
-            'aggregate_id' => '1',
-            'version' => 1,
-            'event_type' => 'attendance_punch.recorded',
-            'payload' => [
-                'attendance_punch_id' => 1,
-            ],
-            'occurred_at' => now(),
+        $requestType = RequestType::query()->create([
+            'code' => 'expense_reimbursement',
+            'name' => '経費精算',
+            'form_schema' => [],
+            'is_active' => true,
         ]);
 
-        $response = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=workflow_request');
+        $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => 'タクシー代',
+            'form_data' => [],
+        ])->assertCreated();
 
-        $response->assertOk();
-        $data = $response->json('data');
+        $matching = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=workflow_request');
+        $matching->assertOk();
+        $data = $matching->json('data');
         $this->assertCount(1, $data);
         $this->assertSame('workflow_request.drafted', $data[0]['event_type']);
+        $this->assertSame('タクシー代', $data[0]['payload']['title']);
+
+        $unrelated = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=backoffice_task');
+        $unrelated->assertOk();
+        $this->assertCount(0, $unrelated->json('data'));
     }
 
     public function test_non_admin_cannot_view_audit_log(): void

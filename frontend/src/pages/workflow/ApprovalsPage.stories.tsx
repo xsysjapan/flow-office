@@ -10,7 +10,7 @@ const sample: WorkflowRequest[] = [
     title: 'タクシー代',
     status: 'submitted',
     form_data: {},
-    applicant: { id: 1, name: '申請者太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null },
+    applicant: { id: 'applicant-1', name: '申請者太郎', email: 'taro@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null },
     submitted_at: '2026-07-01T00:00:00+09:00',
     approved_at: null,
     returned_at: null,

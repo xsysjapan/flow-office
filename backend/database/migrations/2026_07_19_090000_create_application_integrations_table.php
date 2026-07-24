@@ -14,9 +14,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('application_integrations', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする。ApplicationIntegrationAggregateが発番し、
+            // 行の新規作成含めてIntegrationProjectorがこのUUIDをキーに作成・更新する
+            // (docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->string('owner_type');
-            $table->foreignId('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignUuid('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('client_type');
             $table->string('client_name');
             $table->text('purpose')->nullable();
@@ -24,7 +28,7 @@ return new class extends Migration
             $table->string('status')->default('active');
             $table->dateTime('last_used_at')->nullable();
             $table->dateTime('expires_at')->nullable();
-            $table->foreignId('registered_by_user_id')->constrained('users');
+            $table->foreignUuid('registered_by_user_id')->constrained('users');
             $table->timestamps();
 
             $table->index(['owner_type', 'owner_user_id']);

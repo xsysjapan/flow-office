@@ -28,7 +28,7 @@ const expenseType: RequestType = {
 }
 
 const approver: User = {
-  id: 5,
+  id: 'approver-1',
   name: '承認者花子',
   email: 'hanako@example.com',
   department: null,
@@ -98,11 +98,11 @@ describe('WorkflowRequestNewPage', () => {
         request_type_code: 'expense_reimbursement',
         title: 'タクシー代',
         form_data: { amount: '1200' },
-        approver_user_id: 5,
+        approver_user_id: 'approver-1',
       }),
     )
     await waitFor(() =>
-      expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-42', 5),
+      expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-42', 'approver-1'),
     )
     expect(await screen.findByText('申請詳細ページ')).toBeInTheDocument()
   })

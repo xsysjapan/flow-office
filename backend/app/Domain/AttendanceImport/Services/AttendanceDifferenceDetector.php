@@ -26,7 +26,7 @@ class AttendanceDifferenceDetector
      * @param  array<string, mixed>  $proposed  {date, startTime, endTime, breaks[], workLocation, ...}
      * @return array{existing: array<string, mixed>|null, differences: array<int, Difference>}
      */
-    public function detect(int $userId, string $targetMonth, array $proposed): array
+    public function detect(string $userId, string $targetMonth, array $proposed): array
     {
         $workDate = $proposed['date'];
         $differences = [];
@@ -95,7 +95,7 @@ class AttendanceDifferenceDetector
      * @param  array<int, string>  $proposedDates
      * @return array<int, string>
      */
-    public function findDatesMissingFromReport(int $userId, string $targetMonth, array $proposedDates): array
+    public function findDatesMissingFromReport(string $userId, string $targetMonth, array $proposedDates): array
     {
         return AttendanceDay::query()
             ->where('user_id', $userId)

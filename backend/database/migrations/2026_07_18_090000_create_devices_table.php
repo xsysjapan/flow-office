@@ -13,9 +13,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('devices', function (Blueprint $table) {
-            $table->id();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする。行の新規作成自体もDeviceProjector経由で
+            // 行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
             $table->string('owner_type');
-            $table->foreignId('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignUuid('owner_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('name');
             $table->string('device_type');
             $table->string('status')->default('pending_pairing');

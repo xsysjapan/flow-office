@@ -23,12 +23,12 @@ export function fetchToday(): Promise<AttendanceDay> {
 
 /** UC-A006: 週次勤怠(startDateを含む週の月曜〜日曜)。userIdを指定すると自分以外の社員を
  *  参照できる(adminのみ)。 */
-export function fetchWeek(startDate: string, userId?: number): Promise<AttendanceDay[]> {
+export function fetchWeek(startDate: string, userId?: string): Promise<AttendanceDay[]> {
   return apiFetch('/attendance/week', { query: { start_date: startDate, user_id: userId } })
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
-export function fetchAttendanceDayDefaults(userId: number, workDate: string): Promise<AttendanceDayDefaults> {
+export function fetchAttendanceDayDefaults(userId: string, workDate: string): Promise<AttendanceDayDefaults> {
   return apiFetch('/attendance/day-defaults', { query: { user_id: userId, work_date: workDate } })
 }
 
@@ -61,21 +61,21 @@ export interface EditAttendanceDayInput {
   reason: string
 }
 
-export function updateAttendanceDay(id: number, input: EditAttendanceDayInput): Promise<AttendanceDay> {
+export function updateAttendanceDay(id: string, input: EditAttendanceDayInput): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}`, { method: 'PUT', body: input })
 }
 
 /** 日次登録後、区分ごとの時間(所定労働・残業・深夜・休日労働)を手動で補正する。
  *  実績(出勤・退勤・休憩)が再編集され再計算されるとこの補正は解除される。 */
 export function adjustAttendanceDailyCalculation(
-  id: number,
+  id: string,
   input: AttendanceDailyCalculationAdjustment,
 ): Promise<AttendanceDay> {
   return apiFetch(`/attendance/days/${id}/calculation`, { method: 'PUT', body: input })
 }
 
 export interface CreateAttendanceDayInput {
-  user_id: number
+  user_id: string
   work_date: string
   actual_start_at?: string | null
   actual_end_at?: string | null
@@ -100,7 +100,7 @@ export interface DeleteAttendanceDayInput {
 }
 
 /** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
-export function deleteAttendanceDay(id: number, input: DeleteAttendanceDayInput): Promise<{ deleted: boolean }> {
+export function deleteAttendanceDay(id: string, input: DeleteAttendanceDayInput): Promise<{ deleted: boolean }> {
   return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: input })
 }
 
@@ -128,17 +128,17 @@ export interface CorrectAttendancePunchInput {
 }
 
 /** UC-A013: 打刻ログを訂正する。戻り値は訂正後に追記された新しい打刻ログ。 */
-export function correctPunch(id: number, input: CorrectAttendancePunchInput): Promise<AttendancePunch> {
+export function correctPunch(id: string, input: CorrectAttendancePunchInput): Promise<AttendancePunch> {
   return apiFetch(`/attendance-punches/${id}`, { method: 'PUT', body: input })
 }
 
 /** UC-A014: 打刻ログを削除する。戻り値は削除済み状態になった元の打刻ログ。 */
-export function deletePunch(id: number, reason: string): Promise<AttendancePunch> {
+export function deletePunch(id: string, reason: string): Promise<AttendancePunch> {
   return apiFetch(`/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
 /** UC-A007: 月次勤怠。userIdを指定すると自分以外の社員を参照できる(adminのみ)。 */
-export function fetchMonth(yearMonth: string, userId?: number): Promise<{
+export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   days: AttendanceDay[]
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
@@ -147,7 +147,7 @@ export function fetchMonth(yearMonth: string, userId?: number): Promise<{
   return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }
 
-export function submitMonth(yearMonth: string, approverUserId: number): Promise<AttendanceMonth> {
+export function submitMonth(yearMonth: string, approverUserId: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance/months/${yearMonth}/submit`, {
     method: 'POST',
     body: { approver_user_id: approverUserId },
@@ -159,7 +159,7 @@ export function fetchMyMonths(): Promise<AttendanceMonth[]> {
 }
 
 /** 管理者が対象社員を選んで月次勤怠一覧(月次・週次・日次の勤怠参照)を確認する。 */
-export function fetchMonthsForUser(userId: number): Promise<AttendanceMonth[]> {
+export function fetchMonthsForUser(userId: string): Promise<AttendanceMonth[]> {
   return apiFetch(`/attendance/months/user/${userId}`)
 }
 
@@ -167,14 +167,14 @@ export function fetchMonthsToApprove(): Promise<AttendanceMonth[]> {
   return apiFetch('/attendance/months/to-approve')
 }
 
-export function approveMonth(id: number): Promise<AttendanceMonth> {
+export function approveMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/approve`, { method: 'POST' })
 }
 
-export function returnMonth(id: number, comment: string): Promise<AttendanceMonth> {
+export function returnMonth(id: string, comment: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function closeMonth(id: number): Promise<AttendanceMonth> {
+export function closeMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/close`, { method: 'POST' })
 }

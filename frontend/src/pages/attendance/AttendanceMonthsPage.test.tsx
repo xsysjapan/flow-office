@@ -8,7 +8,7 @@ import type { AttendanceMonth, User } from '../../api/types'
 import { AttendanceMonthsPage } from './AttendanceMonthsPage'
 
 const currentUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,
@@ -23,8 +23,8 @@ vi.mock('../../auth/useAuth', () => ({
 }))
 
 const notSubmittedMonth: AttendanceMonth = {
-  id: 1,
-  user_id: 1,
+  id: 'month-1',
+  user_id: 'user-1',
   year_month: '2026-07',
   status: 'not_submitted',
   submitted_at: null,
@@ -74,7 +74,7 @@ describe('AttendanceMonthsPage', () => {
 
   it('lists months with their status and links to the detail page', async () => {
     vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([
-      { ...notSubmittedMonth, id: 2, year_month: '2026-06', status: 'closed' },
+      { ...notSubmittedMonth, id: 'month-2', year_month: '2026-06', status: 'closed' },
     ])
 
     renderPage()

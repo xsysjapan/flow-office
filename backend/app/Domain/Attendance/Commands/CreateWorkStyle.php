@@ -11,6 +11,6 @@ class CreateWorkStyle implements Command
      */
     public function __construct(
         public readonly array $attributes,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
 }

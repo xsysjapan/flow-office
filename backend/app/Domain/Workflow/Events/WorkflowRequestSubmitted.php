@@ -2,27 +2,12 @@
 
 namespace App\Domain\Workflow\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class WorkflowRequestSubmitted implements DomainEvent
+class WorkflowRequestSubmitted extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $workflowRequestId,
-        public readonly int $approverUserId,
-        public readonly int $submittedByUserId,
+        public readonly string $approverUserId,
+        public readonly string $submittedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'workflow_request.submitted';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'workflow_request_id' => $this->workflowRequestId,
-            'approver_user_id' => $this->approverUserId,
-            'submitted_by_user_id' => $this->submittedByUserId,
-        ];
-    }
 }

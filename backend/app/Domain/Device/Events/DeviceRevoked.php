@@ -2,27 +2,13 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceRevoked implements DomainEvent
+class DeviceRevoked extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceId,
-        public readonly int $revokedByUserId,
+        public readonly string $revokedByUserId,
         public readonly ?string $reason,
+        public readonly string $revokedAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.revoked';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'revoked_by_user_id' => $this->revokedByUserId,
-            'reason' => $this->reason,
-        ];
-    }
 }

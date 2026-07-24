@@ -36,7 +36,7 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
     public function __construct(private readonly CommandBus $commandBus) {}
 
     /**
-     * @return array<int, int> 作成された paid_leave_grants のID一覧
+     * @return array<int, string> 作成された paid_leave_grants のID一覧
      */
     public function handle(Command $command): array
     {

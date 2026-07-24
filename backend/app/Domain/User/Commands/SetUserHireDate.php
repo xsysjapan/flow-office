@@ -10,8 +10,8 @@ use App\Domain\EventSourcing\Contracts\Command;
 class SetUserHireDate implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $hireDate,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
     ) {}
 }

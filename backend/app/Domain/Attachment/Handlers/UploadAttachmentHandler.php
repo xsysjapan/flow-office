@@ -2,12 +2,12 @@
 
 namespace App\Domain\Attachment\Handlers;
 
+use App\Domain\Attachment\Aggregates\AttachmentAggregate;
 use App\Domain\Attachment\Commands\UploadAttachment;
-use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\Attachment;
+use Illuminate\Support\Str;
 
 /**
  * UC-F001: 添付ファイルをアップロードする。
@@ -16,35 +16,24 @@ use App\Models\Attachment;
  */
 class UploadAttachmentHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): Attachment
     {
         assert($command instanceof UploadAttachment);
 
-        $attachment = Attachment::query()->create([
-            'owner_type' => $command->ownerTypeAlias,
-            'owner_id' => $command->ownerId,
-            'uploaded_by' => $command->uploadedByUserId,
-            'file_name' => $command->fileName,
-            'stored_path' => $command->storedPath,
-            'mime_type' => $command->mimeType,
-            'file_size' => $command->fileSize,
-        ]);
+        $attachmentId = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'attachment',
-            aggregateId: (string) $attachment->id,
-            event: new AttachmentUploaded(
-                attachmentId: $attachment->id,
+        AttachmentAggregate::retrieve($attachmentId)
+            ->uploadAttachment(
                 ownerType: $command->ownerTypeAlias,
                 ownerId: $command->ownerId,
                 uploadedByUserId: $command->uploadedByUserId,
+                storedPath: $command->storedPath,
                 fileName: $command->fileName,
+                mimeType: $command->mimeType,
                 fileSize: $command->fileSize,
-            ),
-        );
+            )
+            ->persist();
 
-        return $attachment;
+        return Attachment::query()->findOrFail($attachmentId);
     }
 }

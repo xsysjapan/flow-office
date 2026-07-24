@@ -74,7 +74,7 @@ class ShiftPatternController extends Controller
         operationId: 'shiftPatterns.update',
         summary: 'シフトパターンを更新する',
         tags: ['シフトパターン'],
-        parameters: [new OA\Parameter(name: 'shiftPattern', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'shiftPattern', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'start_time', type: 'string', nullable: true), new OA\Property(property: 'end_time', type: 'string', nullable: true), new OA\Property(property: 'crosses_midnight', type: 'boolean'), new OA\Property(property: 'break_minutes', type: 'integer'), new OA\Property(property: 'prescribed_work_minutes', type: 'integer')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

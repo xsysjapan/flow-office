@@ -17,7 +17,7 @@ export function createWorkCalendar(input: CreateWorkCalendarInput): Promise<Work
   return apiFetch('/work-calendars', { method: 'POST', body: input })
 }
 
-export function publishWorkCalendar(id: number): Promise<WorkCalendar> {
+export function publishWorkCalendar(id: string): Promise<WorkCalendar> {
   return apiFetch(`/work-calendars/${id}/publish`, { method: 'POST' })
 }
 
@@ -30,6 +30,6 @@ export interface PutCalendarDayInput {
   note?: string
 }
 
-export function putWorkCalendarDays(id: number, days: PutCalendarDayInput[]): Promise<WorkCalendarDay[]> {
+export function putWorkCalendarDays(id: string, days: PutCalendarDayInput[]): Promise<WorkCalendarDay[]> {
   return apiFetch(`/work-calendars/${id}/days`, { method: 'PUT', body: { days } })
 }

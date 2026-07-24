@@ -11,6 +11,6 @@ class ApproveWorkflowRequest implements Command
 {
     public function __construct(
         public readonly string $workflowRequestId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
 }

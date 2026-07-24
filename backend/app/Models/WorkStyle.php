@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -10,10 +11,19 @@ use Illuminate\Support\Carbon;
 /**
  * 勤務形態 (docs/08-usecases-calendar-shift.md UC-C002)。
  * 所定労働時間・残業計算の基準となるため、ここをマスタ化しハードコードしない。
+ *
+ * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
+ * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'default_break_start_time', 'default_break_end_time', 'auto_break_enabled', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
+#[Fillable(['id', 'code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'default_break_start_time', 'default_break_end_time', 'auto_break_enabled', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
 class WorkStyle extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     /** 毎週少なくとも1日の法定休日を与える(労働基準法 原則)。 */
     public const LEGAL_HOLIDAY_RULE_WEEKLY = 'weekly';
 

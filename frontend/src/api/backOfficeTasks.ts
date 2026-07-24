@@ -13,7 +13,7 @@ export function fetchBackOfficeTask(id: string): Promise<BackOfficeTask> {
   return apiFetch(`/backoffice-tasks/${id}`)
 }
 
-export function assignBackOfficeTask(id: string, assignedUserId: number): Promise<BackOfficeTask> {
+export function assignBackOfficeTask(id: string, assignedUserId: string): Promise<BackOfficeTask> {
   return apiFetch(`/backoffice-tasks/${id}/assign`, {
     method: 'POST',
     body: { assigned_user_id: assignedUserId },

@@ -10,10 +10,10 @@ use App\Domain\EventSourcing\Contracts\Command;
 class GenerateEmployeeShiftAssignments implements Command
 {
     public function __construct(
-        public readonly int $userId,
-        public readonly int $workStyleId,
+        public readonly string $userId,
+        public readonly string $workStyleId,
         public readonly string $from,
         public readonly string $to,
-        public readonly int $generatedByUserId,
+        public readonly string $generatedByUserId,
     ) {}
 }

@@ -82,7 +82,7 @@ export function BackOfficeTaskListPage() {
   const assignTask = useAssignBackOfficeTask()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkAssignee, setBulkAssignee] = useState<number | undefined>(undefined)
+  const [bulkAssignee, setBulkAssignee] = useState<string | undefined>(undefined)
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
 

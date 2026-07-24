@@ -2,27 +2,12 @@
 
 namespace App\Domain\BackOffice\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class BackOfficeTaskAssigned implements DomainEvent
+class BackOfficeTaskAssigned extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $backOfficeTaskId,
-        public readonly int $assignedUserId,
-        public readonly int $assignedByUserId,
+        public readonly string $assignedUserId,
+        public readonly string $assignedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'backoffice_task.assigned';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'backoffice_task_id' => $this->backOfficeTaskId,
-            'assigned_user_id' => $this->assignedUserId,
-            'assigned_by_user_id' => $this->assignedByUserId,
-        ];
-    }
 }

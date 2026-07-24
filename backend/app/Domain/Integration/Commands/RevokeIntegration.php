@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class RevokeIntegration implements Command
 {
     public function __construct(
-        public readonly int $integrationId,
-        public readonly int $revokedByUserId,
+        public readonly string $integrationId,
+        public readonly string $revokedByUserId,
     ) {}
 }

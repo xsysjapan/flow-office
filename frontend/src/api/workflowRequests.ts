@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { Paginated, StoredEvent, WorkflowRequest } from './types'
+import type { Paginated, WorkflowRequest, WorkflowRequestHistoryEntry } from './types'
 
 export function fetchMyWorkflowRequests(): Promise<Paginated<WorkflowRequest>> {
   return apiFetch('/workflow-requests/mine')
@@ -17,14 +17,14 @@ export interface CreateWorkflowRequestInput {
   request_type_code: string
   title: string
   form_data: Record<string, unknown>
-  approver_user_id?: number
+  approver_user_id?: string
 }
 
 export function createWorkflowRequest(input: CreateWorkflowRequestInput): Promise<WorkflowRequest> {
   return apiFetch('/workflow-requests', { method: 'POST', body: input })
 }
 
-export function submitWorkflowRequest(id: string, approverUserId?: number): Promise<WorkflowRequest> {
+export function submitWorkflowRequest(id: string, approverUserId?: string): Promise<WorkflowRequest> {
   return apiFetch(`/workflow-requests/${id}/submit`, {
     method: 'POST',
     body: { approver_user_id: approverUserId },
@@ -44,6 +44,6 @@ export function cancelWorkflowRequest(id: string, reason: string): Promise<Workf
 }
 
 /** UC-W003/UC-W004 コメント履歴。 */
-export function fetchWorkflowRequestHistory(id: string): Promise<StoredEvent[]> {
+export function fetchWorkflowRequestHistory(id: string): Promise<WorkflowRequestHistoryEntry[]> {
   return apiFetch(`/workflow-requests/${id}/history`)
 }

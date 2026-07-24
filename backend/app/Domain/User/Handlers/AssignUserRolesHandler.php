@@ -4,9 +4,8 @@ namespace App\Domain\User\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
+use App\Domain\User\Aggregates\UserAggregate;
 use App\Domain\User\Commands\AssignUserRoles;
-use App\Domain\User\Events\UserRolesChanged;
 use App\Models\Role;
 use App\Models\User;
 use InvalidArgumentException;
@@ -16,8 +15,6 @@ use InvalidArgumentException;
  */
 class AssignUserRolesHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): User
     {
         assert($command instanceof AssignUserRoles);
@@ -30,19 +27,10 @@ class AssignUserRolesHandler implements CommandHandler
             throw new InvalidArgumentException('存在しないロールコードが指定されました。');
         }
 
-        $user->roles()->sync($roles->pluck('id'));
+        UserAggregate::retrieve($user->id)
+            ->changeRoles($previousRoleCodes, $roles->pluck('code')->all(), $command->changedByUserId)
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'user',
-            aggregateId: (string) $user->id,
-            event: new UserRolesChanged(
-                userId: $user->id,
-                previousRoleCodes: $previousRoleCodes,
-                newRoleCodes: $roles->pluck('code')->all(),
-                changedByUserId: $command->changedByUserId,
-            ),
-        );
-
-        return $user;
+        return User::query()->with('roles')->findOrFail($user->id);
     }
 }

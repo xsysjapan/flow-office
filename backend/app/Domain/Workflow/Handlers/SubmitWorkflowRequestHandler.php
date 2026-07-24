@@ -4,10 +4,9 @@ namespace App\Domain\Workflow\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Workflow\Aggregates\WorkflowRequestAggregate;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
-use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
@@ -19,8 +18,6 @@ use Illuminate\Validation\ValidationException;
  */
 class SubmitWorkflowRequestHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): WorkflowRequest
     {
         assert($command instanceof SubmitWorkflowRequest);
@@ -44,15 +41,9 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             throw ValidationException::withMessages(['approver_user_id' => ['承認者を指定してください。']]);
         }
 
-        $this->eventStore->append(
-            aggregateType: 'workflow_request',
-            aggregateId: (string) $workflowRequest->id,
-            event: new WorkflowRequestSubmitted(
-                workflowRequestId: $workflowRequest->id,
-                approverUserId: $approverUserId,
-                submittedByUserId: $command->submittedByUserId,
-            ),
-        );
+        WorkflowRequestAggregate::retrieve($workflowRequest->id)
+            ->submit(approverUserId: $approverUserId, submittedByUserId: $command->submittedByUserId)
+            ->persist();
 
         $approver = User::find($approverUserId);
         if ($approver !== null) {

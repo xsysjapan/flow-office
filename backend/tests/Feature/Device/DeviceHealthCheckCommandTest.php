@@ -5,10 +5,10 @@ namespace Tests\Feature\Device;
 use App\Models\Device;
 use App\Models\DeviceStatus;
 use App\Models\Role;
-use App\Models\StoredEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 class DeviceHealthCheckCommandTest extends TestCase
@@ -55,15 +55,14 @@ class DeviceHealthCheckCommandTest extends TestCase
 
         $this->artisan('devices:health-check', ['--stale-after-hours' => 48])->assertExitCode(0);
 
-        $notification = StoredEvent::query()
-            ->where('aggregate_type', 'notification')
-            ->where('event_type', 'notification.queued')
+        $notification = EloquentStoredEvent::query()
+            ->where('event_class', 'notification.queued')
             ->latest('id')
             ->first();
 
         $this->assertNotNull($notification);
-        $this->assertSame('端末の疎通が途絶えています', $notification->payload['title']);
-        $this->assertStringContainsString('疎通が途絶えた端末', $notification->payload['summary']);
+        $this->assertSame('端末の疎通が途絶えています', $notification->event_properties['title']);
+        $this->assertStringContainsString('疎通が途絶えた端末', $notification->event_properties['summary']);
     }
 
     public function test_it_does_not_queue_a_notification_when_all_devices_are_healthy(): void
@@ -72,6 +71,6 @@ class DeviceHealthCheckCommandTest extends TestCase
 
         $this->artisan('devices:health-check')->assertExitCode(0);
 
-        $this->assertSame(0, StoredEvent::query()->where('aggregate_type', 'notification')->count());
+        $this->assertSame(0, EloquentStoredEvent::query()->where('event_class', 'notification.queued')->count());
     }
 }

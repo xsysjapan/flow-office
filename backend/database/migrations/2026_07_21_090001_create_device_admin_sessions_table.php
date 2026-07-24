@@ -15,10 +15,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('device_admin_sessions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
-            $table->foreignId('admin_user_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('authentication_key_id')->nullable()->constrained('authentication_keys')->nullOnDelete();
+            // 集約ID(aggregate_uuid)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする(他テーブルから参照されないため、
+            // Attachment/WorkflowRequestと同じ(b)方式。docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
+            $table->foreignUuid('device_id')->constrained('devices')->cascadeOnDelete();
+            $table->foreignUuid('admin_user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignUuid('authentication_key_id')->nullable()->constrained('authentication_keys')->nullOnDelete();
             $table->string('source');
             $table->dateTime('started_at');
             $table->dateTime('expires_at');

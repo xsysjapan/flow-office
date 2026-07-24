@@ -2,73 +2,66 @@
 
 namespace App\Domain\Workflow\Projectors;
 
-use App\Domain\EventSourcing\Contracts\Projector;
-use App\Models\StoredEvent;
+use App\Domain\Workflow\Events\WorkflowRequestApproved;
+use App\Domain\Workflow\Events\WorkflowRequestCancelled;
+use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestReturned;
+use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
-use Illuminate\Support\Facades\DB;
+use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * workflow_request.* イベントから workflow_requests を作成・更新する。
- *
- * 主キーがUUID(コマンド側生成)であるため、行の新規作成(drafted)自体も
- * このProjectorが担う。DB採番PKだと集約IDが確定するまでイベントを書けず
- * Projector化できないが、UUIDならその制約がない
- * (.claude/skills/add-projection「集約ルートのUUID化」参照)。
+ * workflow_request.* イベントから workflow_requests を作成・更新する。主キーがコマンド側
+ * 生成のUUIDのため、行の新規作成(drafted)自体もこのProjectorが担う。
  */
-class WorkflowRequestProjector implements Projector
+class WorkflowRequestProjector extends Projector
 {
-    public function eventTypes(): array
+    public function onWorkflowRequestDrafted(WorkflowRequestDrafted $event): void
     {
-        return [
-            'workflow_request.drafted',
-            'workflow_request.submitted',
-            'workflow_request.approved',
-            'workflow_request.returned',
-            'workflow_request.cancelled',
-        ];
+        WorkflowRequest::query()->updateOrCreate(
+            ['id' => $event->aggregateRootUuid()],
+            [
+                'request_type_id' => $event->requestTypeId,
+                'title' => $event->title,
+                'applicant_user_id' => $event->applicantUserId,
+                'approver_user_id' => $event->approverUserId,
+                'status' => WorkflowRequestStatus::DRAFT,
+                'form_data' => $event->formData,
+            ],
+        );
     }
 
-    public function project(StoredEvent $event): void
+    public function onWorkflowRequestSubmitted(WorkflowRequestSubmitted $event): void
     {
-        $payload = $event->payload;
-        $id = $payload['workflow_request_id'];
-
-        match ($event->event_type) {
-            'workflow_request.drafted' => WorkflowRequest::query()->updateOrCreate(
-                ['id' => $id],
-                [
-                    'request_type_id' => $payload['request_type_id'],
-                    'title' => $payload['title'],
-                    'applicant_user_id' => $payload['applicant_user_id'],
-                    'approver_user_id' => $payload['approver_user_id'],
-                    'status' => WorkflowRequestStatus::DRAFT,
-                    'form_data' => $payload['form_data'],
-                ],
-            ),
-            'workflow_request.submitted' => WorkflowRequest::query()->whereKey($id)->update([
-                'approver_user_id' => $payload['approver_user_id'],
-                'status' => WorkflowRequestStatus::SUBMITTED,
-                'submitted_at' => $event->occurred_at,
-            ]),
-            'workflow_request.approved' => WorkflowRequest::query()->whereKey($id)->update([
-                'status' => WorkflowRequestStatus::APPROVED,
-                'approved_at' => $event->occurred_at,
-            ]),
-            'workflow_request.returned' => WorkflowRequest::query()->whereKey($id)->update([
-                'status' => WorkflowRequestStatus::RETURNED,
-                'returned_at' => $event->occurred_at,
-            ]),
-            'workflow_request.cancelled' => WorkflowRequest::query()->whereKey($id)->update([
-                'status' => WorkflowRequestStatus::CANCELLED,
-                'cancelled_at' => $event->occurred_at,
-            ]),
-            default => null,
-        };
+        WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'approver_user_id' => $event->approverUserId,
+            'status' => WorkflowRequestStatus::SUBMITTED,
+            'submitted_at' => $event->createdAt(),
+        ]);
     }
 
-    public function reset(): void
+    public function onWorkflowRequestApproved(WorkflowRequestApproved $event): void
     {
-        DB::table('workflow_requests')->truncate();
+        WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => WorkflowRequestStatus::APPROVED,
+            'approved_at' => $event->createdAt(),
+        ]);
+    }
+
+    public function onWorkflowRequestReturned(WorkflowRequestReturned $event): void
+    {
+        WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => WorkflowRequestStatus::RETURNED,
+            'returned_at' => $event->createdAt(),
+        ]);
+    }
+
+    public function onWorkflowRequestCancelled(WorkflowRequestCancelled $event): void
+    {
+        WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => WorkflowRequestStatus::CANCELLED,
+            'cancelled_at' => $event->createdAt(),
+        ]);
     }
 }

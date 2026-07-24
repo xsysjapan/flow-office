@@ -18,8 +18,8 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignId('request_type_id')->constrained();
             $table->string('title');
-            $table->foreignId('applicant_user_id')->constrained('users');
-            $table->foreignId('approver_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('applicant_user_id')->constrained('users');
+            $table->foreignUuid('approver_user_id')->nullable()->constrained('users');
             $table->string('status')->default('draft');
             $table->json('form_data');
             $table->timestamp('submitted_at')->nullable();

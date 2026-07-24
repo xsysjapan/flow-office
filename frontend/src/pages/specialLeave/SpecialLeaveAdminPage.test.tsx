@@ -24,7 +24,7 @@ const rule: SpecialLeaveGrantRule = {
 }
 
 const targetUser: User = {
-  id: 3,
+  id: 'user-3',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -104,8 +104,8 @@ describe('SpecialLeaveAdminPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(specialLeaveApi, 'grantSpecialLeave').mockResolvedValue({
-      id: 1,
-      user_id: 3,
+      id: 'grant-1',
+      user_id: 'user-3',
       special_leave_type_id: birthdayType.id,
       special_leave_type_name: birthdayType.name,
       granted_on: '2026-07-01',
@@ -129,7 +129,7 @@ describe('SpecialLeaveAdminPage', () => {
 
     await waitFor(() =>
       expect(specialLeaveApi.grantSpecialLeave).toHaveBeenCalledWith({
-        user_id: 3,
+        user_id: 'user-3',
         special_leave_type_id: birthdayType.id,
         granted_on: '2026-07-01',
         expires_on: undefined,

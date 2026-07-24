@@ -40,7 +40,7 @@ export function BackOfficeTaskDetailPage() {
   const assignTask = useAssignBackOfficeTask()
   const changeStatus = useChangeBackOfficeTaskStatus()
 
-  const [assignedUserId, setAssignedUserId] = useState<number | undefined>(undefined)
+  const [assignedUserId, setAssignedUserId] = useState<string | undefined>(undefined)
   const [status, setStatus] = useState<BackOfficeTaskStatus>('not_started')
   const [comment, setComment] = useState('')
 

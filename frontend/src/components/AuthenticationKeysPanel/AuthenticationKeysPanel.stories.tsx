@@ -5,26 +5,26 @@ import { AuthenticationKeysPanel } from './AuthenticationKeysPanel'
 
 const keys: AuthenticationKey[] = [
   {
-    id: 1,
-    user_id: 42,
+    id: 'auth-key-1',
+    user_id: '11111111-1111-1111-1111-111111111111',
     key_type: 'nfc_uid',
     display_name: '本社ICカード',
     status: 'active',
     valid_from: null,
     valid_until: null,
-    registered_by_user_id: 42,
+    registered_by_user_id: '11111111-1111-1111-1111-111111111111',
     registered_at: '2026-07-01T09:00:00+09:00',
     disabled_at: null,
   },
   {
-    id: 2,
-    user_id: 42,
+    id: 'auth-key-2',
+    user_id: '11111111-1111-1111-1111-111111111111',
     key_type: 'fingerprint_external_id',
     display_name: '右手人差し指',
     status: 'disabled',
     valid_from: null,
     valid_until: null,
-    registered_by_user_id: 42,
+    registered_by_user_id: '11111111-1111-1111-1111-111111111111',
     registered_at: '2026-06-01T09:00:00+09:00',
     disabled_at: '2026-06-15T09:00:00+09:00',
   },
@@ -32,12 +32,12 @@ const keys: AuthenticationKey[] = [
 
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['authentication-keys', 42], keys)
+  queryClient.setQueryData(['authentication-keys', '11111111-1111-1111-1111-111111111111'], keys)
 
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <AuthenticationKeysPanel userId={42} />
+        <AuthenticationKeysPanel userId="11111111-1111-1111-1111-111111111111" />
       </QueryClientProvider>
     )
   }
@@ -52,6 +52,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
-  args: { userId: 42 },
+  args: { userId: '11111111-1111-1111-1111-111111111111' },
   render: withSeeded(),
 }

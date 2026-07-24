@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('work_calendar_days', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('calendar_id')->constrained('work_calendars')->cascadeOnDelete();
+            $table->foreignUuid('calendar_id')->constrained('work_calendars')->cascadeOnDelete();
             $table->date('date');
             $table->string('day_type'); // weekday, legal_holiday, company_holiday, special_working_day
             $table->boolean('is_working_day')->default(true);

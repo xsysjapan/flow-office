@@ -12,7 +12,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class LinkSsoAccount implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $entraUserId,
     ) {}
 }

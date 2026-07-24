@@ -4,10 +4,9 @@ namespace App\Domain\SpecialLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
-use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveRequest;
@@ -18,7 +17,7 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * 特別休暇を申請する。有給休暇(RequestPaidLeaveHandler)と同じ考え方だが、
@@ -29,8 +28,6 @@ use Illuminate\Support\Carbon;
  */
 class RequestSpecialLeaveHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): SpecialLeaveRequest
     {
         assert($command instanceof RequestSpecialLeave);
@@ -66,32 +63,22 @@ class RequestSpecialLeaveHandler implements CommandHandler
             throw new DomainRuleException('特別休暇の残数が不足しています。');
         }
 
-        $request = SpecialLeaveRequest::query()->create([
-            'user_id' => $command->userId,
-            'special_leave_type_id' => $command->specialLeaveTypeId,
-            'approver_user_id' => $command->approverUserId,
-            'status' => SpecialLeaveRequestStatus::SUBMITTED,
-            'leave_type' => $command->leaveType,
-            'target_date' => $command->targetDate,
-            'hours' => $command->hours,
-            'requested_days' => $requestedDays,
-            'reason' => $command->reason,
-            'submitted_at' => Carbon::now(),
-        ]);
+        $requestId = (string) Str::uuid();
 
-        $this->eventStore->append(
-            aggregateType: 'special_leave_request',
-            aggregateId: (string) $request->id,
-            event: new SpecialLeaveRequested(
-                specialLeaveRequestId: $request->id,
+        SpecialLeaveRequestAggregate::retrieve($requestId)
+            ->request(
                 userId: $command->userId,
                 specialLeaveTypeId: $command->specialLeaveTypeId,
                 targetDate: $command->targetDate,
                 leaveType: $command->leaveType,
+                hours: $command->hours,
                 requestedDays: $requestedDays,
                 approverUserId: $command->approverUserId,
-            ),
-        );
+                reason: $command->reason,
+            )
+            ->persist();
+
+        $request = SpecialLeaveRequest::query()->findOrFail($requestId);
 
         $approver = User::find($command->approverUserId);
         if ($approver !== null) {
@@ -111,7 +98,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
      * attendance_days.work_typeは1日1件しか値を持てないため、どちらの休暇であっても
      * 二重申請を防ぐ必要がある。
      */
-    private function alreadyHasLeaveOnDate(int $userId, string $targetDate): bool
+    private function alreadyHasLeaveOnDate(string $userId, string $targetDate): bool
     {
         $activeStatuses = [PaidLeaveRequestStatus::SUBMITTED, PaidLeaveRequestStatus::APPROVED];
 

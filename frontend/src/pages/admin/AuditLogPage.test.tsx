@@ -7,7 +7,7 @@ import type { Paginated, StoredEvent } from '../../api/types'
 import { AuditLogPage } from './AuditLogPage'
 
 const event: StoredEvent = {
-  id: 1,
+  id: 'evt-1',
   event_id: 'evt-1',
   aggregate_type: 'workflow_request',
   aggregate_id: '1',

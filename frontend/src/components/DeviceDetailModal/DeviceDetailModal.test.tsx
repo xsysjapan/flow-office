@@ -7,7 +7,7 @@ import type { Device } from '../../api/types'
 import { DeviceDetailModal } from './DeviceDetailModal'
 
 const device: Device = {
-  id: 1,
+  id: 'device-1',
   owner_type: 'organization_shared',
   owner_user_id: null,
   name: '本社1階受付',
@@ -101,7 +101,7 @@ describe('DeviceDetailModal', () => {
     expect(await screen.findByText('端末を再ペアリングしますか?')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '発行する' }))
 
-    expect(issueSpy).toHaveBeenCalledWith(1)
+    expect(issueSpy).toHaveBeenCalledWith('device-1')
     expect(await screen.findByText('1|resecret')).toBeInTheDocument()
   })
 
@@ -113,7 +113,7 @@ describe('DeviceDetailModal', () => {
     await user.click(screen.getByRole('button', { name: '詳細' }))
     await user.click(screen.getByRole('button', { name: '停止する' }))
 
-    expect(disableSpy).toHaveBeenCalledWith(1)
+    expect(disableSpy).toHaveBeenCalledWith('device-1')
   })
 
   it('shows a heartbeat staleness badge for an active device with an old last_seen_at', async () => {
@@ -140,7 +140,7 @@ describe('DeviceDetailModal', () => {
     await user.selectOptions(screen.getByLabelText('スコープを付与する'), '管理者モード(入館証等の現地登録)')
     await user.click(screen.getByRole('button', { name: '付与する' }))
 
-    expect(grantSpy).toHaveBeenCalledWith(1, 'admin:mode')
+    expect(grantSpy).toHaveBeenCalledWith('device-1', 'admin:mode')
   })
 
   it('shows the same role checkboxes offered at registration and lets the admin change them', async () => {
@@ -159,7 +159,7 @@ describe('DeviceDetailModal', () => {
     await user.click(screen.getByRole('checkbox', { name: '入退室管理' }))
     await user.click(screen.getByRole('button', { name: '役割を保存する' }))
 
-    expect(updateRolesSpy).toHaveBeenCalledWith(1, ['attendance_reader', 'access_control'])
+    expect(updateRolesSpy).toHaveBeenCalledWith('device-1', ['attendance_reader', 'access_control'])
   })
 
   it('submits updated settings', async () => {
@@ -177,7 +177,7 @@ describe('DeviceDetailModal', () => {
     await user.click(screen.getByRole('button', { name: '保存する' }))
 
     expect(updateSpy).toHaveBeenCalledWith(
-      1,
+      'device-1',
       expect.objectContaining({ name: '本社1階受付', location_name: '本社2階会議室' }),
     )
     expect(await screen.findByText('設定を保存しました。')).toBeInTheDocument()

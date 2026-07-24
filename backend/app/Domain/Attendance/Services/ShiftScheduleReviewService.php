@@ -59,7 +59,7 @@ class ShiftScheduleReviewService
         ];
     }
 
-    private function resolveWorkStyle(int $userId, string $yearMonth): ?WorkStyle
+    private function resolveWorkStyle(string $userId, string $yearMonth): ?WorkStyle
     {
         $monthStart = Carbon::createFromFormat('Y-m', $yearMonth)->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
@@ -81,7 +81,7 @@ class ShiftScheduleReviewService
      *
      * @return list<array{user_id: int, period_start: string, period_end: string, consecutive_days: int, max_allowed: int}>
      */
-    private function checkConsecutiveWork(int $userId, WorkStyle $workStyle, string $yearMonth): array
+    private function checkConsecutiveWork(string $userId, WorkStyle $workStyle, string $yearMonth): array
     {
         if ($workStyle->max_consecutive_work_days === null) {
             return [];
@@ -147,7 +147,7 @@ class ShiftScheduleReviewService
      *
      * @return array{user_id: int, year_month: string, planned_minutes: int, statutory_cap_minutes: int}|null
      */
-    private function checkMonthlyHours(int $userId, string $yearMonth): ?array
+    private function checkMonthlyHours(string $userId, string $yearMonth): ?array
     {
         $monthStart = Carbon::createFromFormat('Y-m', $yearMonth)->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();

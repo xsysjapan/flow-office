@@ -12,11 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('attendance_months', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成できるUUIDにする(AttendanceMonthProjector経由で行えるようにするため。
+            // docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
+            $table->foreignUuid('user_id')->constrained();
             $table->string('year_month', 7); // YYYY-MM
             $table->string('status')->default('not_submitted'); // not_submitted, submitted, approved, returned, closed
-            $table->foreignId('approver_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('approver_user_id')->nullable()->constrained('users');
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('returned_at')->nullable();

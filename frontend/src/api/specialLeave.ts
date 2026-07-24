@@ -27,7 +27,7 @@ export function fetchMySpecialLeaveGrants(): Promise<SpecialLeaveGrant[]> {
   return apiFetch('/special-leave/grants/mine')
 }
 
-export function fetchSpecialLeaveGrantsForUser(userId: number): Promise<SpecialLeaveGrant[]> {
+export function fetchSpecialLeaveGrantsForUser(userId: string): Promise<SpecialLeaveGrant[]> {
   return apiFetch(`/special-leave/grants/user/${userId}`)
 }
 
@@ -38,7 +38,7 @@ export function fetchSpecialLeaveGrantRules(): Promise<SpecialLeaveGrantRule[]> 
 export interface CreateSpecialLeaveGrantRuleInput {
   special_leave_type_id: number
   name: string
-  work_style_id?: number
+  work_style_id?: string
   min_attendance_rate?: number
   first_grant_after_months?: number
   grant_cycle_months?: number
@@ -52,7 +52,7 @@ export function createSpecialLeaveGrantRule(input: CreateSpecialLeaveGrantRuleIn
 }
 
 export interface GrantSpecialLeaveInput {
-  user_id: number
+  user_id: string
   special_leave_type_id: number
   granted_on: string
   /** 未指定の場合は失効しない付与になる。 */
@@ -78,7 +78,7 @@ export interface CreateSpecialLeaveRequestInput {
   target_date: string
   leave_type: PaidLeaveType
   hours?: number
-  approver_user_id: number
+  approver_user_id: string
   reason?: string
 }
 
@@ -86,15 +86,15 @@ export function createSpecialLeaveRequest(input: CreateSpecialLeaveRequestInput)
   return apiFetch('/special-leave/requests', { method: 'POST', body: input })
 }
 
-export function approveSpecialLeaveRequest(id: number): Promise<SpecialLeaveRequest> {
+export function approveSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/approve`, { method: 'POST' })
 }
 
-export function returnSpecialLeaveRequest(id: number, comment: string): Promise<SpecialLeaveRequest> {
+export function returnSpecialLeaveRequest(id: string, comment: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function cancelSpecialLeaveRequest(id: number): Promise<SpecialLeaveRequest> {
+export function cancelSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/cancel`, { method: 'POST' })
 }
 
@@ -104,6 +104,6 @@ export function fetchMySpecialLeaveHistory(): Promise<StoredEvent[]> {
 }
 
 /** 管理者・人事担当者が対象社員の特別休暇履歴を取得する。 */
-export function fetchSpecialLeaveHistoryForUser(userId: number): Promise<StoredEvent[]> {
+export function fetchSpecialLeaveHistoryForUser(userId: string): Promise<StoredEvent[]> {
   return apiFetch(`/special-leave/history/user/${userId}`)
 }

@@ -11,11 +11,11 @@ use App\Domain\EventSourcing\Contracts\Command;
 class PublishEmployeeShiftAssignments implements Command
 {
     /**
-     * @param  list<int>  $userIds
+     * @param  list<string>  $userIds
      */
     public function __construct(
         public readonly array $userIds,
         public readonly string $yearMonth,
-        public readonly int $publishedByUserId,
+        public readonly string $publishedByUserId,
     ) {}
 }

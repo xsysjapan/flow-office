@@ -27,7 +27,7 @@ return new class extends Migration
     {
         Schema::create('attendance_weekly_calculations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->date('week_start_date');
             $table->date('week_end_date');
             $table->unsignedInteger('actual_work_minutes')->default(0);

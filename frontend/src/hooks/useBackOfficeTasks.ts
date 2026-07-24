@@ -43,7 +43,7 @@ export function useAssignBackOfficeTask() {
   const invalidate = useInvalidateBackOfficeTasks()
 
   return useMutation({
-    mutationFn: ({ id, assignedUserId }: { id: string; assignedUserId: number }) =>
+    mutationFn: ({ id, assignedUserId }: { id: string; assignedUserId: string }) =>
       assignBackOfficeTask(id, assignedUserId),
     onSuccess: (_data, { id }) => invalidate(id),
   })

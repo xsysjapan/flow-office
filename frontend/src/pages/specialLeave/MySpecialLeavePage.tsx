@@ -35,7 +35,7 @@ function SpecialLeaveRequestForm() {
   const [targetDate, setTargetDate] = useState('')
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
   const [hours, setHours] = useState('')
-  const [approverUserId, setApproverUserId] = useState<number | undefined>(undefined)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
 
   const createRequest = useCreateSpecialLeaveRequest()

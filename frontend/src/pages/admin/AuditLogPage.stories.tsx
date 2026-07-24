@@ -5,7 +5,7 @@ import { AuditLogPage } from './AuditLogPage'
 
 const events: StoredEvent[] = [
   {
-    id: 1,
+    id: 'evt-1',
     event_id: 'evt-1',
     aggregate_type: 'workflow_request',
     aggregate_id: '1',
@@ -15,7 +15,7 @@ const events: StoredEvent[] = [
     occurred_at: '2026-07-01T00:00:00+09:00',
   },
   {
-    id: 2,
+    id: 'evt-2',
     event_id: 'evt-2',
     aggregate_type: 'workflow_request',
     aggregate_id: '1',

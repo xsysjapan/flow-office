@@ -29,7 +29,7 @@ class AuthenticationKeyController extends Controller
     }
 
     #[OA\Get(path: '/users/{user}/authentication-keys', operationId: 'authenticationKeys.indexForUser', summary: '指定社員の認証キー一覧を取得する(管理者)', tags: ['認証キー管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
-    public function indexForUser(Request $request, int $userId): AnonymousResourceCollection
+    public function indexForUser(Request $request, string $userId): AnonymousResourceCollection
     {
         $targetUserId = $this->resolveTargetUserId($request, $userId, '他の社員の認証キーを閲覧する権限がありません。');
 
@@ -46,13 +46,13 @@ class AuthenticationKeyController extends Controller
         operationId: 'authenticationKeys.store',
         summary: '認証キーを登録する(UC-K001/UC-K002)',
         tags: ['認証キー管理'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['key_type', 'display_name', 'raw_key_value'], properties: [new OA\Property(property: 'user_id', type: 'integer', nullable: true), new OA\Property(property: 'key_type', type: 'string'), new OA\Property(property: 'display_name', type: 'string'), new OA\Property(property: 'raw_key_value', type: 'string'), new OA\Property(property: 'valid_from', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'valid_until', type: 'string', format: 'date-time', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['key_type', 'display_name', 'raw_key_value'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'key_type', type: 'string'), new OA\Property(property: 'display_name', type: 'string'), new OA\Property(property: 'raw_key_value', type: 'string'), new OA\Property(property: 'valid_from', type: 'string', format: 'date-time', nullable: true), new OA\Property(property: 'valid_until', type: 'string', format: 'date-time', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'string', 'exists:users,id'],
             'key_type' => ['required', Rule::in(AuthenticationKeyType::values())],
             'display_name' => ['required', 'string', 'max:255'],
             'raw_key_value' => ['required', 'string'],

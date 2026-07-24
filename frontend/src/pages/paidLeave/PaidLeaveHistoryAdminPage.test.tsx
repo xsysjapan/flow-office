@@ -8,7 +8,7 @@ import type { Paginated, StoredEvent, User } from '../../api/types'
 import { PaidLeaveHistoryAdminPage } from './PaidLeaveHistoryAdminPage'
 
 const targetUser: User = {
-  id: 3,
+  id: 'user-3',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -44,7 +44,7 @@ describe('PaidLeaveHistoryAdminPage', () => {
       links: { next: null, prev: null },
     }
     const event: StoredEvent = {
-      id: 1,
+      id: 'evt-1',
       event_id: 'evt-1',
       aggregate_type: 'paid_leave_grant',
       aggregate_id: '1',
@@ -63,6 +63,6 @@ describe('PaidLeaveHistoryAdminPage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
 
     expect(await screen.findByText('10日を付与(有効期限 2027-06-30)')).toBeInTheDocument()
-    expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith(3)
+    expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

@@ -14,7 +14,7 @@ import type { Paginated, RotationPattern, ShiftPattern, User, WorkCalendar, Work
 import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
 
 const calendar: WorkCalendar = {
-  id: 1,
+  id: 'calendar-1',
   name: '2026年度カレンダー',
   fiscal_year: 2026,
   starts_on: '2026-04-01',
@@ -24,7 +24,7 @@ const calendar: WorkCalendar = {
 }
 
 const workStyle: WorkStyle = {
-  id: 1,
+  id: 'work-style-1',
   code: 'standard',
   name: '標準勤務',
   work_time_system: '通常労働時間制',
@@ -37,7 +37,7 @@ const workStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 1,
+  calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,
@@ -57,7 +57,7 @@ const workStyle: WorkStyle = {
 }
 
 const targetUser: User = {
-  id: 5,
+  id: 'user-5',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -101,7 +101,7 @@ describe('WorkStylesAndShiftsPage', () => {
   it('shows the applied employee count, last updated date, and configuration warnings', async () => {
     const shiftWorkStyle: WorkStyle = {
       ...workStyle,
-      id: 2,
+      id: 'work-style-2',
       code: 'shift-3',
       name: '3交代制',
       is_shift_based: true,
@@ -132,7 +132,7 @@ describe('WorkStylesAndShiftsPage', () => {
   it('shows the onboarding card and creates the standard default work style', async () => {
     vi.spyOn(workStylesApi, 'createDefaultWorkStyle').mockResolvedValue({
       ...workStyle,
-      id: 9,
+      id: 'work-style-9',
       code: 'standard',
     })
     renderPage({ workStyles: [] })
@@ -145,7 +145,7 @@ describe('WorkStylesAndShiftsPage', () => {
   it('creates the default work style with edited values from the onboarding card', async () => {
     vi.spyOn(workStylesApi, 'createDefaultWorkStyle').mockResolvedValue({
       ...workStyle,
-      id: 9,
+      id: 'work-style-9',
       code: 'standard',
       name: '標準勤務(編集済み)',
     })
@@ -170,7 +170,7 @@ describe('WorkStylesAndShiftsPage', () => {
   it('switches the default work style from the list', async () => {
     const otherWorkStyle: WorkStyle = {
       ...workStyle,
-      id: 2,
+      id: 'work-style-2',
       code: 'flex',
       name: 'フレックス標準',
       is_default: false,
@@ -182,11 +182,11 @@ describe('WorkStylesAndShiftsPage', () => {
     await screen.findByText('フレックス標準', { selector: 'strong' })
     await userEvent.click(screen.getByRole('button', { name: 'デフォルトに設定' }))
 
-    await waitFor(() => expect(workStylesApi.setDefaultWorkStyle).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(workStylesApi.setDefaultWorkStyle).toHaveBeenCalledWith('work-style-2'))
   })
 
   it('creates a new work style with the entered values', async () => {
-    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 2, code: 'discretionary' })
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-2', code: 'discretionary' })
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('コード'), 'discretionary')
@@ -210,7 +210,7 @@ describe('WorkStylesAndShiftsPage', () => {
         default_break_start_time: undefined,
         default_break_end_time: undefined,
         auto_break_enabled: false,
-        calendar_id: 1,
+        calendar_id: 'calendar-1',
         is_shift_based: false,
         legal_holiday_rule: undefined,
         four_week_period_start_date: undefined,
@@ -219,7 +219,7 @@ describe('WorkStylesAndShiftsPage', () => {
   })
 
   it('creates a work style with auto break enabled when the checkbox is checked', async () => {
-    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 5, code: 'auto-break' })
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-5', code: 'auto-break' })
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('コード'), 'auto-break')
@@ -241,7 +241,7 @@ describe('WorkStylesAndShiftsPage', () => {
   })
 
   it('creates a shift-based work style with a four-weeks-four-days legal holiday rule', async () => {
-    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 3, code: 'shift' })
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-3', code: 'shift' })
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('コード'), 'shift')
@@ -267,7 +267,7 @@ describe('WorkStylesAndShiftsPage', () => {
   })
 
   it('creates a flex work style with core time and flexible time settings', async () => {
-    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 4, code: 'flex' })
+    vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-4', code: 'flex' })
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('コード'), 'flex')
@@ -306,10 +306,10 @@ describe('WorkStylesAndShiftsPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockResolvedValue([
       {
-        id: 1,
-        user_id: 5,
+        id: 'assignment-1',
+        user_id: 'user-5',
         work_date: '2026-08-01',
-        work_style_id: 1,
+        work_style_id: 'work-style-1',
         shift_pattern_id: null,
         day_type: 'weekday',
         is_working_day: true,
@@ -339,8 +339,8 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(employeeShiftAssignmentsApi.generateShiftAssignments).toHaveBeenCalledWith({
-        user_id: 5,
-        work_style_id: 1,
+        user_id: 'user-5',
+        work_style_id: 'work-style-1',
         from: '2026-08-01',
         to: '2026-08-31',
       }),
@@ -356,12 +356,12 @@ describe('WorkStylesAndShiftsPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
-      id: 1,
-      user_id: 5,
+      id: 'monthly-assignment-1',
+      user_id: 'user-5',
       year_month: '2026-11',
-      work_style_id: 1,
-      work_style: { id: 1, code: 'standard', name: '標準勤務' },
-      assigned_by_user_id: 1,
+      work_style_id: 'work-style-1',
+      work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+      assigned_by_user_id: 'admin-1',
     })
     renderPage()
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
@@ -379,21 +379,21 @@ describe('WorkStylesAndShiftsPage', () => {
 
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
       {
-        id: 1,
-        user_id: 5,
+        id: 'monthly-assignment-1',
+        user_id: 'user-5',
         year_month: '2026-11',
-        work_style_id: 1,
-        work_style: { id: 1, code: 'standard', name: '標準勤務' },
-        assigned_by_user_id: 1,
+        work_style_id: 'work-style-1',
+        work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+        assigned_by_user_id: 'admin-1',
       },
     ])
     await userEvent.click(screen.getByRole('button', { name: 'この内容で保存する' }))
 
     await waitFor(() =>
       expect(userWorkStyleMonthlyAssignmentsApi.assignUserWorkStyleForMonth).toHaveBeenCalledWith({
-        user_id: 5,
+        user_id: 'user-5',
         year_month: '2026-11',
-        work_style_id: 1,
+        work_style_id: 'work-style-1',
       }),
     )
 
@@ -410,12 +410,12 @@ describe('WorkStylesAndShiftsPage', () => {
     vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([
       {
-        id: 1,
-        user_id: 5,
+        id: 'monthly-assignment-1',
+        user_id: 'user-5',
         year_month: '2026-11',
-        work_style_id: 1,
-        work_style: { id: 1, code: 'standard', name: '標準勤務' },
-        assigned_by_user_id: 1,
+        work_style_id: 'work-style-1',
+        work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+        assigned_by_user_id: 'admin-1',
       },
     ])
     renderPage()
@@ -446,12 +446,12 @@ describe('WorkStylesAndShiftsPage', () => {
     vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(targetUser)
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
     vi.spyOn(userWorkStyleMonthlyAssignmentsApi, 'assignUserWorkStyleForMonth').mockResolvedValue({
-      id: 2,
-      user_id: 5,
+      id: 'monthly-assignment-2',
+      user_id: 'user-5',
       year_month: '2026-11',
-      work_style_id: 1,
-      work_style: { id: 1, code: 'standard', name: '標準勤務' },
-      assigned_by_user_id: 1,
+      work_style_id: 'work-style-1',
+      work_style: { id: 'work-style-1', code: 'standard', name: '標準勤務' },
+      assigned_by_user_id: 'admin-1',
     })
     vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockResolvedValue([])
     renderPage()
@@ -468,8 +468,8 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(employeeShiftAssignmentsApi.generateShiftAssignments).toHaveBeenCalledWith({
-        user_id: 5,
-        work_style_id: 1,
+        user_id: 'user-5',
+        work_style_id: 'work-style-1',
         from: '2026-11-01',
         to: '2026-11-30',
       }),
@@ -478,7 +478,7 @@ describe('WorkStylesAndShiftsPage', () => {
 
   it('creates a shift pattern with the entered values', async () => {
     const pattern = {
-      id: 1,
+      id: 'shift-pattern-1',
       code: 'night_shift',
       name: '深夜勤',
       start_time: '22:00',
@@ -518,7 +518,7 @@ describe('WorkStylesAndShiftsPage', () => {
   it('assigns a shift pattern to an employee day on the shift schedule board', async () => {
     const shiftWorkStyle: WorkStyle = {
       ...workStyle,
-      id: 2,
+      id: 'work-style-2',
       code: 'shift-3',
       name: '3交代制',
       is_shift_based: true,
@@ -526,7 +526,7 @@ describe('WorkStylesAndShiftsPage', () => {
       system_generated: false,
     }
     const pattern = {
-      id: 1,
+      id: 'shift-pattern-1',
       code: 'day_shift',
       name: '日勤',
       start_time: '09:00',
@@ -544,11 +544,11 @@ describe('WorkStylesAndShiftsPage', () => {
     }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'assignShiftPatternDay').mockResolvedValue({
-      id: 10,
-      user_id: 5,
+      id: 'assignment-10',
+      user_id: 'user-5',
       work_date: '2026-08-10',
-      work_style_id: 2,
-      shift_pattern_id: 1,
+      work_style_id: 'work-style-2',
+      shift_pattern_id: 'shift-pattern-1',
       day_type: 'day_shift',
       is_working_day: true,
       is_legal_holiday: false,
@@ -575,19 +575,19 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(employeeShiftAssignmentsApi.assignShiftPatternDay).toHaveBeenCalledWith({
-        user_id: 5,
-        work_style_id: 2,
+        user_id: 'user-5',
+        work_style_id: 'work-style-2',
         work_date: '2026-08-10',
-        shift_pattern_id: 1,
+        shift_pattern_id: 'shift-pattern-1',
         is_legal_holiday: false,
       }),
     )
   })
 
   it('creates a rotation pattern from a sequence of shift patterns', async () => {
-    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 2, code: 'shift-3', name: '3交代制', is_shift_based: true }
+    const shiftWorkStyle: WorkStyle = { ...workStyle, id: 'work-style-2', code: 'shift-3', name: '3交代制', is_shift_based: true }
     const aShift: ShiftPattern = {
-      id: 1,
+      id: 'shift-pattern-1',
       code: 'a-shift',
       name: 'A勤',
       start_time: '06:00',
@@ -599,7 +599,7 @@ describe('WorkStylesAndShiftsPage', () => {
       prescribed_work_minutes: 435,
     }
     const offShift: ShiftPattern = {
-      id: 2,
+      id: 'shift-pattern-2',
       code: 'off',
       name: '休日',
       start_time: null,
@@ -611,8 +611,8 @@ describe('WorkStylesAndShiftsPage', () => {
       prescribed_work_minutes: 0,
     }
     vi.spyOn(rotationPatternsApi, 'createRotationPattern').mockResolvedValue({
-      id: 1,
-      work_style_id: 2,
+      id: 'rotation-pattern-1',
+      work_style_id: 'work-style-2',
       name: '2交代3班ローテーション',
       cycle_length: 2,
       items: [],
@@ -629,11 +629,11 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(rotationPatternsApi.createRotationPattern).toHaveBeenCalledWith({
-        work_style_id: 2,
+        work_style_id: 'work-style-2',
         name: '2交代3班ローテーション',
         items: [
-          { sequence: 0, shift_pattern_id: 1 },
-          { sequence: 1, shift_pattern_id: 2 },
+          { sequence: 0, shift_pattern_id: 'shift-pattern-1' },
+          { sequence: 1, shift_pattern_id: 'shift-pattern-2' },
         ],
       }),
     )
@@ -641,13 +641,13 @@ describe('WorkStylesAndShiftsPage', () => {
 
   it('assigns a rotation, previews it, and generates shifts for the period', async () => {
     const pattern: RotationPattern = {
-      id: 1,
-      work_style_id: 2,
+      id: 'rotation-pattern-1',
+      work_style_id: 'work-style-2',
       name: '2交代3班ローテーション',
       cycle_length: 2,
       items: [
-        { sequence: 0, shift_pattern_id: 1, shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
-        { sequence: 1, shift_pattern_id: 2, shift_pattern_name: '休日', shift_pattern_code: 'off' },
+        { sequence: 0, shift_pattern_id: 'shift-pattern-1', shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
+        { sequence: 1, shift_pattern_id: 'shift-pattern-2', shift_pattern_name: '休日', shift_pattern_code: 'off' },
       ],
     }
     const paginatedUsers: Paginated<User> = {
@@ -657,17 +657,17 @@ describe('WorkStylesAndShiftsPage', () => {
     }
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeRotationAssignmentsApi, 'assignEmployeeRotation').mockResolvedValue({
-      id: 1,
-      user_id: 5,
-      rotation_pattern_id: 1,
+      id: 'rotation-assignment-1',
+      user_id: 'user-5',
+      rotation_pattern_id: 'rotation-pattern-1',
       rotation_pattern_name: '2交代3班ローテーション',
       rotation_start_date: '2026-08-01',
       rotation_start_position: 0,
     })
     vi.spyOn(rotationPatternsApi, 'previewRotationPattern').mockResolvedValue({
       days: [
-        { date: '2026-08-01', sequence: 0, shift_pattern_id: 1, shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
-        { date: '2026-08-02', sequence: 1, shift_pattern_id: 2, shift_pattern_name: '休日', shift_pattern_code: 'off' },
+        { date: '2026-08-01', sequence: 0, shift_pattern_id: 'shift-pattern-1', shift_pattern_name: 'A勤', shift_pattern_code: 'a-shift' },
+        { date: '2026-08-02', sequence: 1, shift_pattern_id: 'shift-pattern-2', shift_pattern_name: '休日', shift_pattern_code: 'off' },
       ],
     })
     vi.spyOn(employeeRotationAssignmentsApi, 'generateRotationShiftAssignments').mockResolvedValue({
@@ -687,8 +687,8 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(employeeRotationAssignmentsApi.assignEmployeeRotation).toHaveBeenCalledWith({
-        user_id: 5,
-        rotation_pattern_id: 1,
+        user_id: 'user-5',
+        rotation_pattern_id: 'rotation-pattern-1',
         rotation_start_date: '2026-08-01',
         rotation_start_position: 0,
       }),
@@ -705,7 +705,7 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await waitFor(() =>
       expect(employeeRotationAssignmentsApi.generateRotationShiftAssignments).toHaveBeenCalledWith({
-        user_id: 5,
+        user_id: 'user-5',
         from: '2026-08-01',
         to: '2026-08-02',
         overwrite_mode: 'skip_edited',

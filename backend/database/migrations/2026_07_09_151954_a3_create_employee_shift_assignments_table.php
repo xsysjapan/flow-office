@@ -12,10 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('employee_shift_assignments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成できるUUIDにする(EmployeeShiftAssignmentProjector経由で行えるように
+            // するため。docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
+            $table->foreignUuid('user_id')->constrained();
             $table->date('work_date');
-            $table->foreignId('work_style_id')->constrained();
+            $table->foreignUuid('work_style_id')->constrained();
             $table->string('day_type');
             $table->boolean('is_working_day')->default(true);
             $table->boolean('is_legal_holiday')->default(false);

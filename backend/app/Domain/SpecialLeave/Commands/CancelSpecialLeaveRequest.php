@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class CancelSpecialLeaveRequest implements Command
 {
     public function __construct(
-        public readonly int $specialLeaveRequestId,
-        public readonly int $cancelledByUserId,
+        public readonly string $specialLeaveRequestId,
+        public readonly string $cancelledByUserId,
     ) {}
 }

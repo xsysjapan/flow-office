@@ -16,7 +16,7 @@ use Illuminate\Support\Carbon;
  */
 class WorkStyleFallbackResolver
 {
-    public function resolveForUser(int $userId, Carbon $workDate): ?WorkStyle
+    public function resolveForUser(string $userId, Carbon $workDate): ?WorkStyle
     {
         $monthlyAssignment = UserWorkStyleMonthlyAssignment::query()
             ->where('user_id', $userId)

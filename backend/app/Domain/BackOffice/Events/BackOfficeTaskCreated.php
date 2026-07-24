@@ -2,12 +2,15 @@
 
 namespace App\Domain\BackOffice\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class BackOfficeTaskCreated implements DomainEvent
+/**
+ * backoffice_task.created。BackOfficeTaskProjectorが集約UUID(aggregateRootUuid() =
+ * backoffice_tasks.id)をキーに行を新規作成する。
+ */
+class BackOfficeTaskCreated extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $backOfficeTaskId,
         public readonly string $sourceType,
         public readonly string $sourceId,
         public readonly string $taskType,
@@ -15,22 +18,4 @@ class BackOfficeTaskCreated implements DomainEvent
         public readonly ?string $assignedDepartment,
         public readonly ?string $dueOn,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'backoffice_task.created';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'backoffice_task_id' => $this->backOfficeTaskId,
-            'source_type' => $this->sourceType,
-            'source_id' => $this->sourceId,
-            'task_type' => $this->taskType,
-            'title' => $this->title,
-            'assigned_department' => $this->assignedDepartment,
-            'due_on' => $this->dueOn,
-        ];
-    }
 }

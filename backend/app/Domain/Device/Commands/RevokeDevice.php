@@ -10,8 +10,8 @@ use App\Domain\EventSourcing\Contracts\Command;
 class RevokeDevice implements Command
 {
     public function __construct(
-        public readonly int $deviceId,
-        public readonly int $revokedByUserId,
+        public readonly string $deviceId,
+        public readonly string $revokedByUserId,
         public readonly ?string $reason,
     ) {}
 }

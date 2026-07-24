@@ -2,12 +2,11 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
-use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Models\AttendanceDay;
 
 /**
@@ -20,7 +19,6 @@ use App\Models\AttendanceDay;
 class AdjustAttendanceDailyCalculationHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly AttendanceEditGuard $guard,
     ) {}
 
@@ -33,11 +31,8 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
         $this->guard->assertMutable($day, $day->user_id, $day->work_date->toDateString());
         $prescribedHolidayWorkMinutes = (int) ($day->calculation?->prescribed_holiday_work_minutes ?? 0);
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_day',
-            aggregateId: (string) $day->id,
-            event: new AttendanceDailyCalculationAdjusted(
-                attendanceDayId: $day->id,
+        AttendanceDayAggregate::retrieve($day->id)
+            ->adjustCalculation(
                 prescribedWorkMinutes: $command->prescribedWorkMinutes,
                 statutoryWithinOvertimeMinutes: $command->statutoryWithinOvertimeMinutes,
                 statutoryExcessOvertimeMinutes: $command->statutoryExcessOvertimeMinutes,
@@ -49,8 +44,8 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
                 lateNightLegalHolidayWorkMinutes: $command->lateNightLegalHolidayWorkMinutes,
                 reason: $command->reason,
                 adjustedByUserId: $command->adjustedByUserId,
-            ),
-        );
+            )
+            ->persist();
 
         return $day;
     }

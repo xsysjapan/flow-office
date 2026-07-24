@@ -7,8 +7,8 @@ use App\Domain\EventSourcing\Contracts\Command;
 class SetUserTerminationDate implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly ?string $terminationDate,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
     ) {}
 }

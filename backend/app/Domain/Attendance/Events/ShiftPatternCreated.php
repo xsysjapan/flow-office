@@ -2,15 +2,15 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
  * shift_pattern.created (UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)を登録する)。
+ * 集約ID(shift_patterns.id)は`aggregateRootUuid()`から取得する。
  */
-class ShiftPatternCreated implements DomainEvent
+class ShiftPatternCreated extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $shiftPatternId,
         public readonly string $code,
         public readonly string $name,
         public readonly ?string $startTime,
@@ -20,28 +20,6 @@ class ShiftPatternCreated implements DomainEvent
         public readonly ?string $breakStartTime,
         public readonly ?string $breakEndTime,
         public readonly int $prescribedWorkMinutes,
-        public readonly int $createdByUserId,
+        public readonly string $createdByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'shift_pattern.created';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'shift_pattern_id' => $this->shiftPatternId,
-            'code' => $this->code,
-            'name' => $this->name,
-            'start_time' => $this->startTime,
-            'end_time' => $this->endTime,
-            'crosses_midnight' => $this->crossesMidnight,
-            'break_minutes' => $this->breakMinutes,
-            'break_start_time' => $this->breakStartTime,
-            'break_end_time' => $this->breakEndTime,
-            'prescribed_work_minutes' => $this->prescribedWorkMinutes,
-            'created_by_user_id' => $this->createdByUserId,
-        ];
-    }
 }

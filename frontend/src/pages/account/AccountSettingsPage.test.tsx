@@ -6,7 +6,7 @@ import type { User } from '../../api/types'
 import { AccountSettingsPage } from './AccountSettingsPage'
 
 const baseUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '本人太郎',
   email: 'taro@example.com',
   department: null,

@@ -24,7 +24,7 @@ class AttendanceEditGuard
     /**
      * @throws DomainRuleException 編集・削除できない場合
      */
-    public function assertMutable(?AttendanceDay $day, int $userId, string $workDate): void
+    public function assertMutable(?AttendanceDay $day, string $userId, string $workDate): void
     {
         $reason = $this->blockedReason($day, $userId, $workDate);
         if ($reason !== null) {
@@ -32,12 +32,12 @@ class AttendanceEditGuard
         }
     }
 
-    public function isMutable(?AttendanceDay $day, int $userId, string $workDate): bool
+    public function isMutable(?AttendanceDay $day, string $userId, string $workDate): bool
     {
         return $this->blockedReason($day, $userId, $workDate) === null;
     }
 
-    private function blockedReason(?AttendanceDay $day, int $userId, string $workDate): ?string
+    private function blockedReason(?AttendanceDay $day, string $userId, string $workDate): ?string
     {
         if ($day !== null && $day->isLocked()) {
             return '締め後の勤怠は修正申請から変更してください。';

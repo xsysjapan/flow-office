@@ -5,7 +5,7 @@ import type { Role, User, WorkStyle } from '../../api/types'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
 const targetUser: User = {
-  id: 1,
+  id: 'user-1',
   name: '山田太郎',
   email: 'yamada@example.com',
   department: '総務部',
@@ -25,7 +25,7 @@ const roles: Role[] = [
 ]
 
 const defaultWorkStyle: WorkStyle = {
-  id: 1,
+  id: 'work-style-1',
   code: 'standard',
   name: '通常勤務',
   work_time_system: 'fixed',
@@ -38,7 +38,7 @@ const defaultWorkStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 1,
+  calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,

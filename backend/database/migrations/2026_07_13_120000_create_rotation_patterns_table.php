@@ -13,8 +13,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('rotation_patterns', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('work_style_id')->constrained()->cascadeOnDelete();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成できるUUIDにする(RotationPatternProjector経由で行えるようにするため。
+            // docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
+            $table->foreignUuid('work_style_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->unsignedSmallInteger('cycle_length');
             $table->timestamps();

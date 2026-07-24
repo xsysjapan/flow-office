@@ -29,7 +29,7 @@ export function useReissueIntegrationToken() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: number) => reissueIntegrationToken(id),
+    mutationFn: (id: string) => reissueIntegrationToken(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['integrations', 'me'] })
     },
@@ -40,7 +40,7 @@ export function useRevokeIntegration() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: number) => revokeIntegration(id),
+    mutationFn: (id: string) => revokeIntegration(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['integrations', 'me'] })
     },

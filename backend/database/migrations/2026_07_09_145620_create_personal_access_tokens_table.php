@@ -13,7 +13,9 @@ return new class extends Migration
     {
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
-            $table->morphs('tokenable');
+            // tokenable_idはUser・Deviceの両方を指す。両者とも主キーがUUID化されているため
+            // uuidMorphsにする(docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuidMorphs('tokenable');
             $table->text('name');
             $table->string('token', 64)->unique();
             $table->text('abilities')->nullable();

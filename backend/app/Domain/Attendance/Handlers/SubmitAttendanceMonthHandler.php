@@ -2,19 +2,18 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
-use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * UC-A008: 月次勤怠を提出する。
@@ -24,7 +23,6 @@ use Illuminate\Support\Carbon;
 class SubmitAttendanceMonthHandler implements CommandHandler
 {
     public function __construct(
-        private readonly EventStore $eventStore,
         private readonly MonthlyOvertimeCalculator $monthlyOvertimeCalculator,
     ) {}
 
@@ -32,31 +30,23 @@ class SubmitAttendanceMonthHandler implements CommandHandler
     {
         assert($command instanceof SubmitAttendanceMonth);
 
-        $month = AttendanceMonth::query()->firstOrCreate(
-            ['user_id' => $command->userId, 'year_month' => $command->yearMonth],
-            ['status' => AttendanceMonthStatus::NOT_SUBMITTED],
-        );
+        $month = AttendanceMonth::query()
+            ->where('user_id', $command->userId)
+            ->where('year_month', $command->yearMonth)
+            ->first();
 
-        if (! in_array($month->status, [AttendanceMonthStatus::NOT_SUBMITTED, AttendanceMonthStatus::RETURNED], true)) {
+        if ($month !== null && ! in_array($month->status, [AttendanceMonthStatus::NOT_SUBMITTED, AttendanceMonthStatus::RETURNED], true)) {
             throw new DomainRuleException('この月次勤怠は現在のステータスからは提出できません。');
         }
 
-        $month->status = AttendanceMonthStatus::SUBMITTED;
-        $month->approver_user_id = $command->approverUserId;
-        $month->submitted_at = Carbon::now();
-        $month->snapshot_json = $this->buildSnapshot($command->userId, $command->yearMonth);
-        $month->save();
+        $monthId = $month->id ?? (string) Str::uuid();
+        $snapshot = $this->buildSnapshot($command->userId, $command->yearMonth);
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_month',
-            aggregateId: (string) $month->id,
-            event: new AttendanceMonthSubmitted(
-                attendanceMonthId: $month->id,
-                userId: $command->userId,
-                yearMonth: $command->yearMonth,
-                approverUserId: $command->approverUserId,
-            ),
-        );
+        AttendanceMonthAggregate::retrieve($monthId)
+            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot)
+            ->persist();
+
+        $month = AttendanceMonth::query()->findOrFail($monthId);
 
         $approver = User::find($command->approverUserId);
         if ($approver !== null) {
@@ -74,7 +64,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
     /**
      * @return array<string, mixed>
      */
-    private function buildSnapshot(int $userId, string $yearMonth): array
+    private function buildSnapshot(string $userId, string $yearMonth): array
     {
         $dayCount = AttendanceDay::query()
             ->where('user_id', $userId)

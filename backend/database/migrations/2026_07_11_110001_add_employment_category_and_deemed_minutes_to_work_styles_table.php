@@ -18,7 +18,7 @@ return new class extends Migration
         });
 
         Schema::table('work_styles', function (Blueprint $table) {
-            $table->foreignId('calendar_id')->nullable()->change();
+            $table->foreignUuid('calendar_id')->nullable()->change();
         });
     }
 
@@ -33,7 +33,7 @@ return new class extends Migration
         });
 
         Schema::table('work_styles', function (Blueprint $table) {
-            $table->foreignId('calendar_id')->nullable(false)->change();
+            $table->foreignUuid('calendar_id')->nullable(false)->change();
         });
     }
 };

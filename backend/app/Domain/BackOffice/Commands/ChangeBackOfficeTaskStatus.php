@@ -12,7 +12,7 @@ class ChangeBackOfficeTaskStatus implements Command
     public function __construct(
         public readonly string $backOfficeTaskId,
         public readonly string $newStatus,
-        public readonly int $changedByUserId,
+        public readonly string $changedByUserId,
         public readonly ?string $comment = null,
     ) {}
 }

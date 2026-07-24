@@ -2,27 +2,12 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DeviceScopeGranted implements DomainEvent
+class DeviceScopeGranted extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $deviceId,
         public readonly string $scope,
-        public readonly int $grantedByUserId,
+        public readonly string $grantedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.scope_granted';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'scope' => $this->scope,
-            'granted_by_user_id' => $this->grantedByUserId,
-        ];
-    }
 }

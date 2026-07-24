@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -11,10 +12,19 @@ use Illuminate\Support\Carbon;
  * 社員ごとのローテーション基準(指示書 8.5節)。rotation_start_dateの時点で
  * rotation_start_position番目(0始まり)のパターンが適用されているものとして、
  * 以降の日別勤務予定を機械的に算出する。
+ *
+ * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
+ * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position', 'assigned_by_user_id'])]
+#[Fillable(['id', 'user_id', 'rotation_pattern_id', 'rotation_start_date', 'rotation_start_position', 'assigned_by_user_id'])]
 class EmployeeRotationAssignment extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

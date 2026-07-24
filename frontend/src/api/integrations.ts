@@ -21,10 +21,10 @@ export function registerIntegration(input: RegisterIntegrationInput): Promise<In
   return apiFetch('/users/me/integrations', { method: 'POST', body: input })
 }
 
-export function reissueIntegrationToken(id: number): Promise<IntegrationTokenResult> {
+export function reissueIntegrationToken(id: string): Promise<IntegrationTokenResult> {
   return apiFetch(`/users/me/integrations/${id}/reissue`, { method: 'POST' })
 }
 
-export function revokeIntegration(id: number): Promise<ApplicationIntegration> {
+export function revokeIntegration(id: string): Promise<ApplicationIntegration> {
   return apiFetch(`/users/me/integrations/${id}/revoke`, { method: 'POST' })
 }

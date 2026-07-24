@@ -9,7 +9,7 @@ import type { BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee: User = {
-  id: 2,
+  id: 'assignee-1',
   name: '担当者花子',
   email: 'hanako@example.com',
   department: null,
@@ -89,7 +89,7 @@ describe('BackOfficeTaskDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
     await waitFor(() =>
-      expect(backOfficeTasksApi.assignBackOfficeTask).toHaveBeenCalledWith('backoffice-task-1', 2),
+      expect(backOfficeTasksApi.assignBackOfficeTask).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1'),
     )
   })
 

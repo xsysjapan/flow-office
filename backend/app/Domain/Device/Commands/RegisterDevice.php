@@ -15,7 +15,7 @@ class RegisterDevice implements Command
      */
     public function __construct(
         public readonly string $ownerType,
-        public readonly ?int $ownerUserId,
+        public readonly ?string $ownerUserId,
         public readonly string $name,
         public readonly string $deviceType,
         public readonly array $roleTypes,
@@ -27,6 +27,6 @@ class RegisterDevice implements Command
         public readonly bool $allowOffline,
         public readonly bool $requireLocation,
         public readonly bool $autoDetectPunchType,
-        public readonly int $registeredByUserId,
+        public readonly string $registeredByUserId,
     ) {}
 }

@@ -2,31 +2,23 @@
 
 namespace App\Domain\AuthenticationKey\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AuthenticationKeyIssued implements DomainEvent
+/**
+ * authentication_key.issued。AuthenticationKeyProjectorが集約UUID(aggregateRootUuid())を
+ * キーにauthentication_keysの行を新規作成する。
+ */
+class AuthenticationKeyIssued extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $authenticationKeyId,
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly string $keyType,
         public readonly string $displayName,
-        public readonly int $registeredByUserId,
+        public readonly string $keyHash,
+        public readonly ?string $validFrom,
+        public readonly ?string $validUntil,
+        public readonly ?array $metadata,
+        public readonly string $registeredByUserId,
+        public readonly string $registeredAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'authentication_key.issued';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'authentication_key_id' => $this->authenticationKeyId,
-            'user_id' => $this->userId,
-            'key_type' => $this->keyType,
-            'display_name' => $this->displayName,
-            'registered_by_user_id' => $this->registeredByUserId,
-        ];
-    }
 }

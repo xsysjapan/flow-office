@@ -9,10 +9,10 @@ use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\StoredEventResource;
+use App\Http\Resources\WorkflowRequestHistoryEntryResource;
 use App\Http\Resources\WorkflowRequestResource;
-use App\Models\StoredEvent;
 use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestHistoryEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -81,7 +81,7 @@ class WorkflowRequestController extends Controller
         operationId: 'workflowRequests.store',
         summary: '申請の下書きを作成する',
         tags: ['汎用申請'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_type_code', 'title', 'form_data'], properties: [new OA\Property(property: 'request_type_code', type: 'string'), new OA\Property(property: 'title', type: 'string'), new OA\Property(property: 'form_data', type: 'object'), new OA\Property(property: 'approver_user_id', type: 'integer', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['request_type_code', 'title', 'form_data'], properties: [new OA\Property(property: 'request_type_code', type: 'string'), new OA\Property(property: 'title', type: 'string'), new OA\Property(property: 'form_data', type: 'object'), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -90,7 +90,7 @@ class WorkflowRequestController extends Controller
             'request_type_code' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'form_data' => ['present', 'array'],
-            'approver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['nullable', 'string', 'exists:users,id'],
         ]);
 
         $workflowRequest = $commandBus->dispatch(new DraftWorkflowRequest(
@@ -112,13 +112,13 @@ class WorkflowRequestController extends Controller
         summary: '申請を提出する',
         tags: ['汎用申請'],
         parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'approver_user_id', type: 'integer', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function submit(Request $request, WorkflowRequest $workflowRequest, CommandBus $commandBus): WorkflowRequestResource
     {
         $data = $request->validate([
-            'approver_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'approver_user_id' => ['nullable', 'string', 'exists:users,id'],
         ]);
 
         $commandBus->dispatch(new SubmitWorkflowRequest(
@@ -171,7 +171,10 @@ class WorkflowRequestController extends Controller
     }
 
     /**
-     * UC-W003/UC-W004 コメント履歴: この申請に関するstored_eventsを時系列で返す。
+     * UC-W003/UC-W004 コメント履歴: この申請の専用履歴Projection
+     * (workflow_request_history_entries)を時系列で返す。stored_events(EventStore)を
+     * 直接公開しない(イベントクラス名・payload形状への依存を避けるため。
+     * docs/29-event-sourcing-framework-migration.md参照)。
      * 申請者・承認者・管理者のみ閲覧可能(汎用監査ログAPIとは別に、資源に紐づけて認可する)。
      */
     #[OA\Get(
@@ -194,13 +197,12 @@ class WorkflowRequestController extends Controller
             'この申請の履歴を閲覧する権限がありません。'
         );
 
-        $events = StoredEvent::query()
-            ->where('aggregate_type', 'workflow_request')
-            ->where('aggregate_id', (string) $workflowRequest->id)
+        $entries = WorkflowRequestHistoryEntry::query()
+            ->where('workflow_request_id', $workflowRequest->id)
             ->orderBy('occurred_at')
             ->get();
 
-        return StoredEventResource::collection($events);
+        return WorkflowRequestHistoryEntryResource::collection($entries);
     }
 
     #[OA\Post(

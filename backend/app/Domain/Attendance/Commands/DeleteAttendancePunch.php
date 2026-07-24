@@ -11,8 +11,8 @@ use App\Domain\EventSourcing\Contracts\Command;
 class DeleteAttendancePunch implements Command
 {
     public function __construct(
-        public readonly int $attendancePunchId,
+        public readonly string $attendancePunchId,
         public readonly string $reason,
-        public readonly int $deletedByUserId,
+        public readonly string $deletedByUserId,
     ) {}
 }

@@ -32,7 +32,7 @@ describe('UserListPage', () => {
     const withData: Paginated<User> = {
       data: [
         {
-          id: 1,
+          id: 'user-1',
           name: '山田太郎',
           email: 'yamada@example.com',
           department: '総務部',
@@ -49,7 +49,7 @@ describe('UserListPage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('link', { name: '山田太郎' })).toHaveAttribute('href', '/admin/users/1')
+    expect(await screen.findByRole('link', { name: '山田太郎' })).toHaveAttribute('href', '/admin/users/user-1')
     expect(screen.getByText('yamada@example.com')).toBeInTheDocument()
     expect(screen.getByText('employee')).toBeInTheDocument()
     expect(screen.getByText('general_affairs_staff')).toBeInTheDocument()

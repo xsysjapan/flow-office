@@ -11,11 +11,11 @@ use App\Domain\EventSourcing\Contracts\Command;
 class EditEmployeeShiftAssignment implements Command
 {
     public function __construct(
-        public readonly int $employeeShiftAssignmentId,
+        public readonly string $employeeShiftAssignmentId,
         public readonly ?string $plannedStartAt,
         public readonly ?string $plannedEndAt,
         public readonly int $plannedBreakMinutes,
         public readonly string $reason,
-        public readonly int $editedByUserId,
+        public readonly string $editedByUserId,
     ) {}
 }

@@ -71,7 +71,7 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()
-  const [approverUserId, setApproverUserId] = useState<number | undefined>(undefined)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
   const submitMonth = useSubmitMonth(yearMonth ?? '')
 
@@ -117,7 +117,7 @@ export function AttendanceMonthDetailPage() {
             <Button
               isLoading={submitMonth.isPending}
               disabled={!approverUserId}
-              onClick={() => submitMonth.mutate(approverUserId as number)}
+              onClick={() => submitMonth.mutate(approverUserId as string)}
             >
               提出する
             </Button>

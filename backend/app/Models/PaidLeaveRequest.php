@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,10 +11,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 有給申請 (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。承認とバックオフィス処理を
  * 別ステータス系列で管理する方針と同様、汎用申請(workflow_requests)とは独立したステータス
  * 系列として持つ(承認時に attendance_days / paid_leave_grants への反映が必要なため)。
+ * 主キーはUUID(HasUuids)。理由はPaidLeaveGrantと同じ(この行自体もPaidLeaveRequestProjectorが
+ * stored_eventsから作成・更新する)。
  */
-#[Fillable(['user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
 class PaidLeaveRequest extends Model
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected function casts(): array
     {
         return [

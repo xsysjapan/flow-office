@@ -2,36 +2,23 @@
 
 namespace App\Domain\Attachment\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
  * attachment.uploaded (UC-F001 手順5: アップロードイベントを記録する)。
+ * event_class_map 経由で 'attachment.uploaded' という短い文字列として保存される
+ * (config/event-sourcing.php参照)。
  */
-class AttachmentUploaded implements DomainEvent
+class AttachmentUploaded extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $attachmentId,
+        public readonly string $attachmentId,
         public readonly string $ownerType,
         public readonly int|string $ownerId,
-        public readonly int $uploadedByUserId,
+        public readonly string $uploadedByUserId,
+        public readonly string $storedPath,
         public readonly string $fileName,
+        public readonly string $mimeType,
         public readonly int $fileSize,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attachment.uploaded';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'attachment_id' => $this->attachmentId,
-            'owner_type' => $this->ownerType,
-            'owner_id' => $this->ownerId,
-            'uploaded_by_user_id' => $this->uploadedByUserId,
-            'file_name' => $this->fileName,
-            'file_size' => $this->fileSize,
-        ];
-    }
 }

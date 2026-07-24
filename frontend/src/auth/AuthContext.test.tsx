@@ -8,7 +8,7 @@ import { AuthProvider } from './AuthContext'
 import { useAuth } from './useAuth'
 
 const testUser: User = {
-  id: 1,
+  id: 'user-1',
   name: 'テスト太郎',
   email: 'taro@example.com',
   department: '開発部',

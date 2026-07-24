@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('devices', function (Blueprint $table) {
-            $table->foreignId('activated_by_user_id')->nullable()->after('owner_user_id')
+            $table->foreignUuid('activated_by_user_id')->nullable()->after('owner_user_id')
                 ->constrained('users')->nullOnDelete();
         });
     }

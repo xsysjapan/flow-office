@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attachment\Aggregates\AttachmentAggregate;
 use App\Domain\Attachment\Commands\UploadAttachment;
-use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\EventSourcing\EventStore;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttachmentResource;
 use App\Models\Attachment;
@@ -102,22 +101,17 @@ class AttachmentController extends Controller
         operationId: 'attachments.download',
         summary: '添付ファイルをダウンロードする',
         tags: ['添付ファイル'],
-        parameters: [new OA\Parameter(name: 'attachment', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'attachment', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function download(Request $request, Attachment $attachment, EventStore $eventStore): StreamedResponse
+    public function download(Request $request, Attachment $attachment): StreamedResponse
     {
         $owner = $attachment->owner;
         $this->authorizeAttachmentAccess($request, $attachment, $owner);
 
-        $eventStore->append(
-            aggregateType: 'attachment',
-            aggregateId: (string) $attachment->id,
-            event: new AttachmentDownloaded(
-                attachmentId: $attachment->id,
-                downloadedByUserId: $request->user()->id,
-            ),
-        );
+        AttachmentAggregate::retrieve($attachment->id)
+            ->downloadAttachment($request->user()->id)
+            ->persist();
 
         return Storage::disk('local')->download($attachment->stored_path, $attachment->file_name);
     }

@@ -10,8 +10,8 @@ const weekStart = formatDate(mondayOf(new Date()))
 function buildDay(offset: number, overrides: Partial<AttendanceDay>): AttendanceDay {
   const workDate = addDays(weekStart, offset)
   return {
-    id: offset + 1,
-    user_id: 1,
+    id: `day-${offset + 1}`,
+    user_id: '11111111-1111-1111-1111-111111111111',
     work_date: workDate,
     status: 'clocked_out',
     actual_start_at: `${workDate}T09:00:00+09:00`,

@@ -4,7 +4,7 @@ import type { SpecialLeaveRequest, User } from '../../api/types'
 import { SpecialLeaveRequestsToApprovePage } from './SpecialLeaveRequestsToApprovePage'
 
 const applicant: User = {
-  id: 1,
+  id: 'user-1',
   name: '申請者太郎',
   email: 'taro@example.com',
   department: null,
@@ -15,8 +15,8 @@ const applicant: User = {
 
 const requests: SpecialLeaveRequest[] = [
   {
-    id: 1,
-    user_id: 1,
+    id: 'request-1',
+    user_id: 'user-1',
     user: applicant,
     special_leave_type_id: 1,
     special_leave_type_name: '誕生日休暇',
@@ -32,8 +32,8 @@ const requests: SpecialLeaveRequest[] = [
     cancelled_at: null,
   },
   {
-    id: 2,
-    user_id: 1,
+    id: 'request-2',
+    user_id: 'user-1',
     user: applicant,
     special_leave_type_id: 2,
     special_leave_type_name: 'リフレッシュ休暇',

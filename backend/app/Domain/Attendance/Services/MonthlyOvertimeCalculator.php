@@ -29,7 +29,7 @@ class MonthlyOvertimeCalculator
     /**
      * @return array{cumulative_statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int}
      */
-    public function calculateForDate(int $userId, string $workDate): array
+    public function calculateForDate(string $userId, string $workDate): array
     {
         $yearMonth = substr($workDate, 0, 7);
 
@@ -69,9 +69,9 @@ class MonthlyOvertimeCalculator
      * 月次確認画面・月次提出スナップショット向けの、対象月全体の集計(9区分の合計に加え、
      * 欠勤・有給・特別休暇の月次集計。docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。
      *
-    * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int}
+     * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int}
      */
-    public function calculateCategoryTotals(int $userId, string $yearMonth): array
+    public function calculateCategoryTotals(string $userId, string $yearMonth): array
     {
         $dayIds = AttendanceDay::query()
             ->where('user_id', $userId)

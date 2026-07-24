@@ -4,10 +4,10 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
-use App\Models\StoredEvent;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -49,9 +49,9 @@ class ShiftPatternTest extends TestCase
 
         $this->assertDatabaseHas('shift_patterns', ['id' => $patternId, 'code' => 'night_shift']);
 
-        $event = StoredEvent::query()->where('aggregate_type', 'shift_pattern')->where('aggregate_id', (string) $patternId)->first();
+        $event = EloquentStoredEvent::query()->where('aggregate_uuid', $patternId)->first();
         $this->assertNotNull($event);
-        $this->assertSame('shift_pattern.created', $event->event_type);
+        $this->assertSame('shift_pattern.created', $event->event_class);
     }
 
     public function test_employee_cannot_create_a_shift_pattern(): void
@@ -86,13 +86,12 @@ class ShiftPatternTest extends TestCase
         $this->assertSame('2026-08-11T06:00:00+00:00', $response->json('planned_end_at'));
 
         $assignment = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->firstOrFail();
-        $event = StoredEvent::query()
-            ->where('aggregate_type', 'employee_shift_assignment')
-            ->where('aggregate_id', (string) $assignment->id)
+        $event = EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $assignment->id)
+            ->where('event_class', 'employee_shift.assigned')
             ->first();
         $this->assertNotNull($event);
-        $this->assertSame('employee_shift.assigned', $event->event_type);
-        $this->assertSame($pattern['id'], $event->payload['shift_pattern_id']);
+        $this->assertSame($pattern['id'], $event->event_properties['shiftPatternId']);
     }
 
     public function test_assigning_a_pattern_with_a_break_window_reflects_it_on_the_assignment(): void
@@ -191,10 +190,9 @@ class ShiftPatternTest extends TestCase
         $this->assertSame(1, $result['published_count']);
         $this->assertTrue($assignment->refresh()->is_published);
 
-        $publishedEvent = StoredEvent::query()
-            ->where('aggregate_type', 'employee_shift_assignment')
-            ->where('aggregate_id', (string) $assignment->id)
-            ->where('event_type', 'employee_shift.published')
+        $publishedEvent = EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $assignment->id)
+            ->where('event_class', 'employee_shift.published')
             ->first();
         $this->assertNotNull($publishedEvent);
 

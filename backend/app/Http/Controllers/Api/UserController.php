@@ -51,7 +51,7 @@ class UserController extends Controller
         summary: 'ユーザー詳細を取得する',
         tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Successful response'),
@@ -69,7 +69,7 @@ class UserController extends Controller
         summary: 'ユーザーのロールを更新する',
         tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -110,7 +110,7 @@ class UserController extends Controller
         summary: '入社日を設定する',
         tags: ['ユーザー'],
         parameters: [
-            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -144,7 +144,7 @@ class UserController extends Controller
         operationId: 'users.updateTerminationDate',
         summary: '退社日を設定する',
         tags: ['ユーザー'],
-        parameters: [new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        parameters: [new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['termination_date'], properties: [new OA\Property(property: 'termination_date', type: 'string', format: 'date', nullable: true)])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]

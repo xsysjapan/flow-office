@@ -8,9 +8,9 @@ import { MyIntegrationsPage } from './MyIntegrationsPage'
 
 const integrations: ApplicationIntegration[] = [
   {
-    id: 1,
+    id: 'integration-1',
     owner_type: 'personal',
-    owner_user_id: 42,
+    owner_user_id: 'user-1',
     client_type: 'mcp_client',
     client_name: 'Claude Desktop',
     purpose: '月次勤怠の下書き作成',
@@ -20,9 +20,9 @@ const integrations: ApplicationIntegration[] = [
     created_at: '2026-07-01T09:00:00+09:00',
   },
   {
-    id: 2,
+    id: 'integration-2',
     owner_type: 'personal',
-    owner_user_id: 42,
+    owner_user_id: 'user-1',
     client_type: 'api_client',
     client_name: '旧連携',
     purpose: null,

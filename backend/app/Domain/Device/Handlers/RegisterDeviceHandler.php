@@ -2,16 +2,14 @@
 
 namespace App\Domain\Device\Handlers;
 
+use App\Domain\Device\Aggregates\DeviceAggregate;
 use App\Domain\Device\Commands\RegisterDevice;
-use App\Domain\Device\Events\DevicePaired;
-use App\Domain\Device\Events\DeviceRegistered;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceOwnerType;
-use App\Models\DeviceStatus;
+use Illuminate\Support\Str;
 
 /**
  * UC-D001/UC-D003: 端末を登録する。
@@ -24,8 +22,6 @@ use App\Models\DeviceStatus;
  */
 class RegisterDeviceHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     /**
      * @return array{device: Device, plainTextToken: ?string}
      */
@@ -41,38 +37,27 @@ class RegisterDeviceHandler implements CommandHandler
             throw new DomainRuleException('個人端末には所有者(ownerUserId)が必須です。');
         }
 
-        $device = Device::query()->create([
-            'owner_type' => $command->ownerType,
-            'owner_user_id' => $command->ownerUserId,
-            'name' => $command->name,
-            'device_type' => $command->deviceType,
-            'status' => DeviceStatus::PENDING_PAIRING,
-            'site_id' => $command->siteId,
-            'location_name' => $command->locationName,
-            'default_work_location_type' => $command->defaultWorkLocationType,
-            'timezone' => $command->timezone,
-            'allowed_punch_types' => $command->allowedPunchTypes,
-            'allow_offline' => $command->allowOffline,
-            'require_location' => $command->requireLocation,
-            'auto_detect_punch_type' => $command->autoDetectPunchType,
-        ]);
+        $aggregateUuid = (string) Str::uuid();
 
-        foreach ($command->roleTypes as $roleType) {
-            $device->roles()->create(['role_type' => $roleType]);
-        }
-
-        $this->eventStore->append(
-            aggregateType: 'device',
-            aggregateId: (string) $device->id,
-            event: new DeviceRegistered(
-                deviceId: $device->id,
-                ownerType: $command->ownerType,
-                ownerUserId: $command->ownerUserId,
-                name: $command->name,
-                deviceType: $command->deviceType,
-                registeredByUserId: $command->registeredByUserId,
-            ),
+        $aggregate = DeviceAggregate::retrieve($aggregateUuid)->register(
+            ownerType: $command->ownerType,
+            ownerUserId: $command->ownerUserId,
+            name: $command->name,
+            deviceType: $command->deviceType,
+            roleTypes: $command->roleTypes,
+            siteId: $command->siteId,
+            locationName: $command->locationName,
+            defaultWorkLocationType: $command->defaultWorkLocationType,
+            timezone: $command->timezone,
+            allowedPunchTypes: $command->allowedPunchTypes,
+            allowOffline: $command->allowOffline,
+            requireLocation: $command->requireLocation,
+            autoDetectPunchType: $command->autoDetectPunchType,
+            registeredByUserId: $command->registeredByUserId,
         );
+        $aggregate->persist();
+
+        $device = Device::query()->findOrFail($aggregateUuid);
 
         $plainTextToken = null;
 
@@ -81,15 +66,7 @@ class RegisterDeviceHandler implements CommandHandler
             $abilities = $device->tokenAbilities();
             $plainTextToken = $device->createToken('device', $abilities)->plainTextToken;
 
-            $device->status = DeviceStatus::ACTIVE;
-            $device->paired_at = now();
-            $device->save();
-
-            $this->eventStore->append(
-                aggregateType: 'device',
-                aggregateId: (string) $device->id,
-                event: new DevicePaired(deviceId: $device->id, abilities: $abilities),
-            );
+            $aggregate->pair($abilities, now()->format('Y-m-d H:i:s'))->persist();
         }
 
         return ['device' => $device->refresh()->load('roles'), 'plainTextToken' => $plainTextToken];

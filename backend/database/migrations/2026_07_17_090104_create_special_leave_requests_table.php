@@ -13,10 +13,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('special_leave_requests', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained();
+            // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
+            // コマンド側で生成するUUIDを主キーにする。行の新規作成自体もSpecialLeaveRequestProjector
+            // 経由で行えるようにするため(docs/29-event-sourcing-framework-migration.md参照)。
+            $table->uuid('id')->primary();
+            $table->foreignUuid('user_id')->constrained();
             $table->foreignId('special_leave_type_id')->constrained();
-            $table->foreignId('approver_user_id')->constrained('users');
+            $table->foreignUuid('approver_user_id')->constrained('users');
             $table->string('status')->default('submitted'); // submitted, approved, returned, cancelled
             $table->string('leave_type'); // full, am_half, pm_half, hourly
             $table->date('target_date');

@@ -14,9 +14,9 @@ return new class extends Migration
     {
         Schema::create('rotation_pattern_items', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('rotation_pattern_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('rotation_pattern_id')->constrained()->cascadeOnDelete();
             $table->unsignedSmallInteger('sequence');
-            $table->foreignId('shift_pattern_id')->constrained();
+            $table->foreignUuid('shift_pattern_id')->constrained();
             $table->timestamps();
 
             $table->unique(['rotation_pattern_id', 'sequence']);

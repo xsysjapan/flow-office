@@ -59,7 +59,7 @@ describe('BackOfficeTaskListPage', () => {
         status: 'processing',
         assigned_department: '総務部',
         assignee: {
-          id: 2,
+          id: 'assignee-1',
           name: '担当者花子',
           email: 'hanako@example.com',
           department: null,
@@ -117,7 +117,7 @@ describe('BackOfficeTaskListPage', () => {
       },
     ]
     const pickedUser: User = {
-      id: 2,
+      id: 'assignee-1',
       name: '担当者花子',
       email: 'hanako@example.com',
       department: null,
@@ -143,7 +143,7 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '割り当てる' }))
 
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
-    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 2)
-    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 2)
+    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1')
+    expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 'assignee-1')
   })
 })

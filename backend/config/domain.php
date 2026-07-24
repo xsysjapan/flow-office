@@ -72,7 +72,6 @@ use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
-use App\Domain\Attendance\Projectors\AttendanceDailyCalculationProjector;
 use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
 use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
 use App\Domain\AuthenticationKey\Handlers\DisableAuthenticationKeyHandler;
@@ -83,7 +82,6 @@ use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
-use App\Domain\BackOffice\Projectors\BackOfficeTaskProjector;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -118,7 +116,6 @@ use App\Domain\Integration\Handlers\ReissueIntegrationTokenHandler;
 use App\Domain\Integration\Handlers\RevokeIntegrationHandler;
 use App\Domain\Notification\Commands\ConfirmNotification;
 use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
-use App\Domain\Notification\Projectors\NotificationProjector;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -177,7 +174,6 @@ use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\SubmitWorkflowRequestHandler;
-use App\Domain\Workflow\Projectors\WorkflowRequestProjector;
 
 return [
 
@@ -305,17 +301,16 @@ return [
     | 再生成対象ではない(承認1件が複数集約にまたがる副作用を持つなど、単純な
     | イベント→行の対応関係に収まらないため)。
     |
-    | workflow_requests / backoffice_tasks は主キーをコマンド側生成のUUIDにしたことで、
-    | 行の新規作成を含めて完全にProjector化している(DB採番PKだと集約IDが確定する前に
-    | イベントを書けず、作成イベントだけはProjector化できないため)。
-    | (.claude/skills/add-projection 参照)
+    | 注意: spatie/laravel-event-sourcingに移行済みのドメイン(Attachment/Integration/
+    | AuthenticationKey/Device/DeviceAdminSession/Notification/Workflow/BackOffice/
+    | PaidLeave/SpecialLeave/User/Attendance)のProjectorはここではなく
+    | Spatie\EventSourcing\EventHandlers\Projectors\Projectorのサブクラスとして実装し、
+    | config/event-sourcing.phpのauto_discover_projectors_and_reactorsで自動検出させる
+    | (docs/29-event-sourcing-framework-migration.md参照)。AttendanceDailyCalculationProjector
+    | もAttendanceのspatie移行に伴いこちらへ移設したため、この配列は現時点で空になっている。
     |
     */
     'projectors' => [
-        AttendanceDailyCalculationProjector::class,
-        WorkflowRequestProjector::class,
-        BackOfficeTaskProjector::class,
-        NotificationProjector::class,
     ],
 
 ];

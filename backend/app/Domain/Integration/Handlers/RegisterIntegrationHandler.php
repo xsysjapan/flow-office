@@ -4,15 +4,15 @@ namespace App\Domain\Integration\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Integration\Aggregates\ApplicationIntegrationAggregate;
 use App\Domain\Integration\Commands\RegisterIntegration;
-use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Models\ApplicationIntegration;
 use App\Models\IntegrationClientType;
 use App\Models\IntegrationOwnerType;
 use App\Models\IntegrationScopeType;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * UC-I001: 個人API・MCP連携を登録する。実際の認証キーはSanctumの個人アクセストークンを
@@ -20,12 +20,13 @@ use App\Models\User;
  * 増やさない。トークンのtokenableはユーザー本人のため、既存の`resolveTargetUserId`等の
  * 「本人またはadmin」ロジックはこのトークンでもそのまま機能する(docs/25参照)。
  *
+ * Sanctumトークンの発行はイベント再生では再現できない外部作用のため、集約に記録する前に
+ * 先に実行し、その結果(トークンID)をイベントに積む(docs/29-event-sourcing-framework-migration.md)。
+ *
  * @implements CommandHandler<RegisterIntegration>
  */
 class RegisterIntegrationHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     /**
      * @return array{integration: ApplicationIntegration, plainTextToken: string}
      */
@@ -53,35 +54,23 @@ class RegisterIntegrationHandler implements CommandHandler
         $user = User::query()->findOrFail($command->ownerUserId);
         $newToken = $user->createToken($command->clientName, $scopes);
         $plainTextToken = $newToken->plainTextToken;
-        $tokenId = $newToken->accessToken->id;
 
-        $integration = ApplicationIntegration::query()->create([
-            'owner_type' => IntegrationOwnerType::PERSONAL,
-            'owner_user_id' => $command->ownerUserId,
-            'client_type' => $command->clientType,
-            'client_name' => $command->clientName,
-            'purpose' => $command->purpose,
-            'personal_access_token_id' => $tokenId,
-            'status' => 'active',
-            'registered_by_user_id' => $command->registeredByUserId,
-        ]);
+        $aggregateUuid = (string) Str::uuid();
 
-        foreach ($scopes as $scope) {
-            $integration->scopes()->create(['scope' => $scope]);
-        }
-
-        $this->eventStore->append(
-            aggregateType: 'application_integration',
-            aggregateId: (string) $integration->id,
-            event: new ApplicationIntegrationRegistered(
-                integrationId: $integration->id,
+        ApplicationIntegrationAggregate::retrieve($aggregateUuid)
+            ->register(
+                ownerType: IntegrationOwnerType::PERSONAL,
                 ownerUserId: $command->ownerUserId,
                 clientType: $command->clientType,
                 clientName: $command->clientName,
+                purpose: $command->purpose,
+                personalAccessTokenId: $newToken->accessToken->id,
                 scopes: $scopes,
                 registeredByUserId: $command->registeredByUserId,
-            ),
-        );
+            )
+            ->persist();
+
+        $integration = ApplicationIntegration::query()->findOrFail($aggregateUuid);
 
         return ['integration' => $integration->load('scopes'), 'plainTextToken' => $plainTextToken];
     }

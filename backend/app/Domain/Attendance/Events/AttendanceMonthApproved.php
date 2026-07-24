@@ -2,25 +2,16 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AttendanceMonthApproved implements DomainEvent
+/**
+ * attendance_month.approved
+ *
+ * UC-A009: 承認者が月次勤怠を承認する。
+ */
+class AttendanceMonthApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $attendanceMonthId,
-        public readonly int $approvedByUserId,
+        public readonly string $approvedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attendance.month_approved';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'attendance_month_id' => $this->attendanceMonthId,
-            'approved_by_user_id' => $this->approvedByUserId,
-        ];
-    }
 }

@@ -2,27 +2,12 @@
 
 namespace App\Domain\BackOffice\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class BackOfficeTaskCompleted implements DomainEvent
+class BackOfficeTaskCompleted extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $backOfficeTaskId,
-        public readonly int $completedByUserId,
+        public readonly string $completedByUserId,
         public readonly ?string $comment,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'backoffice_task.completed';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'backoffice_task_id' => $this->backOfficeTaskId,
-            'completed_by_user_id' => $this->completedByUserId,
-            'comment' => $this->comment,
-        ];
-    }
 }

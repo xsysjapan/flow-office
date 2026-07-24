@@ -2,25 +2,16 @@
 
 namespace App\Domain\Attendance\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class AttendanceMonthClosed implements DomainEvent
+/**
+ * attendance_month.closed
+ *
+ * UC-A011: 管理部が月次勤怠を締める。
+ */
+class AttendanceMonthClosed extends ShouldBeStored
 {
     public function __construct(
-        public readonly int $attendanceMonthId,
-        public readonly int $closedByUserId,
+        public readonly string $closedByUserId,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'attendance.month_closed';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'attendance_month_id' => $this->attendanceMonthId,
-            'closed_by_user_id' => $this->closedByUserId,
-        ];
-    }
 }

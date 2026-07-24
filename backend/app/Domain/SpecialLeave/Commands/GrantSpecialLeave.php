@@ -11,7 +11,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class GrantSpecialLeave implements Command
 {
     public function __construct(
-        public readonly int $userId,
+        public readonly string $userId,
         public readonly int $specialLeaveTypeId,
         public readonly string $grantedOn,
         public readonly ?string $expiresOn,

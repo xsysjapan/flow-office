@@ -9,8 +9,8 @@ import { useSpecialLeaveHistoryForUser } from '../../hooks/useSpecialLeave'
  * 管理者・人事担当者が対象社員を選んで特別休暇履歴を確認する。
  */
 export function SpecialLeaveHistoryAdminPage() {
-  const [userId, setUserId] = useState<number | undefined>(undefined)
-  const { data, isLoading, error } = useSpecialLeaveHistoryForUser(userId ?? NaN)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
+  const { data, isLoading, error } = useSpecialLeaveHistoryForUser(userId ?? '')
 
   return (
     <Card title="特別休暇履歴">

@@ -27,7 +27,7 @@ export function AuditLogPage() {
     aggregate_type: aggregateType || undefined,
     aggregate_id: aggregateId || undefined,
     event_type: eventType || undefined,
-    user_id: userId ? Number(userId) : undefined,
+    user_id: userId || undefined,
     from: from || undefined,
     to: to || undefined,
   }
@@ -59,7 +59,7 @@ export function AuditLogPage() {
           <Input id="audit-event-type" value={eventType} onChange={(e) => setEventType(e.target.value)} />
         </FormField>
         <FormField label="ユーザーID" htmlFor="audit-user-id">
-          <Input id="audit-user-id" type="number" value={userId} onChange={(e) => setUserId(e.target.value)} />
+          <Input id="audit-user-id" value={userId} onChange={(e) => setUserId(e.target.value)} />
         </FormField>
         <FormField label="期間(開始)" htmlFor="audit-from">
           <Input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />

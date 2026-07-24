@@ -5,7 +5,7 @@ export function fetchMyPaidLeaveGrants(): Promise<PaidLeaveGrant[]> {
   return apiFetch('/paid-leave/grants/mine')
 }
 
-export function fetchPaidLeaveGrantsForUser(userId: number): Promise<PaidLeaveGrant[]> {
+export function fetchPaidLeaveGrantsForUser(userId: string): Promise<PaidLeaveGrant[]> {
   return apiFetch(`/paid-leave/grants/user/${userId}`)
 }
 
@@ -15,7 +15,7 @@ export function fetchPaidLeaveGrantRules(): Promise<PaidLeaveGrantRule[]> {
 
 export interface CreatePaidLeaveGrantRuleInput {
   name: string
-  work_style_id?: number
+  work_style_id?: string
   min_attendance_rate?: number
   first_grant_after_months?: number
   grant_cycle_months?: number
@@ -28,7 +28,7 @@ export function createPaidLeaveGrantRule(input: CreatePaidLeaveGrantRuleInput): 
 }
 
 export interface GrantPaidLeaveInput {
-  user_id: number
+  user_id: string
   granted_on: string
   expires_on: string
   granted_days: number
@@ -51,7 +51,7 @@ export interface CreatePaidLeaveRequestInput {
   target_date: string
   leave_type: PaidLeaveType
   hours?: number
-  approver_user_id: number
+  approver_user_id: string
   reason?: string
 }
 
@@ -59,15 +59,15 @@ export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Prom
   return apiFetch('/paid-leave/requests', { method: 'POST', body: input })
 }
 
-export function approvePaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+export function approvePaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/approve`, { method: 'POST' })
 }
 
-export function returnPaidLeaveRequest(id: number, comment: string): Promise<PaidLeaveRequest> {
+export function returnPaidLeaveRequest(id: string, comment: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
-export function cancelPaidLeaveRequest(id: number): Promise<PaidLeaveRequest> {
+export function cancelPaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/cancel`, { method: 'POST' })
 }
 
@@ -77,6 +77,6 @@ export function fetchMyPaidLeaveHistory(): Promise<StoredEvent[]> {
 }
 
 /** UC-P007: 管理者・人事担当者が対象社員の有給履歴を取得する。 */
-export function fetchPaidLeaveHistoryForUser(userId: number): Promise<StoredEvent[]> {
+export function fetchPaidLeaveHistoryForUser(userId: string): Promise<StoredEvent[]> {
   return apiFetch(`/paid-leave/history/user/${userId}`)
 }

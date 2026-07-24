@@ -2,28 +2,15 @@
 
 namespace App\Domain\Device\Events;
 
-use App\Domain\EventSourcing\Contracts\DomainEvent;
+use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
-class DevicePaired implements DomainEvent
+class DevicePaired extends ShouldBeStored
 {
     /**
      * @param  array<int, string>  $abilities
      */
     public function __construct(
-        public readonly int $deviceId,
         public readonly array $abilities,
+        public readonly string $pairedAt,
     ) {}
-
-    public function eventType(): string
-    {
-        return 'device.paired';
-    }
-
-    public function payload(): array
-    {
-        return [
-            'device_id' => $this->deviceId,
-            'abilities' => $this->abilities,
-        ];
-    }
 }

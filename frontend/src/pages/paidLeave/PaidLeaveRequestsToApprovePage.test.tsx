@@ -7,10 +7,10 @@ import type { PaidLeaveRequest } from '../../api/types'
 import { PaidLeaveRequestsToApprovePage } from './PaidLeaveRequestsToApprovePage'
 
 const request: PaidLeaveRequest = {
-  id: 1,
-  user_id: 1,
+  id: 'request-1',
+  user_id: 'user-1',
   user: {
-    id: 1,
+    id: 'user-1',
     name: '申請者太郎',
     email: 'taro@example.com',
     department: null,
@@ -93,7 +93,7 @@ describe('PaidLeaveRequestsToApprovePage', () => {
   })
 
   it('bulk-approves selected requests', async () => {
-    const secondRequest: PaidLeaveRequest = { ...request, id: 2, target_date: '2026-08-11' }
+    const secondRequest: PaidLeaveRequest = { ...request, id: 'request-2', target_date: '2026-08-11' }
     vi.spyOn(paidLeaveApi, 'fetchPaidLeaveRequestsToApprove').mockResolvedValue([request, secondRequest])
     const approveSpy = vi.spyOn(paidLeaveApi, 'approvePaidLeaveRequest').mockResolvedValue({
       ...request,
@@ -110,7 +110,7 @@ describe('PaidLeaveRequestsToApprovePage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'まとめて承認する' }))
 
     await waitFor(() => expect(approveSpy).toHaveBeenCalledTimes(2))
-    expect(approveSpy).toHaveBeenCalledWith(1)
-    expect(approveSpy).toHaveBeenCalledWith(2)
+    expect(approveSpy).toHaveBeenCalledWith('request-1')
+    expect(approveSpy).toHaveBeenCalledWith('request-2')
   })
 })

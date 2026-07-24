@@ -12,7 +12,7 @@ import { useDownloadAttendanceCsv } from '../../hooks/useAttendance'
  */
 export function AttendanceExportPage() {
   const [yearMonth, setYearMonth] = useState('')
-  const [userId, setUserId] = useState<number | undefined>(undefined)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
 
   const downloadCsv = useDownloadAttendanceCsv()
 

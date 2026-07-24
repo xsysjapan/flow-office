@@ -6,8 +6,8 @@ import { MyPaidLeavePage } from './MyPaidLeavePage'
 
 const grants: PaidLeaveGrant[] = [
   {
-    id: 1,
-    user_id: 1,
+    id: 'grant-1',
+    user_id: '11111111-1111-1111-1111-111111111111',
     granted_on: '2025-04-01',
     expires_on: '2027-03-31',
     granted_days: 10,
@@ -16,8 +16,8 @@ const grants: PaidLeaveGrant[] = [
     grant_reason: '法定付与',
   },
   {
-    id: 2,
-    user_id: 1,
+    id: 'grant-2',
+    user_id: '11111111-1111-1111-1111-111111111111',
     granted_on: '2026-04-01',
     expires_on: '2028-03-31',
     granted_days: 11,
@@ -29,8 +29,8 @@ const grants: PaidLeaveGrant[] = [
 
 const requests: PaidLeaveRequest[] = [
   {
-    id: 1,
-    user_id: 1,
+    id: 'request-1',
+    user_id: '11111111-1111-1111-1111-111111111111',
     status: 'submitted',
     leave_type: 'full',
     target_date: '2026-08-10',
@@ -43,8 +43,8 @@ const requests: PaidLeaveRequest[] = [
     cancelled_at: null,
   },
   {
-    id: 2,
-    user_id: 1,
+    id: 'request-2',
+    user_id: '11111111-1111-1111-1111-111111111111',
     status: 'approved',
     leave_type: 'am_half',
     target_date: '2026-07-20',

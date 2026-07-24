@@ -2,17 +2,15 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
-use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
-use Illuminate\Support\Carbon;
 
 /**
  * UC-A010: 承認者が月次勤怠を差戻しする。
@@ -21,8 +19,6 @@ use Illuminate\Support\Carbon;
  */
 class ReturnAttendanceMonthHandler implements CommandHandler
 {
-    public function __construct(private readonly EventStore $eventStore) {}
-
     public function handle(Command $command): AttendanceMonth
     {
         assert($command instanceof ReturnAttendanceMonth);
@@ -37,19 +33,11 @@ class ReturnAttendanceMonthHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
-        $month->status = AttendanceMonthStatus::RETURNED;
-        $month->returned_at = Carbon::now();
-        $month->save();
+        AttendanceMonthAggregate::retrieve($month->id)
+            ->returnToApplicant($command->returnedByUserId, $command->comment)
+            ->persist();
 
-        $this->eventStore->append(
-            aggregateType: 'attendance_month',
-            aggregateId: (string) $month->id,
-            event: new AttendanceMonthReturned(
-                attendanceMonthId: $month->id,
-                returnedByUserId: $command->returnedByUserId,
-                comment: $command->comment,
-            ),
-        );
+        $month = AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
 
         $applicant = User::find($month->user_id);
         if ($applicant !== null) {

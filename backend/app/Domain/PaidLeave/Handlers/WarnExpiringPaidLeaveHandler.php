@@ -4,9 +4,8 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
+use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
-use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use Illuminate\Support\Carbon;
@@ -21,8 +20,6 @@ use Illuminate\Support\Carbon;
 class WarnExpiringPaidLeaveHandler implements CommandHandler
 {
     private const WARNING_WINDOW_DAYS = 90;
-
-    public function __construct(private readonly EventStore $eventStore) {}
 
     /**
      * @return int 警告を発行した件数
@@ -53,19 +50,9 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
                 detailUrl: null,
             );
 
-            $grant->expiry_warned_at = Carbon::now();
-            $grant->save();
-
-            $this->eventStore->append(
-                aggregateType: 'paid_leave_grant',
-                aggregateId: (string) $grant->id,
-                event: new PaidLeaveWarningRaised(
-                    paidLeaveGrantId: $grant->id,
-                    userId: $grant->user_id,
-                    warningType: 'expiry',
-                    message: $message,
-                ),
-            );
+            PaidLeaveGrantAggregate::retrieve($grant->id)
+                ->raiseWarning($grant->user_id, 'expiry', $message)
+                ->persist();
         }
 
         return $grants->count();

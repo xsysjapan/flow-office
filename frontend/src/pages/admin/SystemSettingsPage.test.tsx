@@ -8,7 +8,7 @@ import { SystemSettingsPage } from './SystemSettingsPage'
 
 const settings: SystemSettings = {
   default_timezone: 'Asia/Tokyo',
-  default_work_style_id: 3,
+  default_work_style_id: '33333333-3333-3333-3333-333333333333',
   attendance_submission_deadline_day: 5,
   attendance_month_close_deadline_day: 10,
   m365_tenant_id: null,
@@ -55,7 +55,7 @@ describe('SystemSettingsPage', () => {
         default_timezone: 'America/Los_Angeles',
         attendance_submission_deadline_day: 5,
         attendance_month_close_deadline_day: 10,
-        default_work_style_id: 3,
+        default_work_style_id: '33333333-3333-3333-3333-333333333333',
         m365_tenant_id: null,
         m365_client_id: null,
         m365_mock_enabled: false,

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\DeviceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,9 +20,12 @@ use Laravel\Sanctum\HasApiTokens;
  * Sanctumの`HasApiTokens`はUser以外の任意のEloquentモデルにも適用できるため、端末自身に
  * Sanctumトークンを発行する(UC-D002)。`auth:sanctum`ミドルウェアから認証主体として
  * 解決されるよう、Userと同様にIlluminate\Foundation\Auth\Userを継承する。
+ *
+ * 主キーはUUID(HasUuids)。DeviceAggregateが発番し、行の新規作成含めてDeviceProjectorが
+ * stored_eventsから作成・更新する(docs/29-event-sourcing-framework-migration.md参照)。
  */
 #[Fillable([
-    'owner_type', 'owner_user_id', 'activated_by_user_id', 'name', 'device_type', 'status', 'site_id',
+    'id', 'owner_type', 'owner_user_id', 'activated_by_user_id', 'name', 'device_type', 'status', 'site_id',
     'location_name', 'default_work_location_type', 'timezone', 'allowed_punch_types', 'allow_offline',
     'require_location', 'auto_detect_punch_type', 'last_seen_at', 'app_version',
     'paired_at', 'disabled_at', 'revoked_at',
@@ -29,7 +33,11 @@ use Laravel\Sanctum\HasApiTokens;
 class Device extends Authenticatable
 {
     /** @use HasFactory<DeviceFactory> */
-    use HasApiTokens, HasFactory, SoftDeletes;
+    use HasApiTokens, HasFactory, HasUuids, SoftDeletes;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     protected function casts(): array
     {

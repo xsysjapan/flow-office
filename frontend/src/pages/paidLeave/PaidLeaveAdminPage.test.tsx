@@ -19,7 +19,7 @@ const rule: PaidLeaveGrantRule = {
 }
 
 const targetUser: User = {
-  id: 3,
+  id: 'user-3',
   name: '対象社員',
   email: 'taisho@example.com',
   department: null,
@@ -75,8 +75,8 @@ describe('PaidLeaveAdminPage', () => {
     vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(paidLeaveApi, 'grantPaidLeave').mockResolvedValue({
-      id: 1,
-      user_id: 3,
+      id: 'grant-1',
+      user_id: 'user-3',
       granted_on: '2026-07-01',
       expires_on: '2027-06-30',
       granted_days: 10,
@@ -97,7 +97,7 @@ describe('PaidLeaveAdminPage', () => {
 
     await waitFor(() =>
       expect(paidLeaveApi.grantPaidLeave).toHaveBeenCalledWith({
-        user_id: 3,
+        user_id: 'user-3',
         granted_on: '2026-07-01',
         expires_on: '2027-06-30',
         granted_days: 10,

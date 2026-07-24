@@ -9,8 +9,8 @@ import { usePaidLeaveHistoryForUser } from '../../hooks/usePaidLeave'
  * UC-P007: 管理者・人事担当者が対象社員を選んで有給履歴を確認する。
  */
 export function PaidLeaveHistoryAdminPage() {
-  const [userId, setUserId] = useState<number | undefined>(undefined)
-  const { data, isLoading, error } = usePaidLeaveHistoryForUser(userId ?? NaN)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
+  const { data, isLoading, error } = usePaidLeaveHistoryForUser(userId ?? '')
 
   return (
     <Card title="有給履歴">

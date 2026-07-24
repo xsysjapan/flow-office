@@ -12,7 +12,7 @@ import {
 
 function buildEvent(eventType: string, payload: Record<string, unknown>): StoredEvent {
   return {
-    id: 1,
+    id: '1',
     event_id: 'evt-1',
     aggregate_type: 'paid_leave_grant',
     aggregate_id: '1',

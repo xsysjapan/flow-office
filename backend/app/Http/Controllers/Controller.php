@@ -24,7 +24,7 @@ abstract class Controller
      * (「管理職であっても、個人トークンへ自動的に部下の閲覧権限を付与しない」UC-I002)。
      * ability`*`を持つ通常の人間向けトークンでは今まで通りadmin判定を適用する。
      */
-    protected function abortUnlessOwnerOrAdmin(Request $request, int $ownerId, string $message): void
+    protected function abortUnlessOwnerOrAdmin(Request $request, string $ownerId, string $message): void
     {
         $isSelf = $ownerId === $request->user()->id;
         $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
@@ -48,7 +48,7 @@ abstract class Controller
      * 場合のみ解決する(AttendanceController::week/month、AttendancePunchController::index/store
      * で共通利用)。
      */
-    protected function resolveTargetUserId(Request $request, ?int $requestedUserId, string $message): int
+    protected function resolveTargetUserId(Request $request, ?string $requestedUserId, string $message): string
     {
         $userId = $requestedUserId ?? $request->user()->id;
 

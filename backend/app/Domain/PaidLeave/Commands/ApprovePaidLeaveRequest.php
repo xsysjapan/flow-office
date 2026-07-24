@@ -10,7 +10,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 class ApprovePaidLeaveRequest implements Command
 {
     public function __construct(
-        public readonly int $paidLeaveRequestId,
-        public readonly int $approvedByUserId,
+        public readonly string $paidLeaveRequestId,
+        public readonly string $approvedByUserId,
     ) {}
 }

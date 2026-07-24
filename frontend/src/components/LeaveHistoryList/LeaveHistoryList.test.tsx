@@ -4,7 +4,7 @@ import type { StoredEvent } from '../../api/types'
 import { LeaveHistoryList } from './LeaveHistoryList'
 
 const grantedEvent: StoredEvent = {
-  id: 1,
+  id: 'evt-1',
   event_id: 'evt-1',
   aggregate_type: 'paid_leave_grant',
   aggregate_id: '1',
@@ -15,7 +15,7 @@ const grantedEvent: StoredEvent = {
 }
 
 const requestedEvent: StoredEvent = {
-  id: 2,
+  id: 'evt-2',
   event_id: 'evt-2',
   aggregate_type: 'paid_leave_request',
   aggregate_id: '1',

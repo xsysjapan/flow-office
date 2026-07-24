@@ -22,8 +22,8 @@ export function SpecialLeaveRequestsToApprovePage() {
   const approveRequest = useApproveSpecialLeaveRequest()
   const returnRequest = useReturnSpecialLeaveRequest()
 
-  const [comments, setComments] = useState<Record<number, string>>({})
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [comments, setComments] = useState<Record<string, string>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkApproving, setIsBulkApproving] = useState(false)
   const [bulkError, setBulkError] = useState<Error | null>(null)
 
@@ -33,7 +33,7 @@ export function SpecialLeaveRequestsToApprovePage() {
   const requests = data ?? []
   const actionError = approveRequest.error ?? returnRequest.error ?? bulkError
 
-  function toggleRow(id: number) {
+  function toggleRow(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)

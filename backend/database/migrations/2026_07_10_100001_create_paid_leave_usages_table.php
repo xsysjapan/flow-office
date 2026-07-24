@@ -15,10 +15,16 @@ return new class extends Migration
     {
         Schema::create('paid_leave_usages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
-            $table->foreignId('attendance_day_id')->constrained();
-            $table->foreignId('paid_leave_grant_id')->constrained();
-            $table->foreignId('paid_leave_request_id')->constrained();
+            // stored_events.id。PaidLeaveUsageProjectorの冪等性(同じイベントの再適用で
+            // 行が重複しない)をこのユニーク制約で担保する。この行自体は
+            // paid_leave_grant集約が記録するpaid_leave.usedイベントの派生データであり、
+            // 自身は集約ルートではないためDB採番のままでよい。テストがイベントを経由せず
+            // 直接rowを作成することがあるためnullableにする(その場合は冪等性の対象外)。
+            $table->unsignedBigInteger('stored_event_id')->nullable()->unique();
+            $table->foreignUuid('user_id')->constrained();
+            $table->foreignUuid('attendance_day_id')->constrained();
+            $table->foreignUuid('paid_leave_grant_id')->constrained();
+            $table->foreignUuid('paid_leave_request_id')->constrained();
             $table->date('used_on');
             $table->decimal('used_days', 4, 1);
             $table->unsignedSmallInteger('used_minutes')->nullable();

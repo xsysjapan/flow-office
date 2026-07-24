@@ -63,6 +63,23 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 - CommandHandlerは検証の上で必ず1つ以上のイベントを`stored_events`に追記する。イベントを
   書かない状態変更は作らない。
 
+### spatie/laravel-event-sourcing への移行(進行中)
+
+自前実装のCQRS+ES基盤を`spatie/laravel-event-sourcing`に置き換える大工事が進行中。
+方針・作業順・現在の移行状況は`docs/29-event-sourcing-framework-migration.md`を参照。
+
+- 移行が完了するまで、イベントストアは2系統が併存する:
+  **`legacy_stored_events`**(旧`App\Domain\EventSourcing\EventStore`が書く。`App\Models\StoredEvent`
+  が参照)と、**`stored_events`**(spatie標準スキーマ。移行済みドメインが書く)。
+  どちらのテーブルを見るかはドメインが移行済みかどうかで異なる。
+- ドメインを移行する際は、そのドメインの集約ルート(Eloquentモデル)を
+  `Spatie\EventSourcing\AggregateRoots\AggregateRoot`のサブクラス経由で操作する形に書き換え、
+  Projectorを`Spatie\EventSourcing\EventHandlers\Projectors\Projector`のサブクラスとして実装する
+  (`config/domain.php`への登録は不要。`auto_discover_projectors_and_reactors`により自動検出される)。
+  新しいイベントクラスは`config/event-sourcing.php`の`event_class_map`に必ず短い文字列を登録する
+  (`enforce_event_class_map = true`のため未登録だと例外になる)。
+- 移行済みドメイン: `Attachment`(パイロット実装)。他は未移行(旧実装のまま)。
+
 ## 効率的なコード参照
 
 - 「〇〇ドメインを直す」場合は`app/Domain/<DomainName>/`配下の対象イベント1本分
