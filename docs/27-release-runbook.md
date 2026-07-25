@@ -224,7 +224,14 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   mod_rewriteの前に評価される)ため、`deploy/static/frontend.htaccess`で明示的に
   `DirectorySlash Off`を指定して自動リダイレクト自体を無効化し、その上で`/api`・`/mcp`
   直下へのアクセスを各アプリの`index.php`へ内部リライトするRewriteRuleを追加して
-  回避している。
+  回避している。**さらに注意**: `DirectorySlash Off`だけを本番投入したところ301は
+  止まったが、代わりに素の403(GET)/404(POST)になる事故が発生した。Apacheの
+  ディレクトリウォークが`api/`・`mcp/`(シンボリックリンク先の`backend/public/.htaccess`・
+  `mcp/public/.htaccess`)まで一括でマージするため、`frontend/dist/.htaccess`側の
+  RewriteRuleをper-directory相対パス(`^(api|mcp)$`)でマッチさせようとすると環境に
+  よってマッチしないことがある。`%{REQUEST_URI}`(絶対パス)を条件にして
+  `RewriteRule ^ %1/index.php [L]`のようにマッチさせることで、per-directory相対
+  パスの解釈に依存せず確実に内部リライトできる。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を

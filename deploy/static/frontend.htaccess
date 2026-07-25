@@ -24,9 +24,14 @@
     # DirectorySlash Offにした分、api/・mcp/直下への末尾スラッシュなしアクセスは
     # 自動リダイレクトされなくなるが、そのままではディレクトリが見つかった時点で
     # 処理が止まってしまうため、各アプリのindex.phpへメソッド・ボディを保ったまま
-    # 内部リライトする。
+    # 内部リライトする。api/・mcp/はシンボリックリンクの実ディレクトリのため、
+    # Apacheのディレクトリウォークがmcp/public/.htaccess・backend/public/.htaccess
+    # まで一括でマージしてしまい、per-directory相対パスでの`^(api|mcp)$`一致に
+    # 依存すると環境によってマッチしないことがあった。REQUEST_URIの絶対パスで
+    # 判定することで、per-directory相対パスの解釈に依存せず確実にマッチさせる。
     RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^(api|mcp)$ $1/index.php [L]
+    RewriteCond %{REQUEST_URI} /(api|mcp)$
+    RewriteRule ^ %1/index.php [L]
 
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
