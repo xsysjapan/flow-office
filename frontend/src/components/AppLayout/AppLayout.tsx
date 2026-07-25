@@ -33,7 +33,6 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
       { to: '/', label: '今日の勤怠' },
       { to: '/attendance/week', label: '週次勤怠' },
       { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
-      { to: '/attendance/bulk-entry', label: '実績の一括入力' },
       { to: '/paid-leave', label: '有給' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
     ],

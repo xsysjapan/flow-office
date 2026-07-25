@@ -9,6 +9,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { MonthlyAttendanceBulkEntryModal } from '../../components/MonthlyAttendanceBulkEntryModal/MonthlyAttendanceBulkEntryModal'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
@@ -60,6 +61,7 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
       <Button variant="secondary" size="icon" title="次月" aria-label="次月" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
         <ChevronRight aria-hidden="true" />
       </Button>
+      <MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} />
     </div>
   )
 }

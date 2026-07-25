@@ -7,6 +7,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useWeek } from '../../hooks/useAttendance'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
@@ -53,6 +54,7 @@ export function WeekAttendancePage() {
             <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
               <ChevronRight aria-hidden="true" />
             </Button>
+            <WeeklyAttendanceBulkEntryModal defaultFrom={dates[0]} defaultTo={dates[6]} />
           </div>
         }
       >

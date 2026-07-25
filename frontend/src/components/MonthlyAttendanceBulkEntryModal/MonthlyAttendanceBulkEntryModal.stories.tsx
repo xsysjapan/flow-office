@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { fn } from 'storybook/test'
 import type { User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
-import { AttendanceBulkEntryPage } from './AttendanceBulkEntryPage'
+import { MonthlyAttendanceBulkEntryModal } from './MonthlyAttendanceBulkEntryModal'
 
 const currentUser: User = {
   id: 'user-1',
@@ -29,16 +29,16 @@ function Decorator() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue}>
-        <AttendanceBulkEntryPage />
+        <MonthlyAttendanceBulkEntryModal yearMonth="2026-08" />
       </AuthContext.Provider>
     </QueryClientProvider>
   )
 }
 
 const meta = {
-  title: 'Pages/Attendance/AttendanceBulkEntryPage',
-  component: AttendanceBulkEntryPage,
-} satisfies Meta<typeof AttendanceBulkEntryPage>
+  title: 'Components/MonthlyAttendanceBulkEntryModal',
+  component: MonthlyAttendanceBulkEntryModal,
+} satisfies Meta<typeof MonthlyAttendanceBulkEntryModal>
 
 export default meta
 type Story = StoryObj<typeof meta>
