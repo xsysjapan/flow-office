@@ -123,7 +123,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
     await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
 
-    await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-04(火)' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: '08-04 (火)' }))
     await userEvent.clear(screen.getByLabelText('2026-08-04の出勤時刻'))
     await userEvent.type(screen.getByLabelText('2026-08-04の出勤時刻'), '10:00')
     await userEvent.clear(screen.getByLabelText('2026-08-04の退勤時刻'))

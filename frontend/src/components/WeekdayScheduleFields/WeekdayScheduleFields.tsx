@@ -105,7 +105,7 @@ export function WeekdayScheduleFields({
                 onChange={(e) => onChange(iso, { endTime: e.target.value })}
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pl-8 sm:pl-0">
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <Checkbox
                   checked={row.breakEnabled}

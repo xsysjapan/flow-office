@@ -180,12 +180,12 @@ export function MonthlyAttendanceBulkEntryModal({
                     key={date}
                     className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
                   >
-                    <label className="flex items-center gap-2 font-medium text-foreground sm:w-32">
+                    <label className="flex shrink-0 items-center gap-2 font-medium text-foreground">
                       <Checkbox
                         checked={row?.enabled ?? false}
                         onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
                       />
-                      {date}({weekdayLabel})
+                      {date.slice(5)} ({weekdayLabel})
                     </label>
                     {row?.enabled && (
                       <>
@@ -206,7 +206,7 @@ export function MonthlyAttendanceBulkEntryModal({
                             onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
                           />
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 pl-8 sm:pl-0">
                           <label className="flex items-center gap-2 text-foreground">
                             <Checkbox
                               checked={row.breakEnabled}
