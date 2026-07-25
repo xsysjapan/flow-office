@@ -171,14 +171,15 @@ curl    https://example.com/flow-office/api/onboarding/status             # 200 
 curl -I https://example.com/flow-office/api/api-docs                      # 200 (Swagger UI)
 curl -I https://example.com/flow-office/mcp/link                          # 200 (mcp)
 curl    https://example.com/flow-office/mcp/.well-known/oauth-authorization-server  # 200 JSON
-curl -I -X POST https://example.com/flow-office/mcp                       # 401 (トークン無し。404/405/500ではないこと)
+curl -I -X POST https://example.com/flow-office/mcp/                      # 401 (トークン無し。404/405/500ではないこと)
 ```
 
-最後の`POST /flow-office/mcp`(マウントパス直下)は、JSON-RPCエンドポイントが
-アプリのルート(`/`)に登録されているため成立する。mcp/では`route:cache`を使わない
-運用にしているため(下記「8. リハーサルで発見した注意点」)、ここが**404か405で
-返ってきた場合はmcp/の`bootstrap/cache/routes-v7.php`が古いデプロイの`route:cache`
-実行によって残ってしまっている可能性が高い**ので、`route:clear`で切り分けること。
+最後の`POST /flow-office/mcp/`(末尾スラッシュあり。理由は下記「8. リハーサルで
+発見した注意点」参照)は、JSON-RPCエンドポイントがアプリのルート(`/`)に登録されて
+いるため成立する。mcp/では`route:cache`を使わない運用にしているため、ここが
+**404か405で返ってきた場合はmcp/の`bootstrap/cache/routes-v7.php`が古いデプロイの
+`route:cache`実行によって残ってしまっている可能性が高い**ので、`route:clear`で
+切り分けること。
 
 cron設置後、`schedule:run`が実際に1分毎に発火しているか、DBキュー(`jobs`テーブル)に
 積んだジョブが処理されるかを一度確認する(ログや`jobs`テーブルの行数で確認できる)。
@@ -212,17 +213,29 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
 - **Apacheの`Alias`は宣言順マッチ**: 最長一致ではない。限定的なパスを先に書かないと、
   一般的なパスのAliasに奪われる。
 - **シンボリックリンクで実ディレクトリとして見える`/api`・`/mcp`直下への末尾スラッシュ
-  なしアクセスが、mod_rewriteより先に301になる**: `frontend/dist/api`・`frontend/dist/mcp`は
-  それぞれ`backend/public`・`mcp/public`へのシンボリックリンクであり、Apacheからは実
+  なしアクセスは、Apache本体(`mod_dir`)にディレクトリとして処理され、期待通りに
+  動かないことがある**: `frontend/dist/api`・`frontend/dist/mcp`はそれぞれ
+  `backend/public`・`mcp/public`へのシンボリックリンクであり、Apacheからは実
   ディレクトリに見える。末尾スラッシュなしで`/flow-office/mcp`のようにこのディレクトリ
-  直下へアクセスすると、`frontend/dist/.htaccess`のRewriteRuleが評価されるより前に、
-  Apache本体(`mod_dir`のDirectorySlash機能)が`%{REQUEST_URI}/`への301リダイレクトを
-  発行してしまう。これはメソッドに関わらず起きるため、`POST /flow-office/mcp`のような
-  ボディ付きリクエストがリダイレクト先へGETとして再送され、mcp/側が返すはずの401等の
-  レスポンスが得られず、ヘルスチェックが`expected 401 ... got 301`で失敗する事故が
-  発生した。`deploy/static/frontend.htaccess`に、`/api`・`/mcp`直下へのアクセスを
-  mod_dirのリダイレクトより先に各アプリの`index.php`へ内部リライトするRewriteRuleを
-  追加して回避している。
+  直下へアクセスすると、`mod_dir`が`frontend/dist/.htaccess`のRewriteRuleより先に
+  ディレクトリとして処理してしまい、301リダイレクト(既定の`DirectorySlash On`時)や
+  素の403(GET)/404(POST)になることがある。これはメソッドに関わらず起きるため、
+  `POST /flow-office/mcp`のようなボディ付きリクエストが期待通りの401(mcp/側の
+  レスポンス)を返さず、ヘルスチェックが失敗する事故が発生した。
+
+  `.htaccess`側だけでの対処(`DirectorySlash Off`、RewriteRuleのsubstitutionを
+  相対パス/絶対パスに変える、シンボリックリンク名をURLパスと違える等)を複数試したが、
+  この本番環境では`mod_dir`が`mod_rewrite`より先に評価されるため確実には防げず、
+  シンボリックリンク名を変える方式はLaravelの`SCRIPT_NAME`/`REQUEST_URI`の前提
+  (物理パスとURLパスの接頭辞が一致すること)を壊してしまい、`api/onboarding/status`
+  等の既存エンドポイントまで壊れる regressionを起こした。
+
+  最終的に、**末尾スラッシュありの`/api/`・`/mcp/`は問題なく動く**ことを確認した上で、
+  末尾スラッシュなしの直下アクセスは無理に修正せず、そちらを正としてヘルスチェック・
+  MCPクライアント設定を統一する方針にした(`.github/workflows/deploy.yml`の
+  ヘルスチェックは`POST $BASE_URL/mcp/`を叩く)。mcp/のOAuthディスカバリー
+  (`/mcp/.well-known/oauth-protected-resource`)が広告するリソースURLも、この制約に
+  合わせて末尾スラッシュ付きにすることを今後検討すること。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を

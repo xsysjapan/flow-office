@@ -139,8 +139,12 @@ jobs:
           curl -fsS "$BASE_URL/api/onboarding/status" > /dev/null
           curl -fsS -o /dev/null "$BASE_URL/mcp/link"
           curl -fsS "$BASE_URL/mcp/.well-known/oauth-authorization-server" > /dev/null
-          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/mcp")
+          # 末尾スラッシュなしの POST "$BASE_URL/mcp" は、Apache本体(mod_dir)が
+          # frontend/dist/.htaccessのRewriteRuleより先にディレクトリ判定を行ってしまい、
+          # 301や403/404になることがある(docs/27-release-runbook.md参照)。実際に動作する
+          # のは末尾スラッシュ付きの "$BASE_URL/mcp/" のため、ヘルスチェックもそちらを叩く。
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/mcp/")
           if [ "$status" != "401" ]; then
-            echo "expected 401 from POST $BASE_URL/mcp, got $status" >&2
+            echo "expected 401 from POST $BASE_URL/mcp/, got $status" >&2
             exit 1
           fi
