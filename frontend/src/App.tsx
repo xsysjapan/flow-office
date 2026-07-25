@@ -8,6 +8,7 @@ import { OnboardingPage } from './pages/auth/OnboardingPage'
 import { TodayAttendancePage } from './pages/attendance/TodayAttendancePage'
 import { WeekAttendancePage } from './pages/attendance/WeekAttendancePage'
 import { AttendanceDayPage } from './pages/attendance/AttendanceDayPage'
+import { AttendanceBulkEntryPage } from './pages/attendance/AttendanceBulkEntryPage'
 import { AttendanceMonthDetailPage } from './pages/attendance/AttendanceMonthDetailPage'
 import { WorkflowRequestListPage } from './pages/workflow/WorkflowRequestListPage'
 import { WorkflowRequestNewPage } from './pages/workflow/WorkflowRequestNewPage'
@@ -60,6 +61,7 @@ function App() {
       >
         <Route index element={<TodayAttendancePage />} />
         <Route path="attendance/week" element={<WeekAttendancePage />} />
+        <Route path="attendance/bulk-entry" element={<AttendanceBulkEntryPage />} />
         <Route path="attendance/days/:date" element={<AttendanceDayPage />} />
         <Route path="requests" element={<WorkflowRequestListPage />} />
         <Route path="requests/new" element={<WorkflowRequestNewPage />} />

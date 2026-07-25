@@ -19,6 +19,8 @@ import {
   fetchPunches,
   fetchToday,
   fetchWeek,
+  generateAttendancePattern,
+  previewAttendancePattern,
   returnMonth,
   startBreak,
   submitMonth,
@@ -28,6 +30,8 @@ import {
   type CreateAttendancePunchInput,
   type DeleteAttendanceDayInput,
   type EditAttendanceDayInput,
+  type GenerateAttendancePatternInput,
+  type PreviewAttendancePatternInput,
 } from '../api/attendance'
 import { downloadAttendanceCsv } from '../api/exports'
 import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
@@ -117,6 +121,27 @@ export function useCreateAttendanceDay() {
 
   return useMutation({
     mutationFn: (input: CreateAttendanceDayInput) => createAttendanceDay(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
+      void queryClient.invalidateQueries({ queryKey: WEEK_KEY })
+    },
+  })
+}
+
+/** 週次・月次一括入力: 確定前に実績の展開結果をプレビューする(永続化しない)。 */
+export function usePreviewAttendancePattern() {
+  return useMutation({
+    mutationFn: (input: PreviewAttendancePatternInput) => previewAttendancePattern(input),
+  })
+}
+
+/** 週次・月次一括入力: パターンを確定し、実績(attendance_days)を一括作成・更新する。 */
+export function useGenerateAttendancePattern() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: GenerateAttendancePatternInput) => generateAttendancePattern(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TODAY_KEY })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })

@@ -175,6 +175,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/week', [AttendanceController::class, 'week'])->middleware('ability:attendance:self:read');
         Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware('ability:attendance:self:read');
         Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware('ability:attendance:self:update');
+        Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware('ability:attendance:self:read');
+        Route::post('/days/generate-pattern', [AttendanceController::class, 'generateAttendancePattern'])->middleware('ability:attendance:self:update');
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware('ability:attendance:self:read');
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware('ability:attendance:self:update');
         Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation']);
