@@ -101,13 +101,13 @@ export function WeeklyAttendanceBulkEntryModal({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>週次の一括入力</DialogTitle>
-          <DialogDescription>出退勤・休憩時刻を指定して、期間へ一括展開する。</DialogDescription>
+          <DialogDescription>出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
         </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
         {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
-
-        <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
         <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
           <Input

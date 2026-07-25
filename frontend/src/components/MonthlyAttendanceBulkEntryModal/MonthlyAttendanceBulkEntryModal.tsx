@@ -141,8 +141,10 @@ export function MonthlyAttendanceBulkEntryModal({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>月次の一括入力</DialogTitle>
-          <DialogDescription>{yearMonth}: 出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
+          <DialogDescription>出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
         </DialogHeader>
+
+        <p className="text-sm text-muted-foreground">適用期間: {from} 〜 {to}</p>
 
         {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
@@ -174,8 +176,11 @@ export function MonthlyAttendanceBulkEntryModal({
                 const row = dayOverrideState[date]
                 const weekdayLabel = WEEKDAYS[(new Date(`${date}T00:00:00`).getDay() + 6) % 7].label
                 return (
-                  <li key={date} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                    <label className="flex w-32 items-center gap-2 font-medium text-foreground">
+                  <li
+                    key={date}
+                    className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+                  >
+                    <label className="flex items-center gap-2 font-medium text-foreground sm:w-32">
                       <Checkbox
                         checked={row?.enabled ?? false}
                         onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
@@ -184,48 +189,52 @@ export function MonthlyAttendanceBulkEntryModal({
                     </label>
                     {row?.enabled && (
                       <>
-                        <Input
-                          type="time"
-                          aria-label={`${date}の出勤時刻`}
-                          className="w-28"
-                          value={row.startTime}
-                          onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
-                        />
-                        <span className="text-muted-foreground">〜</span>
-                        <Input
-                          type="time"
-                          aria-label={`${date}の退勤時刻`}
-                          className="w-28"
-                          value={row.endTime}
-                          onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
-                        />
-                        <label className="flex items-center gap-2 text-foreground">
-                          <Checkbox
-                            checked={row.breakEnabled}
-                            aria-label={`${date}の休憩`}
-                            onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            aria-label={`${date}の出勤時刻`}
+                            className="w-28"
+                            value={row.startTime}
+                            onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
                           />
-                          休憩
-                        </label>
-                        {row.breakEnabled && (
-                          <>
-                            <Input
-                              type="time"
-                              aria-label={`${date}の休憩開始時刻`}
-                              className="w-28"
-                              value={row.breakStartTime}
-                              onChange={(e) => handleDayOverrideChange(date, { breakStartTime: e.target.value })}
+                          <span className="text-muted-foreground">〜</span>
+                          <Input
+                            type="time"
+                            aria-label={`${date}の退勤時刻`}
+                            className="w-28"
+                            value={row.endTime}
+                            onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 text-foreground">
+                            <Checkbox
+                              checked={row.breakEnabled}
+                              aria-label={`${date}の休憩`}
+                              onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
                             />
-                            <span className="text-muted-foreground">〜</span>
-                            <Input
-                              type="time"
-                              aria-label={`${date}の休憩終了時刻`}
-                              className="w-28"
-                              value={row.breakEndTime}
-                              onChange={(e) => handleDayOverrideChange(date, { breakEndTime: e.target.value })}
-                            />
-                          </>
-                        )}
+                            休憩
+                          </label>
+                          {row.breakEnabled && (
+                            <>
+                              <Input
+                                type="time"
+                                aria-label={`${date}の休憩開始時刻`}
+                                className="w-28"
+                                value={row.breakStartTime}
+                                onChange={(e) => handleDayOverrideChange(date, { breakStartTime: e.target.value })}
+                              />
+                              <span className="text-muted-foreground">〜</span>
+                              <Input
+                                type="time"
+                                aria-label={`${date}の休憩終了時刻`}
+                                className="w-28"
+                                value={row.breakEndTime}
+                                onChange={(e) => handleDayOverrideChange(date, { breakEndTime: e.target.value })}
+                              />
+                            </>
+                          )}
+                        </div>
                       </>
                     )}
                   </li>

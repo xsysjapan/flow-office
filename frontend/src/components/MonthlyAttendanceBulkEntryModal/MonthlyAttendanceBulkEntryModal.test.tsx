@@ -62,7 +62,8 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     expect(screen.queryByText('月次の一括入力')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
     expect(await screen.findByText('月次の一括入力')).toBeInTheDocument()
-    expect(screen.getByText('2026-08: 出退勤・休憩時刻を指定して一括で確定する。')).toBeInTheDocument()
+    expect(screen.getByText('出退勤・休憩時刻を指定して一括で確定する。')).toBeInTheDocument()
+    expect(screen.getByText('適用期間: 2026-08-01 〜 2026-08-31')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 

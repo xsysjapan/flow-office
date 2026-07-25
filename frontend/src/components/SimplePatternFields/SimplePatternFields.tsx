@@ -71,53 +71,57 @@ export function SimplePatternFields({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-start-time">
-          開始時刻
-          <Input
-            id="simple-pattern-start-time"
-            type="time"
-            className="w-28"
-            value={state.startTime}
-            onChange={(e) => onChange({ startTime: e.target.value })}
-          />
-        </label>
-        <span className="text-sm text-muted-foreground">〜</span>
-        <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-end-time">
-          終了時刻
-          <Input
-            id="simple-pattern-end-time"
-            type="time"
-            className="w-28"
-            value={state.endTime}
-            onChange={(e) => onChange({ endTime: e.target.value })}
-          />
-        </label>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-start-time">
+            開始時刻
+            <Input
+              id="simple-pattern-start-time"
+              type="time"
+              className="w-28"
+              value={state.startTime}
+              onChange={(e) => onChange({ startTime: e.target.value })}
+            />
+          </label>
+          <span className="text-sm text-muted-foreground">〜</span>
+          <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-end-time">
+            終了時刻
+            <Input
+              id="simple-pattern-end-time"
+              type="time"
+              className="w-28"
+              value={state.endTime}
+              onChange={(e) => onChange({ endTime: e.target.value })}
+            />
+          </label>
+        </div>
         {crossesMidnight(state) && <Badge tone="neutral">翌日</Badge>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
         <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox checked={state.breakEnabled} onCheckedChange={(checked) => onChange({ breakEnabled: checked === true })} />
           休憩
         </label>
-        <Input
-          type="time"
-          aria-label="休憩開始時刻"
-          className="w-28"
-          disabled={!state.breakEnabled}
-          value={state.breakStartTime}
-          onChange={(e) => onChange({ breakStartTime: e.target.value })}
-        />
-        <span className="text-sm text-muted-foreground">〜</span>
-        <Input
-          type="time"
-          aria-label="休憩終了時刻"
-          className="w-28"
-          disabled={!state.breakEnabled}
-          value={state.breakEndTime}
-          onChange={(e) => onChange({ breakEndTime: e.target.value })}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="time"
+            aria-label="休憩開始時刻"
+            className="w-28"
+            disabled={!state.breakEnabled}
+            value={state.breakStartTime}
+            onChange={(e) => onChange({ breakStartTime: e.target.value })}
+          />
+          <span className="text-sm text-muted-foreground">〜</span>
+          <Input
+            type="time"
+            aria-label="休憩終了時刻"
+            className="w-28"
+            disabled={!state.breakEnabled}
+            value={state.breakEndTime}
+            onChange={(e) => onChange({ breakEndTime: e.target.value })}
+          />
+        </div>
       </div>
     </div>
   )

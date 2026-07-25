@@ -75,57 +75,64 @@ export function WeekdayScheduleFields({
       {WEEKDAYS.map(({ iso, label }) => {
         const row = state[iso]
         return (
-          <div key={iso} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-2">
-            <label className="flex w-16 items-center gap-2 text-sm font-medium text-foreground">
+          <div
+            key={iso}
+            className="flex flex-col gap-2 rounded-md border border-border p-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+          >
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:w-16">
               <Checkbox
                 checked={row.enabled}
                 onCheckedChange={(checked) => onChange(iso, { enabled: checked === true })}
               />
               {label}曜日
             </label>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の出勤時刻`}
-              className="w-28"
-              disabled={!row.enabled}
-              value={row.startTime}
-              onChange={(e) => onChange(iso, { startTime: e.target.value })}
-            />
-            <span className="text-sm text-muted-foreground">〜</span>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の退勤時刻`}
-              className="w-28"
-              disabled={!row.enabled}
-              value={row.endTime}
-              onChange={(e) => onChange(iso, { endTime: e.target.value })}
-            />
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                checked={row.breakEnabled}
-                aria-label={`${label}曜日の休憩`}
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                aria-label={`${label}曜日の出勤時刻`}
+                className="w-28"
                 disabled={!row.enabled}
-                onCheckedChange={(checked) => onChange(iso, { breakEnabled: checked === true })}
+                value={row.startTime}
+                onChange={(e) => onChange(iso, { startTime: e.target.value })}
               />
-              休憩
-            </label>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の休憩開始時刻`}
-              className="w-28"
-              disabled={!row.enabled || !row.breakEnabled}
-              value={row.breakStartTime}
-              onChange={(e) => onChange(iso, { breakStartTime: e.target.value })}
-            />
-            <span className="text-sm text-muted-foreground">〜</span>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の休憩終了時刻`}
-              className="w-28"
-              disabled={!row.enabled || !row.breakEnabled}
-              value={row.breakEndTime}
-              onChange={(e) => onChange(iso, { breakEndTime: e.target.value })}
-            />
+              <span className="text-sm text-muted-foreground">〜</span>
+              <Input
+                type="time"
+                aria-label={`${label}曜日の退勤時刻`}
+                className="w-28"
+                disabled={!row.enabled}
+                value={row.endTime}
+                onChange={(e) => onChange(iso, { endTime: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <Checkbox
+                  checked={row.breakEnabled}
+                  aria-label={`${label}曜日の休憩`}
+                  disabled={!row.enabled}
+                  onCheckedChange={(checked) => onChange(iso, { breakEnabled: checked === true })}
+                />
+                休憩
+              </label>
+              <Input
+                type="time"
+                aria-label={`${label}曜日の休憩開始時刻`}
+                className="w-28"
+                disabled={!row.enabled || !row.breakEnabled}
+                value={row.breakStartTime}
+                onChange={(e) => onChange(iso, { breakStartTime: e.target.value })}
+              />
+              <span className="text-sm text-muted-foreground">〜</span>
+              <Input
+                type="time"
+                aria-label={`${label}曜日の休憩終了時刻`}
+                className="w-28"
+                disabled={!row.enabled || !row.breakEnabled}
+                value={row.breakEndTime}
+                onChange={(e) => onChange(iso, { breakEndTime: e.target.value })}
+              />
+            </div>
           </div>
         )
       })}
