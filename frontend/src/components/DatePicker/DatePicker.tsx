@@ -15,6 +15,12 @@ export interface DatePickerProps {
   disabled?: boolean
   /** 「今日」「明日」等の相対日付ショートカットを表示するか。既定は表示する。 */
   showRelativeShortcuts?: boolean
+  /** この日付以降のみ選択可にする(native input[type=date]のminと同じくmin自体も選択可)。"YYYY-MM-DD"形式。 */
+  min?: string
+  /** この日付以前のみ選択可にする(native input[type=date]のmaxと同じくmax自体も選択可)。"YYYY-MM-DD"形式。 */
+  max?: string
+  /** ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native input[type=date]のaria-labelと同じ用途)。 */
+  'aria-label'?: string
 }
 
 /** "YYYY-MM-DD" をタイムゾーン変換をせず、その日のローカル日付として`Date`に変換する。 */
@@ -47,9 +53,14 @@ export function DatePicker({
   placeholder = '日付を選択',
   disabled,
   showRelativeShortcuts = true,
+  min,
+  max,
+  'aria-label': ariaLabel,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const selected = parseDateValue(value)
+  const minDate = parseDateValue(min)
+  const maxDate = parseDateValue(max)
 
   const selectDate = (date: string | undefined) => {
     onChange(date)
@@ -63,6 +74,7 @@ export function DatePicker({
           id={id}
           type="button"
           disabled={disabled}
+          aria-label={ariaLabel}
           className={cn(
             'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50',
             !value && 'text-muted-foreground',
@@ -73,25 +85,34 @@ export function DatePicker({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        {showRelativeShortcuts && (
+        {(showRelativeShortcuts || value) && (
           <div className="flex flex-wrap gap-1.5 border-b border-border p-2">
-            {relativeDateShortcuts().map((shortcut) => (
-              <Button
-                key={shortcut.label}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => selectDate(shortcut.date)}
-              >
-                {shortcut.label}
+            {showRelativeShortcuts &&
+              relativeDateShortcuts()
+                .filter((shortcut) => (!min || shortcut.date >= min) && (!max || shortcut.date <= max))
+                .map((shortcut) => (
+                  <Button
+                    key={shortcut.label}
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => selectDate(shortcut.date)}
+                  >
+                    {shortcut.label}
+                  </Button>
+                ))}
+            {value && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => selectDate(undefined)}>
+                クリア
               </Button>
-            ))}
+            )}
           </div>
         )}
         <Calendar
           mode="single"
           selected={selected}
-          defaultMonth={selected}
+          defaultMonth={selected ?? minDate ?? maxDate}
+          disabled={[...(minDate ? [{ before: minDate }] : []), ...(maxDate ? [{ after: maxDate }] : [])]}
           onSelect={(date) => selectDate(date ? formatDate(date) : undefined)}
         />
       </PopoverContent>

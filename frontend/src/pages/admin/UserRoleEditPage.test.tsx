@@ -8,6 +8,7 @@ import * as userWorkStyleMonthlyAssignmentsApi from '../../api/userWorkStyleMont
 import * as usersApi from '../../api/users'
 import * as workStylesApi from '../../api/workStyles'
 import type { Role, User, UserWorkStyleMonthlyAssignment, WorkStyle } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { formatDate } from '../../utils/weekDates'
 import { UserRoleEditPage } from './UserRoleEditPage'
 
@@ -135,15 +136,16 @@ describe('UserRoleEditPage', () => {
   it('prefills the hire date when the user already has one', async () => {
     renderPage({ ...targetUser, hire_date: '2024-04-01' })
 
-    expect(await screen.findByLabelText('入社日(有給の自動付与に使用)')).toHaveValue('2024-04-01')
+    expect(await screen.findByRole('button', { name: '入社日(有給の自動付与に使用)' })).toHaveTextContent('2024-04-01')
   })
 
   it('saves the entered hire date', async () => {
     vi.spyOn(usersApi, 'updateUserHireDate').mockResolvedValue({ ...targetUser, hire_date: '2024-04-01' })
 
     renderPage(targetUser)
+    await screen.findByLabelText('入社日(有給の自動付与に使用)')
 
-    await userEvent.type(await screen.findByLabelText('入社日(有給の自動付与に使用)'), '2024-04-01')
+    await pickDate(userEvent, '入社日(有給の自動付与に使用)', '2024-04-01')
     await userEvent.click(screen.getByRole('button', { name: '入社日を保存する' }))
 
     await waitFor(() =>
@@ -155,8 +157,8 @@ describe('UserRoleEditPage', () => {
     vi.spyOn(usersApi, 'updateUserTerminationDate').mockResolvedValue({ ...targetUser, termination_date: '2026-03-31' })
     renderPage({ ...targetUser, termination_date: '2026-03-31' })
 
-    expect(await screen.findByLabelText('退社日(未設定なら在籍中)')).toHaveValue('2026-03-31')
-    await userEvent.clear(screen.getByLabelText('退社日(未設定なら在籍中)'))
+    await userEvent.click(await screen.findByRole('button', { name: '退社日(未設定なら在籍中)' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'クリア' }))
     await userEvent.click(screen.getByRole('button', { name: '退社日を保存する' }))
 
     await waitFor(() => expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith('user-1', null))
@@ -165,20 +167,18 @@ describe('UserRoleEditPage', () => {
   it('prefills the usage start date when the user already has one', async () => {
     renderPage({ ...targetUser, usage_start_date: '2026-07-01' })
 
-    expect(await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)')).toHaveValue(
-      '2026-07-01',
-    )
+    expect(
+      await screen.findByRole('button', { name: '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)' }),
+    ).toHaveTextContent('2026-07-01')
   })
 
   it('saves the entered usage start date', async () => {
     vi.spyOn(usersApi, 'updateUserUsageStartDate').mockResolvedValue({ ...targetUser, usage_start_date: '2026-07-01' })
 
     renderPage(targetUser)
+    await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)')
 
-    await userEvent.type(
-      await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)'),
-      '2026-07-01',
-    )
+    await pickDate(userEvent, '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)', '2026-07-01')
     await userEvent.click(screen.getByRole('button', { name: '利用開始日を保存する' }))
 
     await waitFor(() => expect(usersApi.updateUserUsageStartDate).toHaveBeenCalledWith('user-1', '2026-07-01'))

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { pickTime } from '../../test-support/pickerInteractions'
 import {
   buildWeeklyPatternFromSimpleState,
   crossesMidnight,
@@ -43,11 +44,12 @@ describe('SimplePatternFields', () => {
     expect(screen.getByText('翌日')).toBeInTheDocument()
   })
 
-  it('notifies onChange when the start/end time is edited', () => {
+  it('notifies onChange when the start/end time is edited', async () => {
     const onChange = vi.fn()
+    const user = userEvent.setup()
     render(<SimplePatternFields state={defaultSimplePatternState()} onChange={onChange} />)
 
-    fireEvent.change(screen.getByLabelText('開始時刻'), { target: { value: '22:00' } })
+    await pickTime(user, '開始時刻', '22:00')
     expect(onChange).toHaveBeenCalledWith({ startTime: '22:00' })
   })
 

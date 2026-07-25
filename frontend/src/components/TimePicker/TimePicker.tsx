@@ -12,6 +12,8 @@ export interface TimePickerProps {
   disabled?: boolean
   /** 分の選択肢の間隔(分)。既定は1分刻み(全60分)。 */
   minuteStep?: number
+  /** ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native input[type=time]のaria-labelと同じ用途)。 */
+  'aria-label'?: string
 }
 
 function pad(n: number): string {
@@ -51,7 +53,15 @@ function useScrollToSelected(selectedValue: string | undefined) {
  * 時・分をリストから選ぶ時刻入力。値は`<input type="time">`と同じ"HH:mm"文字列。
  * 出退勤時刻・休憩時刻など、時刻をリストから選びたい入力全般で使う。
  */
-export function TimePicker({ id, value, onChange, placeholder = '時刻を選択', disabled, minuteStep = 1 }: TimePickerProps) {
+export function TimePicker({
+  id,
+  value,
+  onChange,
+  placeholder = '時刻を選択',
+  disabled,
+  minuteStep = 1,
+  'aria-label': ariaLabel,
+}: TimePickerProps) {
   const [open, setOpen] = useState(false)
   const { hour, minute } = splitTime(value)
   const minutes = minuteOptions(minuteStep)
@@ -74,6 +84,7 @@ export function TimePicker({ id, value, onChange, placeholder = '時刻を選択
           id={id}
           type="button"
           disabled={disabled}
+          aria-label={ariaLabel}
           className={cn(
             'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50',
             !value && 'text-muted-foreground',

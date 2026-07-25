@@ -8,6 +8,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { Duration } from '../../components/Duration/Duration'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { DateTimePicker } from '../../components/DateTimePicker/DateTimePicker'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import {
   Dialog,
@@ -119,19 +120,15 @@ function BreakRowsEditor({
       <span className="text-xs font-medium text-muted-foreground">休憩</span>
       {rows.map((row) => (
         <div key={row.rowId} className="flex flex-wrap items-center gap-2">
-          <Input
-            type="datetime-local"
+          <DateTimePicker
             aria-label="休憩開始"
-            className="w-auto"
-            value={row.start}
-            onChange={(e) => onUpdate(row.rowId, { start: e.target.value })}
+            value={row.start || undefined}
+            onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
           />
-          <Input
-            type="datetime-local"
+          <DateTimePicker
             aria-label="休憩終了"
-            className="w-auto"
-            value={row.end}
-            onChange={(e) => onUpdate(row.rowId, { end: e.target.value })}
+            value={row.end || undefined}
+            onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
           />
           <Button variant="danger" onClick={() => onRemove(row.rowId)}>
             削除
@@ -182,19 +179,15 @@ function LeaveSegmentsEditor({
       <span className="text-xs font-medium text-muted-foreground">遅刻・早退</span>
       {rows.map((row) => (
         <div key={row.rowId} className="flex flex-wrap items-center gap-2">
-          <Input
-            type="datetime-local"
+          <DateTimePicker
             aria-label="遅刻・早退開始"
-            className="w-auto"
-            value={row.start}
-            onChange={(e) => onUpdate(row.rowId, { start: e.target.value })}
+            value={row.start || undefined}
+            onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
           />
-          <Input
-            type="datetime-local"
+          <DateTimePicker
             aria-label="遅刻・早退終了"
-            className="w-auto"
-            value={row.end}
-            onChange={(e) => onUpdate(row.rowId, { end: e.target.value })}
+            value={row.end || undefined}
+            onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
           />
           <Input
             aria-label="遅刻・早退の備考"
@@ -294,13 +287,7 @@ function PunchLogRow({ punch, isEdited, isEditing }: { punch: AttendancePunch; i
                 </option>
               ))}
             </NativeSelect>
-            <Input
-              type="datetime-local"
-              aria-label="訂正後の日時"
-              className="w-auto"
-              value={punchedAt}
-              onChange={(e) => setPunchedAt(e.target.value)}
-            />
+            <DateTimePicker aria-label="訂正後の日時" value={punchedAt || undefined} onChange={(value) => setPunchedAt(value ?? '')} />
             <Input
               aria-label="訂正後のオフセット"
               className="w-24"
@@ -380,13 +367,7 @@ function PunchAddForm({ date }: { date: string }) {
             </option>
           ))}
         </NativeSelect>
-        <Input
-          type="datetime-local"
-          aria-label="追加する日時"
-          className="w-auto"
-          value={punchedAt}
-          onChange={(e) => setPunchedAt(e.target.value)}
-        />
+        <DateTimePicker aria-label="追加する日時" value={punchedAt || undefined} onChange={(value) => setPunchedAt(value ?? '')} />
         <Input
           aria-label="追加するオフセット"
           className="w-24"
@@ -549,14 +530,14 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
     <div className="flex flex-col gap-3">
       {updateDay.error && <ErrorMessage error={updateDay.error} />}
 
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+      <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
-        <Input type="datetime-local" value={actualStartAt} onChange={(e) => setActualStartAt(e.target.value)} />
-      </label>
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        <DateTimePicker aria-label="出勤" value={actualStartAt || undefined} onChange={(value) => setActualStartAt(value ?? '')} />
+      </div>
+      <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         退勤
-        <Input type="datetime-local" value={actualEndAt} onChange={(e) => setActualEndAt(e.target.value)} />
-      </label>
+        <DateTimePicker aria-label="退勤" value={actualEndAt || undefined} onChange={(value) => setActualEndAt(value ?? '')} />
+      </div>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         現地時刻オフセット(海外出張時などに変更)
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
@@ -674,14 +655,14 @@ function DayCreateForm({ date }: { date: string }) {
         <p className="text-sm text-info">{DAY_DEFAULTS_SOURCE_LABEL[defaults.source]}</p>
       )}
 
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+      <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
-        <Input type="datetime-local" value={actualStartAt} onChange={(e) => setActualStartAt(e.target.value)} />
-      </label>
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        <DateTimePicker aria-label="出勤" value={actualStartAt || undefined} onChange={(value) => setActualStartAt(value ?? '')} />
+      </div>
+      <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         退勤
-        <Input type="datetime-local" value={actualEndAt} onChange={(e) => setActualEndAt(e.target.value)} />
-      </label>
+        <DateTimePicker aria-label="退勤" value={actualEndAt || undefined} onChange={(value) => setActualEndAt(value ?? '')} />
+      </div>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         現地時刻オフセット(海外出張時などに変更)
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />

@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
+import { TimePicker } from '../TimePicker/TimePicker'
 import { WEEKDAYS, weekdayEntry } from '../WeekdayScheduleFields/WeekdayScheduleFields'
 import type { AttendanceDayOverrides, WeeklyAttendancePattern } from '../../api/attendance'
 
@@ -190,21 +191,21 @@ export function MonthlyAttendanceBulkEntryModal({
                     {row?.enabled && (
                       <>
                         <div className="flex items-center gap-2">
-                          <Input
-                            type="time"
-                            aria-label={`${date}の出勤時刻`}
-                            className="w-28"
-                            value={row.startTime}
-                            onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
-                          />
+                          <div className="w-28">
+                            <TimePicker
+                              aria-label={`${date}の出勤時刻`}
+                              value={row.startTime}
+                              onChange={(time) => handleDayOverrideChange(date, { startTime: time ?? '' })}
+                            />
+                          </div>
                           <span className="text-muted-foreground">〜</span>
-                          <Input
-                            type="time"
-                            aria-label={`${date}の退勤時刻`}
-                            className="w-28"
-                            value={row.endTime}
-                            onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
-                          />
+                          <div className="w-28">
+                            <TimePicker
+                              aria-label={`${date}の退勤時刻`}
+                              value={row.endTime}
+                              onChange={(time) => handleDayOverrideChange(date, { endTime: time ?? '' })}
+                            />
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 pl-8 sm:pl-0">
                           <label className="flex items-center gap-2 text-foreground">
@@ -217,21 +218,21 @@ export function MonthlyAttendanceBulkEntryModal({
                           </label>
                           {row.breakEnabled && (
                             <>
-                              <Input
-                                type="time"
-                                aria-label={`${date}の休憩開始時刻`}
-                                className="w-28"
-                                value={row.breakStartTime}
-                                onChange={(e) => handleDayOverrideChange(date, { breakStartTime: e.target.value })}
-                              />
+                              <div className="w-28">
+                                <TimePicker
+                                  aria-label={`${date}の休憩開始時刻`}
+                                  value={row.breakStartTime}
+                                  onChange={(time) => handleDayOverrideChange(date, { breakStartTime: time ?? '' })}
+                                />
+                              </div>
                               <span className="text-muted-foreground">〜</span>
-                              <Input
-                                type="time"
-                                aria-label={`${date}の休憩終了時刻`}
-                                className="w-28"
-                                value={row.breakEndTime}
-                                onChange={(e) => handleDayOverrideChange(date, { breakEndTime: e.target.value })}
-                              />
+                              <div className="w-28">
+                                <TimePicker
+                                  aria-label={`${date}の休憩終了時刻`}
+                                  value={row.breakEndTime}
+                                  onChange={(time) => handleDayOverrideChange(date, { breakEndTime: time ?? '' })}
+                                />
+                              </div>
                             </>
                           )}
                         </div>

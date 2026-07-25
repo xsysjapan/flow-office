@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type { Paginated, SpecialLeaveGrant, SpecialLeaveGrantRule, SpecialLeaveType, User } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
 const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
@@ -123,7 +124,7 @@ describe('SpecialLeaveAdminPage', () => {
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[1], '誕生日休暇')
-    await userEvent.type(screen.getByLabelText('付与日'), '2026-07-01')
+    await pickDate(userEvent, '付与日', '2026-07-01')
     await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
     await userEvent.click(screen.getByRole('button', { name: '付与する' }))
 

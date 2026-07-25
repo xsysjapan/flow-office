@@ -12,6 +12,12 @@ export interface DateTimePickerProps {
   minuteStep?: number
   /** 「今日」「明日」等の相対日付ショートカットを表示するか。既定は表示する。DatePickerへそのまま渡す。 */
   showRelativeShortcuts?: boolean
+  /**
+   * ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native
+   * input[type=datetime-local]のaria-labelと同じ用途)。日付側は"{ariaLabel}(日付)"、
+   * 時刻側は"{ariaLabel}(時刻)"としてそれぞれのトリガーに付与する。
+   */
+  'aria-label'?: string
 }
 
 function splitValue(value: string | undefined): { date: string | undefined; time: string | undefined } {
@@ -32,6 +38,7 @@ export function DateTimePicker({
   disabled,
   minuteStep,
   showRelativeShortcuts,
+  'aria-label': ariaLabel,
 }: DateTimePickerProps) {
   const { date, time } = splitValue(value)
 
@@ -60,6 +67,7 @@ export function DateTimePicker({
           onChange={handleDateChange}
           disabled={disabled}
           showRelativeShortcuts={showRelativeShortcuts}
+          aria-label={ariaLabel ? `${ariaLabel}(日付)` : undefined}
         />
       </div>
       <div className="flex-[2]">
@@ -69,6 +77,7 @@ export function DateTimePicker({
           onChange={handleTimeChange}
           disabled={disabled}
           minuteStep={minuteStep}
+          aria-label={ariaLabel ? `${ariaLabel}(時刻)` : undefined}
         />
       </div>
     </div>

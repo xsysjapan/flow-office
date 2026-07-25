@@ -26,3 +26,7 @@ export const Empty: Story = {
 export const Disabled: Story = {
   args: { value: '2026-08-15', onChange: () => {}, disabled: true },
 }
+
+export const WithMinMax: Story = {
+  args: { value: '2026-08-15', onChange: () => {}, min: '2026-08-10', max: '2026-08-20' },
+}

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type { Paginated, SpecialLeaveGrant, SpecialLeaveRequest, SpecialLeaveType, User } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { MySpecialLeavePage } from './MySpecialLeavePage'
 
 const approver: User = {
@@ -104,7 +105,7 @@ describe('MySpecialLeavePage', () => {
     await screen.findByText('特別休暇申請はまだありません。')
 
     await userEvent.selectOptions(screen.getByLabelText('特別休暇の種類'), '誕生日休暇')
-    await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
+    await pickDate(userEvent, '対象日', '2026-08-10')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))

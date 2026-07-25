@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { TimePicker } from '../../components/TimePicker/TimePicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -135,21 +137,11 @@ function WorkStyleOnboardingCard() {
             </FormField>
 
             <FormField label="始業時刻" htmlFor="onboarding-work-style-start-time" required>
-              <Input
-                id="onboarding-work-style-start-time"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
+              <TimePicker id="onboarding-work-style-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
             </FormField>
 
             <FormField label="終業時刻" htmlFor="onboarding-work-style-end-time" required>
-              <Input
-                id="onboarding-work-style-end-time"
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-              />
+              <TimePicker id="onboarding-work-style-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
             </FormField>
           </div>
 
@@ -377,21 +369,11 @@ function WorkStyleFormCard() {
         </FormField>
 
         <FormField label="標準開始時刻" htmlFor="work-style-start-time">
-          <Input
-            id="work-style-start-time"
-            type="time"
-            value={defaultStartTime}
-            onChange={(e) => setDefaultStartTime(e.target.value)}
-          />
+          <TimePicker id="work-style-start-time" value={defaultStartTime} onChange={(time) => setDefaultStartTime(time ?? '')} />
         </FormField>
 
         <FormField label="標準終了時刻" htmlFor="work-style-end-time">
-          <Input
-            id="work-style-end-time"
-            type="time"
-            value={defaultEndTime}
-            onChange={(e) => setDefaultEndTime(e.target.value)}
-          />
+          <TimePicker id="work-style-end-time" value={defaultEndTime} onChange={(time) => setDefaultEndTime(time ?? '')} />
         </FormField>
 
         <FormField label="標準休憩(分)" htmlFor="work-style-break-minutes">
@@ -404,11 +386,10 @@ function WorkStyleFormCard() {
         </FormField>
 
         <FormField label="標準休憩開始時刻" htmlFor="work-style-break-start-time">
-          <Input
+          <TimePicker
             id="work-style-break-start-time"
-            type="time"
             value={defaultBreakStartTime}
-            onChange={(e) => setDefaultBreakStartTime(e.target.value)}
+            onChange={(time) => setDefaultBreakStartTime(time ?? '')}
           />
           <p className="mt-1 text-xs text-muted-foreground">
             日次勤怠の入力画面で、勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。
@@ -416,11 +397,10 @@ function WorkStyleFormCard() {
         </FormField>
 
         <FormField label="標準休憩終了時刻" htmlFor="work-style-break-end-time">
-          <Input
+          <TimePicker
             id="work-style-break-end-time"
-            type="time"
             value={defaultBreakEndTime}
-            onChange={(e) => setDefaultBreakEndTime(e.target.value)}
+            onChange={(time) => setDefaultBreakEndTime(time ?? '')}
           />
         </FormField>
 
@@ -486,11 +466,10 @@ function WorkStyleFormCard() {
 
           {legalHolidayRule === 'four_weeks_four_days' && (
             <FormField label="4週間の起算日" htmlFor="work-style-four-week-start" required>
-              <Input
+              <DatePicker
                 id="work-style-four-week-start"
-                type="date"
-                value={fourWeekPeriodStartDate}
-                onChange={(e) => setFourWeekPeriodStartDate(e.target.value)}
+                value={fourWeekPeriodStartDate || undefined}
+                onChange={(date) => setFourWeekPeriodStartDate(date ?? '')}
               />
               <p className="mt-1 text-xs text-muted-foreground">就業規則で定めた4週間の起算日。</p>
             </FormField>
@@ -526,21 +505,11 @@ function WorkStyleFormCard() {
           </FormField>
 
           <FormField label="勤務可能開始時刻" htmlFor="work-style-flexible-start">
-            <Input
-              id="work-style-flexible-start"
-              type="time"
-              value={flexibleTimeStart}
-              onChange={(e) => setFlexibleTimeStart(e.target.value)}
-            />
+            <TimePicker id="work-style-flexible-start" value={flexibleTimeStart} onChange={(time) => setFlexibleTimeStart(time ?? '')} />
           </FormField>
 
           <FormField label="勤務可能終了時刻" htmlFor="work-style-flexible-end">
-            <Input
-              id="work-style-flexible-end"
-              type="time"
-              value={flexibleTimeEnd}
-              onChange={(e) => setFlexibleTimeEnd(e.target.value)}
-            />
+            <TimePicker id="work-style-flexible-end" value={flexibleTimeEnd} onChange={(time) => setFlexibleTimeEnd(time ?? '')} />
           </FormField>
 
           <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:col-span-2">
@@ -551,21 +520,11 @@ function WorkStyleFormCard() {
           {coreTimeEnabled && (
             <>
               <FormField label="コアタイム開始時刻" htmlFor="work-style-core-time-start" required>
-                <Input
-                  id="work-style-core-time-start"
-                  type="time"
-                  value={coreTimeStart}
-                  onChange={(e) => setCoreTimeStart(e.target.value)}
-                />
+                <TimePicker id="work-style-core-time-start" value={coreTimeStart} onChange={(time) => setCoreTimeStart(time ?? '')} />
               </FormField>
 
               <FormField label="コアタイム終了時刻" htmlFor="work-style-core-time-end" required>
-                <Input
-                  id="work-style-core-time-end"
-                  type="time"
-                  value={coreTimeEnd}
-                  onChange={(e) => setCoreTimeEnd(e.target.value)}
-                />
+                <TimePicker id="work-style-core-time-end" value={coreTimeEnd} onChange={(time) => setCoreTimeEnd(time ?? '')} />
                 <p className="mt-1 text-xs text-muted-foreground">
                   労働時間は足りていてもコアタイム中に不在の場合は別枠の警告になる(指示書7.4節)。
                 </p>
@@ -640,11 +599,11 @@ function ShiftGenerationCard() {
         </FormField>
 
         <FormField label="開始日" htmlFor="shift-from" required>
-          <Input id="shift-from" type="date" value={shiftFrom} onChange={(e) => setShiftFrom(e.target.value)} />
+          <DatePicker id="shift-from" value={shiftFrom || undefined} onChange={(date) => setShiftFrom(date ?? '')} />
         </FormField>
 
         <FormField label="終了日" htmlFor="shift-to" required>
-          <Input id="shift-to" type="date" value={shiftTo} onChange={(e) => setShiftTo(e.target.value)} />
+          <DatePicker id="shift-to" value={shiftTo || undefined} onChange={(date) => setShiftTo(date ?? '')} />
         </FormField>
       </div>
 
@@ -741,23 +700,23 @@ function WeekdayPatternGrid({
               />
               {label}曜日
             </label>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の開始時刻`}
-              className="w-28"
-              disabled={!row.enabled}
-              value={row.startTime}
-              onChange={(e) => onChange(iso, { startTime: e.target.value })}
-            />
+            <div className="w-28">
+              <TimePicker
+                aria-label={`${label}曜日の開始時刻`}
+                disabled={!row.enabled}
+                value={row.startTime}
+                onChange={(time) => onChange(iso, { startTime: time ?? '' })}
+              />
+            </div>
             <span className="text-sm text-muted-foreground">〜</span>
-            <Input
-              type="time"
-              aria-label={`${label}曜日の終了時刻`}
-              className="w-28"
-              disabled={!row.enabled}
-              value={row.endTime}
-              onChange={(e) => onChange(iso, { endTime: e.target.value })}
-            />
+            <div className="w-28">
+              <TimePicker
+                aria-label={`${label}曜日の終了時刻`}
+                disabled={!row.enabled}
+                value={row.endTime}
+                onChange={(time) => onChange(iso, { endTime: time ?? '' })}
+              />
+            </div>
             <Input
               type="number"
               min={0}
@@ -835,11 +794,11 @@ function WeeklyPatternShiftAssignmentCard() {
         </FormField>
 
         <FormField label="適用開始日" htmlFor="weekly-pattern-from" required>
-          <Input id="weekly-pattern-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker id="weekly-pattern-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
         </FormField>
 
         <FormField label="適用終了日" htmlFor="weekly-pattern-to" required>
-          <Input id="weekly-pattern-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker id="weekly-pattern-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
         </FormField>
       </div>
 
@@ -1053,21 +1012,21 @@ function MonthlyPatternShiftAssignmentCard() {
                       </label>
                       {!row.dayOff && (
                         <>
-                          <Input
-                            type="time"
-                            aria-label={`${date}の開始時刻`}
-                            className="w-28"
-                            value={row.startTime}
-                            onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
-                          />
+                          <div className="w-28">
+                            <TimePicker
+                              aria-label={`${date}の開始時刻`}
+                              value={row.startTime}
+                              onChange={(time) => handleDayOverrideChange(date, { startTime: time ?? '' })}
+                            />
+                          </div>
                           <span className="text-muted-foreground">〜</span>
-                          <Input
-                            type="time"
-                            aria-label={`${date}の終了時刻`}
-                            className="w-28"
-                            value={row.endTime}
-                            onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
-                          />
+                          <div className="w-28">
+                            <TimePicker
+                              aria-label={`${date}の終了時刻`}
+                              value={row.endTime}
+                              onChange={(time) => handleDayOverrideChange(date, { endTime: time ?? '' })}
+                            />
+                          </div>
                           <Input
                             type="number"
                             min={0}
@@ -1385,11 +1344,11 @@ function ShiftPatternFormCard() {
         </FormField>
 
         <FormField label="開始時刻" htmlFor="shift-pattern-start-time">
-          <Input id="shift-pattern-start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          <TimePicker id="shift-pattern-start-time" value={startTime} onChange={(time) => setStartTime(time ?? '')} />
         </FormField>
 
         <FormField label="終了時刻" htmlFor="shift-pattern-end-time">
-          <Input id="shift-pattern-end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          <TimePicker id="shift-pattern-end-time" value={endTime} onChange={(time) => setEndTime(time ?? '')} />
         </FormField>
 
         <FormField label="休憩(分)" htmlFor="shift-pattern-break-minutes">
@@ -1403,24 +1362,14 @@ function ShiftPatternFormCard() {
         </FormField>
 
         <FormField label="休憩開始時刻" htmlFor="shift-pattern-break-start-time">
-          <Input
-            id="shift-pattern-break-start-time"
-            type="time"
-            value={breakStartTime}
-            onChange={(e) => setBreakStartTime(e.target.value)}
-          />
+          <TimePicker id="shift-pattern-break-start-time" value={breakStartTime} onChange={(time) => setBreakStartTime(time ?? '')} />
           <p className="mt-1 text-xs text-muted-foreground">
             日次勤怠の入力画面で、打刻が無く勤務予定がある日の休憩の初期値に使う。
           </p>
         </FormField>
 
         <FormField label="休憩終了時刻" htmlFor="shift-pattern-break-end-time">
-          <Input
-            id="shift-pattern-break-end-time"
-            type="time"
-            value={breakEndTime}
-            onChange={(e) => setBreakEndTime(e.target.value)}
-          />
+          <TimePicker id="shift-pattern-break-end-time" value={breakEndTime} onChange={(time) => setBreakEndTime(time ?? '')} />
         </FormField>
 
         <FormField label="所定労働時間(分)" htmlFor="shift-pattern-prescribed-minutes" required>
@@ -1650,11 +1599,10 @@ function RotationAssignmentCard() {
         </FormField>
 
         <FormField label="ローテーション開始日" htmlFor="rotation-assignment-start-date" required>
-          <Input
+          <DatePicker
             id="rotation-assignment-start-date"
-            type="date"
-            value={rotationStartDate}
-            onChange={(e) => setRotationStartDate(e.target.value)}
+            value={rotationStartDate || undefined}
+            onChange={(date) => setRotationStartDate(date ?? '')}
           />
         </FormField>
 
@@ -1690,21 +1638,11 @@ function RotationAssignmentCard() {
 
         <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="生成開始日" htmlFor="rotation-generate-from" required>
-            <Input
-              id="rotation-generate-from"
-              type="date"
-              value={generateFrom}
-              onChange={(e) => setGenerateFrom(e.target.value)}
-            />
+            <DatePicker id="rotation-generate-from" value={generateFrom || undefined} onChange={(date) => setGenerateFrom(date ?? '')} />
           </FormField>
 
           <FormField label="生成終了日" htmlFor="rotation-generate-to" required>
-            <Input
-              id="rotation-generate-to"
-              type="date"
-              value={generateTo}
-              onChange={(e) => setGenerateTo(e.target.value)}
-            />
+            <DatePicker id="rotation-generate-to" value={generateTo || undefined} onChange={(date) => setGenerateTo(date ?? '')} />
           </FormField>
         </div>
 
@@ -1819,7 +1757,7 @@ function ShiftScheduleBoardCard() {
         </FormField>
 
         <FormField label="対象日" htmlFor="shift-board-date" required>
-          <Input id="shift-board-date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+          <DatePicker id="shift-board-date" value={workDate || undefined} onChange={(date) => setWorkDate(date ?? '')} />
         </FormField>
 
         <FormField label="シフトパターン" htmlFor="shift-board-pattern" required>

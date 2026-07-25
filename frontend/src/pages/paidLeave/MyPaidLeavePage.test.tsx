@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
 import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { MyPaidLeavePage } from './MyPaidLeavePage'
 
 const approver: User = {
@@ -114,7 +115,7 @@ describe('MyPaidLeavePage', () => {
     renderPage()
     await screen.findByText('有給申請はまだありません。')
 
-    await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
+    await pickDate(userEvent, '対象日', '2026-08-10')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
@@ -137,7 +138,7 @@ describe('MyPaidLeavePage', () => {
     renderPage()
     await screen.findByText('有給申請はまだありません。')
 
-    await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
+    await pickDate(userEvent, '対象日', '2026-08-10')
     await userEvent.selectOptions(screen.getByLabelText('取得単位'), '時間休')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')

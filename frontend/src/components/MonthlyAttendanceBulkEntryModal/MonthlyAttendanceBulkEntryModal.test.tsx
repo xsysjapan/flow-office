@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { User } from '../../api/types'
+import { pickTime } from '../../test-support/pickerInteractions'
 import { MonthlyAttendanceBulkEntryModal } from './MonthlyAttendanceBulkEntryModal'
 
 const currentUser: User = {
@@ -124,10 +125,8 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '08-04 (火)' }))
-    await userEvent.clear(screen.getByLabelText('2026-08-04の出勤時刻'))
-    await userEvent.type(screen.getByLabelText('2026-08-04の出勤時刻'), '10:00')
-    await userEvent.clear(screen.getByLabelText('2026-08-04の退勤時刻'))
-    await userEvent.type(screen.getByLabelText('2026-08-04の退勤時刻'), '15:00')
+    await pickTime(userEvent, '2026-08-04の出勤時刻', '10:00')
+    await pickTime(userEvent, '2026-08-04の退勤時刻', '15:00')
     await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-04の休憩' }))
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 

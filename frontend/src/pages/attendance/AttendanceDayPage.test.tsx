@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceDay, AttendancePunch, User } from '../../api/types'
+import { pickDateTime } from '../../test-support/pickerInteractions'
 import { AttendanceDayPage } from './AttendanceDayPage'
 import { formatDate } from '../../utils/weekDates'
 
@@ -193,7 +194,7 @@ describe('AttendanceDayPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
     await userEvent.selectOptions(screen.getByLabelText('追加する打刻種別'), 'clock_out')
-    await userEvent.type(screen.getByLabelText('追加する日時'), `${date}T18:00`)
+    await pickDateTime(userEvent, '追加する日時(日付)', '追加する日時(時刻)', `${date}T18:00`)
     await userEvent.clear(screen.getByLabelText('追加するオフセット'))
     await userEvent.type(screen.getByLabelText('追加するオフセット'), '+09:00')
     await userEvent.click(screen.getByRole('button', { name: '打刻を追加' }))
@@ -311,10 +312,14 @@ describe('AttendanceDayPage', () => {
     renderPage([])
 
     expect(await screen.findByText('勤務予定(休憩を含む)を初期値として反映しました。')).toBeInTheDocument()
-    expect(screen.getByLabelText('出勤')).toHaveValue(`${date}T09:00`)
-    expect(screen.getByLabelText('退勤')).toHaveValue(`${date}T18:00`)
-    expect(screen.getByLabelText('休憩開始')).toHaveValue(`${date}T12:00`)
-    expect(screen.getByLabelText('休憩終了')).toHaveValue(`${date}T13:00`)
+    expect(screen.getByRole('button', { name: '出勤(日付)' })).toHaveTextContent(`${date}`)
+    expect(screen.getByRole('button', { name: '出勤(時刻)' })).toHaveTextContent('09:00')
+    expect(screen.getByRole('button', { name: '退勤(日付)' })).toHaveTextContent(`${date}`)
+    expect(screen.getByRole('button', { name: '退勤(時刻)' })).toHaveTextContent('18:00')
+    expect(screen.getByRole('button', { name: '休憩開始(日付)' })).toHaveTextContent(`${date}`)
+    expect(screen.getByRole('button', { name: '休憩開始(時刻)' })).toHaveTextContent('12:00')
+    expect(screen.getByRole('button', { name: '休憩終了(日付)' })).toHaveTextContent(`${date}`)
+    expect(screen.getByRole('button', { name: '休憩終了(時刻)' })).toHaveTextContent('13:00')
   })
 
   it('warns of insufficient break time before saving, without blocking the save (labor law article 34)', async () => {
@@ -329,8 +334,8 @@ describe('AttendanceDayPage', () => {
     renderPage([])
 
     await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
-    fireEvent.change(screen.getByLabelText('出勤'), { target: { value: `${date}T09:00` } })
-    fireEvent.change(screen.getByLabelText('退勤'), { target: { value: `${date}T18:00` } })
+    await pickDateTime(userEvent, '出勤(日付)', '出勤(時刻)', `${date}T09:00`)
+    await pickDateTime(userEvent, '退勤(日付)', '退勤(時刻)', `${date}T18:00`)
 
     expect(await screen.findByText(/休憩が60分未満です/)).toBeInTheDocument()
 
@@ -393,8 +398,8 @@ describe('AttendanceDayPage', () => {
 
     await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
     await userEvent.click(screen.getByRole('button', { name: '遅刻・早退を追加' }))
-    fireEvent.change(screen.getByLabelText('遅刻・早退開始'), { target: { value: `${date}T09:00` } })
-    fireEvent.change(screen.getByLabelText('遅刻・早退終了'), { target: { value: `${date}T11:00` } })
+    await pickDateTime(userEvent, '遅刻・早退開始(日付)', '遅刻・早退開始(時刻)', `${date}T09:00`)
+    await pickDateTime(userEvent, '遅刻・早退終了(日付)', '遅刻・早退終了(時刻)', `${date}T11:00`)
     await userEvent.type(screen.getByLabelText('作成理由(必須)'), '午前は欠勤')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 

@@ -1,6 +1,6 @@
 import { Badge } from '../Badge/Badge'
 import { Checkbox } from '../ui/checkbox'
-import { Input } from '../ui/input'
+import { TimePicker } from '../TimePicker/TimePicker'
 import { WEEKDAYS, weekdayEntry } from '../WeekdayScheduleFields/WeekdayScheduleFields'
 import type { WeeklyAttendancePattern } from '../../api/attendance'
 
@@ -75,24 +75,16 @@ export function SimplePatternFields({
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-start-time">
             開始時刻
-            <Input
-              id="simple-pattern-start-time"
-              type="time"
-              className="w-28"
-              value={state.startTime}
-              onChange={(e) => onChange({ startTime: e.target.value })}
-            />
+            <div className="w-28">
+              <TimePicker id="simple-pattern-start-time" value={state.startTime} onChange={(time) => onChange({ startTime: time ?? '' })} />
+            </div>
           </label>
           <span className="text-sm text-muted-foreground">〜</span>
           <label className="flex items-center gap-2 text-sm text-foreground" htmlFor="simple-pattern-end-time">
             終了時刻
-            <Input
-              id="simple-pattern-end-time"
-              type="time"
-              className="w-28"
-              value={state.endTime}
-              onChange={(e) => onChange({ endTime: e.target.value })}
-            />
+            <div className="w-28">
+              <TimePicker id="simple-pattern-end-time" value={state.endTime} onChange={(time) => onChange({ endTime: time ?? '' })} />
+            </div>
           </label>
         </div>
         {crossesMidnight(state) && <Badge tone="neutral">翌日</Badge>}
@@ -104,23 +96,23 @@ export function SimplePatternFields({
           休憩
         </label>
         <div className="flex items-center gap-2">
-          <Input
-            type="time"
-            aria-label="休憩開始時刻"
-            className="w-28"
-            disabled={!state.breakEnabled}
-            value={state.breakStartTime}
-            onChange={(e) => onChange({ breakStartTime: e.target.value })}
-          />
+          <div className="w-28">
+            <TimePicker
+              aria-label="休憩開始時刻"
+              disabled={!state.breakEnabled}
+              value={state.breakStartTime}
+              onChange={(time) => onChange({ breakStartTime: time ?? '' })}
+            />
+          </div>
           <span className="text-sm text-muted-foreground">〜</span>
-          <Input
-            type="time"
-            aria-label="休憩終了時刻"
-            className="w-28"
-            disabled={!state.breakEnabled}
-            value={state.breakEndTime}
-            onChange={(e) => onChange({ breakEndTime: e.target.value })}
-          />
+          <div className="w-28">
+            <TimePicker
+              aria-label="休憩終了時刻"
+              disabled={!state.breakEnabled}
+              value={state.breakEndTime}
+              onChange={(time) => onChange({ breakEndTime: time ?? '' })}
+            />
+          </div>
         </div>
       </div>
     </div>

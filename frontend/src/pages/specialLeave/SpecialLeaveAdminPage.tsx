@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -325,21 +326,11 @@ function ManualGrantCard() {
         </FormField>
 
         <FormField label="付与日" htmlFor="special-leave-grant-granted-on" required>
-          <Input
-            id="special-leave-grant-granted-on"
-            type="date"
-            value={grantedOn}
-            onChange={(e) => setGrantedOn(e.target.value)}
-          />
+          <DatePicker id="special-leave-grant-granted-on" value={grantedOn || undefined} onChange={(date) => setGrantedOn(date ?? '')} />
         </FormField>
 
         <FormField label="失効日(空欄なら失効しない)" htmlFor="special-leave-grant-expires-on">
-          <Input
-            id="special-leave-grant-expires-on"
-            type="date"
-            value={expiresOn}
-            onChange={(e) => setExpiresOn(e.target.value)}
-          />
+          <DatePicker id="special-leave-grant-expires-on" value={expiresOn || undefined} onChange={(date) => setExpiresOn(date ?? '')} />
         </FormField>
 
         <FormField label="付与日数" htmlFor="special-leave-grant-granted-days" required>

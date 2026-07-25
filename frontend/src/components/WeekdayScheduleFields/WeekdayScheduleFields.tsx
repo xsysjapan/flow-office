@@ -1,5 +1,5 @@
 import { Checkbox } from '../ui/checkbox'
-import { Input } from '../ui/input'
+import { TimePicker } from '../TimePicker/TimePicker'
 import type { AttendanceWeekdayEntry, WeeklyAttendancePattern } from '../../api/attendance'
 
 export const WEEKDAYS: { iso: number; label: string }[] = [
@@ -87,23 +87,23 @@ export function WeekdayScheduleFields({
               {label}曜日
             </label>
             <div className="flex items-center gap-2">
-              <Input
-                type="time"
-                aria-label={`${label}曜日の出勤時刻`}
-                className="w-28"
-                disabled={!row.enabled}
-                value={row.startTime}
-                onChange={(e) => onChange(iso, { startTime: e.target.value })}
-              />
+              <div className="w-28">
+                <TimePicker
+                  aria-label={`${label}曜日の出勤時刻`}
+                  disabled={!row.enabled}
+                  value={row.startTime}
+                  onChange={(time) => onChange(iso, { startTime: time ?? '' })}
+                />
+              </div>
               <span className="text-sm text-muted-foreground">〜</span>
-              <Input
-                type="time"
-                aria-label={`${label}曜日の退勤時刻`}
-                className="w-28"
-                disabled={!row.enabled}
-                value={row.endTime}
-                onChange={(e) => onChange(iso, { endTime: e.target.value })}
-              />
+              <div className="w-28">
+                <TimePicker
+                  aria-label={`${label}曜日の退勤時刻`}
+                  disabled={!row.enabled}
+                  value={row.endTime}
+                  onChange={(time) => onChange(iso, { endTime: time ?? '' })}
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2 pl-8 sm:pl-0">
               <label className="flex items-center gap-2 text-sm text-foreground">
@@ -115,23 +115,23 @@ export function WeekdayScheduleFields({
                 />
                 休憩
               </label>
-              <Input
-                type="time"
-                aria-label={`${label}曜日の休憩開始時刻`}
-                className="w-28"
-                disabled={!row.enabled || !row.breakEnabled}
-                value={row.breakStartTime}
-                onChange={(e) => onChange(iso, { breakStartTime: e.target.value })}
-              />
+              <div className="w-28">
+                <TimePicker
+                  aria-label={`${label}曜日の休憩開始時刻`}
+                  disabled={!row.enabled || !row.breakEnabled}
+                  value={row.breakStartTime}
+                  onChange={(time) => onChange(iso, { breakStartTime: time ?? '' })}
+                />
+              </div>
               <span className="text-sm text-muted-foreground">〜</span>
-              <Input
-                type="time"
-                aria-label={`${label}曜日の休憩終了時刻`}
-                className="w-28"
-                disabled={!row.enabled || !row.breakEnabled}
-                value={row.breakEndTime}
-                onChange={(e) => onChange(iso, { breakEndTime: e.target.value })}
-              />
+              <div className="w-28">
+                <TimePicker
+                  aria-label={`${label}曜日の休憩終了時刻`}
+                  disabled={!row.enabled || !row.breakEnabled}
+                  value={row.breakEndTime}
+                  onChange={(time) => onChange(iso, { breakEndTime: time ?? '' })}
+                />
+              </div>
             </div>
           </div>
         )
