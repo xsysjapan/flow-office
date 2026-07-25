@@ -103,4 +103,20 @@ class WorkStyleDefaultTest extends TestCase
         $this->assertTrue(WorkStyle::query()->find($flex['id'])->is_default);
         $this->assertSame($flex['id'], SystemSetting::current()->default_work_style_id);
     }
+
+    public function test_setting_the_already_default_work_style_repairs_a_desynced_system_setting(): void
+    {
+        $admin = $this->makeAdmin();
+        $created = $this->actingAs($admin)->postJson('/api/work-styles/default', [])->json();
+
+        // system_settings.default_work_style_id が work_styles.is_default とズレた状態
+        // (過去の不整合等)を再現する。
+        SystemSetting::current()->update(['default_work_style_id' => null]);
+        $this->assertNull(SystemSetting::current()->fresh()->default_work_style_id);
+
+        $response = $this->actingAs($admin)->postJson("/api/work-styles/{$created['id']}/set-default");
+
+        $response->assertOk()->assertJsonPath('is_default', true);
+        $this->assertSame($created['id'], SystemSetting::current()->fresh()->default_work_style_id);
+    }
 }

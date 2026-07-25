@@ -31,6 +31,10 @@ class SetDefaultWorkStyleHandler implements CommandHandler
         }
 
         if ($workStyle->is_default) {
+            // is_defaultは既にtrueでも、system_settings.default_work_style_id側が
+            // ズレている状態(過去の不整合等)を修復できるよう、ここでも同期を保証する。
+            SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
             return $workStyle;
         }
 
