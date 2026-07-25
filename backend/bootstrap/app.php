@@ -19,6 +19,15 @@ if (file_exists(dirname(__DIR__).'/.env')) {
     \Dotenv\Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
 }
 
+// config('app.api_prefix')が空文字の環境では'prefix/*'が'/*'になり、
+// 先頭スラッシュなしのリクエストパスに常にマッチしなくなるため、空の場合は'*'にする。
+function isApiRequest(Request $request): bool
+{
+    $apiPrefix = config('app.api_prefix', '');
+
+    return $request->is($apiPrefix === '' ? '*' : $apiPrefix.'/*');
+}
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
@@ -45,27 +54,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [EnsureFullAccessOrExplicitAbility::class]);
 
         $middleware->redirectGuestsTo(
-            fn (Request $request) => $request->is('api/*') ? null : route('login'),
+            fn (Request $request) => isApiRequest($request) ? null : route('login'),
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->shouldRenderJsonWhen(function (Request $request) {
-            $apiPrefix = config('app.api_prefix', '');
-            return $request->is($apiPrefix.'/*');
-        });
+        $exceptions->shouldRenderJsonWhen(fn (Request $request) => isApiRequest($request));
 
         // CommandHandlerが検知した業務ルール違反はクライアント起因のエラーとして422で返す。
         $exceptions->render(function (DomainRuleException $e, Request $request) {
-            $apiPrefix = config('app.api_prefix', '');
-            if ($request->is($apiPrefix.'/*')) {
+            if (isApiRequest($request)) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
         });
 
         // 楽観ロック競合(docs/26-usecases-monthly-import.md「楽観ロック」)はHTTP 409で返す。
         $exceptions->render(function (ConcurrencyException $e, Request $request) {
-            $apiPrefix = config('app.api_prefix', '');
-            if ($request->is($apiPrefix.'/*')) {
+            if (isApiRequest($request)) {
                 return response()->json(['message' => $e->getMessage(), 'code' => 'ATTENDANCE_VERSION_CONFLICT'], 409);
             }
         });
