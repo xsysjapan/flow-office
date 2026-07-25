@@ -140,6 +140,66 @@ class AttendanceAutoBreakTest extends TestCase
         $this->assertSame('12:30:00', $break->break_end_at->format('H:i:s'));
     }
 
+    public function test_auto_break_is_inserted_when_manually_editing_the_daily_attendance(): void
+    {
+        $employee = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $this->createWorkStyleAndAssignment($employee, $today, true);
+
+        Carbon::setTestNow($today->copy()->setTime(9, 0));
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        $dateString = $today->toDateString();
+        $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [],
+            'reason' => '手動入力での確定',
+        ]);
+
+        $editResponse->assertOk();
+
+        $day = AttendanceDay::query()->findOrFail($dayId);
+        $this->assertSame(1, $day->breaks()->count(), '手動編集でも勤務形態のauto_break_enabledを尊重して自動補完されるべき');
+
+        $break = $day->breaks()->first();
+        $this->assertSame('12:00:00', $break->break_start_at->format('H:i:s'));
+        $this->assertSame('13:00:00', $break->break_end_at->format('H:i:s'));
+
+        // 9:00〜18:00(9時間)から自動補完された休憩1時間を差し引いた480分が労働時間になる。
+        $this->assertSame(480, $editResponse->json('calculation.work_minutes'));
+    }
+
+    public function test_auto_break_is_not_inserted_when_manually_editing_with_a_break_already_entered(): void
+    {
+        $employee = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $this->createWorkStyleAndAssignment($employee, $today, true);
+
+        Carbon::setTestNow($today->copy()->setTime(9, 0));
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        $dateString = $today->toDateString();
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [[
+                'start' => "{$dateString}T12:00:00+09:00",
+                'end' => "{$dateString}T12:30:00+09:00",
+            ]],
+            'reason' => '手動入力での確定(休憩あり)',
+        ])->assertOk();
+
+        $day = AttendanceDay::query()->findOrFail($dayId);
+        $this->assertSame(1, $day->breaks()->count(), '手動で入力済みの休憩に加えて自動補完してはいけない');
+
+        $break = $day->breaks()->first();
+        $this->assertSame('12:00:00', $break->break_start_at->format('H:i:s'));
+        $this->assertSame('12:30:00', $break->break_end_at->format('H:i:s'));
+    }
+
     public function test_auto_break_is_not_inserted_when_the_work_style_has_auto_break_disabled(): void
     {
         $employee = User::factory()->create();

@@ -14,7 +14,6 @@ use App\Models\PaidLeaveUsage;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
 use App\Models\SpecialLeaveUsage;
-use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -49,14 +48,11 @@ use Illuminate\Support\Str;
  */
 class AttendanceDayPunchSyncer
 {
-    /** 標準休憩の自動補完を検討する最短実働時間(6時間)。 */
-    private const AUTO_BREAK_MINIMUM_WORK_MINUTES = 360;
-
     public function __construct(
         private readonly AttendancePunchReconciler $reconciler,
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
-        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+        private readonly AttendanceStandardBreakInserter $standardBreakInserter,
     ) {}
 
     /**
@@ -232,7 +228,7 @@ class AttendanceDayPunchSyncer
             $day,
         );
 
-        $this->autoInsertStandardBreakIfApplicable($aggregate, $transientDay);
+        $this->standardBreakInserter->insertIfApplicable($aggregate, $transientDay);
 
         $calculation = $this->calculator->calculate($transientDay);
         $aggregate->calculate($calculation);
@@ -300,75 +296,6 @@ class AttendanceDayPunchSyncer
         $day->setRelation('shiftAssignment', $shiftAssignment);
 
         return $day;
-    }
-
-    /**
-     * 指示書: 1日分の勤務が確定した際、働き方(work_styles.auto_break_enabled)が有効で、
-     * その日にまだ休憩が1件も記録されていない場合に限り、標準休憩(default_break_start_time〜
-     * default_break_end_time)を自動でattendance_breaksへ補完する。実際に打刻・編集された
-     * 休憩が1件でもあれば何もしない(上書き・重複させない)。
-     *
-     * 適用条件(.claude/skills/attendance-calc-review参照。いずれも所定労働時間・休憩時刻の
-     * マスタ設定のみを根拠にし、8時間等の法定値をここでハードコードしない):
-     * - 対象日の働き方でauto_break_enabledが有効
-     * - 働き方にdefault_break_start_time・default_break_end_timeが両方設定されている
-     * - 実働時間(出勤〜退勤)が6時間以上
-     * - 標準休憩の時間帯が実働時間内に完全に収まる
-     * - その日に休憩が1件も記録されていない
-     */
-    private function autoInsertStandardBreakIfApplicable(AttendanceDayAggregate $aggregate, AttendanceDay $transientDay): void
-    {
-        if ($transientDay->breaks->isNotEmpty()) {
-            return;
-        }
-
-        $start = $transientDay->actual_start_at;
-        $end = $transientDay->actual_end_at;
-        if ($start === null || $end === null) {
-            return;
-        }
-
-        if ($start->diffInMinutes($end) < self::AUTO_BREAK_MINIMUM_WORK_MINUTES) {
-            return;
-        }
-
-        $workStyle = $transientDay->shiftAssignment?->workStyle
-            ?? $this->workStyleFallbackResolver->resolveForUser($transientDay->user_id, $transientDay->work_date->copy());
-
-        if (! $this->supportsAutoBreak($workStyle)) {
-            return;
-        }
-
-        $breakStart = $transientDay->work_date->copy()->setTimeFromTimeString($workStyle->default_break_start_time);
-        $breakEnd = $transientDay->work_date->copy()->setTimeFromTimeString($workStyle->default_break_end_time);
-
-        if ($breakEnd->lessThanOrEqualTo($breakStart)) {
-            return;
-        }
-
-        if (! ($start->lessThanOrEqualTo($breakStart) && $breakEnd->lessThanOrEqualTo($end))) {
-            return;
-        }
-
-        $aggregate->autoInsertBreak(
-            workStyleId: $workStyle->id,
-            breakStartAt: LocalDateTime::formatWithOffsetMinutes($breakStart, $transientDay->utc_offset_minutes),
-            breakEndAt: LocalDateTime::formatWithOffsetMinutes($breakEnd, $transientDay->utc_offset_minutes),
-        );
-
-        // 計算(AttendanceCalculator)にもこの自動補完した休憩を反映する。
-        $transientDay->setRelation(
-            'breaks',
-            $transientDay->breaks->push(new AttendanceBreak(['break_start_at' => $breakStart, 'break_end_at' => $breakEnd])),
-        );
-    }
-
-    private function supportsAutoBreak(?WorkStyle $workStyle): bool
-    {
-        return $workStyle !== null
-            && $workStyle->auto_break_enabled
-            && $workStyle->default_break_start_time !== null
-            && $workStyle->default_break_end_time !== null;
     }
 
     private function resolveShiftAssignmentId(string $userId, string $workDate): ?string
