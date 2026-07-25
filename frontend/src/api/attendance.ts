@@ -92,6 +92,72 @@ export function createAttendanceDay(input: CreateAttendanceDayInput): Promise<At
   return apiFetch('/attendance/days', { method: 'POST', body: input })
 }
 
+/** 週次・月次一括入力: 曜日ごとの実際の出退勤・休憩時刻。ISO曜日(1=月〜7=日)をキーとする。 */
+export type AttendanceWeekdayEntry = {
+  start_time: string
+  end_time: string
+  break_start_time?: string
+  break_end_time?: string
+} | null
+export type WeeklyAttendancePattern = Record<number, AttendanceWeekdayEntry>
+/** 日付('YYYY-MM-DD')をキーとする、週次パターンへの日単位の上書き。 */
+export type AttendanceDayOverrides = Record<string, AttendanceWeekdayEntry>
+
+export interface PreviewAttendancePatternInput {
+  from: string
+  to: string
+  utc_offset: string
+  weekly_pattern: WeeklyAttendancePattern
+  day_overrides?: AttendanceDayOverrides
+}
+
+export interface AttendancePatternPreviewDay {
+  date: string
+  weekday: number
+  start_time: string
+  end_time: string
+  break_start_time: string | null
+  break_end_time: string | null
+  has_existing_day: boolean
+  is_locked: boolean
+}
+
+/** 確定前に、週次・月次パターンの実績展開結果を確認する(永続化しない)。 */
+export function previewAttendancePattern(
+  input: PreviewAttendancePatternInput,
+): Promise<{ days: AttendancePatternPreviewDay[] }> {
+  return apiFetch('/attendance/days/preview-pattern', { method: 'POST', body: input })
+}
+
+export interface GenerateAttendancePatternInput extends PreviewAttendancePatternInput {
+  user_id: string
+  overwrite_mode?: 'skip_existing' | 'overwrite_existing'
+  reason: string
+}
+
+export type AttendancePatternResultStatus = 'created' | 'updated' | 'skipped_existing' | 'rejected'
+
+export interface AttendancePatternResultDay {
+  date: string
+  status: AttendancePatternResultStatus
+  message: string | null
+}
+
+export interface GenerateAttendancePatternResult {
+  results: AttendancePatternResultDay[]
+  created_count: number
+  updated_count: number
+  skipped_count: number
+  rejected_count: number
+}
+
+/** 週次・月次パターンを確定し、指定期間の実績(attendance_days)を一括作成・更新する。 */
+export function generateAttendancePattern(
+  input: GenerateAttendancePatternInput,
+): Promise<GenerateAttendancePatternResult> {
+  return apiFetch('/attendance/days/generate-pattern', { method: 'POST', body: input })
+}
+
 export type AttendanceDayPunchLogAction = 'leave_punches' | 'delete_punches' | 'recreate_from_punches'
 
 export interface DeleteAttendanceDayInput {

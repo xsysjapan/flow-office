@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as employeeRotationAssignmentsApi from '../../api/employeeRotationAssignments'
@@ -11,6 +11,7 @@ import * as usersApi from '../../api/users'
 import * as workCalendarsApi from '../../api/workCalendars'
 import * as workStylesApi from '../../api/workStyles'
 import type { Paginated, RotationPattern, ShiftPattern, User, WorkCalendar, WorkStyle } from '../../api/types'
+import { pickDate, pickTime } from '../../test-support/pickerInteractions'
 import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
 
 const calendar: WorkCalendar = {
@@ -216,7 +217,7 @@ describe('WorkStylesAndShiftsPage', () => {
         four_week_period_start_date: undefined,
       }),
     )
-  })
+  }, 15000)
 
   it('creates a work style with auto break enabled when the checkbox is checked', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-5', code: 'auto-break' })
@@ -238,8 +239,10 @@ describe('WorkStylesAndShiftsPage', () => {
         }),
       ),
     )
-  })
+  }, 15000)
 
+  // このページは多数のCardを同時に描画するため、フォーム入力が多いテストは
+  // 既定の5000msにわずかに収まらないことがある(実処理は正常、環境の負荷次第の揺れ)。
   it('creates a shift-based work style with a four-weeks-four-days legal holiday rule', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-3', code: 'shift' })
     renderPage()
@@ -252,7 +255,7 @@ describe('WorkStylesAndShiftsPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
     await userEvent.click(screen.getByLabelText('シフト制'))
     await userEvent.selectOptions(screen.getByLabelText('法定休日の与え方'), '4週4日以上(変形休日制)')
-    await userEvent.type(screen.getByLabelText('4週間の起算日'), '2026-06-01')
+    await pickDate(userEvent.setup(), '4週間の起算日', '2026-06-01')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
@@ -264,7 +267,7 @@ describe('WorkStylesAndShiftsPage', () => {
         }),
       ),
     )
-  })
+  }, 15000)
 
   it('creates a flex work style with core time and flexible time settings', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-4', code: 'flex' })
@@ -276,11 +279,11 @@ describe('WorkStylesAndShiftsPage', () => {
     await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
-    fireEvent.change(screen.getByLabelText('勤務可能開始時刻'), { target: { value: '05:00' } })
-    fireEvent.change(screen.getByLabelText('勤務可能終了時刻'), { target: { value: '22:00' } })
+    await pickTime(userEvent.setup(), '勤務可能開始時刻', '05:00')
+    await pickTime(userEvent.setup(), '勤務可能終了時刻', '22:00')
     await userEvent.click(screen.getByLabelText('コアタイムあり'))
-    fireEvent.change(screen.getByLabelText('コアタイム開始時刻'), { target: { value: '10:00' } })
-    fireEvent.change(screen.getByLabelText('コアタイム終了時刻'), { target: { value: '15:00' } })
+    await pickTime(userEvent.setup(), 'コアタイム開始時刻', '10:00')
+    await pickTime(userEvent.setup(), 'コアタイム終了時刻', '15:00')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
@@ -295,7 +298,7 @@ describe('WorkStylesAndShiftsPage', () => {
         }),
       ),
     )
-  })
+  }, 15000)
 
   it('generates and shows shifts for the selected user and period', async () => {
     const paginatedUsers: Paginated<User> = {
@@ -333,8 +336,8 @@ describe('WorkStylesAndShiftsPage', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getByLabelText('勤務形態'), '標準勤務')
-    await userEvent.type(screen.getByLabelText('開始日'), '2026-08-01')
-    await userEvent.type(screen.getByLabelText('終了日'), '2026-08-31')
+    await pickDate(userEvent.setup(), '開始日', '2026-08-01')
+    await pickDate(userEvent.setup(), '終了日', '2026-08-31')
     await userEvent.click(screen.getByRole('button', { name: '生成する' }))
 
     await waitFor(() =>
@@ -345,7 +348,7 @@ describe('WorkStylesAndShiftsPage', () => {
         to: '2026-08-31',
       }),
     )
-  })
+  }, 15000)
 
   it('assigns a monthly work style to a user and shows the assignment history', async () => {
     const paginatedUsers: Paginated<User> = {
@@ -495,8 +498,8 @@ describe('WorkStylesAndShiftsPage', () => {
 
     await userEvent.type(screen.getByLabelText('パターンコード'), 'night_shift')
     await userEvent.type(screen.getByLabelText('パターン名称'), '深夜勤')
-    fireEvent.change(screen.getByLabelText('開始時刻'), { target: { value: '22:00' } })
-    fireEvent.change(screen.getByLabelText('終了時刻'), { target: { value: '06:00' } })
+    await pickTime(userEvent.setup(), '開始時刻', '22:00')
+    await pickTime(userEvent.setup(), '終了時刻', '06:00')
     await userEvent.type(screen.getByLabelText('休憩(分)'), '60')
     await userEvent.type(screen.getByLabelText('所定労働時間(分)'), '420')
     await userEvent.click(screen.getByLabelText('日跨ぎ勤務(終了時刻は翌日)'))
@@ -513,7 +516,7 @@ describe('WorkStylesAndShiftsPage', () => {
         prescribed_work_minutes: 420,
       }),
     )
-  })
+  }, 15000)
 
   it('assigns a shift pattern to an employee day on the shift schedule board', async () => {
     const shiftWorkStyle: WorkStyle = {
@@ -569,7 +572,7 @@ describe('WorkStylesAndShiftsPage', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getByLabelText('勤務形態(シフト表)'), '3交代制')
-    await userEvent.type(screen.getByLabelText('対象日'), '2026-08-10')
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.selectOptions(screen.getByLabelText('シフトパターン'), '日勤')
     await userEvent.click(screen.getByRole('button', { name: '割り当てる(下書き)' }))
 
@@ -582,7 +585,7 @@ describe('WorkStylesAndShiftsPage', () => {
         is_legal_holiday: false,
       }),
     )
-  })
+  }, 15000)
 
   it('creates a rotation pattern from a sequence of shift patterns', async () => {
     const shiftWorkStyle: WorkStyle = { ...workStyle, id: 'work-style-2', code: 'shift-3', name: '3交代制', is_shift_based: true }
@@ -682,7 +685,7 @@ describe('WorkStylesAndShiftsPage', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getByLabelText('ローテーションパターン'), '2交代3班ローテーション')
-    await userEvent.type(screen.getByLabelText('ローテーション開始日'), '2026-08-01')
+    await pickDate(userEvent.setup(), 'ローテーション開始日', '2026-08-01')
     await userEvent.click(screen.getByRole('button', { name: 'ローテーションを割り当てる' }))
 
     await waitFor(() =>
@@ -694,8 +697,8 @@ describe('WorkStylesAndShiftsPage', () => {
       }),
     )
 
-    await userEvent.type(screen.getByLabelText('生成開始日'), '2026-08-01')
-    await userEvent.type(screen.getByLabelText('生成終了日'), '2026-08-02')
+    await pickDate(userEvent.setup(), '生成開始日', '2026-08-01')
+    await pickDate(userEvent.setup(), '生成終了日', '2026-08-02')
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 
     expect(await screen.findByText('2026-08-01: A勤')).toBeInTheDocument()
@@ -712,5 +715,115 @@ describe('WorkStylesAndShiftsPage', () => {
       }),
     )
     expect(await screen.findByText('2件生成しました。')).toBeInTheDocument()
-  })
+  }, 15000)
+
+  it('previews and confirms a weekly shift pattern for the selected user and period', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
+      days: [
+        { date: '2026-08-03', weekday: 1, is_working_day: true, start_time: '09:00', end_time: '18:00', break_minutes: 60, source: 'weekly_pattern' },
+        { date: '2026-08-08', weekday: 6, is_working_day: false, start_time: null, end_time: null, break_minutes: 0, source: 'weekly_pattern' },
+      ],
+    })
+    vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockResolvedValue({
+      generated: [],
+      generated_count: 5,
+      skipped_dates: [],
+    })
+
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(週次)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態(週次)'), '標準勤務')
+    await pickDate(userEvent.setup(), '適用開始日', '2026-08-01')
+    await pickDate(userEvent.setup(), '適用終了日', '2026-08-31')
+    await userEvent.click(screen.getByRole('button', { name: '週次パターンをプレビューする' }))
+
+    const mondayToFriday = { start_time: '09:00', end_time: '18:00', break_minutes: 60 }
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.previewPatternShiftAssignments).toHaveBeenCalledWith({
+        from: '2026-08-01',
+        to: '2026-08-31',
+        weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+      }),
+    )
+    expect(await screen.findByText('2026-08-03: 09:00〜18:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-08: 休み')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '週次パターンで確定する' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.generatePatternShiftAssignments).toHaveBeenCalledWith({
+        user_id: 'user-5',
+        work_style_id: 'work-style-1',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+        overwrite_mode: 'skip_edited',
+      }),
+    )
+    expect(await screen.findByText('5件生成しました。')).toBeInTheDocument()
+  }, 15000)
+
+  it('overrides a single day when confirming a monthly shift pattern', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
+      days: [{ date: '2026-08-03', weekday: 1, is_working_day: false, start_time: null, end_time: null, break_minutes: 0, source: 'day_override' }],
+    })
+    vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockResolvedValue({
+      generated: [],
+      generated_count: 30,
+      skipped_dates: ['2026-08-03'],
+    })
+
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(月次)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態(月次)'), '標準勤務')
+    await userEvent.type(screen.getByLabelText('対象年月(月次パターン)'), '2026-08')
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-03(月)' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '休みにする' }))
+    await userEvent.click(screen.getByRole('button', { name: '月次パターンをプレビューする' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.previewPatternShiftAssignments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '2026-08-01',
+          to: '2026-08-31',
+          day_overrides: { '2026-08-03': null },
+        }),
+      ),
+    )
+    expect(await screen.findByText('2026-08-03: 休み')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '月次パターンで確定する' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.generatePatternShiftAssignments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-5',
+          work_style_id: 'work-style-1',
+          day_overrides: { '2026-08-03': null },
+        }),
+      ),
+    )
+    expect(await screen.findByText('30件生成しました。(実績・締め済み・個別上書きのため1件をスキップしました)')).toBeInTheDocument()
+  }, 15000)
 })

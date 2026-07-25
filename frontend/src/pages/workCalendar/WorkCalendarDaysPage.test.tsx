@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { WorkCalendarDaysPage } from './WorkCalendarDaysPage'
 
 const calendar: WorkCalendar = {
@@ -47,7 +48,7 @@ describe('WorkCalendarDaysPage', () => {
     await screen.findByText('2026年度カレンダー の日別編集')
     await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
 
-    await userEvent.type(screen.getByLabelText('日付'), '2026-05-05')
+    await pickDate(userEvent.setup(), '日付', '2026-05-05')
     await userEvent.type(screen.getByLabelText('区分'), '祝日')
     await userEvent.click(screen.getByLabelText('稼働日'))
     await userEvent.click(screen.getByLabelText('法定休日'))

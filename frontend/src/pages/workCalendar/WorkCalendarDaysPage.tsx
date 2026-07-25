@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -79,11 +80,10 @@ export function WorkCalendarDaysPage() {
           {rows.map((row) => (
             <TableRow key={row.rowId}>
               <TableCell>
-                <Input
+                <DatePicker
                   aria-label="日付"
-                  type="date"
-                  value={row.date}
-                  onChange={(e) => updateRow(row.rowId, { date: e.target.value })}
+                  value={row.date || undefined}
+                  onChange={(date) => updateRow(row.rowId, { date: date ?? '' })}
                 />
               </TableCell>
               <TableCell>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -86,12 +87,7 @@ function SpecialLeaveRequestForm() {
         </FormField>
 
         <FormField label="対象日" htmlFor="special-leave-target-date" required>
-          <Input
-            id="special-leave-target-date"
-            type="date"
-            value={targetDate}
-            onChange={(e) => setTargetDate(e.target.value)}
-          />
+          <DatePicker id="special-leave-target-date" value={targetDate || undefined} onChange={(date) => setTargetDate(date ?? '')} />
         </FormField>
 
         <FormField label="取得単位" htmlFor="special-leave-leave-type" required>

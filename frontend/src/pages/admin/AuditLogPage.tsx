@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -62,10 +63,10 @@ export function AuditLogPage() {
           <Input id="audit-user-id" value={userId} onChange={(e) => setUserId(e.target.value)} />
         </FormField>
         <FormField label="期間(開始)" htmlFor="audit-from">
-          <Input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker id="audit-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
         </FormField>
         <FormField label="期間(終了)" htmlFor="audit-to">
-          <Input id="audit-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker id="audit-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
         </FormField>
       </div>
 

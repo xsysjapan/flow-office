@@ -3,12 +3,12 @@ import { useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { AuthenticationKeysPanel } from '../../components/AuthenticationKeysPanel/AuthenticationKeysPanel'
 import { Checkbox } from '../../components/ui/checkbox'
-import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { useRoles } from '../../hooks/useRoles'
 import {
@@ -148,20 +148,14 @@ export function UserRoleEditPage() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField label="入社日(有給の自動付与に使用)" htmlFor="user-role-edit-hire-date">
-            <Input
-              id="user-role-edit-hire-date"
-              type="date"
-              value={hireDate}
-              onChange={(e) => setHireDate(e.target.value)}
-            />
+            <DatePicker id="user-role-edit-hire-date" value={hireDate || undefined} onChange={(date) => setHireDate(date ?? '')} />
           </FormField>
           <FormField label="退社日(未設定なら在籍中)" htmlFor="user-role-edit-termination-date">
-            <Input
+            <DatePicker
               id="user-role-edit-termination-date"
-              type="date"
               min={hireDate || undefined}
-              value={terminationDate}
-              onChange={(e) => setTerminationDate(e.target.value)}
+              value={terminationDate || undefined}
+              onChange={(date) => setTerminationDate(date ?? '')}
             />
           </FormField>
         </div>
@@ -193,11 +187,10 @@ export function UserRoleEditPage() {
           label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
           htmlFor="user-role-edit-usage-start-date"
         >
-          <Input
+          <DatePicker
             id="user-role-edit-usage-start-date"
-            type="date"
-            value={usageStartDate}
-            onChange={(e) => setUsageStartDate(e.target.value)}
+            value={usageStartDate || undefined}
+            onChange={(date) => setUsageStartDate(date ?? '')}
           />
         </FormField>
 

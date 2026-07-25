@@ -11,12 +11,15 @@ use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
+use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Services\AttendanceDayDefaultsResolver;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
+use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
@@ -333,6 +336,122 @@ class AttendanceController extends Controller
         ));
 
         return new AttendanceDayResource($attendanceDay->refresh()->load(['breaks', 'leaveSegments', 'calculation']));
+    }
+
+    /**
+     * 週次・月次一括入力: 曜日ごとの実際の出退勤・休憩時刻(+日単位の上書き)から、
+     * 指定期間の実績をどう展開するかを確認する(永続化しない)。
+     */
+    #[OA\Post(
+        path: '/attendance/days/preview-pattern',
+        operationId: 'attendance.days.previewPattern',
+        summary: '週次・月次パターンの実績展開結果をプレビューする',
+        tags: ['勤怠'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['from', 'to', 'utc_offset', 'weekly_pattern'], properties: [new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'utc_offset', type: 'string'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function previewAttendancePattern(Request $request, AttendanceEditGuard $guard): JsonResponse
+    {
+        $data = $request->validate($this->attendancePatternValidationRules());
+
+        $userId = $request->user()->id;
+        $resolver = new WeeklyPatternResolver($data['weekly_pattern'], $data['day_overrides'] ?? []);
+        $period = Carbon::parse($data['from'])->toPeriod(Carbon::parse($data['to']));
+        $days = [];
+
+        foreach ($period as $date) {
+            $resolved = $resolver->resolve($date);
+            $value = $resolved['value'] ?? null;
+
+            if ($value === null) {
+                continue;
+            }
+
+            $hasExistingDay = AttendanceDay::query()
+                ->where('user_id', $userId)
+                ->whereDate('work_date', $date->toDateString())
+                ->exists();
+
+            $days[] = [
+                'date' => $date->toDateString(),
+                'weekday' => $date->dayOfWeekIso,
+                'start_time' => $value['start_time'],
+                'end_time' => $value['end_time'],
+                'break_start_time' => $value['break_start_time'] ?? null,
+                'break_end_time' => $value['break_end_time'] ?? null,
+                'has_existing_day' => $hasExistingDay,
+                'is_locked' => ! $guard->isMutable(null, $userId, $date->toDateString()),
+            ];
+        }
+
+        return response()->json(['days' => $days]);
+    }
+
+    /**
+     * 週次・月次一括入力: 曜日ごとの実際の出退勤・休憩時刻(+日単位の上書き)を指定期間へ
+     * 一括展開し、実績(attendance_days)を作成・更新する。日次ロジックは複製せず、
+     * 日ごとに既存の単日Command(CreateAttendanceDay/EditAttendanceDay)を呼び出す
+     * (GeneratePatternAttendanceDaysHandler参照)。
+     */
+    #[OA\Post(
+        path: '/attendance/days/generate-pattern',
+        operationId: 'attendance.days.generatePattern',
+        summary: '週次・月次パターンから実績を一括作成・更新する',
+        tags: ['勤怠'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'from', 'to', 'utc_offset', 'weekly_pattern', 'reason'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'utc_offset', type: 'string'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function generateAttendancePattern(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            ...$this->attendancePatternValidationRules(),
+            'overwrite_mode' => ['nullable', Rule::in([
+                GeneratePatternAttendanceDays::OVERWRITE_MODE_SKIP_EXISTING,
+                GeneratePatternAttendanceDays::OVERWRITE_MODE_OVERWRITE_EXISTING,
+            ])],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の実績を一括入力する権限がありません。');
+
+        $result = $commandBus->dispatch(new GeneratePatternAttendanceDays(
+            userId: $data['user_id'],
+            from: $data['from'],
+            to: $data['to'],
+            weeklyPattern: $data['weekly_pattern'],
+            dayOverrides: $data['day_overrides'] ?? [],
+            utcOffset: $data['utc_offset'],
+            overwriteMode: $data['overwrite_mode'] ?? GeneratePatternAttendanceDays::OVERWRITE_MODE_SKIP_EXISTING,
+            reason: $data['reason'],
+            actingUserId: $request->user()->id,
+        ));
+
+        return response()->json($result);
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    private function attendancePatternValidationRules(): array
+    {
+        return [
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+            'utc_offset' => ['required', 'regex:/^[+-]\d{2}:\d{2}$/'],
+            'weekly_pattern' => ['required', 'array'],
+            'weekly_pattern.*' => ['nullable', 'array'],
+            'weekly_pattern.*.start_time' => ['required_with:weekly_pattern.*.end_time', 'date_format:H:i'],
+            'weekly_pattern.*.end_time' => ['required_with:weekly_pattern.*.start_time', 'date_format:H:i'],
+            'weekly_pattern.*.break_start_time' => ['required_with:weekly_pattern.*.break_end_time', 'date_format:H:i'],
+            'weekly_pattern.*.break_end_time' => ['required_with:weekly_pattern.*.break_start_time', 'date_format:H:i'],
+            'day_overrides' => ['nullable', 'array'],
+            'day_overrides.*' => ['nullable', 'array'],
+            'day_overrides.*.start_time' => ['required_with:day_overrides.*.end_time', 'date_format:H:i'],
+            'day_overrides.*.end_time' => ['required_with:day_overrides.*.start_time', 'date_format:H:i'],
+            'day_overrides.*.break_start_time' => ['required_with:day_overrides.*.break_end_time', 'date_format:H:i'],
+            'day_overrides.*.break_end_time' => ['required_with:day_overrides.*.break_start_time', 'date_format:H:i'],
+        ];
     }
 
     /**

@@ -21,12 +21,13 @@ if (file_exists(dirname(__DIR__).'/.env')) {
 
 // config('app.api_prefix')が空文字の環境では'prefix/*'が'/*'になり、
 // 先頭スラッシュなしのリクエストパスに常にマッチしなくなるため、空の場合は'*'にする。
-function isApiRequest(Request $request): bool
-{
+// クロージャとして定義する(トップレベル関数だとLaravelのテストが各テストごとに
+// このファイルをrequireし直すため、2件目以降のテストで関数の再宣言エラーになる)。
+$isApiRequest = function (Request $request): bool {
     $apiPrefix = config('app.api_prefix', '');
 
     return $request->is($apiPrefix === '' ? '*' : $apiPrefix.'/*');
-}
+};
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -36,7 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
+    ->withMiddleware(function (Middleware $middleware) use ($isApiRequest): void {
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
             // 端末(devices)・認証キー発行トークン等、限定abilityのSanctumトークン用。
@@ -54,22 +55,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [EnsureFullAccessOrExplicitAbility::class]);
 
         $middleware->redirectGuestsTo(
-            fn (Request $request) => isApiRequest($request) ? null : route('login'),
+            fn (Request $request) => $isApiRequest($request) ? null : route('login'),
         );
     })
-    ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->shouldRenderJsonWhen(fn (Request $request) => isApiRequest($request));
+    ->withExceptions(function (Exceptions $exceptions) use ($isApiRequest): void {
+        $exceptions->shouldRenderJsonWhen(fn (Request $request) => $isApiRequest($request));
 
         // CommandHandlerが検知した業務ルール違反はクライアント起因のエラーとして422で返す。
-        $exceptions->render(function (DomainRuleException $e, Request $request) {
-            if (isApiRequest($request)) {
+        $exceptions->render(function (DomainRuleException $e, Request $request) use ($isApiRequest) {
+            if ($isApiRequest($request)) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
         });
 
         // 楽観ロック競合(docs/26-usecases-monthly-import.md「楽観ロック」)はHTTP 409で返す。
-        $exceptions->render(function (ConcurrencyException $e, Request $request) {
-            if (isApiRequest($request)) {
+        $exceptions->render(function (ConcurrencyException $e, Request $request) use ($isApiRequest) {
+            if ($isApiRequest($request)) {
                 return response()->json(['message' => $e->getMessage(), 'code' => 'ATTENDANCE_VERSION_CONFLICT'], 409);
             }
         });

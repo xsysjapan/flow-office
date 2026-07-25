@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   assignShiftPatternDay,
   fetchShiftAssignments,
+  generatePatternShiftAssignments,
   generateShiftAssignments,
+  previewPatternShiftAssignments,
   publishShiftSchedule,
   reviewShiftSchedule,
   type AssignShiftPatternDayInput,
   type GenerateShiftAssignmentsInput,
+  type PatternShiftAssignmentsInput,
+  type PreviewPatternShiftAssignmentsInput,
   type ShiftScheduleTarget,
 } from '../api/employeeShiftAssignments'
 
@@ -56,6 +60,25 @@ export function usePublishShiftSchedule() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['employee-shift-assignments'] })
       void queryClient.invalidateQueries({ queryKey: ['shift-schedule-review'] })
+    },
+  })
+}
+
+/** 週次・月次一括入力: 確定前に展開結果をプレビューする(永続化しない)。 */
+export function usePreviewPatternShiftAssignments() {
+  return useMutation({
+    mutationFn: (input: PreviewPatternShiftAssignmentsInput) => previewPatternShiftAssignments(input),
+  })
+}
+
+/** 週次・月次一括入力: パターンを確定し、勤務予定を一括生成する。 */
+export function useGeneratePatternShiftAssignments() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: PatternShiftAssignmentsInput) => generatePatternShiftAssignments(input),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['employee-shift-assignments', input.user_id] })
     },
   })
 }

@@ -5,6 +5,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
 import { useCreateWorkCalendar, usePublishWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
@@ -70,11 +71,11 @@ export function WorkCalendarListPage() {
           </FormField>
 
           <FormField label="開始日" htmlFor="calendar-starts-on" required>
-            <Input id="calendar-starts-on" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
+            <DatePicker id="calendar-starts-on" value={startsOn || undefined} onChange={(date) => setStartsOn(date ?? '')} />
           </FormField>
 
           <FormField label="終了日" htmlFor="calendar-ends-on" required>
-            <Input id="calendar-ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
+            <DatePicker id="calendar-ends-on" value={endsOn || undefined} onChange={(date) => setEndsOn(date ?? '')} />
           </FormField>
 
           <FormField label="週の開始日(0=日曜)" htmlFor="calendar-week-starts-on">

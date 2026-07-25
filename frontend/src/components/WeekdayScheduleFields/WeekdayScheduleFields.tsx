@@ -1,0 +1,141 @@
+import { Checkbox } from '../ui/checkbox'
+import { TimePicker } from '../TimePicker/TimePicker'
+import type { AttendanceWeekdayEntry, WeeklyAttendancePattern } from '../../api/attendance'
+
+export const WEEKDAYS: { iso: number; label: string }[] = [
+  { iso: 1, label: '月' },
+  { iso: 2, label: '火' },
+  { iso: 3, label: '水' },
+  { iso: 4, label: '木' },
+  { iso: 5, label: '金' },
+  { iso: 6, label: '土' },
+  { iso: 7, label: '日' },
+]
+
+export interface WeekdayRowState {
+  enabled: boolean
+  startTime: string
+  endTime: string
+  breakEnabled: boolean
+  breakStartTime: string
+  breakEndTime: string
+}
+
+/** 平日(月〜金)9:00〜18:00・休憩12:00〜13:00、土日は入力しない、を初期値にする。 */
+export function defaultWeeklyPatternState(): Record<number, WeekdayRowState> {
+  const state: Record<number, WeekdayRowState> = {}
+  for (const { iso } of WEEKDAYS) {
+    state[iso] = {
+      enabled: iso <= 5,
+      startTime: '09:00',
+      endTime: '18:00',
+      breakEnabled: iso <= 5,
+      breakStartTime: '12:00',
+      breakEndTime: '13:00',
+    }
+  }
+  return state
+}
+
+export function buildWeeklyPattern(state: Record<number, WeekdayRowState>): WeeklyAttendancePattern {
+  const pattern: WeeklyAttendancePattern = {}
+  for (const { iso } of WEEKDAYS) {
+    const row = state[iso]
+    pattern[iso] = row.enabled ? weekdayEntry(row) : null
+  }
+  return pattern
+}
+
+export function weekdayEntry(row: {
+  startTime: string
+  endTime: string
+  breakEnabled: boolean
+  breakStartTime: string
+  breakEndTime: string
+}): AttendanceWeekdayEntry {
+  return {
+    start_time: row.startTime,
+    end_time: row.endTime,
+    ...(row.breakEnabled ? { break_start_time: row.breakStartTime, break_end_time: row.breakEndTime } : {}),
+  }
+}
+
+/**
+ * 週次・月次一括入力で共通して使う「曜日ごとに入力する/しない・出退勤時刻・休憩時刻」の入力行。
+ */
+export function WeekdayScheduleFields({
+  state,
+  onChange,
+}: {
+  state: Record<number, WeekdayRowState>
+  onChange: (iso: number, patch: Partial<WeekdayRowState>) => void
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-2">
+      {WEEKDAYS.map(({ iso, label }) => {
+        const row = state[iso]
+        return (
+          <div
+            key={iso}
+            className="flex flex-col gap-2 rounded-md border border-border p-2 md:flex-row md:flex-wrap md:items-center sm:gap-3"
+          >
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground w-24">
+                <Checkbox
+                  checked={row.enabled}
+                  onCheckedChange={(checked) => onChange(iso, { enabled: checked === true })}
+                />
+                {label}曜日
+              </label>
+              <div className="w-24">
+                <TimePicker
+                  aria-label={`${label}曜日の出勤時刻`}
+                  disabled={!row.enabled}
+                  value={row.startTime}
+                  onChange={(time) => onChange(iso, { startTime: time ?? '' })}
+                />
+              </div>
+              <span className="text-sm text-muted-foreground">〜</span>
+              <div className="w-24">
+                <TimePicker
+                  aria-label={`${label}曜日の退勤時刻`}
+                  disabled={!row.enabled}
+                  value={row.endTime}
+                  onChange={(time) => onChange(iso, { endTime: time ?? '' })}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pl-4 md:pl-0">
+              <label className="flex items-center gap-2 text-xs w-20 text-foreground md:text-sm">
+                <Checkbox
+                  checked={row.breakEnabled}
+                  aria-label={`${label}曜日の休憩`}
+                  disabled={!row.enabled}
+                  onCheckedChange={(checked) => onChange(iso, { breakEnabled: checked === true })}
+                />
+                休憩
+              </label>
+              <div className="w-24">
+                <TimePicker
+                  aria-label={`${label}曜日の休憩開始時刻`}
+                  disabled={!row.enabled || !row.breakEnabled}
+                  value={row.breakStartTime}
+                  onChange={(time) => onChange(iso, { breakStartTime: time ?? '' })}
+                />
+              </div>
+              <span className="text-sm text-muted-foreground">〜</span>
+              <div className="w-24">
+                <TimePicker
+                  aria-label={`${label}曜日の休憩終了時刻`}
+                  disabled={!row.enabled || !row.breakEnabled}
+                  value={row.breakEndTime}
+                  onChange={(time) => onChange(iso, { breakEndTime: time ?? '' })}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

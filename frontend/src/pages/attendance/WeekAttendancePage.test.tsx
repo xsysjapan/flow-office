@@ -8,6 +8,20 @@ import type { AttendanceDay } from '../../api/types'
 import { addDays, formatDate, mondayOf } from '../../utils/weekDates'
 import { WeekAttendancePage } from './WeekAttendancePage'
 
+const currentUser = {
+  id: 'user-1',
+  name: '本人太郎',
+  email: 'taro@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active' as const,
+  last_login_at: null,
+}
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: currentUser }),
+}))
+
 const weekStart = formatDate(mondayOf(new Date()))
 
 const mondayRecord: AttendanceDay = {

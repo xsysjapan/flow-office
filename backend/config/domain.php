@@ -24,6 +24,8 @@ use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
+use App\Domain\Attendance\Commands\GeneratePatternShiftAssignments;
 use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
 use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
 use App\Domain\Attendance\Commands\PublishWorkCalendar;
@@ -59,6 +61,8 @@ use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
 use App\Domain\Attendance\Handlers\GenerateEmployeeShiftAssignmentsHandler;
+use App\Domain\Attendance\Handlers\GeneratePatternAttendanceDaysHandler;
+use App\Domain\Attendance\Handlers\GeneratePatternShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
@@ -259,6 +263,8 @@ return [
         CreateShiftPattern::class => CreateShiftPatternHandler::class,
         UpdateShiftPattern::class => UpdateShiftPatternHandler::class,
         GenerateEmployeeShiftAssignments::class => GenerateEmployeeShiftAssignmentsHandler::class,
+        GeneratePatternAttendanceDays::class => GeneratePatternAttendanceDaysHandler::class,
+        GeneratePatternShiftAssignments::class => GeneratePatternShiftAssignmentsHandler::class,
         AssignShiftPatternDay::class => AssignShiftPatternDayHandler::class,
         PublishEmployeeShiftAssignments::class => PublishEmployeeShiftAssignmentsHandler::class,
         CreateRotationPattern::class => CreateRotationPatternHandler::class,

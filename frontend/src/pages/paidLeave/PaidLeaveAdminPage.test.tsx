@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
 import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, User } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
 
 const rule: PaidLeaveGrantRule = {
@@ -90,8 +91,8 @@ describe('PaidLeaveAdminPage', () => {
     await userEvent.click(await screen.findByRole('combobox'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await userEvent.type(screen.getByLabelText('付与日'), '2026-07-01')
-    await userEvent.type(screen.getByLabelText('失効日'), '2027-06-30')
+    await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+    await pickDate(userEvent.setup(), '失効日', '2027-06-30')
     await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
     await userEvent.click(screen.getByRole('button', { name: '付与する' }))
 

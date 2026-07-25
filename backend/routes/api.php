@@ -142,6 +142,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
         Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
+        Route::post('/employee-shift-assignments/preview-pattern', [EmployeeShiftAssignmentController::class, 'previewPattern']);
+        Route::post('/employee-shift-assignments/generate-pattern', [EmployeeShiftAssignmentController::class, 'generatePattern']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
         Route::delete('/user-work-style-monthly-assignments/{userWorkStyleMonthlyAssignment}', [UserWorkStyleMonthlyAssignmentController::class, 'destroy']);
@@ -173,6 +175,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/week', [AttendanceController::class, 'week'])->middleware('ability:attendance:self:read');
         Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware('ability:attendance:self:read');
         Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware('ability:attendance:self:update');
+        Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware('ability:attendance:self:read');
+        Route::post('/days/generate-pattern', [AttendanceController::class, 'generateAttendancePattern'])->middleware('ability:attendance:self:update');
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware('ability:attendance:self:read');
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware('ability:attendance:self:update');
         Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation']);
