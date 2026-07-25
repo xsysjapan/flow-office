@@ -211,37 +211,39 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   設計にすること(案内が必要な場合はWebサーバー側のリダイレクトで対応する)。
 - **Apacheの`Alias`は宣言順マッチ**: 最長一致ではない。限定的なパスを先に書かないと、
   一般的なパスのAliasに奪われる。
-- **シンボリックリンクの名前をURLパスと同じ(`api`・`mcp`)にすると、末尾スラッシュ
-  なしアクセスがmod_rewriteより先にmod_dirに処理を奪われる**: 当初
-  `frontend/dist/api`・`frontend/dist/mcp`という名前でそれぞれ`backend/public`・
-  `mcp/public`へシンボリックリンクしていたが、これはApacheからは実ディレクトリに
-  見える。末尾スラッシュなしで`/flow-office/mcp`のようにこのディレクトリ直下へ
-  アクセスすると、`frontend/dist/.htaccess`のRewriteRuleが評価されるより前に
-  Apache本体(`mod_dir`)がディレクトリとして処理してしまい、`%{REQUEST_URI}/`への
-  301リダイレクトを発行してしまう。これはメソッドに関わらず起きるため、
-  `POST /flow-office/mcp`のようなボディ付きリクエストがリダイレクト先へGETとして
-  再送され、mcp/側が返すはずの401等のレスポンスが得られず、ヘルスチェックが
-  `expected 401 ... got 301`で失敗する事故が発生した。mcp/のOAuthディスカバリー
-  (`/mcp/.well-known/oauth-protected-resource`)が広告するリソースURL自体が末尾
-  スラッシュなしの`https://.../flow-office/mcp`であるため、これはCIのヘルス
-  チェックだけの問題ではなく実際のMCPクライアントが使う本番の契約でもあり、
-  確実に直す必要があった。
-
-  `.htaccess`側でRewriteRuleをmod_dirより先に評価させようとする対処
-  (`DirectorySlash Off`の指定、`RewriteRule`のsubstitutionを相対パス→
-  `REQUEST_URI`ベースの絶対パスへ変更、等)を複数試したが、この本番環境では
-  `mod_dir`のディレクトリ判定が`mod_rewrite`のRewriteRuleより先に評価される
-  ため、どの`.htaccess`側の工夫でも403(GET)/404(POST)や301が再発し、
-  確実には防げなかった。
-
-  最終的に、**シンボリックリンクの名前をURLパスの`api`・`mcp`とは違えて
-  `_api_public`・`_mcp_public`にする**ことで解決した(`deploy/scripts/activate-release.sh`・
-  `deploy/static/frontend.htaccess`参照)。URLパスと同じ名前の実ディレクトリが
-  直下に存在しなければ、Apacheの`mod_dir`はそもそも「ディレクトリへのアクセス」だと
-  認識しないため、通常の`RewriteRule ^(api|mcp)$ _$1_public/index.php [L]`が
-  `mod_dir`に横取りされることなく確実に効く。この手の「Laravel(等)の`public/`を
-  シンボリックリンクでURLサブパスに直下マウントする」構成では、シンボリックリンクの
-  実名をURLパスと一致させないことを最初から前提にすべきだった。
+- **シンボリックリンクで実ディレクトリとして見える`/api`・`/mcp`直下への末尾スラッシュ
+  なしアクセスが、mod_rewriteより先に301になる**: `frontend/dist/api`・`frontend/dist/mcp`は
+  それぞれ`backend/public`・`mcp/public`へのシンボリックリンクであり、Apacheからは実
+  ディレクトリに見える。末尾スラッシュなしで`/flow-office/mcp`のようにこのディレクトリ
+  直下へアクセスすると、`frontend/dist/.htaccess`のRewriteRuleが評価されるより前に、
+  Apache本体(`mod_dir`のDirectorySlash機能)が`%{REQUEST_URI}/`への301リダイレクトを
+  発行してしまう。これはメソッドに関わらず起きるため、`POST /flow-office/mcp`のような
+  ボディ付きリクエストがリダイレクト先へGETとして再送され、mcp/側が返すはずの401等の
+  レスポンスが得られず、ヘルスチェックが`expected 401 ... got 301`で失敗する事故が
+  発生した。`RewriteRule`をmod_dirより先に置くだけでは防げなかった(DirectorySlashは
+  mod_rewriteの前に評価される)ため、`deploy/static/frontend.htaccess`で明示的に
+  `DirectorySlash Off`を指定して自動リダイレクト自体を無効化し、その上で`/api`・`/mcp`
+  直下へのアクセスを各アプリの`index.php`へ内部リライトするRewriteRuleを追加して
+  回避している。**さらに注意**: `DirectorySlash Off`だけを本番投入したところ301は
+  止まったが、代わりに素の403(GET)/404(POST)になる事故が発生した。Apacheの
+  ディレクトリウォークが`api/`・`mcp/`(シンボリックリンク先の`backend/public/.htaccess`・
+  `mcp/public/.htaccess`)まで一括でマージするため、`frontend/dist/.htaccess`側の
+  RewriteRuleをper-directory相対パス(`^(api|mcp)$`)でマッチさせようとすると環境に
+  よってマッチしないことがある。`%{REQUEST_URI}`(絶対パス)を条件にして
+  `RewriteRule ^ %1/index.php [L]`のようにマッチさせることで、per-directory相対
+  パスの解釈に依存せず確実に内部リライトできる…はずだったが、本番デプロイで再検証した
+  ところこれでも403(GET)/404(POST)が再発した。mcp/のOAuthディスカバリー
+  (`/mcp/.well-known/oauth-protected-resource`)が広告するリソースURLが末尾スラッシュ
+  なしの`https://.../flow-office/mcp`であるため、これはCIのヘルスチェックだけの
+  問題ではなく実際のMCPクライアントが使う本番の契約であり、確実に直す必要がある。
+  最終的に、substitutionを相対パス(`%1/index.php`)ではなく`/`始まりの絶対URLパス
+  (`%1/%2/index.php`)にすることで解決した。相対パスのsubstitutionはApacheが
+  「現在のper-directory文脈からの相対」と解釈するため、ディレクトリウォークの
+  マージ状況によって解釈がぶれるが、`/`始まりの絶対パスにするとApacheが
+  `translate_name`からリクエスト処理全体をやり直すため、per-directory文脈の解釈に
+  依存せず実ファイル(`mcp/index.php`等)に確実に到達できる。この手のシンボリック
+  リンクマウント+ディレクトリ直下リクエストの内部リライトでは、最初から絶対パスの
+  substitutionを使うべきだった。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を
