@@ -211,6 +211,18 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   設計にすること(案内が必要な場合はWebサーバー側のリダイレクトで対応する)。
 - **Apacheの`Alias`は宣言順マッチ**: 最長一致ではない。限定的なパスを先に書かないと、
   一般的なパスのAliasに奪われる。
+- **シンボリックリンクで実ディレクトリとして見える`/api`・`/mcp`直下への末尾スラッシュ
+  なしアクセスが、mod_rewriteより先に301になる**: `frontend/dist/api`・`frontend/dist/mcp`は
+  それぞれ`backend/public`・`mcp/public`へのシンボリックリンクであり、Apacheからは実
+  ディレクトリに見える。末尾スラッシュなしで`/flow-office/mcp`のようにこのディレクトリ
+  直下へアクセスすると、`frontend/dist/.htaccess`のRewriteRuleが評価されるより前に、
+  Apache本体(`mod_dir`のDirectorySlash機能)が`%{REQUEST_URI}/`への301リダイレクトを
+  発行してしまう。これはメソッドに関わらず起きるため、`POST /flow-office/mcp`のような
+  ボディ付きリクエストがリダイレクト先へGETとして再送され、mcp/側が返すはずの401等の
+  レスポンスが得られず、ヘルスチェックが`expected 401 ... got 301`で失敗する事故が
+  発生した。`deploy/static/frontend.htaccess`に、`/api`・`/mcp`直下へのアクセスを
+  mod_dirのリダイレクトより先に各アプリの`index.php`へ内部リライトするRewriteRuleを
+  追加して回避している。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を
