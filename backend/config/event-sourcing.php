@@ -32,6 +32,7 @@ use App\Domain\Attendance\Events\WorkCalendarDaysUpdated;
 use App\Domain\Attendance\Events\WorkCalendarPublished;
 use App\Domain\Attendance\Events\WorkStyleCreated;
 use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
+use App\Domain\Attendance\Events\WorkStyleUpdated;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyDisabled;
 use App\Domain\AuthenticationKey\Events\AuthenticationKeyIssued;
 use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
@@ -221,6 +222,7 @@ return [
 
         'work_style.created' => WorkStyleCreated::class,
         'work_style.default_changed' => WorkStyleDefaultChanged::class,
+        'work_style.updated' => WorkStyleUpdated::class,
 
         'shift_pattern.created' => ShiftPatternCreated::class,
         'shift_pattern.updated' => ShiftPatternUpdated::class,

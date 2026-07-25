@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\WorkStyleCreated;
 use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
+use App\Domain\Attendance\Events\WorkStyleUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -32,6 +33,19 @@ class WorkStyleAggregate extends AggregateRoot
         $this->recordThat(new WorkStyleDefaultChanged(
             previousDefaultWorkStyleId: $previousDefaultWorkStyleId,
             changedByUserId: $changedByUserId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function update(array $attributes, string $updatedByUserId): self
+    {
+        $this->recordThat(new WorkStyleUpdated(
+            attributes: $attributes,
+            updatedByUserId: $updatedByUserId,
         ));
 
         return $this;

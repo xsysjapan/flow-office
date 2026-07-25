@@ -186,6 +186,27 @@ describe('WorkStylesAndShiftsPage', () => {
     await waitFor(() => expect(workStylesApi.setDefaultWorkStyle).toHaveBeenCalledWith('work-style-2'))
   })
 
+  it('edits an existing (including system-generated default) work style from the list', async () => {
+    vi.spyOn(workStylesApi, 'updateWorkStyle').mockResolvedValue({ ...workStyle, name: '標準勤務(改)' })
+    renderPage()
+
+    await screen.findByText('標準勤務', { selector: 'strong' })
+    await userEvent.click(screen.getByRole('button', { name: '編集' }))
+
+    const nameField = await screen.findByLabelText('名称')
+    expect(nameField).toHaveValue('標準勤務')
+    await userEvent.clear(nameField)
+    await userEvent.type(nameField, '標準勤務(改)')
+    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+
+    await waitFor(() =>
+      expect(workStylesApi.updateWorkStyle).toHaveBeenCalledWith(
+        'work-style-1',
+        expect.objectContaining({ code: 'standard', name: '標準勤務(改)' }),
+      ),
+    )
+  }, 15000)
+
   it('creates a new work style with the entered values', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-2', code: 'discretionary' })
     renderPage()

@@ -244,4 +244,134 @@ class WorkStyleControllerTest extends TestCase
 
         $response->assertCreated()->assertJsonPath('deemed_daily_minutes', 540);
     }
+
+    public function test_a_work_style_can_be_updated(): void
+    {
+        $calendar = $this->makeCalendar();
+        $user = $this->makeAdmin();
+
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'fixed-standard',
+            'name' => '固定時間制',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
+            'code' => 'fixed-standard',
+            'name' => '固定時間制(改)',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 420,
+            'prescribed_weekly_minutes' => 2100,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('name', '固定時間制(改)')
+            ->assertJsonPath('prescribed_daily_minutes', 420)
+            ->assertJsonPath('prescribed_weekly_minutes', 2100);
+
+        $this->assertSame('固定時間制(改)', $workStyle->fresh()->name);
+    }
+
+    /**
+     * 初回オンボーディングで作成された標準の勤務形態(system_generated=true)も、
+     * デフォルト指定・システム生成フラグ以外の項目は編集できる。
+     */
+    public function test_the_system_generated_standard_work_style_can_be_updated(): void
+    {
+        $user = $this->makeAdmin();
+
+        $standard = WorkStyle::query()->create([
+            'code' => 'standard',
+            'name' => '通常勤務',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '09:00',
+            'default_end_time' => '18:00',
+            'is_default' => true,
+            'system_generated' => true,
+        ]);
+
+        $response = $this->actingAs($user)->putJson("/api/work-styles/{$standard->id}", [
+            'code' => 'standard',
+            'name' => '通常勤務',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 420,
+            'prescribed_weekly_minutes' => 2100,
+            'default_start_time' => '09:30',
+            'default_end_time' => '17:30',
+        ]);
+
+        $response->assertOk()->assertJsonPath('prescribed_daily_minutes', 420);
+
+        $refreshed = $standard->fresh();
+        $this->assertSame(420, $refreshed->prescribed_daily_minutes);
+        $this->assertTrue($refreshed->is_default);
+        $this->assertTrue($refreshed->system_generated);
+    }
+
+    public function test_updating_a_work_style_with_another_styles_code_is_rejected(): void
+    {
+        $calendar = $this->makeCalendar();
+        $user = $this->makeAdmin();
+
+        WorkStyle::query()->create([
+            'code' => 'taken-code',
+            'name' => '既存の勤務形態',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'own-code',
+            'name' => '編集対象',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
+            'code' => 'taken-code',
+            'name' => '編集対象',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('code');
+    }
+
+    public function test_updating_a_work_style_keeps_its_own_code_valid(): void
+    {
+        $calendar = $this->makeCalendar();
+        $user = $this->makeAdmin();
+
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'own-code',
+            'name' => '編集対象',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
+            'code' => 'own-code',
+            'name' => '編集対象(改)',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'calendar_id' => $calendar->id,
+        ]);
+
+        $response->assertOk()->assertJsonPath('name', '編集対象(改)');
+    }
 }

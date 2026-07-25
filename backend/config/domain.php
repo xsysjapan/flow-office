@@ -37,6 +37,7 @@ use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
 use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
+use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
@@ -74,6 +75,7 @@ use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
+use App\Domain\Attendance\Handlers\UpdateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
 use App\Domain\AuthenticationKey\Commands\DisableAuthenticationKey;
@@ -258,6 +260,7 @@ return [
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
         CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,
         SetDefaultWorkStyle::class => SetDefaultWorkStyleHandler::class,
+        UpdateWorkStyle::class => UpdateWorkStyleHandler::class,
         AssignUserWorkStyleForMonth::class => AssignUserWorkStyleForMonthHandler::class,
         RemoveUserWorkStyleMonthlyAssignment::class => RemoveUserWorkStyleMonthlyAssignmentHandler::class,
         CreateShiftPattern::class => CreateShiftPatternHandler::class,

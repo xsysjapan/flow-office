@@ -37,6 +37,7 @@ import {
   useCreateDefaultWorkStyle,
   useCreateWorkStyle,
   useSetDefaultWorkStyle,
+  useUpdateWorkStyle,
   useWorkStyles,
 } from '../../hooks/useWorkStyles'
 import type { LegalHolidayRule, RotationPreviewDay, WorkStyle } from '../../api/types'
@@ -183,8 +184,10 @@ function WorkStyleFormCard() {
   const { data: workStyles, isLoading, error } = useWorkStyles()
   const { data: workCalendars } = useWorkCalendars()
   const createWorkStyle = useCreateWorkStyle()
+  const updateWorkStyle = useUpdateWorkStyle()
   const setDefaultWorkStyle = useSetDefaultWorkStyle()
 
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [workTimeSystem, setWorkTimeSystem] = useState('')
@@ -210,70 +213,104 @@ function WorkStyleFormCard() {
   const [flexibleTimeEnd, setFlexibleTimeEnd] = useState('')
 
   const isFlex = workTimeSystem === 'flex'
+  const isEditing = editingId !== null
 
-  const handleCreateWorkStyle = () => {
-    createWorkStyle.mutate(
-      {
-        code,
-        name,
-        work_time_system: workTimeSystem,
-        prescribed_daily_minutes: Number(prescribedDailyMinutes),
-        prescribed_weekly_minutes: Number(prescribedWeeklyMinutes),
-        default_start_time: defaultStartTime || undefined,
-        default_end_time: defaultEndTime || undefined,
-        default_break_minutes: defaultBreakMinutes ? Number(defaultBreakMinutes) : undefined,
-        rounding_unit_minutes: roundingUnitMinutes ? Number(roundingUnitMinutes) : undefined,
-        default_break_start_time: defaultBreakStartTime || undefined,
-        default_break_end_time: defaultBreakEndTime || undefined,
-        auto_break_enabled: autoBreakEnabled,
-        calendar_id: calendarId,
-        is_shift_based: isShiftBased,
-        legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
-        four_week_period_start_date:
-          isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
-        max_consecutive_work_days:
-          isShiftBased && maxConsecutiveWorkDays ? Number(maxConsecutiveWorkDays) : undefined,
-        settlement_start_day: isFlex && settlementStartDay ? Number(settlementStartDay) : undefined,
-        core_time_enabled: isFlex ? coreTimeEnabled : undefined,
-        core_time_start: isFlex && coreTimeEnabled ? coreTimeStart : undefined,
-        core_time_end: isFlex && coreTimeEnabled ? coreTimeEnd : undefined,
-        flexible_time_start: isFlex ? flexibleTimeStart || undefined : undefined,
-        flexible_time_end: isFlex ? flexibleTimeEnd || undefined : undefined,
-      },
-      {
-        onSuccess: () => {
-          setCode('')
-          setName('')
-          setWorkTimeSystem('')
-          setPrescribedDailyMinutes('')
-          setPrescribedWeeklyMinutes('')
-          setDefaultStartTime('')
-          setDefaultEndTime('')
-          setDefaultBreakMinutes('')
-          setRoundingUnitMinutes('')
-          setDefaultBreakStartTime('')
-          setDefaultBreakEndTime('')
-          setAutoBreakEnabled(false)
-          setCalendarId('')
-          setIsShiftBased(false)
-          setLegalHolidayRule('weekly')
-          setFourWeekPeriodStartDate('')
-          setMaxConsecutiveWorkDays('')
-          setSettlementStartDay('')
-          setCoreTimeEnabled(false)
-          setCoreTimeStart('')
-          setCoreTimeEnd('')
-          setFlexibleTimeStart('')
-          setFlexibleTimeEnd('')
-        },
-      },
-    )
+  const resetForm = () => {
+    setEditingId(null)
+    setCode('')
+    setName('')
+    setWorkTimeSystem('')
+    setPrescribedDailyMinutes('')
+    setPrescribedWeeklyMinutes('')
+    setDefaultStartTime('')
+    setDefaultEndTime('')
+    setDefaultBreakMinutes('')
+    setRoundingUnitMinutes('')
+    setDefaultBreakStartTime('')
+    setDefaultBreakEndTime('')
+    setAutoBreakEnabled(false)
+    setCalendarId('')
+    setIsShiftBased(false)
+    setLegalHolidayRule('weekly')
+    setFourWeekPeriodStartDate('')
+    setMaxConsecutiveWorkDays('')
+    setSettlementStartDay('')
+    setCoreTimeEnabled(false)
+    setCoreTimeStart('')
+    setCoreTimeEnd('')
+    setFlexibleTimeStart('')
+    setFlexibleTimeEnd('')
+  }
+
+  const startEditing = (style: WorkStyle) => {
+    setEditingId(style.id)
+    setCode(style.code)
+    setName(style.name)
+    setWorkTimeSystem(style.work_time_system)
+    setPrescribedDailyMinutes(String(style.prescribed_daily_minutes))
+    setPrescribedWeeklyMinutes(String(style.prescribed_weekly_minutes))
+    setDefaultStartTime(style.default_start_time ?? '')
+    setDefaultEndTime(style.default_end_time ?? '')
+    setDefaultBreakMinutes(style.default_break_minutes != null ? String(style.default_break_minutes) : '')
+    setRoundingUnitMinutes(style.rounding_unit_minutes != null ? String(style.rounding_unit_minutes) : '')
+    setDefaultBreakStartTime(style.default_break_start_time ?? '')
+    setDefaultBreakEndTime(style.default_break_end_time ?? '')
+    setAutoBreakEnabled(style.auto_break_enabled)
+    setCalendarId(style.calendar_id ?? '')
+    setIsShiftBased(style.is_shift_based)
+    setLegalHolidayRule(style.legal_holiday_rule ?? 'weekly')
+    setFourWeekPeriodStartDate(style.four_week_period_start_date ?? '')
+    setMaxConsecutiveWorkDays(style.max_consecutive_work_days != null ? String(style.max_consecutive_work_days) : '')
+    setSettlementStartDay(style.settlement_start_day != null ? String(style.settlement_start_day) : '')
+    setCoreTimeEnabled(style.core_time_enabled)
+    setCoreTimeStart(style.core_time_start ?? '')
+    setCoreTimeEnd(style.core_time_end ?? '')
+    setFlexibleTimeStart(style.flexible_time_start ?? '')
+    setFlexibleTimeEnd(style.flexible_time_end ?? '')
+    document.getElementById('work-style-create-form')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const handleSubmitWorkStyle = () => {
+    const input = {
+      code,
+      name,
+      work_time_system: workTimeSystem,
+      prescribed_daily_minutes: Number(prescribedDailyMinutes),
+      prescribed_weekly_minutes: Number(prescribedWeeklyMinutes),
+      default_start_time: defaultStartTime || undefined,
+      default_end_time: defaultEndTime || undefined,
+      default_break_minutes: defaultBreakMinutes ? Number(defaultBreakMinutes) : undefined,
+      rounding_unit_minutes: roundingUnitMinutes ? Number(roundingUnitMinutes) : undefined,
+      default_break_start_time: defaultBreakStartTime || undefined,
+      default_break_end_time: defaultBreakEndTime || undefined,
+      auto_break_enabled: autoBreakEnabled,
+      calendar_id: calendarId,
+      is_shift_based: isShiftBased,
+      legal_holiday_rule: isShiftBased ? legalHolidayRule : undefined,
+      four_week_period_start_date:
+        isShiftBased && legalHolidayRule === 'four_weeks_four_days' ? fourWeekPeriodStartDate : undefined,
+      max_consecutive_work_days:
+        isShiftBased && maxConsecutiveWorkDays ? Number(maxConsecutiveWorkDays) : undefined,
+      settlement_start_day: isFlex && settlementStartDay ? Number(settlementStartDay) : undefined,
+      core_time_enabled: isFlex ? coreTimeEnabled : undefined,
+      core_time_start: isFlex && coreTimeEnabled ? coreTimeStart : undefined,
+      core_time_end: isFlex && coreTimeEnabled ? coreTimeEnd : undefined,
+      flexible_time_start: isFlex ? flexibleTimeStart || undefined : undefined,
+      flexible_time_end: isFlex ? flexibleTimeEnd || undefined : undefined,
+    }
+
+    if (editingId !== null) {
+      updateWorkStyle.mutate({ id: editingId, input }, { onSuccess: resetForm })
+    } else {
+      createWorkStyle.mutate(input, { onSuccess: resetForm })
+    }
   }
 
   return (
     <Card id="work-style-create-form" title="勤務形態">
       {error && <ErrorMessage error={error} fallback="勤務形態の取得に失敗しました。" />}
       {createWorkStyle.error && <ErrorMessage error={createWorkStyle.error} />}
+      {updateWorkStyle.error && <ErrorMessage error={updateWorkStyle.error} />}
       {setDefaultWorkStyle.error && <ErrorMessage error={setDefaultWorkStyle.error} />}
 
       {isLoading ? (
@@ -294,11 +331,12 @@ function WorkStyleFormCard() {
                 {style.is_shift_based && (
                   <span className="text-muted-foreground">{legalHolidayRuleDescription(style)}</span>
                 )}
-                {style.is_default ? (
+                {style.is_default && (
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                     デフォルト
                   </span>
-                ) : (
+                )}
+                {!style.is_default && (
                   <Button
                     variant="secondary"
                     isLoading={setDefaultWorkStyle.isPending}
@@ -307,6 +345,9 @@ function WorkStyleFormCard() {
                     デフォルトに設定
                   </Button>
                 )}
+                <Button variant="secondary" onClick={() => startEditing(style)}>
+                  編集
+                </Button>
               </div>
 
               <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -324,7 +365,9 @@ function WorkStyleFormCard() {
         </ul>
       )}
 
-      <h3 className="mb-3 text-sm font-semibold text-foreground">勤務形態を作成</h3>
+      <h3 className="mb-3 text-sm font-semibold text-foreground">
+        {isEditing ? `勤務形態を編集(${name || code})` : '勤務形態を作成'}
+      </h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="コード" htmlFor="work-style-code" required>
@@ -534,22 +577,29 @@ function WorkStyleFormCard() {
         </div>
       )}
 
-      <Button
-        isLoading={createWorkStyle.isPending}
-        disabled={
-          !code ||
-          !name ||
-          !workTimeSystem ||
-          !prescribedDailyMinutes ||
-          !prescribedWeeklyMinutes ||
-          !calendarId ||
-          (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate) ||
-          (isFlex && coreTimeEnabled && (!coreTimeStart || !coreTimeEnd))
-        }
-        onClick={handleCreateWorkStyle}
-      >
-        作成する
-      </Button>
+      <div className="flex flex-wrap gap-3">
+        <Button
+          isLoading={isEditing ? updateWorkStyle.isPending : createWorkStyle.isPending}
+          disabled={
+            !code ||
+            !name ||
+            !workTimeSystem ||
+            !prescribedDailyMinutes ||
+            !prescribedWeeklyMinutes ||
+            (!isEditing && !calendarId) ||
+            (isShiftBased && legalHolidayRule === 'four_weeks_four_days' && !fourWeekPeriodStartDate) ||
+            (isFlex && coreTimeEnabled && (!coreTimeStart || !coreTimeEnd))
+          }
+          onClick={handleSubmitWorkStyle}
+        >
+          {isEditing ? '更新する' : '作成する'}
+        </Button>
+        {isEditing && (
+          <Button variant="secondary" onClick={resetForm}>
+            キャンセル
+          </Button>
+        )}
+      </div>
     </Card>
   )
 }

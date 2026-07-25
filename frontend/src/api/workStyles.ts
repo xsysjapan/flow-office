@@ -35,6 +35,12 @@ export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle>
   return apiFetch('/work-styles', { method: 'POST', body: input })
 }
 
+export type UpdateWorkStyleInput = CreateWorkStyleInput
+
+export function updateWorkStyle(id: string, input: UpdateWorkStyleInput): Promise<WorkStyle> {
+  return apiFetch(`/work-styles/${id}`, { method: 'PUT', body: input })
+}
+
 export interface CreateDefaultWorkStyleInput {
   name?: string
   default_start_time?: string

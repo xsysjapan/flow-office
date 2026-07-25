@@ -4,8 +4,10 @@ import {
   createWorkStyle,
   fetchWorkStyles,
   setDefaultWorkStyle,
+  updateWorkStyle,
   type CreateDefaultWorkStyleInput,
   type CreateWorkStyleInput,
+  type UpdateWorkStyleInput,
 } from '../api/workStyles'
 
 const LIST_KEY = ['work-styles']
@@ -30,6 +32,17 @@ export function useCreateDefaultWorkStyle() {
 
   return useMutation({
     mutationFn: (input: CreateDefaultWorkStyleInput = {}) => createDefaultWorkStyle(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
+}
+
+export function useUpdateWorkStyle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateWorkStyleInput }) => updateWorkStyle(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

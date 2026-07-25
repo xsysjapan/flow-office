@@ -140,6 +140,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
+        Route::put('/work-styles/{workStyle}', [WorkStyleController::class, 'update']);
         Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
         Route::post('/employee-shift-assignments/preview-pattern', [EmployeeShiftAssignmentController::class, 'previewPattern']);
