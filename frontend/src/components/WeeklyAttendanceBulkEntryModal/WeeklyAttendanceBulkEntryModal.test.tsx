@@ -62,8 +62,7 @@ describe('WeeklyAttendanceBulkEntryModal', () => {
     expect(screen.queryByText('週次の一括入力')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
     expect(await screen.findByText('週次の一括入力')).toBeInTheDocument()
-    expect(screen.getByLabelText('適用開始日')).toHaveValue('2026-08-03')
-    expect(screen.getByLabelText('適用終了日')).toHaveValue('2026-08-09')
+    expect(screen.getByText('適用期間: 2026-08-03 〜 2026-08-09')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 

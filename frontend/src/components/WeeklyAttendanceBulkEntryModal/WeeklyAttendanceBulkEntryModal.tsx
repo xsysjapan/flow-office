@@ -44,8 +44,6 @@ export function WeeklyAttendanceBulkEntryModal({
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen
 
   const [activeTab, setActiveTab] = useState<'simple' | 'detailed'>('simple')
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(defaultTo)
   const [offset, setOffset] = useState(browserOffsetString())
   const [reason, setReason] = useState('')
   const [simplePatternState, setSimplePatternState] = useState<SimplePatternState>(defaultSimplePatternState())
@@ -61,8 +59,6 @@ export function WeeklyAttendanceBulkEntryModal({
     if (!isControlled) setUncontrolledOpen(next)
     onOpenChange?.(next)
     if (next) {
-      setFrom(defaultFrom)
-      setTo(defaultTo)
       setReason('')
       previewPattern.reset()
       generatePattern.reset()
@@ -79,16 +75,15 @@ export function WeeklyAttendanceBulkEntryModal({
       : buildWeeklyPattern(detailedPatternState)
 
   const handlePreview = () => {
-    if (!from || !to) return
-    previewPattern.mutate({ from, to, utc_offset: offset, weekly_pattern: weeklyPattern })
+    previewPattern.mutate({ from: defaultFrom, to: defaultTo, utc_offset: offset, weekly_pattern: weeklyPattern })
   }
 
   const handleGenerate = () => {
-    if (!user || !from || !to || !reason) return
+    if (!user || !reason) return
     generatePattern.mutate({
       user_id: user.id,
-      from,
-      to,
+      from: defaultFrom,
+      to: defaultTo,
       utc_offset: offset,
       weekly_pattern: weeklyPattern,
       overwrite_mode: overwriteMode,
@@ -112,25 +107,17 @@ export function WeeklyAttendanceBulkEntryModal({
         {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="適用開始日" htmlFor="weekly-attendance-from" required>
-            <Input id="weekly-attendance-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </FormField>
+        <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
-          <FormField label="適用終了日" htmlFor="weekly-attendance-to" required>
-            <Input id="weekly-attendance-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </FormField>
-
-          <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
-            <Input
-              id="weekly-attendance-offset"
-              value={offset}
-              placeholder="+09:00"
-              pattern="^[+-]\d{2}:\d{2}$"
-              onChange={(e) => setOffset(e.target.value)}
-            />
-          </FormField>
-        </div>
+        <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
+          <Input
+            id="weekly-attendance-offset"
+            value={offset}
+            placeholder="+09:00"
+            pattern="^[+-]\d{2}:\d{2}$"
+            onChange={(e) => setOffset(e.target.value)}
+          />
+        </FormField>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'simple' | 'detailed')}>
           <TabsList>
@@ -149,7 +136,7 @@ export function WeeklyAttendanceBulkEntryModal({
         </Tabs>
 
         <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
+          <Button variant="secondary" isLoading={previewPattern.isPending} onClick={handlePreview}>
             プレビューする
           </Button>
         </div>
@@ -182,11 +169,7 @@ export function WeeklyAttendanceBulkEntryModal({
           <p className="mt-1 text-xs text-muted-foreground">締め済み・承認済みの月に属する日はどちらを選んでも変更されない。</p>
         </FormField>
 
-        <Button
-          isLoading={generatePattern.isPending}
-          disabled={!user || !from || !to || !reason}
-          onClick={handleGenerate}
-        >
+        <Button isLoading={generatePattern.isPending} disabled={!user || !reason} onClick={handleGenerate}>
           確定する
         </Button>
 
