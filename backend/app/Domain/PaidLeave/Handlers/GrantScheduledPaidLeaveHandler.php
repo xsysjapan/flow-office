@@ -28,6 +28,7 @@ use Illuminate\Support\Collection;
  * の勤務予定日を分母、`attendance_days` が退勤済みまたは有給消化済みの日を分子として計算する
  * (有給取得日は出勤したものとして扱う。労働基準法上の8割出勤要件の考え方に基づく)。
  * 期間中の勤務予定日が1件も無い場合は判定不能としてスキップする。
+ * 利用開始日が設定されていて、かつそれが未到来の場合は対象外とする(未設定なら制限しない)。
  *
  * @implements CommandHandler<GrantScheduledPaidLeave>
  */
@@ -97,7 +98,9 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
      */
     private function eligibleUsers(PaidLeaveGrantRule $rule, Carbon $today): Collection
     {
-        $query = User::query()->whereNotNull('hire_date');
+        $query = User::query()
+            ->whereNotNull('hire_date')
+            ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
             $userIds = EmployeeShiftAssignment::query()

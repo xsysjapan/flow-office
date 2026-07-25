@@ -96,6 +96,18 @@ class PaidLeaveScheduledBatchTest extends TestCase
         $this->assertSame('2028-08-10', $grant->expires_on->toDateString());
     }
 
+    public function test_it_does_not_grant_when_usage_start_date_is_after_the_anniversary(): void
+    {
+        $today = Carbon::parse('2026-08-10');
+        $employee = User::factory()->create(['hire_date' => '2026-02-10', 'usage_start_date' => '2026-09-01']);
+        $this->createRuleWithSteps();
+        $this->seedAttendanceHistory($employee, $today, scheduledDays: 5, attendedDays: 4);
+
+        $grantedIds = app(CommandBus::class)->dispatch(new GrantScheduledPaidLeave($today->toDateString()));
+
+        $this->assertCount(0, $grantedIds);
+    }
+
     public function test_it_does_not_grant_on_a_non_anniversary_day(): void
     {
         $today = Carbon::parse('2026-08-11'); // 記念日(08-10)から1日ずれている

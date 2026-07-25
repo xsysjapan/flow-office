@@ -107,6 +107,19 @@ class SpecialLeaveScheduledBatchTest extends TestCase
         $this->assertNull($grant->expires_on);
     }
 
+    public function test_it_does_not_grant_when_usage_start_date_is_after_the_anniversary(): void
+    {
+        $today = Carbon::parse('2026-08-10');
+        $employee = User::factory()->create(['hire_date' => '2025-08-10', 'usage_start_date' => '2026-09-01']);
+        $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
+        $this->createRuleWithSteps($type, expiresAfterMonths: 6);
+        $this->seedAttendanceHistory($employee, $today, scheduledDays: 5, attendedDays: 4);
+
+        $grantedIds = app(CommandBus::class)->dispatch(new GrantScheduledSpecialLeave($today->toDateString()));
+
+        $this->assertCount(0, $grantedIds);
+    }
+
     public function test_it_does_not_grant_on_a_non_anniversary_day(): void
     {
         $today = Carbon::parse('2026-08-11');

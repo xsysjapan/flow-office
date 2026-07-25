@@ -22,13 +22,16 @@ use Laravel\Sanctum\HasApiTokens;
  * システム設定のデフォルトタイムゾーンで設定する (docs/06-usecases-auth.md UC-003)。
  * hire_date (入社日) とtermination_date (退社日) はMS365に対応する属性がないため同期対象外で、管理者が個別に設定する
  * (docs/09-usecases-paid-leave.md UC-P002: 継続勤務期間の計算に使う)。
+ * usage_start_date (利用開始日) も同様に管理者が個別に設定する。勤怠未提出フォロー等の各種
+ * フォロー通知は、この日付および入社日より前の期間については送らない(まだ本システムの
+ * 利用や在籍を開始していないため)。
  *
  * 主キーはUUID(HasUuids)。DB採番だと集約IDがINSERTするまで確定せずProjectorで作成できないため、
  * コマンド側で生成できるUUIDにしている(.claude/skills/add-projection「集約ルートのUUID化」参照)。
  * この行自体もUserProjectorがstored_eventsから作成・更新する
  * (docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'entra_user_id', 'name', 'email', 'password', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'last_login_at'])]
+#[Fillable(['id', 'entra_user_id', 'name', 'email', 'password', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'usage_start_date', 'last_login_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -46,6 +49,7 @@ class User extends Authenticatable
         return [
             'hire_date' => 'date',
             'termination_date' => 'date',
+            'usage_start_date' => 'date',
             'last_login_at' => 'datetime',
             // ローカルパスワードは平文でDBに保持しない (Laravel標準のhashedキャストで自動ハッシュ化する)。
             'password' => 'hashed',

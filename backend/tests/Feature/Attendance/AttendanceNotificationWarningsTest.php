@@ -43,6 +43,26 @@ class AttendanceNotificationWarningsTest extends TestCase
         $this->assertSame(0, $count);
     }
 
+    public function test_does_not_warn_users_whose_usage_start_date_or_hire_date_is_after_the_target_month(): void
+    {
+        SystemSetting::current()->update(['attendance_submission_deadline_day' => 5]);
+
+        // 対象月(2026-06)より後に利用開始 → フォロー対象外。
+        User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-07-01']);
+        // 対象月(2026-06)より後に入社 → フォロー対象外。
+        User::factory()->create(['employment_status' => 'active', 'hire_date' => '2026-07-01']);
+        // 対象月中に利用開始・入社済み → フォロー対象。
+        User::factory()->create([
+            'employment_status' => 'active',
+            'usage_start_date' => '2026-06-01',
+            'hire_date' => '2026-01-01',
+        ]);
+
+        $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance(asOf: '2026-07-06'));
+
+        $this->assertSame(1, $count);
+    }
+
     public function test_warns_about_months_not_yet_closed_within_the_warning_window_before_the_deadline(): void
     {
         SystemSetting::current()->update(['attendance_month_close_deadline_day' => 10]);
@@ -64,6 +84,18 @@ class AttendanceNotificationWarningsTest extends TestCase
         AttendanceMonth::query()->create(['user_id' => $user->id, 'year_month' => '2026-06', 'status' => 'approved']);
 
         $count = app(CommandBus::class)->dispatch(new WarnMonthCloseDeadline(asOf: '2026-07-01'));
+
+        $this->assertSame(0, $count);
+    }
+
+    public function test_month_close_warning_excludes_users_whose_usage_start_date_is_after_the_target_month(): void
+    {
+        SystemSetting::current()->update(['attendance_month_close_deadline_day' => 10]);
+
+        $notYetUsing = User::factory()->create(['usage_start_date' => '2026-07-01']);
+        AttendanceMonth::query()->create(['user_id' => $notYetUsing->id, 'year_month' => '2026-06', 'status' => 'approved']);
+
+        $count = app(CommandBus::class)->dispatch(new WarnMonthCloseDeadline(asOf: '2026-07-07'));
 
         $this->assertSame(0, $count);
     }
