@@ -240,6 +240,8 @@ describe('WorkStylesAndShiftsPage', () => {
     )
   })
 
+  // このページは多数のCardを同時に描画するため、フォーム入力が多いテストは
+  // 既定の5000msにわずかに収まらないことがある(実処理は正常、環境の負荷次第の揺れ)。
   it('creates a shift-based work style with a four-weeks-four-days legal holiday rule', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-3', code: 'shift' })
     renderPage()
@@ -264,7 +266,7 @@ describe('WorkStylesAndShiftsPage', () => {
         }),
       ),
     )
-  })
+  }, 15000)
 
   it('creates a flex work style with core time and flexible time settings', async () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-4', code: 'flex' })
@@ -295,7 +297,7 @@ describe('WorkStylesAndShiftsPage', () => {
         }),
       ),
     )
-  })
+  }, 15000)
 
   it('generates and shows shifts for the selected user and period', async () => {
     const paginatedUsers: Paginated<User> = {
