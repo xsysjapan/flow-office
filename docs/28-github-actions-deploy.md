@@ -28,8 +28,8 @@ ssh sshuser@ssh.example.com -p 10022
     │   │   └── frontend/dist/
     │   │       ├── index.html, assets/...
     │   │       ├── .htaccess, robots.txt        (deploy/static/からビルド時にコピー)
-    │   │       ├── api -> ../../backend/public   (相対シンボリックリンク)
-    │   │       └── mcp -> ../../mcp/public       (相対シンボリックリンク)
+    │   │       ├── _api_public -> ../../backend/public   (相対シンボリックリンク)
+    │   │       └── _mcp_public -> ../../mcp/public       (相対シンボリックリンク)
     │   └── (直近5世代を保持し、古いものは自動削除)
     ├── current -> releases/20260720120500-abc1234   … デプロイのたびにアトミックに張替え
     └── shared/
@@ -56,8 +56,13 @@ frontendはReact Router(`/login`・`/auth/callback`等)でルーティングし�
 しまう。共有ホスティングでApache本体の設定(`docs/27-release-runbook.md`の`FallbackResource`
 相当)を編集できない前提のため、`deploy/static/frontend.htaccess` を「Build frontend」ステップ
 後に `frontend/dist/.htaccess` としてコピーし、mod_rewriteで実ファイル・実ディレクトリ以外を
-`index.html`にフォールバックさせる。`api/`・`mcp/`はシンボリックリンク(実ディレクトリ)として
-存在するため、この判定で自動的に除外され、それぞれの`public/.htaccess`が引き続き適用される。
+`index.html`にフォールバックさせる。`/api`・`/mcp`へのアクセスは、`_api_public`・
+`_mcp_public`という(URLパスとは別名の)シンボリックリンク先のフロントコントローラへ
+明示的なRewriteRuleで転送する。シンボリックリンクの名前をわざと`api`・`mcp`という
+URLパスと違えているのは、同名の実ディレクトリを直下に置くと、末尾スラッシュなしで
+`/flow-office/mcp`のようにアクセスした際にApache本体(`mod_dir`)がRewriteRuleより先に
+ディレクトリとして扱い、301や403/404で処理を打ち切ってしまう既知の問題があるため
+(`docs/27-release-runbook.md`参照)。
 
 ### 1.2 検索エンジンからの非公開
 

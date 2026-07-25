@@ -4,36 +4,22 @@
 # React Routerのフロントエンドルーティング(/login, /auth/callback 等)へ直接アクセス・
 # リロードした際、Apache上に対応する実ファイルが存在せず404になってしまうのを防ぐため、
 # 実ファイル・実ディレクトリ以外のリクエストをすべて index.html にフォールバックさせる。
-# api/・mcp/ はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
-# 下記の-f/-d判定で自動的に除外され、それぞれのpublic/.htaccessが引き続き適用される。
-<IfModule mod_dir.c>
-    # api/・mcp/はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
-    # DirectorySlashが既定(On)のままだと、末尾スラッシュなしで直下にアクセスした際に
-    # 下のRewriteRuleより先にApache本体(mod_dir)が自動的に「%{REQUEST_URI}/」への
-    # 301リダイレクトを発行してしまう。POSTのようなボディ付きリクエストがこの301で
-    # GETに落ちてしまい、各アプリのフロントコントローラが期待するレスポンス
-    # (例: mcp/のPOST 401)を返せなくなる(docs/28-github-actions-deploy.md参照)。
-    # DirectorySlashはmod_rewriteのRewriteRuleより先に評価されるため、rewrite側の
-    # 対処だけでは防げず、ここで明示的に無効化する必要がある。
-    DirectorySlash Off
-</IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # DirectorySlash Offにした分、api/・mcp/直下への末尾スラッシュなしアクセスは
-    # 自動リダイレクトされなくなるが、そのままではディレクトリが見つかった時点で
-    # 処理が止まってしまうため、各アプリのindex.phpへメソッド・ボディを保ったまま
-    # 内部リライトする。api/・mcp/はシンボリックリンクの実ディレクトリのため、
-    # Apacheのディレクトリウォークがmcp/public/.htaccess・backend/public/.htaccess
-    # まで一括でマージしてしまい、相対パスでの内部リライト(substitutionが「/」で
-    # 始まらない形)だと、per-directory文脈の解釈が環境によってズレて機能しないことが
-    # あった(本番検証で実際に403/404が再発した)。substitutionを「/」始まりの絶対URL
-    # パスにすることで、Apacheにtranslate_nameからやり直させ、実ファイル
-    # (mcp/index.php等)への到達を per-directory文脈の解釈に依存せず確実にする。
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteCond %{REQUEST_URI} ^(.*)/(api|mcp)$
-    RewriteRule ^ %1/%2/index.php [L]
+    # backend/mcpのpublic/への実体は"_api_public"・"_mcp_public"という名前で
+    # シンボリックリンクしてあり(activate-release.sh参照)、URLパスの"api"・"mcp"
+    # とはわざと名前を違えている。もし"api"・"mcp"という名前のまま実ディレクトリを
+    # 直下に置くと、末尾スラッシュなしで"/flow-office/mcp"のようにアクセスした際、
+    # Apache本体(mod_dir)がこのRewriteRuleより先にディレクトリとして扱ってしまい、
+    # 301(末尾スラッシュ補完)や403/404で処理を打ち切ってしまう
+    # (この不一致はDirectorySlash Off等の.htaccess側の対処では防げなかった。
+    # docs/27-release-runbook.md参照)。実ディレクトリの名前をURLパスと違えることで、
+    # mod_dirがそもそも「該当ディレクトリへのアクセス」と認識しなくなり、通常の
+    # RewriteRuleで確実にフロントコントローラへ振り向けられる。
+    RewriteRule ^(api|mcp)$ _$1_public/index.php [L]
+    RewriteRule ^(api|mcp)/(.*)$ _$1_public/$2 [L]
 
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d

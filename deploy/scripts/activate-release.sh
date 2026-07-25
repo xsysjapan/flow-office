@@ -47,8 +47,16 @@ done
 
 # frontend/dist内に、backend・mcpのpublic/への相対シンボリックリンクを張る
 # (同一リリースディレクトリ内で完結する相対パスなので、リリースをまたいでも壊れない)。
-ln -sfn "../../backend/public" "$RELEASE_DIR/frontend/dist/api"
-ln -sfn "../../mcp/public" "$RELEASE_DIR/frontend/dist/mcp"
+# シンボリックリンク名はURLパス("api"・"mcp")とわざと変えて"_api_public"・
+# "_mcp_public"にする。同名(例: "mcp"というディレクトリが実在)にすると、
+# 末尾スラッシュなしで"/flow-office/mcp"にアクセスした際、Apache本体(mod_dir)が
+# frontend/dist/.htaccessのRewriteRuleより先にディレクトリとして扱ってしまい、
+# 301や403/404で処理を打ち切ってしまう(docs/27-release-runbook.md参照。
+# DirectorySlash Off等の対処でも防げなかった)。実ディレクトリの名前をURLパスと
+# 違えることで、mod_dirがそもそも「該当ディレクトリへのアクセス」と認識しなくなり、
+# 通常のRewriteRuleで確実にフロントコントローラへ振り向けられる。
+ln -sfn "../../backend/public" "$RELEASE_DIR/frontend/dist/_api_public"
+ln -sfn "../../mcp/public" "$RELEASE_DIR/frontend/dist/_mcp_public"
 
 # mcpのOAuth署名鍵は初回のみ生成し、以後はshared/mcp/storageに永続化されたものを使い回す
 # (devの鍵を使い回さない。生成のたびにリフレッシュトークンが無効になるため)。
