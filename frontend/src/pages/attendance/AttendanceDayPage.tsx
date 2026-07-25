@@ -612,13 +612,27 @@ function DayCreateForm({ date }: { date: string }) {
   } = useEditableRows<LeaveSegmentRowData>([])
   const createDay = useCreateAttendanceDay()
   const { data: defaults } = useAttendanceDayDefaults(user?.id, date)
-  const appliedDefaultsRef = useRef(false)
+  const appliedDefaultsDateRef = useRef<string | null>(null)
 
-  // 初期表示時、打刻→勤務予定(休憩を含む)→システムの初期設定の優先順位で提案された値を
-  // 一度だけ反映する(以降のリフェッチや再レンダーで、入力済みの値を上書きしない)。
+  // 日付が変わったら前日の入力状態を破棄する。同じ週の前日・翌日へ遷移した場合も
+  // コンポーネントの再マウント有無に依存せず、遷移先の日付の初期値を表示する。
   useEffect(() => {
-    if (!defaults || appliedDefaultsRef.current) return
-    appliedDefaultsRef.current = true
+    appliedDefaultsDateRef.current = null
+    setActualStartAt('')
+    setActualEndAt('')
+    setOffset(browserOffsetString())
+    setWorkType('')
+    setWorkLocationType('')
+    setNote('')
+    setReason('')
+    resetRows([])
+  }, [date, resetRows])
+
+  // 打刻→勤務予定(休憩を含む)→システムの初期設定の優先順位で提案された値を
+  // 日付ごとに一度だけ反映する(同じ日付のリフェッチでは入力済みの値を上書きしない)。
+  useEffect(() => {
+    if (!defaults || appliedDefaultsDateRef.current === date) return
+    appliedDefaultsDateRef.current = date
     if (defaults.source === 'none') return
 
     const referenceOffset = isoToOffsetString(defaults.actual_start_at ?? defaults.breaks[0]?.start)
@@ -626,7 +640,7 @@ function DayCreateForm({ date }: { date: string }) {
     setActualStartAt(toDatetimeLocal(defaults.actual_start_at))
     setActualEndAt(toDatetimeLocal(defaults.actual_end_at))
     resetRows(defaults.breaks.map((b) => ({ start: toDatetimeLocal(b.start), end: toDatetimeLocal(b.end) })))
-  }, [defaults, resetRows])
+  }, [date, defaults, resetRows])
 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
 

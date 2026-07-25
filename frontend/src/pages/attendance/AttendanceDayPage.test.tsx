@@ -322,6 +322,33 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByRole('button', { name: '休憩終了(時刻)' })).toHaveTextContent('13:00')
   })
 
+  it('replaces the create-form defaults when navigating to another day in the same week', async () => {
+    const initialDate = '2026-07-25'
+    const nextDate = '2026-07-26'
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchAttendanceDayDefaults').mockImplementation(async (_userId, workDate) => ({
+      source: 'system_default',
+      actual_start_at: `${workDate}T${workDate === initialDate ? '09:00' : '10:00'}:00+09:00`,
+      actual_end_at: `${workDate}T${workDate === initialDate ? '18:00' : '19:00'}:00+09:00`,
+      breaks: [],
+    }))
+    renderPage([], initialDate)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '出勤(日付)' })).toHaveTextContent(initialDate)
+      expect(screen.getByRole('button', { name: '出勤(時刻)' })).toHaveTextContent('09:00')
+    })
+
+    await userEvent.click(screen.getByRole('link', { name: '翌日' }))
+
+    expect(await screen.findByText(`${nextDate}(日)`)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '出勤(日付)' })).toHaveTextContent(nextDate)
+      expect(screen.getByRole('button', { name: '出勤(時刻)' })).toHaveTextContent('10:00')
+    })
+    expect(attendanceApi.fetchAttendanceDayDefaults).toHaveBeenLastCalledWith('user-1', nextDate)
+  })
+
   it('warns of insufficient break time before saving, without blocking the save (labor law article 34)', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'createAttendanceDay').mockResolvedValue({ ...recordedDay, id: 'day-2' })
