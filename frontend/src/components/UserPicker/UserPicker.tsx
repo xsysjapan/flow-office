@@ -20,8 +20,8 @@ export function UserPicker({ id, value, onChange, placeholder = '氏名または
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedLabel, setSelectedLabel] = useState<string>()
-  const { data } = useUsers(query)
-  const suggestions = query ? (data?.data ?? []) : []
+  const { data } = useUsers(query, 100)
+  const suggestions = data?.data ?? []
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -40,11 +40,14 @@ export function UserPicker({ id, value, onChange, placeholder = '氏名または
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0"
+        align="start"
+      >
         <Command shouldFilter={false}>
           <CommandInput placeholder={placeholder} value={query} onValueChange={setQuery} />
           <CommandList>
-            {query && <CommandEmpty>該当する社員が見つかりません</CommandEmpty>}
+            <CommandEmpty>該当する社員が見つかりません</CommandEmpty>
             <CommandGroup>
               {suggestions.map((user) => (
                 <CommandItem
@@ -58,7 +61,9 @@ export function UserPicker({ id, value, onChange, placeholder = '氏名または
                   }}
                 >
                   <Check className={cn('size-4', user.id === value ? 'opacity-100' : 'opacity-0')} />
-                  {user.name}({user.email})
+                  <span className="min-w-0 truncate">
+                    {user.name}({user.email})
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>

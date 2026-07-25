@@ -1,8 +1,8 @@
 import { apiFetch } from './client'
 import type { Paginated, User } from './types'
 
-export function fetchUsers(query?: string): Promise<Paginated<User>> {
-  return apiFetch('/users', { query: { q: query } })
+export function fetchUsers(query?: string, perPage?: number): Promise<Paginated<User>> {
+  return apiFetch('/users', { query: { q: query, per_page: perPage } })
 }
 
 export function fetchUser(id: string): Promise<User> {

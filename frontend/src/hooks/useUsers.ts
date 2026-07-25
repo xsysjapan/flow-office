@@ -8,10 +8,10 @@ import {
   updateUserUsageStartDate,
 } from '../api/users'
 
-export function useUsers(query?: string) {
+export function useUsers(query?: string, perPage?: number) {
   return useQuery({
-    queryKey: ['users', query ?? ''],
-    queryFn: () => fetchUsers(query),
+    queryKey: ['users', query ?? '', perPage ?? 'default'],
+    queryFn: () => fetchUsers(query, perPage),
     placeholderData: keepPreviousData,
   })
 }

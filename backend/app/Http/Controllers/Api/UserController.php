@@ -27,6 +27,7 @@ class UserController extends Controller
         tags: ['ユーザー'],
         parameters: [
             new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Successful response'),
@@ -35,13 +36,17 @@ class UserController extends Controller
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $users = User::query()
             ->with('roles')
             ->when($request->string('q')->toString(), fn ($query, $q) => $query->where(function ($sub) use ($q) {
                 $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%");
             }))
             ->orderBy('name')
-            ->paginate(50);
+            ->paginate($validated['per_page'] ?? 50);
 
         return UserResource::collection($users);
     }

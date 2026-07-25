@@ -54,6 +54,47 @@ function renderPicker(onChange = vi.fn()) {
 }
 
 describe('UserPicker', () => {
+  it('shows up to 100 users before a query is entered', async () => {
+    renderPicker()
+
+    await userEvent.click(screen.getByRole('combobox'))
+
+    expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
+    expect(usersApi.fetchUsers).toHaveBeenCalledWith('', 100)
+  })
+
+  it('matches the trigger width and constrains long content', async () => {
+    renderPicker()
+
+    await userEvent.click(screen.getByRole('combobox'))
+
+    expect(await screen.findByRole('dialog')).toHaveClass(
+      'w-[var(--radix-popover-trigger-width)]',
+      'max-w-[calc(100vw-2rem)]',
+    )
+    expect((await screen.findByRole('option')).querySelector('span')).toHaveClass('min-w-0', 'truncate')
+  })
+
+  it('moves focus to the search field and draws one ring around the complete input row', async () => {
+    renderPicker()
+
+    await userEvent.click(screen.getByRole('combobox'))
+
+    const input = screen.getByPlaceholderText('氏名またはメールアドレスで検索')
+    expect(input).toHaveFocus()
+    expect(input).toHaveClass(
+      'focus:!shadow-none',
+      'focus:outline-none',
+      'focus:ring-0',
+      'focus:ring-offset-0',
+      'focus-visible:!shadow-none',
+      'focus-visible:outline-none',
+      'focus-visible:ring-0',
+      'focus-visible:ring-offset-0',
+    )
+    expect(input.parentElement).toHaveClass('focus-within:ring-2', 'focus-within:ring-inset', 'rounded-t-md')
+  })
+
   it('shows matching users as suggestions while typing', async () => {
     renderPicker()
 

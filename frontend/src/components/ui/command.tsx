@@ -14,11 +14,14 @@ export function Command({ className, ...props }: React.ComponentProps<typeof Com
 
 export function CommandInput({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div className="flex items-center gap-2 border-b border-border px-3" cmdk-input-wrapper="">
+    <div
+      className="flex items-center gap-2 rounded-t-md border-b border-border px-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40"
+      cmdk-input-wrapper=""
+    >
       <Search className="size-4 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         className={cn(
-          'flex h-9 w-full rounded-md bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-9 w-full rounded-md bg-transparent py-2 text-sm text-foreground outline-none ring-0 shadow-none placeholder:text-muted-foreground focus:!shadow-none focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:!shadow-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
         {...props}
