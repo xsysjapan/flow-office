@@ -713,4 +713,114 @@ describe('WorkStylesAndShiftsPage', () => {
     )
     expect(await screen.findByText('2件生成しました。')).toBeInTheDocument()
   })
+
+  it('previews and confirms a weekly shift pattern for the selected user and period', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
+      days: [
+        { date: '2026-08-03', weekday: 1, is_working_day: true, start_time: '09:00', end_time: '18:00', break_minutes: 60, source: 'weekly_pattern' },
+        { date: '2026-08-08', weekday: 6, is_working_day: false, start_time: null, end_time: null, break_minutes: 0, source: 'weekly_pattern' },
+      ],
+    })
+    vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockResolvedValue({
+      generated: [],
+      generated_count: 5,
+      skipped_dates: [],
+    })
+
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(週次)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態(週次)'), '標準勤務')
+    await userEvent.type(screen.getByLabelText('適用開始日'), '2026-08-01')
+    await userEvent.type(screen.getByLabelText('適用終了日'), '2026-08-31')
+    await userEvent.click(screen.getByRole('button', { name: '週次パターンをプレビューする' }))
+
+    const mondayToFriday = { start_time: '09:00', end_time: '18:00', break_minutes: 60 }
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.previewPatternShiftAssignments).toHaveBeenCalledWith({
+        from: '2026-08-01',
+        to: '2026-08-31',
+        weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+      }),
+    )
+    expect(await screen.findByText('2026-08-03: 09:00〜18:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-08: 休み')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '週次パターンで確定する' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.generatePatternShiftAssignments).toHaveBeenCalledWith({
+        user_id: 'user-5',
+        work_style_id: 'work-style-1',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+        overwrite_mode: 'skip_edited',
+      }),
+    )
+    expect(await screen.findByText('5件生成しました。')).toBeInTheDocument()
+  })
+
+  it('overrides a single day when confirming a monthly shift pattern', async () => {
+    const paginatedUsers: Paginated<User> = {
+      data: [targetUser],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
+      days: [{ date: '2026-08-03', weekday: 1, is_working_day: false, start_time: null, end_time: null, break_minutes: 0, source: 'day_override' }],
+    })
+    vi.spyOn(employeeShiftAssignmentsApi, 'generatePatternShiftAssignments').mockResolvedValue({
+      generated: [],
+      generated_count: 30,
+      skipped_dates: ['2026-08-03'],
+    })
+
+    renderPage()
+    await screen.findByText('標準勤務', { selector: 'strong' })
+
+    await userEvent.click(screen.getByRole('combobox', { name: '対象社員(月次)' }))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
+    await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
+    await userEvent.selectOptions(screen.getByLabelText('勤務形態(月次)'), '標準勤務')
+    await userEvent.type(screen.getByLabelText('対象年月(月次パターン)'), '2026-08')
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-03(月)' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '休みにする' }))
+    await userEvent.click(screen.getByRole('button', { name: '月次パターンをプレビューする' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.previewPatternShiftAssignments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '2026-08-01',
+          to: '2026-08-31',
+          day_overrides: { '2026-08-03': null },
+        }),
+      ),
+    )
+    expect(await screen.findByText('2026-08-03: 休み')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '月次パターンで確定する' }))
+
+    await waitFor(() =>
+      expect(employeeShiftAssignmentsApi.generatePatternShiftAssignments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-5',
+          work_style_id: 'work-style-1',
+          day_overrides: { '2026-08-03': null },
+        }),
+      ),
+    )
+    expect(await screen.findByText('30件生成しました。(実績・締め済み・個別上書きのため1件をスキップしました)')).toBeInTheDocument()
+  })
 })

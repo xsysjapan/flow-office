@@ -16,7 +16,9 @@ import {
 } from '../../hooks/useEmployeeRotationAssignments'
 import {
   useAssignShiftPatternDay,
+  useGeneratePatternShiftAssignments,
   useGenerateShiftAssignments,
+  usePreviewPatternShiftAssignments,
   usePublishShiftSchedule,
   useShiftAssignments,
   useShiftScheduleReview,
@@ -36,6 +38,7 @@ import {
   useWorkStyles,
 } from '../../hooks/useWorkStyles'
 import type { LegalHolidayRule, RotationPreviewDay, WorkStyle } from '../../api/types'
+import type { DayShiftOverrides, WeeklyShiftPattern } from '../../api/employeeShiftAssignments'
 
 /** "YYYY-MM" から、その月の1日と末日(YYYY-MM-DD)を返す。 */
 function monthBoundaries(yearMonth: string): { from: string; to: string } {
@@ -676,6 +679,458 @@ function ShiftGenerationCard() {
             </ul>
           )}
         </div>
+      )}
+    </Card>
+  )
+}
+
+const WEEKDAYS: { iso: number; label: string }[] = [
+  { iso: 1, label: '月' },
+  { iso: 2, label: '火' },
+  { iso: 3, label: '水' },
+  { iso: 4, label: '木' },
+  { iso: 5, label: '金' },
+  { iso: 6, label: '土' },
+  { iso: 7, label: '日' },
+]
+
+interface WeekdayRowState {
+  enabled: boolean
+  startTime: string
+  endTime: string
+  breakMinutes: string
+}
+
+function defaultWeeklyPatternState(): Record<number, WeekdayRowState> {
+  const state: Record<number, WeekdayRowState> = {}
+  for (const { iso } of WEEKDAYS) {
+    state[iso] = { enabled: iso <= 5, startTime: '09:00', endTime: '18:00', breakMinutes: '60' }
+  }
+  return state
+}
+
+function buildWeeklyPattern(state: Record<number, WeekdayRowState>): WeeklyShiftPattern {
+  const pattern: WeeklyShiftPattern = {}
+  for (const { iso } of WEEKDAYS) {
+    const row = state[iso]
+    pattern[iso] = row.enabled
+      ? { start_time: row.startTime, end_time: row.endTime, break_minutes: Number(row.breakMinutes) }
+      : null
+  }
+  return pattern
+}
+
+/** 週次・月次一括入力で共通して使う「曜日ごとの勤務する/しない・時刻・休憩」の入力行。 */
+function WeekdayPatternGrid({
+  state,
+  onChange,
+}: {
+  state: Record<number, WeekdayRowState>
+  onChange: (iso: number, patch: Partial<WeekdayRowState>) => void
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-2">
+      {WEEKDAYS.map(({ iso, label }) => {
+        const row = state[iso]
+        return (
+          <div key={iso} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-2">
+            <label className="flex w-16 items-center gap-2 text-sm font-medium text-foreground">
+              <Checkbox
+                checked={row.enabled}
+                onCheckedChange={(checked) => onChange(iso, { enabled: checked === true })}
+              />
+              {label}曜日
+            </label>
+            <Input
+              type="time"
+              aria-label={`${label}曜日の開始時刻`}
+              className="w-28"
+              disabled={!row.enabled}
+              value={row.startTime}
+              onChange={(e) => onChange(iso, { startTime: e.target.value })}
+            />
+            <span className="text-sm text-muted-foreground">〜</span>
+            <Input
+              type="time"
+              aria-label={`${label}曜日の終了時刻`}
+              className="w-28"
+              disabled={!row.enabled}
+              value={row.endTime}
+              onChange={(e) => onChange(iso, { endTime: e.target.value })}
+            />
+            <Input
+              type="number"
+              min={0}
+              aria-label={`${label}曜日の休憩分`}
+              className="w-24"
+              disabled={!row.enabled}
+              value={row.breakMinutes}
+              onChange={(e) => onChange(iso, { breakMinutes: e.target.value })}
+            />
+            <span className="text-sm text-muted-foreground">分休憩</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * 週次一括入力: 曜日ごとに開始/終了時刻・休憩を指定し、期間へ一括展開して確定する。
+ */
+function WeeklyPatternShiftAssignmentCard() {
+  const { data: workStyles } = useWorkStyles()
+  const [targetUserId, setTargetUserId] = useState<string | undefined>(undefined)
+  const [workStyleId, setWorkStyleId] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [weeklyPatternState, setWeeklyPatternState] = useState<Record<number, WeekdayRowState>>(
+    defaultWeeklyPatternState(),
+  )
+  const [overwriteMode, setOverwriteMode] = useState<'skip_edited' | 'overwrite_all'>('skip_edited')
+
+  const previewPattern = usePreviewPatternShiftAssignments()
+  const generatePattern = useGeneratePatternShiftAssignments()
+
+  const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
+    setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
+  }
+
+  const handlePreview = () => {
+    if (!from || !to) return
+    previewPattern.mutate({ from, to, weekly_pattern: buildWeeklyPattern(weeklyPatternState) })
+  }
+
+  const handleGenerate = () => {
+    if (!targetUserId || !workStyleId || !from || !to) return
+    generatePattern.mutate({
+      user_id: targetUserId,
+      work_style_id: workStyleId,
+      from,
+      to,
+      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+      overwrite_mode: overwriteMode,
+    })
+  }
+
+  return (
+    <Card title="週次の一括入力">
+      {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
+      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象社員(週次)" htmlFor="weekly-pattern-user" required>
+          <UserPicker id="weekly-pattern-user" value={targetUserId} onChange={setTargetUserId} />
+        </FormField>
+
+        <FormField label="勤務形態(週次)" htmlFor="weekly-pattern-work-style" required>
+          <NativeSelect id="weekly-pattern-work-style" value={workStyleId} onChange={(e) => setWorkStyleId(e.target.value)}>
+            <option value="">選択してください</option>
+            {workStyles?.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="適用開始日" htmlFor="weekly-pattern-from" required>
+          <Input id="weekly-pattern-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </FormField>
+
+        <FormField label="適用終了日" htmlFor="weekly-pattern-to" required>
+          <Input id="weekly-pattern-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </FormField>
+      </div>
+
+      <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの勤務時間</p>
+      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} />
+
+      <div className="my-4 flex flex-wrap gap-3">
+        <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
+          週次パターンをプレビューする
+        </Button>
+      </div>
+
+      {previewPattern.data && (
+        <ul className="mb-4 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+          {previewPattern.data.days.map((day) => (
+            <li key={day.date} className="text-foreground">
+              {day.date}: {day.is_working_day ? `${day.start_time}〜${day.end_time}` : '休み'}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <FormField label="再生成時の扱い(週次)" htmlFor="weekly-pattern-overwrite-mode">
+        <NativeSelect
+          id="weekly-pattern-overwrite-mode"
+          value={overwriteMode}
+          onChange={(e) => setOverwriteMode(e.target.value as 'skip_edited' | 'overwrite_all')}
+        >
+          <option value="skip_edited">未編集日のみ再生成する(安全)</option>
+          <option value="overwrite_all">個別上書きも含めてすべて再生成する</option>
+        </NativeSelect>
+        <p className="mt-1 text-xs text-muted-foreground">実績のある日・締め済みの日はどちらを選んでも上書きされない。</p>
+      </FormField>
+
+      <Button
+        isLoading={generatePattern.isPending}
+        disabled={!targetUserId || !workStyleId || !from || !to}
+        onClick={handleGenerate}
+      >
+        週次パターンで確定する
+      </Button>
+
+      {generatePattern.data && (
+        <p className="mt-3 text-sm text-foreground">
+          {generatePattern.data.generated_count}件生成しました。
+          {generatePattern.data.skipped_dates.length > 0 &&
+            `(実績・締め済み・個別上書きのため${generatePattern.data.skipped_dates.length}件をスキップしました)`}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+interface DayOverrideRowState {
+  enabled: boolean
+  dayOff: boolean
+  startTime: string
+  endTime: string
+  breakMinutes: string
+}
+
+/** "YYYY-MM"から、その月の全日付("YYYY-MM-DD")を返す。 */
+function daysInMonth(yearMonth: string): string[] {
+  if (!yearMonth) return []
+  const { from, to } = monthBoundaries(yearMonth)
+  const dates: string[] = []
+  const cursor = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T00:00:00`)
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
+/**
+ * 月次一括入力: 曜日ごとの既定パターンに加えて、月内の特定日だけ個別に
+ * 時刻を変更したり休みにしたりできる。
+ */
+function MonthlyPatternShiftAssignmentCard() {
+  const { data: workStyles } = useWorkStyles()
+  const [targetUserId, setTargetUserId] = useState<string | undefined>(undefined)
+  const [workStyleId, setWorkStyleId] = useState('')
+  const [yearMonth, setYearMonth] = useState('')
+  const [weeklyPatternState, setWeeklyPatternState] = useState<Record<number, WeekdayRowState>>(
+    defaultWeeklyPatternState(),
+  )
+  const [dayOverrideState, setDayOverrideState] = useState<Record<string, DayOverrideRowState>>({})
+  const [overwriteMode, setOverwriteMode] = useState<'skip_edited' | 'overwrite_all'>('skip_edited')
+
+  const previewPattern = usePreviewPatternShiftAssignments()
+  const generatePattern = useGeneratePatternShiftAssignments()
+
+  const { from, to } = yearMonth ? monthBoundaries(yearMonth) : { from: '', to: '' }
+  const dates = daysInMonth(yearMonth)
+
+  const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
+    setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
+  }
+
+  const handleDayOverrideChange = (date: string, patch: Partial<DayOverrideRowState>) => {
+    setDayOverrideState((prev) => ({
+      ...prev,
+      [date]: {
+        enabled: prev[date]?.enabled ?? false,
+        dayOff: prev[date]?.dayOff ?? false,
+        startTime: prev[date]?.startTime ?? '09:00',
+        endTime: prev[date]?.endTime ?? '18:00',
+        breakMinutes: prev[date]?.breakMinutes ?? '60',
+        ...patch,
+      },
+    }))
+  }
+
+  const buildDayOverrides = (): DayShiftOverrides => {
+    const overrides: DayShiftOverrides = {}
+    for (const [date, row] of Object.entries(dayOverrideState)) {
+      if (!row.enabled) continue
+      overrides[date] = row.dayOff
+        ? null
+        : { start_time: row.startTime, end_time: row.endTime, break_minutes: Number(row.breakMinutes) }
+    }
+    return overrides
+  }
+
+  const handlePreview = () => {
+    if (!from || !to) return
+    previewPattern.mutate({
+      from,
+      to,
+      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+      day_overrides: buildDayOverrides(),
+    })
+  }
+
+  const handleGenerate = () => {
+    if (!targetUserId || !workStyleId || !from || !to) return
+    generatePattern.mutate({
+      user_id: targetUserId,
+      work_style_id: workStyleId,
+      from,
+      to,
+      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+      day_overrides: buildDayOverrides(),
+      overwrite_mode: overwriteMode,
+    })
+  }
+
+  return (
+    <Card title="月次の一括入力(日単位の個別設定つき)">
+      {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
+      {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="対象社員(月次)" htmlFor="monthly-pattern-user" required>
+          <UserPicker id="monthly-pattern-user" value={targetUserId} onChange={setTargetUserId} />
+        </FormField>
+
+        <FormField label="勤務形態(月次)" htmlFor="monthly-pattern-work-style" required>
+          <NativeSelect
+            id="monthly-pattern-work-style"
+            value={workStyleId}
+            onChange={(e) => setWorkStyleId(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {workStyles?.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="対象年月(月次パターン)" htmlFor="monthly-pattern-year-month" required>
+          <Input
+            id="monthly-pattern-year-month"
+            type="month"
+            value={yearMonth}
+            onChange={(e) => setYearMonth(e.target.value)}
+          />
+        </FormField>
+      </div>
+
+      <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの既定の勤務時間</p>
+      <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} />
+
+      {dates.length > 0 && (
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="mb-2 text-sm font-semibold text-foreground">日単位の個別設定</h3>
+          <ul className="divide-y divide-border">
+            {dates.map((date) => {
+              const row = dayOverrideState[date]
+              const weekdayLabel = WEEKDAYS[(new Date(`${date}T00:00:00`).getDay() + 6) % 7].label
+              return (
+                <li key={date} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                  <label className="flex w-32 items-center gap-2 font-medium text-foreground">
+                    <Checkbox
+                      checked={row?.enabled ?? false}
+                      onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
+                    />
+                    {date}({weekdayLabel})
+                  </label>
+                  {row?.enabled && (
+                    <>
+                      <label className="flex items-center gap-2 text-foreground">
+                        <Checkbox
+                          checked={row.dayOff}
+                          onCheckedChange={(checked) => handleDayOverrideChange(date, { dayOff: checked === true })}
+                        />
+                        休みにする
+                      </label>
+                      {!row.dayOff && (
+                        <>
+                          <Input
+                            type="time"
+                            aria-label={`${date}の開始時刻`}
+                            className="w-28"
+                            value={row.startTime}
+                            onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
+                          />
+                          <span className="text-muted-foreground">〜</span>
+                          <Input
+                            type="time"
+                            aria-label={`${date}の終了時刻`}
+                            className="w-28"
+                            value={row.endTime}
+                            onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            aria-label={`${date}の休憩分`}
+                            className="w-24"
+                            value={row.breakMinutes}
+                            onChange={(e) => handleDayOverrideChange(date, { breakMinutes: e.target.value })}
+                          />
+                          <span className="text-muted-foreground">分休憩</span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      <div className="my-4 flex flex-wrap gap-3">
+        <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
+          月次パターンをプレビューする
+        </Button>
+      </div>
+
+      {previewPattern.data && (
+        <ul className="mb-4 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+          {previewPattern.data.days.map((day) => (
+            <li key={day.date} className="text-foreground">
+              {day.date}: {day.is_working_day ? `${day.start_time}〜${day.end_time}` : '休み'}
+              {day.source === 'day_override' && <span className="ml-1 text-xs text-muted-foreground">(個別設定)</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <FormField label="再生成時の扱い(月次)" htmlFor="monthly-pattern-overwrite-mode">
+        <NativeSelect
+          id="monthly-pattern-overwrite-mode"
+          value={overwriteMode}
+          onChange={(e) => setOverwriteMode(e.target.value as 'skip_edited' | 'overwrite_all')}
+        >
+          <option value="skip_edited">未編集日のみ再生成する(安全)</option>
+          <option value="overwrite_all">個別上書きも含めてすべて再生成する</option>
+        </NativeSelect>
+        <p className="mt-1 text-xs text-muted-foreground">実績のある日・締め済みの日はどちらを選んでも上書きされない。</p>
+      </FormField>
+
+      <Button
+        isLoading={generatePattern.isPending}
+        disabled={!targetUserId || !workStyleId || !from || !to}
+        onClick={handleGenerate}
+      >
+        月次パターンで確定する
+      </Button>
+
+      {generatePattern.data && (
+        <p className="mt-3 text-sm text-foreground">
+          {generatePattern.data.generated_count}件生成しました。
+          {generatePattern.data.skipped_dates.length > 0 &&
+            `(実績・締め済み・個別上書きのため${generatePattern.data.skipped_dates.length}件をスキップしました)`}
+        </p>
       )}
     </Card>
   )
@@ -1475,6 +1930,8 @@ export function WorkStylesAndShiftsPage() {
       <WorkStyleFormCard />
       <MonthlyWorkStyleAssignmentCard />
       <ShiftGenerationCard />
+      <WeeklyPatternShiftAssignmentCard />
+      <MonthlyPatternShiftAssignmentCard />
       <ShiftPatternFormCard />
       <RotationPatternFormCard />
       <RotationAssignmentCard />

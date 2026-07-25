@@ -142,6 +142,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
         Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
         Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
+        Route::post('/employee-shift-assignments/preview-pattern', [EmployeeShiftAssignmentController::class, 'previewPattern']);
+        Route::post('/employee-shift-assignments/generate-pattern', [EmployeeShiftAssignmentController::class, 'generatePattern']);
         Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
         Route::delete('/user-work-style-monthly-assignments/{userWorkStyleMonthlyAssignment}', [UserWorkStyleMonthlyAssignmentController::class, 'destroy']);

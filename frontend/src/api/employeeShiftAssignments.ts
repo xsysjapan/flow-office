@@ -47,3 +47,51 @@ export function reviewShiftSchedule(target: ShiftScheduleTarget): Promise<ShiftS
 export function publishShiftSchedule(target: ShiftScheduleTarget): Promise<{ published_count: number }> {
   return apiFetch('/employee-shift-assignments/publish', { method: 'POST', body: target })
 }
+
+/** 週次・月次一括入力: 曜日ごとの開始/終了時刻・休憩分。ISO曜日(1=月〜7=日)をキーとする。 */
+export type WeekdayShiftEntry = { start_time: string; end_time: string; break_minutes: number } | null
+export type WeeklyShiftPattern = Record<number, WeekdayShiftEntry>
+/** 日付('YYYY-MM-DD')をキーとする、週次パターンへの日単位の上書き。 */
+export type DayShiftOverrides = Record<string, WeekdayShiftEntry>
+
+export interface PatternShiftAssignmentsInput {
+  user_id: string
+  work_style_id: string
+  from: string
+  to: string
+  weekly_pattern: WeeklyShiftPattern
+  day_overrides?: DayShiftOverrides
+  overwrite_mode?: 'skip_edited' | 'overwrite_all'
+}
+
+export type PreviewPatternShiftAssignmentsInput = Omit<PatternShiftAssignmentsInput, 'user_id' | 'work_style_id'>
+
+export interface PatternShiftPreviewDay {
+  date: string
+  weekday: number
+  is_working_day: boolean
+  start_time: string | null
+  end_time: string | null
+  break_minutes: number
+  source: 'day_override' | 'weekly_pattern' | 'none'
+}
+
+/** 確定前に、週次・月次パターンの展開結果を確認する(永続化しない)。 */
+export function previewPatternShiftAssignments(
+  input: PreviewPatternShiftAssignmentsInput,
+): Promise<{ days: PatternShiftPreviewDay[] }> {
+  return apiFetch('/employee-shift-assignments/preview-pattern', { method: 'POST', body: input })
+}
+
+export interface GeneratePatternShiftAssignmentsResult {
+  generated: EmployeeShiftAssignment[]
+  generated_count: number
+  skipped_dates: string[]
+}
+
+/** 週次・月次パターンを確定し、指定期間の勤務予定を一括生成する。 */
+export function generatePatternShiftAssignments(
+  input: PatternShiftAssignmentsInput,
+): Promise<GeneratePatternShiftAssignmentsResult> {
+  return apiFetch('/employee-shift-assignments/generate-pattern', { method: 'POST', body: input })
+}

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\GeneratePatternShiftAssignments;
 use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
 use App\Domain\Attendance\Services\ShiftScheduleReviewService;
+use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EmployeeShiftAssignmentResource;
@@ -15,6 +17,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
 /**
@@ -84,6 +88,107 @@ class EmployeeShiftAssignmentController extends Controller
         ));
 
         return EmployeeShiftAssignmentResource::collection($assignments);
+    }
+
+    /**
+     * 週次・月次一括入力: 曜日ごとの既定値(+日単位の上書き)から、指定期間の勤務予定を
+     * どう展開するかを確認する(永続化しない。`RotationPatternController::preview`と同じ思想)。
+     */
+    #[OA\Post(
+        path: '/employee-shift-assignments/preview-pattern',
+        operationId: 'employeeShiftAssignments.previewPattern',
+        summary: '週次・月次パターンの展開結果をプレビューする',
+        tags: ['勤務予定'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['from', 'to', 'weekly_pattern'], properties: [new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function previewPattern(Request $request): JsonResponse
+    {
+        $data = $request->validate($this->patternValidationRules());
+
+        $resolver = new WeeklyPatternResolver($data['weekly_pattern'], $data['day_overrides'] ?? []);
+        $period = Carbon::parse($data['from'])->toPeriod(Carbon::parse($data['to']));
+        $days = [];
+
+        foreach ($period as $date) {
+            $resolved = $resolver->resolve($date);
+            $value = $resolved['value'] ?? null;
+
+            $days[] = [
+                'date' => $date->toDateString(),
+                'weekday' => $date->dayOfWeekIso,
+                'is_working_day' => $value !== null,
+                'start_time' => $value['start_time'] ?? null,
+                'end_time' => $value['end_time'] ?? null,
+                'break_minutes' => $value['break_minutes'] ?? 0,
+                'source' => $resolved['source'] ?? 'none',
+            ];
+        }
+
+        return response()->json(['days' => $days]);
+    }
+
+    /**
+     * 週次・月次一括入力: 曜日ごとの既定値(+日単位の上書き)を指定期間へ一括展開し、
+     * 勤務予定を確定する。
+     */
+    #[OA\Post(
+        path: '/employee-shift-assignments/generate-pattern',
+        operationId: 'employeeShiftAssignments.generatePattern',
+        summary: '週次・月次パターンから勤務予定を一括生成する',
+        tags: ['勤務予定'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_style_id', 'from', 'to', 'weekly_pattern'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_style_id', type: 'string', format: 'uuid'), new OA\Property(property: 'from', type: 'string', format: 'date'), new OA\Property(property: 'to', type: 'string', format: 'date'), new OA\Property(property: 'weekly_pattern', type: 'object'), new OA\Property(property: 'day_overrides', type: 'object', nullable: true), new OA\Property(property: 'overwrite_mode', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function generatePattern(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            'work_style_id' => ['required', 'string', 'exists:work_styles,id'],
+            ...$this->patternValidationRules(),
+            'overwrite_mode' => ['nullable', Rule::in([
+                GeneratePatternShiftAssignments::OVERWRITE_MODE_SKIP_EDITED,
+                GeneratePatternShiftAssignments::OVERWRITE_MODE_OVERWRITE_ALL,
+            ])],
+        ]);
+
+        $result = $commandBus->dispatch(new GeneratePatternShiftAssignments(
+            userId: $data['user_id'],
+            workStyleId: $data['work_style_id'],
+            from: $data['from'],
+            to: $data['to'],
+            weeklyPattern: $data['weekly_pattern'],
+            dayOverrides: $data['day_overrides'] ?? [],
+            overwriteMode: $data['overwrite_mode'] ?? GeneratePatternShiftAssignments::OVERWRITE_MODE_SKIP_EDITED,
+            generatedByUserId: $request->user()->id,
+        ));
+
+        return response()->json([
+            'generated' => EmployeeShiftAssignmentResource::collection($result['generated']),
+            'generated_count' => $result['generated']->count(),
+            'skipped_dates' => $result['skipped_dates'],
+        ]);
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    private function patternValidationRules(): array
+    {
+        return [
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+            'weekly_pattern' => ['required', 'array'],
+            'weekly_pattern.*' => ['nullable', 'array'],
+            'weekly_pattern.*.start_time' => ['required_with:weekly_pattern.*.end_time', 'date_format:H:i'],
+            'weekly_pattern.*.end_time' => ['required_with:weekly_pattern.*.start_time', 'date_format:H:i'],
+            'weekly_pattern.*.break_minutes' => ['required_with:weekly_pattern.*.start_time', 'integer', 'min:0'],
+            'day_overrides' => ['nullable', 'array'],
+            'day_overrides.*' => ['nullable', 'array'],
+            'day_overrides.*.start_time' => ['required_with:day_overrides.*.end_time', 'date_format:H:i'],
+            'day_overrides.*.end_time' => ['required_with:day_overrides.*.start_time', 'date_format:H:i'],
+            'day_overrides.*.break_minutes' => ['required_with:day_overrides.*.start_time', 'integer', 'min:0'],
+        ];
     }
 
     /**
