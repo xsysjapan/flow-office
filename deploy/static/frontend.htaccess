@@ -9,6 +9,16 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # api/・mcp/はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
+    # 末尾スラッシュなしで直下にアクセスされると、下のRewriteRuleより先にApache本体
+    # (mod_dir)が自動的に「%{REQUEST_URI}/」への301リダイレクトを発行してしまう。
+    # POSTのようなボディ付きリクエストがこの301でGETに落ちてしまい、各アプリの
+    # フロントコントローラが期待するレスポンス(例: mcp/のPOST 401)を返せなくなる
+    # (docs/28-github-actions-deploy.md参照)。mod_dirのリダイレクトより先に、各アプリの
+    # index.phpへメソッド・ボディを保ったまま内部リライトする。
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^(api|mcp)$ $1/index.php [L]
+
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
