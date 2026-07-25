@@ -147,7 +147,7 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 `scenario-07-new-work-time-systems.spec.ts`のファイル冒頭コメントに記載のとおり、
 以下の管理画面未対応事項がある(いずれもAPIを直接叩いて確認):
 
-- 勤務形態作成フォーム(`WorkStylesAndShiftsPage`)に、雇用区分・みなし時間
+- 勤務形態作成フォーム(`WorkStylesPage`)に、雇用区分・みなし時間
   (deemed_daily_minutes)・変形期間の起算日(variable_period_start_day)・法定休日
   「決めない方式」の入力欄がまだ無く、`calendar_id`も必須のままになっている
   (バックエンドは2026-07-12時点でnullable)

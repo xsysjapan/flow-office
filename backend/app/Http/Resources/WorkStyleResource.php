@@ -27,6 +27,7 @@ class WorkStyleResource extends JsonResource
             'default_end_time' => $this->default_end_time,
             'default_break_minutes' => $this->default_break_minutes,
             'rounding_unit_minutes' => $this->rounding_unit_minutes,
+            'rounding_mode' => $this->rounding_mode,
             'default_break_start_time' => $this->default_break_start_time,
             'default_break_end_time' => $this->default_break_end_time,
             'auto_break_enabled' => $this->auto_break_enabled,

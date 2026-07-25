@@ -7,6 +7,7 @@ use App\Models\EmployeeShiftAssignment;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
 use App\Models\SystemSetting;
+use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -14,8 +15,8 @@ use Illuminate\Support\Collection;
 /**
  * 日次勤怠の入力画面(未入力の日)を開いた際の初期値を、優先順位に沿って解決する。
  *
- * 1. 打刻(attendance_punches)があれば、その内容を働き方の丸め単位(work_styles.
- *    rounding_unit_minutes)で丸めて反映する。
+ * 1. 打刻(attendance_punches)があれば、その内容を働き方の丸め単位・丸め方向(work_styles.
+ *    rounding_unit_minutes・rounding_mode)で丸めて反映する。
  * 2. 打刻が無く勤務予定(employee_shift_assignments)があれば、その予定(休憩を含む)を表示する。
  * 3. 勤務予定も無ければ、システムの初期設定(その月に割り当てられた働き方 → 会社の
  *    デフォルト働き方の標準時刻・標準休憩)を表示する(WorkStyleFallbackResolver参照)。
@@ -70,6 +71,7 @@ class AttendanceDayDefaultsResolver
 
         $workStyle = $shift?->workStyle ?? $this->workStyleFallbackResolver->resolveForUser($userId, $workDate);
         $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
+        $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
         $offsetMinutes = $punches->first()->utc_offset_minutes;
 
         $clockIn = $punches->firstWhere('punch_type', PunchType::CLOCK_IN);
@@ -82,8 +84,8 @@ class AttendanceDayDefaultsResolver
                 $openBreakStart = $punch->punched_at;
             } elseif ($punch->punch_type === PunchType::BREAK_END && $openBreakStart !== null) {
                 $breaks[] = [
-                    'start' => LocalDateTime::formatWithOffsetMinutes($this->roundToNearest($openBreakStart, $roundingUnitMinutes), $offsetMinutes),
-                    'end' => LocalDateTime::formatWithOffsetMinutes($this->roundToNearest($punch->punched_at, $roundingUnitMinutes), $offsetMinutes),
+                    'start' => LocalDateTime::formatWithOffsetMinutes($this->roundSegmentEnd($openBreakStart, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
+                    'end' => LocalDateTime::formatWithOffsetMinutes($this->roundSegmentStart($punch->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
                 ];
                 $openBreakStart = null;
             }
@@ -92,10 +94,10 @@ class AttendanceDayDefaultsResolver
         return [
             'source' => 'punch',
             'actual_start_at' => $clockIn !== null
-                ? LocalDateTime::formatWithOffsetMinutes($this->roundToNearest($clockIn->punched_at, $roundingUnitMinutes), $offsetMinutes)
+                ? LocalDateTime::formatWithOffsetMinutes($this->roundSegmentStart($clockIn->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
                 : null,
             'actual_end_at' => $clockOut !== null
-                ? LocalDateTime::formatWithOffsetMinutes($this->roundToNearest($clockOut->punched_at, $roundingUnitMinutes), $offsetMinutes)
+                ? LocalDateTime::formatWithOffsetMinutes($this->roundSegmentEnd($clockOut->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
                 : null,
             'breaks' => $breaks,
         ];
@@ -162,8 +164,36 @@ class AttendanceDayDefaultsResolver
     }
 
     /**
-     * 打刻時刻を$unitMinutes分単位に最も近い時刻へ丸める(四捨五入)。丸め方向(切上げ/切下げ)は
-     * 指定されていないため、単純な四捨五入とする。$unitMinutesが1以下の場合は丸めない。
+     * 勤務区間が「始まる」打刻(始業・休憩終了)を丸める。$roundingModeが
+     * shorten(勤務時間が短くなる方向)なら繰り上げ(遅い方へ)、lengthen(長くなる方向)なら
+     * 繰り下げ(早い方へ)、nearestなら四捨五入する。
+     */
+    private function roundSegmentStart(Carbon $time, int $unitMinutes, string $roundingMode): Carbon
+    {
+        return match ($roundingMode) {
+            WorkStyle::ROUNDING_MODE_SHORTEN => $this->ceilToUnit($time, $unitMinutes),
+            WorkStyle::ROUNDING_MODE_LENGTHEN => $this->floorToUnit($time, $unitMinutes),
+            default => $this->roundToNearest($time, $unitMinutes),
+        };
+    }
+
+    /**
+     * 勤務区間が「終わる」打刻(終業・休憩開始)を丸める。$roundingModeが
+     * shorten(勤務時間が短くなる方向)なら繰り下げ(早い方へ)、lengthen(長くなる方向)なら
+     * 繰り上げ(遅い方へ)、nearestなら四捨五入する。
+     */
+    private function roundSegmentEnd(Carbon $time, int $unitMinutes, string $roundingMode): Carbon
+    {
+        return match ($roundingMode) {
+            WorkStyle::ROUNDING_MODE_SHORTEN => $this->floorToUnit($time, $unitMinutes),
+            WorkStyle::ROUNDING_MODE_LENGTHEN => $this->ceilToUnit($time, $unitMinutes),
+            default => $this->roundToNearest($time, $unitMinutes),
+        };
+    }
+
+    /**
+     * 打刻時刻を$unitMinutes分単位に最も近い時刻へ丸める(四捨五入)。$unitMinutesが1以下の
+     * 場合は丸めない。
      */
     private function roundToNearest(Carbon $time, int $unitMinutes): Carbon
     {
@@ -171,9 +201,37 @@ class AttendanceDayDefaultsResolver
             return $time->copy();
         }
 
-        $minutesSinceMidnight = $time->hour * 60 + $time->minute + ($time->second / 60);
-        $roundedMinutes = (int) round($minutesSinceMidnight / $unitMinutes) * $unitMinutes;
+        $roundedMinutes = (int) round($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
 
         return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
+    }
+
+    /** 打刻時刻を$unitMinutes分単位の直前(早い方)へ切り捨てる。 */
+    private function floorToUnit(Carbon $time, int $unitMinutes): Carbon
+    {
+        if ($unitMinutes <= 1) {
+            return $time->copy();
+        }
+
+        $roundedMinutes = (int) floor($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
+
+        return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
+    }
+
+    /** 打刻時刻を$unitMinutes分単位の直後(遅い方)へ切り上げる。 */
+    private function ceilToUnit(Carbon $time, int $unitMinutes): Carbon
+    {
+        if ($unitMinutes <= 1) {
+            return $time->copy();
+        }
+
+        $roundedMinutes = (int) ceil($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
+
+        return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
+    }
+
+    private function minutesSinceMidnight(Carbon $time): float
+    {
+        return $time->hour * 60 + $time->minute + ($time->second / 60);
     }
 }

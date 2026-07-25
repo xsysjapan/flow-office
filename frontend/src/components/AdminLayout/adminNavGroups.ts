@@ -30,7 +30,8 @@ export const adminNavGroups: AdminNavGroup[] = [
     roles: [ROLE.ADMIN, ROLE.HR_STAFF],
     items: [
       { to: '/admin/work-calendars', label: 'カレンダー', description: '休日・稼働日カレンダーを管理する' },
-      { to: '/admin/work-styles', label: '勤務形態・シフト', description: '勤務形態とシフトパターンを管理する' },
+      { to: '/admin/work-styles', label: '勤務形態', description: '勤務形態(所定労働時間・労働時間制)を管理する' },
+      { to: '/admin/shifts', label: 'シフト', description: 'シフトパターン・ローテーション・シフト生成を管理する' },
       { to: '/admin/paid-leave', label: '有給ルール', description: '有給の付与・消化ルールを管理する' },
       { to: '/admin/paid-leave/history', label: '有給履歴', description: '対象社員の有給履歴を確認する' },
       { to: '/admin/special-leave', label: '特別休暇設定', description: '特別休暇の種類・付与ルールを管理する' },

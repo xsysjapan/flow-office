@@ -62,6 +62,7 @@ class WorkStyleController extends Controller
         $data = $request->validate($this->validationRules($request));
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
+        $data['rounding_mode'] ??= WorkStyle::ROUNDING_MODE_NEAREST;
 
         if ($data['work_time_system'] === WorkStyle::WORK_TIME_SYSTEM_FLEX) {
             $this->validateFlexTimeFields($data);
@@ -95,6 +96,7 @@ class WorkStyleController extends Controller
         $data = $request->validate($this->validationRules($request, ignoreId: $workStyle->id));
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
+        $data['rounding_mode'] ??= WorkStyle::ROUNDING_MODE_NEAREST;
 
         if ($data['work_time_system'] === WorkStyle::WORK_TIME_SYSTEM_FLEX) {
             $this->validateFlexTimeFields($data);
@@ -139,6 +141,11 @@ class WorkStyleController extends Controller
             'default_end_time' => ['nullable', 'date_format:H:i'],
             'default_break_minutes' => ['integer', 'min:0'],
             'rounding_unit_minutes' => ['nullable', Rule::in([5, 10, 15, 30])],
+            'rounding_mode' => ['nullable', Rule::in([
+                WorkStyle::ROUNDING_MODE_NEAREST,
+                WorkStyle::ROUNDING_MODE_SHORTEN,
+                WorkStyle::ROUNDING_MODE_LENGTHEN,
+            ])],
             'default_break_start_time' => ['nullable', 'date_format:H:i'],
             'default_break_end_time' => ['nullable', 'date_format:H:i'],
             'auto_break_enabled' => ['boolean'],

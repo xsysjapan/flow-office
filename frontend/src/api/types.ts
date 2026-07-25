@@ -294,6 +294,12 @@ export type AttendanceMonthStatus = 'not_submitted' | 'submitted' | 'approved' |
 
 export type LegalHolidayRule = 'weekly' | 'four_weeks_four_days'
 
+/**
+ * 打刻の丸め方向。nearest=四捨五入、shorten=勤務時間が短くなる方向(始業・休憩終了は
+ * 繰り上げ、終業・休憩開始は繰り下げ)、lengthen=勤務時間が長くなる方向(逆)。
+ */
+export type RoundingMode = 'nearest' | 'shorten' | 'lengthen'
+
 /** UC-C005: シフト制勤務者の法定休日要件(毎週1日 or 4週4日以上)を満たしていない期間。 */
 export interface LegalHolidayWarning {
   rule: LegalHolidayRule
@@ -507,6 +513,8 @@ export interface WorkStyle {
   /** 日次勤怠の入力画面で打刻内容を初期値として反映する際の丸め単位(5/10/15/30分)。
    *  未設定(null)は丸めない。 */
   rounding_unit_minutes: number | null
+  /** 丸め方向。未設定(null)は'nearest'(四捨五入)として扱う。 */
+  rounding_mode: RoundingMode | null
   /** 標準休憩の開始・終了時刻。勤務予定・打刻のいずれも無い日の初期値(システムの初期設定)に使う。 */
   default_break_start_time: string | null
   default_break_end_time: string | null
