@@ -72,4 +72,29 @@ class UserHireDateTest extends TestCase
             'termination_date' => '2024-03-31',
         ])->assertStatus(422);
     }
+
+    public function test_hr_staff_can_set_a_users_usage_start_date(): void
+    {
+        $hr = User::factory()->create();
+        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $employee = User::factory()->create();
+
+        $response = $this->actingAs($hr)->putJson("/api/users/{$employee->id}/usage-start-date", [
+            'usage_start_date' => '2026-07-01',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('usage_start_date', '2026-07-01');
+        $this->assertSame('2026-07-01', $employee->refresh()->usage_start_date->toDateString());
+    }
+
+    public function test_employee_cannot_set_a_usage_start_date(): void
+    {
+        $employee = User::factory()->create();
+        $other = User::factory()->create();
+
+        $this->actingAs($employee)->putJson("/api/users/{$other->id}/usage-start-date", [
+            'usage_start_date' => '2026-07-01',
+        ])->assertForbidden();
+    }
 }

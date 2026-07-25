@@ -17,6 +17,8 @@ use Illuminate\Support\Carbon;
  * 提出期限(`system_settings.attendance_submission_deadline_day`、当月の日)を過ぎても
  * 前月分が未提出(差戻し中も含む)の在籍社員を対象に、解消するまで実行のたびに通知する
  * (状態を記録して警告を1回に絞る仕組みは持たない。docs/13-usecases-notification.md参照)。
+ * 利用開始日・入社日より前の月(まだ本システムの利用や在籍を開始していない期間)は
+ * フォロー対象外とする。
  *
  * @implements CommandHandler<WarnUnsubmittedAttendance>
  */
@@ -37,6 +39,7 @@ class WarnUnsubmittedAttendanceHandler implements CommandHandler
         }
 
         $targetYearMonth = $today->copy()->subMonthNoOverflow()->format('Y-m');
+        $targetMonthEnd = Carbon::createFromFormat('Y-m', $targetYearMonth)->endOfMonth()->toDateString();
 
         $submittedUserIds = AttendanceMonth::query()
             ->where('year_month', $targetYearMonth)
@@ -46,6 +49,8 @@ class WarnUnsubmittedAttendanceHandler implements CommandHandler
         $unsubmittedUsers = User::query()
             ->where('employment_status', 'active')
             ->whereNotIn('id', $submittedUserIds)
+            ->where(fn ($query) => $query->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $targetMonthEnd))
+            ->where(fn ($query) => $query->whereNull('hire_date')->orWhereDate('hire_date', '<=', $targetMonthEnd))
             ->get(['id', 'name', 'email']);
 
         foreach ($unsubmittedUsers as $user) {

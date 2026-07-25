@@ -162,6 +162,28 @@ describe('UserRoleEditPage', () => {
     await waitFor(() => expect(usersApi.updateUserTerminationDate).toHaveBeenCalledWith('user-1', null))
   })
 
+  it('prefills the usage start date when the user already has one', async () => {
+    renderPage({ ...targetUser, usage_start_date: '2026-07-01' })
+
+    expect(await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)')).toHaveValue(
+      '2026-07-01',
+    )
+  })
+
+  it('saves the entered usage start date', async () => {
+    vi.spyOn(usersApi, 'updateUserUsageStartDate').mockResolvedValue({ ...targetUser, usage_start_date: '2026-07-01' })
+
+    renderPage(targetUser)
+
+    await userEvent.type(
+      await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)'),
+      '2026-07-01',
+    )
+    await userEvent.click(screen.getByRole('button', { name: '利用開始日を保存する' }))
+
+    await waitFor(() => expect(usersApi.updateUserUsageStartDate).toHaveBeenCalledWith('user-1', '2026-07-01'))
+  })
+
   it('defaults to using the company default work style when no monthly assignment exists', async () => {
     renderPage(targetUser)
 

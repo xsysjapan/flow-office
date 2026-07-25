@@ -21,6 +21,7 @@ use Illuminate\Support\Collection;
  * GrantScheduledPaidLeaveHandlerと同じ考え方だが、有給の法定8割出勤要件の判定
  * (paid_leave_%のみを出勤扱いとする)には一切手を入れず、こちらは独自に出勤率を判定する
  * (有給・特別休暇いずれの消化日も出勤扱いとする。会社独自の制度のため要件は柔軟に持てる)。
+ * 利用開始日が設定されていて、かつそれが未到来の場合は対象外とする(未設定なら制限しない)。
  *
  * @implements CommandHandler<GrantScheduledSpecialLeave>
  */
@@ -100,7 +101,9 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
      */
     private function eligibleUsers(SpecialLeaveGrantRule $rule, Carbon $today): Collection
     {
-        $query = User::query()->whereNotNull('hire_date');
+        $query = User::query()
+            ->whereNotNull('hire_date')
+            ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
             $userIds = EmployeeShiftAssignment::query()

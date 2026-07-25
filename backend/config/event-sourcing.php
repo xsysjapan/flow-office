@@ -77,6 +77,7 @@ use App\Domain\User\Events\UserRolesChanged;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
+use App\Domain\User\Events\UserUsageStartDateSet;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -290,6 +291,7 @@ return [
         'user.roles_changed' => UserRolesChanged::class,
         'user.hire_date_set' => UserHireDateSet::class,
         'user.termination_date_set' => UserTerminationDateSet::class,
+        'user.usage_start_date_set' => UserUsageStartDateSet::class,
         'user.migrated_from_legacy' => UserMigratedFromLegacy::class,
 
         'backoffice_task.created' => BackOfficeTaskCreated::class,

@@ -16,7 +16,13 @@ import {
   useRemoveUserWorkStyleMonthlyAssignment,
   useUserWorkStyleMonthlyAssignments,
 } from '../../hooks/useUserWorkStyleMonthlyAssignments'
-import { useUpdateUserHireDate, useUpdateUserRoles, useUpdateUserTerminationDate, useUser } from '../../hooks/useUsers'
+import {
+  useUpdateUserHireDate,
+  useUpdateUserRoles,
+  useUpdateUserTerminationDate,
+  useUpdateUserUsageStartDate,
+  useUser,
+} from '../../hooks/useUsers'
 import { useWorkStyles } from '../../hooks/useWorkStyles'
 import { formatDate } from '../../utils/weekDates'
 
@@ -25,6 +31,7 @@ type WorkStyleMode = 'default' | 'specify'
 /**
  * UC-M001: ユーザーに付与する権限(ロール)を編集する。
  * UC-P002: 有給の自動付与に使う入社日を設定する。
+ * 勤怠提出フォロー等の各種フォロー通知の起算日となる利用開始日を設定する。
  * 指示書 13章: 会社のデフォルトを使用するか、別の働き方を指定するかを選択する。
  */
 export function UserRoleEditPage() {
@@ -38,12 +45,14 @@ export function UserRoleEditPage() {
   const updateRoles = useUpdateUserRoles()
   const updateHireDate = useUpdateUserHireDate()
   const updateTerminationDate = useUpdateUserTerminationDate()
+  const updateUsageStartDate = useUpdateUserUsageStartDate()
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth()
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment()
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [hireDate, setHireDate] = useState('')
   const [terminationDate, setTerminationDate] = useState('')
+  const [usageStartDate, setUsageStartDate] = useState('')
   const [isInitialized, setIsInitialized] = useState(false)
 
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
@@ -58,6 +67,7 @@ export function UserRoleEditPage() {
       setSelectedCodes(user.roles ?? [])
       setHireDate(user.hire_date ?? '')
       setTerminationDate(user.termination_date ?? '')
+      setUsageStartDate(user.usage_start_date ?? '')
       setIsInitialized(true)
     }
   }, [user, isInitialized])
@@ -171,6 +181,34 @@ export function UserRoleEditPage() {
             onClick={() => updateTerminationDate.mutate({ id: userId, terminationDate: terminationDate || null })}
           >
             退社日を保存する
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-border pt-4">
+        {updateUsageStartDate.error && <ErrorMessage error={updateUsageStartDate.error} />}
+        {updateUsageStartDate.isSuccess && <Badge tone="success">保存しました</Badge>}
+
+        <FormField
+          label="利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)"
+          htmlFor="user-role-edit-usage-start-date"
+        >
+          <Input
+            id="user-role-edit-usage-start-date"
+            type="date"
+            value={usageStartDate}
+            onChange={(e) => setUsageStartDate(e.target.value)}
+          />
+        </FormField>
+
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            isLoading={updateUsageStartDate.isPending}
+            disabled={!usageStartDate}
+            onClick={() => updateUsageStartDate.mutate({ id: userId, usageStartDate })}
+          >
+            利用開始日を保存する
           </Button>
         </div>
       </div>

@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\User\Commands\AssignUserRoles;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SetUserTerminationDate;
+use App\Domain\User\Commands\SetUserUsageStartDate;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -155,6 +156,41 @@ class UserController extends Controller
         $commandBus->dispatch(new SetUserTerminationDate(
             userId: $user->id,
             terminationDate: $data['termination_date'],
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new UserResource($user->refresh()->load('roles'));
+    }
+
+    #[OA\Put(
+        path: '/users/{user}/usage-start-date',
+        operationId: 'users.updateUsageStartDate',
+        summary: '利用開始日を設定する',
+        tags: ['ユーザー'],
+        parameters: [
+            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['usage_start_date'],
+                properties: [
+                    new OA\Property(property: 'usage_start_date', type: 'string', format: 'date'),
+                ],
+            ),
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+        ],
+    )]
+    public function updateUsageStartDate(Request $request, User $user, CommandBus $commandBus): UserResource
+    {
+        $data = $request->validate(['usage_start_date' => ['required', 'date']]);
+
+        $commandBus->dispatch(new SetUserUsageStartDate(
+            userId: $user->id,
+            usageStartDate: $data['usage_start_date'],
             changedByUserId: $request->user()->id,
         ));
 

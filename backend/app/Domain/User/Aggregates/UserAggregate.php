@@ -10,6 +10,7 @@ use App\Domain\User\Events\UserRolesChanged;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
+use App\Domain\User\Events\UserUsageStartDateSet;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -98,6 +99,13 @@ class UserAggregate extends AggregateRoot
     public function setTerminationDate(?string $terminationDate, string $changedByUserId): self
     {
         $this->recordThat(new UserTerminationDateSet(terminationDate: $terminationDate, changedByUserId: $changedByUserId));
+
+        return $this;
+    }
+
+    public function setUsageStartDate(string $usageStartDate, string $changedByUserId): self
+    {
+        $this->recordThat(new UserUsageStartDateSet(usageStartDate: $usageStartDate, changedByUserId: $changedByUserId));
 
         return $this;
     }

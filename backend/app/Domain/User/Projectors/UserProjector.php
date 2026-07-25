@@ -11,6 +11,7 @@ use App\Domain\User\Events\UserRolesChanged;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
+use App\Domain\User\Events\UserUsageStartDateSet;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -125,6 +126,13 @@ class UserProjector extends Projector
     {
         User::query()->whereKey($event->aggregateRootUuid())->update([
             'termination_date' => $event->terminationDate,
+        ]);
+    }
+
+    public function onUserUsageStartDateSet(UserUsageStartDateSet $event): void
+    {
+        User::query()->whereKey($event->aggregateRootUuid())->update([
+            'usage_start_date' => $event->usageStartDate,
         ]);
     }
 }

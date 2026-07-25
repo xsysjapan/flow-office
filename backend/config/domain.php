@@ -152,6 +152,7 @@ use App\Domain\User\Commands\RecordLocalLogin;
 use App\Domain\User\Commands\RecordSsoLogin;
 use App\Domain\User\Commands\SetUserHireDate;
 use App\Domain\User\Commands\SetUserTerminationDate;
+use App\Domain\User\Commands\SetUserUsageStartDate;
 use App\Domain\User\Commands\StartOnboardingSso;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
@@ -162,6 +163,7 @@ use App\Domain\User\Handlers\RecordLocalLoginHandler;
 use App\Domain\User\Handlers\RecordSsoLoginHandler;
 use App\Domain\User\Handlers\SetUserHireDateHandler;
 use App\Domain\User\Handlers\SetUserTerminationDateHandler;
+use App\Domain\User\Handlers\SetUserUsageStartDateHandler;
 use App\Domain\User\Handlers\StartOnboardingSsoHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -217,6 +219,7 @@ return [
         AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
         SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
+        SetUserUsageStartDate::class => SetUserUsageStartDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
         RecordSsoLogin::class => RecordSsoLoginHandler::class,
         RecordLocalLogin::class => RecordLocalLoginHandler::class,

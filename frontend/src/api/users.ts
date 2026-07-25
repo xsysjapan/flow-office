@@ -22,3 +22,8 @@ export function updateUserHireDate(id: string, hireDate: string): Promise<User> 
 export function updateUserTerminationDate(id: string, terminationDate: string | null): Promise<User> {
   return apiFetch(`/users/${id}/termination-date`, { method: 'PUT', body: { termination_date: terminationDate } })
 }
+
+/** 勤怠提出フォロー等の各種フォロー通知の起算日となる利用開始日を設定する。 */
+export function updateUserUsageStartDate(id: string, usageStartDate: string): Promise<User> {
+  return apiFetch(`/users/${id}/usage-start-date`, { method: 'PUT', body: { usage_start_date: usageStartDate } })
+}
