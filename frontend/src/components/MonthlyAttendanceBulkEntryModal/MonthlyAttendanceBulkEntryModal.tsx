@@ -172,76 +172,80 @@ export function MonthlyAttendanceBulkEntryModal({
             />
           </TabsContent>
           <TabsContent value="detailed">
-            <ul className="divide-y divide-border">
+            <div className="grid grid-cols-1 gap-2">
               {dates.map((date) => {
-                const row = dayOverrideState[date]
+                const row = dayOverrideState[date] ?? {
+                  enabled: false,
+                  startTime: '09:00',
+                  endTime: '18:00',
+                  breakEnabled: true,
+                  breakStartTime: '12:00',
+                  breakEndTime: '13:00',
+                }
                 const weekdayLabel = WEEKDAYS[(new Date(`${date}T00:00:00`).getDay() + 6) % 7].label
                 return (
-                  <li
+                  <div
                     key={date}
-                    className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+                    className="flex flex-col gap-2 rounded-md border border-border p-2 md:flex-row md:flex-wrap md:items-center sm:gap-3"
                   >
-                    <label className="flex shrink-0 items-center gap-2 font-medium text-foreground">
-                      <Checkbox
-                        checked={row?.enabled ?? false}
-                        onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
-                      />
-                      {date.slice(5)} ({weekdayLabel})
-                    </label>
-                    {row?.enabled && (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <div className="w-28">
-                            <TimePicker
-                              aria-label={`${date}の出勤時刻`}
-                              value={row.startTime}
-                              onChange={(time) => handleDayOverrideChange(date, { startTime: time ?? '' })}
-                            />
-                          </div>
-                          <span className="text-muted-foreground">〜</span>
-                          <div className="w-28">
-                            <TimePicker
-                              aria-label={`${date}の退勤時刻`}
-                              value={row.endTime}
-                              onChange={(time) => handleDayOverrideChange(date, { endTime: time ?? '' })}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 pl-8 sm:pl-0">
-                          <label className="flex items-center gap-2 text-foreground">
-                            <Checkbox
-                              checked={row.breakEnabled}
-                              aria-label={`${date}の休憩`}
-                              onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
-                            />
-                            休憩
-                          </label>
-                          {row.breakEnabled && (
-                            <>
-                              <div className="w-28">
-                                <TimePicker
-                                  aria-label={`${date}の休憩開始時刻`}
-                                  value={row.breakStartTime}
-                                  onChange={(time) => handleDayOverrideChange(date, { breakStartTime: time ?? '' })}
-                                />
-                              </div>
-                              <span className="text-muted-foreground">〜</span>
-                              <div className="w-28">
-                                <TimePicker
-                                  aria-label={`${date}の休憩終了時刻`}
-                                  value={row.breakEndTime}
-                                  onChange={(time) => handleDayOverrideChange(date, { breakEndTime: time ?? '' })}
-                                />
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </li>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-foreground w-24">
+                        <Checkbox
+                          checked={row.enabled}
+                          onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
+                        />
+                        {date.slice(5)} ({weekdayLabel})
+                      </label>
+                      <div className="w-24">
+                        <TimePicker
+                          aria-label={`${date}の出勤時刻`}
+                          disabled={!row.enabled}
+                          value={row.startTime}
+                          onChange={(time) => handleDayOverrideChange(date, { startTime: time ?? '' })}
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">〜</span>
+                      <div className="w-24">
+                        <TimePicker
+                          aria-label={`${date}の退勤時刻`}
+                          disabled={!row.enabled}
+                          value={row.endTime}
+                          onChange={(time) => handleDayOverrideChange(date, { endTime: time ?? '' })}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pl-4 md:pl-0">
+                      <label className="flex items-center gap-2 text-xs w-20 text-foreground md:text-sm">
+                        <Checkbox
+                          checked={row.breakEnabled}
+                          aria-label={`${date}の休憩`}
+                          disabled={!row.enabled}
+                          onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
+                        />
+                        休憩
+                      </label>
+                      <div className="w-24">
+                        <TimePicker
+                          aria-label={`${date}の休憩開始時刻`}
+                          disabled={!row.enabled || !row.breakEnabled}
+                          value={row.breakStartTime}
+                          onChange={(time) => handleDayOverrideChange(date, { breakStartTime: time ?? '' })}
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">〜</span>
+                      <div className="w-24">
+                        <TimePicker
+                          aria-label={`${date}の休憩終了時刻`}
+                          disabled={!row.enabled || !row.breakEnabled}
+                          value={row.breakEndTime}
+                          onChange={(time) => handleDayOverrideChange(date, { breakEndTime: time ?? '' })}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
           </TabsContent>
         </Tabs>
 

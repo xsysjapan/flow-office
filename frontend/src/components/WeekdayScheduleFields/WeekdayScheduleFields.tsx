@@ -77,17 +77,17 @@ export function WeekdayScheduleFields({
         return (
           <div
             key={iso}
-            className="flex flex-col gap-2 rounded-md border border-border p-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+            className="flex flex-col gap-2 rounded-md border border-border p-2 md:flex-row md:flex-wrap md:items-center sm:gap-3"
           >
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground sm:w-16">
-              <Checkbox
-                checked={row.enabled}
-                onCheckedChange={(checked) => onChange(iso, { enabled: checked === true })}
-              />
-              {label}曜日
-            </label>
             <div className="flex items-center gap-2">
-              <div className="w-28">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground w-24">
+                <Checkbox
+                  checked={row.enabled}
+                  onCheckedChange={(checked) => onChange(iso, { enabled: checked === true })}
+                />
+                {label}曜日
+              </label>
+              <div className="w-24">
                 <TimePicker
                   aria-label={`${label}曜日の出勤時刻`}
                   disabled={!row.enabled}
@@ -96,7 +96,7 @@ export function WeekdayScheduleFields({
                 />
               </div>
               <span className="text-sm text-muted-foreground">〜</span>
-              <div className="w-28">
+              <div className="w-24">
                 <TimePicker
                   aria-label={`${label}曜日の退勤時刻`}
                   disabled={!row.enabled}
@@ -105,8 +105,8 @@ export function WeekdayScheduleFields({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2 pl-8 sm:pl-0">
-              <label className="flex items-center gap-2 text-sm text-foreground">
+            <div className="flex items-center gap-2 pl-4 md:pl-0">
+              <label className="flex items-center gap-2 text-xs w-20 text-foreground md:text-sm">
                 <Checkbox
                   checked={row.breakEnabled}
                   aria-label={`${label}曜日の休憩`}
@@ -115,7 +115,7 @@ export function WeekdayScheduleFields({
                 />
                 休憩
               </label>
-              <div className="w-28">
+              <div className="w-24">
                 <TimePicker
                   aria-label={`${label}曜日の休憩開始時刻`}
                   disabled={!row.enabled || !row.breakEnabled}
@@ -124,7 +124,7 @@ export function WeekdayScheduleFields({
                 />
               </div>
               <span className="text-sm text-muted-foreground">〜</span>
-              <div className="w-28">
+              <div className="w-24">
                 <TimePicker
                   aria-label={`${label}曜日の休憩終了時刻`}
                   disabled={!row.enabled || !row.breakEnabled}
