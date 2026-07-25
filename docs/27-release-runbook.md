@@ -231,7 +231,19 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   RewriteRuleをper-directory相対パス(`^(api|mcp)$`)でマッチさせようとすると環境に
   よってマッチしないことがある。`%{REQUEST_URI}`(絶対パス)を条件にして
   `RewriteRule ^ %1/index.php [L]`のようにマッチさせることで、per-directory相対
-  パスの解釈に依存せず確実に内部リライトできる。
+  パスの解釈に依存せず確実に内部リライトできる…はずだったが、本番デプロイで再検証した
+  ところこれでも403(GET)/404(POST)が再発した。mcp/のOAuthディスカバリー
+  (`/mcp/.well-known/oauth-protected-resource`)が広告するリソースURLが末尾スラッシュ
+  なしの`https://.../flow-office/mcp`であるため、これはCIのヘルスチェックだけの
+  問題ではなく実際のMCPクライアントが使う本番の契約であり、確実に直す必要がある。
+  最終的に、substitutionを相対パス(`%1/index.php`)ではなく`/`始まりの絶対URLパス
+  (`%1/%2/index.php`)にすることで解決した。相対パスのsubstitutionはApacheが
+  「現在のper-directory文脈からの相対」と解釈するため、ディレクトリウォークの
+  マージ状況によって解釈がぶれるが、`/`始まりの絶対パスにするとApacheが
+  `translate_name`からリクエスト処理全体をやり直すため、per-directory文脈の解釈に
+  依存せず実ファイル(`mcp/index.php`等)に確実に到達できる。この手のシンボリック
+  リンクマウント+ディレクトリ直下リクエストの内部リライトでは、最初から絶対パスの
+  substitutionを使うべきだった。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を

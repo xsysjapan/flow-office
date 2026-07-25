@@ -26,12 +26,14 @@
     # 処理が止まってしまうため、各アプリのindex.phpへメソッド・ボディを保ったまま
     # 内部リライトする。api/・mcp/はシンボリックリンクの実ディレクトリのため、
     # Apacheのディレクトリウォークがmcp/public/.htaccess・backend/public/.htaccess
-    # まで一括でマージしてしまい、per-directory相対パスでの`^(api|mcp)$`一致に
-    # 依存すると環境によってマッチしないことがあった。REQUEST_URIの絶対パスで
-    # 判定することで、per-directory相対パスの解釈に依存せず確実にマッチさせる。
+    # まで一括でマージしてしまい、相対パスでの内部リライト(substitutionが「/」で
+    # 始まらない形)だと、per-directory文脈の解釈が環境によってズレて機能しないことが
+    # あった(本番検証で実際に403/404が再発した)。substitutionを「/」始まりの絶対URL
+    # パスにすることで、Apacheにtranslate_nameからやり直させ、実ファイル
+    # (mcp/index.php等)への到達を per-directory文脈の解釈に依存せず確実にする。
     RewriteCond %{REQUEST_FILENAME} -d
-    RewriteCond %{REQUEST_URI} /(api|mcp)$
-    RewriteRule ^ %1/index.php [L]
+    RewriteCond %{REQUEST_URI} ^(.*)/(api|mcp)$
+    RewriteRule ^ %1/%2/index.php [L]
 
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
