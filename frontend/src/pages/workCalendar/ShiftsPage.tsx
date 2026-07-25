@@ -10,6 +10,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import {
   useAssignEmployeeRotation,
   useEmployeeRotationAssignment,
@@ -456,11 +457,10 @@ function MonthlyPatternShiftAssignmentCard() {
         </FormField>
 
         <FormField label="対象年月(月次パターン)" htmlFor="monthly-pattern-year-month" required>
-          <Input
+          <YearMonthPicker
             id="monthly-pattern-year-month"
-            type="month"
-            value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
+            value={yearMonth || undefined}
+            onChange={(value) => setYearMonth(value ?? '')}
           />
         </FormField>
       </div>
@@ -1116,11 +1116,10 @@ function ShiftScheduleBoardCard() {
           </FormField>
 
           <FormField label="対象月" htmlFor="shift-board-year-month" required>
-            <Input
+            <YearMonthPicker
               id="shift-board-year-month"
-              type="month"
-              value={yearMonth}
-              onChange={(e) => setYearMonth(e.target.value)}
+              value={yearMonth || undefined}
+              onChange={(value) => setYearMonth(value ?? '')}
             />
           </FormField>
         </div>

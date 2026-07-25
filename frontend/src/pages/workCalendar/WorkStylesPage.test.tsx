@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { describe, expect, it, vi } from 'vitest'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as userWorkStyleMonthlyAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
@@ -333,7 +334,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await pickYearMonth(userEvent.setup(), '対象年月', '2026-11')
     await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
     await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
 
@@ -387,14 +388,14 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await pickYearMonth(userEvent.setup(), '対象年月', '2026-11')
     await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
     await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
 
     expect(await screen.findByText('変更内容の確認')).toBeInTheDocument()
     expect(screen.getAllByText('標準勤務').some((el) => el.tagName === 'DD')).toBe(true)
 
-    await userEvent.type(screen.getByLabelText('対象年月'), '2026-12')
+    await pickYearMonth(userEvent.setup(), '対象年月', '2026-12')
 
     expect(screen.queryByText('変更内容の確認')).not.toBeInTheDocument()
   })
@@ -423,7 +424,7 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByRole('combobox', { name: '働き方の対象社員' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await userEvent.type(screen.getByLabelText('対象年月'), '2026-11')
+    await pickYearMonth(userEvent.setup(), '対象年月', '2026-11')
     await userEvent.selectOptions(screen.getByLabelText('働き方'), '標準勤務')
     await userEvent.click(screen.getByRole('button', { name: '変更内容を確認する' }))
     await userEvent.click(await screen.findByLabelText(/この働き方をもとに2026-11の勤務予定を自動生成する/))

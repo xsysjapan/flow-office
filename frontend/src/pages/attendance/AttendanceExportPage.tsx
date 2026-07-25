@@ -3,8 +3,8 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
-import { Input } from '../../components/ui/input'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { useDownloadAttendanceCsv } from '../../hooks/useAttendance'
 
 /**
@@ -26,11 +26,10 @@ export function AttendanceExportPage() {
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象月" htmlFor="attendance-export-year-month" required>
-          <Input
+          <YearMonthPicker
             id="attendance-export-year-month"
-            type="month"
-            value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
+            value={yearMonth || undefined}
+            onChange={(value) => setYearMonth(value ?? '')}
           />
         </FormField>
         <FormField label="対象社員(任意)" htmlFor="attendance-export-user">

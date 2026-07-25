@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { CalendarIcon } from 'lucide-react'
 import { ja } from 'react-day-picker/locale'
-import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { Button } from '../ui/button'
 import { Calendar } from '../ui/calendar'
@@ -66,21 +65,18 @@ export function DatePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           id={id}
-          type="button"
+          variant="outline"
           disabled={disabled}
           aria-label={ariaLabel}
-          className={cn(
-            'flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50',
-            !value && 'text-muted-foreground',
-          )}
+          className={`w-full justify-start px-3 font-normal ${value ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{value ?? placeholder}</span>
-        </button>
+        </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[17.25rem] max-w-[calc(100vw-2rem)] overflow-x-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0" align="start" collisionPadding={16}>
         {(showRelativeShortcuts || value) && (
           <div className="flex min-h-11 items-center justify-end gap-1 border-b border-border bg-muted/30 px-2 py-1.5">
             {showRelativeShortcuts &&

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { describe, expect, it, vi } from 'vitest'
 import * as exportsApi from '../../api/exports'
 import { AttendanceExportPage } from './AttendanceExportPage'
@@ -26,7 +27,7 @@ describe('AttendanceExportPage', () => {
     vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
     renderPage()
 
-    await userEvent.type(screen.getByLabelText('対象月'), '2026-06')
+    await pickYearMonth(userEvent.setup(), '対象月', '2026-06')
     await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
 
     await waitFor(() =>
@@ -38,7 +39,7 @@ describe('AttendanceExportPage', () => {
     vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockRejectedValue(new Error('取得に失敗しました'))
     renderPage()
 
-    await userEvent.type(screen.getByLabelText('対象月'), '2026-06')
+    await pickYearMonth(userEvent.setup(), '対象月', '2026-06')
     await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('取得に失敗しました')

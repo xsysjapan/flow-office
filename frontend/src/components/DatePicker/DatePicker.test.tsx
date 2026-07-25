@@ -71,7 +71,7 @@ describe('DatePicker', () => {
     render(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
 
-    expect(screen.getByRole('button', { name: '前の月へ' }).parentElement).toHaveClass('z-10')
+    expect(screen.getByRole('button', { name: '前の月へ' }).parentElement).toHaveClass('inset-x-0', 'top-0', 'z-10')
     await userEvent.click(screen.getByRole('button', { name: '前の月へ' }))
     expect(screen.getByText('2026年7月')).toBeInTheDocument()
 
@@ -148,12 +148,12 @@ describe('DatePicker', () => {
   it('uses the same calendar width with or without the clear button', async () => {
     const { rerender } = render(<DatePicker value={undefined} onChange={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
-    expect(screen.getByRole('dialog')).toHaveClass('w-[17.25rem]', 'overflow-x-auto')
+    expect(screen.getByRole('dialog')).toHaveClass('w-auto')
 
     await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
     rerender(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
-    expect(screen.getByRole('dialog')).toHaveClass('w-[17.25rem]', 'overflow-x-auto')
+    expect(screen.getByRole('dialog')).toHaveClass('w-auto')
     expect(screen.getByRole('button', { name: 'クリア' })).toBeInTheDocument()
   })
 
@@ -164,7 +164,8 @@ describe('DatePicker', () => {
     expect(screen.getByText('2026年8月')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '前の月へ' })).toHaveClass('size-8')
     expect(screen.getByRole('button', { name: '次の月へ' })).toHaveClass('size-8')
-    expect(screen.getByRole('grid').closest('.rdp-root')).toHaveClass('relative')
+    expect(screen.getByRole('grid')).toHaveClass('table-fixed')
+    expect(screen.getByRole('grid').closest('.rdp-root')).toHaveClass('relative', 'w-fit')
     expect(document.querySelector('[data-day="2026-08-15"] button')?.getAttribute('aria-label')).toContain(
       '2026年8月15日土曜日',
     )

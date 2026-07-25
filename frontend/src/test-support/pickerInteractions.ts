@@ -52,6 +52,22 @@ export async function pickTime(user: UserEvent, triggerName: string, hhmm: strin
   await user.click(within(minuteList).getByRole('option', { name: minute }))
 }
 
+/** `YearMonthPicker`を開き、指定した"YYYY-MM"を選ぶ。 */
+export async function pickYearMonth(user: UserEvent, triggerLabel: string, yearMonth: string): Promise<void> {
+  await user.click(screen.getByLabelText(triggerLabel))
+  const [targetYear, targetMonth] = yearMonth.split('-').map(Number)
+  const listbox = screen.getByRole('listbox')
+  const currentYear = Number(listbox.getAttribute('aria-label')?.match(/^(\d{4})年/)?.[1])
+  if (!Number.isFinite(currentYear)) throw new Error('年月Pickerの表示年を読み取れませんでした。')
+
+  const yearButton = screen.getByRole('button', { name: targetYear < currentYear ? '前年へ' : '翌年へ' })
+  for (let year = currentYear; year !== targetYear; year += targetYear < currentYear ? -1 : 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await user.click(yearButton)
+  }
+  await user.click(screen.getByRole('option', { name: `${targetYear}年${targetMonth}月` }))
+}
+
 /**
  * `DateTimePicker`(日付・時刻それぞれ独立したトリガーボタンを持つ)を操作し、
  * 指定した"YYYY-MM-DDTHH:mm"を選ぶ。

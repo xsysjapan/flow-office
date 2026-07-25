@@ -13,6 +13,7 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import {
   useAssignUserWorkStyleForMonth,
   useUserWorkStyleMonthlyAssignments,
@@ -331,11 +332,10 @@ function MonthlyWorkStyleAssignmentCard() {
         </FormField>
 
         <FormField label="対象年月" htmlFor="monthly-work-style-year-month" required>
-          <Input
+          <YearMonthPicker
             id="monthly-work-style-year-month"
-            type="month"
-            value={yearMonth}
-            onChange={(e) => handleYearMonthChange(e.target.value)}
+            value={yearMonth || undefined}
+            onChange={(value) => handleYearMonthChange(value ?? '')}
           />
         </FormField>
 

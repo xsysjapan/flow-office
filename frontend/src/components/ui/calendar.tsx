@@ -14,32 +14,36 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn('relative p-3', className)}
+      className={cn('relative w-fit p-3', className)}
       classNames={{
-        months: 'flex flex-col gap-2',
-        month: 'flex flex-col gap-4',
-        month_caption: 'relative flex h-8 items-center justify-center',
-        caption_label: 'text-sm font-medium',
-        nav: 'absolute inset-x-3 top-3 z-10 flex h-8 items-center justify-between',
+        months: 'relative flex flex-col gap-4',
+        month: 'flex w-fit flex-col gap-3',
+        month_caption: 'flex h-8 w-full items-center justify-center px-9',
+        caption_label: 'flex h-8 items-center justify-center text-sm font-medium leading-none select-none',
+        nav: 'absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between',
         button_previous: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-8 bg-transparent p-0 text-muted-foreground hover:text-foreground',
+          'size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
         ),
         button_next: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-8 bg-transparent p-0 text-muted-foreground hover:text-foreground',
+          'size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
         ),
-        month_grid: 'mt-1 w-full border-collapse',
-        weekdays: 'flex',
-        weekday: 'text-muted-foreground w-9 text-xs font-normal',
-        week: 'flex w-full mt-1',
-        day: 'p-0 text-center text-sm relative [&:has([data-selected])]:bg-accent size-9',
+        month_grid: 'table-fixed border-collapse',
+        weekdays: 'table-row',
+        weekday: 'size-9 p-0 text-center text-xs font-normal text-muted-foreground select-none',
+        week: 'table-row',
+        day: 'relative size-9 p-0 text-center text-sm',
         day_button: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-9 p-0 font-normal aria-selected:opacity-100 hover:bg-accent',
+          'size-9 p-0 font-normal aria-selected:opacity-100',
         ),
-        selected: 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground [&>button]:bg-primary [&>button]:text-primary-foreground',
-        today: '[&>button]:border [&>button]:border-border',
+        selected:
+          '[&>button]:bg-primary [&>button]:text-primary-foreground [&>button]:hover:bg-primary [&>button]:hover:text-primary-foreground [&>button]:focus-visible:bg-primary',
+        range_start: 'bg-accent [&>button]:rounded-l-md',
+        range_middle: 'bg-accent [&>button]:rounded-none [&>button]:bg-transparent [&>button]:text-foreground',
+        range_end: 'bg-accent [&>button]:rounded-r-md',
+        today: '[&>button]:bg-accent [&>button]:text-accent-foreground',
         outside: 'text-muted-foreground opacity-50',
         disabled: 'text-muted-foreground opacity-50',
         hidden: 'invisible',

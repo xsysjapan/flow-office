@@ -4,7 +4,7 @@ import { Calendar } from './calendar'
 
 function Demo() {
   const [selected, setSelected] = useState<Date | undefined>(new Date('2026-08-15'))
-  return <Calendar mode="single" selected={selected} onSelect={setSelected} />
+  return <Calendar mode="single" selected={selected} defaultMonth={selected} onSelect={setSelected} />
 }
 
 const meta = {

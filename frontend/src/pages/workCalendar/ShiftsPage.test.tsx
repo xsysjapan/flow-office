@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { describe, expect, it, vi } from 'vitest'
 import * as employeeRotationAssignmentsApi from '../../api/employeeRotationAssignments'
 import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
@@ -448,7 +449,7 @@ describe('ShiftsPage', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getByLabelText('勤務形態(月次)'), '標準勤務')
-    await userEvent.type(screen.getByLabelText('対象年月(月次パターン)'), '2026-08')
+    await pickYearMonth(userEvent.setup(), '対象年月(月次パターン)', '2026-08')
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-03(月)' }))
     await userEvent.click(screen.getByRole('checkbox', { name: '休みにする' }))
