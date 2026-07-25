@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Clock } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
 export interface TimePickerProps {
@@ -34,17 +35,18 @@ function splitTime(value: string | undefined): { hour: string | undefined; minut
   return { hour, minute }
 }
 
-/** 選択中の項目を持つ列の中央にスクロールする(初回表示時のみ)。 */
-function useScrollToSelected(selectedValue: string | undefined) {
+/** ポップオーバーを開いたとき、選択中の項目を持つ列の中央にスクロールする。 */
+function useScrollToSelected(selectedValue: string | undefined, open: boolean) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!selectedValue || !containerRef.current) return
-    const selectedButton = containerRef.current.querySelector<HTMLButtonElement>('[data-selected="true"]')
-    selectedButton?.scrollIntoView({ block: 'center' })
-    // 初回表示時にだけ中央へスクロールしたいので、依存配列は空にする。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (!open || !selectedValue) return
+    const timer = window.setTimeout(() => {
+      const selectedButton = containerRef.current?.querySelector<HTMLButtonElement>('[data-selected="true"]')
+      selectedButton?.scrollIntoView({ block: 'center' })
+    })
+    return () => window.clearTimeout(timer)
+  }, [open, selectedValue])
 
   return containerRef
 }
@@ -66,8 +68,8 @@ export function TimePicker({
   const { hour, minute } = splitTime(value)
   const minutes = minuteOptions(minuteStep)
 
-  const hourColumnRef = useScrollToSelected(hour)
-  const minuteColumnRef = useScrollToSelected(minute)
+  const hourColumnRef = useScrollToSelected(hour, open)
+  const minuteColumnRef = useScrollToSelected(minute, open)
 
   const selectHour = (nextHour: string) => {
     onChange(`${nextHour}:${minute ?? '00'}`)
@@ -75,6 +77,17 @@ export function TimePicker({
 
   const selectMinute = (nextMinute: string) => {
     onChange(`${hour ?? '00'}:${nextMinute}`)
+  }
+
+  const clearTime = () => {
+    onChange(undefined)
+    setOpen(false)
+  }
+
+  const selectCurrentTime = () => {
+    const now = new Date()
+    onChange(`${pad(now.getHours())}:${pad(now.getMinutes())}`)
+    setOpen(false)
   }
 
   return (
@@ -94,42 +107,54 @@ export function TimePicker({
           <span className="truncate">{value ?? placeholder}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="flex w-32 gap-1 p-1" align="start">
-        <div ref={hourColumnRef} className="flex max-h-60 flex-1 flex-col overflow-y-auto" role="listbox" aria-label="時">
-          {HOURS.map((h) => (
-            <button
-              key={h}
-              type="button"
-              role="option"
-              aria-selected={h === hour}
-              data-selected={h === hour}
-              className={cn(
-                'rounded-sm px-2 py-1 text-center text-sm text-foreground outline-none hover:bg-accent focus-visible:bg-accent',
-                h === hour && 'bg-primary text-primary-foreground hover:bg-primary',
-              )}
-              onClick={() => selectHour(h)}
-            >
-              {h}
-            </button>
-          ))}
+      <PopoverContent className="w-40 p-0" align="start">
+        <div className="flex min-h-11 items-center justify-end gap-1 border-b border-border bg-muted/30 px-2 py-1.5">
+          <Button type="button" variant="ghost" size="sm" className="px-2" onClick={selectCurrentTime}>
+            現在時刻
+          </Button>
+          {value && (
+            <Button type="button" variant="ghost" size="sm" className="px-2" onClick={clearTime}>
+              クリア
+            </Button>
+          )}
         </div>
-        <div ref={minuteColumnRef} className="flex max-h-60 flex-1 flex-col overflow-y-auto" role="listbox" aria-label="分">
-          {minutes.map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="option"
-              aria-selected={m === minute}
-              data-selected={m === minute}
-              className={cn(
-                'rounded-sm px-2 py-1 text-center text-sm text-foreground outline-none hover:bg-accent focus-visible:bg-accent',
-                m === minute && 'bg-primary text-primary-foreground hover:bg-primary',
-              )}
-              onClick={() => selectMinute(m)}
-            >
-              {m}
-            </button>
-          ))}
+        <div className="flex gap-1 p-1">
+          <div ref={hourColumnRef} className="flex max-h-60 flex-1 flex-col overflow-y-auto" role="listbox" aria-label="時">
+            {HOURS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                role="option"
+                aria-selected={h === hour}
+                data-selected={h === hour}
+                className={cn(
+                  'shrink-0 rounded-sm px-2 py-1 text-center text-sm text-foreground outline-none hover:bg-accent focus-visible:bg-accent',
+                  h === hour && 'bg-primary text-primary-foreground hover:bg-primary',
+                )}
+                onClick={() => selectHour(h)}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+          <div ref={minuteColumnRef} className="flex max-h-60 flex-1 flex-col overflow-y-auto" role="listbox" aria-label="分">
+            {minutes.map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="option"
+                aria-selected={m === minute}
+                data-selected={m === minute}
+                className={cn(
+                  'shrink-0 rounded-sm px-2 py-1 text-center text-sm text-foreground outline-none hover:bg-accent focus-visible:bg-accent',
+                  m === minute && 'bg-primary text-primary-foreground hover:bg-primary',
+                )}
+                onClick={() => selectMinute(m)}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
       </PopoverContent>
     </Popover>

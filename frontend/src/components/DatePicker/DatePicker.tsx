@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { CalendarIcon } from 'lucide-react'
+import { ja } from 'react-day-picker/locale'
 import { cn } from '../../lib/utils'
-import { addDays, formatDate } from '../../utils/weekDates'
-import { Button } from '../Button/Button'
+import { formatDate } from '../../utils/weekDates'
+import { Button } from '../ui/button'
 import { Calendar } from '../ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
@@ -33,12 +34,7 @@ function parseDateValue(value: string | undefined): Date | undefined {
 /** 「今日」を基準にした相対日付のショートカット一覧。 */
 function relativeDateShortcuts(): { label: string; date: string }[] {
   const today = formatDate(new Date())
-  return [
-    { label: '昨日', date: addDays(today, -1) },
-    { label: '今日', date: today },
-    { label: '明日', date: addDays(today, 1) },
-    { label: '明後日', date: addDays(today, 2) },
-  ]
+  return [{ label: '今日', date: today }]
 }
 
 /**
@@ -84,9 +80,9 @@ export function DatePicker({
           <span className="truncate">{value ?? placeholder}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-[17.25rem] max-w-[calc(100vw-2rem)] overflow-x-auto p-0" align="start">
         {(showRelativeShortcuts || value) && (
-          <div className="flex flex-wrap gap-1.5 border-b border-border p-2">
+          <div className="flex min-h-11 items-center justify-end gap-1 border-b border-border bg-muted/30 px-2 py-1.5">
             {showRelativeShortcuts &&
               relativeDateShortcuts()
                 .filter((shortcut) => (!min || shortcut.date >= min) && (!max || shortcut.date <= max))
@@ -94,7 +90,7 @@ export function DatePicker({
                   <Button
                     key={shortcut.label}
                     type="button"
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
                     onClick={() => selectDate(shortcut.date)}
                   >
@@ -102,14 +98,20 @@ export function DatePicker({
                   </Button>
                 ))}
             {value && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => selectDate(undefined)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => selectDate(undefined)}>
                 クリア
               </Button>
             )}
           </div>
         )}
         <Calendar
+          key={value ?? 'empty'}
           mode="single"
+          locale={ja}
+          labels={{
+            labelPrevious: () => '前の月へ',
+            labelNext: () => '次の月へ',
+          }}
           selected={selected}
           defaultMonth={selected ?? minDate ?? maxDate}
           disabled={[...(minDate ? [{ before: minDate }] : []), ...(maxDate ? [{ after: maxDate }] : [])]}

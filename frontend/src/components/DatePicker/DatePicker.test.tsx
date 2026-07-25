@@ -5,8 +5,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { formatDate } from '../../utils/weekDates'
 import { DatePicker } from './DatePicker'
 
-function ControlledDatePicker({ onChange }: { onChange: (date: string | undefined) => void }) {
-  const [value, setValue] = useState<string | undefined>(undefined)
+function ControlledDatePicker({
+  onChange,
+  initialValue,
+}: {
+  onChange: (date: string | undefined) => void
+  initialValue?: string
+}) {
+  const [value, setValue] = useState<string | undefined>(initialValue)
 
   return (
     <DatePicker
@@ -50,27 +56,41 @@ describe('DatePicker', () => {
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
-  it('selects today via the 今日 relative-date shortcut and closes the popover', async () => {
+  it('selects today via the 今日 shortcut and closes the popover', async () => {
     const onChange = vi.fn()
-    render(<ControlledDatePicker onChange={onChange} />)
+    render(<ControlledDatePicker initialValue="2026-08-15" onChange={onChange} />)
 
-    await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
     await userEvent.click(await screen.findByRole('button', { name: '今日' }))
 
     expect(onChange).toHaveBeenCalledWith(formatDate(new Date()))
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
-  it('selects tomorrow via the 明日 relative-date shortcut', async () => {
-    const onChange = vi.fn()
-    render(<ControlledDatePicker onChange={onChange} />)
+  it('navigates to the previous and next months', async () => {
+    render(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
+
+    expect(screen.getByRole('button', { name: '前の月へ' }).parentElement).toHaveClass('z-10')
+    await userEvent.click(screen.getByRole('button', { name: '前の月へ' }))
+    expect(screen.getByText('2026年7月')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '次の月へ' }))
+    expect(screen.getByText('2026年8月')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '次の月へ' }))
+    expect(screen.getByText('2026年9月')).toBeInTheDocument()
+  })
+
+  it('keeps the shortcut toolbar compact', async () => {
+    render(<ControlledDatePicker onChange={vi.fn()} />)
 
     await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
-    await userEvent.click(await screen.findByRole('button', { name: '明日' }))
 
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    expect(onChange).toHaveBeenCalledWith(formatDate(tomorrow))
+    expect(screen.getByRole('button', { name: '今日' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '昨日' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '明日' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '明後日' })).not.toBeInTheDocument()
   })
 
   it('hides the relative-date shortcuts when showRelativeShortcuts is false', async () => {
@@ -87,7 +107,7 @@ describe('DatePicker', () => {
     render(<DatePicker value="2026-08-15" onChange={onChange} min="2026-08-10" showRelativeShortcuts={false} />)
 
     await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
-    await userEvent.click(await screen.findByLabelText('Wednesday, August 5th, 2026'))
+    await userEvent.click(await screen.findByLabelText('2026年8月5日水曜日'))
 
     expect(onChange).not.toHaveBeenCalled()
   })
@@ -97,7 +117,7 @@ describe('DatePicker', () => {
     render(<DatePicker value="2026-08-15" onChange={onChange} min="2026-08-10" showRelativeShortcuts={false} />)
 
     await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
-    await userEvent.click(await screen.findByLabelText('Monday, August 10th, 2026'))
+    await userEvent.click(await screen.findByLabelText('2026年8月10日月曜日'))
 
     expect(onChange).toHaveBeenCalledWith('2026-08-10')
   })
@@ -123,6 +143,31 @@ describe('DatePicker', () => {
     await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
 
     expect(screen.queryByRole('button', { name: 'クリア' })).not.toBeInTheDocument()
+  })
+
+  it('uses the same calendar width with or without the clear button', async () => {
+    const { rerender } = render(<DatePicker value={undefined} onChange={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
+    expect(screen.getByRole('dialog')).toHaveClass('w-[17.25rem]', 'overflow-x-auto')
+
+    await userEvent.click(screen.getByRole('button', { name: '日付を選択' }))
+    rerender(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
+    expect(screen.getByRole('dialog')).toHaveClass('w-[17.25rem]', 'overflow-x-auto')
+    expect(screen.getByRole('button', { name: 'クリア' })).toBeInTheDocument()
+  })
+
+  it('displays the calendar in Japanese', async () => {
+    render(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
+
+    expect(screen.getByText('2026年8月')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '前の月へ' })).toHaveClass('size-8')
+    expect(screen.getByRole('button', { name: '次の月へ' })).toHaveClass('size-8')
+    expect(screen.getByRole('grid').closest('.rdp-root')).toHaveClass('relative')
+    expect(document.querySelector('[data-day="2026-08-15"] button')?.getAttribute('aria-label')).toContain(
+      '2026年8月15日土曜日',
+    )
   })
 
   it('hides relative-date shortcuts that fall outside min/max', async () => {

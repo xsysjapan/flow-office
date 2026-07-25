@@ -8,19 +8,11 @@ import type { UserEvent } from '@testing-library/user-event'
  * ここに集約する。
  */
 
-function ordinalSuffix(day: number): string {
-  if (day % 10 === 1 && day !== 11) return 'st'
-  if (day % 10 === 2 && day !== 12) return 'nd'
-  if (day % 10 === 3 && day !== 13) return 'rd'
-  return 'th'
-}
-
-/** react-day-pickerの日付ボタンの既定aria-label(date-fnsの'PPPP'相当)を組み立てる。 */
+/** 日本語ロケールのreact-day-pickerの日付ボタンのaria-labelを組み立てる。 */
 function dayButtonLabel(date: Date): string {
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' })
-  const month = date.toLocaleDateString('en-US', { month: 'long' })
-  const day = date.getDate()
-  return `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${date.getFullYear()}`
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日${date.toLocaleDateString('ja-JP', {
+    weekday: 'long',
+  })}`
 }
 
 async function navigateToMonth(user: UserEvent, targetYear: number, targetMonthIndex: number): Promise<void> {
@@ -28,11 +20,14 @@ async function navigateToMonth(user: UserEvent, targetYear: number, targetMonthI
   const label = grid.getAttribute('aria-label')
   if (!label) throw new Error('カレンダーのaria-labelから年月を読み取れませんでした。')
 
-  const current = new Date(`1 ${label}`)
-  const diff = (targetYear - current.getFullYear()) * 12 + (targetMonthIndex - current.getMonth())
+  const match = label.match(/(\d{4})年(\d{1,2})月/)
+  if (!match) throw new Error(`カレンダーの年月を読み取れませんでした: ${label}`)
+  const currentYear = Number(match[1])
+  const currentMonthIndex = Number(match[2]) - 1
+  const diff = (targetYear - currentYear) * 12 + (targetMonthIndex - currentMonthIndex)
   if (diff === 0) return
 
-  const button = screen.getByRole('button', { name: diff < 0 ? 'Go to the Previous Month' : 'Go to the Next Month' })
+  const button = screen.getByRole('button', { name: diff < 0 ? '前の月へ' : '次の月へ' })
   for (let i = 0; i < Math.abs(diff); i++) {
     // eslint-disable-next-line no-await-in-loop
     await user.click(button)

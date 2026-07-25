@@ -14,22 +14,22 @@ export function Calendar({ className, classNames, showOutsideDays = true, ...pro
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn('p-3', className)}
+      className={cn('relative p-3', className)}
       classNames={{
         months: 'flex flex-col gap-2',
         month: 'flex flex-col gap-4',
-        month_caption: 'flex justify-center pt-1 relative items-center h-9',
+        month_caption: 'relative flex h-8 items-center justify-center',
         caption_label: 'text-sm font-medium',
-        nav: 'flex items-center justify-between absolute inset-x-0 top-0 h-9',
+        nav: 'absolute inset-x-3 top-3 z-10 flex h-8 items-center justify-between',
         button_previous: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-7 bg-transparent p-0 text-muted-foreground hover:text-foreground',
+          'size-8 bg-transparent p-0 text-muted-foreground hover:text-foreground',
         ),
         button_next: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-7 bg-transparent p-0 text-muted-foreground hover:text-foreground',
+          'size-8 bg-transparent p-0 text-muted-foreground hover:text-foreground',
         ),
-        month_grid: 'w-full border-collapse mt-2',
+        month_grid: 'mt-1 w-full border-collapse',
         weekdays: 'flex',
         weekday: 'text-muted-foreground w-9 text-xs font-normal',
         week: 'flex w-full mt-1',
