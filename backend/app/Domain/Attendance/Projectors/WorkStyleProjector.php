@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\WorkStyleCreated;
 use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
+use App\Domain\Attendance\Events\WorkStyleUpdated;
 use App\Models\WorkStyle;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -27,5 +28,10 @@ class WorkStyleProjector extends Projector
         }
 
         WorkStyle::query()->whereKey($event->aggregateRootUuid())->update(['is_default' => true]);
+    }
+
+    public function onWorkStyleUpdated(WorkStyleUpdated $event): void
+    {
+        WorkStyle::query()->whereKey($event->aggregateRootUuid())->update($event->attributes);
     }
 }

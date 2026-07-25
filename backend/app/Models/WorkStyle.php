@@ -15,7 +15,7 @@ use Illuminate\Support\Carbon;
  * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
  * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'default_break_start_time', 'default_break_end_time', 'auto_break_enabled', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
+#[Fillable(['id', 'code', 'name', 'employment_category_id', 'work_time_system', 'prescribed_daily_minutes', 'prescribed_weekly_minutes', 'deemed_daily_minutes', 'default_start_time', 'default_end_time', 'default_break_minutes', 'rounding_unit_minutes', 'rounding_mode', 'default_break_start_time', 'default_break_end_time', 'auto_break_enabled', 'calendar_id', 'is_shift_based', 'is_default', 'system_generated', 'legal_holiday_rule', 'four_week_period_start_date', 'variable_period_start_day', 'max_consecutive_work_days', 'settlement_start_day', 'core_time_enabled', 'core_time_start', 'core_time_end', 'flexible_time_start', 'flexible_time_end'])]
 class WorkStyle extends Model
 {
     use HasUuids;
@@ -36,6 +36,15 @@ class WorkStyle extends Model
      * (週内で休みとなっている最後の日)で解決する。
      */
     public const LEGAL_HOLIDAY_RULE_UNDETERMINED = 'undetermined';
+
+    /** 打刻の丸め: 最も近い単位へ四捨五入する。 */
+    public const ROUNDING_MODE_NEAREST = 'nearest';
+
+    /** 打刻の丸め: 勤務時間が短くなる方向へ丸める(始業は繰り上げ、終業・休憩開始は繰り下げ)。 */
+    public const ROUNDING_MODE_SHORTEN = 'shorten';
+
+    /** 打刻の丸め: 勤務時間が長くなる方向へ丸める(始業は繰り下げ、終業・休憩開始は繰り上げ)。 */
+    public const ROUNDING_MODE_LENGTHEN = 'lengthen';
 
     /** 通常勤務(固定時間制・時短勤務等)。所定労働時間との差分のみ判定が必要。 */
     public const WORK_TIME_SYSTEM_FIXED = 'fixed';

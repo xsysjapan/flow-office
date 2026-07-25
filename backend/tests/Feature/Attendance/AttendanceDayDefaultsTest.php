@@ -53,6 +53,80 @@ class AttendanceDayDefaultsTest extends TestCase
         $response->assertJsonPath('breaks.0.end', "{$workDate}T13:00:00+09:00");
     }
 
+    public function test_defaults_reflect_punches_rounded_to_shorten_working_time(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'rounding_unit_minutes' => 15,
+            'rounding_mode' => WorkStyle::ROUNDING_MODE_SHORTEN,
+            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:53:00+09:00");
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T12:02:00+09:00");
+        $this->recordPunch($employee, $workDate, 'break_end', "{$workDate}T12:58:00+09:00");
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T18:07:00+09:00");
+
+        $response = $this->actingAs($employee)->getJson(
+            "/api/attendance/day-defaults?user_id={$employee->id}&work_date={$workDate}"
+        );
+
+        $response->assertOk();
+        // 勤務時間が短くなる方向: 始業は繰り上げ(08:53→09:00)、休憩開始は繰り下げ(12:02→12:00、
+        // 休憩が長くなる)、休憩終了は繰り上げ(12:58→13:00、休憩が長くなる)、終業は繰り下げ(18:07→18:00)。
+        $response->assertJsonPath('actual_start_at', "{$workDate}T09:00:00+09:00");
+        $response->assertJsonPath('breaks.0.start', "{$workDate}T12:00:00+09:00");
+        $response->assertJsonPath('breaks.0.end', "{$workDate}T13:00:00+09:00");
+        $response->assertJsonPath('actual_end_at', "{$workDate}T18:00:00+09:00");
+    }
+
+    public function test_defaults_reflect_punches_rounded_to_lengthen_working_time(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'rounding_unit_minutes' => 15,
+            'rounding_mode' => WorkStyle::ROUNDING_MODE_LENGTHEN,
+            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:53:00+09:00");
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T12:02:00+09:00");
+        $this->recordPunch($employee, $workDate, 'break_end', "{$workDate}T12:58:00+09:00");
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T18:07:00+09:00");
+
+        $response = $this->actingAs($employee)->getJson(
+            "/api/attendance/day-defaults?user_id={$employee->id}&work_date={$workDate}"
+        );
+
+        $response->assertOk();
+        // 勤務時間が長くなる方向: 始業は繰り下げ(08:53→08:45)、休憩開始は繰り上げ(12:02→12:15、
+        // 休憩が短くなる)、休憩終了は繰り下げ(12:58→12:45、休憩が短くなる)、終業は繰り上げ(18:07→18:15)。
+        $response->assertJsonPath('actual_start_at', "{$workDate}T08:45:00+09:00");
+        $response->assertJsonPath('breaks.0.start', "{$workDate}T12:15:00+09:00");
+        $response->assertJsonPath('breaks.0.end', "{$workDate}T12:45:00+09:00");
+        $response->assertJsonPath('actual_end_at', "{$workDate}T18:15:00+09:00");
+    }
+
     public function test_defaults_reflect_the_schedule_including_its_break_when_there_are_no_punches(): void
     {
         $employee = User::factory()->create();

@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { Paginated, User, WorkCalendar, WorkStyle } from '../../api/types'
-import { WorkStylesAndShiftsPage } from './WorkStylesAndShiftsPage'
+import type { WorkCalendar, WorkStyle } from '../../api/types'
+import { WorkStyleFormModal } from './WorkStyleFormModal'
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -17,13 +18,14 @@ const workStyle: WorkStyle = {
   id: 'work-style-1',
   code: 'standard',
   name: '標準勤務',
-  work_time_system: '通常労働時間制',
+  work_time_system: 'fixed',
   prescribed_daily_minutes: 480,
   prescribed_weekly_minutes: 2400,
   default_start_time: '09:00',
   default_end_time: '18:00',
   default_break_minutes: 60,
   rounding_unit_minutes: null,
+  rounding_mode: null,
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
@@ -40,47 +42,45 @@ const workStyle: WorkStyle = {
   core_time_end: null,
   flexible_time_start: null,
   flexible_time_end: null,
-  applied_employee_count: 45,
+  applied_employee_count: 3,
   active_shift_pattern_count: null,
   configuration_warnings: [],
   updated_at: '2026-07-01T09:00:00+09:00',
 }
 
-const paginatedUsers: Paginated<User> = {
-  data: [],
-  meta: { current_page: 1, last_page: 1, total: 0 },
-  links: { next: null, prev: null },
-}
-
-function withSeeded(workStyles: WorkStyle[] = [workStyle]) {
+function withSeeded(mode: 'create' | 'edit') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['work-styles'], workStyles)
   queryClient.setQueryData(['work-calendars'], [calendar])
-  queryClient.setQueryData(['users', ''], paginatedUsers)
-  queryClient.setQueryData(['shift-patterns'], [])
 
   return function Decorator() {
+    const [open, setOpen] = useState(true)
     return (
       <QueryClientProvider client={queryClient}>
-        <WorkStylesAndShiftsPage />
+        <WorkStyleFormModal
+          mode={mode}
+          workStyle={mode === 'edit' ? workStyle : undefined}
+          open={open}
+          onOpenChange={setOpen}
+        />
       </QueryClientProvider>
     )
   }
 }
 
 const meta = {
-  title: 'Pages/WorkCalendar/WorkStylesAndShiftsPage',
-  component: WorkStylesAndShiftsPage,
-} satisfies Meta<typeof WorkStylesAndShiftsPage>
+  title: 'Components/WorkStyleFormModal',
+  component: WorkStyleFormModal,
+} satisfies Meta<typeof WorkStyleFormModal>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Default: Story = {
-  render: withSeeded(),
+export const Create: Story = {
+  args: { mode: 'create', open: true, onOpenChange: () => {} },
+  render: withSeeded('create'),
 }
 
-/** 指示書 12.1節: 会社のデフォルト働き方が未設定の間に表示するオンボーディング。 */
-export const OnboardingNeeded: Story = {
-  render: withSeeded([]),
+export const Edit: Story = {
+  args: { mode: 'edit', workStyle, open: true, onOpenChange: () => {} },
+  render: withSeeded('edit'),
 }

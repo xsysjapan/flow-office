@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { LegalHolidayRule, WorkStyle } from './types'
+import type { LegalHolidayRule, RoundingMode, WorkStyle } from './types'
 
 export function fetchWorkStyles(): Promise<WorkStyle[]> {
   return apiFetch('/work-styles')
@@ -15,6 +15,7 @@ export interface CreateWorkStyleInput {
   default_end_time?: string
   default_break_minutes?: number
   rounding_unit_minutes?: number
+  rounding_mode?: RoundingMode
   default_break_start_time?: string
   default_break_end_time?: string
   auto_break_enabled?: boolean
@@ -33,6 +34,12 @@ export interface CreateWorkStyleInput {
 
 export function createWorkStyle(input: CreateWorkStyleInput): Promise<WorkStyle> {
   return apiFetch('/work-styles', { method: 'POST', body: input })
+}
+
+export type UpdateWorkStyleInput = CreateWorkStyleInput
+
+export function updateWorkStyle(id: string, input: UpdateWorkStyleInput): Promise<WorkStyle> {
+  return apiFetch(`/work-styles/${id}`, { method: 'PUT', body: input })
 }
 
 export interface CreateDefaultWorkStyleInput {

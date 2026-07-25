@@ -6,6 +6,7 @@ use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
+use App\Domain\Attendance\Services\AttendanceStandardBreakInserter;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -32,6 +33,7 @@ class EditAttendanceDayHandler implements CommandHandler
     public function __construct(
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
+        private readonly AttendanceStandardBreakInserter $standardBreakInserter,
     ) {}
 
     public function handle(Command $command): AttendanceDay
@@ -79,9 +81,17 @@ class EditAttendanceDayHandler implements CommandHandler
             )
             ->persist();
 
-        $day = AttendanceDay::query()->findOrFail($command->attendanceDayId);
+        $day = AttendanceDay::query()->findOrFail($command->attendanceDayId)
+            ->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle');
 
-        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
+        // 手動編集で休憩を1件も入力しなかった場合も、打刻経路と同じ規則で標準休憩を
+        // 補完する(勤務形態のauto_break_enabled。操作経路ごとに計算ロジックを複製しない)。
+        $breakAggregate = AttendanceDayAggregate::retrieve($day->id);
+        if ($this->standardBreakInserter->insertIfApplicable($breakAggregate, $day)) {
+            $breakAggregate->persist();
+        }
+
+        $calculation = $this->calculator->calculate($day);
 
         AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
 

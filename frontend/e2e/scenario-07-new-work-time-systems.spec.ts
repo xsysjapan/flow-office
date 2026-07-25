@@ -30,7 +30,7 @@ import {
  * (`fetchAttendanceDay`。§5-4等と同じハイブリッド方針)。
  *
  * 【既知のフロントエンド未対応事項】管理画面の勤務形態作成フォーム
- * (`WorkStylesAndShiftsPage`)には、雇用区分・みなし時間(deemed_daily_minutes)・
+ * (`WorkStylesPage`)には、雇用区分・みなし時間(deemed_daily_minutes)・
  * 変形期間の起算日(variable_period_start_day)・法定休日「決めない方式」の入力欄がまだ
  * 無く、`calendar_id`も必須のままになっている(バックエンドは2026-07-12時点でnullable)。
  * また週次勤怠画面(`WeekAttendancePage`)は労働時間(work_minutes)しか表示せず、

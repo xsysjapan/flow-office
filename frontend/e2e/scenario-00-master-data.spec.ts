@@ -13,6 +13,7 @@ test('管理者が各種マスタ管理画面にアクセスできる', async ({
   for (const path of [
     '/admin/work-calendars',
     '/admin/work-styles',
+    '/admin/shifts',
     '/admin/paid-leave',
     '/admin/request-types',
     '/admin/users',
@@ -59,28 +60,25 @@ test('カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await calendarRow.getByRole('button', { name: '公開する' }).click()
   await expect(calendarRow.getByRole('status', { name: '公開済み' })).toBeVisible()
 
-  // --- UC-C002: 勤務形態作成 ---
+  // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---
   await page.goto('/admin/work-styles')
-  await page.getByLabel('コード', { exact: true }).fill(workStyleCode)
-  // 「名称」ラベルはシフトパターン・ローテーションパターンのフォームにも存在し複数一致する
-  // ようになったため(2026-07時点で追加された画面)、IDで一意に指定する。
-  await page.locator('#work-style-name').fill('E2Eテスト用勤務形態')
+  await page.getByRole('button', { name: '新規登録' }).click()
+  await page.getByLabel('コード').fill(workStyleCode)
+  await page.getByLabel('名称').fill('E2Eテスト用勤務形態')
   await page.getByLabel('労働時間制').selectOption({ value: 'fixed' })
   await page.getByLabel('所定労働時間(分/日)').fill('480')
   await page.getByLabel('所定労働時間(分/週)').fill('2400')
   await page.getByLabel('標準開始時刻').fill('09:00')
   await page.getByLabel('標準終了時刻').fill('18:00')
   await page.getByLabel('カレンダー').selectOption({ label: calendarName })
-  // 同じ画面にシフトパターン・ローテーションパターンの作成ボタンも増えたため、完全一致で指定する。
-  await page.getByRole('button', { name: '作成する', exact: true }).click()
+  await page.getByRole('button', { name: '登録する' }).click()
   await expect(page.getByText(workStyleCode)).toBeVisible()
 
-  // --- UC-C003: シフト生成 ---
+  // --- UC-C003: シフト生成(シフトページ) ---
+  await page.goto('/admin/shifts')
   await pickUser(page, '対象社員', SCENARIO_USERS.punchEmployee, 'kenta.takahashi@example.com', { exact: true })
-  // 同じ画面にシフト表用の「勤務形態(シフト表)」セレクトも増えたため、完全一致で指定する。
   await page.getByLabel('勤務形態', { exact: true }).selectOption({ label: 'E2Eテスト用勤務形態' })
   await page.getByLabel('開始日', { exact: true }).fill(`${fiscalYear}-04-01`)
-  // 同じ画面にローテーション生成用の「生成終了日」も増えたため、完全一致で指定する。
   await page.getByLabel('終了日', { exact: true }).fill(`${fiscalYear}-04-01`)
   await page.getByRole('button', { name: '生成する', exact: true }).click()
   await expect(page.getByText(`${fiscalYear}-04-01`)).toBeVisible()

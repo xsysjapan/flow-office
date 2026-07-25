@@ -43,6 +43,7 @@ const defaultWorkStyle: WorkStyle = {
   default_end_time: '18:00',
   default_break_minutes: 60,
   rounding_unit_minutes: null,
+  rounding_mode: null,
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,

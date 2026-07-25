@@ -29,7 +29,8 @@ import { RequestTypeListPage } from './pages/workflow/RequestTypeListPage'
 import { RequestTypeEditPage } from './pages/workflow/RequestTypeEditPage'
 import { WorkCalendarListPage } from './pages/workCalendar/WorkCalendarListPage'
 import { WorkCalendarDaysPage } from './pages/workCalendar/WorkCalendarDaysPage'
-import { WorkStylesAndShiftsPage } from './pages/workCalendar/WorkStylesAndShiftsPage'
+import { WorkStylesPage } from './pages/workCalendar/WorkStylesPage'
+import { ShiftsPage } from './pages/workCalendar/ShiftsPage'
 import { PaidLeaveAdminPage } from './pages/paidLeave/PaidLeaveAdminPage'
 import { PaidLeaveHistoryAdminPage } from './pages/paidLeave/PaidLeaveHistoryAdminPage'
 import { SpecialLeaveAdminPage } from './pages/specialLeave/SpecialLeaveAdminPage'
@@ -87,7 +88,8 @@ function App() {
           <Route path="request-types/:id" element={<RequestTypeEditPage />} />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
           <Route path="work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
-          <Route path="work-styles" element={<WorkStylesAndShiftsPage />} />
+          <Route path="work-styles" element={<WorkStylesPage />} />
+          <Route path="shifts" element={<ShiftsPage />} />
           <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
           <Route path="paid-leave/history" element={<PaidLeaveHistoryAdminPage />} />
           <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
