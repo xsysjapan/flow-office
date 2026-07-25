@@ -54,8 +54,8 @@ describe('WorkCalendarListPage', () => {
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2026年度カレンダー')
     await userEvent.type(screen.getByLabelText('年度'), '2026')
-    await pickDate(userEvent, '開始日', '2026-04-01')
-    await pickDate(userEvent, '終了日', '2027-03-31')
+    await pickDate(userEvent.setup(), '開始日', '2026-04-01')
+    await pickDate(userEvent.setup(), '終了日', '2027-03-31')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>

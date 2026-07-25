@@ -91,8 +91,8 @@ describe('PaidLeaveAdminPage', () => {
     await userEvent.click(await screen.findByRole('combobox'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
-    await pickDate(userEvent, '付与日', '2026-07-01')
-    await pickDate(userEvent, '失効日', '2027-06-30')
+    await pickDate(userEvent.setup(), '付与日', '2026-07-01')
+    await pickDate(userEvent.setup(), '失効日', '2027-06-30')
     await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
     await userEvent.click(screen.getByRole('button', { name: '付与する' }))
 

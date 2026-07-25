@@ -115,7 +115,7 @@ describe('MyPaidLeavePage', () => {
     renderPage()
     await screen.findByText('有給申請はまだありません。')
 
-    await pickDate(userEvent, '対象日', '2026-08-10')
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
@@ -138,7 +138,7 @@ describe('MyPaidLeavePage', () => {
     renderPage()
     await screen.findByText('有給申請はまだありません。')
 
-    await pickDate(userEvent, '対象日', '2026-08-10')
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.selectOptions(screen.getByLabelText('取得単位'), '時間休')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')

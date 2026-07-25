@@ -145,7 +145,7 @@ describe('UserRoleEditPage', () => {
     renderPage(targetUser)
     await screen.findByLabelText('入社日(有給の自動付与に使用)')
 
-    await pickDate(userEvent, '入社日(有給の自動付与に使用)', '2024-04-01')
+    await pickDate(userEvent.setup(), '入社日(有給の自動付与に使用)', '2024-04-01')
     await userEvent.click(screen.getByRole('button', { name: '入社日を保存する' }))
 
     await waitFor(() =>
@@ -178,7 +178,7 @@ describe('UserRoleEditPage', () => {
     renderPage(targetUser)
     await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)')
 
-    await pickDate(userEvent, '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)', '2026-07-01')
+    await pickDate(userEvent.setup(), '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)', '2026-07-01')
     await userEvent.click(screen.getByRole('button', { name: '利用開始日を保存する' }))
 
     await waitFor(() => expect(usersApi.updateUserUsageStartDate).toHaveBeenCalledWith('user-1', '2026-07-01'))

@@ -105,7 +105,7 @@ describe('MySpecialLeavePage', () => {
     await screen.findByText('特別休暇申請はまだありません。')
 
     await userEvent.selectOptions(screen.getByLabelText('特別休暇の種類'), '誕生日休暇')
-    await pickDate(userEvent, '対象日', '2026-08-10')
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.click(screen.getByLabelText('承認者'))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))

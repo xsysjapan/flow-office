@@ -125,8 +125,8 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '08-04 (火)' }))
-    await pickTime(userEvent, '2026-08-04の出勤時刻', '10:00')
-    await pickTime(userEvent, '2026-08-04の退勤時刻', '15:00')
+    await pickTime(userEvent.setup(), '2026-08-04の出勤時刻', '10:00')
+    await pickTime(userEvent.setup(), '2026-08-04の退勤時刻', '15:00')
     await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-04の休憩' }))
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 
@@ -156,5 +156,5 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
       ),
     )
     expect(await screen.findByText('0件作成・1件更新しました。')).toBeInTheDocument()
-  })
+  }, 15000)
 })

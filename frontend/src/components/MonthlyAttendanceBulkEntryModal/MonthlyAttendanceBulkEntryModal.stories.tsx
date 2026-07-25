@@ -44,5 +44,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
+  args: { yearMonth: '2026-08' },
   render: () => <Decorator />,
 }

@@ -194,7 +194,7 @@ describe('AttendanceDayPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'ログを編集' }))
     await userEvent.selectOptions(screen.getByLabelText('追加する打刻種別'), 'clock_out')
-    await pickDateTime(userEvent, '追加する日時(日付)', '追加する日時(時刻)', `${date}T18:00`)
+    await pickDateTime(userEvent.setup(), '追加する日時(日付)', '追加する日時(時刻)', `${date}T18:00`)
     await userEvent.clear(screen.getByLabelText('追加するオフセット'))
     await userEvent.type(screen.getByLabelText('追加するオフセット'), '+09:00')
     await userEvent.click(screen.getByRole('button', { name: '打刻を追加' }))
@@ -334,8 +334,8 @@ describe('AttendanceDayPage', () => {
     renderPage([])
 
     await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
-    await pickDateTime(userEvent, '出勤(日付)', '出勤(時刻)', `${date}T09:00`)
-    await pickDateTime(userEvent, '退勤(日付)', '退勤(時刻)', `${date}T18:00`)
+    await pickDateTime(userEvent.setup(), '出勤(日付)', '出勤(時刻)', `${date}T09:00`)
+    await pickDateTime(userEvent.setup(), '退勤(日付)', '退勤(時刻)', `${date}T18:00`)
 
     expect(await screen.findByText(/休憩が60分未満です/)).toBeInTheDocument()
 
@@ -398,8 +398,8 @@ describe('AttendanceDayPage', () => {
 
     await screen.findByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')
     await userEvent.click(screen.getByRole('button', { name: '遅刻・早退を追加' }))
-    await pickDateTime(userEvent, '遅刻・早退開始(日付)', '遅刻・早退開始(時刻)', `${date}T09:00`)
-    await pickDateTime(userEvent, '遅刻・早退終了(日付)', '遅刻・早退終了(時刻)', `${date}T11:00`)
+    await pickDateTime(userEvent.setup(), '遅刻・早退開始(日付)', '遅刻・早退開始(時刻)', `${date}T09:00`)
+    await pickDateTime(userEvent.setup(), '遅刻・早退終了(日付)', '遅刻・早退終了(時刻)', `${date}T11:00`)
     await userEvent.type(screen.getByLabelText('作成理由(必須)'), '午前は欠勤')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
