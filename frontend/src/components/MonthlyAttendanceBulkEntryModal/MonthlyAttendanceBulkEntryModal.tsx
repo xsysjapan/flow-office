@@ -6,19 +6,19 @@ import { datesInMonth } from '../../utils/weekDates'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import {
+  buildWeeklyPatternFromSimpleState,
+  defaultSimplePatternState,
+  SimplePatternFields,
+  type SimplePatternState,
+} from '../SimplePatternFields/SimplePatternFields'
 import { Checkbox } from '../ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
-import {
-  buildWeeklyPattern,
-  defaultWeeklyPatternState,
-  WEEKDAYS,
-  weekdayEntry,
-  WeekdayScheduleFields,
-  type WeekdayRowState,
-} from '../WeekdayScheduleFields/WeekdayScheduleFields'
-import type { AttendanceDayOverrides } from '../../api/attendance'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
+import { WEEKDAYS, weekdayEntry } from '../WeekdayScheduleFields/WeekdayScheduleFields'
+import type { AttendanceDayOverrides, WeeklyAttendancePattern } from '../../api/attendance'
 
 interface DayOverrideRowState {
   enabled: boolean
@@ -27,6 +27,13 @@ interface DayOverrideRowState {
   breakEnabled: boolean
   breakStartTime: string
   breakEndTime: string
+}
+
+/** 曜日ごとの既定を持たない(すべて対象外の)weekly_pattern。「日にちごとに設定」タブで使う。 */
+function emptyWeeklyPattern(): WeeklyAttendancePattern {
+  const pattern: WeeklyAttendancePattern = {}
+  for (const { iso } of WEEKDAYS) pattern[iso] = null
+  return pattern
 }
 
 export interface MonthlyAttendanceBulkEntryModalProps {
@@ -38,9 +45,10 @@ export interface MonthlyAttendanceBulkEntryModalProps {
 }
 
 /**
- * 月次勤怠画面(AttendanceMonthDetailPage)から開く一括入力モーダル。曜日ごとの
- * 既定の出退勤・休憩時刻に加えて、月内の特定日だけ個別に時刻を変更できる。
- * 対象は常に本人。
+ * 月次勤怠画面(AttendanceMonthDetailPage)から開く一括入力モーダル。対象は常に本人。
+ * 「まとめて設定」(開始/終了時刻を1組だけ入力し、適用する曜日を選ぶだけの簡易入力)を
+ * 既定タブとし、日にちごとに個別の時刻を指定したい場合向けにもう1つのタブを用意する。
+ * 2つのタブは排他的な入力方法であり、同時には組み合わせない。
  */
 export function MonthlyAttendanceBulkEntryModal({
   yearMonth,
@@ -52,11 +60,10 @@ export function MonthlyAttendanceBulkEntryModal({
   const isControlled = controlledOpen !== undefined
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen
 
+  const [activeTab, setActiveTab] = useState<'simple' | 'detailed'>('simple')
   const [offset, setOffset] = useState(browserOffsetString())
   const [reason, setReason] = useState('')
-  const [weeklyPatternState, setWeeklyPatternState] = useState<Record<number, WeekdayRowState>>(
-    defaultWeeklyPatternState(),
-  )
+  const [simplePatternState, setSimplePatternState] = useState<SimplePatternState>(defaultSimplePatternState())
   const [dayOverrideState, setDayOverrideState] = useState<Record<string, DayOverrideRowState>>({})
   const [overwriteMode, setOverwriteMode] = useState<'skip_existing' | 'overwrite_existing'>('skip_existing')
 
@@ -76,10 +83,6 @@ export function MonthlyAttendanceBulkEntryModal({
       previewPattern.reset()
       generatePattern.reset()
     }
-  }
-
-  const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
-    setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
   }
 
   const handleDayOverrideChange = (date: string, patch: Partial<DayOverrideRowState>) => {
@@ -106,15 +109,12 @@ export function MonthlyAttendanceBulkEntryModal({
     return overrides
   }
 
+  const weeklyPattern = activeTab === 'simple' ? buildWeeklyPatternFromSimpleState(simplePatternState) : emptyWeeklyPattern()
+  const dayOverrides = activeTab === 'detailed' ? buildDayOverrides() : {}
+
   const handlePreview = () => {
     if (!from || !to) return
-    previewPattern.mutate({
-      from,
-      to,
-      utc_offset: offset,
-      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
-      day_overrides: buildDayOverrides(),
-    })
+    previewPattern.mutate({ from, to, utc_offset: offset, weekly_pattern: weeklyPattern, day_overrides: dayOverrides })
   }
 
   const handleGenerate = () => {
@@ -124,8 +124,8 @@ export function MonthlyAttendanceBulkEntryModal({
       from,
       to,
       utc_offset: offset,
-      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
-      day_overrides: buildDayOverrides(),
+      weekly_pattern: weeklyPattern,
+      day_overrides: dayOverrides,
       overwrite_mode: overwriteMode,
       reason,
     })
@@ -141,7 +141,7 @@ export function MonthlyAttendanceBulkEntryModal({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>月次の一括入力</DialogTitle>
-          <DialogDescription>{yearMonth}: 曜日ごとの既定に加えて、日単位でも個別に設定できる。</DialogDescription>
+          <DialogDescription>{yearMonth}: 出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
         </DialogHeader>
 
         {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
@@ -157,75 +157,83 @@ export function MonthlyAttendanceBulkEntryModal({
           />
         </FormField>
 
-        <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの既定の出退勤・休憩時刻</p>
-        <WeekdayScheduleFields state={weeklyPatternState} onChange={handleWeekdayChange} />
-
-        <div className="border-t border-border pt-4">
-          <h3 className="mb-2 text-sm font-semibold text-foreground">日単位の個別設定</h3>
-          <ul className="divide-y divide-border">
-            {dates.map((date) => {
-              const row = dayOverrideState[date]
-              const weekdayLabel = WEEKDAYS[(new Date(`${date}T00:00:00`).getDay() + 6) % 7].label
-              return (
-                <li key={date} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                  <label className="flex w-32 items-center gap-2 font-medium text-foreground">
-                    <Checkbox
-                      checked={row?.enabled ?? false}
-                      onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
-                    />
-                    {date}({weekdayLabel})
-                  </label>
-                  {row?.enabled && (
-                    <>
-                      <Input
-                        type="time"
-                        aria-label={`${date}の出勤時刻`}
-                        className="w-28"
-                        value={row.startTime}
-                        onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'simple' | 'detailed')}>
+          <TabsList>
+            <TabsTrigger value="simple">まとめて設定</TabsTrigger>
+            <TabsTrigger value="detailed">日にちごとに設定</TabsTrigger>
+          </TabsList>
+          <TabsContent value="simple">
+            <SimplePatternFields
+              state={simplePatternState}
+              onChange={(patch) => setSimplePatternState((prev) => ({ ...prev, ...patch }))}
+            />
+          </TabsContent>
+          <TabsContent value="detailed">
+            <ul className="divide-y divide-border">
+              {dates.map((date) => {
+                const row = dayOverrideState[date]
+                const weekdayLabel = WEEKDAYS[(new Date(`${date}T00:00:00`).getDay() + 6) % 7].label
+                return (
+                  <li key={date} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                    <label className="flex w-32 items-center gap-2 font-medium text-foreground">
+                      <Checkbox
+                        checked={row?.enabled ?? false}
+                        onCheckedChange={(checked) => handleDayOverrideChange(date, { enabled: checked === true })}
                       />
-                      <span className="text-muted-foreground">〜</span>
-                      <Input
-                        type="time"
-                        aria-label={`${date}の退勤時刻`}
-                        className="w-28"
-                        value={row.endTime}
-                        onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
-                      />
-                      <label className="flex items-center gap-2 text-foreground">
-                        <Checkbox
-                          checked={row.breakEnabled}
-                          aria-label={`${date}の休憩`}
-                          onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
+                      {date}({weekdayLabel})
+                    </label>
+                    {row?.enabled && (
+                      <>
+                        <Input
+                          type="time"
+                          aria-label={`${date}の出勤時刻`}
+                          className="w-28"
+                          value={row.startTime}
+                          onChange={(e) => handleDayOverrideChange(date, { startTime: e.target.value })}
                         />
-                        休憩
-                      </label>
-                      {row.breakEnabled && (
-                        <>
-                          <Input
-                            type="time"
-                            aria-label={`${date}の休憩開始時刻`}
-                            className="w-28"
-                            value={row.breakStartTime}
-                            onChange={(e) => handleDayOverrideChange(date, { breakStartTime: e.target.value })}
+                        <span className="text-muted-foreground">〜</span>
+                        <Input
+                          type="time"
+                          aria-label={`${date}の退勤時刻`}
+                          className="w-28"
+                          value={row.endTime}
+                          onChange={(e) => handleDayOverrideChange(date, { endTime: e.target.value })}
+                        />
+                        <label className="flex items-center gap-2 text-foreground">
+                          <Checkbox
+                            checked={row.breakEnabled}
+                            aria-label={`${date}の休憩`}
+                            onCheckedChange={(checked) => handleDayOverrideChange(date, { breakEnabled: checked === true })}
                           />
-                          <span className="text-muted-foreground">〜</span>
-                          <Input
-                            type="time"
-                            aria-label={`${date}の休憩終了時刻`}
-                            className="w-28"
-                            value={row.breakEndTime}
-                            onChange={(e) => handleDayOverrideChange(date, { breakEndTime: e.target.value })}
-                          />
-                        </>
-                      )}
-                    </>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
+                          休憩
+                        </label>
+                        {row.breakEnabled && (
+                          <>
+                            <Input
+                              type="time"
+                              aria-label={`${date}の休憩開始時刻`}
+                              className="w-28"
+                              value={row.breakStartTime}
+                              onChange={(e) => handleDayOverrideChange(date, { breakStartTime: e.target.value })}
+                            />
+                            <span className="text-muted-foreground">〜</span>
+                            <Input
+                              type="time"
+                              aria-label={`${date}の休憩終了時刻`}
+                              className="w-28"
+                              value={row.breakEndTime}
+                              onChange={(e) => handleDayOverrideChange(date, { breakEndTime: e.target.value })}
+                            />
+                          </>
+                        )}
+                      </>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </TabsContent>
+        </Tabs>
 
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>

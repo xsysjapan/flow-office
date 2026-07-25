@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { User } from '../../api/types'
 import { MonthlyAttendanceBulkEntryModal } from './MonthlyAttendanceBulkEntryModal'
@@ -30,7 +30,71 @@ function renderModal() {
 }
 
 describe('MonthlyAttendanceBulkEntryModal', () => {
-  it('opens from its own trigger button and overrides a single day when confirming', async () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('opens from its own trigger button and confirms a pattern applied to the selected weekdays', async () => {
+    vi.spyOn(attendanceApi, 'previewAttendancePattern').mockResolvedValue({
+      days: [
+        {
+          date: '2026-08-03',
+          weekday: 1,
+          start_time: '09:00',
+          end_time: '18:00',
+          break_start_time: '12:00',
+          break_end_time: '13:00',
+          has_existing_day: false,
+          is_locked: false,
+        },
+      ],
+    })
+    vi.spyOn(attendanceApi, 'generateAttendancePattern').mockResolvedValue({
+      results: [{ date: '2026-08-03', status: 'created', message: null }],
+      created_count: 20,
+      updated_count: 0,
+      skipped_count: 0,
+      rejected_count: 0,
+    })
+
+    renderModal()
+
+    expect(screen.queryByText('月次の一括入力')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
+    expect(await screen.findByText('月次の一括入力')).toBeInTheDocument()
+    expect(screen.getByText('2026-08: 出退勤・休憩時刻を指定して一括で確定する。')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
+
+    const mondayToFriday = { start_time: '09:00', end_time: '18:00', break_start_time: '12:00', break_end_time: '13:00' }
+    await waitFor(() =>
+      expect(attendanceApi.previewAttendancePattern).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '2026-08-01',
+          to: '2026-08-31',
+          weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+          day_overrides: {},
+        }),
+      ),
+    )
+    expect(await screen.findByText('2026-08-03: 09:00〜18:00')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('確定理由'), '出張中の実績をまとめて入力')
+    await userEvent.click(screen.getByRole('button', { name: '確定する' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.generateAttendancePattern).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-1',
+          weekly_pattern: { 1: mondayToFriday, 2: mondayToFriday, 3: mondayToFriday, 4: mondayToFriday, 5: mondayToFriday, 6: null, 7: null },
+          day_overrides: {},
+        }),
+      ),
+    )
+    expect(await screen.findByText('20件作成・0件更新しました。')).toBeInTheDocument()
+  })
+
+  it('switches to the day-by-day tab and overrides a single date, independent of the weekday pattern', async () => {
     vi.spyOn(attendanceApi, 'previewAttendancePattern').mockResolvedValue({
       days: [
         {
@@ -47,7 +111,7 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     })
     vi.spyOn(attendanceApi, 'generateAttendancePattern').mockResolvedValue({
       results: [{ date: '2026-08-04', status: 'updated', message: null }],
-      created_count: 20,
+      created_count: 0,
       updated_count: 1,
       skipped_count: 0,
       rejected_count: 0,
@@ -55,10 +119,8 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
 
     renderModal()
 
-    expect(screen.queryByText('月次の一括入力')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '一括入力' }))
-    expect(await screen.findByText('月次の一括入力')).toBeInTheDocument()
-    expect(screen.getByText('2026-08: 曜日ごとの既定に加えて、日単位でも個別に設定できる。')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('tab', { name: '日にちごとに設定' }))
 
     await userEvent.click(await screen.findByRole('checkbox', { name: '2026-08-04(火)' }))
     await userEvent.clear(screen.getByLabelText('2026-08-04の出勤時刻'))
@@ -68,11 +130,13 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: '2026-08-04の休憩' }))
     await userEvent.click(screen.getByRole('button', { name: 'プレビューする' }))
 
+    const emptyWeeklyPattern = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null }
     await waitFor(() =>
       expect(attendanceApi.previewAttendancePattern).toHaveBeenCalledWith(
         expect.objectContaining({
           from: '2026-08-01',
           to: '2026-08-31',
+          weekly_pattern: emptyWeeklyPattern,
           day_overrides: { '2026-08-04': { start_time: '10:00', end_time: '15:00' } },
         }),
       ),
@@ -86,10 +150,11 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
       expect(attendanceApi.generateAttendancePattern).toHaveBeenCalledWith(
         expect.objectContaining({
           user_id: 'user-1',
+          weekly_pattern: emptyWeeklyPattern,
           day_overrides: { '2026-08-04': { start_time: '10:00', end_time: '15:00' } },
         }),
       ),
     )
-    expect(await screen.findByText('20件作成・1件更新しました。')).toBeInTheDocument()
+    expect(await screen.findByText('0件作成・1件更新しました。')).toBeInTheDocument()
   })
 })

@@ -5,9 +5,16 @@ import { browserOffsetString } from '../../utils/offsetDateTime'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import {
+  buildWeeklyPatternFromSimpleState,
+  defaultSimplePatternState,
+  SimplePatternFields,
+  type SimplePatternState,
+} from '../SimplePatternFields/SimplePatternFields'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { buildWeeklyPattern, defaultWeeklyPatternState, WeekdayScheduleFields, type WeekdayRowState } from '../WeekdayScheduleFields/WeekdayScheduleFields'
 
 export interface WeeklyAttendanceBulkEntryModalProps {
@@ -20,8 +27,10 @@ export interface WeeklyAttendanceBulkEntryModalProps {
 }
 
 /**
- * 週次勤怠画面(WeekAttendancePage)から開く一括入力モーダル。曜日ごとの実際の
- * 出退勤・休憩時刻を指定し、期間へ一括展開して確定する。対象は常に本人。
+ * 週次勤怠画面(WeekAttendancePage)から開く一括入力モーダル。対象は常に本人。
+ * 「まとめて設定」(開始/終了時刻を1組だけ入力し、適用する曜日を選ぶだけの簡易入力)を
+ * 既定タブとし、曜日ごとに個別の時刻を指定したい場合向けに従来の詳細入力をもう1つの
+ * タブとして残す。
  */
 export function WeeklyAttendanceBulkEntryModal({
   defaultFrom,
@@ -34,11 +43,13 @@ export function WeeklyAttendanceBulkEntryModal({
   const isControlled = controlledOpen !== undefined
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen
 
+  const [activeTab, setActiveTab] = useState<'simple' | 'detailed'>('simple')
   const [from, setFrom] = useState(defaultFrom)
   const [to, setTo] = useState(defaultTo)
   const [offset, setOffset] = useState(browserOffsetString())
   const [reason, setReason] = useState('')
-  const [weeklyPatternState, setWeeklyPatternState] = useState<Record<number, WeekdayRowState>>(
+  const [simplePatternState, setSimplePatternState] = useState<SimplePatternState>(defaultSimplePatternState())
+  const [detailedPatternState, setDetailedPatternState] = useState<Record<number, WeekdayRowState>>(
     defaultWeeklyPatternState(),
   )
   const [overwriteMode, setOverwriteMode] = useState<'skip_existing' | 'overwrite_existing'>('skip_existing')
@@ -58,13 +69,18 @@ export function WeeklyAttendanceBulkEntryModal({
     }
   }
 
-  const handleWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
-    setWeeklyPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
+  const handleDetailedWeekdayChange = (iso: number, patch: Partial<WeekdayRowState>) => {
+    setDetailedPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
   }
+
+  const weeklyPattern =
+    activeTab === 'simple'
+      ? buildWeeklyPatternFromSimpleState(simplePatternState)
+      : buildWeeklyPattern(detailedPatternState)
 
   const handlePreview = () => {
     if (!from || !to) return
-    previewPattern.mutate({ from, to, utc_offset: offset, weekly_pattern: buildWeeklyPattern(weeklyPatternState) })
+    previewPattern.mutate({ from, to, utc_offset: offset, weekly_pattern: weeklyPattern })
   }
 
   const handleGenerate = () => {
@@ -74,7 +90,7 @@ export function WeeklyAttendanceBulkEntryModal({
       from,
       to,
       utc_offset: offset,
-      weekly_pattern: buildWeeklyPattern(weeklyPatternState),
+      weekly_pattern: weeklyPattern,
       overwrite_mode: overwriteMode,
       reason,
     })
@@ -90,7 +106,7 @@ export function WeeklyAttendanceBulkEntryModal({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>週次の一括入力</DialogTitle>
-          <DialogDescription>曜日ごとの出退勤・休憩時刻を指定して、期間へ一括展開する。</DialogDescription>
+          <DialogDescription>出退勤・休憩時刻を指定して、期間へ一括展開する。</DialogDescription>
         </DialogHeader>
 
         {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
@@ -116,8 +132,21 @@ export function WeeklyAttendanceBulkEntryModal({
           </FormField>
         </div>
 
-        <p className="mb-2 text-sm font-semibold text-foreground">曜日ごとの出退勤・休憩時刻</p>
-        <WeekdayScheduleFields state={weeklyPatternState} onChange={handleWeekdayChange} />
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'simple' | 'detailed')}>
+          <TabsList>
+            <TabsTrigger value="simple">まとめて設定</TabsTrigger>
+            <TabsTrigger value="detailed">曜日ごとに設定</TabsTrigger>
+          </TabsList>
+          <TabsContent value="simple">
+            <SimplePatternFields
+              state={simplePatternState}
+              onChange={(patch) => setSimplePatternState((prev) => ({ ...prev, ...patch }))}
+            />
+          </TabsContent>
+          <TabsContent value="detailed">
+            <WeekdayScheduleFields state={detailedPatternState} onChange={handleDetailedWeekdayChange} />
+          </TabsContent>
+        </Tabs>
 
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
