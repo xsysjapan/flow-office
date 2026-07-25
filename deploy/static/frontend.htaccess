@@ -6,16 +6,25 @@
 # 実ファイル・実ディレクトリ以外のリクエストをすべて index.html にフォールバックさせる。
 # api/・mcp/ はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
 # 下記の-f/-d判定で自動的に除外され、それぞれのpublic/.htaccessが引き続き適用される。
+<IfModule mod_dir.c>
+    # api/・mcp/はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
+    # DirectorySlashが既定(On)のままだと、末尾スラッシュなしで直下にアクセスした際に
+    # 下のRewriteRuleより先にApache本体(mod_dir)が自動的に「%{REQUEST_URI}/」への
+    # 301リダイレクトを発行してしまう。POSTのようなボディ付きリクエストがこの301で
+    # GETに落ちてしまい、各アプリのフロントコントローラが期待するレスポンス
+    # (例: mcp/のPOST 401)を返せなくなる(docs/28-github-actions-deploy.md参照)。
+    # DirectorySlashはmod_rewriteのRewriteRuleより先に評価されるため、rewrite側の
+    # 対処だけでは防げず、ここで明示的に無効化する必要がある。
+    DirectorySlash Off
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # api/・mcp/はシンボリックリンク(実ディレクトリ)としてdist配下に存在するため、
-    # 末尾スラッシュなしで直下にアクセスされると、下のRewriteRuleより先にApache本体
-    # (mod_dir)が自動的に「%{REQUEST_URI}/」への301リダイレクトを発行してしまう。
-    # POSTのようなボディ付きリクエストがこの301でGETに落ちてしまい、各アプリの
-    # フロントコントローラが期待するレスポンス(例: mcp/のPOST 401)を返せなくなる
-    # (docs/28-github-actions-deploy.md参照)。mod_dirのリダイレクトより先に、各アプリの
-    # index.phpへメソッド・ボディを保ったまま内部リライトする。
+    # DirectorySlash Offにした分、api/・mcp/直下への末尾スラッシュなしアクセスは
+    # 自動リダイレクトされなくなるが、そのままではディレクトリが見つかった時点で
+    # 処理が止まってしまうため、各アプリのindex.phpへメソッド・ボディを保ったまま
+    # 内部リライトする。
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^(api|mcp)$ $1/index.php [L]
 

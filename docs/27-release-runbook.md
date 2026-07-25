@@ -220,9 +220,11 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   発行してしまう。これはメソッドに関わらず起きるため、`POST /flow-office/mcp`のような
   ボディ付きリクエストがリダイレクト先へGETとして再送され、mcp/側が返すはずの401等の
   レスポンスが得られず、ヘルスチェックが`expected 401 ... got 301`で失敗する事故が
-  発生した。`deploy/static/frontend.htaccess`に、`/api`・`/mcp`直下へのアクセスを
-  mod_dirのリダイレクトより先に各アプリの`index.php`へ内部リライトするRewriteRuleを
-  追加して回避している。
+  発生した。`RewriteRule`をmod_dirより先に置くだけでは防げなかった(DirectorySlashは
+  mod_rewriteの前に評価される)ため、`deploy/static/frontend.htaccess`で明示的に
+  `DirectorySlash Off`を指定して自動リダイレクト自体を無効化し、その上で`/api`・`/mcp`
+  直下へのアクセスを各アプリの`index.php`へ内部リライトするRewriteRuleを追加して
+  回避している。
 - **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
   テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
   開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を
