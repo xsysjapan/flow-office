@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { ExpenseItemsTable } from './ExpenseItemsTable'
 import { useEditableRows } from '../../hooks/useEditableRows'
@@ -11,7 +10,7 @@ const categories: ExpenseCategory[] = [
     code: 'transport',
     name: '交通費',
     description: null,
-    evidence_type_default: 'not_required',
+    evidence_type_default: 'receipt_optional',
     receipt_required_threshold: null,
     approval_skip_threshold: null,
     is_active: true,
@@ -21,7 +20,7 @@ const categories: ExpenseCategory[] = [
     code: 'lodging',
     name: '宿泊費',
     description: null,
-    evidence_type_default: 'required',
+    evidence_type_default: 'receipt_required',
     receipt_required_threshold: null,
     approval_skip_threshold: null,
     is_active: true,
