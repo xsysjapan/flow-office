@@ -3,55 +3,51 @@
 namespace Tests\Feature\BackOffice;
 
 use App\Models\BackOfficeTask;
-use App\Models\RequestType;
+use App\Models\ExpenseCategory;
+use App\Models\ExpenseClaim;
+use App\Models\ExpenseItem;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * UC-B004 手順5: 会計/振込CSVを出力する。対象はハードコードされたtask_typeではなく、
- * request_types.export_amount_field が設定された申請種別かどうかで決まる。
+ * UC-X012 手順5: 経費精算専用ドメイン(expense_claims)から会計/振込CSVを出力する。
+ * 旧汎用ワークフロー方式(request_types.export_amount_field)は廃止したため、対象は
+ * backoffice_tasks.source_type = 'ExpenseClaim' の支払予定/完了タスクのみ。
  */
 class ExpensesExportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_export_includes_only_request_types_configured_with_an_export_amount_field(): void
+    public function test_export_includes_only_expense_claim_backoffice_tasks(): void
     {
         $staff = User::factory()->create();
         $staff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
         $applicant = User::factory()->create(['name' => '申請者太郎']);
 
-        $expenseType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算',
-            'form_schema' => [], 'is_active' => true,
-            'requires_backoffice_task' => true, 'backoffice_task_type' => 'expense_reimbursement',
-            'export_amount_field' => 'amount',
-        ]);
-        $businessCardType = RequestType::query()->create([
-            'code' => 'business_card', 'name' => '名刺申請',
-            'form_schema' => [], 'is_active' => true,
-            'requires_backoffice_task' => true, 'backoffice_task_type' => 'business_card',
+        $category = ExpenseCategory::query()->create([
+            'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);
 
-        $expenseRequest = WorkflowRequest::query()->create([
-            'request_type_id' => $expenseType->id, 'title' => 'タクシー代', 'applicant_user_id' => $applicant->id,
-            'status' => 'approved', 'form_data' => ['amount' => 3400],
+        $claim = ExpenseClaim::query()->create([
+            'employee_id' => $applicant->id, 'period_from' => '2020-01-01', 'period_to' => '2020-01-31',
+            'status' => 'approved', 'total_amount' => 3400,
+        ]);
+        ExpenseItem::query()->create([
+            'claim_id' => $claim->id, 'category_id' => $category->id, 'amount' => 3400,
+            'evidence_type' => 'fact_reference_available',
         ]);
         $expenseTask = BackOfficeTask::query()->create([
-            'source_type' => 'workflow_request', 'source_id' => $expenseRequest->id,
-            'task_type' => 'expense_reimbursement', 'title' => '経費精算: タクシー代', 'status' => 'payment_scheduled',
+            'source_type' => 'ExpenseClaim', 'source_id' => $claim->id,
+            'task_type' => 'expense_reimbursement', 'title' => '経費精算: 申請者太郎', 'status' => 'payment_scheduled',
         ]);
 
-        $businessCardRequest = WorkflowRequest::query()->create([
-            'request_type_id' => $businessCardType->id, 'title' => '名刺100枚', 'applicant_user_id' => $applicant->id,
-            'status' => 'approved', 'form_data' => ['quantity' => 100],
-        ]);
+        // 別ドメイン(汎用ワークフロー: 名刺申請)のタスクは対象外であること。
         BackOfficeTask::query()->create([
-            'source_type' => 'workflow_request', 'source_id' => $businessCardRequest->id,
-            'task_type' => 'business_card', 'title' => '名刺申請: 名刺100枚', 'status' => 'payment_scheduled',
+            'source_type' => 'workflow_request', 'source_id' => (string) Str::uuid(),
+            'task_type' => 'business_card', 'title' => '名刺100枚', 'status' => 'payment_scheduled',
         ]);
 
         $response = $this->actingAs($staff)->get('/api/exports/expenses?from=2020-01-01&to=2030-01-01');
