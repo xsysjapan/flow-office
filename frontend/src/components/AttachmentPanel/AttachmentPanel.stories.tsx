@@ -11,14 +11,14 @@ const sampleAttachments: Attachment[] = [
 function withSeeded(ownerId: string, attachments: Attachment[] | undefined, required = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   if (attachments) {
-    queryClient.setQueryData(['attachments', 'ExpenseItem', ownerId], attachments)
+    queryClient.setQueryData(['attachments', 'expense_item', ownerId], attachments)
   }
 
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
         <div className="max-w-md">
-          <AttachmentPanel ownerType="ExpenseItem" ownerId={ownerId} required={required} />
+          <AttachmentPanel ownerType="expense_item" ownerId={ownerId} required={required} />
         </div>
       </QueryClientProvider>
     )
@@ -28,7 +28,7 @@ function withSeeded(ownerId: string, attachments: Attachment[] | undefined, requ
 const meta = {
   title: 'Components/AttachmentPanel',
   component: AttachmentPanel,
-  args: { ownerType: 'ExpenseItem', ownerId: 'expense-item-1' },
+  args: { ownerType: 'expense_item', ownerId: 'expense-item-1' },
 } satisfies Meta<typeof AttachmentPanel>
 
 export default meta
@@ -45,11 +45,11 @@ export const Empty: Story = {
 export const ReadOnly: Story = {
   render: () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-    queryClient.setQueryData(['attachments', 'ExpenseItem', 'expense-item-3'], sampleAttachments)
+    queryClient.setQueryData(['attachments', 'expense_item', 'expense-item-3'], sampleAttachments)
     return (
       <QueryClientProvider client={queryClient}>
         <div className="max-w-md">
-          <AttachmentPanel ownerType="ExpenseItem" ownerId="expense-item-3" readOnly />
+          <AttachmentPanel ownerType="expense_item" ownerId="expense-item-3" readOnly />
         </div>
       </QueryClientProvider>
     )
@@ -63,11 +63,11 @@ export const RequiredAndEmpty: Story = {
 export const Compact: Story = {
   render: () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-    queryClient.setQueryData(['attachments', 'ExpenseItem', 'expense-item-5'], sampleAttachments)
+    queryClient.setQueryData(['attachments', 'expense_item', 'expense-item-5'], sampleAttachments)
     return (
       <QueryClientProvider client={queryClient}>
         <div className="max-w-xs">
-          <AttachmentPanel ownerType="ExpenseItem" ownerId="expense-item-5" compact />
+          <AttachmentPanel ownerType="expense_item" ownerId="expense-item-5" compact />
         </div>
       </QueryClientProvider>
     )

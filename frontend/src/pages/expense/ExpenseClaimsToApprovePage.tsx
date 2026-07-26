@@ -1,19 +1,11 @@
 import { Link } from 'react-router-dom'
-import { Badge, type BadgeTone } from '../../components/Badge/Badge'
+import { Badge } from '../../components/Badge/Badge'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import type { ExpenseClaimStatus } from '../../api/types'
 import { useExpenseClaimsToApprove } from '../../hooks/useExpenseClaims'
-
-const expenseClaimStatusMeta: Record<ExpenseClaimStatus, { label: string; tone: BadgeTone }> = {
-  draft: { label: '下書き', tone: 'neutral' },
-  in_review: { label: '申請中', tone: 'info' },
-  returned: { label: '差戻し', tone: 'warning' },
-  approved: { label: '承認済み', tone: 'success' },
-  cancelled: { label: '取消', tone: 'neutral' },
-}
+import { expenseClaimStatusLabel } from '../../utils/statusLabels'
 
 /**
  * UC-X011手順1: 承認者向けの承認待ちの経費精算一覧。
@@ -43,7 +35,7 @@ export function ExpenseClaimsToApprovePage() {
           </TableHeader>
           <TableBody>
             {claims.map((claim) => {
-              const { label, tone } = expenseClaimStatusMeta[claim.status]
+              const { label, tone } = expenseClaimStatusLabel(claim.status)
               return (
                 <TableRow key={claim.id}>
                   <TableCell>

@@ -39,7 +39,7 @@ class CreateBackOfficeTaskFromExpenseClaimApprovalHandler implements CommandHand
 
         BackOfficeTaskAggregate::retrieve($backOfficeTaskId)
             ->create(
-                sourceType: 'ExpenseClaim',
+                sourceType: 'expense_claim',
                 sourceId: $claim->id,
                 taskType: self::TASK_TYPE,
                 title: $title,

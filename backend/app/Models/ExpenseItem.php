@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  *
  * 主キーはUUID(HasUuids)。ExpenseClaimAggregateが発番し、ExpenseClaimProjectorが
  * stored_eventsから作成・更新・削除する。添付ファイルは新規テーブルを持たず、既存の
- * Attachment集約をowner_type='ExpenseItem'として再利用する。
+ * Attachment集約をowner_type='expense_item'として再利用する。
  */
 #[Fillable([
     'id', 'claim_id', 'category_id', 'usage_date', 'origin', 'destination',

@@ -15,7 +15,7 @@ function renderPanel(
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AttachmentPanel ownerType="ExpenseItem" ownerId="expense-item-1" {...props} />
+      <AttachmentPanel ownerType="expense_item" ownerId="expense-item-1" {...props} />
     </QueryClientProvider>,
   )
 }
@@ -56,7 +56,7 @@ describe('AttachmentPanel', () => {
     await userEvent.upload(input, file)
 
     await waitFor(() =>
-      expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('ExpenseItem', 'expense-item-1', file),
+      expect(attachmentsApi.uploadAttachment).toHaveBeenCalledWith('expense_item', 'expense-item-1', file),
     )
   })
 

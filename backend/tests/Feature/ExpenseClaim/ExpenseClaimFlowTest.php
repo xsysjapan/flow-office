@@ -50,7 +50,7 @@ class ExpenseClaimFlowTest extends TestCase
         $approve = $this->actingAs($approver)->postJson("/api/expense-claims/{$claimId}/approve");
         $approve->assertOk()->assertJsonPath('status', 'approved')->assertJsonPath('total_amount', 500);
 
-        $task = BackOfficeTask::query()->where('source_type', 'ExpenseClaim')->where('source_id', $claimId)->first();
+        $task = BackOfficeTask::query()->where('source_type', 'expense_claim')->where('source_id', $claimId)->first();
         $this->assertNotNull($task, 'バックオフィスタスクが自動生成されていること');
         $this->assertSame('expense_reimbursement', $task->task_type);
         $this->assertSame('not_started', $task->status);
@@ -115,7 +115,7 @@ class ExpenseClaimFlowTest extends TestCase
 
         $submit->assertOk()->assertJsonPath('status', 'approved');
 
-        $task = BackOfficeTask::query()->where('source_type', 'ExpenseClaim')->where('source_id', $claimId)->first();
+        $task = BackOfficeTask::query()->where('source_type', 'expense_claim')->where('source_id', $claimId)->first();
         $this->assertNotNull($task);
     }
 

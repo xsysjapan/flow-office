@@ -15,7 +15,7 @@ use Tests\TestCase;
 /**
  * UC-X012 手順5: 経費精算専用ドメイン(expense_claims)から会計/振込CSVを出力する。
  * 旧汎用ワークフロー方式(request_types.export_amount_field)は廃止したため、対象は
- * backoffice_tasks.source_type = 'ExpenseClaim' の支払予定/完了タスクのみ。
+ * backoffice_tasks.source_type = 'expense_claim' の支払予定/完了タスクのみ。
  */
 class ExpensesExportTest extends TestCase
 {
@@ -40,7 +40,7 @@ class ExpensesExportTest extends TestCase
             'evidence_type' => 'fact_reference_available',
         ]);
         $expenseTask = BackOfficeTask::query()->create([
-            'source_type' => 'ExpenseClaim', 'source_id' => $claim->id,
+            'source_type' => 'expense_claim', 'source_id' => $claim->id,
             'task_type' => 'expense_reimbursement', 'title' => '経費精算: 申請者太郎', 'status' => 'payment_scheduled',
         ]);
 

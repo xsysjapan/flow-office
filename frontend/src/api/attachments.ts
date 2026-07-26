@@ -1,9 +1,7 @@
 import { apiFetch, getToken } from './client'
 import type { Attachment } from './types'
 
-/** 'ExpenseItem' はdocs/30-usecases-expense.md記載のバックエンド契約どおりPascalCaseで渡す
- *  (owner_typeポリモーフィック識別子。他のowner_typeとは命名規則が異なる点に注意)。 */
-export type AttachmentOwnerType = 'workflow_request' | 'ExpenseItem'
+export type AttachmentOwnerType = 'workflow_request' | 'expense_item'
 
 export function fetchAttachments(ownerType: AttachmentOwnerType, ownerId: string): Promise<Attachment[]> {
   return apiFetch('/attachments', { query: { owner_type: ownerType, owner_id: ownerId } })

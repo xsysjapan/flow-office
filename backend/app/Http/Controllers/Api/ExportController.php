@@ -107,7 +107,7 @@ class ExportController extends Controller
         // (docs/30-usecases-expense.md)。
         $tasks = BackOfficeTask::query()
             ->with(['source.employee'])
-            ->where('source_type', 'ExpenseClaim')
+            ->where('source_type', 'expense_claim')
             ->whereIn('status', ['payment_scheduled', 'completed'])
             ->whereBetween('created_at', [
                 Carbon::parse($data['from'])->startOfDay(),

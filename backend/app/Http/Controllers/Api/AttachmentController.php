@@ -42,7 +42,7 @@ class AttachmentController extends Controller
     private const OWNER_TYPE_MAP = [
         'workflow_request' => WorkflowRequest::class,
         'attendance_day' => AttendanceDay::class,
-        'ExpenseItem' => ExpenseItem::class,
+        'expense_item' => ExpenseItem::class,
     ];
 
     /**
@@ -203,7 +203,7 @@ class AttachmentController extends Controller
             $isEmployeeOrApprover = $claim !== null
                 && in_array($user->id, [$claim->employee_id, $claim->approver_user_id], true);
             $isAssignedBackOfficeStaff = $claim !== null && BackOfficeTask::query()
-                ->where('source_type', 'ExpenseClaim')
+                ->where('source_type', 'expense_claim')
                 ->where('source_id', $claim->id)
                 ->where('assigned_user_id', $user->id)
                 ->exists();

@@ -3,6 +3,7 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
+  ExpenseClaimStatus,
   LegalHolidayWarning,
   PaidLeaveRequestStatus,
   PaidLeaveType,
@@ -69,6 +70,18 @@ const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
 
 export function workflowRequestStatusLabel(status: WorkflowRequestStatus): StatusMeta {
   return workflowRequestStatusMeta[status]
+}
+
+const expenseClaimStatusMeta: Record<ExpenseClaimStatus, StatusMeta> = {
+  draft: { label: '下書き', tone: 'neutral' },
+  in_review: { label: '申請中', tone: 'info' },
+  returned: { label: '差戻し', tone: 'warning' },
+  approved: { label: '承認済み', tone: 'success' },
+  cancelled: { label: '取消', tone: 'danger' },
+}
+
+export function expenseClaimStatusLabel(status: ExpenseClaimStatus): StatusMeta {
+  return expenseClaimStatusMeta[status]
 }
 
 export function attendanceMonthStatusLabel(status: AttendanceMonthStatus): StatusMeta {
