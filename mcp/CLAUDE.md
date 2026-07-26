@@ -44,6 +44,9 @@ database/        mcp/自身のDBのmigrations(backend/のDBとは無関係)
   それが呼び出す `backend/routes/api.php` 側のエンドポイントだけを見れば足りる。
   `backend/app/Domain/` の実装詳細まで読み込む必要はない(mcp/はAPIクライアントに徹する)。
 - OAuth周りの調査は `app/Mcp/OAuth/` に閉じる。ツール実装(`Mcp/Tools/`)を一緒に読む必要はない。
+- 新規MCPツール追加のように1ファイルで完結する実装は、対象ツール名と呼び出し先の
+  `backend/routes/api.php`エンドポイントを指定してgeneral-purposeサブエージェントに
+  実装自体を委譲し、メインの会話コンテキストを消費させない(ルート`CLAUDE.md`参照)。
 
 ## 開発でよく使うパターン
 
