@@ -26,7 +26,10 @@ use Illuminate\Support\Collection;
  */
 class AttendanceDayDefaultsResolver
 {
-    public function __construct(private readonly WorkStyleFallbackResolver $workStyleFallbackResolver) {}
+    public function __construct(
+        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+        private readonly AttendanceTimeRounder $timeRounder,
+    ) {}
 
     /**
      * @return array{source: string, actual_start_at: ?string, actual_end_at: ?string, breaks: array<int, array{start: string, end: ?string}>}
@@ -84,8 +87,8 @@ class AttendanceDayDefaultsResolver
                 $openBreakStart = $punch->punched_at;
             } elseif ($punch->punch_type === PunchType::BREAK_END && $openBreakStart !== null) {
                 $breaks[] = [
-                    'start' => LocalDateTime::formatWithOffsetMinutes($this->roundSegmentEnd($openBreakStart, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
-                    'end' => LocalDateTime::formatWithOffsetMinutes($this->roundSegmentStart($punch->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
+                    'start' => LocalDateTime::formatWithOffsetMinutes($this->timeRounder->roundSegmentEnd($openBreakStart, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
+                    'end' => LocalDateTime::formatWithOffsetMinutes($this->timeRounder->roundSegmentStart($punch->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes),
                 ];
                 $openBreakStart = null;
             }
@@ -94,10 +97,10 @@ class AttendanceDayDefaultsResolver
         return [
             'source' => 'punch',
             'actual_start_at' => $clockIn !== null
-                ? LocalDateTime::formatWithOffsetMinutes($this->roundSegmentStart($clockIn->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
+                ? LocalDateTime::formatWithOffsetMinutes($this->timeRounder->roundSegmentStart($clockIn->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
                 : null,
             'actual_end_at' => $clockOut !== null
-                ? LocalDateTime::formatWithOffsetMinutes($this->roundSegmentEnd($clockOut->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
+                ? LocalDateTime::formatWithOffsetMinutes($this->timeRounder->roundSegmentEnd($clockOut->punched_at, $roundingUnitMinutes, $roundingMode), $offsetMinutes)
                 : null,
             'breaks' => $breaks,
         ];
@@ -161,77 +164,5 @@ class AttendanceDayDefaultsResolver
     private function defaultTimezone(): string
     {
         return SystemSetting::current()->default_timezone;
-    }
-
-    /**
-     * 勤務区間が「始まる」打刻(始業・休憩終了)を丸める。$roundingModeが
-     * shorten(勤務時間が短くなる方向)なら繰り上げ(遅い方へ)、lengthen(長くなる方向)なら
-     * 繰り下げ(早い方へ)、nearestなら四捨五入する。
-     */
-    private function roundSegmentStart(Carbon $time, int $unitMinutes, string $roundingMode): Carbon
-    {
-        return match ($roundingMode) {
-            WorkStyle::ROUNDING_MODE_SHORTEN => $this->ceilToUnit($time, $unitMinutes),
-            WorkStyle::ROUNDING_MODE_LENGTHEN => $this->floorToUnit($time, $unitMinutes),
-            default => $this->roundToNearest($time, $unitMinutes),
-        };
-    }
-
-    /**
-     * 勤務区間が「終わる」打刻(終業・休憩開始)を丸める。$roundingModeが
-     * shorten(勤務時間が短くなる方向)なら繰り下げ(早い方へ)、lengthen(長くなる方向)なら
-     * 繰り上げ(遅い方へ)、nearestなら四捨五入する。
-     */
-    private function roundSegmentEnd(Carbon $time, int $unitMinutes, string $roundingMode): Carbon
-    {
-        return match ($roundingMode) {
-            WorkStyle::ROUNDING_MODE_SHORTEN => $this->floorToUnit($time, $unitMinutes),
-            WorkStyle::ROUNDING_MODE_LENGTHEN => $this->ceilToUnit($time, $unitMinutes),
-            default => $this->roundToNearest($time, $unitMinutes),
-        };
-    }
-
-    /**
-     * 打刻時刻を$unitMinutes分単位に最も近い時刻へ丸める(四捨五入)。$unitMinutesが1以下の
-     * 場合は丸めない。
-     */
-    private function roundToNearest(Carbon $time, int $unitMinutes): Carbon
-    {
-        if ($unitMinutes <= 1) {
-            return $time->copy();
-        }
-
-        $roundedMinutes = (int) round($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
-
-        return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
-    }
-
-    /** 打刻時刻を$unitMinutes分単位の直前(早い方)へ切り捨てる。 */
-    private function floorToUnit(Carbon $time, int $unitMinutes): Carbon
-    {
-        if ($unitMinutes <= 1) {
-            return $time->copy();
-        }
-
-        $roundedMinutes = (int) floor($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
-
-        return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
-    }
-
-    /** 打刻時刻を$unitMinutes分単位の直後(遅い方)へ切り上げる。 */
-    private function ceilToUnit(Carbon $time, int $unitMinutes): Carbon
-    {
-        if ($unitMinutes <= 1) {
-            return $time->copy();
-        }
-
-        $roundedMinutes = (int) ceil($this->minutesSinceMidnight($time) / $unitMinutes) * $unitMinutes;
-
-        return $time->copy()->startOfDay()->addMinutes($roundedMinutes);
-    }
-
-    private function minutesSinceMidnight(Carbon $time): float
-    {
-        return $time->hour * 60 + $time->minute + ($time->second / 60);
     }
 }
