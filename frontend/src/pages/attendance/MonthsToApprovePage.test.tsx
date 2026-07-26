@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as usersApi from '../../api/users'
 import type { AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
+import { pickYearMonth } from '../../test-support/pickerInteractions'
 import { MonthsToApprovePage } from './MonthsToApprovePage'
 
 const approverUser: User = {
@@ -254,7 +255,7 @@ describe('MonthsToApprovePage', () => {
     await userEvent.selectOptions(screen.getByLabelText('ステータス'), '承認済み')
     await waitFor(() => expect(fetchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'approved', page: 1 })))
 
-    await userEvent.type(screen.getByLabelText('年月'), '2026-06')
+    await pickYearMonth(userEvent.setup(), '年月', '2026-06')
     await waitFor(() => expect(fetchSpy).toHaveBeenLastCalledWith(expect.objectContaining({ yearMonth: '2026-06' })))
 
     const userCombobox = screen.getByRole('combobox', { name: '対象社員' })

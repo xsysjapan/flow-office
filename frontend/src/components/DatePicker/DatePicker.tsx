@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CalendarIcon } from 'lucide-react'
+import type { CaptionLabelProps } from 'react-day-picker'
 import { ja } from 'react-day-picker/locale'
+import { YearMonthGrid } from '../YearMonthPicker/YearMonthGrid'
 import { formatDate } from '../../utils/weekDates'
 import { Button } from '../ui/button'
 import { Calendar } from '../ui/calendar'
@@ -30,6 +32,10 @@ function parseDateValue(value: string | undefined): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }
 
+function formatYearMonth(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 /** 「今日」を基準にした相対日付のショートカット一覧。 */
 function relativeDateShortcuts(): { label: string; date: string }[] {
   const today = formatDate(new Date())
@@ -40,6 +46,8 @@ function relativeDateShortcuts(): { label: string; date: string }[] {
  * カレンダーから日付を1件選ぶ入力。値は`<input type="date">`と同じ"YYYY-MM-DD"文字列。
  * 勤務日・適用期間の開始/終了日など、カレンダーから選びたい日付入力全般で使う。
  * 「今日」「明日」等、よく使う相対日付をワンクリックで選べるショートカットを備える。
+ * カレンダー上部の年月表示をクリックすると年月ピッカーに切り替わり、遠い過去の年へも
+ * 素早く移動できる(月を選ぶと日付選択画面に戻り、その月の日付を選べる)。
  */
 export function DatePicker({
   id,
@@ -53,17 +61,33 @@ export function DatePicker({
   'aria-label': ariaLabel,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<'day' | 'yearMonth'>('day')
   const selected = parseDateValue(value)
   const minDate = parseDateValue(min)
   const maxDate = parseDateValue(max)
+  const [month, setMonth] = useState<Date>(() => selected ?? minDate ?? maxDate ?? new Date())
 
   const selectDate = (date: string | undefined) => {
     onChange(date)
     setOpen(false)
   }
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setMode('day')
+      setMonth(selected ?? minDate ?? maxDate ?? new Date())
+    }
+    setOpen(nextOpen)
+  }
+
+  const selectYearMonth = (yearMonth: string) => {
+    const [year, monthNumber] = yearMonth.split('-').map(Number)
+    setMonth(new Date(year, monthNumber - 1, 1))
+    setMode('day')
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -77,42 +101,73 @@ export function DatePicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start" collisionPadding={16}>
-        {(showRelativeShortcuts || value) && (
-          <div className="flex min-h-11 items-center justify-end gap-1 border-b border-border bg-muted/30 px-2 py-1.5">
-            {showRelativeShortcuts &&
-              relativeDateShortcuts()
-                .filter((shortcut) => (!min || shortcut.date >= min) && (!max || shortcut.date <= max))
-                .map((shortcut) => (
-                  <Button
-                    key={shortcut.label}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => selectDate(shortcut.date)}
-                  >
-                    {shortcut.label}
+        {mode === 'day' ? (
+          <>
+            {(showRelativeShortcuts || value) && (
+              <div className="flex min-h-11 items-center justify-end gap-1 border-b border-border bg-muted/30 px-2 py-1.5">
+                {showRelativeShortcuts &&
+                  relativeDateShortcuts()
+                    .filter((shortcut) => (!min || shortcut.date >= min) && (!max || shortcut.date <= max))
+                    .map((shortcut) => (
+                      <Button
+                        key={shortcut.label}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => selectDate(shortcut.date)}
+                      >
+                        {shortcut.label}
+                      </Button>
+                    ))}
+                {value && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => selectDate(undefined)}>
+                    クリア
                   </Button>
-                ))}
-            {value && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => selectDate(undefined)}>
-                クリア
-              </Button>
+                )}
+              </div>
             )}
-          </div>
+            <Calendar
+              mode="single"
+              locale={ja}
+              labels={{
+                labelPrevious: () => '前の月へ',
+                labelNext: () => '次の月へ',
+              }}
+              selected={selected}
+              month={month}
+              onMonthChange={setMonth}
+              disabled={[...(minDate ? [{ before: minDate }] : []), ...(maxDate ? [{ after: maxDate }] : [])]}
+              onSelect={(date) => selectDate(date ? formatDate(date) : undefined)}
+              components={{
+                CaptionLabel: ({ children, className, ...captionProps }: CaptionLabelProps) => (
+                  <button
+                    type="button"
+                    className={`${className ?? ''} rounded-md px-2 hover:bg-accent hover:text-accent-foreground`}
+                    onClick={() => setMode('yearMonth')}
+                    {...captionProps}
+                  >
+                    {children}
+                  </button>
+                ),
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <div className="flex min-h-11 items-center justify-start border-b border-border bg-muted/30 px-2 py-1.5">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMode('day')}>
+                日付選択に戻る
+              </Button>
+            </div>
+            <YearMonthGrid
+              initialYearMonth={formatYearMonth(month)}
+              selectedYearMonth={formatYearMonth(month)}
+              min={min?.slice(0, 7)}
+              max={max?.slice(0, 7)}
+              onSelect={selectYearMonth}
+            />
+          </>
         )}
-        <Calendar
-          key={value ?? 'empty'}
-          mode="single"
-          locale={ja}
-          labels={{
-            labelPrevious: () => '前の月へ',
-            labelNext: () => '次の月へ',
-          }}
-          selected={selected}
-          defaultMonth={selected ?? minDate ?? maxDate}
-          disabled={[...(minDate ? [{ before: minDate }] : []), ...(maxDate ? [{ after: maxDate }] : [])]}
-          onSelect={(date) => selectDate(date ? formatDate(date) : undefined)}
-        />
       </PopoverContent>
     </Popover>
   )
