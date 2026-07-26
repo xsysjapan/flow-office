@@ -197,6 +197,34 @@ describe('AttendanceMonthDetailPage', () => {
     expect(await screen.findByRole('button', { name: '提出する' })).toBeDisabled()
   })
 
+  it('shows a submit control for an in-progress month with no attendance_months record yet', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '提出する' })).toBeDisabled()
+  })
+
+  it('does not show a submit control for a future month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+
+    renderPage('2026-08')
+
+    await screen.findByText('月次勤怠')
+    expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
+  })
+
   it('does not show a submit control for an approved month', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],

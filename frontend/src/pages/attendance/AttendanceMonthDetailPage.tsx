@@ -81,7 +81,11 @@ export function AttendanceMonthDetailPage() {
 
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
-  const canSubmit = month?.status === 'not_submitted' || month?.status === 'returned'
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
+  // attendance_monthsの行は初回提出時に初めて作られるため、month === null は「未提出」を意味する。
+  const canSubmit =
+    yearMonth <= currentYearMonth &&
+    (month === null || month === undefined || month.status === 'not_submitted' || month.status === 'returned')
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
