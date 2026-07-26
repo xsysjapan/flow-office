@@ -11,6 +11,8 @@ use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\LocalAzureProvider;
 use App\Domain\User\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
+use App\Models\ExpenseClaim;
+use App\Models\ExpenseItem;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -57,9 +59,13 @@ class AppServiceProvider extends ServiceProvider
         }
 
         // attachments.owner_type / backoffice_tasks.source_type にDBへ安定な短い別名を保存する。
+        // ExpenseClaim/ExpenseItemはdocs/30-usecases-expense.mdの指定に合わせてPascalCaseの
+        // エイリアスを使う(他ドメインとの命名規則の不統一は許容する)。
         Relation::morphMap([
             'workflow_request' => WorkflowRequest::class,
             'attendance_day' => AttendanceDay::class,
+            'ExpenseClaim' => ExpenseClaim::class,
+            'ExpenseItem' => ExpenseItem::class,
         ]);
 
         // 単体リソースを "data" キーで包まない(ページネーション付きコレクションは

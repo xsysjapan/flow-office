@@ -39,7 +39,7 @@ describe('ExpenseClaimListPage', () => {
       submitted_at: '2026-07-01T00:00:00+09:00',
       approved_at: '2026-07-02T00:00:00+09:00',
       items: [
-        { id: 'item-1', category_id: 1, usage_date: '2026-06-05', origin: null, destination: null, transport_type: '電車', amount: 800, destination_name: null, purpose: '来客対応', project_id: null, evidence_type: 'ic_card', fact_reference_type: null, fact_reference_id: null, commuting_deduction_amount: null },
+        { id: 'item-1', category_id: 1, usage_date: '2026-06-05', origin: null, destination: null, transport_type: '電車', amount: 800, destination_name: null, purpose: '来客対応', project_id: null, evidence_type: 'receipt_required', fact_reference_type: null, fact_reference_id: null, commuting_deduction_amount: null },
       ],
     }
     vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue([claim])

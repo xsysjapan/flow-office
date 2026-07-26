@@ -108,12 +108,30 @@ use App\Domain\Device\Handlers\RevokeDeviceHandler;
 use App\Domain\Device\Handlers\UpdateDeviceRolesHandler;
 use App\Domain\Device\Handlers\UpdateDeviceSettingsHandler;
 use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
+use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromExpenseClaimApproval;
+use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
 use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSession;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSessionBootstrap;
 use App\Domain\DeviceAdminSession\Handlers\EndDeviceAdminSessionHandler;
 use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionBootstrapHandler;
 use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionHandler;
+use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
+use App\Domain\ExpenseClaim\Commands\ApproveExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
+use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
+use App\Domain\ExpenseClaim\Handlers\AddExpenseItemHandler;
+use App\Domain\ExpenseClaim\Handlers\ApproveExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\CancelExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\DraftExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\RemoveExpenseItemHandler;
+use App\Domain\ExpenseClaim\Handlers\ReturnExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\SubmitExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\UpdateExpenseItemHandler;
 use App\Domain\Integration\Commands\RegisterIntegration;
 use App\Domain\Integration\Commands\ReissueIntegrationToken;
 use App\Domain\Integration\Commands\RevokeIntegration;
@@ -241,8 +259,18 @@ return [
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
+        CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,
         AssignBackOfficeTask::class => AssignBackOfficeTaskHandler::class,
         ChangeBackOfficeTaskStatus::class => ChangeBackOfficeTaskStatusHandler::class,
+
+        DraftExpenseClaim::class => DraftExpenseClaimHandler::class,
+        AddExpenseItem::class => AddExpenseItemHandler::class,
+        UpdateExpenseItem::class => UpdateExpenseItemHandler::class,
+        RemoveExpenseItem::class => RemoveExpenseItemHandler::class,
+        SubmitExpenseClaim::class => SubmitExpenseClaimHandler::class,
+        ApproveExpenseClaim::class => ApproveExpenseClaimHandler::class,
+        ReturnExpenseClaim::class => ReturnExpenseClaimHandler::class,
+        CancelExpenseClaim::class => CancelExpenseClaimHandler::class,
 
         ClockIn::class => ClockInHandler::class,
         StartBreak::class => StartBreakHandler::class,

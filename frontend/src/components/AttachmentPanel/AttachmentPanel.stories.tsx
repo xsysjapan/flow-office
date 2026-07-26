@@ -28,6 +28,7 @@ function withSeeded(ownerId: string, attachments: Attachment[] | undefined, requ
 const meta = {
   title: 'Components/AttachmentPanel',
   component: AttachmentPanel,
+  args: { ownerType: 'ExpenseItem', ownerId: 'expense-item-1' },
 } satisfies Meta<typeof AttachmentPanel>
 
 export default meta
