@@ -30,6 +30,33 @@ export function useEditableRows<T extends object>(initialRows: T[] = []) {
     setRows(newRows.map((row) => ({ ...row, rowId: nextIdRef.current++ })))
   }, [])
 
+  /** 指定行の直後に複製を挿入する(表形式一括入力の行複製、docs/30-usecases-expense.md UC-X006)。 */
+  const duplicateRow = useCallback((rowId: number) => {
+    setRows((prev) => {
+      const index = prev.findIndex((row) => row.rowId === rowId)
+      if (index === -1) return prev
+      const copy: EditableRow<T> = { ...prev[index], rowId: nextIdRef.current++ }
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)]
+    })
+  }, [])
+
+  /** 複数行をまとめて末尾に追加する(表形式の複数行貼り付け、docs/30-usecases-expense.md UC-X006)。 */
+  const appendRows = useCallback((newRows: T[]) => {
+    setRows((prev) => [...prev, ...newRows.map((row) => ({ ...row, rowId: nextIdRef.current++ }))])
+  }, [])
+
+  /** 行を1つ上/下に並べ替える(docs/30-usecases-expense.md UC-X006)。 */
+  const moveRow = useCallback((rowId: number, direction: 'up' | 'down') => {
+    setRows((prev) => {
+      const index = prev.findIndex((row) => row.rowId === rowId)
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (index === -1 || targetIndex < 0 || targetIndex >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
+      return next
+    })
+  }, [])
+
   const toData = useCallback(
     (): T[] =>
       rows.map((row) => {
@@ -40,5 +67,5 @@ export function useEditableRows<T extends object>(initialRows: T[] = []) {
     [rows],
   )
 
-  return { rows, addRow, updateRow, removeRow, reset, toData }
+  return { rows, addRow, updateRow, removeRow, reset, toData, duplicateRow, appendRows, moveRow }
 }

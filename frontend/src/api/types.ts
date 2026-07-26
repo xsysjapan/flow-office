@@ -818,6 +818,91 @@ export interface Notification {
   confirmed_at: string | null
 }
 
+/** docs/30-usecases-expense.md UC-X001: 経費区分マスタ。区分ごとの証憑要件・承認省略しきい値は
+ *  すべてマスタ設定で、区分追加のためにコードを変更しない。 */
+export type ExpenseEvidenceType = 'fact_reference_available' | 'receipt_required' | 'receipt_optional'
+
+export interface ExpenseCategory {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  evidence_type_default: ExpenseEvidenceType
+  /** レシート添付が必須となる金額しきい値(円)。未設定(null)なら金額によらずevidence_type_defaultに従う。 */
+  receipt_required_threshold: number | null
+  /** UC-X011 手順5: この金額以下の明細は承認を1段階省略できる。未設定(null)なら省略なし。 */
+  approval_skip_threshold: number | null
+  is_active: boolean
+}
+
+/** UC-X002/X003: 個人(personal)・全社共有(company)は`scope`の違いのみで、テーブル・振る舞いを
+ *  分けない。編集権限は個人用は本人のみ、全社共有は経理・管理者のみ。 */
+export type ExpenseRouteTemplateScope = 'personal' | 'company'
+
+export interface ExpenseRouteTemplate {
+  id: number
+  scope: ExpenseRouteTemplateScope
+  /** personalスコープの所有者。companyスコープはnull。 */
+  employee_id: string | null
+  name: string
+  origin: string
+  destination: string
+  transport_type: string
+  amount: number
+  category_id: number
+  is_active: boolean
+}
+
+export type ExpenseClaimStatus = 'draft' | 'in_review' | 'returned' | 'approved' | 'cancelled'
+
+/** UC-X004/X011: 経費明細が参照する勤怠実績・予定・出張申請の種別。金額計算・確定判定には
+ *  使わず、入力補助・承認時の突合せ表示にのみ使う(docs/30-usecases-expense.md)。 */
+export type ExpenseFactReferenceType = 'attendance_day' | 'schedule' | 'business_trip'
+
+export interface ExpenseItem {
+  id: string
+  claim_id?: string
+  category_id: number
+  category?: Pick<ExpenseCategory, 'id' | 'code' | 'name' | 'evidence_type_default'>
+  usage_date: string
+  origin: string | null
+  destination: string | null
+  transport_type: string | null
+  amount: number
+  destination_name: string | null
+  purpose: string | null
+  project_id: string | null
+  evidence_type: ExpenseEvidenceType
+  fact_reference_type: ExpenseFactReferenceType | null
+  fact_reference_id: string | null
+  /** UC-X009: 定期区間重複の自己申告による控除額。会社負担額はamount - commuting_deduction_amount。 */
+  commuting_deduction_amount: number | null
+  attachments?: Attachment[]
+}
+
+export interface ExpenseClaim {
+  id: string
+  employee_id: string
+  employee?: User
+  period_from: string
+  period_to: string
+  status: ExpenseClaimStatus
+  approver_user_id: string | null
+  approver?: User
+  total_amount: number
+  submitted_at: string | null
+  approved_at: string | null
+  items: ExpenseItem[]
+}
+
+export interface ExpenseClaimHistoryEntry {
+  id: number
+  action: 'drafted' | 'submitted' | 'approved' | 'returned' | 'cancelled'
+  actor_user_id: string | null
+  comment: string | null
+  occurred_at: string
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {

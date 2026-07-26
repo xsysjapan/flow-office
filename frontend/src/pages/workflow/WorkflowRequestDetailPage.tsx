@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
-import { downloadAttachment } from '../../api/attachments'
+import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -9,7 +9,6 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
 import { Separator } from '../../components/ui/separator'
-import { useAttachments, useUploadAttachment } from '../../hooks/useAttachments'
 import {
   useApproveWorkflowRequest,
   useCancelWorkflowRequest,
@@ -22,11 +21,6 @@ import { workflowRequestHistoryActionLabel, workflowRequestStatusLabel } from '.
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  return `${(bytes / 1024).toFixed(1)}KB`
 }
 
 function SectionHeading({ children }: { children: string }) {
@@ -46,10 +40,6 @@ export function WorkflowRequestDetailPage() {
   const approveRequest = useApproveWorkflowRequest()
   const returnRequest = useReturnWorkflowRequest()
   const cancelRequest = useCancelWorkflowRequest()
-
-  const { data: attachments, isLoading: isLoadingAttachments } = useAttachments('workflow_request', requestId)
-  const uploadAttachment = useUploadAttachment()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: history, isLoading: isLoadingHistory } = useWorkflowRequestHistory(requestId)
 
@@ -94,49 +84,7 @@ export function WorkflowRequestDetailPage() {
 
         <div className="flex flex-col gap-2">
           <SectionHeading>添付ファイル</SectionHeading>
-          {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
-          {isLoadingAttachments ? (
-            <LoadingState />
-          ) : (
-            <ul className="flex flex-col" aria-label="添付ファイル">
-              {(attachments ?? []).length === 0 && (
-                <li className="py-1.5 text-sm text-muted-foreground">添付ファイルはありません。</li>
-              )}
-              {attachments?.map((attachment) => (
-                <li
-                  key={attachment.id}
-                  className="flex items-center justify-between gap-3 border-b border-border py-1.5 text-sm last:border-b-0"
-                >
-                  <span className="text-foreground">
-                    {attachment.file_name}({formatFileSize(attachment.file_size)})
-                  </span>
-                  <Button variant="secondary" onClick={() => void downloadAttachment(attachment.id, attachment.file_name)}>
-                    ダウンロード
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex items-center gap-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-sm file:font-medium file:text-foreground"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                uploadAttachment.mutate(
-                  { ownerType: 'workflow_request', ownerId: requestId, file },
-                  {
-                    onSuccess: () => {
-                      if (fileInputRef.current) fileInputRef.current.value = ''
-                    },
-                  },
-                )
-              }}
-            />
-            {uploadAttachment.isPending && <span className="text-sm text-muted-foreground">アップロード中...</span>}
-          </div>
+          <AttachmentPanel ownerType="workflow_request" ownerId={requestId} />
         </div>
 
         <div className="flex flex-col gap-2">
