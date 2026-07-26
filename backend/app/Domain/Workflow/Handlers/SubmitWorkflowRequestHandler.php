@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
+use App\Support\FrontendUrl;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -51,7 +52,7 @@ class SubmitWorkflowRequestHandler implements CommandHandler
                 recipient: $approver,
                 title: '承認依頼',
                 summary: "「{$workflowRequest->title}」の承認依頼が届いています。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path("/requests/{$workflowRequest->id}"),
             );
         }
 

@@ -73,6 +73,10 @@ class SpecialLeaveRequestTest extends TestCase
         $requestResponse->assertJsonPath('status', 'submitted');
         $requestId = $requestResponse->json('id');
 
+        // 承認依頼の通知には、特別休暇申請の承認待ち一覧へのリンクが付く。
+        $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith('/special-leave/to-approve', $approverNotifications[0]['detail_url']);
+
         $approveResponse = $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve");
         $approveResponse->assertOk();
         $approveResponse->assertJsonPath('status', 'approved');
@@ -303,6 +307,10 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
         $response->assertOk();
         $response->assertJsonPath('status', 'returned');
+
+        // 差戻し通知には、特別休暇申請の履歴画面へのリンクが付く。
+        $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith('/special-leave/history', $employeeNotifications[0]['detail_url']);
     }
 
     public function test_employee_can_cancel_their_own_submitted_request(): void

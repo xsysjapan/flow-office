@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
+use App\Support\FrontendUrl;
 
 /**
  * @implements CommandHandler<ApproveWorkflowRequest>
@@ -43,7 +44,7 @@ class ApproveWorkflowRequestHandler implements CommandHandler
                 recipient: $applicant,
                 title: '承認完了',
                 summary: "「{$workflowRequest->title}」が承認されました。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path("/requests/{$workflowRequest->id}"),
             );
         }
 

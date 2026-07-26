@@ -16,6 +16,7 @@ use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Str;
 
 /**
@@ -92,7 +93,7 @@ class RequestPaidLeaveHandler implements CommandHandler
                 recipient: $approver,
                 title: '有給申請の承認依頼',
                 summary: "{$command->targetDate} の有給申請が提出されました。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/paid-leave/to-approve'),
             );
         }
 

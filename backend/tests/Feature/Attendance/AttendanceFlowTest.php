@@ -192,6 +192,10 @@ class AttendanceFlowTest extends TestCase
         $submit->assertSuccessful()->assertJsonPath('status', 'submitted');
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
 
+        // 承認依頼の通知には、承認待ち一覧へのリンクが付く。
+        $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith('/attendance/months/to-approve', $approverNotifications[0]['detail_url']);
+
         $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', true);
         $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
             'reason' => '提出済み後の編集テスト(拒否されるべき)',
@@ -199,6 +203,10 @@ class AttendanceFlowTest extends TestCase
 
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")
             ->assertOk()->assertJsonPath('status', 'approved');
+
+        // 承認完了の通知には、当該月の月次勤怠画面へのリンクが付く。
+        $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith("/attendance/months/{$yearMonth}", $employeeNotifications[0]['detail_url']);
 
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")

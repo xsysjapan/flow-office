@@ -17,6 +17,7 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Str;
 
 /**
@@ -86,7 +87,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
                 recipient: $approver,
                 title: '特別休暇申請の承認依頼',
                 summary: "{$command->targetDate} の{$specialLeaveType->name}の申請が提出されました。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/special-leave/to-approve'),
             );
         }
 

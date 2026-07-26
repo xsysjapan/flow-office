@@ -14,6 +14,7 @@ use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Str;
 
 /**
@@ -60,7 +61,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
                 recipient: $approver,
                 title: '月次勤怠の承認依頼',
                 summary: "{$command->yearMonth} の月次勤怠が提出されました。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/attendance/months/to-approve'),
             );
         }
 

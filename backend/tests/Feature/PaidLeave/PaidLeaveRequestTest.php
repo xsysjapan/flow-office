@@ -63,6 +63,10 @@ class PaidLeaveRequestTest extends TestCase
         $requestResponse->assertJsonPath('requested_days', 1);
         $requestId = $requestResponse->json('id');
 
+        // 承認依頼の通知には、有給申請の承認待ち一覧へのリンクが付く。
+        $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith('/paid-leave/to-approve', $approverNotifications[0]['detail_url']);
+
         $approveResponse = $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve");
         $approveResponse->assertOk();
         $approveResponse->assertJsonPath('status', 'approved');
@@ -226,6 +230,10 @@ class PaidLeaveRequestTest extends TestCase
         ]);
         $response->assertOk();
         $response->assertJsonPath('status', 'returned');
+
+        // 差戻し通知には、有給申請の履歴画面へのリンクが付く。
+        $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith('/paid-leave/history', $employeeNotifications[0]['detail_url']);
     }
 
     public function test_employee_can_cancel_their_own_submitted_request(): void
