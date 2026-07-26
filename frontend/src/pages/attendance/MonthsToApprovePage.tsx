@@ -15,6 +15,7 @@ import type { AttendanceMonthStatus } from '../../api/types'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../../hooks/useAttendance'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
 import { hasAnyRole, ROLE } from '../../utils/roles'
+import { datesInMonth } from '../../utils/weekDates'
 import { DailyReferenceView, MonthlyReferenceView } from './AttendanceReferencePage'
 
 const STATUS_FILTER_OPTIONS: Array<{ value: AttendanceMonthStatus | ''; label: string }> = [
@@ -27,18 +28,26 @@ const STATUS_FILTER_OPTIONS: Array<{ value: AttendanceMonthStatus | ''; label: s
  * 承認者が対象社員の実際の勤務表(月次・打刻ログ)を確認するための展開領域。
  * レビュー対象はこの申請の年月のみのため、他の月には遷移できないようにする
  * (MonthlyReferenceViewの前月・次月ナビは表示しない)。日別の行を選ぶとその日の
- * 詳細に遷移し、「月次に戻る」で一覧に戻る(オブジェクト指向UI)。
+ * 詳細に遷移し、そこでも前日・翌日への移動は対象月の範囲内に限定する
+ * (DailyReferenceViewのdateRange)。「月次に戻る」で一覧にも戻れる(オブジェクト指向UI)。
  * 行ごとに独立させるため、呼び出し側で`key`に対象月のidを渡してリセットさせる想定。
  */
 function MonthAttendanceReview({ userId, yearMonth }: { userId: string; yearMonth: string }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const dates = datesInMonth(yearMonth)
+  const dateRange = { min: dates[0], max: dates[dates.length - 1] }
 
   return (
     <div className="mt-3 rounded-md border border-border p-3">
       {selectedDate === null ? (
         <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={setSelectedDate} />
       ) : (
-        <DailyReferenceView userId={userId} initialDate={selectedDate} restrictNavigation onBack={() => setSelectedDate(null)} />
+        <DailyReferenceView
+          userId={userId}
+          initialDate={selectedDate}
+          dateRange={dateRange}
+          onBack={() => setSelectedDate(null)}
+        />
       )}
     </div>
   )

@@ -283,13 +283,14 @@ function ReadOnlyPunchLogCard({ date, userId }: { date: string; userId: string }
 export function DailyReferenceView({
   userId,
   initialDate,
-  restrictNavigation = false,
+  dateRange,
   onBack,
 }: {
   userId: string
   initialDate?: string
-  /** trueの場合、前日・今日・翌日への移動を隠す(承認レビューで対象日を固定する用途)。 */
-  restrictNavigation?: boolean
+  /** 指定すると、前日・翌日への移動をこの範囲内(両端含む)に限定する(承認レビューで
+   *  対象月の範囲外に遷移できないようにする用途)。 */
+  dateRange?: { min: string; max: string }
   /** 指定すると、ナビゲーションに戻るボタンを表示する(月次一覧へ戻る等)。 */
   onBack?: () => void
 }) {
@@ -306,26 +307,39 @@ export function DailyReferenceView({
       title="日次勤怠"
       actions={statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
       navigation={
-        restrictNavigation ? (
-          onBack && (
+        <div className="flex gap-2">
+          {onBack && (
             <Button variant="secondary" onClick={onBack}>
               <ChevronLeft aria-hidden="true" />
               月次に戻る
             </Button>
-          )
-        ) : (
-          <div className="flex gap-2">
-            <Button variant="secondary" size="icon" title="前日" aria-label="前日" onClick={() => setDate((prev) => addDays(prev, -1))}>
-              <ChevronLeft aria-hidden="true" />
-            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="icon"
+            title="前日"
+            aria-label="前日"
+            disabled={dateRange !== undefined && date <= dateRange.min}
+            onClick={() => setDate((prev) => addDays(prev, -1))}
+          >
+            <ChevronLeft aria-hidden="true" />
+          </Button>
+          {dateRange === undefined && (
             <Button variant="secondary" disabled={date === today} onClick={() => setDate(today)}>
               今日
             </Button>
-            <Button variant="secondary" size="icon" title="翌日" aria-label="翌日" onClick={() => setDate((prev) => addDays(prev, 1))}>
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-        )
+          )}
+          <Button
+            variant="secondary"
+            size="icon"
+            title="翌日"
+            aria-label="翌日"
+            disabled={dateRange !== undefined && date >= dateRange.max}
+            onClick={() => setDate((prev) => addDays(prev, 1))}
+          >
+            <ChevronRight aria-hidden="true" />
+          </Button>
+        </div>
       }
     >
       <p className="mb-3 text-sm text-muted-foreground">

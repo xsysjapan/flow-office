@@ -71,6 +71,23 @@ function paginated(data: AttendanceMonth[], overrides: Partial<Paginated<Attenda
   }
 }
 
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -250,27 +267,11 @@ describe('MonthsToApprovePage', () => {
 
   it('expands the actual attendance record for the target employee, defaulting to the monthly view', async () => {
     vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue(paginated([{ ...submittedMonth, user: targetEmployeeUser }]))
-    const zeroTotals: AttendanceMonthlyCalculationTotals = {
-      work_minutes: 0,
-      payroll_work_minutes: 0,
-      prescribed_work_minutes: 0,
-      statutory_within_overtime_minutes: 0,
-      statutory_excess_overtime_minutes: 0,
-      statutory_excess_overtime_within_60h_minutes: 0,
-      statutory_excess_overtime_over_60h_minutes: 0,
-      late_night_work_minutes: 0,
-      late_night_prescribed_work_minutes: 0,
-      late_night_statutory_within_overtime_minutes: 0,
-      late_night_statutory_excess_overtime_minutes: 0,
-      legal_holiday_work_minutes: 0,
-      prescribed_holiday_work_minutes: 0,
-      late_night_legal_holiday_work_minutes: 0,
-    }
     const fetchMonthSpy = vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: { ...submittedMonth, user: targetEmployeeUser },
       flex_settlement_summary: null,
-      monthly_calculation_totals: zeroTotals,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
     renderPage()
@@ -285,27 +286,11 @@ describe('MonthsToApprovePage', () => {
 
   it('restricts the expanded review to the request month and drills into a selected day', async () => {
     vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue(paginated([{ ...submittedMonth, user: targetEmployeeUser }]))
-    const zeroTotals: AttendanceMonthlyCalculationTotals = {
-      work_minutes: 0,
-      payroll_work_minutes: 0,
-      prescribed_work_minutes: 0,
-      statutory_within_overtime_minutes: 0,
-      statutory_excess_overtime_minutes: 0,
-      statutory_excess_overtime_within_60h_minutes: 0,
-      statutory_excess_overtime_over_60h_minutes: 0,
-      late_night_work_minutes: 0,
-      late_night_prescribed_work_minutes: 0,
-      late_night_statutory_within_overtime_minutes: 0,
-      late_night_statutory_excess_overtime_minutes: 0,
-      legal_holiday_work_minutes: 0,
-      prescribed_holiday_work_minutes: 0,
-      late_night_legal_holiday_work_minutes: 0,
-    }
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: { ...submittedMonth, user: targetEmployeeUser },
       flex_settlement_summary: null,
-      monthly_calculation_totals: zeroTotals,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
     vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
@@ -323,10 +308,36 @@ describe('MonthsToApprovePage', () => {
     await userEvent.click(screen.getByText('2026-07-01(水)'))
 
     expect(await screen.findByRole('heading', { name: '日次勤怠' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '前日' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '翌日' })).not.toBeInTheDocument()
+    expect(screen.getByText('2026-07-01(水)')).toBeInTheDocument()
+
+    // 対象月の初日のため、前日への移動は範囲外になり非活性になる。翌日へは移動できる。
+    expect(screen.getByRole('button', { name: '前日' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '翌日' })).not.toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: '翌日' }))
+    expect(await screen.findByText('2026-07-02(木)')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /月次に戻る/ }))
     expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
+  })
+
+  it('disables the next-day button at the last day of the request month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue(paginated([{ ...submittedMonth, user: targetEmployeeUser }]))
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...submittedMonth, user: targetEmployeeUser },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: '実際の勤務表を確認' }))
+    await userEvent.click(await screen.findByText('2026-07-31(金)'))
+
+    expect(await screen.findByText('2026-07-31(金)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '前日' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: '翌日' })).toBeDisabled()
   })
 })
