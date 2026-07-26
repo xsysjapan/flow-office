@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adjustAttendanceDailyCalculation,
   approveMonth,
@@ -30,6 +30,7 @@ import {
   type CreateAttendancePunchInput,
   type DeleteAttendanceDayInput,
   type EditAttendanceDayInput,
+  type FetchMonthsToApproveOptions,
   type GenerateAttendancePatternInput,
   type PreviewAttendancePatternInput,
 } from '../api/attendance'
@@ -166,9 +167,9 @@ export function useDeleteAttendanceDay() {
 
 const PUNCHES_KEY = ['attendance', 'punches']
 
-export function usePunches(params: { from?: string; to?: string }) {
+export function usePunches(params: { from?: string; to?: string; userId?: string }) {
   return useQuery({
-    queryKey: [...PUNCHES_KEY, params.from, params.to],
+    queryKey: [...PUNCHES_KEY, params.from, params.to, params.userId],
     queryFn: () => fetchPunches(params),
     enabled: Boolean(params.from && params.to),
   })
@@ -238,8 +239,12 @@ export function useMyMonths() {
   return useQuery({ queryKey: MY_MONTHS_KEY, queryFn: fetchMyMonths })
 }
 
-export function useMonthsToApprove() {
-  return useQuery({ queryKey: MONTHS_TO_APPROVE_KEY, queryFn: fetchMonthsToApprove })
+export function useMonthsToApprove(options: FetchMonthsToApproveOptions = {}) {
+  return useQuery({
+    queryKey: [...MONTHS_TO_APPROVE_KEY, options.status ?? '', options.yearMonth ?? '', options.userId ?? '', options.page ?? 1],
+    queryFn: () => fetchMonthsToApprove(options),
+    placeholderData: keepPreviousData,
+  })
 }
 
 /** 管理者が対象社員を選んで月次勤怠一覧(月の選択画面)を確認する。userId未確定の間は取得しない。 */

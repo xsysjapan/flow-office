@@ -17,6 +17,7 @@ class AttendanceMonthResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'user' => new UserResource($this->whenLoaded('user')),
             'year_month' => $this->year_month,
             'status' => $this->status,
             'approver' => new UserResource($this->whenLoaded('approver')),

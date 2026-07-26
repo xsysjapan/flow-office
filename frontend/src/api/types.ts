@@ -312,6 +312,7 @@ export interface LegalHolidayWarning {
 export interface AttendanceMonth {
   id: string
   user_id: string
+  user?: User
   year_month: string
   status: AttendanceMonthStatus
   approver?: User

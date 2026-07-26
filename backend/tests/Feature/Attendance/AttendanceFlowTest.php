@@ -257,17 +257,17 @@ class AttendanceFlowTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
 
         // 提出直後: 承認者には見えるが、承認者ではないadminにはまだ見えない。
-        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(1);
-        $this->actingAs($admin)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0);
+        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(1, 'data');
+        $this->actingAs($admin)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0, 'data');
 
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
 
         // 承認後: 承認者(admin・hr_staffではない)の一覧からは消えるが、adminには
         // 自分が承認者かどうかに関わらず締め処理待ちとして表示される。
-        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0);
+        $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertJsonCount(0, 'data');
         $this->actingAs($admin)->getJson('/api/attendance/months/to-approve')
-            ->assertJsonCount(1)
-            ->assertJsonPath('0.status', 'approved');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', 'approved');
     }
 
     /**
@@ -299,6 +299,54 @@ class AttendanceFlowTest extends TestCase
         $monthResponse = $this->actingAs($admin)->getJson("/api/attendance/months/{$today->format('Y-m')}?user_id={$other->id}");
         $monthResponse->assertSuccessful();
         $this->assertSame($other->id, $monthResponse->json('days.0.user_id'));
+    }
+
+    /**
+     * UC-A009: 承認者は都度指定され、adminとは限らない(CLAUDE.md「承認者は都度指定」)。
+     * 承認者に指定された月次については、月次・週次・日次・打刻ログを参照できる(承認前に
+     * 実際の勤務表・打刻を確認できるようにするため)。ただし閲覧のみで、編集はできない。
+     */
+    public function test_approver_can_view_but_not_edit_the_assigned_months_attendance(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $unrelated = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $yearMonth = $today->format('Y-m');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+
+        // 承認者は月次・週次・日次・打刻ログを閲覧できる。
+        $this->actingAs($approver)->getJson("/api/attendance/months/{$yearMonth}?user_id={$employee->id}")
+            ->assertSuccessful()
+            ->assertJsonPath('month.user_id', $employee->id);
+
+        $this->actingAs($approver)->getJson("/api/attendance/week?start_date={$today->toDateString()}&user_id={$employee->id}")
+            ->assertSuccessful();
+
+        $this->actingAs($approver)->getJson("/api/attendance/days/{$dayId}")
+            ->assertSuccessful();
+
+        $this->actingAs($approver)->getJson("/api/attendance-punches?user_id={$employee->id}&from={$yearMonth}-01&to={$yearMonth}-28")
+            ->assertSuccessful();
+
+        // 期間を指定しない打刻ログ参照は、承認者であっても許可しない(無制限の閲覧範囲になるため)。
+        $this->actingAs($approver)->getJson("/api/attendance-punches?user_id={$employee->id}")
+            ->assertForbidden();
+
+        // 承認者であっても編集はできない。
+        $this->actingAs($approver)->putJson("/api/attendance/days/{$dayId}", ['reason' => '承認者による編集テスト'])
+            ->assertForbidden();
+
+        // 承認者に指定されていない社員は、閲覧もできない。
+        $this->actingAs($unrelated)->getJson("/api/attendance/months/{$yearMonth}?user_id={$employee->id}")
+            ->assertForbidden();
     }
 
     /**

@@ -5,8 +5,10 @@ import type {
   AttendanceDayDefaults,
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
+  AttendanceMonthStatus,
   AttendancePunch,
   FlexSettlementSummary,
+  Paginated,
   WorkLocationType,
 } from './types'
 
@@ -170,9 +172,12 @@ export function deleteAttendanceDay(id: string, input: DeleteAttendanceDayInput)
   return apiFetch(`/attendance/days/${id}`, { method: 'DELETE', body: input })
 }
 
-/** UC-A012: 指定した勤務日範囲の打刻ログ(訂正済み・削除済みも含む)を取得する。 */
-export function fetchPunches(params: { from?: string; to?: string } = {}): Promise<AttendancePunch[]> {
-  return apiFetch('/attendance-punches', { query: params })
+/** UC-A012: 指定した勤務日範囲の打刻ログ(訂正済み・削除済みも含む)を取得する。
+ *  userIdを指定すると自分以外の社員の打刻ログを参照できる(admin、またはfrom/toの期間の
+ *  年月の承認者)。 */
+export function fetchPunches(params: { from?: string; to?: string; userId?: string } = {}): Promise<AttendancePunch[]> {
+  const { userId, ...rest } = params
+  return apiFetch('/attendance-punches', { query: { ...rest, user_id: userId } })
 }
 
 export interface CreateAttendancePunchInput {
@@ -229,8 +234,21 @@ export function fetchMonthsForUser(userId: string): Promise<AttendanceMonth[]> {
   return apiFetch(`/attendance/months/user/${userId}`)
 }
 
-export function fetchMonthsToApprove(): Promise<AttendanceMonth[]> {
-  return apiFetch('/attendance/months/to-approve')
+export interface FetchMonthsToApproveOptions {
+  status?: AttendanceMonthStatus
+  yearMonth?: string
+  userId?: string
+  page?: number
+  perPage?: number
+}
+
+/** UC-A009/UC-A010: 承認待ちの月次勤怠一覧。ステータス・年月・対象社員での絞り込みと
+ *  ページングに対応する。 */
+export function fetchMonthsToApprove(options: FetchMonthsToApproveOptions = {}): Promise<Paginated<AttendanceMonth>> {
+  const { status, yearMonth, userId, page, perPage } = options
+  return apiFetch('/attendance/months/to-approve', {
+    query: { status, year_month: yearMonth, user_id: userId, page, per_page: perPage },
+  })
 }
 
 export function approveMonth(id: string): Promise<AttendanceMonth> {

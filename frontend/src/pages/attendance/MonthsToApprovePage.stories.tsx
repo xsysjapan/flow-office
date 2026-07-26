@@ -54,7 +54,11 @@ const months: AttendanceMonth[] = [
 
 function withSeeded(data: AttendanceMonth[], viewer: User) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['attendance', 'months', 'to-approve'], data)
+  queryClient.setQueryData(['attendance', 'months', 'to-approve', '', '', '', 1], {
+    data,
+    meta: { current_page: 1, last_page: 1, total: data.length },
+    links: { next: null, prev: null },
+  })
 
   const authValue: AuthContextValue = {
     user: viewer,

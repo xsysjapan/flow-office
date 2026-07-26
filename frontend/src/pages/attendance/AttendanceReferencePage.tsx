@@ -10,14 +10,20 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { AttendanceDay } from '../../api/types'
-import { useAttendanceMonth, useWeek } from '../../hooks/useAttendance'
+import { useAttendanceMonth, usePunches, useWeek } from '../../hooks/useAttendance'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
-import { isoToTimeLiteral } from '../../utils/offsetDateTime'
-import { attendanceDayStatusLabel, attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
+import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
+import {
+  attendanceDayStatusLabel,
+  attendanceMonthStatusLabel,
+  legalHolidayWarningLabel,
+  punchStatusLabel,
+  punchTypeLabel,
+} from '../../utils/statusLabels'
 import { addDays, addMonths, datesInMonth, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
 
-type ViewMode = 'month' | 'week' | 'day'
+export type ViewMode = 'month' | 'week' | 'day'
 
 const VIEW_MODES: Array<{ key: ViewMode; label: string }> = [
   { key: 'month', label: '月次' },
@@ -67,8 +73,8 @@ function ReadOnlyDayRow({ date, day }: { date: string; day: AttendanceDay | unde
   )
 }
 
-function MonthlyReferenceView({ userId }: { userId: string }) {
-  const [yearMonth, setYearMonth] = useState(() => formatDate(new Date()).slice(0, 7))
+export function MonthlyReferenceView({ userId, initialYearMonth }: { userId: string; initialYearMonth?: string }) {
+  const [yearMonth, setYearMonth] = useState(() => initialYearMonth ?? formatDate(new Date()).slice(0, 7))
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
 
@@ -142,7 +148,7 @@ function MonthlyReferenceView({ userId }: { userId: string }) {
   )
 }
 
-function WeeklyReferenceView({ userId }: { userId: string }) {
+export function WeeklyReferenceView({ userId }: { userId: string }) {
   const [weekStart, setWeekStart] = useState(() => formatDate(mondayOf(new Date())))
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const { data, isLoading, error } = useWeek(weekStart, userId)
@@ -202,7 +208,36 @@ function WeeklyReferenceView({ userId }: { userId: string }) {
   )
 }
 
-function DailyReferenceView({ userId }: { userId: string }) {
+/** 参照専用の打刻ログ(訂正・削除等の操作は行わない。承認前の勤務実態確認用)。 */
+function ReadOnlyPunchLogCard({ date, userId }: { date: string; userId: string }) {
+  const { data: punches, isLoading } = usePunches({ from: date, to: date, userId })
+  const activePunches = punches?.filter((punch) => punch.status === 'active')
+
+  return (
+    <Card title="打刻ログ">
+      {isLoading ? (
+        <LoadingState />
+      ) : !activePunches || activePunches.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この日の打刻ログはありません。</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {activePunches.map((punch) => {
+            const { label, tone } = punchStatusLabel(punch.status)
+            return (
+              <li key={punch.id} className="flex flex-wrap items-center gap-2 py-1.5 text-xs">
+                <span className="font-medium text-foreground">{punchTypeLabel(punch.punch_type)}</span>
+                <span className="text-muted-foreground">{isoToLocalDatetimeLiteral(punch.punched_at).replace('T', ' ')}</span>
+                <Badge tone={tone}>{label}</Badge>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+export function DailyReferenceView({ userId }: { userId: string }) {
   const [date, setDate] = useState(() => formatDate(new Date()))
   const today = formatDate(new Date())
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
@@ -211,6 +246,7 @@ function DailyReferenceView({ userId }: { userId: string }) {
   const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
 
   return (
+    <>
     <Card
       title="日次勤怠"
       actions={statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
@@ -302,7 +338,9 @@ function DailyReferenceView({ userId }: { userId: string }) {
           )}
         </div>
       )}
-    </Card>
+      </Card>
+      <ReadOnlyPunchLogCard date={date} userId={userId} />
+    </>
   )
 }
 
