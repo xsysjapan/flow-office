@@ -171,6 +171,34 @@ describe('DatePicker', () => {
     )
   })
 
+  it('switches to the year-month picker when the caption is clicked, then jumps to the chosen month', async () => {
+    render(<DatePicker value="2026-08-15" onChange={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
+
+    await userEvent.click(screen.getByText('2026年8月'))
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+    expect(screen.getByRole('listbox', { name: '2026年の月' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '前年へ' }))
+    await userEvent.click(screen.getByRole('option', { name: '2025年3月' }))
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(await screen.findByText('2025年3月')).toBeInTheDocument()
+  })
+
+  it('returns to the day view via 日付選択に戻る without changing the value', async () => {
+    const onChange = vi.fn()
+    render(<DatePicker value="2026-08-15" onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: '2026-08-15' }))
+    await userEvent.click(screen.getByText('2026年8月'))
+
+    await userEvent.click(screen.getByRole('button', { name: '日付選択に戻る' }))
+
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+    expect(screen.getByText('2026年8月')).toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('hides relative-date shortcuts that fall outside min/max', async () => {
     const today = formatDate(new Date())
     render(<DatePicker value={undefined} onChange={vi.fn()} min={today} max={today} />)
