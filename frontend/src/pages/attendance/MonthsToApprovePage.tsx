@@ -38,7 +38,7 @@ function MonthAttendanceReview({ userId, yearMonth }: { userId: string; yearMont
   const dateRange = { min: dates[0], max: dates[dates.length - 1] }
 
   return (
-    <div className="mt-3 rounded-md border border-border p-3">
+    <div className="mt-3 flex flex-col gap-6 rounded-md border border-border p-3">
       {selectedDate === null ? (
         <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={setSelectedDate} />
       ) : (
