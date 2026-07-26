@@ -12,7 +12,7 @@ use Tests\TestCase;
 /**
  * 出勤日(attendance_days)の新規作成。打刻(attendance_punches)とは勤務日が同じという
  * だけの緩い関係しかなく、打刻の有無にかかわらず作成・削除できる。その月が編集不可
- * (承認済み・締め済み)になるまでは、いつでも作成・削除できる(AttendanceEditGuard参照)。
+ * (提出済み・承認済み・締め済み)になるまでは、いつでも作成・削除できる(AttendanceEditGuard参照)。
  */
 class CreateAttendanceDayTest extends TestCase
 {
@@ -84,6 +84,40 @@ class CreateAttendanceDayTest extends TestCase
             'work_date' => '2026-06-15',
             'reason' => '承認済み月への出勤日追加(拒否されるべき)',
         ])->assertStatus(422);
+    }
+
+    public function test_creating_a_day_once_the_month_is_submitted_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id, 'year_month' => '2026-06', 'status' => 'submitted',
+            'approver_user_id' => $approver->id,
+        ]);
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-15',
+            'reason' => '提出済み月への出勤日追加(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_creating_a_day_for_a_returned_month_is_allowed(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        AttendanceMonth::query()->create([
+            'user_id' => $employee->id, 'year_month' => '2026-06', 'status' => 'returned',
+            'approver_user_id' => $approver->id,
+        ]);
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-15',
+            'reason' => '差戻し後の再編集',
+        ])->assertCreated();
     }
 
     public function test_creating_another_users_day_requires_admin_role(): void

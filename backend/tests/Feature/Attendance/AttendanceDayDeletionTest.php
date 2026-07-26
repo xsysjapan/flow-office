@@ -166,8 +166,10 @@ class AttendanceDayDeletionTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
 
+        // is_locked は締め(locked_at)だけでなく、月次が提出済み以降であることも反映する
+        // (AttendanceEditGuardと同じ判定。AttendanceDayResource参照)。
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
-        $dayResponse->assertJsonPath('is_locked', false); // 締めはまだ行われていない
+        $dayResponse->assertJsonPath('is_locked', true);
 
         $this->actingAs($employee)->deleteJson("/api/attendance/days/{$dayId}", ['reason' => '承認後の削除テスト'])
             ->assertStatus(422);

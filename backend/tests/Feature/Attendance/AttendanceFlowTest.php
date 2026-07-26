@@ -192,6 +192,11 @@ class AttendanceFlowTest extends TestCase
         $submit->assertSuccessful()->assertJsonPath('status', 'submitted');
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
 
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', true);
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'reason' => '提出済み後の編集テスト(拒否されるべき)',
+        ])->assertStatus(422);
+
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")
             ->assertOk()->assertJsonPath('status', 'approved');
 
@@ -206,6 +211,27 @@ class AttendanceFlowTest extends TestCase
             'reason' => '締め後の編集テスト',
         ]);
         $editAfterClose->assertStatus(422);
+    }
+
+    /**
+     * UC-A008: 出勤中・休憩中のまま退勤していない日(打刻漏れ・退勤忘れ)が対象月にある間は
+     * 提出できない。
+     */
+    public function test_submitting_a_month_with_an_unfinished_day_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in');
+
+        $yearMonth = $today->format('Y-m');
+        $submit = $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ]);
+
+        $submit->assertStatus(422);
+        $this->assertNull(AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first());
     }
 
     /**

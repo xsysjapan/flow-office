@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
@@ -19,11 +20,12 @@ class AttendanceDayResource extends JsonResource
         // 海外出張などで勤務日ごとに現地時刻が変わるため、社員本人の既定タイムゾーンでは
         // なくこのオフセットを使う (docs/03-architecture.md 3.4)。
         $utcOffsetMinutes = $this->utc_offset_minutes;
+        $workDate = $this->work_date?->toDateString();
 
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'work_date' => $this->work_date?->toDateString(),
+            'work_date' => $workDate,
             'status' => $this->status,
             'source' => $this->source,
             'actual_start_at' => LocalDateTime::formatWithOffsetMinutes($this->actual_start_at, $utcOffsetMinutes),
@@ -32,7 +34,11 @@ class AttendanceDayResource extends JsonResource
             'work_type' => $this->work_type,
             'work_location_type' => $this->work_location_type,
             'note' => $this->note,
-            'is_locked' => $this->isLocked(),
+            // 締め(locked_at)だけでなく、月次が提出済み以降のロックも合わせて反映する
+            // (AttendanceEditGuard参照。previewAttendancePatternと同じ判定)。
+            'is_locked' => $workDate === null
+                ? $this->isLocked()
+                : ! app(AttendanceEditGuard::class)->isMutable($this->resource, $this->user_id, $workDate),
             // today()でその日の勤務予定を一時的に載せている場合のみ含める(UC-A001 手順2)。
             'planned_start_at' => $this->planned_start_at,
             'planned_end_at' => $this->planned_end_at,
