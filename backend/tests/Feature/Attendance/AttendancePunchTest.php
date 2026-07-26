@@ -5,7 +5,10 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\WorkCalendar;
+use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -41,6 +44,44 @@ class AttendancePunchTest extends TestCase
         $this->assertSame('clocked_out', $day->status);
         $this->assertSame(1, $day->breaks()->count());
         $this->assertNotNull($day->calculation);
+        $this->assertSame(480, $day->calculation->work_minutes);
+    }
+
+    public function test_completed_punches_are_rounded_to_the_work_styles_rounding_unit_on_sync(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'rounding_unit_minutes' => 30,
+            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        // 30分単位への四捨五入: 08:53→09:00, 12:02→12:00, 12:58→13:00, 18:12→18:00。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:53:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T12:02:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_end', "{$workDate}T12:58:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T18:12:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+
+        $this->assertNotNull($day);
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
+
+        $break = $day->breaks()->first();
+        $this->assertSame('2026-07-09T12:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T13:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_end_at, $day->utc_offset_minutes));
+
+        // 丸め後の実働時間: 09:00〜18:00から休憩60分を引いた480分。
         $this->assertSame(480, $day->calculation->work_minutes);
     }
 
