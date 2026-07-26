@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -191,11 +191,10 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 
-    expect(await screen.findByRole('button', { name: '提出する' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: '提出する' })).toBeInTheDocument()
   })
 
   it('shows a submit control for an in-progress month with no attendance_months record yet', async () => {
@@ -205,11 +204,10 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 
-    expect(await screen.findByRole('button', { name: '提出する' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: '提出する' })).toBeInTheDocument()
   })
 
   it('disables the bulk-entry button once the month is submitted', async () => {
@@ -268,7 +266,7 @@ describe('AttendanceMonthDetailPage', () => {
     expect(screen.queryByRole('button', { name: '提出する' })).not.toBeInTheDocument()
   })
 
-  it('submits the month with the picked approver', async () => {
+  it('opens a modal to pick the approver, mentions that submitting locks editing, and submits', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: notSubmittedMonth,
@@ -280,14 +278,33 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
-    await screen.findByRole('button', { name: '提出する' })
-    const approverCombobox = screen.getAllByRole('combobox').find((el) => el.id === 'approver')!
-    await userEvent.click(approverCombobox)
+    await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/編集できなくなります/)).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('combobox'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
-    await userEvent.click(screen.getByRole('button', { name: '提出する' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: '提出する' }))
 
     await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith(yearMonth, 'approver-1'))
+  })
+
+  it('disables the confirm button in the submit modal until an approver is picked', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByRole('button', { name: '提出する' })).toBeDisabled()
   })
 
   it('shows legal holiday warning badges', async () => {
