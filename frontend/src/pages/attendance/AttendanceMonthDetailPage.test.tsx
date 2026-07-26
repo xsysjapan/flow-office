@@ -73,6 +73,7 @@ const notSubmittedMonth: AttendanceMonth = {
   submitted_at: null,
   approved_at: null,
   returned_at: null,
+  return_comment: null,
   closed_at: null,
   snapshot: null,
   legal_holiday_warnings: [],
@@ -277,6 +278,35 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText(/法定休日不足/)).toBeInTheDocument()
+  })
+
+  it('shows the return comment for a returned month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...notSubmittedMonth, status: 'returned', return_comment: '休憩時間の入力に不備があります' },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    expect(await screen.findByText('差戻し理由: 休憩時間の入力に不備があります')).toBeInTheDocument()
+  })
+
+  it('does not show a return comment notice for a not_submitted month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    await screen.findByText('月次勤怠')
+    expect(screen.queryByText(/差戻し理由/)).not.toBeInTheDocument()
   })
 
   it('shows an error message when the fetch fails', async () => {

@@ -24,6 +24,7 @@ class AttendanceMonthResource extends JsonResource
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'approved_at' => $this->approved_at?->toIso8601String(),
             'returned_at' => $this->returned_at?->toIso8601String(),
+            'return_comment' => $this->return_comment,
             'closed_at' => $this->closed_at?->toIso8601String(),
             'snapshot' => $this->snapshot_json,
             // UC-C005: シフト制の勤務形態のみ対象。承認をブロックせず警告として表示する。

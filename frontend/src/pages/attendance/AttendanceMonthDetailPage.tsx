@@ -115,6 +115,12 @@ export function AttendanceMonthDetailPage() {
           </div>
         )}
 
+        {month?.status === 'returned' && month.return_comment && (
+          <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+            差戻し理由: {month.return_comment}
+          </div>
+        )}
+
         {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
 
         {canSubmit && (

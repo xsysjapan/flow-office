@@ -50,6 +50,7 @@ const submittedMonth: AttendanceMonth = {
   submitted_at: '2026-07-05T00:00:00+09:00',
   approved_at: null,
   returned_at: null,
+  return_comment: null,
   closed_at: null,
   snapshot: null,
   legal_holiday_warnings: [],

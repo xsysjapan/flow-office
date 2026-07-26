@@ -222,6 +222,42 @@ class AttendanceFlowTest extends TestCase
     }
 
     /**
+     * UC-A010: 差戻し理由は通知だけでなく、申請者側の月次勤怠画面(GET /attendance/months/{yearMonth})
+     * にも表示できるよう、attendance_monthsのProjectionに保持する。再提出すると前回の差戻し理由は
+     * 表示されなくなる(新しい提出サイクルに前回の理由を持ち越さない)。
+     */
+    public function test_return_comment_is_shown_on_the_month_and_cleared_on_resubmission(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $yearMonth = $today->format('Y-m');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+        $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
+
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/return", [
+            'comment' => '休憩時間の入力に不備があります',
+        ])->assertOk()->assertJsonPath('status', 'returned');
+
+        $monthResponse = $this->actingAs($employee)->getJson("/api/attendance/months/{$yearMonth}");
+        $monthResponse->assertSuccessful();
+        $this->assertSame('休憩時間の入力に不備があります', $monthResponse->json('month.return_comment'));
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful()->assertJsonPath('status', 'submitted');
+
+        $resubmittedResponse = $this->actingAs($employee)->getJson("/api/attendance/months/{$yearMonth}");
+        $this->assertNull($resubmittedResponse->json('month.return_comment'));
+    }
+
+    /**
      * UC-A008: 出勤中・休憩中のまま退勤していない日(打刻漏れ・退勤忘れ)が対象月にある間は
      * 提出できない。
      */

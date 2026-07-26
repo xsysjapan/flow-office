@@ -30,6 +30,7 @@ const notSubmittedMonth: AttendanceMonth = {
   submitted_at: null,
   approved_at: null,
   returned_at: null,
+  return_comment: null,
   closed_at: null,
   snapshot: null,
   legal_holiday_warnings: [],
