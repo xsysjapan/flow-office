@@ -134,18 +134,21 @@ class AttendanceFlowTest extends TestCase
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $today = Carbon::today($employee->timezone);
+        $previousDay = $today->copy()->subDay()->toDateString();
+        $today = $today->toDateString();
 
         // ニューヨーク出張中(-05:00)、現地22:00〜翌05:00の勤務。
         $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
-            'actual_start_at' => '2026-07-09T22:00:00-05:00',
-            'actual_end_at' => '2026-07-10T05:00:00-05:00',
+            'actual_start_at' => "{$previousDay}T22:00:00-05:00",
+            'actual_end_at' => "{$today}T05:00:00-05:00",
             'breaks' => [],
             'reason' => '出張のため現地時刻で記録',
         ]);
 
         $editResponse->assertOk();
-        $editResponse->assertJsonPath('actual_start_at', '2026-07-09T22:00:00-05:00');
-        $editResponse->assertJsonPath('actual_end_at', '2026-07-10T05:00:00-05:00');
+        $editResponse->assertJsonPath('actual_start_at', "{$previousDay}T22:00:00-05:00");
+        $editResponse->assertJsonPath('actual_end_at', "{$today}T05:00:00-05:00");
         $editResponse->assertJsonPath('utc_offset_minutes', -300);
 
         $calculation = $editResponse->json('calculation');
@@ -162,15 +165,66 @@ class AttendanceFlowTest extends TestCase
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $today = Carbon::today($employee->timezone);
+        $previousDay = $today->copy()->subDay()->toDateString();
+        $today = $today->toDateString();
 
         $editResponse = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
-            'actual_start_at' => '2026-07-09T22:00:00-05:00',
-            'actual_end_at' => '2026-07-10T05:00:00+09:00',
+            'actual_start_at' => "{$previousDay}T22:00:00-05:00",
+            'actual_end_at' => "{$today}T05:00:00+09:00",
             'breaks' => [],
             'reason' => 'オフセット不一致テスト',
         ]);
 
         $editResponse->assertStatus(422);
+    }
+
+    public function test_editing_a_day_with_actual_end_before_actual_start_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $today = Carbon::today($employee->timezone)->toDateString();
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$today}T18:00:00+09:00",
+            'actual_end_at' => "{$today}T09:00:00+09:00",
+            'breaks' => [],
+            'reason' => '退勤が出勤より前(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_editing_a_day_with_a_break_outside_actual_times_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $today = Carbon::today($employee->timezone)->toDateString();
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$today}T09:00:00+09:00",
+            'actual_end_at' => "{$today}T18:00:00+09:00",
+            'breaks' => [['start' => "{$today}T18:30:00+09:00", 'end' => "{$today}T19:00:00+09:00"]],
+            'reason' => '退勤後の休憩(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_editing_a_day_with_actual_times_more_than_one_day_from_the_work_date_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $today = Carbon::today($employee->timezone);
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => $today->copy()->subDays(2)->toDateString().'T09:00:00+09:00',
+            'actual_end_at' => $today->toDateString().'T18:00:00+09:00',
+            'breaks' => [],
+            'reason' => '勤務日から2日離れた出勤時刻(拒否されるべき)',
+        ])->assertStatus(422);
     }
 
     public function test_month_submit_approve_close_locks_days(): void

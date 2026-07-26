@@ -52,6 +52,88 @@ class CreateAttendanceDayTest extends TestCase
         $this->assertSame(0, $day->calculation->work_minutes);
     }
 
+    public function test_actual_start_at_more_than_one_day_before_the_work_date_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-08T22:00:00+09:00',
+            'actual_end_at' => '2026-06-10T06:00:00+09:00',
+            'reason' => '勤務日から2日離れた出勤時刻(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_actual_start_at_one_day_before_the_work_date_is_allowed(): void
+    {
+        $employee = User::factory()->create();
+
+        // 夜勤(前日夜〜当日朝)を想定し、勤務日の前日の出勤時刻は許容する。
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-09T22:00:00+09:00',
+            'actual_end_at' => '2026-06-10T06:00:00+09:00',
+            'reason' => '夜勤(前日夜開始)',
+        ])->assertCreated();
+    }
+
+    public function test_actual_end_at_before_actual_start_at_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-10T18:00:00+09:00',
+            'actual_end_at' => '2026-06-10T09:00:00+09:00',
+            'reason' => '退勤が出勤より前(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_a_break_starting_before_actual_start_at_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-10T09:00:00+09:00',
+            'actual_end_at' => '2026-06-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-06-10T08:00:00+09:00', 'end' => '2026-06-10T08:30:00+09:00']],
+            'reason' => '出勤前に始まる休憩(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_a_break_ending_after_actual_end_at_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-10T09:00:00+09:00',
+            'actual_end_at' => '2026-06-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-06-10T17:30:00+09:00', 'end' => '2026-06-10T18:30:00+09:00']],
+            'reason' => '退勤後まで続く休憩(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
+    public function test_a_break_ending_before_it_starts_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => '2026-06-10',
+            'actual_start_at' => '2026-06-10T09:00:00+09:00',
+            'actual_end_at' => '2026-06-10T18:00:00+09:00',
+            'breaks' => [['start' => '2026-06-10T13:00:00+09:00', 'end' => '2026-06-10T12:00:00+09:00']],
+            'reason' => '休憩の終了が開始より前(拒否されるべき)',
+        ])->assertStatus(422);
+    }
+
     public function test_creating_a_day_that_already_exists_is_rejected(): void
     {
         $employee = User::factory()->create();
