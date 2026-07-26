@@ -85,6 +85,71 @@ class AttendancePunchTest extends TestCase
         $this->assertSame(480, $day->calculation->work_minutes);
     }
 
+    public function test_nearest_rounding_rounds_the_half_unit_up(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+        $this->createWorkStyleWithRounding(30, WorkStyle::ROUNDING_MODE_NEAREST);
+
+        // 四捨五入: ちょうど半分の8:45は繰り上げて9:00、8:44は繰り下げて8:30。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:45:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T18:00:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+
+        $employee2 = User::factory()->create();
+        $this->recordPunch($employee2, $workDate, 'clock_in', "{$workDate}T08:44:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee2, $workDate, 'clock_out', "{$workDate}T18:00:00+09:00")->assertSuccessful();
+
+        $day2 = AttendanceDay::query()->where('user_id', $employee2->id)->whereDate('work_date', $workDate)->first();
+        $this->assertSame('2026-07-09T08:30:00+09:00', LocalDateTime::formatWithOffsetMinutes($day2->actual_start_at, $day2->utc_offset_minutes));
+    }
+
+    public function test_shorten_rounding_shortens_the_paid_work_time(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+        $this->createWorkStyleWithRounding(30, WorkStyle::ROUNDING_MODE_SHORTEN);
+
+        // 切り捨て(会社有利): 出勤は繰り上げ(8:31〜9:00→9:00)、退勤は繰り下げ(18:00〜18:29→18:00)、
+        // 休憩開始は繰り下げ(12:00〜12:29→12:00)、休憩終了は繰り上げ(12:31〜13:00→13:00)。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:31:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T12:29:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_end', "{$workDate}T12:31:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T18:29:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $break = $day->breaks()->first();
+
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T12:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T13:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_end_at, $day->utc_offset_minutes));
+    }
+
+    public function test_lengthen_rounding_lengthens_the_paid_work_time(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+        $this->createWorkStyleWithRounding(30, WorkStyle::ROUNDING_MODE_LENGTHEN);
+
+        // 切り上げ(社員有利): 出勤は繰り下げ(9:00〜9:29→9:00)、退勤は繰り上げ(17:31〜18:00→18:00)、
+        // 休憩開始は繰り上げ(11:31〜12:00→12:00)、休憩終了は繰り下げ(13:00〜13:29→13:00)。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T09:29:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T11:31:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_end', "{$workDate}T13:29:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'clock_out', "{$workDate}T17:31:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+        $break = $day->breaks()->first();
+
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T18:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_end_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T12:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_start_at, $day->utc_offset_minutes));
+        $this->assertSame('2026-07-09T13:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_end_at, $day->utc_offset_minutes));
+    }
+
     public function test_a_punch_offset_different_from_the_owners_timezone_is_preserved_on_the_day(): void
     {
         $employee = User::factory()->create(); // timezone: Asia/Tokyo (既定値)
@@ -290,5 +355,24 @@ class AttendancePunchTest extends TestCase
             'punched_at' => $punchedAt,
             'source' => 'web',
         ]);
+    }
+
+    private function createWorkStyleWithRounding(int $roundingUnitMinutes, string $roundingMode): WorkStyle
+    {
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard-'.$roundingMode, 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'rounding_unit_minutes' => $roundingUnitMinutes,
+            'rounding_mode' => $roundingMode,
+            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        return $workStyle;
     }
 }
