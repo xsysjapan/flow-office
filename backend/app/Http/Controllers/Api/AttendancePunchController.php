@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
+use App\Domain\Attendance\Services\AttendanceApproverAccess;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendancePunchResource;
 use App\Models\AttendancePunch;
 use App\Models\PunchType;
+use App\Models\Role;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -30,7 +33,7 @@ class AttendancePunchController extends Controller
         operationId: 'attendancePunches.index',
         summary: '打刻ログ一覧を取得する',
         tags: ['打刻ログ'],
-        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
+        parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: false, description: '省略時は自分自身。他の社員を指定できるのはadmin、またはfrom/toの期間の年月の承認者のみ', schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
@@ -41,7 +44,12 @@ class AttendancePunchController extends Controller
             'to' => ['nullable', 'date'],
         ]);
 
-        $targetUserId = $this->resolveTargetUserId($request, $data['user_id'] ?? null, '他の社員の打刻を記録・閲覧する権限がありません。');
+        $targetUserId = $this->resolveViewableUserId(
+            $request,
+            $data['user_id'] ?? null,
+            $this->candidateYearMonths($data['from'] ?? null, $data['to'] ?? null),
+            '他の社員の打刻を閲覧する権限がありません。',
+        );
 
         $punches = AttendancePunch::query()
             ->where('user_id', $targetUserId)
@@ -147,5 +155,46 @@ class AttendancePunchController extends Controller
         ));
 
         return new AttendancePunchResource($attendancePunch->refresh());
+    }
+
+    /**
+     * 打刻ログの閲覧のみを、本人・管理者に加えて「対象期間の年月の承認者に指定されている場合」
+     * まで許可する(UC-A009参照。AttendanceControllerと同じ判定)。書き込み系(記録・訂正・削除)
+     * は引き続き`resolveTargetUserId`/`abortUnlessOwnerOrAdmin`(本人・管理者のみ)を使う。
+     *
+     * @param  string[]  $yearMonths
+     */
+    private function resolveViewableUserId(Request $request, ?string $requestedUserId, array $yearMonths, string $message): string
+    {
+        $userId = $requestedUserId ?? $request->user()->id;
+        if ($userId === $request->user()->id) {
+            return $userId;
+        }
+
+        $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
+        $isApprover = app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth($request->user()->id, $userId, $yearMonths);
+
+        abort_if(! $isAdmin && ! $isApprover, 403, $message);
+
+        return $userId;
+    }
+
+    /** from/toの範囲に含まれる年月(`Y-m`)を列挙する。どちらか一方でも欠けている場合は、
+     *  無制限の期間を承認者の閲覧範囲チェックに使わせないため空配列を返す(本人・管理者のみ許可)。 */
+    private function candidateYearMonths(?string $from, ?string $to): array
+    {
+        if ($from === null || $to === null) {
+            return [];
+        }
+
+        $months = [];
+        $cursor = Carbon::parse($from)->startOfMonth();
+        $end = Carbon::parse($to)->startOfMonth();
+        while ($cursor->lte($end)) {
+            $months[] = $cursor->format('Y-m');
+            $cursor->addMonth();
+        }
+
+        return $months;
     }
 }

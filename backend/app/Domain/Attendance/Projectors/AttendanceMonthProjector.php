@@ -26,6 +26,8 @@ class AttendanceMonthProjector extends Projector
                 'approver_user_id' => $event->approverUserId,
                 'submitted_at' => $event->createdAt(),
                 'snapshot_json' => $event->snapshot,
+                // 差戻し後の再提出では、前回の差戻し理由を画面に残さない。
+                'return_comment' => null,
             ],
         );
     }
@@ -43,6 +45,7 @@ class AttendanceMonthProjector extends Projector
         AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => AttendanceMonthStatus::RETURNED,
             'returned_at' => $event->createdAt(),
+            'return_comment' => $event->comment,
         ]);
     }
 

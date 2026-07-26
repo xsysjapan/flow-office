@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 
 /**
  * UC-A010: 承認者が月次勤怠を差戻しする。
@@ -45,7 +46,7 @@ class ReturnAttendanceMonthHandler implements CommandHandler
                 recipient: $applicant,
                 title: '月次勤怠が差戻されました',
                 summary: "{$month->year_month} の月次勤怠が差し戻されました: {$command->comment}",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path("/attendance/months/{$month->year_month}"),
             );
         }
 

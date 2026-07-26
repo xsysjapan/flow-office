@@ -11,6 +11,14 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { MonthlyAttendanceBulkEntryModal } from '../../components/MonthlyAttendanceBulkEntryModal/MonthlyAttendanceBulkEntryModal'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
@@ -33,7 +41,7 @@ function useNavigableYearMonths(yearMonth: string) {
   return { prevMonth, nextMonth }
 }
 
-function MonthNav({ yearMonth }: { yearMonth: string }) {
+function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: boolean }) {
   const navigate = useNavigate()
   const { prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
@@ -61,8 +69,56 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
       <Button variant="secondary" size="icon" title="次月" aria-label="次月" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
         <ChevronRight aria-hidden="true" />
       </Button>
-      <MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} />
+      {canSubmit && <SubmitMonthDialog yearMonth={yearMonth} />}
     </div>
+  )
+}
+
+/** 「提出する」押下で開き、提出先の承認者を選んでから確定するモーダル。 */
+function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+  const submitMonth = useSubmitMonth(yearMonth)
+
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open)
+        if (open) {
+          setApproverUserId(undefined)
+          submitMonth.reset()
+        }
+      }}
+    >
+      <Button onClick={() => setIsOpen(true)}>提出する</Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>月次勤怠を提出しますか?</DialogTitle>
+          <DialogDescription>
+            {yearMonth} の月次勤怠を提出します。提出先の承認者を選んでください。提出すると、承認・差戻しされるまでこの月の日次勤怠・打刻ログは編集できなくなります。
+          </DialogDescription>
+        </DialogHeader>
+        {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
+        <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setIsOpen(false)}>
+            キャンセル
+          </Button>
+          <Button
+            isLoading={submitMonth.isPending}
+            disabled={!approverUserId}
+            onClick={() =>
+              submitMonth.mutate(approverUserId as string, {
+                onSuccess: () => setIsOpen(false),
+              })
+            }
+          >
+            提出する
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -73,15 +129,21 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()
-  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
-  const submitMonth = useSubmitMonth(yearMonth ?? '')
 
   if (!yearMonth) return null
 
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
-  const canSubmit = month?.status === 'not_submitted' || month?.status === 'returned'
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
+  // attendance_monthsの行は初回提出時に初めて作られるため、month === null(取得済みで
+  // レコード無し)は「未提出」を意味する。month === undefined(取得中)はまだ判定できない
+  // ため、提出ボタンはナビにあり isLoading では隠れないので明示的に除外する。
+  const canSubmit =
+    !isLoading &&
+    yearMonth <= currentYearMonth &&
+    (month === null || month?.status === 'not_submitted' || month?.status === 'returned')
+  const bulkEntryLocked = month != null && (month.status === 'submitted' || month.status === 'approved' || month.status === 'closed')
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
@@ -91,7 +153,7 @@ export function AttendanceMonthDetailPage() {
       <Card
         title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
-        navigation={<MonthNav yearMonth={yearMonth} />}
+        navigation={<MonthNav yearMonth={yearMonth} canSubmit={canSubmit} />}
       >
         <p className="mb-3 text-sm text-muted-foreground">{yearMonth}</p>
 
@@ -111,18 +173,9 @@ export function AttendanceMonthDetailPage() {
           </div>
         )}
 
-        {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
-
-        {canSubmit && (
-          <div className="flex items-center gap-2">
-            <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
-            <Button
-              isLoading={submitMonth.isPending}
-              disabled={!approverUserId}
-              onClick={() => submitMonth.mutate(approverUserId as string)}
-            >
-              提出する
-            </Button>
+        {month?.status === 'returned' && month.return_comment && (
+          <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+            差戻し理由: {month.return_comment}
           </div>
         )}
 
@@ -142,7 +195,7 @@ export function AttendanceMonthDetailPage() {
       </Card>
 
       {!isLoading && !error && (
-        <Card title="日別の内訳">
+        <Card title="日別の内訳" actions={<MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} disabled={bulkEntryLocked} />}>
           <ul className="divide-y divide-border">
             {dates.map((date) => (
               <AttendanceDayRow

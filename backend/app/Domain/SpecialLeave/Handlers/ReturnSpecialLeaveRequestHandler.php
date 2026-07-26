@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 
 /**
  * @implements CommandHandler<ReturnSpecialLeaveRequest>
@@ -43,7 +44,7 @@ class ReturnSpecialLeaveRequestHandler implements CommandHandler
                 recipient: $applicant,
                 title: '特別休暇申請の差戻し',
                 summary: "{$request->target_date->toDateString()} の特別休暇申請が差し戻されました: {$command->comment}",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/special-leave/history'),
             );
         }
 

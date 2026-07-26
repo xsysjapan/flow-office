@@ -46,9 +46,17 @@ class WorkflowRequestFlowTest extends TestCase
             ->postJson("/api/workflow-requests/{$workflowRequestId}/submit");
         $submitResponse->assertOk()->assertJsonPath('status', 'submitted');
 
+        // 承認依頼の通知には、この申請の詳細画面へのリンクが付く。
+        $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith("/requests/{$workflowRequestId}", $approverNotifications[0]['detail_url']);
+
         $approveResponse = $this->actingAs($approver)
             ->postJson("/api/workflow-requests/{$workflowRequestId}/approve");
         $approveResponse->assertOk()->assertJsonPath('status', 'approved');
+
+        // 承認完了の通知にも同じ申請の詳細画面へのリンクが付く。
+        $applicantNotifications = $this->actingAs($applicant)->getJson('/api/notifications/mine')->json('data');
+        $this->assertStringEndsWith("/requests/{$workflowRequestId}", $applicantNotifications[0]['detail_url']);
 
         $task = BackOfficeTask::query()->where('source_id', $workflowRequestId)->first();
         $this->assertNotNull($task, 'バックオフィスタスクが自動生成されていること');

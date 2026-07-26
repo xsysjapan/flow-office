@@ -12,14 +12,21 @@ use App\Models\AttendanceMonthStatus;
  * `attendance_punches`)が通常の編集・削除操作の対象にできるかを判定する。
  *
  * 締め後(`locked_at`設定後)は修正申請ワークフローを使う (docs/07-usecases-attendance.md
- * UC-A005)。加えて、月次が承認済み(`attendance.month_approved`)以降は、まだ締め
- * (`locked_at`)が設定されていなくても通常の編集・削除を禁止する(UC-A015)。承認後は
- * バックオフィス確認対象になるため、日次側の記録・その根拠となる打刻ログのいずれも
- * 承認時点の内容から変更させない(UC-A013/UC-A014)。
+ * UC-A005)。加えて、月次が提出済み(`attendance.month_submitted`)以降は、まだ締め
+ * (`locked_at`)が設定されていなくても通常の編集・削除を禁止する(UC-A008/UC-A015)。提出後は
+ * 承認者による確認・バックオフィス確認対象になるため、日次側の記録・その根拠となる打刻ログの
+ * いずれも提出時点の内容から変更させない(UC-A013/UC-A014)。個々の`AttendanceDay`単位では
+ * なく月次のProjection(`attendance_months.status`)を見て判定するため、休日など
+ * `AttendanceDay`レコード自体が存在しない日にも一律にロックがかかる。差戻し(returned)に
+ * なった月は再度編集可能に戻る。
  */
 class AttendanceEditGuard
 {
-    private const BLOCKED_MONTH_STATUSES = [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED];
+    private const BLOCKED_MONTH_STATUSES = [
+        AttendanceMonthStatus::SUBMITTED,
+        AttendanceMonthStatus::APPROVED,
+        AttendanceMonthStatus::CLOSED,
+    ];
 
     /**
      * @throws DomainRuleException 編集・削除できない場合
@@ -49,7 +56,7 @@ class AttendanceEditGuard
             ->first();
 
         if ($month !== null && in_array($month->status, self::BLOCKED_MONTH_STATUSES, true)) {
-            return '承認済みの月次勤怠に含まれる日次勤怠は修正申請から変更してください。';
+            return '提出済み以降の月次勤怠に含まれる日次勤怠は修正申請から変更してください。';
         }
 
         return null;

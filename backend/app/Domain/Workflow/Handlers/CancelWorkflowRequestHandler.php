@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
+use App\Support\FrontendUrl;
 
 /**
  * @implements CommandHandler<CancelWorkflowRequest>
@@ -42,7 +43,7 @@ class CancelWorkflowRequestHandler implements CommandHandler
                     recipient: $approver,
                     title: '申請取消',
                     summary: "「{$workflowRequest->title}」が取り消されました: {$command->reason}",
-                    detailUrl: null,
+                    detailUrl: FrontendUrl::path("/requests/{$workflowRequest->id}"),
                 );
             }
         }

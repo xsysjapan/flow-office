@@ -54,7 +54,6 @@ export function WeekAttendancePage() {
             <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
               <ChevronRight aria-hidden="true" />
             </Button>
-            <WeeklyAttendanceBulkEntryModal defaultFrom={dates[0]} defaultTo={dates[6]} />
           </div>
         }
       >
@@ -79,19 +78,19 @@ export function WeekAttendancePage() {
       </Card>
 
       {!isLoading && !error && (
-        <Card title="日別の内訳">
-            <ul className="divide-y divide-border">
-              {dates.map((date) => (
-                <AttendanceDayRow
-                  key={date}
-                  date={date}
-                  day={daysByDate.get(date)}
-                  warnings={dayWarnings(date, daysByDate.get(date), today)}
-                />
-              ))}
-            </ul>
-          </Card>
+        <Card title="日別の内訳" actions={<WeeklyAttendanceBulkEntryModal defaultFrom={dates[0]} defaultTo={dates[6]} />}>
+          <ul className="divide-y divide-border">
+            {dates.map((date) => (
+              <AttendanceDayRow
+                key={date}
+                date={date}
+                day={daysByDate.get(date)}
+                warnings={dayWarnings(date, daysByDate.get(date), today)}
+              />
+            ))}
+          </ul>
+        </Card>
       )}
-      </div>
+    </div>
   )
 }

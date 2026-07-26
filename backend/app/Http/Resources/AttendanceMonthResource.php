@@ -17,12 +17,14 @@ class AttendanceMonthResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'user' => new UserResource($this->whenLoaded('user')),
             'year_month' => $this->year_month,
             'status' => $this->status,
             'approver' => new UserResource($this->whenLoaded('approver')),
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'approved_at' => $this->approved_at?->toIso8601String(),
             'returned_at' => $this->returned_at?->toIso8601String(),
+            'return_comment' => $this->return_comment,
             'closed_at' => $this->closed_at?->toIso8601String(),
             'snapshot' => $this->snapshot_json,
             // UC-C005: シフト制の勤務形態のみ対象。承認をブロックせず警告として表示する。

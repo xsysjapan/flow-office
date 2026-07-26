@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 
 /**
  * UC-A009: 承認者が月次勤怠を承認する。
@@ -43,7 +44,7 @@ class ApproveAttendanceMonthHandler implements CommandHandler
                 recipient: $applicant,
                 title: '月次勤怠が承認されました',
                 summary: "{$month->year_month} の月次勤怠が承認されました。バックオフィス確認対象になります。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path("/attendance/months/{$month->year_month}"),
             );
         }
 

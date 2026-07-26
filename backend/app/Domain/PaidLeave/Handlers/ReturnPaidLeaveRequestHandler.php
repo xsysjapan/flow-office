@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 
 /**
  * @implements CommandHandler<ReturnPaidLeaveRequest>
@@ -43,7 +44,7 @@ class ReturnPaidLeaveRequestHandler implements CommandHandler
                 recipient: $applicant,
                 title: '有給申請の差戻し',
                 summary: "{$request->target_date->toDateString()} の有給申請が差し戻されました: {$command->comment}",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/paid-leave/history'),
             );
         }
 

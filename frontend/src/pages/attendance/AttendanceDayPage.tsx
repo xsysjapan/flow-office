@@ -26,6 +26,7 @@ import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
   useAttendanceDayDefaults,
+  useAttendanceMonth,
   useCorrectPunch,
   useCreateAttendanceDay,
   useCreatePunch,
@@ -62,6 +63,22 @@ const DAY_DEFAULTS_SOURCE_LABEL: Record<AttendanceDayDefaults['source'], string 
 
 const PUNCH_TYPES: PunchType[] = ['clock_in', 'break_start', 'break_end', 'clock_out']
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
+
+/** 月次勤怠が提出済み以降(提出済み・承認済み・締め済み)かどうか。バックエンドの
+ *  `AttendanceEditGuard::BLOCKED_MONTH_STATUSES` と対応する(差戻し・未提出・月次未作成は含めない)。 */
+function useMonthLocked(date: string): boolean {
+  const { data } = useAttendanceMonth(date.slice(0, 7))
+  const status = data?.month?.status
+  return status === 'submitted' || status === 'approved' || status === 'closed'
+}
+
+function MonthLockedNotice() {
+  return (
+    <p className="text-sm text-muted-foreground">
+      月次勤怠が提出済みのため、この日は編集できません。修正が必要な場合は修正申請を利用してください。
+    </p>
+  )
+}
 
 function weekdayLabel(date: string): string {
   const dow = new Date(`${date}T00:00:00`).getDay()
@@ -383,21 +400,25 @@ function PunchAddForm({ date }: { date: string }) {
   )
 }
 
-function PunchLogCard({ date }: { date: string }) {
+function PunchLogCard({ date, locked }: { date: string; locked: boolean }) {
   const { data: punches, isLoading } = usePunches({ from: date, to: date })
   const [isEditing, setIsEditing] = useState(false)
-  const visiblePunches = isEditing ? punches : punches?.filter((punch) => punch.status === 'active')
+  const editable = isEditing && !locked
+  const visiblePunches = editable ? punches : punches?.filter((punch) => punch.status === 'active')
   const editedPunchIds = new Set(punches?.flatMap((punch) => punch.superseded_by_punch_id ?? []))
 
   return (
     <Card
       title="打刻ログ"
       actions={
-        <Button variant="secondary" onClick={() => setIsEditing((current) => !current)}>
-          {isEditing ? '閲覧に戻る' : 'ログを編集'}
-        </Button>
+        !locked && (
+          <Button variant="secondary" onClick={() => setIsEditing((current) => !current)}>
+            {isEditing ? '閲覧に戻る' : 'ログを編集'}
+          </Button>
+        )
       }
     >
+      {locked && <MonthLockedNotice />}
       {isLoading ? (
         <LoadingState />
       ) : !punches || punches.length === 0 ? (
@@ -407,11 +428,11 @@ function PunchLogCard({ date }: { date: string }) {
       ) : (
         <ul className="divide-y divide-border">
           {visiblePunches.map((punch) => (
-            <PunchLogRow key={punch.id} punch={punch} isEdited={editedPunchIds.has(punch.id)} isEditing={isEditing} />
+            <PunchLogRow key={punch.id} punch={punch} isEdited={editedPunchIds.has(punch.id)} isEditing={editable} />
           ))}
         </ul>
       )}
-      {isEditing && <PunchAddForm date={date} />}
+      {editable && <PunchAddForm date={date} />}
     </Card>
   )
 }
@@ -842,12 +863,14 @@ export function AttendanceDayPage() {
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
   const { data: weekDays, isLoading, error } = useWeek(monday)
+  const monthLocked = useMonthLocked(date ?? '')
 
   if (!date) return null
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="日次勤怠の取得に失敗しました。" />
 
   const day = weekDays?.find((d) => d.work_date === date)
+  const locked = monthLocked || day?.is_locked === true
   const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
   const today = formatDate(new Date())
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
@@ -908,9 +931,11 @@ export function AttendanceDayPage() {
 
                 <div className="flex items-center gap-2">
                   {day.calculation.is_manually_adjusted && <Badge tone="info">手動補正済み</Badge>}
-                  <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
-                    集計値を修正
-                  </Button>
+                  {!locked && (
+                    <Button variant="secondary" onClick={() => setIsAdjustingCalculation(true)}>
+                      集計値を修正
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -991,32 +1016,44 @@ export function AttendanceDayPage() {
               </dl>
             )}
 
-            <div className="flex gap-2 border-t border-border pt-4">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsAdjustingCalculation(false)
-                  setIsEditing(true)
-                }}
-              >
-                編集
-              </Button>
-              <DeleteDayDialog
-                day={day}
-                onDeleted={(punchLogAction) => {
-                  if (punchLogAction !== 'recreate_from_punches') navigate(-1)
-                }}
-              />
-            </div>
+            {locked ? (
+              <div className="border-t border-border pt-4">
+                <MonthLockedNotice />
+              </div>
+            ) : (
+              <div className="flex gap-2 border-t border-border pt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setIsAdjustingCalculation(false)
+                    setIsEditing(true)
+                  }}
+                >
+                  編集
+                </Button>
+                <DeleteDayDialog
+                  day={day}
+                  onDeleted={(punchLogAction) => {
+                    if (punchLogAction !== 'recreate_from_punches') navigate(-1)
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 
         {day && isEditing && <DayEditForm day={day} onDone={() => setIsEditing(false)} />}
 
-        {!day && <DayCreateForm date={date} />}
+        {!day && locked && (
+          <div className="flex flex-col gap-2">
+            <MonthLockedNotice />
+          </div>
+        )}
+
+        {!day && !locked && <DayCreateForm date={date} />}
       </Card>
 
-      <PunchLogCard date={date} />
+      <PunchLogCard date={date} locked={locked} />
     </div>
   )
 }

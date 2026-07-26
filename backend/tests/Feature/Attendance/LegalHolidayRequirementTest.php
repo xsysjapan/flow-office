@@ -62,7 +62,7 @@ class LegalHolidayRequirementTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', '2026-06')->firstOrFail()->id;
 
         $toApprove = $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertOk();
-        $warnings = collect($toApprove->json())->firstWhere('id', $monthId)['legal_holiday_warnings'];
+        $warnings = collect($toApprove->json('data'))->firstWhere('id', $monthId)['legal_holiday_warnings'];
 
         $this->assertCount(1, $warnings);
         $this->assertSame('weekly', $warnings[0]['rule']);

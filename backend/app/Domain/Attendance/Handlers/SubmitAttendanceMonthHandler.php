@@ -10,13 +10,16 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Str;
 
 /**
- * UC-A008: 月次勤怠を提出する。
+ * UC-A008: 月次勤怠を提出する。出勤中・休憩中のまま確定していない日(打刻漏れ・退勤忘れ)が
+ * 対象月内にある間は提出できない。
  *
  * @implements CommandHandler<SubmitAttendanceMonth>
  */
@@ -39,6 +42,10 @@ class SubmitAttendanceMonthHandler implements CommandHandler
             throw new DomainRuleException('この月次勤怠は現在のステータスからは提出できません。');
         }
 
+        if ($this->hasUnfinishedDay($command->userId, $command->yearMonth)) {
+            throw new DomainRuleException('勤務中・休憩中の日があるため提出できません。退勤してから提出してください。');
+        }
+
         $monthId = $month->id ?? (string) Str::uuid();
         $snapshot = $this->buildSnapshot($command->userId, $command->yearMonth);
 
@@ -54,11 +61,21 @@ class SubmitAttendanceMonthHandler implements CommandHandler
                 recipient: $approver,
                 title: '月次勤怠の承認依頼',
                 summary: "{$command->yearMonth} の月次勤怠が提出されました。",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path('/attendance/months/to-approve'),
             );
         }
 
         return $month;
+    }
+
+    /** 出勤中・休憩中のまま確定していない日が対象月内にあれば提出させない。 */
+    private function hasUnfinishedDay(string $userId, string $yearMonth): bool
+    {
+        return AttendanceDay::query()
+            ->where('user_id', $userId)
+            ->where('work_date', 'like', "{$yearMonth}%")
+            ->whereIn('status', [AttendanceDayStatus::WORKING, AttendanceDayStatus::ON_BREAK])
+            ->exists();
     }
 
     /**

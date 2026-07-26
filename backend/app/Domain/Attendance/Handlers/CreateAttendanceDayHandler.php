@@ -55,6 +55,10 @@ class CreateAttendanceDayHandler implements CommandHandler
             ->whereDate('work_date', $command->workDate)
             ->first();
 
+        $actualStartAt = $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null;
+        $actualEndAt = $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null;
+        $this->assertActualTimesValid($actualStartAt, $actualEndAt, $command->workDate);
+
         $breaksPayload = [];
         $parsedBreaks = [];
         foreach ($command->breaks as $break) {
@@ -66,13 +70,12 @@ class CreateAttendanceDayHandler implements CommandHandler
                 'end' => $end !== null ? LocalDateTime::formatWithOffsetMinutes($end, $offsetMinutes) : null,
             ];
         }
+        $this->assertBreaksWithinActualTimes($parsedBreaks, $actualStartAt, $actualEndAt);
 
         [$leaveSegmentsPayload] = $this->buildLeaveSegments($command->leaveSegments, $parsedBreaks, $offsetMinutes);
 
         $dayId = (string) Str::uuid();
         $status = $command->actualEndAt !== null ? AttendanceDayStatus::CLOCKED_OUT : AttendanceDayStatus::NOT_STARTED;
-        $actualStartAt = $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null;
-        $actualEndAt = $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null;
 
         AttendanceDayAggregate::retrieve($dayId)
             ->create(
@@ -186,5 +189,50 @@ class CreateAttendanceDayHandler implements CommandHandler
     private function intervalsOverlap(Carbon $aStart, Carbon $aEnd, Carbon $bStart, Carbon $bEnd): bool
     {
         return $aStart->lessThan($bEnd) && $bStart->lessThan($aEnd);
+    }
+
+    /** 出勤・退勤時刻が勤務日の前後1日以内であること、退勤が出勤より後であることを検証する。 */
+    private function assertActualTimesValid(?Carbon $actualStartAt, ?Carbon $actualEndAt, string $workDate): void
+    {
+        if ($actualStartAt !== null) {
+            $this->assertWithinWorkDateWindow($actualStartAt, $workDate, '出勤時刻');
+        }
+        if ($actualEndAt !== null) {
+            $this->assertWithinWorkDateWindow($actualEndAt, $workDate, '退勤時刻');
+        }
+        if ($actualStartAt !== null && $actualEndAt !== null && ! $actualEndAt->greaterThan($actualStartAt)) {
+            throw new DomainRuleException('退勤時刻は出勤時刻より後にしてください。');
+        }
+    }
+
+    /** 深夜勤務・夜勤明けの記録を許容しつつ、明らかな入力ミスを弾くため勤務日の前後1日以内に収める。 */
+    private function assertWithinWorkDateWindow(Carbon $dateTime, string $workDate, string $label): void
+    {
+        $diffDays = abs(Carbon::parse($workDate)->startOfDay()->diffInDays($dateTime->copy()->startOfDay()));
+        if ($diffDays > 1) {
+            throw new DomainRuleException("{$label}は勤務日の前後1日以内にしてください。");
+        }
+    }
+
+    /**
+     * 休憩の開始・終了に矛盾がないこと(終了は開始より後)、出勤〜退勤の範囲内であることを検証する。
+     *
+     * @param  array<int, AttendanceBreak>  $parsedBreaks
+     */
+    private function assertBreaksWithinActualTimes(array $parsedBreaks, ?Carbon $actualStartAt, ?Carbon $actualEndAt): void
+    {
+        foreach ($parsedBreaks as $break) {
+            if ($break->break_end_at !== null && ! $break->break_end_at->greaterThan($break->break_start_at)) {
+                throw new DomainRuleException('休憩の終了時刻は開始時刻より後にしてください。');
+            }
+
+            if ($actualStartAt !== null && $break->break_start_at->lessThan($actualStartAt)) {
+                throw new DomainRuleException('休憩時間は出勤〜退勤の範囲内にしてください。');
+            }
+
+            if ($actualEndAt !== null && $break->break_end_at !== null && $break->break_end_at->greaterThan($actualEndAt)) {
+                throw new DomainRuleException('休憩時間は出勤〜退勤の範囲内にしてください。');
+            }
+        }
     }
 }

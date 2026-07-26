@@ -11,6 +11,7 @@ use App\Jobs\SendNotificationJob;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
+use App\Support\FrontendUrl;
 
 /**
  * @implements CommandHandler<ReturnWorkflowRequest>
@@ -41,7 +42,7 @@ class ReturnWorkflowRequestHandler implements CommandHandler
                 recipient: $applicant,
                 title: '差戻し',
                 summary: "「{$workflowRequest->title}」が差し戻されました: {$command->comment}",
-                detailUrl: null,
+                detailUrl: FrontendUrl::path("/requests/{$workflowRequest->id}"),
             );
         }
 

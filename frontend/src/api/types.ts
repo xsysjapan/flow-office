@@ -312,12 +312,14 @@ export interface LegalHolidayWarning {
 export interface AttendanceMonth {
   id: string
   user_id: string
+  user?: User
   year_month: string
   status: AttendanceMonthStatus
   approver?: User
   submitted_at: string | null
   approved_at: string | null
   returned_at: string | null
+  return_comment: string | null
   closed_at: string | null
   snapshot: Record<string, number> | null
   legal_holiday_warnings: LegalHolidayWarning[]

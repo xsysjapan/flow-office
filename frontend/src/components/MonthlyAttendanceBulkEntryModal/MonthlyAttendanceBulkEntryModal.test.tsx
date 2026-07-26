@@ -35,6 +35,17 @@ describe('MonthlyAttendanceBulkEntryModal', () => {
     vi.restoreAllMocks()
   })
 
+  it('disables its trigger button when the month is locked (e.g. submitted)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MonthlyAttendanceBulkEntryModal yearMonth="2026-08" disabled />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByRole('button', { name: '一括入力' })).toBeDisabled()
+  })
+
   it('opens from its own trigger button and confirms a pattern applied to the selected weekdays', async () => {
     vi.spyOn(attendanceApi, 'previewAttendancePattern').mockResolvedValue({
       days: [

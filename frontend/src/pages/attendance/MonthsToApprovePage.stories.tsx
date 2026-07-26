@@ -33,6 +33,7 @@ const months: AttendanceMonth[] = [
     submitted_at: '2026-07-05T00:00:00+09:00',
     approved_at: null,
     returned_at: null,
+    return_comment: null,
     closed_at: null,
     snapshot: null,
     legal_holiday_warnings: [],
@@ -46,6 +47,7 @@ const months: AttendanceMonth[] = [
     submitted_at: '2026-07-01T00:00:00+09:00',
     approved_at: '2026-07-02T00:00:00+09:00',
     returned_at: null,
+    return_comment: null,
     closed_at: null,
     snapshot: null,
     legal_holiday_warnings: [],
@@ -54,7 +56,11 @@ const months: AttendanceMonth[] = [
 
 function withSeeded(data: AttendanceMonth[], viewer: User) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['attendance', 'months', 'to-approve'], data)
+  queryClient.setQueryData(['attendance', 'months', 'to-approve', '', '', '', 1], {
+    data,
+    meta: { current_page: 1, last_page: 1, total: data.length },
+    links: { next: null, prev: null },
+  })
 
   const authValue: AuthContextValue = {
     user: viewer,

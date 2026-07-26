@@ -4,12 +4,43 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
-import type { AttendanceDay, AttendancePunch, User } from '../../api/types'
+import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, AttendancePunch, User } from '../../api/types'
 import { pickDateTime } from '../../test-support/pickerInteractions'
 import { AttendanceDayPage } from './AttendanceDayPage'
 import { formatDate } from '../../utils/weekDates'
 
 const date = '2026-07-06'
+
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
+}
+
+const notSubmittedMonth: AttendanceMonth = {
+  id: 'month-1',
+  user_id: 'user-1',
+  year_month: date.slice(0, 7),
+  status: 'not_submitted',
+  submitted_at: null,
+  approved_at: null,
+  returned_at: null,
+  return_comment: null,
+  closed_at: null,
+  snapshot: null,
+  legal_holiday_warnings: [],
+}
 
 const currentUser: User = {
   id: 'user-1',
@@ -73,6 +104,12 @@ function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date) {
 describe('AttendanceDayPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
   })
 
   it('shows the recorded day summary and status', async () => {
@@ -452,6 +489,47 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByLabelText('うち深夜法定内残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('うち深夜法定外残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('うち深夜法定休日労働時間(分)')).toBeInTheDocument()
+  })
+
+  it('hides edit/delete/adjust/punch-log-edit controls and shows a notice once the month is submitted', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...notSubmittedMonth, status: 'submitted' },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    renderPage([recordedDay])
+
+    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(await screen.findAllByText(/提出済みのため、この日は編集できません/)).not.toHaveLength(0)
+    expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '集計値を修正' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'ログを編集' })).not.toBeInTheDocument()
+  })
+
+  it('hides the create form and shows a notice for a missing day once the month is submitted', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...notSubmittedMonth, status: 'submitted' },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    renderPage([])
+
+    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(screen.queryByText('この日の勤怠記録はまだありません。実績を入力して作成できます。')).not.toBeInTheDocument()
+    expect(await screen.findAllByText(/提出済みのため、この日は編集できません/)).not.toHaveLength(0)
+  })
+
+  it('locks a day whose own is_locked flag is true even if the month projection has not caught up', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    renderPage([{ ...recordedDay, is_locked: true }])
+
+    expect(await screen.findByText('日次勤怠')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument()
   })
 
   it('shows an error message when the week fails to load', async () => {

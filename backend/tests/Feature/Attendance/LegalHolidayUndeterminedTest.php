@@ -171,7 +171,7 @@ class LegalHolidayUndeterminedTest extends TestCase
 
         $monthId = AttendanceMonth::query()->where('user_id', $user->id)->where('year_month', '2026-06')->firstOrFail()->id;
         $toApprove = $this->actingAs($approver)->getJson('/api/attendance/months/to-approve')->assertOk();
-        $warnings = collect($toApprove->json())->firstWhere('id', $monthId)['legal_holiday_warnings'];
+        $warnings = collect($toApprove->json('data'))->firstWhere('id', $monthId)['legal_holiday_warnings'];
 
         $violation = collect($warnings)->firstWhere('period_start', '2026-06-01');
         $this->assertNotNull($violation);
