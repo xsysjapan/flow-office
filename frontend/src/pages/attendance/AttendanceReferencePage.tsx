@@ -38,14 +38,22 @@ function weekdayLabel(date: string): string {
   return WEEKDAY_LABELS[dow === 0 ? 6 : dow - 1]
 }
 
-/** 月次・週次一覧の1日分。管理者が参照するだけの画面のため、自分の日次編集画面への
- *  リンクにはしない。 */
-function ReadOnlyDayRow({ date, day }: { date: string; day: AttendanceDay | undefined }) {
+/** 月次・週次一覧の1日分。既定では参照専用(リンクにしない)。`onSelect`を渡すと行全体を
+ *  クリックできるようにする(承認待ち一覧からの実際の勤務表確認など、対象日への遷移が必要な場合)。 */
+function ReadOnlyDayRow({
+  date,
+  day,
+  onSelect,
+}: {
+  date: string
+  day: AttendanceDay | undefined
+  onSelect?: (date: string) => void
+}) {
   const { label, tone } = day ? attendanceDayStatusLabel(day.status) : { label: '未入力', tone: 'neutral' as const }
   const warnings = dayWarnings(date, day, formatDate(new Date()))
 
-  return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-2 py-3 sm:flex sm:items-center sm:gap-2.5">
+  const content = (
+    <>
       <div className="flex min-w-0 items-center gap-2 sm:contents">
         <span className="whitespace-nowrap text-sm font-semibold text-foreground">
           {date}({weekdayLabel(date)})
@@ -69,12 +77,45 @@ function ReadOnlyDayRow({ date, day }: { date: string; day: AttendanceDay | unde
           </Badge>
         ))}
       </div>
+    </>
+  )
+
+  if (onSelect) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onSelect(date)}
+          className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-md px-2 py-3 text-left transition-colors hover:bg-accent sm:flex sm:items-center sm:gap-2.5"
+        >
+          {content}
+        </button>
+      </li>
+    )
+  }
+
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-2 py-3 sm:flex sm:items-center sm:gap-2.5">
+      {content}
     </li>
   )
 }
 
-export function MonthlyReferenceView({ userId, initialYearMonth }: { userId: string; initialYearMonth?: string }) {
-  const [yearMonth, setYearMonth] = useState(() => initialYearMonth ?? formatDate(new Date()).slice(0, 7))
+export function MonthlyReferenceView({
+  userId,
+  initialYearMonth,
+  restrictToYearMonth,
+  onSelectDate,
+}: {
+  userId: string
+  initialYearMonth?: string
+  /** 指定すると、この年月に固定し前月・次月への移動をできなくする(承認レビューの対象範囲を
+   *  限定する用途)。 */
+  restrictToYearMonth?: string
+  /** 指定すると、日別の内訳の各行をクリックできるようにし、選んだ日付を通知する。 */
+  onSelectDate?: (date: string) => void
+}) {
+  const [yearMonth, setYearMonth] = useState(() => restrictToYearMonth ?? initialYearMonth ?? formatDate(new Date()).slice(0, 7))
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
 
@@ -89,17 +130,19 @@ export function MonthlyReferenceView({ userId, initialYearMonth }: { userId: str
         title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
         navigation={
-          <div className="flex gap-2">
-            <Button variant="secondary" size="icon" title="前月" aria-label="前月" onClick={() => setYearMonth((ym) => addMonths(ym, -1))}>
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <Button variant="secondary" disabled={yearMonth === currentYearMonth} onClick={() => setYearMonth(currentYearMonth)}>
-              今月
-            </Button>
-            <Button variant="secondary" size="icon" title="次月" aria-label="次月" onClick={() => setYearMonth((ym) => addMonths(ym, 1))}>
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
+          restrictToYearMonth === undefined && (
+            <div className="flex gap-2">
+              <Button variant="secondary" size="icon" title="前月" aria-label="前月" onClick={() => setYearMonth((ym) => addMonths(ym, -1))}>
+                <ChevronLeft aria-hidden="true" />
+              </Button>
+              <Button variant="secondary" disabled={yearMonth === currentYearMonth} onClick={() => setYearMonth(currentYearMonth)}>
+                今月
+              </Button>
+              <Button variant="secondary" size="icon" title="次月" aria-label="次月" onClick={() => setYearMonth((ym) => addMonths(ym, 1))}>
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
+          )
         }
       >
         <p className="mb-3 text-sm text-muted-foreground">{yearMonth}</p>
@@ -139,7 +182,7 @@ export function MonthlyReferenceView({ userId, initialYearMonth }: { userId: str
         <Card title="日別の内訳">
           <ul className="divide-y divide-border">
             {dates.map((date) => (
-              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} />
+              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} onSelect={onSelectDate} />
             ))}
           </ul>
         </Card>
@@ -237,8 +280,20 @@ function ReadOnlyPunchLogCard({ date, userId }: { date: string; userId: string }
   )
 }
 
-export function DailyReferenceView({ userId }: { userId: string }) {
-  const [date, setDate] = useState(() => formatDate(new Date()))
+export function DailyReferenceView({
+  userId,
+  initialDate,
+  restrictNavigation = false,
+  onBack,
+}: {
+  userId: string
+  initialDate?: string
+  /** trueの場合、前日・今日・翌日への移動を隠す(承認レビューで対象日を固定する用途)。 */
+  restrictNavigation?: boolean
+  /** 指定すると、ナビゲーションに戻るボタンを表示する(月次一覧へ戻る等)。 */
+  onBack?: () => void
+}) {
+  const [date, setDate] = useState(() => initialDate ?? formatDate(new Date()))
   const today = formatDate(new Date())
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
   const { data, isLoading, error } = useWeek(monday, userId)
@@ -251,17 +306,26 @@ export function DailyReferenceView({ userId }: { userId: string }) {
       title="日次勤怠"
       actions={statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
       navigation={
-        <div className="flex gap-2">
-          <Button variant="secondary" size="icon" title="前日" aria-label="前日" onClick={() => setDate((prev) => addDays(prev, -1))}>
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <Button variant="secondary" disabled={date === today} onClick={() => setDate(today)}>
-            今日
-          </Button>
-          <Button variant="secondary" size="icon" title="翌日" aria-label="翌日" onClick={() => setDate((prev) => addDays(prev, 1))}>
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
+        restrictNavigation ? (
+          onBack && (
+            <Button variant="secondary" onClick={onBack}>
+              <ChevronLeft aria-hidden="true" />
+              月次に戻る
+            </Button>
+          )
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="secondary" size="icon" title="前日" aria-label="前日" onClick={() => setDate((prev) => addDays(prev, -1))}>
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <Button variant="secondary" disabled={date === today} onClick={() => setDate(today)}>
+              今日
+            </Button>
+            <Button variant="secondary" size="icon" title="翌日" aria-label="翌日" onClick={() => setDate((prev) => addDays(prev, 1))}>
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        )
       }
     >
       <p className="mb-3 text-sm text-muted-foreground">

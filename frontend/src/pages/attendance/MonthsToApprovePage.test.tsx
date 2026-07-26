@@ -282,4 +282,51 @@ describe('MonthsToApprovePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '勤務表を閉じる' }))
     expect(screen.queryByRole('heading', { name: '月次勤怠' })).not.toBeInTheDocument()
   })
+
+  it('restricts the expanded review to the request month and drills into a selected day', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue(paginated([{ ...submittedMonth, user: targetEmployeeUser }]))
+    const zeroTotals: AttendanceMonthlyCalculationTotals = {
+      work_minutes: 0,
+      payroll_work_minutes: 0,
+      prescribed_work_minutes: 0,
+      statutory_within_overtime_minutes: 0,
+      statutory_excess_overtime_minutes: 0,
+      statutory_excess_overtime_within_60h_minutes: 0,
+      statutory_excess_overtime_over_60h_minutes: 0,
+      late_night_work_minutes: 0,
+      late_night_prescribed_work_minutes: 0,
+      late_night_statutory_within_overtime_minutes: 0,
+      late_night_statutory_excess_overtime_minutes: 0,
+      legal_holiday_work_minutes: 0,
+      prescribed_holiday_work_minutes: 0,
+      late_night_legal_holiday_work_minutes: 0,
+    }
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...submittedMonth, user: targetEmployeeUser },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: '実際の勤務表を確認' }))
+    await screen.findByRole('heading', { name: '月次勤怠' })
+
+    // レビュー対象は申請された年月のみで、他の月には遷移できない。
+    expect(screen.queryByRole('button', { name: '前月' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '次月' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '今月' })).not.toBeInTheDocument()
+
+    // 対象行を選択すると対象日に遷移する。
+    await userEvent.click(screen.getByText('2026-07-01(水)'))
+
+    expect(await screen.findByRole('heading', { name: '日次勤怠' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '前日' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '翌日' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /月次に戻る/ }))
+    expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
+  })
 })

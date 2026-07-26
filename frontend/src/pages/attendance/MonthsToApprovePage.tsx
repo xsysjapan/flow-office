@@ -15,13 +15,7 @@ import type { AttendanceMonthStatus } from '../../api/types'
 import { useApproveMonth, useCloseMonth, useMonthsToApprove, useReturnMonth } from '../../hooks/useAttendance'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
 import { hasAnyRole, ROLE } from '../../utils/roles'
-import { DailyReferenceView, MonthlyReferenceView, WeeklyReferenceView, type ViewMode } from './AttendanceReferencePage'
-
-const VIEW_MODES: Array<{ key: ViewMode; label: string }> = [
-  { key: 'month', label: '月次' },
-  { key: 'week', label: '週次' },
-  { key: 'day', label: '日次' },
-]
+import { DailyReferenceView, MonthlyReferenceView } from './AttendanceReferencePage'
 
 const STATUS_FILTER_OPTIONS: Array<{ value: AttendanceMonthStatus | ''; label: string }> = [
   { value: '', label: 'すべて' },
@@ -29,30 +23,23 @@ const STATUS_FILTER_OPTIONS: Array<{ value: AttendanceMonthStatus | ''; label: s
   { value: 'approved', label: '承認済み' },
 ]
 
-/** 承認者が対象社員の実際の勤務表(月次・週次・日次・打刻ログ)を確認するための展開領域。
- *  行ごとに独立させるため、呼び出し側で`key`に対象月のidを渡してリセットさせる想定。 */
+/**
+ * 承認者が対象社員の実際の勤務表(月次・打刻ログ)を確認するための展開領域。
+ * レビュー対象はこの申請の年月のみのため、他の月には遷移できないようにする
+ * (MonthlyReferenceViewの前月・次月ナビは表示しない)。日別の行を選ぶとその日の
+ * 詳細に遷移し、「月次に戻る」で一覧に戻る(オブジェクト指向UI)。
+ * 行ごとに独立させるため、呼び出し側で`key`に対象月のidを渡してリセットさせる想定。
+ */
 function MonthAttendanceReview({ userId, yearMonth }: { userId: string; yearMonth: string }) {
-  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-md border border-border p-3">
-      <div className="flex gap-2">
-        {VIEW_MODES.map((mode) => (
-          <Button
-            key={mode.key}
-            type="button"
-            size="sm"
-            variant={viewMode === mode.key ? 'primary' : 'secondary'}
-            onClick={() => setViewMode(mode.key)}
-          >
-            {mode.label}
-          </Button>
-        ))}
-      </div>
-
-      {viewMode === 'month' && <MonthlyReferenceView userId={userId} initialYearMonth={yearMonth} />}
-      {viewMode === 'week' && <WeeklyReferenceView userId={userId} />}
-      {viewMode === 'day' && <DailyReferenceView userId={userId} />}
+    <div className="mt-3 rounded-md border border-border p-3">
+      {selectedDate === null ? (
+        <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={setSelectedDate} />
+      ) : (
+        <DailyReferenceView userId={userId} initialDate={selectedDate} restrictNavigation onBack={() => setSelectedDate(null)} />
+      )}
     </div>
   )
 }
