@@ -161,7 +161,12 @@ class AttendanceDayPunchSyncer
         if ($status === AttendanceDayStatus::WORKING && $day?->actual_start_at === null) {
             $firstClockIn = $punches->firstWhere('punch_type', PunchType::CLOCK_IN);
             if ($firstClockIn !== null) {
-                $actualStartAt = LocalDateTime::formatWithOffsetMinutes($firstClockIn->punched_at, $firstClockIn->utc_offset_minutes);
+                $workStyle = $this->resolveWorkStyle($userId, $workDate, $shiftAssignmentId);
+                $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
+                $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
+
+                $roundedClockIn = $this->timeRounder->roundSegmentStart($firstClockIn->punched_at, $roundingUnitMinutes, $roundingMode);
+                $actualStartAt = LocalDateTime::formatWithOffsetMinutes($roundedClockIn, $firstClockIn->utc_offset_minutes);
                 $utcOffsetMinutes = $firstClockIn->utc_offset_minutes;
             }
         }
@@ -194,10 +199,7 @@ class AttendanceDayPunchSyncer
         $shiftAssignmentId = $day?->shift_assignment_id ?? $this->resolveShiftAssignmentId($userId, $workDate);
         $offsetMinutes = $reconciled['utc_offset_minutes'];
 
-        $workStyle = $shiftAssignmentId !== null
-            ? EmployeeShiftAssignment::query()->with('workStyle')->find($shiftAssignmentId)?->workStyle
-            : null;
-        $workStyle ??= $this->workStyleFallbackResolver->resolveForUser($userId, Carbon::parse($workDate));
+        $workStyle = $this->resolveWorkStyle($userId, $workDate, $shiftAssignmentId);
         $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
         $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
 
@@ -323,5 +325,18 @@ class AttendanceDayPunchSyncer
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
             ->value('id');
+    }
+
+    /**
+     * 丸め設定の元になる働き方を、勤務予定 → その月の割当 → システム既定の順で解決する
+     * (WorkStyleFallbackResolver参照)。
+     */
+    private function resolveWorkStyle(string $userId, string $workDate, ?string $shiftAssignmentId): ?WorkStyle
+    {
+        $workStyle = $shiftAssignmentId !== null
+            ? EmployeeShiftAssignment::query()->with('workStyle')->find($shiftAssignmentId)?->workStyle
+            : null;
+
+        return $workStyle ?? $this->workStyleFallbackResolver->resolveForUser($userId, Carbon::parse($workDate));
     }
 }

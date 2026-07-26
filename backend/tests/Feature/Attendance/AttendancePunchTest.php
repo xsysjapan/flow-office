@@ -150,6 +150,40 @@ class AttendancePunchTest extends TestCase
         $this->assertSame('2026-07-09T13:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($break->break_end_at, $day->utc_offset_minutes));
     }
 
+    public function test_clock_in_only_is_rounded_while_still_working(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+        $this->createWorkStyleWithRounding(30, WorkStyle::ROUNDING_MODE_NEAREST);
+
+        // 退勤がまだ無く「勤務中」のままでも、四捨五入(8:45→9:00)は反映される。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:45:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+
+        $this->assertNotNull($day);
+        $this->assertSame('working', $day->status);
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+    }
+
+    public function test_break_start_only_keeps_the_rounded_clock_in_while_on_break(): void
+    {
+        $employee = User::factory()->create();
+        $workDate = '2026-07-09';
+        $this->createWorkStyleWithRounding(30, WorkStyle::ROUNDING_MODE_NEAREST);
+
+        // 出勤(8:45→9:00に丸め)の後、退勤せずに休憩開始だけした場合も、
+        // 丸め済みの出勤時刻が休憩中のまま保たれる。
+        $this->recordPunch($employee, $workDate, 'clock_in', "{$workDate}T08:45:00+09:00")->assertSuccessful();
+        $this->recordPunch($employee, $workDate, 'break_start', "{$workDate}T12:00:00+09:00")->assertSuccessful();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
+
+        $this->assertNotNull($day);
+        $this->assertSame('on_break', $day->status);
+        $this->assertSame('2026-07-09T09:00:00+09:00', LocalDateTime::formatWithOffsetMinutes($day->actual_start_at, $day->utc_offset_minutes));
+    }
+
     public function test_a_punch_offset_different_from_the_owners_timezone_is_preserved_on_the_day(): void
     {
         $employee = User::factory()->create(); // timezone: Asia/Tokyo (既定値)
