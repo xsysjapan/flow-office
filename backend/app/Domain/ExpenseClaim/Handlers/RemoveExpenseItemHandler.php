@@ -18,7 +18,7 @@ use App\Models\ExpenseItem;
  */
 class RemoveExpenseItemHandler implements CommandHandler
 {
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof RemoveExpenseItem);
 
@@ -36,5 +36,7 @@ class RemoveExpenseItemHandler implements CommandHandler
         ExpenseClaimAggregate::retrieve($claim->id)
             ->removeItem($item->id)
             ->persist();
+
+        return null;
     }
 }
