@@ -51,6 +51,19 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [{ to: '/admin/request-types', label: '申請種別', description: '申請フォームと承認ルートを管理する' }],
   },
   {
+    label: '経費精算設定',
+    icon: Workflow,
+    roles: [ROLE.ADMIN, ROLE.ACCOUNTING_STAFF],
+    items: [
+      { to: '/admin/expense-categories', label: '経費区分', description: '経費区分ごとの証憑要件・承認省略ルールを管理する' },
+      {
+        to: '/admin/expense-route-templates',
+        label: '移動区間テンプレート(全社共有)',
+        description: '全社員が利用できる移動区間テンプレートを管理する',
+      },
+    ],
+  },
+  {
     label: 'システム',
     icon: Settings,
     roles: [ROLE.ADMIN],

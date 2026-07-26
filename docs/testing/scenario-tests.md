@@ -156,36 +156,39 @@
 8. 差し戻しパターンとして、承認者が有給申請を差し戻し(`POST .../return`)、
    本人が再申請または取消(`POST .../cancel`)する流れも1回試す。
 
-### シナリオ4: 交通費申請
+### シナリオ4: 経費精算(交通費)
 
-**このシナリオは経費精算専用ドメイン (docs/30-usecases-expense.md) への移行前の、
-汎用申請 (`request_types`: `commuting_expense`/`expense_reimbursement`) を前提とした
-現行実装のテスト手順である。専用ドメインへの実装移行後は、このシナリオ自体を
-UC-X009〜UC-X012ベースに書き換える必要がある。**
+**経費精算専用ドメイン (docs/30-usecases-expense.md) への移行後の手順。旧・汎用申請
+(`request_types`: `commuting_expense`/`expense_reimbursement`)経由のテスト手順は廃止した
+(この2つのrequest_typeはシード対象から除外済み)。**
 
-打刻ユーザーが月内の出張で発生した交通費を精算申請する。
+打刻ユーザーが交通費の経費精算を作成〜申請する。
 
-1. 申請種別「交通費精算」(`commuting_expense`)を選び、金額・経路を入力して下書き作成する
-   (UC-W002、`POST /workflow-requests`)。
-2. 承認者を指定して提出する(`POST /workflow-requests/{id}/submit`)。
-3. 承認者が承認する(UC-W003、`POST /workflow-requests/{id}/approve`)。
-4. 承認により自動生成される経理向けバックオフィスタスク(`task_type=expense_reimbursement`)
-   を確認する(UC-B001、`GET /backoffice-tasks/unassigned`)。
-5. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`。割り当てと
+1. 経費精算(`/expenses/new`)で対象期間を指定して下書きを作成する(UC-X010、
+   `POST /expense-claims`)。
+2. 表形式入力(UC-X006)で日付・金額の明細を追加し、まとめて保存する
+   (`POST /expense-claims/{id}/items/bulk`)。
+3. 承認者を指定して提出する(UC-X010、`POST /expense-claims/{id}/submit`)。
+4. 承認者が承認待ち一覧(`/expenses/to-approve`)から開いて承認する(UC-X011、
+   `POST /expense-claims/{id}/approve`)。
+5. 承認により自動生成される経理向けバックオフィスタスク(`task_type=expense_reimbursement`
+   固定、経費区分によらない。`source_type=expense_claim`)を確認する(UC-B001、
+   `GET /backoffice-tasks/unassigned`)。
+6. 経理担当者(小林誠)がタスクを自分に割り当て(UC-B002、`POST .../assign`。割り当てと
    同時に自動的に`in_review`になる)、処理ステータスを進めて完了にする(UC-B003、
-   `POST .../status`、`payment_scheduled`→`completed`)。**2026-07時点で
-   `request_types.allowed_status_transitions`(タスク種別ごとの遷移マスタ、
-   `backend/database/seeders/RequestTypeSeeder.php`)が追加されたため、経費精算系
-   (`commuting_expense`/`expense_reimbursement`)では`in_review`から`processing`への
-   遷移は許可されておらず、`payment_scheduled`に直接進む。**
-6. 経理担当者が経費CSVを出力し、金額が含まれることを確認する(UC-E001、
-   `GET /exports/expenses`)。**2026-07-10時点でこの出力用の画面はまだ実装されて
-   おらず、APIを直接呼ぶ以外に確認方法がない**。フロントエンドにCSV出力画面
+   `POST .../status`、`payment_scheduled`→`completed`。`in_review`から`processing`への
+   遷移は許可されておらず、`payment_scheduled`に直接進む)。
+7. 経理担当者が経費CSVを出力し、金額が含まれることを確認する(UC-E001、
+   `GET /exports/expenses`)。**2026-07時点でこの出力用の画面はまだ実装されておらず、
+   APIを直接呼ぶ以外に確認方法がない**。フロントエンドにCSV出力画面
    (`AttendanceExportPage`相当のもの)を追加するかどうかは別途検討する。
-7. 申請者が申請一覧・履歴でステータス変遷を確認する(`GET /workflow-requests/{id}/history`)。
+8. 申請者が経費精算の詳細・履歴でステータス変遷を確認する
+   (`GET /expense-claims/{id}/history`)。
 
-**確認ポイント**: `workflow_requests.status` と `backoffice_tasks.status` が独立した
-ステータス系列として管理され、どちらか一方だけを見て「完了」と誤認しないか。
+**確認ポイント**: `expense_claims.status` と `backoffice_tasks.status` が独立した
+ステータス系列として管理され、どちらか一方だけを見て「完了」と誤認しないか。勤怠実績
+(UC-X004/UC-X011)・定期区間控除の自己申告(UC-X009)・レシート添付必須のバリデーション
+(UC-X005)は、このシナリオでは未検証(別シナリオまたは今後の拡張で確認する)。
 
 ### シナリオ5: 名刺の申請〜作成・発行
 

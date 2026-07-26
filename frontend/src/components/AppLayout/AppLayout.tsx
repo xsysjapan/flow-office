@@ -43,6 +43,8 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
     items: [
       { to: '/requests', label: '自分の申請' },
       { to: '/requests/new', label: '新規申請' },
+      { to: '/expenses', label: '経費精算' },
+      { to: '/expenses/new', label: '経費精算(新規作成)' },
     ],
   },
   {
@@ -53,6 +55,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
       { to: '/attendance/months/to-approve', label: '月次勤怠承認' },
       { to: '/paid-leave/to-approve', label: '有給申請承認' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave/to-approve', label: '特別休暇申請承認' }] : []),
+      { to: '/expenses/to-approve', label: '経費精算承認' },
     ],
   },
   {
@@ -72,7 +75,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
   {
     label: '管理',
     icon: Settings,
-    roles: [ROLE.ADMIN, ROLE.HR_STAFF],
+    roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
     items: [{ to: '/admin', label: '管理メニュー' }],
   },
   ]
