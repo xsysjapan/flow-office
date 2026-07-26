@@ -8,6 +8,7 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -147,13 +148,12 @@ export function MonthsToApprovePage() {
             </NativeSelect>
           </FormField>
         </div>
-        <div className="w-36">
+        <div className="w-48">
           <FormField label="年月" htmlFor="months-to-approve-year-month">
-            <Input
+            <YearMonthPicker
               id="months-to-approve-year-month"
-              type="month"
-              value={yearMonth}
-              onChange={(e) => handleFilterChange({ yearMonth: e.target.value })}
+              value={yearMonth || undefined}
+              onChange={(value) => handleFilterChange({ yearMonth: value ?? '' })}
             />
           </FormField>
         </div>
