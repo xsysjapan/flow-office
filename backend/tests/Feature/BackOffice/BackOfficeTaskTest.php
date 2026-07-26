@@ -23,7 +23,7 @@ class BackOfficeTaskTest extends TestCase
         $task = BackOfficeTask::query()->create([
             'source_type' => 'workflow_request',
             'source_id' => 1,
-            'task_type' => 'expense_reimbursement',
+            'task_type' => 'business_card',
             'title' => 'テストタスク',
             'status' => 'not_started',
         ]);

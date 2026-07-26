@@ -51,7 +51,7 @@ class RequestTypeMasterConfigTest extends TestCase
     public function test_submitting_without_an_attachment_fails_when_the_request_type_requires_one(): void
     {
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
             'requires_attachment' => true,
         ]);
         $applicant = User::factory()->create();
@@ -69,7 +69,7 @@ class RequestTypeMasterConfigTest extends TestCase
     public function test_submitting_with_an_attachment_succeeds_when_the_request_type_requires_one(): void
     {
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
             'requires_attachment' => true,
         ]);
         $applicant = User::factory()->create();
