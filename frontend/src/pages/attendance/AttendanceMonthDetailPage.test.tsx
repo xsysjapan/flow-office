@@ -212,6 +212,34 @@ describe('AttendanceMonthDetailPage', () => {
     expect(await screen.findByRole('button', { name: '提出する' })).toBeDisabled()
   })
 
+  it('disables the bulk-entry button once the month is submitted', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: { ...notSubmittedMonth, status: 'submitted' },
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+
+    renderPage()
+
+    await screen.findByText('提出済み')
+    await waitFor(() => expect(screen.getByRole('button', { name: '一括入力' })).toBeDisabled())
+  })
+
+  it('keeps the bulk-entry button enabled for a not_submitted month', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '一括入力' })).not.toBeDisabled()
+  })
+
   it('does not show a submit control for a future month', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],

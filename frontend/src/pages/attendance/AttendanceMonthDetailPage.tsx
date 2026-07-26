@@ -33,7 +33,7 @@ function useNavigableYearMonths(yearMonth: string) {
   return { prevMonth, nextMonth }
 }
 
-function MonthNav({ yearMonth }: { yearMonth: string }) {
+function MonthNav({ yearMonth, bulkEntryLocked }: { yearMonth: string; bulkEntryLocked: boolean }) {
   const navigate = useNavigate()
   const { prevMonth, nextMonth } = useNavigableYearMonths(yearMonth)
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
@@ -61,7 +61,7 @@ function MonthNav({ yearMonth }: { yearMonth: string }) {
       <Button variant="secondary" size="icon" title="次月" aria-label="次月" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
         <ChevronRight aria-hidden="true" />
       </Button>
-      <MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} />
+      <MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} disabled={bulkEntryLocked} />
     </div>
   )
 }
@@ -86,6 +86,7 @@ export function AttendanceMonthDetailPage() {
   const canSubmit =
     yearMonth <= currentYearMonth &&
     (month === null || month === undefined || month.status === 'not_submitted' || month.status === 'returned')
+  const bulkEntryLocked = month != null && (month.status === 'submitted' || month.status === 'approved' || month.status === 'closed')
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
@@ -95,7 +96,7 @@ export function AttendanceMonthDetailPage() {
       <Card
         title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
-        navigation={<MonthNav yearMonth={yearMonth} />}
+        navigation={<MonthNav yearMonth={yearMonth} bulkEntryLocked={bulkEntryLocked} />}
       >
         <p className="mb-3 text-sm text-muted-foreground">{yearMonth}</p>
 

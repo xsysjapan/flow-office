@@ -43,6 +43,8 @@ export interface MonthlyAttendanceBulkEntryModalProps {
   /** 一覧から個別にトリガーボタンを描画したくない場合(制御されたopen/onOpenChange)向け。省略時は自前のトリガーボタンを表示する。 */
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** 対象月が提出済み以降でロック中の場合など、トリガーボタンを非活性にしたい場合。 */
+  disabled?: boolean
 }
 
 /**
@@ -55,6 +57,7 @@ export function MonthlyAttendanceBulkEntryModal({
   yearMonth,
   open: controlledOpen,
   onOpenChange,
+  disabled = false,
 }: MonthlyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -135,7 +138,7 @@ export function MonthlyAttendanceBulkEntryModal({
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       {!isControlled && (
-        <Button variant="secondary" onClick={() => handleOpenChange(true)}>
+        <Button variant="secondary" disabled={disabled} onClick={() => handleOpenChange(true)}>
           一括入力
         </Button>
       )}
