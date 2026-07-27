@@ -11,6 +11,7 @@ import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import {
   useDisableDevice,
+  useEnableDevice,
   useGrantDeviceScope,
   useIssueDevicePairingClaim,
   useUpdateDeviceRoles,
@@ -109,6 +110,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
   const updateRoles = useUpdateDeviceRoles()
   const grantScope = useGrantDeviceScope()
   const disableDevice = useDisableDevice()
+  const enableDevice = useEnableDevice()
 
   const grantedScopes = device.scopes ?? []
   const ungrantedScopes = GRANTABLE_DEVICE_SCOPES.filter((scope) => !grantedScopes.includes(scope))
@@ -144,6 +146,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
       issuePairingClaim.reset()
       grantScope.reset()
       disableDevice.reset()
+      enableDevice.reset()
       updateRoles.reset()
       setScopeToGrant('')
     }
@@ -308,6 +311,24 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
               onClick={() => disableDevice.mutate(device.id)}
             >
               停止する
+            </Button>
+          </div>
+        )}
+
+        {device.status === 'disabled' && (
+          <div className="rounded-md border border-border p-3">
+            <p className="mb-2 text-sm font-medium text-foreground">稼働状態</p>
+            <p className="mb-2 text-xs text-muted-foreground">
+              有効化すると「ペアリング待ち」に戻り、改めてペアリング用QRを発行して再ペアリングが必要になります。
+            </p>
+            {enableDevice.error && <ErrorMessage error={enableDevice.error} />}
+            <Button
+              size="sm"
+              variant="secondary"
+              isLoading={enableDevice.isPending}
+              onClick={() => enableDevice.mutate(device.id)}
+            >
+              有効化する
             </Button>
           </div>
         )}

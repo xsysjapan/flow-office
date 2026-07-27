@@ -91,6 +91,7 @@ use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
+use App\Domain\Device\Commands\EnableDevice;
 use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
@@ -101,6 +102,7 @@ use App\Domain\Device\Commands\WarnStaleDevices;
 use App\Domain\Device\Handlers\ClaimDevicePairingHandler;
 use App\Domain\Device\Handlers\DeleteDeviceHandler;
 use App\Domain\Device\Handlers\DisableDeviceHandler;
+use App\Domain\Device\Handlers\EnableDeviceHandler;
 use App\Domain\Device\Handlers\GrantDeviceScopeHandler;
 use App\Domain\Device\Handlers\IssueDevicePairingClaimHandler;
 use App\Domain\Device\Handlers\RegisterDeviceHandler;
@@ -202,6 +204,7 @@ return [
         IssueDevicePairingClaim::class => IssueDevicePairingClaimHandler::class,
         ClaimDevicePairing::class => ClaimDevicePairingHandler::class,
         DisableDevice::class => DisableDeviceHandler::class,
+        EnableDevice::class => EnableDeviceHandler::class,
         RevokeDevice::class => RevokeDeviceHandler::class,
         DeleteDevice::class => DeleteDeviceHandler::class,
         GrantDeviceScope::class => GrantDeviceScopeHandler::class,

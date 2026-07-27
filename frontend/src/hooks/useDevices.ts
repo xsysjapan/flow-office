@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   deleteDevice,
   disableDevice,
+  enableDevice,
   fetchDevice,
   fetchDevices,
   grantDeviceScope,
@@ -59,6 +60,17 @@ export function useDisableDevice() {
 
   return useMutation({
     mutationFn: (deviceId: string) => disableDevice(deviceId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+  })
+}
+
+export function useEnableDevice() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (deviceId: string) => enableDevice(deviceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['devices'] })
     },

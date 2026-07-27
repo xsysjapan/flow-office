@@ -251,6 +251,9 @@ class DeviceRegistrationTest extends TestCase
 
     public function test_disabled_or_revoked_device_cannot_reissue_pairing(): void
     {
+        // disabled端末は「有効化(POST /devices/{device}/enable)してからpairingをやり直す」
+        // 2段階の設計にしたため、enableを経ないこの経路では引き続き422になる
+        // (DeviceEnableTestで有効化後の再ペアリングを別途カバーする)。
         $admin = $this->admin();
         $device = Device::factory()->create([
             'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,

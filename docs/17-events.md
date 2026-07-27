@@ -94,6 +94,8 @@
   再発行。Androidアプリの削除等で端末が打刻できなくなった場合の復旧手段。端末は一旦
   `pending_pairing`に戻り、再ペアリング完了で`device.paired`が改めて記録される)
 - `device.disabled` (管理者・本人による一時停止)
+- `device.enabled` (停止(disabled)中の端末を`pending_pairing`に戻し、UC-D002のペアリングを
+  やり直せるようにする。失効(revoked)端末には使えない)
 - `device.revoked` (紛失・盗難等による失効。再度使うには新規登録が必要)
 - `device.deleted` (停止・失効済み端末の一覧からの論理削除。監査証跡は`stored_events`に残る)
 - `device.role_assigned` (端末役割(`device_roles`)の追加・変更)

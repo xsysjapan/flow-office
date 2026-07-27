@@ -83,7 +83,10 @@ Androidアプリの削除・端末の初期化などで本トークンを失っ�
 既存の本トークンを`tokens()->delete()`で失効させ、端末を一旦`pending_pairing`へ戻した上で
 新しいclaim tokenを発行する(`device.pairing_reissued`イベント)。以降はUC-D002のステップ2
 以降と同じ流れで再ペアリングし、完了時に改めて`device.paired`が記録され`status=active`へ戻る。
-`disabled`/`revoked`の端末はこの経路の対象外(停止解除・失効後の扱いはUC-D005参照)。
+`disabled`/`revoked`の端末はこの経路の対象外。`disabled`の端末はUC-D005の有効化
+(`POST /devices/{device}/enable`)で`pending_pairing`に戻せばこの経路に乗せられるが、
+`revoked`の端末は恒久的に対象外のままで、UC-D001/UC-D002からの新規登録し直しが必要
+(UC-D005参照)。
 
 端末の停止・失効(UC-D005)時は、この端末のSanctumトークンを`tokens()->delete()`で
 すべて削除する。未使用のclaim tokenが残っていても、これにより自動的に無効化される。
@@ -181,12 +184,18 @@ Android以外の機器も共通の`devices`モデル(`device_type`の該当す�
 3. 対応するSanctumトークンを削除する(`$device->tokens()->delete()`)
 4. `device.disabled`または`device.revoked`イベントを記録する
 5. 失効した端末を再度使う場合は、UC-D001/UC-D002から登録し直す
-6. 停止・失効済みの端末は、管理者が一覧から削除できる(`device.deleted`)。監査証跡
+6. 停止済みの端末を再度使う場合は、管理者(個人端末の場合は本人でも可)が
+   `POST /devices/{device}/enable`で有効化する(`device.enabled`イベント。`status`は
+   `pending_pairing`に戻り、`disabled_at`はクリアされる)。有効化後はUC-D002の
+   ペアリング(`POST /devices/{device}/pairing`)をやり直すことで通常通り復旧できる。
+   稼働中(active)・ペアリング待ち(pending_pairing)の端末や、失効(revoked)済みの端末を
+   有効化しようとした場合は422になる(停止(disabled)中の端末のみが対象)
+7. 停止・失効済みの端末は、管理者が一覧から削除できる(`device.deleted`)。監査証跡
    (`stored_events`、UC-M003の監査ログ)を残すため物理削除はせず論理削除
    (`devices.deleted_at`)のみ行う。稼働中・ペアリング待ちの端末は先に停止/失効させない限り
    削除できない。削除済みの端末は一覧画面の「削除済みを表示」切り替えで確認できる
 
-関連イベント: `device.disabled`, `device.revoked`, `device.deleted`
+関連イベント: `device.disabled`, `device.enabled`, `device.revoked`, `device.deleted`
 関連テーブル: `devices`
 
 ## UC-D006: Android端末を管理者モードにする
@@ -244,6 +253,7 @@ Web管理画面からIDを直接入力させるのではなく、共有Android�
   (打刻リーダー/認証端末/入退室管理)と、端末詳細で変更できる役割の選択肢は同じにする
   (登録後に選び直せないと役割の変更手段がなくなるため)
 - 端末停止・失効、監査履歴(UC-M003の監査ログ画面から`aggregate_type=device`で参照)
+- 停止(disabled)中の端末の有効化(停止解除。`pending_pairing`に戻し、再ペアリングへ進む)
 
 ### ユーザー向け(個人端末)
 

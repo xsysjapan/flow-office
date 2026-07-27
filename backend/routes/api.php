@@ -281,9 +281,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
         Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
     });
-    // 停止・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
+    // 停止・有効化・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
     // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。
     Route::post('/devices/{device}/disable', [DeviceController::class, 'disable']);
+    Route::post('/devices/{device}/enable', [DeviceController::class, 'enable']);
     Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke']);
 
     // --- 認証キー管理 (docs/24-usecases-authentication-keys.md UC-K001〜UC-K003) ---

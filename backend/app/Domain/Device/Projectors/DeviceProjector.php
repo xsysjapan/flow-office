@@ -4,6 +4,7 @@ namespace App\Domain\Device\Projectors;
 
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
+use App\Domain\Device\Events\DeviceEnabled;
 use App\Domain\Device\Events\DevicePaired;
 use App\Domain\Device\Events\DevicePairingClaimIssued;
 use App\Domain\Device\Events\DeviceRegistered;
@@ -72,6 +73,14 @@ class DeviceProjector extends Projector
         $this->device($event->aggregateRootUuid())->update([
             'status' => DeviceStatus::DISABLED,
             'disabled_at' => $event->disabledAt,
+        ]);
+    }
+
+    public function onDeviceEnabled(DeviceEnabled $event): void
+    {
+        $this->device($event->aggregateRootUuid())->update([
+            'status' => DeviceStatus::PENDING_PAIRING,
+            'disabled_at' => null,
         ]);
     }
 
