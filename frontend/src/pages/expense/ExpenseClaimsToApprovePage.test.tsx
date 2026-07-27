@@ -3,8 +3,12 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as expenseClaimsApi from '../../api/expenseClaims'
-import type { ExpenseClaim } from '../../api/types'
+import type { ExpenseClaim, Paginated } from '../../api/types'
 import { ExpenseClaimsToApprovePage } from './ExpenseClaimsToApprovePage'
+
+function paginated(data: ExpenseClaim[]): Paginated<ExpenseClaim> {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -19,7 +23,7 @@ function renderPage() {
 
 describe('ExpenseClaimsToApprovePage', () => {
   it('shows an empty state when there is nothing to approve', async () => {
-    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockResolvedValue([])
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockResolvedValue(paginated([]))
 
     renderPage()
 
@@ -42,7 +46,7 @@ describe('ExpenseClaimsToApprovePage', () => {
         { id: 'item-1', category_id: 1, usage_date: '2026-07-10', origin: null, destination: null, transport_type: '電車', amount: 5400, destination_name: null, purpose: '客先訪問', project_id: null, evidence_type: 'receipt_required', fact_reference_type: null, fact_reference_id: null, commuting_deduction_amount: null },
       ],
     }
-    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockResolvedValue([claim])
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockResolvedValue(paginated([claim]))
 
     renderPage()
 

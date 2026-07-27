@@ -1,8 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
-import type { ExpenseClaim } from '../../api/types'
+import type { ExpenseClaim, Paginated } from '../../api/types'
 import { ExpenseClaimListPage } from './ExpenseClaimListPage'
+
+function paginated(data: ExpenseClaim[]): Paginated<ExpenseClaim> {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+}
 
 const sample: ExpenseClaim[] = [
   {
@@ -37,7 +41,7 @@ const sample: ExpenseClaim[] = [
 
 function withSeededList(data: ExpenseClaim[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['expense-claims', 'mine'], data)
+  queryClient.setQueryData(['expense-claims', 'mine'], paginated(data))
 
   return function Decorator() {
     return (

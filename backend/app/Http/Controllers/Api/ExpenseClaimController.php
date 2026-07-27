@@ -42,7 +42,7 @@ class ExpenseClaimController extends Controller
     public function indexMine(Request $request): AnonymousResourceCollection
     {
         $claims = ExpenseClaim::query()
-            ->with(['employee', 'approver'])
+            ->with(['employee', 'approver', 'items'])
             ->where('employee_id', $request->user()->id)
             ->latest()
             ->paginate(20);
@@ -60,7 +60,7 @@ class ExpenseClaimController extends Controller
     public function indexToApprove(Request $request): AnonymousResourceCollection
     {
         $claims = ExpenseClaim::query()
-            ->with(['employee', 'approver'])
+            ->with(['employee', 'approver', 'items'])
             ->where('approver_user_id', $request->user()->id)
             ->where('status', 'in_review')
             ->latest()

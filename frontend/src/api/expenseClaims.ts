@@ -1,13 +1,20 @@
 import { apiFetch } from './client'
-import type { ExpenseClaim, ExpenseClaimHistoryEntry, ExpenseEvidenceType, ExpenseFactReferenceType, ExpenseItem } from './types'
+import type {
+  ExpenseClaim,
+  ExpenseClaimHistoryEntry,
+  ExpenseEvidenceType,
+  ExpenseFactReferenceType,
+  ExpenseItem,
+  Paginated,
+} from './types'
 
 /** UC-X010: 自分の経費精算一覧。 */
-export function fetchMyExpenseClaims(): Promise<ExpenseClaim[]> {
+export function fetchMyExpenseClaims(): Promise<Paginated<ExpenseClaim>> {
   return apiFetch('/expense-claims/mine')
 }
 
 /** UC-X011: 自分が承認者に指定されている経費精算一覧。 */
-export function fetchExpenseClaimsToApprove(): Promise<ExpenseClaim[]> {
+export function fetchExpenseClaimsToApprove(): Promise<Paginated<ExpenseClaim>> {
   return apiFetch('/expense-claims/to-approve')
 }
 
@@ -47,7 +54,7 @@ export function addExpenseItem(claimId: string, input: SaveExpenseItemInput): Pr
 /** UC-X006/X007/X008: 表形式一括入力・移動経路分解・テンプレート複数日生成のいずれも
  *  複数明細をまとめて送るこのエンドポイントに集約する。 */
 export function addExpenseItemsBulk(claimId: string, items: SaveExpenseItemInput[]): Promise<ExpenseItem[]> {
-  return apiFetch(`/expense-claims/${claimId}/items/bulk`, { method: 'POST', body: items })
+  return apiFetch(`/expense-claims/${claimId}/items/bulk`, { method: 'POST', body: { items } })
 }
 
 export function updateExpenseItem(

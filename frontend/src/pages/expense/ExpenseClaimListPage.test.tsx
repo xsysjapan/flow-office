@@ -3,8 +3,12 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as expenseClaimsApi from '../../api/expenseClaims'
-import type { ExpenseClaim } from '../../api/types'
+import type { ExpenseClaim, Paginated } from '../../api/types'
 import { ExpenseClaimListPage } from './ExpenseClaimListPage'
+
+function paginated(data: ExpenseClaim[]): Paginated<ExpenseClaim> {
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -19,7 +23,7 @@ function renderPage() {
 
 describe('ExpenseClaimListPage', () => {
   it('shows an empty state when there are no claims', async () => {
-    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue([])
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([]))
 
     renderPage()
 
@@ -42,7 +46,7 @@ describe('ExpenseClaimListPage', () => {
         { id: 'item-1', category_id: 1, usage_date: '2026-06-05', origin: null, destination: null, transport_type: '電車', amount: 800, destination_name: null, purpose: '来客対応', project_id: null, evidence_type: 'receipt_required', fact_reference_type: null, fact_reference_id: null, commuting_deduction_amount: null },
       ],
     }
-    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue([claim])
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([claim]))
 
     renderPage()
 
@@ -69,7 +73,7 @@ describe('ExpenseClaimListPage', () => {
       approved_at: null,
       items: [],
     }
-    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue([claim])
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([claim]))
 
     renderPage()
 
@@ -79,7 +83,7 @@ describe('ExpenseClaimListPage', () => {
   })
 
   it('shows the new-claim link', async () => {
-    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue([])
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([]))
 
     renderPage()
 

@@ -17,7 +17,7 @@ export function ExpenseClaimListPage() {
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="経費精算一覧の取得に失敗しました。" />
 
-  const claims = data ?? []
+  const claims = data?.data ?? []
 
   return (
     <Card
