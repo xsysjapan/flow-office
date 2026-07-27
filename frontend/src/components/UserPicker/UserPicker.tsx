@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
-import { useUsers } from '../../hooks/useUsers'
+import { useUserSearch } from '../../hooks/useUsers'
 import { cn } from '../../lib/utils'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -20,7 +20,7 @@ export function UserPicker({ id, value, onChange, placeholder = '氏名または
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedLabel, setSelectedLabel] = useState<string>()
-  const { data } = useUsers(query, 100)
+  const { data } = useUserSearch(query, 100)
   const suggestions = data?.data ?? []
 
   return (

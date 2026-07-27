@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout/AppLayout'
 import { AdminLayout } from './components/AdminLayout/AdminLayout'
 import { RequireAuth } from './auth/RequireAuth'
+import { RequireAdminRoute } from './auth/RequireAdminRoute'
 import { AuthCallbackPage } from './pages/auth/AuthCallbackPage'
 import { LoginPage } from './pages/auth/LoginPage'
 import { OnboardingPage } from './pages/auth/OnboardingPage'
@@ -92,7 +93,14 @@ function App() {
         <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="admin" element={<AdminLayout />}>
+        <Route
+          path="admin"
+          element={
+            <RequireAdminRoute>
+              <AdminLayout />
+            </RequireAdminRoute>
+          }
+        >
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<UserListPage />} />
           <Route path="users/:id" element={<UserRoleEditPage />} />

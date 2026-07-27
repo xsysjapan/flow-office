@@ -86,7 +86,7 @@ describe('ShiftsPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'generateShiftAssignments').mockResolvedValue([
       {
         id: 'assignment-1',
@@ -196,7 +196,7 @@ describe('ShiftsPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'assignShiftPatternDay').mockResolvedValue({
       id: 'assignment-10',
       user_id: 'user-5',
@@ -311,7 +311,7 @@ describe('ShiftsPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeRotationAssignmentsApi, 'assignEmployeeRotation').mockResolvedValue({
       id: 'rotation-assignment-1',
       user_id: 'user-5',
@@ -376,7 +376,7 @@ describe('ShiftsPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
       days: [
         { date: '2026-08-03', weekday: 1, is_working_day: true, start_time: '09:00', end_time: '18:00', break_minutes: 60, source: 'weekly_pattern' },
@@ -432,7 +432,7 @@ describe('ShiftsPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(employeeShiftAssignmentsApi, 'previewPatternShiftAssignments').mockResolvedValue({
       days: [{ date: '2026-08-03', weekday: 1, is_working_day: false, start_time: null, end_time: null, break_minutes: 0, source: 'day_override' }],
     })

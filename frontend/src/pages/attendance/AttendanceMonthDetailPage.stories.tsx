@@ -103,7 +103,7 @@ function withSeeded(monthData: { days: AttendanceDay[]; month: AttendanceMonth |
     flex_settlement_summary: null,
     monthly_calculation_totals: monthlyCalculationTotals,
   })
-  queryClient.setQueryData(['users', ''], emptyUsers)
+  queryClient.setQueryData(['users', 'search', '', 100], emptyUsers)
   queryClient.setQueryData(['user-work-style-monthly-assignments', currentUser.id], workStyleAssignments)
 
   return function Decorator() {

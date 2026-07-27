@@ -68,7 +68,7 @@ describe('AttendanceReferencePage', () => {
   })
 
   it('shows the selected employees monthly attendance by default', async () => {
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: null,
@@ -85,7 +85,7 @@ describe('AttendanceReferencePage', () => {
   })
 
   it('switches to the weekly view for the selected employee', async () => {
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: null,
@@ -106,7 +106,7 @@ describe('AttendanceReferencePage', () => {
   })
 
   it('switches to the daily view and shows a message when there is no record', async () => {
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: null,
@@ -139,7 +139,7 @@ describe('AttendanceReferencePage', () => {
       breaks: [],
       calculation: null,
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
       days: [],
       month: null,

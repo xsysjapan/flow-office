@@ -42,7 +42,7 @@ const paginatedUsers: Paginated<User> = {
 
 function renderPicker(onChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+  vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
 
   render(
     <QueryClientProvider client={queryClient}>
@@ -60,7 +60,7 @@ describe('UserPicker', () => {
     await userEvent.click(screen.getByRole('combobox'))
 
     expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
-    expect(usersApi.fetchUsers).toHaveBeenCalledWith('', 100)
+    expect(usersApi.searchUsers).toHaveBeenCalledWith('', 100)
   })
 
   it('matches the trigger width and constrains long content', async () => {

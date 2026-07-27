@@ -28,7 +28,7 @@ const paginatedUsers: Paginated<User> = {
 function withSeeded(seedRules: PaidLeaveGrantRule[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['paid-leave', 'grant-rules'], seedRules)
-  queryClient.setQueryData(['users', ''], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
 
   return function Decorator() {
     return (

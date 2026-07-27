@@ -231,7 +231,7 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 
@@ -273,7 +273,7 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
     vi.spyOn(attendanceApi, 'submitMonth').mockResolvedValue({ ...notSubmittedMonth, status: 'submitted' })
 
     renderPage()
@@ -297,7 +297,7 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 
@@ -332,7 +332,7 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 
@@ -346,7 +346,7 @@ describe('AttendanceMonthDetailPage', () => {
       flex_settlement_summary: null,
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
 
     renderPage()
 

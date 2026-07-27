@@ -1,8 +1,14 @@
 import { apiFetch } from './client'
-import type { Paginated, User } from './types'
+import type { Paginated, User, UserSearchResult } from './types'
 
+/** role:admin,hr_staff限定。入社日・退社日・雇用区分・ロールを含む一覧が必要な管理画面向け。 */
 export function fetchUsers(query?: string, perPage?: number): Promise<Paginated<User>> {
   return apiFetch('/users', { query: { q: query, per_page: perPage } })
+}
+
+/** 承認者選択(UserPicker)等、一般社員も使う軽量な検索。機微な項目は返らない。 */
+export function searchUsers(query?: string, perPage?: number): Promise<Paginated<UserSearchResult>> {
+  return apiFetch('/users/search', { query: { q: query, per_page: perPage } })
 }
 
 export function fetchUser(id: string): Promise<User> {

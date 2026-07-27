@@ -243,7 +243,7 @@ describe('MonthsToApprovePage', () => {
 
   it('requests the filtered status, year-month, and user when the filters change', async () => {
     const fetchSpy = vi.spyOn(attendanceApi, 'fetchMonthsToApprove').mockResolvedValue(paginated([submittedMonth]))
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
       data: [targetEmployeeUser],
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },

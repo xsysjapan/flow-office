@@ -127,7 +127,7 @@ describe('BackOfficeTaskListPage', () => {
     }
     vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate(unassigned))
     vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginate([pickedUser]))
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginate([pickedUser]))
     const assignSpy = vi.spyOn(backOfficeTasksApi, 'assignBackOfficeTask').mockResolvedValue(unassigned[0])
 
     renderPage()

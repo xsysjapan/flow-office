@@ -9,6 +9,7 @@ use App\Domain\User\Commands\SetUserTerminationDate;
 use App\Domain\User\Commands\SetUserUsageStartDate;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\UserSearchResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -49,6 +50,41 @@ class UserController extends Controller
             ->paginate($validated['per_page'] ?? 50);
 
         return UserResource::collection($users);
+    }
+
+    /**
+     * 承認者選択(UserPicker)など、一般社員も含め誰でも使える軽量な検索専用エンドポイント。
+     * 入社日・退社日・雇用区分・ロールのような管理者向けの機微な項目は返さない
+     * (それらが必要な一覧・詳細は `index`/`show` を使い、role:admin,hr_staff で保護する)。
+     */
+    #[OA\Get(
+        path: '/users/search',
+        operationId: 'users.search',
+        summary: '氏名・メールアドレスでユーザーを検索する(承認者選択等の軽量な用途向け)',
+        tags: ['ユーザー'],
+        parameters: [
+            new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+        ],
+    )]
+    public function search(Request $request): AnonymousResourceCollection
+    {
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $users = User::query()
+            ->when($request->string('q')->toString(), fn ($query, $q) => $query->where(function ($sub) use ($q) {
+                $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%");
+            }))
+            ->orderBy('name')
+            ->paginate($validated['per_page'] ?? 50);
+
+        return UserSearchResource::collection($users);
     }
 
     #[OA\Get(

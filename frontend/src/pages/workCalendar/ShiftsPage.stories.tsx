@@ -46,7 +46,7 @@ const paginatedUsers: Paginated<User> = {
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['work-styles'], [workStyle])
-  queryClient.setQueryData(['users', ''], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
   queryClient.setQueryData(['shift-patterns'], [])
   queryClient.setQueryData(['rotation-patterns'], [])
 

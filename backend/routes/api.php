@@ -77,8 +77,12 @@ Route::post('/dev/reset-database', DevDatabaseResetController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
-    Route::get('/users', [UserController::class, 'index']);
-    Route::get('/users/{user}', [UserController::class, 'show']);
+    // 入社日・退社日・雇用区分・ロールを含む一覧・詳細はrole:admin,hr_staff限定。
+    // 承認者選択(UserPicker)等、一般社員も使う軽量な検索は下のUserController::search
+    // (/users/search)を使う。
+    Route::get('/users', [UserController::class, 'index'])->middleware('role:admin,hr_staff');
+    Route::get('/users/search', [UserController::class, 'search']);
+    Route::get('/users/{user}', [UserController::class, 'show'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('role:admin,hr_staff');

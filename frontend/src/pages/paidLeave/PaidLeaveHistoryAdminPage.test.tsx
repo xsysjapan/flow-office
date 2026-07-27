@@ -53,7 +53,7 @@ describe('PaidLeaveHistoryAdminPage', () => {
       payload: { granted_days: 10, expires_on: '2027-06-30' },
       occurred_at: '2025-07-01T09:00:00+09:00',
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(paidLeaveApi, 'fetchPaidLeaveHistoryForUser').mockResolvedValue([event])
 
     renderPage()

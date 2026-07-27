@@ -66,7 +66,7 @@ function withSeeded(typeData: SpecialLeaveType[], grantData: SpecialLeaveGrant[]
   queryClient.setQueryData(['special-leave', 'types'], typeData)
   queryClient.setQueryData(['special-leave', 'grants', 'mine'], grantData)
   queryClient.setQueryData(['special-leave', 'requests', 'mine'], requestData)
-  queryClient.setQueryData(['users', ''], emptyUsers)
+  queryClient.setQueryData(['users', 'search', '', 100], emptyUsers)
 
   return function Decorator() {
     return (

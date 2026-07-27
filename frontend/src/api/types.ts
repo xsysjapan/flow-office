@@ -18,6 +18,19 @@ export interface User {
   sso_linked?: boolean
 }
 
+/**
+ * GET /users/search が返す軽量なユーザー情報。承認者選択(UserPicker)等、一般社員も使う
+ * 用途向けで、入社日・退社日・雇用区分・ロールのような管理者向けの機微な項目は含まない
+ * (それらが必要な場合はrole:admin,hr_staff限定のUserを使う)。
+ */
+export interface UserSearchResult {
+  id: string
+  name: string
+  email: string
+  department: string | null
+  job_title: string | null
+}
+
 export interface Role {
   id: number
   code: string

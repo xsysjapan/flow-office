@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   fetchUser,
   fetchUsers,
+  searchUsers,
   updateUserHireDate,
   updateUserRoles,
   updateUserTerminationDate,
@@ -12,6 +13,15 @@ export function useUsers(query?: string, perPage?: number) {
   return useQuery({
     queryKey: ['users', query ?? '', perPage ?? 'default'],
     queryFn: () => fetchUsers(query, perPage),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 承認者選択(UserPicker)等、一般社員も使う軽量な検索。 */
+export function useUserSearch(query?: string, perPage?: number) {
+  return useQuery({
+    queryKey: ['users', 'search', query ?? '', perPage ?? 'default'],
+    queryFn: () => searchUsers(query, perPage),
     placeholderData: keepPreviousData,
   })
 }
