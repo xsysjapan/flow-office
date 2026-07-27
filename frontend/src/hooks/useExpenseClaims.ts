@@ -13,7 +13,6 @@ import {
   returnExpenseClaim,
   submitExpenseClaim,
   updateExpenseItem,
-  type CreateExpenseClaimInput,
   type SaveExpenseItemInput,
 } from '../api/expenseClaims'
 
@@ -59,7 +58,7 @@ export function useCreateExpenseClaim() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreateExpenseClaimInput) => createExpenseClaim(input),
+    mutationFn: () => createExpenseClaim(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

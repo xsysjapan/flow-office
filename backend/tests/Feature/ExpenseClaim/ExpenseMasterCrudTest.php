@@ -22,19 +22,39 @@ class ExpenseMasterCrudTest extends TestCase
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
 
-        $payload = ['code' => 'transportation', 'name' => '交通費'];
+        $payload = ['code' => 'transportation', 'name' => '交通費', 'entry_mode' => 'batch'];
 
         $this->actingAs($employee)->postJson('/api/expense-categories', $payload)->assertForbidden();
 
         $created = $this->actingAs($admin)->postJson('/api/expense-categories', $payload);
+        $created->assertCreated()->assertJsonPath('entry_mode', 'batch');
+
+        $categoryId = $created->json('id');
+        $this->actingAs($admin)->putJson("/api/expense-categories/{$categoryId}", [
+            'code' => 'transportation', 'name' => '交通費(更新)', 'entry_mode' => 'batch',
+        ])->assertOk()->assertJsonPath('name', '交通費(更新)');
+
+        $this->actingAs($employee)->getJson('/api/expense-categories')->assertOk()->assertJsonCount(1);
+    }
+
+    public function test_expense_category_rejects_invalid_entry_mode(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $this->actingAs($admin)->postJson('/api/expense-categories', [
+            'code' => 'meal', 'name' => '会食', 'entry_mode' => 'weekly',
+        ])->assertStatus(422)->assertJsonValidationErrors('entry_mode');
+
+        $created = $this->actingAs($admin)->postJson('/api/expense-categories', [
+            'code' => 'meal', 'name' => '会食', 'entry_mode' => 'single',
+        ]);
         $created->assertCreated();
 
         $categoryId = $created->json('id');
         $this->actingAs($admin)->putJson("/api/expense-categories/{$categoryId}", [
-            'code' => 'transportation', 'name' => '交通費(更新)',
-        ])->assertOk()->assertJsonPath('name', '交通費(更新)');
-
-        $this->actingAs($employee)->getJson('/api/expense-categories')->assertOk()->assertJsonCount(1);
+            'code' => 'meal', 'name' => '会食', 'entry_mode' => 'weekly',
+        ])->assertStatus(422)->assertJsonValidationErrors('entry_mode');
     }
 
     public function test_personal_route_template_is_editable_only_by_its_owner(): void

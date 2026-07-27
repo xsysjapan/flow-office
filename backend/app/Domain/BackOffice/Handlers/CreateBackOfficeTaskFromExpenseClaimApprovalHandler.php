@@ -33,7 +33,7 @@ class CreateBackOfficeTaskFromExpenseClaimApprovalHandler implements CommandHand
 
         $claim = ExpenseClaim::query()->with('employee')->findOrFail($command->expenseClaimId);
 
-        $title = "経費精算: {$claim->employee?->name} ({$claim->period_from->toDateString()}〜{$claim->period_to->toDateString()})";
+        $title = "経費精算: {$claim->employee?->name} ({$claim->period_from?->toDateString()}〜{$claim->period_to?->toDateString()})";
 
         $backOfficeTaskId = (string) Str::uuid();
 

@@ -17,6 +17,7 @@ class ExpenseCategoryResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,
+            'entry_mode' => $this->entry_mode,
             'evidence_type_default' => $this->evidence_type_default,
             'receipt_required_threshold' => $this->receipt_required_threshold,
             'approval_skip_threshold' => $this->approval_skip_threshold,

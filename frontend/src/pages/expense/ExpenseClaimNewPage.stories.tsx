@@ -23,6 +23,7 @@ const categories: ExpenseCategory[] = [
     name: '交通費',
     description: null,
     evidence_type_default: 'fact_reference_available',
+    entry_mode: 'batch',
     receipt_required_threshold: null,
     approval_skip_threshold: 3000,
     is_active: true,
@@ -33,6 +34,18 @@ const categories: ExpenseCategory[] = [
     name: '宿泊費',
     description: null,
     evidence_type_default: 'receipt_required',
+    entry_mode: 'single',
+    receipt_required_threshold: 0,
+    approval_skip_threshold: null,
+    is_active: true,
+  },
+  {
+    id: 3,
+    code: 'meal',
+    name: '会食',
+    description: null,
+    evidence_type_default: 'receipt_required',
+    entry_mode: 'single',
     receipt_required_threshold: 0,
     approval_skip_threshold: null,
     is_active: true,
@@ -94,11 +107,20 @@ function withSeeded() {
 const meta = {
   title: 'Pages/Expense/ExpenseClaimNewPage',
   component: ExpenseClaimNewPage,
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'UC-X004: 対象期間は聞かず、まず経費区分を選ぶ。区分のentry_modeがbatch(交通費)なら表形式・移動経路・テンプレートの3タブ、singleなら区分専用の1件入力フォームに自動的に切り替わる。',
+      },
+    },
+  },
 } satisfies Meta<typeof ExpenseClaimNewPage>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const PeriodSelection: Story = {
+/** UC-X004: 対象期間は聞かず、まず経費区分を選ぶ初期状態。 */
+export const CategorySelection: Story = {
   render: withSeeded(),
 }

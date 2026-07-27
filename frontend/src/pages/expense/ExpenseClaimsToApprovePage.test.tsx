@@ -59,6 +59,26 @@ describe('ExpenseClaimsToApprovePage', () => {
     expect(screen.getByText('5,400円')).toBeInTheDocument()
   })
 
+  it('shows a dash for the period when it has not been calculated yet', async () => {
+    const claim: ExpenseClaim = {
+      id: 'expense-claim-2',
+      employee_id: 'employee-1',
+      period_from: null,
+      period_to: null,
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockResolvedValue(paginated([claim]))
+
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: '-' })).toHaveAttribute('href', '/expenses/expense-claim-2')
+  })
+
   it('shows an error message when the fetch fails', async () => {
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaimsToApprove').mockRejectedValue(new Error('failure'))
 

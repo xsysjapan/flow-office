@@ -43,7 +43,7 @@ export function ExpenseClaimsToApprovePage() {
                       to={`/expenses/${claim.id}`}
                       className="font-medium text-foreground hover:text-primary hover:underline"
                     >
-                      {claim.period_from} 〜 {claim.period_to}
+                      {claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '-'}
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{claim.employee?.name}</TableCell>

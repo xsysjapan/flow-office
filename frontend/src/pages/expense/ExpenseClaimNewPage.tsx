@@ -11,6 +11,7 @@ import { ExpenseRouteBuilder } from '../../components/ExpenseRouteBuilder/Expens
 import { ExpenseTemplateBulkGenerator } from '../../components/ExpenseTemplateBulkGenerator/ExpenseTemplateBulkGenerator'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { SingleExpenseItemForm, type SingleExpenseItemFieldSet } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -18,8 +19,10 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
+import type { ExpenseCategory } from '../../api/types'
 import { useWeek } from '../../hooks/useAttendance'
 import {
+  useAddExpenseItem,
   useAddExpenseItemsBulk,
   useCreateExpenseClaim,
   useDeleteExpenseItem,
@@ -39,6 +42,14 @@ import { workLocationTypeLabel } from '../../utils/statusLabels'
 
 function emptyItem(categoryId?: number): SaveExpenseItemInput {
   return { category_id: categoryId ?? 0, usage_date: '', amount: 0 }
+}
+
+/** UC-X004b〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊以外は
+ *  すべて汎用(取引先+内容)の`generic`にまとめ、区分が増えてもフロント分岐を増やさない。 */
+function fieldSetForCategory(category: ExpenseCategory): SingleExpenseItemFieldSet {
+  if (category.code === 'meal') return 'meal'
+  if (category.code === 'lodging') return 'lodging'
+  return 'generic'
 }
 
 /** UC-X004: 対象日の勤怠実績(出社/客先訪問等)を入力補助として参考表示するのみで、
@@ -159,18 +170,53 @@ function PersonalRouteTemplateManager({ employeeId }: { employeeId: string }) {
   )
 }
 
+/** UC-X004: 経費区分を選ぶステップ。対象期間は聞かず、区分を選んだ時点で裏側で
+ *  空の下書き(expense_claims)を作成する(初回のみ。既にドラフトがある場合は
+ *  UC-X013で区分を追加するだけなので作成し直さない)。 */
+function CategorySelectionStep({
+  categories,
+  onSelect,
+  isCreatingClaim,
+}: {
+  categories: ExpenseCategory[]
+  onSelect: (category: ExpenseCategory) => void
+  isCreatingClaim: boolean
+}) {
+  const activeCategories = categories.filter((category) => category.is_active)
+
+  return (
+    <Card title="経費区分を選ぶ">
+      <p className="mb-3 text-sm text-muted-foreground">
+        対象期間の入力は不要です。まず精算したい経費区分を選んでください。
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {activeCategories.map((category) => (
+          <Button
+            key={category.id}
+            variant="secondary"
+            isLoading={isCreatingClaim}
+            onClick={() => onSelect(category)}
+          >
+            {category.name}
+          </Button>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 /**
- * UC-X002/X004〜X010: 経費精算の新規作成。対象期間を指定してドラフトを作成した後、
- * 表形式入力(UC-X006)・移動経路入力(UC-X007)・テンプレート一括生成(UC-X008)の
- * いずれかで明細を組み立て、まとめて保存する。保存済みの明細にはUC-X009の定期区間控除・
- * UC-X005のレシート添付を行い、最後に承認者を指定して申請する(UC-X010)。
+ * UC-X002/X004〜X013: 経費精算の新規作成。対象期間は入力させず、まず経費区分を選ぶ。
+ * 区分の`entry_mode`が`batch`(交通費)なら表形式入力・移動経路入力・テンプレート一括生成の
+ * 3タブを、`single`(会食・宿泊・消耗品・その他)なら区分専用の1件入力フォームを表示する。
+ * `expense_claims`は明細を1件保存した時点で暗黙に作成され、対象期間はusage_dateから
+ * 自動算出される派生値として表示するだけにする(原則2)。
  */
 export function ExpenseClaimNewPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [claimId, setClaimId] = useState<string | undefined>(undefined)
-  const [periodFrom, setPeriodFrom] = useState('')
-  const [periodTo, setPeriodTo] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
   const createClaim = useCreateExpenseClaim()
@@ -180,6 +226,7 @@ export function ExpenseClaimNewPage() {
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, toData, reset } =
     useEditableRows<SaveExpenseItemInput>([])
+  const addItem = useAddExpenseItem(claimId ?? '')
   const addItemsBulk = useAddExpenseItemsBulk(claimId ?? '')
   const updateItem = useUpdateExpenseItem(claimId ?? '')
   const deleteItem = useDeleteExpenseItem(claimId ?? '')
@@ -188,9 +235,16 @@ export function ExpenseClaimNewPage() {
   if (isLoadingCategories) return <LoadingState />
   if (categoriesError) return <ErrorMessage error={categoriesError} fallback="経費区分の取得に失敗しました。" />
 
-  const handleCreateClaim = async () => {
-    const created = await createClaim.mutateAsync({ period_from: periodFrom, period_to: periodTo })
-    setClaimId(created.id)
+  const selectedCategory = categories?.find((category) => category.id === selectedCategoryId)
+
+  const handleSelectCategory = async (category: ExpenseCategory) => {
+    let id = claimId
+    if (!id) {
+      const created = await createClaim.mutateAsync()
+      id = created.id
+      setClaimId(id)
+    }
+    setSelectedCategoryId(category.id)
   }
 
   const handleSaveItems = async () => {
@@ -200,32 +254,42 @@ export function ExpenseClaimNewPage() {
     reset([])
   }
 
+  const handleSaveSingleItem = async (input: SaveExpenseItemInput) => {
+    if (!claimId) return
+    await addItem.mutateAsync(input)
+  }
+
   const handleSubmit = async () => {
     if (!claimId || !approverUserId) return
     await submitClaim.mutateAsync(approverUserId)
     navigate(`/expenses/${claimId}`)
   }
 
-  if (!claimId) {
+  if (!claimId || !selectedCategory) {
     return (
-      <Card title="経費精算の新規作成">
+      <div className="flex flex-col gap-6">
+        {categoriesError && <ErrorMessage error={categoriesError} />}
         {createClaim.error && <ErrorMessage error={createClaim.error} />}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="対象期間(開始)" htmlFor="period-from" required>
-            <Input id="period-from" type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
-          </FormField>
-          <FormField label="対象期間(終了)" htmlFor="period-to" required>
-            <Input id="period-to" type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
-          </FormField>
-        </div>
-        <Button
-          isLoading={createClaim.isPending}
-          disabled={!periodFrom || !periodTo}
-          onClick={() => void handleCreateClaim()}
-        >
-          作成して明細入力へ進む
-        </Button>
-      </Card>
+        <CategorySelectionStep
+          categories={categories ?? []}
+          onSelect={(category) => void handleSelectCategory(category)}
+          isCreatingClaim={createClaim.isPending}
+        />
+
+        {claimId && isLoadingClaim && <LoadingState />}
+        {claimId && claimError && <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />}
+        {claimId && claim && (
+          <SavedItemsAndSubmit
+            claim={claim}
+            approverUserId={approverUserId}
+            onApproverChange={setApproverUserId}
+            onUpdateItem={(itemId, input) => updateItem.mutate({ itemId, input })}
+            onDeleteItem={(itemId) => deleteItem.mutate(itemId)}
+            onSubmit={() => void handleSubmit()}
+            submitClaim={submitClaim}
+          />
+        )}
+      </div>
     )
   }
 
@@ -234,59 +298,123 @@ export function ExpenseClaimNewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title={`経費精算(${claim?.period_from} 〜 ${claim?.period_to})`}>
-        <AttendanceReferenceLookup />
-
-        <Tabs defaultValue="table" className="mt-4">
-          <TabsList>
-            <TabsTrigger value="table">表形式入力</TabsTrigger>
-            <TabsTrigger value="route">移動経路入力</TabsTrigger>
-            <TabsTrigger value="template">テンプレートから生成</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="table">
-            <ExpenseItemsTable
-              rows={rows}
-              categories={categories ?? []}
-              onAddRow={() => addRow(emptyItem(categories?.[0]?.id))}
-              onUpdateRow={updateRow}
-              onRemoveRow={removeRow}
-              onDuplicateRow={duplicateRow}
-              onMoveRow={moveRow}
-              onPasteRows={appendRows}
-            />
-          </TabsContent>
-
-          <TabsContent value="route">
-            <ExpenseRouteBuilder
-              categories={categories ?? []}
-              defaultCategoryId={categories?.[0]?.id}
-              onGenerate={appendRows}
-            />
-          </TabsContent>
-
-          <TabsContent value="template">
-            <ExpenseTemplateBulkGenerator templates={templates ?? []} onGenerate={appendRows} />
-          </TabsContent>
-        </Tabs>
-
-        {rows.length > 0 && (
-          <div className="mt-4">
-            <Button isLoading={addItemsBulk.isPending} onClick={() => void handleSaveItems()}>
-              明細を保存する({rows.length}件)
+      <Card
+        title={`${selectedCategory.name}の明細を入力`}
+        actions={
+          (claim?.items.length ?? 0) > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => setSelectedCategoryId(undefined)}>
+              別の区分の明細を追加する
             </Button>
-            {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
-          </div>
+          )
+        }
+      >
+        {selectedCategory.entry_mode === 'batch' ? (
+          <>
+            <AttendanceReferenceLookup />
+
+            <Tabs defaultValue="table" className="mt-4">
+              <TabsList>
+                <TabsTrigger value="table">表形式入力</TabsTrigger>
+                <TabsTrigger value="route">移動経路入力</TabsTrigger>
+                <TabsTrigger value="template">テンプレートから生成</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="table">
+                <ExpenseItemsTable
+                  rows={rows}
+                  categories={categories ?? []}
+                  onAddRow={() => addRow(emptyItem(selectedCategory.id))}
+                  onUpdateRow={updateRow}
+                  onRemoveRow={removeRow}
+                  onDuplicateRow={duplicateRow}
+                  onMoveRow={moveRow}
+                  onPasteRows={appendRows}
+                />
+              </TabsContent>
+
+              <TabsContent value="route">
+                <ExpenseRouteBuilder
+                  categories={categories ?? []}
+                  defaultCategoryId={selectedCategory.id}
+                  onGenerate={appendRows}
+                />
+              </TabsContent>
+
+              <TabsContent value="template">
+                <ExpenseTemplateBulkGenerator templates={templates ?? []} onGenerate={appendRows} />
+              </TabsContent>
+            </Tabs>
+
+            {rows.length > 0 && (
+              <div className="mt-4">
+                <Button isLoading={addItemsBulk.isPending} onClick={() => void handleSaveItems()}>
+                  明細を保存する({rows.length}件)
+                </Button>
+                {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {addItem.error && <ErrorMessage error={addItem.error} />}
+            <SingleExpenseItemForm
+              fieldSet={fieldSetForCategory(selectedCategory)}
+              categoryId={selectedCategory.id}
+              onSubmit={(input) => void handleSaveSingleItem(input)}
+              isSubmitting={addItem.isPending}
+            />
+          </>
         )}
       </Card>
 
-      <Card title="個人の移動区間テンプレート">
-        {user && <PersonalRouteTemplateManager employeeId={user.id} />}
-      </Card>
+      {selectedCategory.entry_mode === 'batch' && (
+        <Card title="個人の移動区間テンプレート">
+          {user && <PersonalRouteTemplateManager employeeId={user.id} />}
+        </Card>
+      )}
 
-      <Card title={`保存済みの明細(${claim?.items.length ?? 0}件)`}>
-        {(claim?.items.length ?? 0) === 0 ? (
-          <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のタブから追加してください。</p>
+      {claim && (
+        <SavedItemsAndSubmit
+          claim={claim}
+          approverUserId={approverUserId}
+          onApproverChange={setApproverUserId}
+          onUpdateItem={(itemId, input) => updateItem.mutate({ itemId, input })}
+          onDeleteItem={(itemId) => deleteItem.mutate(itemId)}
+          onSubmit={() => void handleSubmit()}
+          submitClaim={submitClaim}
+        />
+      )}
+    </div>
+  )
+}
+
+/** UC-X010: 保存済み明細一覧と申請セクション。対象期間は明細のusage_dateから自動算出された
+ *  claim.period_from/period_toをそのまま表示するだけで、編集項目としては持たない。 */
+function SavedItemsAndSubmit({
+  claim,
+  approverUserId,
+  onApproverChange,
+  onUpdateItem,
+  onDeleteItem,
+  onSubmit,
+  submitClaim,
+}: {
+  claim: NonNullable<ReturnType<typeof useExpenseClaim>['data']>
+  approverUserId: string | undefined
+  onApproverChange: (userId: string | undefined) => void
+  onUpdateItem: (itemId: string, input: SaveExpenseItemInput) => void
+  onDeleteItem: (itemId: string) => void
+  onSubmit: () => void
+  submitClaim: ReturnType<typeof useSubmitExpenseClaim>
+}) {
+  const period =
+    claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
+
+  return (
+    <>
+      <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
+        {claim.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のフォームから追加してください。</p>
         ) : (
           <Table>
             <TableHeader>
@@ -301,7 +429,7 @@ export function ExpenseClaimNewPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {claim?.items.map((item) => {
+              {claim.items.map((item) => {
                 const requiresReceipt = item.evidence_type === 'receipt_required'
                 const deductionAmount = item.commuting_deduction_amount ?? 0
                 return (
@@ -322,16 +450,13 @@ export function ExpenseClaimNewPage() {
                         <Checkbox
                           checked={deductionAmount > 0}
                           onCheckedChange={(checked) =>
-                            updateItem.mutate({
-                              itemId: item.id,
-                              input: {
-                                category_id: item.category_id,
-                                usage_date: item.usage_date,
-                                description: item.description ?? undefined,
-                                amount: item.amount,
-                                project_id: item.project_id ?? undefined,
-                                commuting_deduction_amount: checked === true ? deductionAmount : 0,
-                              },
+                            onUpdateItem(item.id, {
+                              category_id: item.category_id,
+                              usage_date: item.usage_date,
+                              description: item.description ?? undefined,
+                              amount: item.amount,
+                              project_id: item.project_id ?? undefined,
+                              commuting_deduction_amount: checked === true ? deductionAmount : 0,
                             })
                           }
                         />
@@ -344,16 +469,13 @@ export function ExpenseClaimNewPage() {
                           aria-label={`${item.usage_date}の定期区間控除額`}
                           value={deductionAmount}
                           onChange={(e) =>
-                            updateItem.mutate({
-                              itemId: item.id,
-                              input: {
-                                category_id: item.category_id,
-                                usage_date: item.usage_date,
-                                description: item.description ?? undefined,
-                                amount: item.amount,
-                                project_id: item.project_id ?? undefined,
-                                commuting_deduction_amount: Number(e.target.value),
-                              },
+                            onUpdateItem(item.id, {
+                              category_id: item.category_id,
+                              usage_date: item.usage_date,
+                              description: item.description ?? undefined,
+                              amount: item.amount,
+                              project_id: item.project_id ?? undefined,
+                              commuting_deduction_amount: Number(e.target.value),
                             })
                           }
                         />
@@ -363,7 +485,7 @@ export function ExpenseClaimNewPage() {
                       <AttachmentPanel ownerType="expense_item" ownerId={item.id} required={requiresReceipt} compact />
                     </TableCell>
                     <TableCell>
-                      <Button variant="danger" size="sm" onClick={() => deleteItem.mutate(item.id)}>
+                      <Button variant="danger" size="sm" onClick={() => onDeleteItem(item.id)}>
                         削除
                       </Button>
                     </TableCell>
@@ -378,19 +500,19 @@ export function ExpenseClaimNewPage() {
       <Card title="申請する">
         {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
         <FormField label="承認者" htmlFor="approver" required>
-          <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+          <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
         </FormField>
         <div className="flex items-center gap-3">
           <Button
             isLoading={submitClaim.isPending}
-            disabled={!approverUserId || (claim?.items.length ?? 0) === 0}
-            onClick={() => void handleSubmit()}
+            disabled={!approverUserId || claim.items.length === 0}
+            onClick={onSubmit}
           >
             申請する
           </Button>
           <Badge tone="neutral">下書き</Badge>
         </div>
       </Card>
-    </div>
+    </>
   )
 }

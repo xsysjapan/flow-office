@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { ExpenseCategory, ExpenseEvidenceType } from './types'
+import type { ExpenseCategory, ExpenseCategoryEntryMode, ExpenseEvidenceType } from './types'
 
 /** UC-X001: 経費区分マスタ。 */
 export function fetchExpenseCategories(includeInactive = false): Promise<ExpenseCategory[]> {
@@ -11,6 +11,8 @@ export interface SaveExpenseCategoryInput {
   name: string
   description?: string
   evidence_type_default: ExpenseEvidenceType
+  /** UC-X001手順3: `batch`(交通費専用のまとめ入力)/`single`(区分専用の1件入力フォーム)。 */
+  entry_mode: ExpenseCategoryEntryMode
   receipt_required_threshold?: number
   approval_skip_threshold?: number
   is_active?: boolean

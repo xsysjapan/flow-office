@@ -28,13 +28,9 @@ class ExpenseClaimAggregate extends AggregateRoot
      */
     private array $itemIds = [];
 
-    public function draft(string $employeeId, string $periodFrom, string $periodTo): self
+    public function draft(string $employeeId): self
     {
-        $this->recordThat(new ExpenseClaimDrafted(
-            employeeId: $employeeId,
-            periodFrom: $periodFrom,
-            periodTo: $periodTo,
-        ));
+        $this->recordThat(new ExpenseClaimDrafted(employeeId: $employeeId));
 
         return $this;
     }

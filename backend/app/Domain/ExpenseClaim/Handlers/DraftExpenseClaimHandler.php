@@ -23,11 +23,7 @@ class DraftExpenseClaimHandler implements CommandHandler
         $claimId = (string) Str::uuid();
 
         ExpenseClaimAggregate::retrieve($claimId)
-            ->draft(
-                employeeId: $command->employeeId,
-                periodFrom: $command->periodFrom,
-                periodTo: $command->periodTo,
-            )
+            ->draft(employeeId: $command->employeeId)
             ->persist();
 
         return ExpenseClaim::query()->findOrFail($claimId);

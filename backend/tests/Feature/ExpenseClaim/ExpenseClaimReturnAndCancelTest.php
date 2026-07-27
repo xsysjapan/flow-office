@@ -16,9 +16,7 @@ class ExpenseClaimReturnAndCancelTest extends TestCase
 
     private function draftWithItem(User $employee, ExpenseCategory $category): string
     {
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 500,

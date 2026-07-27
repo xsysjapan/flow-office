@@ -835,12 +835,17 @@ export interface Notification {
  *  すべてマスタ設定で、区分追加のためにコードを変更しない。 */
 export type ExpenseEvidenceType = 'fact_reference_available' | 'receipt_required' | 'receipt_optional'
 
+/** UC-X001手順3/UC-X004: `batch`は交通費専用のまとめ入力ツール(表形式・移動経路・
+ *  テンプレート)、`single`は区分専用の1件入力フォーム(続けて何度でも入力できる)。 */
+export type ExpenseCategoryEntryMode = 'batch' | 'single'
+
 export interface ExpenseCategory {
   id: number
   code: string
   name: string
   description: string | null
   evidence_type_default: ExpenseEvidenceType
+  entry_mode: ExpenseCategoryEntryMode
   /** レシート添付が必須となる金額しきい値(円)。未設定(null)なら金額によらずevidence_type_defaultに従う。 */
   receipt_required_threshold: number | null
   /** UC-X011 手順5: この金額以下の明細は承認を1段階省略できる。未設定(null)なら省略なし。 */
@@ -894,8 +899,9 @@ export interface ExpenseClaim {
   id: string
   employee_id: string
   employee?: User
-  period_from: string
-  period_to: string
+  /** 保存済み明細のusage_dateの最小値・最大値から自動算出される派生値。明細が無い作成直後はnull(原則2)。 */
+  period_from: string | null
+  period_to: string | null
   status: ExpenseClaimStatus
   approver_user_id: string | null
   approver?: User

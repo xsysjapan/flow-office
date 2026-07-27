@@ -30,9 +30,7 @@ class ExpenseClaimFlowTest extends TestCase
         $approver = User::factory()->create();
         $category = $this->makeCategory();
 
-        $draft = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ]);
+        $draft = $this->actingAs($employee)->postJson('/api/expense-claims');
         $draft->assertCreated()->assertJsonPath('status', 'draft');
         $claimId = $draft->json('id');
 
@@ -61,9 +59,7 @@ class ExpenseClaimFlowTest extends TestCase
         $employee = User::factory()->create();
         $category = $this->makeCategory();
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $response = $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items/bulk", [
             'items' => [
@@ -78,14 +74,35 @@ class ExpenseClaimFlowTest extends TestCase
         $show->assertOk()->assertJsonPath('total_amount', 1000);
     }
 
+    public function test_period_from_and_period_to_are_derived_from_item_usage_dates(): void
+    {
+        $employee = User::factory()->create();
+        $category = $this->makeCategory();
+
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+
+        $draft = $this->actingAs($employee)->getJson("/api/expense-claims/{$claimId}");
+        $draft->assertOk()->assertJsonPath('period_from', null)->assertJsonPath('period_to', null);
+
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
+            'category_id' => $category->id, 'amount' => 500, 'usage_date' => '2026-07-10',
+        ])->assertCreated();
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
+            'category_id' => $category->id, 'amount' => 300, 'usage_date' => '2026-07-03',
+        ])->assertCreated();
+
+        $show = $this->actingAs($employee)->getJson("/api/expense-claims/{$claimId}");
+        $show->assertOk()
+            ->assertJsonPath('period_from', '2026-07-03')
+            ->assertJsonPath('period_to', '2026-07-10');
+    }
+
     public function test_commuting_deduction_reduces_total_amount(): void
     {
         $employee = User::factory()->create();
         $category = $this->makeCategory();
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 1000, 'commuting_deduction_amount' => 200,
@@ -101,9 +118,7 @@ class ExpenseClaimFlowTest extends TestCase
         $approver = User::factory()->create();
         $category = $this->makeCategory(approvalSkipThreshold: 1000);
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 500,
@@ -126,9 +141,7 @@ class ExpenseClaimFlowTest extends TestCase
         $stranger = User::factory()->create();
         $category = $this->makeCategory();
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 500,
         ])->assertCreated();
@@ -144,9 +157,7 @@ class ExpenseClaimFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit", [
             'approver_user_id' => $approver->id,
@@ -162,9 +173,7 @@ class ExpenseClaimFlowTest extends TestCase
             'evidence_type_default' => ExpenseCategory::EVIDENCE_RECEIPT_REQUIRED,
         ]);
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 8000, 'description' => '出張宿泊',
         ])->assertCreated();
@@ -180,9 +189,7 @@ class ExpenseClaimFlowTest extends TestCase
         $stranger = User::factory()->create();
         $category = $this->makeCategory();
 
-        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims', [
-            'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
-        ])->json('id');
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
 
         $this->actingAs($stranger)->postJson("/api/expense-claims/{$claimId}/items", [
             'category_id' => $category->id, 'amount' => 500,

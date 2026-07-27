@@ -93,6 +93,7 @@ class ExpenseCategoryController extends Controller
             'code' => ['required', 'string', 'max:100', 'unique:expense_categories,code,'.($expenseCategory?->id ?? 'NULL')],
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
+            'entry_mode' => ['required', 'string', 'in:batch,single'],
             'evidence_type_default' => ['nullable', 'string', 'in:fact_reference_available,receipt_required,receipt_optional'],
             'receipt_required_threshold' => ['nullable', 'integer', 'min:0'],
             'approval_skip_threshold' => ['nullable', 'integer', 'min:0'],

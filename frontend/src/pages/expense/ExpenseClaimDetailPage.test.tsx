@@ -161,4 +161,10 @@ describe('ExpenseClaimDetailPage', () => {
 
     expect(await screen.findByText('提出')).toBeInTheDocument()
   })
+
+  it('shows a placeholder title when the period has not been calculated yet', async () => {
+    renderPage({ ...inReviewClaim, period_from: null, period_to: null })
+
+    expect(await screen.findByText('経費精算(対象期間未確定)')).toBeInTheDocument()
+  })
 })

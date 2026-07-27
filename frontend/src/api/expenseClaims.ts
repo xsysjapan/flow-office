@@ -22,13 +22,10 @@ export function fetchExpenseClaim(id: string): Promise<ExpenseClaim> {
   return apiFetch(`/expense-claims/${id}`)
 }
 
-export interface CreateExpenseClaimInput {
-  period_from: string
-  period_to: string
-}
-
-export function createExpenseClaim(input: CreateExpenseClaimInput): Promise<ExpenseClaim> {
-  return apiFetch('/expense-claims', { method: 'POST', body: input })
+/** UC-X004手順4: 対象期間の入力は行わず、明細を保存すると暗黙にexpense_claimsが作成される。
+ *  この関数はその下書きを明示的に作るためボディなしでPOSTするだけ。 */
+export function createExpenseClaim(): Promise<ExpenseClaim> {
+  return apiFetch('/expense-claims', { method: 'POST' })
 }
 
 export interface SaveExpenseItemInput {

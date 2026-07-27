@@ -13,6 +13,7 @@ const transportCategory: ExpenseCategory = {
   name: '交通費',
   description: null,
   evidence_type_default: 'fact_reference_available',
+  entry_mode: 'batch',
   receipt_required_threshold: null,
   approval_skip_threshold: 3000,
   is_active: true,
@@ -49,6 +50,7 @@ describe('ExpenseCategoryEditPage', () => {
     expect(screen.getByLabelText('コード')).toBeDisabled()
     expect(screen.getByLabelText('名称')).toHaveValue('交通費')
     expect(screen.getByLabelText('承認省略しきい値(円・任意)')).toHaveValue(3000)
+    expect(screen.getByLabelText('入力方式')).toHaveValue('batch')
   })
 
   it('creates a new expense category and navigates back to the list', async () => {
@@ -69,6 +71,7 @@ describe('ExpenseCategoryEditPage', () => {
         name: '消耗品費',
         description: undefined,
         evidence_type_default: 'fact_reference_available',
+        entry_mode: 'single',
         receipt_required_threshold: undefined,
         approval_skip_threshold: undefined,
         is_active: true,
@@ -90,6 +93,7 @@ describe('ExpenseCategoryEditPage', () => {
         name: '交通費',
         description: undefined,
         evidence_type_default: 'fact_reference_available',
+        entry_mode: 'batch',
         receipt_required_threshold: undefined,
         approval_skip_threshold: 3000,
         is_active: true,

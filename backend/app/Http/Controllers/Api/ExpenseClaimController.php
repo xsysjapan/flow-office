@@ -89,22 +89,14 @@ class ExpenseClaimController extends Controller
     #[OA\Post(
         path: '/expense-claims',
         operationId: 'expenseClaims.store',
-        summary: '経費精算の下書きを作成する',
+        summary: '経費精算の下書きを作成する(UC-X004: 対象期間は聞かない。空のボディで下書きのみ作成する)',
         tags: ['経費精算'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['period_from', 'period_to'], properties: [new OA\Property(property: 'period_from', type: 'string', format: 'date'), new OA\Property(property: 'period_to', type: 'string', format: 'date')])),
-        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
-        $data = $request->validate([
-            'period_from' => ['required', 'date'],
-            'period_to' => ['required', 'date', 'after_or_equal:period_from'],
-        ]);
-
         $claim = $commandBus->dispatch(new DraftExpenseClaim(
             employeeId: $request->user()->id,
-            periodFrom: $data['period_from'],
-            periodTo: $data['period_to'],
         ));
 
         return (new ExpenseClaimResource($claim))->response()->setStatusCode(Response::HTTP_CREATED);

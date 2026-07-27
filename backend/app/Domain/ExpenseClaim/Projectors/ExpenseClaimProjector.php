@@ -18,9 +18,12 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 /**
  * expense_claim.* イベントから expense_claims / expense_items を作成・更新する。
  * 主キーがコマンド側生成のUUIDのため、行の新規作成(drafted/item_added)自体もこの
- * Projectorが担う。total_amountは明細の(amount - commuting_deduction_amount)の合計を
- * 都度全件から再計算する(差分更新だとリプレイで二重計上されるため。
+ * Projectorが担う。total_amountは明細の(amount - commuting_deduction_amount)の合計を、
+ * period_from/period_toは明細のusage_dateの最小値・最大値を、都度全件から再計算する
+ * (差分更新だとリプレイで二重計上・不整合が生じるため。
  * .claude/skills/add-projection のProjector冪等性チェックリストに対応)。
+ * period_from/period_toはユーザー入力欄ではなく、明細から算出される派生値
+ * (docs/30-usecases-expense.md UC-X004、原則2)。
  */
 class ExpenseClaimProjector extends Projector
 {
@@ -30,8 +33,8 @@ class ExpenseClaimProjector extends Projector
             ['id' => $event->aggregateRootUuid()],
             [
                 'employee_id' => $event->employeeId,
-                'period_from' => $event->periodFrom,
-                'period_to' => $event->periodTo,
+                'period_from' => null,
+                'period_to' => null,
                 'status' => ExpenseClaimStatus::DRAFT,
                 'total_amount' => 0,
             ],
@@ -57,6 +60,7 @@ class ExpenseClaimProjector extends Projector
         );
 
         $this->recalculateTotal($event->aggregateRootUuid());
+        $this->recalculatePeriod($event->aggregateRootUuid());
     }
 
     public function onExpenseItemUpdated(ExpenseItemUpdated $event): void
@@ -74,6 +78,7 @@ class ExpenseClaimProjector extends Projector
         ]);
 
         $this->recalculateTotal($event->aggregateRootUuid());
+        $this->recalculatePeriod($event->aggregateRootUuid());
     }
 
     public function onExpenseItemRemoved(ExpenseItemRemoved $event): void
@@ -81,6 +86,7 @@ class ExpenseClaimProjector extends Projector
         ExpenseItem::query()->whereKey($event->itemId)->delete();
 
         $this->recalculateTotal($event->aggregateRootUuid());
+        $this->recalculatePeriod($event->aggregateRootUuid());
     }
 
     public function onExpenseClaimSubmitted(ExpenseClaimSubmitted $event): void
@@ -120,5 +126,22 @@ class ExpenseClaimProjector extends Projector
             ->sum(fn (ExpenseItem $item) => $item->amount - $item->commuting_deduction_amount);
 
         ExpenseClaim::query()->whereKey($claimId)->update(['total_amount' => $total]);
+    }
+
+    /**
+     * UC-X004: period_from/period_toは明細のusage_dateの最小値・最大値から算出する
+     * 表示用の派生値。明細が0件(usage_date未入力のみを含む場合も)なら両方nullにする。
+     */
+    private function recalculatePeriod(string $claimId): void
+    {
+        $usageDates = ExpenseItem::query()
+            ->where('claim_id', $claimId)
+            ->whereNotNull('usage_date')
+            ->pluck('usage_date');
+
+        ExpenseClaim::query()->whereKey($claimId)->update([
+            'period_from' => $usageDates->min(),
+            'period_to' => $usageDates->max(),
+        ]);
     }
 }

@@ -9,7 +9,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
-import type { ExpenseEvidenceType } from '../../api/types'
+import type { ExpenseCategoryEntryMode, ExpenseEvidenceType } from '../../api/types'
 import {
   useCreateExpenseCategory,
   useExpenseCategories,
@@ -20,6 +20,11 @@ const evidenceTypeOptions: { value: ExpenseEvidenceType; label: string }[] = [
   { value: 'fact_reference_available', label: '実績参照のみ' },
   { value: 'receipt_required', label: 'レシート必須' },
   { value: 'receipt_optional', label: 'レシート任意' },
+]
+
+const entryModeOptions: { value: ExpenseCategoryEntryMode; label: string }[] = [
+  { value: 'batch', label: 'まとめ入力(交通費専用: 表形式・移動経路・テンプレート)' },
+  { value: 'single', label: '1件入力(区分専用フォームで続けて何度でも入力できる)' },
 ]
 
 /**
@@ -43,6 +48,7 @@ export function ExpenseCategoryEditPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [evidenceTypeDefault, setEvidenceTypeDefault] = useState<ExpenseEvidenceType>('fact_reference_available')
+  const [entryMode, setEntryMode] = useState<ExpenseCategoryEntryMode>('single')
   const [receiptRequiredThreshold, setReceiptRequiredThreshold] = useState('')
   const [approvalSkipThreshold, setApprovalSkipThreshold] = useState('')
   const [isActive, setIsActive] = useState(true)
@@ -53,6 +59,7 @@ export function ExpenseCategoryEditPage() {
     setName(existing.name)
     setDescription(existing.description ?? '')
     setEvidenceTypeDefault(existing.evidence_type_default)
+    setEntryMode(existing.entry_mode)
     setReceiptRequiredThreshold(
       existing.receipt_required_threshold != null ? String(existing.receipt_required_threshold) : '',
     )
@@ -74,6 +81,7 @@ export function ExpenseCategoryEditPage() {
       name,
       description: description || undefined,
       evidence_type_default: evidenceTypeDefault,
+      entry_mode: entryMode,
       receipt_required_threshold: receiptRequiredThreshold ? Number(receiptRequiredThreshold) : undefined,
       approval_skip_threshold: approvalSkipThreshold ? Number(approvalSkipThreshold) : undefined,
       is_active: isActive,
@@ -113,6 +121,20 @@ export function ExpenseCategoryEditPage() {
           onChange={(e) => setEvidenceTypeDefault(e.target.value as ExpenseEvidenceType)}
         >
           {evidenceTypeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </NativeSelect>
+      </FormField>
+
+      <FormField label="入力方式" htmlFor="entry-mode" required>
+        <NativeSelect
+          id="entry-mode"
+          value={entryMode}
+          onChange={(e) => setEntryMode(e.target.value as ExpenseCategoryEntryMode)}
+        >
+          {entryModeOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

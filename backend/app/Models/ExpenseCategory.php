@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  * ここで設定し、区分追加のためにコードを変更しない(docs/30-usecases-expense.md)。
  */
 #[Fillable([
-    'code', 'name', 'description', 'evidence_type_default',
+    'code', 'name', 'description', 'entry_mode', 'evidence_type_default',
     'receipt_required_threshold', 'approval_skip_threshold', 'is_active',
 ])]
 class ExpenseCategory extends Model
@@ -20,6 +20,10 @@ class ExpenseCategory extends Model
     public const EVIDENCE_RECEIPT_REQUIRED = 'receipt_required';
 
     public const EVIDENCE_RECEIPT_OPTIONAL = 'receipt_optional';
+
+    public const ENTRY_MODE_BATCH = 'batch';
+
+    public const ENTRY_MODE_SINGLE = 'single';
 
     protected function casts(): array
     {

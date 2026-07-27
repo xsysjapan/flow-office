@@ -91,7 +91,10 @@ export function ExpenseClaimDetailPage() {
   const actionError = submitClaim.error ?? approveClaim.error ?? returnClaim.error ?? cancelClaim.error
 
   return (
-    <Card title={`経費精算(${claim.period_from} 〜 ${claim.period_to})`} actions={<Badge tone={tone}>{label}</Badge>}>
+    <Card
+      title={`経費精算(${claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'})`}
+      actions={<Badge tone={tone}>{label}</Badge>}
+    >
       {actionError && <ErrorMessage error={actionError} />}
 
       <div className="flex flex-col gap-6">

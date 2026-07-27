@@ -82,6 +82,26 @@ describe('ExpenseClaimListPage', () => {
     expect(screen.getByText('-')).toBeInTheDocument()
   })
 
+  it('shows a dash for the period when it has not been calculated yet (no items saved)', async () => {
+    const claim: ExpenseClaim = {
+      id: 'expense-claim-3',
+      employee_id: 'employee-1',
+      period_from: null,
+      period_to: null,
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([claim]))
+
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: '-' })).toHaveAttribute('href', '/expenses/expense-claim-3')
+  })
+
   it('shows the new-claim link', async () => {
     vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([]))
 

@@ -10,6 +10,7 @@ const transportCategory: ExpenseCategory = {
   name: '交通費',
   description: '通勤・出張時の交通費',
   evidence_type_default: 'fact_reference_available',
+  entry_mode: 'batch',
   receipt_required_threshold: null,
   approval_skip_threshold: 3000,
   is_active: true,

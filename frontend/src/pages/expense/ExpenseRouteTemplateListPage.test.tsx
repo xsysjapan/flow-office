@@ -14,6 +14,7 @@ const categories: ExpenseCategory[] = [
     name: '交通費',
     description: null,
     evidence_type_default: 'fact_reference_available',
+    entry_mode: 'batch',
     receipt_required_threshold: null,
     approval_skip_threshold: null,
     is_active: true,
