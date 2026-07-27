@@ -878,12 +878,9 @@ export interface ExpenseItem {
   category_id: number
   category?: Pick<ExpenseCategory, 'id' | 'code' | 'name' | 'evidence_type_default'>
   usage_date: string
-  origin: string | null
-  destination: string | null
-  transport_type: string | null
+  /** 内容(自由記述)。交通費の場合は「出発地 → 到着地(手段)」形式の1行テキストをUI側で整形して設定する。 */
+  description: string | null
   amount: number
-  destination_name: string | null
-  purpose: string | null
   project_id: string | null
   evidence_type: ExpenseEvidenceType
   fact_reference_type: ExpenseFactReferenceType | null

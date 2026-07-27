@@ -114,7 +114,7 @@ export function ExpenseClaimDetailPage() {
                 <TableRow>
                   <TableHead>日付</TableHead>
                   <TableHead>経費区分</TableHead>
-                  <TableHead>経路・内容</TableHead>
+                  <TableHead>内容</TableHead>
                   <TableHead>金額</TableHead>
                   <TableHead>勤怠実績との突合せ</TableHead>
                   <TableHead>領収書</TableHead>
@@ -127,9 +127,7 @@ export function ExpenseClaimDetailPage() {
                     <TableRow key={item.id}>
                       <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
                       <TableCell className="text-muted-foreground">{item.category?.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.origin && item.destination ? `${item.origin} → ${item.destination}` : item.purpose}
-                      </TableCell>
+                      <TableCell className="text-muted-foreground">{item.description}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {item.amount.toLocaleString()}円
                         {deductionAmount > 0 && (

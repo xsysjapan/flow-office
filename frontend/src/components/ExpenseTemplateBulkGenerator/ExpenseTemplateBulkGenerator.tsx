@@ -33,12 +33,11 @@ export function ExpenseTemplateBulkGenerator({ templates, onGenerate }: ExpenseT
   const handleGenerate = () => {
     if (!selectedTemplate || dates.length === 0) return
 
+    const description = `${selectedTemplate.origin} → ${selectedTemplate.destination}(${selectedTemplate.transport_type})`
     const items: SaveExpenseItemInput[] = dates.map((date) => ({
       category_id: selectedTemplate.category_id,
       usage_date: formatDate(date),
-      origin: selectedTemplate.origin,
-      destination: selectedTemplate.destination,
-      transport_type: selectedTemplate.transport_type,
+      description,
       amount: selectedTemplate.amount,
     }))
 

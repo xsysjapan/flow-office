@@ -37,8 +37,8 @@ class ExpenseClaimFlowTest extends TestCase
         $claimId = $draft->json('id');
 
         $item = $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
-            'category_id' => $category->id, 'origin' => '自宅', 'destination' => '会社',
-            'transport_type' => 'train', 'amount' => 500, 'usage_date' => '2026-07-01',
+            'category_id' => $category->id, 'description' => '自宅 → 会社(電車)',
+            'amount' => 500, 'usage_date' => '2026-07-01',
         ]);
         $item->assertCreated();
 
@@ -67,8 +67,8 @@ class ExpenseClaimFlowTest extends TestCase
 
         $response = $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items/bulk", [
             'items' => [
-                ['category_id' => $category->id, 'amount' => 300, 'origin' => '自宅', 'destination' => '会社'],
-                ['category_id' => $category->id, 'amount' => 700, 'origin' => '会社', 'destination' => '客先'],
+                ['category_id' => $category->id, 'amount' => 300, 'description' => '自宅 → 会社(電車)'],
+                ['category_id' => $category->id, 'amount' => 700, 'description' => '会社 → 客先(電車)'],
             ],
         ]);
         $response->assertCreated();
@@ -166,7 +166,7 @@ class ExpenseClaimFlowTest extends TestCase
             'period_from' => '2026-07-01', 'period_to' => '2026-07-31',
         ])->json('id');
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
-            'category_id' => $category->id, 'amount' => 8000, 'purpose' => '出張宿泊',
+            'category_id' => $category->id, 'amount' => 8000, 'description' => '出張宿泊',
         ])->assertCreated();
 
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit", [

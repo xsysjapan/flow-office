@@ -28,8 +28,8 @@ const categories: ExpenseCategory[] = [
 ]
 
 const sampleRows: SaveExpenseItemInput[] = [
-  { category_id: 1, usage_date: '2026-07-01', origin: '自宅', destination: '本社', transport_type: '電車', amount: 420, destination_name: '本社', purpose: '定例会議' },
-  { category_id: 1, usage_date: '2026-07-02', origin: '本社', destination: '取引先', transport_type: 'タクシー', amount: 1800, destination_name: '取引先A社', purpose: '商談' },
+  { category_id: 1, usage_date: '2026-07-01', amount: 420, description: '自宅 → 本社(電車)' },
+  { category_id: 1, usage_date: '2026-07-02', amount: 1800, description: '本社 → 取引先(タクシー)' },
 ]
 
 function Demo({ initialRows }: { initialRows: SaveExpenseItemInput[] }) {

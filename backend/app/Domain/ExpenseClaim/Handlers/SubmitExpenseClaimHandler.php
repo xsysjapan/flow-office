@@ -45,7 +45,7 @@ class SubmitExpenseClaimHandler implements CommandHandler
                 $item->evidence_type === ExpenseCategory::EVIDENCE_RECEIPT_REQUIRED
                 && ! $item->attachments()->exists()
             ) {
-                throw new DomainRuleException("明細「{$item->purpose}」はレシート等の添付が必須です。");
+                throw new DomainRuleException("明細「{$item->description}」はレシート等の添付が必須です。");
             }
         }
 

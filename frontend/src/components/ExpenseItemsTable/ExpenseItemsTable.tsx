@@ -21,8 +21,8 @@ export interface ExpenseItemsTableProps {
   onPasteRows: (rows: SaveExpenseItemInput[]) => void
 }
 
-/** 貼り付けテキストを "usage_date,origin,destination,transport_type,amount,destination_name,purpose" の
- *  タブ/カンマ区切り行としてパースする(UC-X006手順3)。categoryは含まれないため呼び出し側で既定値を補う。 */
+/** 貼り付けテキストを "usage_date,amount,description" のタブ/カンマ区切り行としてパースする
+ *  (UC-X006手順3)。categoryは含まれないため呼び出し側で既定値を補う。 */
 function parsePastedRows(text: string, defaultCategoryId: number): SaveExpenseItemInput[] {
   return text
     .split('\n')
@@ -30,18 +30,13 @@ function parsePastedRows(text: string, defaultCategoryId: number): SaveExpenseIt
     .filter((line) => line.length > 0)
     .map((line) => {
       const cols = line.split(/\t|,/).map((c) => c.trim())
-      const [usage_date = '', origin = '', destination = '', transport_type = '', amountRaw = '', destination_name = '', purpose = ''] =
-        cols
+      const [usage_date = '', amountRaw = '', description = ''] = cols
       const amount = Number(amountRaw)
       return {
         category_id: defaultCategoryId,
         usage_date,
-        origin: origin || undefined,
-        destination: destination || undefined,
-        transport_type: transport_type || undefined,
         amount: Number.isFinite(amount) ? amount : 0,
-        destination_name: destination_name || undefined,
-        purpose: purpose || undefined,
+        description: description || undefined,
       }
     })
 }
@@ -60,7 +55,7 @@ export function ExpenseItemsTable({
   const [showPasteArea, setShowPasteArea] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [bulkDate, setBulkDate] = useState('')
-  const [bulkPurpose, setBulkPurpose] = useState('')
+  const [bulkDescription, setBulkDescription] = useState('')
   const [bulkProjectId, setBulkProjectId] = useState('')
 
   const total = rows.reduce((sum, row) => sum + (row.amount || 0), 0)
@@ -80,7 +75,7 @@ export function ExpenseItemsTable({
   function handleApplyBulkFields() {
     const patch: Partial<SaveExpenseItemInput> = {}
     if (bulkDate) patch.usage_date = bulkDate
-    if (bulkPurpose) patch.purpose = bulkPurpose
+    if (bulkDescription) patch.description = bulkDescription
     if (bulkProjectId) patch.project_id = bulkProjectId
     if (Object.keys(patch).length === 0) return
     selectedRowIds.forEach((rowId) => onUpdateRow(rowId, patch))
@@ -100,13 +95,13 @@ export function ExpenseItemsTable({
       {showPasteArea && (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
           <label htmlFor="expense-items-paste-area" className="text-sm font-medium text-foreground">
-            貼り付け(日付,出発地,到着地,手段,金額,訪問先,目的の順・1行1明細)
+            貼り付け(日付,金額,内容の順・1行1明細)
           </label>
           <Textarea
             id="expense-items-paste-area"
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={'2026-07-01\t自宅\t本社\t電車\t420\t本社\t定例会議'}
+            placeholder={'2026-07-01\t420\t自宅 → 本社(電車)'}
           />
           <p className="text-xs text-muted-foreground">取り込み後に経費区分を選択してください</p>
           <div>
@@ -126,10 +121,14 @@ export function ExpenseItemsTable({
             <Input id="expense-items-bulk-date" type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="expense-items-bulk-purpose" className="text-xs font-medium text-foreground">
-              目的
+            <label htmlFor="expense-items-bulk-description" className="text-xs font-medium text-foreground">
+              内容
             </label>
-            <Input id="expense-items-bulk-purpose" value={bulkPurpose} onChange={(e) => setBulkPurpose(e.target.value)} />
+            <Input
+              id="expense-items-bulk-description"
+              value={bulkDescription}
+              onChange={(e) => setBulkDescription(e.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="expense-items-bulk-project" className="text-xs font-medium text-foreground">
@@ -149,12 +148,8 @@ export function ExpenseItemsTable({
             <TableHead />
             <TableHead>日付</TableHead>
             <TableHead>経費区分</TableHead>
-            <TableHead>出発地</TableHead>
-            <TableHead>到着地</TableHead>
-            <TableHead>手段</TableHead>
             <TableHead>金額</TableHead>
-            <TableHead>訪問先</TableHead>
-            <TableHead>目的</TableHead>
+            <TableHead>内容</TableHead>
             <TableHead>操作</TableHead>
           </TableRow>
         </TableHeader>
@@ -191,27 +186,6 @@ export function ExpenseItemsTable({
               </TableCell>
               <TableCell>
                 <Input
-                  aria-label={`${index + 1}行目の出発地`}
-                  value={row.origin ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { origin: e.target.value })}
-                />
-              </TableCell>
-              <TableCell>
-                <Input
-                  aria-label={`${index + 1}行目の到着地`}
-                  value={row.destination ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { destination: e.target.value })}
-                />
-              </TableCell>
-              <TableCell>
-                <Input
-                  aria-label={`${index + 1}行目の手段`}
-                  value={row.transport_type ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { transport_type: e.target.value })}
-                />
-              </TableCell>
-              <TableCell>
-                <Input
                   type="number"
                   aria-label={`${index + 1}行目の金額`}
                   value={row.amount}
@@ -220,16 +194,9 @@ export function ExpenseItemsTable({
               </TableCell>
               <TableCell>
                 <Input
-                  aria-label={`${index + 1}行目の訪問先`}
-                  value={row.destination_name ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { destination_name: e.target.value })}
-                />
-              </TableCell>
-              <TableCell>
-                <Input
-                  aria-label={`${index + 1}行目の目的`}
-                  value={row.purpose ?? ''}
-                  onChange={(e) => onUpdateRow(row.rowId, { purpose: e.target.value })}
+                  aria-label={`${index + 1}行目の内容`}
+                  value={row.description ?? ''}
+                  onChange={(e) => onUpdateRow(row.rowId, { description: e.target.value })}
                 />
               </TableCell>
               <TableCell>

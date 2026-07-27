@@ -71,9 +71,7 @@ describe('ExpenseTemplateBulkGenerator', () => {
     for (const item of items) {
       expect(item).toMatchObject({
         category_id: 7,
-        origin: '自宅',
-        destination: '会社',
-        transport_type: '電車',
+        description: '自宅 → 会社(電車)',
         amount: 500,
       })
       expect(item.usage_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)

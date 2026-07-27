@@ -34,12 +34,9 @@ export function createExpenseClaim(input: CreateExpenseClaimInput): Promise<Expe
 export interface SaveExpenseItemInput {
   category_id: number
   usage_date: string
-  origin?: string
-  destination?: string
-  transport_type?: string
+  /** 内容(自由記述)。交通費の場合は「出発地 → 到着地(手段)」形式の1行テキストをUI側で整形して設定する。 */
+  description?: string
   amount: number
-  destination_name?: string
-  purpose?: string
   project_id?: string
   evidence_type?: ExpenseEvidenceType
   fact_reference_type?: ExpenseFactReferenceType

@@ -90,12 +90,15 @@ export function ExpenseRouteBuilder({
     for (let i = 0; i < stops.length - 1; i += 1) {
       const segment = segments[i]
       if (!segment || segment.excluded) continue
+      const origin = stops[i].name
+      const destination = stops[i + 1].name
+      const description = segment.transportType
+        ? `${origin} → ${destination}(${segment.transportType})`
+        : `${origin} → ${destination}`
       items.push({
         category_id: segment.categoryId === '' ? (defaultCategoryId ?? categories[0]?.id ?? 0) : segment.categoryId,
         usage_date: usageDate,
-        origin: stops[i].name,
-        destination: stops[i + 1].name,
-        transport_type: segment.transportType || undefined,
+        description,
         amount: Number(segment.amount) || 0,
       })
     }

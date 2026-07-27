@@ -17,8 +17,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * Attachment集約をowner_type='expense_item'として再利用する。
  */
 #[Fillable([
-    'id', 'claim_id', 'category_id', 'usage_date', 'origin', 'destination',
-    'transport_type', 'amount', 'destination_name', 'purpose', 'project_id',
+    'id', 'claim_id', 'category_id', 'usage_date', 'description', 'amount', 'project_id',
     'evidence_type', 'fact_reference_type', 'fact_reference_id', 'commuting_deduction_amount',
 ])]
 class ExpenseItem extends Model

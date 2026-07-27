@@ -293,7 +293,7 @@ export function ExpenseClaimNewPage() {
               <TableRow>
                 <TableHead>日付</TableHead>
                 <TableHead>経費区分</TableHead>
-                <TableHead>経路・内容</TableHead>
+                <TableHead>内容</TableHead>
                 <TableHead>金額</TableHead>
                 <TableHead>定期区間控除</TableHead>
                 <TableHead>領収書</TableHead>
@@ -308,9 +308,7 @@ export function ExpenseClaimNewPage() {
                   <TableRow key={item.id}>
                     <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
                     <TableCell className="text-muted-foreground">{item.category?.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {item.origin && item.destination ? `${item.origin} → ${item.destination}` : item.purpose}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{item.description}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {item.amount.toLocaleString()}円
                       {deductionAmount > 0 && (
@@ -329,12 +327,8 @@ export function ExpenseClaimNewPage() {
                               input: {
                                 category_id: item.category_id,
                                 usage_date: item.usage_date,
-                                origin: item.origin ?? undefined,
-                                destination: item.destination ?? undefined,
-                                transport_type: item.transport_type ?? undefined,
+                                description: item.description ?? undefined,
                                 amount: item.amount,
-                                destination_name: item.destination_name ?? undefined,
-                                purpose: item.purpose ?? undefined,
                                 project_id: item.project_id ?? undefined,
                                 commuting_deduction_amount: checked === true ? deductionAmount : 0,
                               },
@@ -355,12 +349,8 @@ export function ExpenseClaimNewPage() {
                               input: {
                                 category_id: item.category_id,
                                 usage_date: item.usage_date,
-                                origin: item.origin ?? undefined,
-                                destination: item.destination ?? undefined,
-                                transport_type: item.transport_type ?? undefined,
+                                description: item.description ?? undefined,
                                 amount: item.amount,
-                                destination_name: item.destination_name ?? undefined,
-                                purpose: item.purpose ?? undefined,
                                 project_id: item.project_id ?? undefined,
                                 commuting_deduction_amount: Number(e.target.value),
                               },

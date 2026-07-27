@@ -61,9 +61,7 @@ describe('ExpenseRouteBuilder', () => {
       {
         category_id: 1,
         usage_date: '2026-07-26',
-        origin: '会社',
-        destination: '訪問先',
-        transport_type: '電車',
+        description: '会社 → 訪問先(電車)',
         amount: 500,
       },
     ])
