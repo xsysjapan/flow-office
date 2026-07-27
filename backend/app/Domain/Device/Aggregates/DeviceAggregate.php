@@ -4,6 +4,7 @@ namespace App\Domain\Device\Aggregates;
 
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
+use App\Domain\Device\Events\DeviceEnabled;
 use App\Domain\Device\Events\DevicePaired;
 use App\Domain\Device\Events\DevicePairingClaimIssued;
 use App\Domain\Device\Events\DeviceRegistered;
@@ -84,6 +85,13 @@ class DeviceAggregate extends AggregateRoot
     public function disable(string $disabledByUserId, string $disabledAt): self
     {
         $this->recordThat(new DeviceDisabled(disabledByUserId: $disabledByUserId, disabledAt: $disabledAt));
+
+        return $this;
+    }
+
+    public function enable(string $enabledByUserId, string $enabledAt): self
+    {
+        $this->recordThat(new DeviceEnabled(enabledByUserId: $enabledByUserId, enabledAt: $enabledAt));
 
         return $this;
     }

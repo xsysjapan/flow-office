@@ -116,6 +116,19 @@ describe('DeviceDetailModal', () => {
     expect(disableSpy).toHaveBeenCalledWith('device-1')
   })
 
+  it('lets the admin enable a disabled device', async () => {
+    const user = userEvent.setup()
+    const enableSpy = vi
+      .spyOn(devicesApi, 'enableDevice')
+      .mockResolvedValue({ ...device, status: 'pending_pairing', disabled_at: null })
+    renderModal({ status: 'disabled', disabled_at: '2026-07-20T00:00:00+09:00' })
+
+    await user.click(screen.getByRole('button', { name: '詳細' }))
+    await user.click(screen.getByRole('button', { name: '有効化する' }))
+
+    expect(enableSpy).toHaveBeenCalledWith('device-1')
+  })
+
   it('shows a heartbeat staleness badge for an active device with an old last_seen_at', async () => {
     const user = userEvent.setup()
     renderModal({ status: 'active', last_seen_at: '2000-01-01T00:00:00+09:00' })

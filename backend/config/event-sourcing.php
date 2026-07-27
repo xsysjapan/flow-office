@@ -41,6 +41,7 @@ use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
+use App\Domain\Device\Events\DeviceEnabled;
 use App\Domain\Device\Events\DevicePaired;
 use App\Domain\Device\Events\DevicePairingClaimIssued;
 use App\Domain\Device\Events\DeviceRegistered;
@@ -251,6 +252,7 @@ return [
         'device.paired' => DevicePaired::class,
         'device.pairing_claim_issued' => DevicePairingClaimIssued::class,
         'device.disabled' => DeviceDisabled::class,
+        'device.enabled' => DeviceEnabled::class,
         'device.revoked' => DeviceRevoked::class,
         'device.deleted' => DeviceDeleted::class,
         'device.role_assigned' => DeviceRoleAssigned::class,

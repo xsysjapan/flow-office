@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
+use App\Domain\Device\Commands\EnableDevice;
 use App\Domain\Device\Commands\GrantDeviceScope;
 use App\Domain\Device\Commands\IssueDevicePairingClaim;
 use App\Domain\Device\Commands\RegisterDevice;
@@ -250,6 +251,23 @@ class DeviceController extends Controller
         $device = $commandBus->dispatch(new DisableDevice(
             deviceId: $device->id,
             disabledByUserId: $request->user()->id,
+        ));
+
+        return new DeviceResource($device);
+    }
+
+    /**
+     * UC-D005: 停止(disabled)中の端末を有効化し、pending_pairingへ戻す(失効(revoked)済み
+     * の端末は対象外)。有効化後は POST /devices/{device}/pairing で通常通り再ペアリングする。
+     */
+    #[OA\Post(path: '/devices/{device}/enable', operationId: 'devices.enable', summary: '端末を有効化する(UC-D005)', tags: ['端末管理'], responses: [new OA\Response(response: 200, description: 'Successful response')])]
+    public function enable(Device $device, CommandBus $commandBus, Request $request): DeviceResource
+    {
+        $this->abortUnlessDeviceOwnerOrAdmin($request, $device);
+
+        $device = $commandBus->dispatch(new EnableDevice(
+            deviceId: $device->id,
+            enabledByUserId: $request->user()->id,
         ));
 
         return new DeviceResource($device);

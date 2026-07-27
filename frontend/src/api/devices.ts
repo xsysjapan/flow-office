@@ -68,6 +68,12 @@ export function disableDevice(deviceId: string): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/disable`, { method: 'POST' })
 }
 
+// 停止(disabled)中の端末をペアリング待ち(pending_pairing)に戻す。再ペアリングは
+// 別のAPI(issueDevicePairingClaim)で改めて行う。
+export function enableDevice(deviceId: string): Promise<Device> {
+  return apiFetch(`/devices/${deviceId}/enable`, { method: 'POST' })
+}
+
 export function revokeDevice(deviceId: string, reason?: string): Promise<Device> {
   return apiFetch(`/devices/${deviceId}/revoke`, { method: 'POST', body: { reason } })
 }

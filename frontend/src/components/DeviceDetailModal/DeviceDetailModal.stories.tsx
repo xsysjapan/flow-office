@@ -66,3 +66,10 @@ export const PendingPairing: Story = {
     open: true,
   },
 }
+
+export const Disabled: Story = {
+  args: {
+    device: { ...baseDevice, status: 'disabled', disabled_at: '2026-07-20T00:00:00+09:00' },
+    open: true,
+  },
+}
