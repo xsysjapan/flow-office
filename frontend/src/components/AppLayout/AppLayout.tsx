@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Plug, Settings, type LucideIcon } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
+import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
@@ -24,7 +25,11 @@ interface NavGroup {
   roles?: RoleCode[]
 }
 
-function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): NavGroup[] {
+function navGroups(
+  currentYearMonth: string,
+  hasSpecialLeaveTypes: boolean,
+  expenseCategoryShortcuts: NavItem[],
+): NavGroup[] {
   return [
   {
     label: '勤怠',
@@ -45,6 +50,7 @@ function navGroups(currentYearMonth: string, hasSpecialLeaveTypes: boolean): Nav
       { to: '/requests/new', label: '新規申請' },
       { to: '/expenses', label: '経費精算' },
       { to: '/expenses/new', label: '経費精算(新規作成)' },
+      ...expenseCategoryShortcuts,
     ],
   },
   {
@@ -208,7 +214,14 @@ export function AppLayout() {
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data: specialLeaveTypes } = useSpecialLeaveTypes()
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes).filter(
+  const { data: expenseCategories } = useExpenseCategories()
+  // よく使う経費区分をメニューから直接開けるようにする(区分選択ステップを省略する
+  // ショートカット)。区分自体はマスタなので、ここでは並び順そのままにコード→リンクへ
+  // 変換するだけで、特定区分をハードコードしない。
+  const expenseCategoryShortcuts: NavItem[] = (expenseCategories ?? [])
+    .filter((category) => category.is_active)
+    .map((category) => ({ to: `/expenses/new?category=${category.code}`, label: `経費精算(${category.name})` }))
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, expenseCategoryShortcuts).filter(
     (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
   )
 

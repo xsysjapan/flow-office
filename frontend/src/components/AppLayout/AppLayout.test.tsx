@@ -3,8 +3,9 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as specialLeaveApi from '../../api/specialLeave'
-import type { SpecialLeaveType, User } from '../../api/types'
+import type { ExpenseCategory, SpecialLeaveType, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { formatDate } from '../../utils/weekDates'
 import { AppLayout } from './AppLayout'
@@ -19,7 +20,12 @@ const mockUser: User = {
   last_login_at: null,
 }
 
-function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes: SpecialLeaveType[] = []) {
+function renderLayout(
+  logout = vi.fn(),
+  user: User = mockUser,
+  specialLeaveTypes: SpecialLeaveType[] = [],
+  expenseCategories: ExpenseCategory[] = [],
+) {
   const authValue: AuthContextValue = {
     user,
     status: 'authenticated',
@@ -30,6 +36,7 @@ function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes
   }
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(specialLeaveTypes)
+  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(expenseCategories)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -68,6 +75,41 @@ describe('AppLayout', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請' }))
     expect(await screen.findByRole('menuitem', { name: '自分の申請' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
+  })
+
+  it('shows a shortcut per active expense category that jumps straight into that category', async () => {
+    renderLayout(vi.fn(), mockUser, [], [
+      {
+        id: 1,
+        code: 'transportation',
+        name: '交通費',
+        description: null,
+        evidence_type_default: 'fact_reference_available',
+        entry_mode: 'batch',
+        receipt_required_threshold: null,
+        approval_skip_threshold: null,
+        is_active: true,
+      },
+      {
+        id: 2,
+        code: 'supplies',
+        name: '消耗品',
+        description: null,
+        evidence_type_default: 'receipt_optional',
+        entry_mode: 'single',
+        receipt_required_threshold: 3000,
+        approval_skip_threshold: 1000,
+        is_active: false,
+      },
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: '申請' }))
+
+    expect(await screen.findByRole('menuitem', { name: '経費精算(交通費)' })).toHaveAttribute(
+      'href',
+      '/expenses/new?category=transportation',
+    )
+    expect(screen.queryByRole('menuitem', { name: '経費精算(消耗品)' })).not.toBeInTheDocument()
   })
 
   it('links 月次勤怠 to the current month detail page', async () => {

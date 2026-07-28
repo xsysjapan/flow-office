@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
@@ -209,12 +209,16 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  * `expense_claims`は区分を選んだだけでは作成せず、明細を1件でも実際に保存した時点で初めて
  * 作成する。対象期間はusage_dateから自動算出される派生値として表示するだけにする(原則2)。
  * URLに`:id`が含まれる場合(下書きの編集を再開する`/expenses/:id/edit`)は、既存のclaimIdを
- * そのまま使う。
+ * そのまま使う。また`?category=<区分コード>`が付いている場合(メニューのよく使う区分への
+ * ショートカット)は、新規作成時に限り区分選択ステップを飛ばしてそのまま該当区分の入力
+ * フォームを表示する。
  */
 export function ExpenseClaimNewPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { id: routeClaimId } = useParams<{ id?: string }>()
+  const [searchParams] = useSearchParams()
+  const categoryCodeParam = searchParams.get('category')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
@@ -223,6 +227,16 @@ export function ExpenseClaimNewPage() {
   const { data: claim, isLoading: isLoadingClaim, error: claimError } = useExpenseClaim(claimId)
   const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useExpenseCategories()
   const { data: templates } = useExpenseRouteTemplates()
+
+  // ?category=のショートカットはページ表示時に1回だけ適用する。「区分を変更する」で
+  // 選択を解除した後にこのeffectが再実行され、同じ区分へ戻されてしまわないようにする。
+  const appliedCategoryShortcut = useRef(false)
+  useEffect(() => {
+    if (routeClaimId || appliedCategoryShortcut.current || !categoryCodeParam || !categories) return
+    appliedCategoryShortcut.current = true
+    const shortcutCategory = categories.find((category) => category.code === categoryCodeParam && category.is_active)
+    if (shortcutCategory) setSelectedCategoryId(shortcutCategory.id)
+  }, [routeClaimId, categoryCodeParam, categories])
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, toData, reset } =
     useEditableRows<SaveExpenseItemInput>([])
@@ -312,11 +326,9 @@ export function ExpenseClaimNewPage() {
       <Card
         title={`${selectedCategory.name}の明細を入力`}
         actions={
-          (claim?.items.length ?? 0) > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setSelectedCategoryId(undefined)}>
-              別の区分の明細を追加する
-            </Button>
-          )
+          <Button variant="secondary" size="sm" onClick={() => setSelectedCategoryId(undefined)}>
+            {(claim?.items.length ?? 0) > 0 ? '別の区分の明細を追加する' : '区分を変更する'}
+          </Button>
         }
       >
         {selectedCategory.entry_mode === 'batch' ? (

@@ -65,7 +65,10 @@ function draftClaim(overrides: Partial<ExpenseClaim> = {}): ExpenseClaim {
   }
 }
 
-function renderPage(categories: ExpenseCategory[] = [transportCategory, lodgingCategory]) {
+function renderPage(
+  categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
+  initialPath = '/expenses/new',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
   vi.spyOn(expenseRouteTemplatesApi, 'fetchExpenseRouteTemplates').mockResolvedValue([])
@@ -78,9 +81,10 @@ function renderPage(categories: ExpenseCategory[] = [transportCategory, lodgingC
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/expenses/new']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
+          <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
           <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
@@ -188,6 +192,33 @@ describe('ExpenseClaimNewPage', () => {
     )
 
     expect(await screen.findByLabelText('宿泊先名')).toHaveValue('')
+  })
+
+  it('skips the category selection step when a ?category= shortcut param matches an active category', async () => {
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?category=lodging')
+
+    expect(await screen.findByLabelText('利用日')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '宿泊費' })).not.toBeInTheDocument()
+    expect(createClaim).not.toHaveBeenCalled()
+  })
+
+  it('ignores a ?category= shortcut param that does not match any active category', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?category=unknown')
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
+  })
+
+  it('lets the user go back to category selection via 区分を変更する before anything is saved', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?category=lodging')
+
+    await screen.findByLabelText('利用日')
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
   })
 
   it('does not create a second claim when returning to pick another category (UC-X013)', async () => {
