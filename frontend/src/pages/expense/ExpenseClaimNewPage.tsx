@@ -5,6 +5,7 @@ import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPane
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
 import { ExpenseRouteBuilder } from '../../components/ExpenseRouteBuilder/ExpenseRouteBuilder'
@@ -554,9 +555,13 @@ function SavedItemsAndSubmit({
           </Button>
           <Badge tone="neutral">下書き</Badge>
           {claim.status === 'draft' && (
-            <Button variant="danger" isLoading={deleteClaimMutation.isPending} onClick={onDeleteClaim}>
-              この下書きを削除する
-            </Button>
+            <ConfirmDialog
+              trigger={<Button variant="danger">この下書きを削除する</Button>}
+              title="この経費精算を削除しますか?"
+              description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
+              isConfirming={deleteClaimMutation.isPending}
+              onConfirm={onDeleteClaim}
+            />
           )}
         </div>
       </Card>

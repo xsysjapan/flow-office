@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -74,14 +75,17 @@ export function ExpenseClaimListPage() {
                         </Button>
                       )}
                       {isDeletable && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          isLoading={deleteClaim.isPending && deleteClaim.variables === claim.id}
-                          onClick={() => deleteClaim.mutate(claim.id)}
-                        >
-                          削除
-                        </Button>
+                        <ConfirmDialog
+                          trigger={
+                            <Button variant="danger" size="sm">
+                              削除
+                            </Button>
+                          }
+                          title="この下書きを削除しますか?"
+                          description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
+                          isConfirming={deleteClaim.isPending && deleteClaim.variables === claim.id}
+                          onConfirm={() => deleteClaim.mutate(claim.id)}
+                        />
                       )}
                     </div>
                   </TableCell>

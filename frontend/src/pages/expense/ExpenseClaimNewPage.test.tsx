@@ -297,6 +297,8 @@ describe('ExpenseClaimNewPage', () => {
     renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
 
     await userEvent.click(await screen.findByRole('button', { name: 'この下書きを削除する' }))
+    expect(deleteClaim).not.toHaveBeenCalled()
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
     expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()

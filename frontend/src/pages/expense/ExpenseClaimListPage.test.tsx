@@ -160,8 +160,36 @@ describe('ExpenseClaimListPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    expect(await screen.findByText('この下書きを削除しますか?')).toBeInTheDocument()
+    expect(deleteClaim).not.toHaveBeenCalled()
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('expense-claim-draft'))
+  })
+
+  it('does not delete when the confirmation dialog is cancelled', async () => {
+    const draft: ExpenseClaim = {
+      id: 'expense-claim-draft',
+      employee_id: 'employee-1',
+      period_from: null,
+      period_to: null,
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([draft]))
+    const deleteClaim = vi.spyOn(expenseClaimsApi, 'deleteExpenseClaim').mockResolvedValue(undefined)
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    expect(deleteClaim).not.toHaveBeenCalled()
   })
 
   it('shows the new-claim link', async () => {
