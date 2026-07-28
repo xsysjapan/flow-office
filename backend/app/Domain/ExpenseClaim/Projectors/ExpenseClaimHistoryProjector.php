@@ -4,6 +4,7 @@ namespace App\Domain\ExpenseClaim\Projectors;
 
 use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
@@ -42,6 +43,14 @@ class ExpenseClaimHistoryProjector extends Projector
     public function onExpenseClaimCancelled(ExpenseClaimCancelled $event): void
     {
         $this->record($event, ExpenseClaimHistoryAction::CANCELLED, $event->cancelledByUserId, $event->reason);
+    }
+
+    /**
+     * 削除された下書きの履歴は表示先(経費精算自体)が無くなるため、残さず一緒に削除する。
+     */
+    public function onExpenseClaimDeleted(ExpenseClaimDeleted $event): void
+    {
+        ExpenseClaimHistoryEntry::query()->where('expense_claim_id', $event->aggregateRootUuid())->delete();
     }
 
     private function record(ShouldBeStored $event, string $action, ?string $actorUserId, ?string $comment = null): void

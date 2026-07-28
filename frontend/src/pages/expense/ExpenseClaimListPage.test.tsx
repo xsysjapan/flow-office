@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as expenseClaimsApi from '../../api/expenseClaims'
 import type { ExpenseClaim, Paginated } from '../../api/types'
 import { ExpenseClaimListPage } from './ExpenseClaimListPage'
@@ -22,6 +23,10 @@ function renderPage() {
 }
 
 describe('ExpenseClaimListPage', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows an empty state when there are no claims', async () => {
     vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([]))
 
@@ -100,6 +105,63 @@ describe('ExpenseClaimListPage', () => {
     renderPage()
 
     expect(await screen.findByRole('link', { name: '-' })).toHaveAttribute('href', '/expenses/expense-claim-3')
+  })
+
+  it('lets a draft be edited or deleted, but not an approved claim', async () => {
+    const draft: ExpenseClaim = {
+      id: 'expense-claim-draft',
+      employee_id: 'employee-1',
+      period_from: null,
+      period_to: null,
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    const approved: ExpenseClaim = {
+      id: 'expense-claim-approved',
+      employee_id: 'employee-1',
+      period_from: '2026-06-01',
+      period_to: '2026-06-30',
+      status: 'approved',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([draft, approved]))
+
+    renderPage()
+
+    await screen.findByRole('link', { name: '-' })
+    expect(screen.getAllByRole('link', { name: '編集を続ける' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '削除' })).toHaveLength(1)
+  })
+
+  it('deletes a draft when its 削除 button is clicked', async () => {
+    const draft: ExpenseClaim = {
+      id: 'expense-claim-draft',
+      employee_id: 'employee-1',
+      period_from: null,
+      period_to: null,
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([draft]))
+    const deleteClaim = vi.spyOn(expenseClaimsApi, 'deleteExpenseClaim').mockResolvedValue(undefined)
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+
+    await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('expense-claim-draft'))
   })
 
   it('shows the new-claim link', async () => {

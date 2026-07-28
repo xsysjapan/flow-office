@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Briefcase, CalendarClock, CheckCircle2, ChevronDown, FileText, Menu, Plug, Settings, type LucideIcon } from 'lucide-react'
+import {
+  Briefcase,
+  CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  FileText,
+  Menu,
+  Plug,
+  Receipt,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
@@ -48,7 +59,13 @@ function navGroups(
     items: [
       { to: '/requests', label: '自分の申請' },
       { to: '/requests/new', label: '新規申請' },
-      { to: '/expenses', label: '経費精算' },
+    ],
+  },
+  {
+    label: '経費精算',
+    icon: Receipt,
+    items: [
+      { to: '/expenses', label: '経費精算一覧' },
       { to: '/expenses/new', label: '経費精算(新規作成)' },
       ...expenseCategoryShortcuts,
     ],

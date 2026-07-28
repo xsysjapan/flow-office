@@ -119,6 +119,7 @@ use App\Domain\DeviceAdminSession\Handlers\StartDeviceAdminSessionHandler;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ApproveExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\DeleteExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
@@ -127,6 +128,7 @@ use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
 use App\Domain\ExpenseClaim\Handlers\AddExpenseItemHandler;
 use App\Domain\ExpenseClaim\Handlers\ApproveExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\CancelExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\DeleteExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\DraftExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\RemoveExpenseItemHandler;
 use App\Domain\ExpenseClaim\Handlers\ReturnExpenseClaimHandler;
@@ -271,6 +273,7 @@ return [
         ApproveExpenseClaim::class => ApproveExpenseClaimHandler::class,
         ReturnExpenseClaim::class => ReturnExpenseClaimHandler::class,
         CancelExpenseClaim::class => CancelExpenseClaimHandler::class,
+        DeleteExpenseClaim::class => DeleteExpenseClaimHandler::class,
 
         ClockIn::class => ClockInHandler::class,
         StartBreak::class => StartBreakHandler::class,

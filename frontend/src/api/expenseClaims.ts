@@ -82,6 +82,11 @@ export function cancelExpenseClaim(claimId: string, reason: string): Promise<Exp
   return apiFetch(`/expense-claims/${claimId}/cancel`, { method: 'POST', body: { reason } })
 }
 
+/** UC-X010: 不要な下書き(申請前のみ)を削除する。 */
+export function deleteExpenseClaim(claimId: string): Promise<void> {
+  return apiFetch(`/expense-claims/${claimId}`, { method: 'DELETE' })
+}
+
 export function fetchExpenseClaimHistory(claimId: string): Promise<ExpenseClaimHistoryEntry[]> {
   return apiFetch(`/expense-claims/${claimId}/history`)
 }

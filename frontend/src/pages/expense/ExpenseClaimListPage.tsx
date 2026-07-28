@@ -5,14 +5,15 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useMyExpenseClaims } from '../../hooks/useExpenseClaims'
+import { useDeleteExpenseClaim, useMyExpenseClaims } from '../../hooks/useExpenseClaims'
 import { expenseClaimStatusLabel } from '../../utils/statusLabels'
 
 /**
- * UC-X010: 自分の経費精算一覧。
+ * UC-X010: 自分の経費精算一覧。まだ申請していない不要な下書きはここから削除できる。
  */
 export function ExpenseClaimListPage() {
   const { data, isLoading, error } = useMyExpenseClaims()
+  const deleteClaim = useDeleteExpenseClaim()
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="経費精算一覧の取得に失敗しました。" />
@@ -28,6 +29,8 @@ export function ExpenseClaimListPage() {
         </Button>
       }
     >
+      {deleteClaim.error && <ErrorMessage error={deleteClaim.error} />}
+
       {claims.length === 0 ? (
         <p className="text-sm text-muted-foreground">経費精算はまだありません。</p>
       ) : (
@@ -46,6 +49,7 @@ export function ExpenseClaimListPage() {
             {claims.map((claim) => {
               const { label, tone } = expenseClaimStatusLabel(claim.status)
               const isEditable = claim.status === 'draft' || claim.status === 'returned'
+              const isDeletable = claim.status === 'draft'
               return (
                 <TableRow key={claim.id}>
                   <TableCell>
@@ -63,11 +67,23 @@ export function ExpenseClaimListPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{claim.approver?.name ?? '-'}</TableCell>
                   <TableCell>
-                    {isEditable && (
-                      <Button asChild variant="secondary" size="sm">
-                        <Link to={`/expenses/${claim.id}/edit`}>編集を続ける</Link>
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isEditable && (
+                        <Button asChild variant="secondary" size="sm">
+                          <Link to={`/expenses/${claim.id}/edit`}>編集を続ける</Link>
+                        </Button>
+                      )}
+                      {isDeletable && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          isLoading={deleteClaim.isPending && deleteClaim.variables === claim.id}
+                          onClick={() => deleteClaim.mutate(claim.id)}
+                        >
+                          削除
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               )

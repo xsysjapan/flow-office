@@ -103,13 +103,25 @@ describe('AppLayout', () => {
       },
     ])
 
-    await userEvent.click(screen.getByRole('button', { name: '申請' }))
+    await userEvent.click(screen.getByRole('button', { name: '経費精算' }))
 
     expect(await screen.findByRole('menuitem', { name: '経費精算(交通費)' })).toHaveAttribute(
       'href',
       '/expenses/new?category=transportation',
     )
     expect(screen.queryByRole('menuitem', { name: '経費精算(消耗品)' })).not.toBeInTheDocument()
+  })
+
+  it('keeps 経費精算 as its own menu group, separate from 申請', async () => {
+    renderLayout()
+
+    await userEvent.click(screen.getByRole('button', { name: '申請' }))
+    expect(screen.queryByRole('menuitem', { name: '経費精算一覧' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+
+    await userEvent.click(await screen.findByRole('button', { name: '経費精算' }))
+    expect(await screen.findByRole('menuitem', { name: '経費精算一覧' })).toHaveAttribute('href', '/expenses')
+    expect(screen.getByRole('menuitem', { name: '経費精算(新規作成)' })).toBeInTheDocument()
   })
 
   it('links 月次勤怠 to the current month detail page', async () => {

@@ -5,6 +5,7 @@ namespace App\Domain\ExpenseClaim\Aggregates;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
@@ -129,6 +130,13 @@ class ExpenseClaimAggregate extends AggregateRoot
     public function cancel(string $cancelledByUserId, string $reason): self
     {
         $this->recordThat(new ExpenseClaimCancelled(cancelledByUserId: $cancelledByUserId, reason: $reason));
+
+        return $this;
+    }
+
+    public function delete(string $deletedByUserId): self
+    {
+        $this->recordThat(new ExpenseClaimDeleted(deletedByUserId: $deletedByUserId));
 
         return $this;
     }

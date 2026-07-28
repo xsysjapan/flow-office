@@ -25,6 +25,7 @@ import {
   useAddExpenseItem,
   useAddExpenseItemsBulk,
   useCreateExpenseClaim,
+  useDeleteExpenseClaim,
   useDeleteExpenseItem,
   useExpenseClaim,
   useSubmitExpenseClaim,
@@ -243,6 +244,7 @@ export function ExpenseClaimNewPage() {
   const addItem = useAddExpenseItem()
   const addItemsBulk = useAddExpenseItemsBulk()
   const updateItem = useUpdateExpenseItem()
+  const deleteClaimMutation = useDeleteExpenseClaim()
   const deleteItem = useDeleteExpenseItem()
   const submitClaim = useSubmitExpenseClaim(claimId ?? '')
 
@@ -314,6 +316,10 @@ export function ExpenseClaimNewPage() {
             onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
             onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
             onSubmit={() => void handleSubmit()}
+            onDeleteClaim={() => {
+              deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
+            }}
+            deleteClaimMutation={deleteClaimMutation}
             submitClaim={submitClaim}
           />
         )}
@@ -408,6 +414,10 @@ export function ExpenseClaimNewPage() {
           onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
           onSubmit={() => void handleSubmit()}
           submitClaim={submitClaim}
+          onDeleteClaim={() => {
+            deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
+          }}
+          deleteClaimMutation={deleteClaimMutation}
         />
       )}
     </div>
@@ -415,7 +425,8 @@ export function ExpenseClaimNewPage() {
 }
 
 /** UC-X010: 保存済み明細一覧と申請セクション。対象期間は明細のusage_dateから自動算出された
- *  claim.period_from/period_toをそのまま表示するだけで、編集項目としては持たない。 */
+ *  claim.period_from/period_toをそのまま表示するだけで、編集項目としては持たない。
+ *  下書き(draft)のみ「この下書きを削除する」で不要な経費精算そのものを削除できる。 */
 function SavedItemsAndSubmit({
   claim,
   approverUserId,
@@ -424,6 +435,8 @@ function SavedItemsAndSubmit({
   onDeleteItem,
   onSubmit,
   submitClaim,
+  onDeleteClaim,
+  deleteClaimMutation,
 }: {
   claim: NonNullable<ReturnType<typeof useExpenseClaim>['data']>
   approverUserId: string | undefined
@@ -431,6 +444,8 @@ function SavedItemsAndSubmit({
   onUpdateItem: (itemId: string, input: SaveExpenseItemInput) => void
   onDeleteItem: (itemId: string) => void
   onSubmit: () => void
+  onDeleteClaim: () => void
+  deleteClaimMutation: ReturnType<typeof useDeleteExpenseClaim>
   submitClaim: ReturnType<typeof useSubmitExpenseClaim>
 }) {
   const period =
@@ -525,6 +540,7 @@ function SavedItemsAndSubmit({
 
       <Card title="申請する">
         {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
+        {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
         <FormField label="承認者" htmlFor="approver" required>
           <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
         </FormField>
@@ -537,6 +553,11 @@ function SavedItemsAndSubmit({
             申請する
           </Button>
           <Badge tone="neutral">下書き</Badge>
+          {claim.status === 'draft' && (
+            <Button variant="danger" isLoading={deleteClaimMutation.isPending} onClick={onDeleteClaim}>
+              この下書きを削除する
+            </Button>
+          )}
         </div>
       </Card>
     </>

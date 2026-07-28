@@ -52,6 +52,7 @@ use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionEnded;
 use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionStarted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
@@ -317,6 +318,7 @@ return [
         'expense_claim.approved' => ExpenseClaimApproved::class,
         'expense_claim.returned' => ExpenseClaimReturned::class,
         'expense_claim.cancelled' => ExpenseClaimCancelled::class,
+        'expense_claim.deleted' => ExpenseClaimDeleted::class,
     ],
 
     /*

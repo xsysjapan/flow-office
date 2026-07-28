@@ -83,6 +83,7 @@ function renderPage(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
+          <Route path="/expenses" element={<p>経費精算一覧</p>} />
           <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
           <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
           <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
@@ -270,5 +271,34 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '交通費' }))
     await screen.findByRole('tab', { name: '表形式入力' })
     expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSave)
+  })
+
+  it('lets the applicant delete an unwanted draft while resuming its edit', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteClaim = vi.spyOn(expenseClaimsApi, 'deleteExpenseClaim').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'この下書きを削除する' }))
+
+    await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
+    expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()
   })
 })

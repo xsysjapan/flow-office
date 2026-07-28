@@ -5,6 +5,7 @@ import {
   approveExpenseClaim,
   cancelExpenseClaim,
   createExpenseClaim,
+  deleteExpenseClaim,
   deleteExpenseItem,
   fetchExpenseClaim,
   fetchExpenseClaimHistory,
@@ -144,5 +145,15 @@ export function useCancelExpenseClaim(claimId: string) {
   return useMutation({
     mutationFn: (reason: string) => cancelExpenseClaim(claimId, reason),
     onSuccess: invalidate,
+  })
+}
+
+/** UC-X010: 不要な下書きを削除する。一覧から即実行するため、claimIdはmutate時の引数で受け取る。 */
+export function useDeleteExpenseClaim() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (claimId: string) => deleteExpenseClaim(claimId),
+    onSuccess: (_data, claimId) => invalidateClaimQueries(queryClient, claimId),
   })
 }

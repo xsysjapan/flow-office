@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ApproveExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\DeleteExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
@@ -294,6 +295,26 @@ class ExpenseClaimController extends Controller
         ));
 
         return new ExpenseClaimResource($expenseClaim->refresh()->load(['employee', 'approver']));
+    }
+
+    #[OA\Delete(
+        path: '/expense-claims/{expenseClaim}',
+        operationId: 'expenseClaims.destroy',
+        summary: '不要な下書きを削除する(下書き状態のみ)',
+        tags: ['経費精算'],
+        parameters: [new OA\Parameter(name: 'expenseClaim', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 204, description: 'Deleted'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function destroy(Request $request, ExpenseClaim $expenseClaim, CommandBus $commandBus): Response
+    {
+        $this->authorizeOwnership($request, $expenseClaim);
+
+        $commandBus->dispatch(new DeleteExpenseClaim(
+            claimId: $expenseClaim->id,
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->noContent();
     }
 
     #[OA\Get(

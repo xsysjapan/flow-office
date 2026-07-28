@@ -4,6 +4,7 @@ namespace App\Domain\ExpenseClaim\Projectors;
 
 use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
@@ -118,6 +119,16 @@ class ExpenseClaimProjector extends Projector
         ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => ExpenseClaimStatus::CANCELLED,
         ]);
+    }
+
+    /**
+     * 不要な下書きの削除。expense_itemsはexpense_claimsへのcascadeOnDeleteで一緒に消える。
+     * 再生時にdrafted→deletedを再適用しても最終状態は「行が存在しない」で変わらないため
+     * 冪等。
+     */
+    public function onExpenseClaimDeleted(ExpenseClaimDeleted $event): void
+    {
+        ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 
     private function recalculateTotal(string $claimId): void

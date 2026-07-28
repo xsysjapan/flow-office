@@ -141,6 +141,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/expense-claims/{expenseClaim}/approve', [ExpenseClaimController::class, 'approve']);
     Route::post('/expense-claims/{expenseClaim}/return', [ExpenseClaimController::class, 'return']);
     Route::post('/expense-claims/{expenseClaim}/cancel', [ExpenseClaimController::class, 'cancel']);
+    Route::delete('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'destroy']);
     Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
