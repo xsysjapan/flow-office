@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
@@ -170,17 +170,15 @@ function PersonalRouteTemplateManager({ employeeId }: { employeeId: string }) {
   )
 }
 
-/** UC-X004: 経費区分を選ぶステップ。対象期間は聞かず、区分を選んだ時点で裏側で
- *  空の下書き(expense_claims)を作成する(初回のみ。既にドラフトがある場合は
- *  UC-X013で区分を追加するだけなので作成し直さない)。 */
+/** UC-X004: 経費区分を選ぶステップ。対象期間は聞かず、区分を選ぶだけの画面。この時点では
+ *  まだ何もサーバーに送信しない。下書き(expense_claims)自体は、実際に明細を1件保存した
+ *  瞬間に初めて作成する(区分を選んだだけでデータを作らない)。 */
 function CategorySelectionStep({
   categories,
   onSelect,
-  isCreatingClaim,
 }: {
   categories: ExpenseCategory[]
   onSelect: (category: ExpenseCategory) => void
-  isCreatingClaim: boolean
 }) {
   const activeCategories = categories.filter((category) => category.is_active)
 
@@ -191,12 +189,7 @@ function CategorySelectionStep({
       </p>
       <div className="flex flex-wrap gap-2">
         {activeCategories.map((category) => (
-          <Button
-            key={category.id}
-            variant="secondary"
-            isLoading={isCreatingClaim}
-            onClick={() => onSelect(category)}
-          >
+          <Button key={category.id} variant="secondary" onClick={() => onSelect(category)}>
             {category.name}
           </Button>
         ))}
@@ -205,17 +198,24 @@ function CategorySelectionStep({
   )
 }
 
+/** 明細の追加・修正・削除ができる(=編集を再開できる)ステータス。backendの
+ *  `ExpenseClaimStatus::editable()`と一致させる。 */
+const EDITABLE_STATUSES = ['draft', 'returned']
+
 /**
- * UC-X002/X004〜X013: 経費精算の新規作成。対象期間は入力させず、まず経費区分を選ぶ。
- * 区分の`entry_mode`が`batch`(交通費)なら表形式入力・移動経路入力・テンプレート一括生成の
- * 3タブを、`single`(会食・宿泊・消耗品・その他)なら区分専用の1件入力フォームを表示する。
- * `expense_claims`は明細を1件保存した時点で暗黙に作成され、対象期間はusage_dateから
- * 自動算出される派生値として表示するだけにする(原則2)。
+ * UC-X002/X004〜X013: 経費精算の新規作成・下書き編集。対象期間は入力させず、まず経費区分を
+ * 選ぶ。区分の`entry_mode`が`batch`(交通費)なら表形式入力・移動経路入力・テンプレート一括
+ * 生成の3タブを、`single`(会食・宿泊・消耗品・その他)なら区分専用の1件入力フォームを表示する。
+ * `expense_claims`は区分を選んだだけでは作成せず、明細を1件でも実際に保存した時点で初めて
+ * 作成する。対象期間はusage_dateから自動算出される派生値として表示するだけにする(原則2)。
+ * URLに`:id`が含まれる場合(下書きの編集を再開する`/expenses/:id/edit`)は、既存のclaimIdを
+ * そのまま使う。
  */
 export function ExpenseClaimNewPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [claimId, setClaimId] = useState<string | undefined>(undefined)
+  const { id: routeClaimId } = useParams<{ id?: string }>()
+  const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
@@ -226,10 +226,10 @@ export function ExpenseClaimNewPage() {
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, toData, reset } =
     useEditableRows<SaveExpenseItemInput>([])
-  const addItem = useAddExpenseItem(claimId ?? '')
-  const addItemsBulk = useAddExpenseItemsBulk(claimId ?? '')
-  const updateItem = useUpdateExpenseItem(claimId ?? '')
-  const deleteItem = useDeleteExpenseItem(claimId ?? '')
+  const addItem = useAddExpenseItem()
+  const addItemsBulk = useAddExpenseItemsBulk()
+  const updateItem = useUpdateExpenseItem()
+  const deleteItem = useDeleteExpenseItem()
   const submitClaim = useSubmitExpenseClaim(claimId ?? '')
 
   if (isLoadingCategories) return <LoadingState />
@@ -237,26 +237,30 @@ export function ExpenseClaimNewPage() {
 
   const selectedCategory = categories?.find((category) => category.id === selectedCategoryId)
 
-  const handleSelectCategory = async (category: ExpenseCategory) => {
-    let id = claimId
-    if (!id) {
-      const created = await createClaim.mutateAsync()
-      id = created.id
-      setClaimId(id)
-    }
+  /** claimIdが未確定(=まだ何も保存していない新規作成)なら、この場で下書きを作成して
+   *  そのIDを返す。既にある場合は作成し直さない(UC-X013: 別区分の明細を追加)。 */
+  const ensureClaimId = async (): Promise<string> => {
+    if (claimId) return claimId
+    const created = await createClaim.mutateAsync()
+    setClaimId(created.id)
+    return created.id
+  }
+
+  const handleSelectCategory = (category: ExpenseCategory) => {
     setSelectedCategoryId(category.id)
   }
 
   const handleSaveItems = async () => {
     const items = toData().filter((item) => item.usage_date && item.amount)
-    if (items.length === 0 || !claimId) return
-    await addItemsBulk.mutateAsync(items)
+    if (items.length === 0) return
+    const id = await ensureClaimId()
+    await addItemsBulk.mutateAsync({ claimId: id, items })
     reset([])
   }
 
   const handleSaveSingleItem = async (input: SaveExpenseItemInput) => {
-    if (!claimId) return
-    await addItem.mutateAsync(input)
+    const id = await ensureClaimId()
+    await addItem.mutateAsync({ claimId: id, input })
   }
 
   const handleSubmit = async () => {
@@ -265,26 +269,36 @@ export function ExpenseClaimNewPage() {
     navigate(`/expenses/${claimId}`)
   }
 
-  if (!claimId || !selectedCategory) {
+  if (claimId && isLoadingClaim) return <LoadingState />
+  if (claimId && claimError) return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
+
+  if (claimId && claim && !EDITABLE_STATUSES.includes(claim.status)) {
+    return (
+      <Card title="この経費精算は編集できません">
+        <p className="text-sm text-muted-foreground">
+          申請済み・承認済み・取消済みの経費精算は明細を編集できません。詳細画面から状態を確認してください。
+        </p>
+        <Button className="mt-3" variant="secondary" onClick={() => navigate(`/expenses/${claimId}`)}>
+          詳細画面へ
+        </Button>
+      </Card>
+    )
+  }
+
+  if (!selectedCategory) {
     return (
       <div className="flex flex-col gap-6">
         {categoriesError && <ErrorMessage error={categoriesError} />}
         {createClaim.error && <ErrorMessage error={createClaim.error} />}
-        <CategorySelectionStep
-          categories={categories ?? []}
-          onSelect={(category) => void handleSelectCategory(category)}
-          isCreatingClaim={createClaim.isPending}
-        />
+        <CategorySelectionStep categories={categories ?? []} onSelect={handleSelectCategory} />
 
-        {claimId && isLoadingClaim && <LoadingState />}
-        {claimId && claimError && <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />}
-        {claimId && claim && (
+        {claim && (
           <SavedItemsAndSubmit
             claim={claim}
             approverUserId={approverUserId}
             onApproverChange={setApproverUserId}
-            onUpdateItem={(itemId, input) => updateItem.mutate({ itemId, input })}
-            onDeleteItem={(itemId) => deleteItem.mutate(itemId)}
+            onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
+            onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
             onSubmit={() => void handleSubmit()}
             submitClaim={submitClaim}
           />
@@ -292,9 +306,6 @@ export function ExpenseClaimNewPage() {
       </div>
     )
   }
-
-  if (isLoadingClaim) return <LoadingState />
-  if (claimError) return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
 
   return (
     <div className="flex flex-col gap-6">
@@ -347,7 +358,10 @@ export function ExpenseClaimNewPage() {
 
             {rows.length > 0 && (
               <div className="mt-4">
-                <Button isLoading={addItemsBulk.isPending} onClick={() => void handleSaveItems()}>
+                <Button
+                  isLoading={createClaim.isPending || addItemsBulk.isPending}
+                  onClick={() => void handleSaveItems()}
+                >
                   明細を保存する({rows.length}件)
                 </Button>
                 {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
@@ -361,7 +375,7 @@ export function ExpenseClaimNewPage() {
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
               onSubmit={(input) => void handleSaveSingleItem(input)}
-              isSubmitting={addItem.isPending}
+              isSubmitting={createClaim.isPending || addItem.isPending}
             />
           </>
         )}
@@ -378,8 +392,8 @@ export function ExpenseClaimNewPage() {
           claim={claim}
           approverUserId={approverUserId}
           onApproverChange={setApproverUserId}
-          onUpdateItem={(itemId, input) => updateItem.mutate({ itemId, input })}
-          onDeleteItem={(itemId) => deleteItem.mutate(itemId)}
+          onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
+          onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
           onSubmit={() => void handleSubmit()}
           submitClaim={submitClaim}
         />

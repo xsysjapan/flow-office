@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
@@ -182,6 +182,12 @@ export function ExpenseClaimDetailPage() {
         <Separator />
 
         <div className="flex flex-wrap items-center gap-3">
+          {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
+            <Button asChild variant="secondary">
+              <Link to={`/expenses/${claim.id}/edit`}>明細を編集する</Link>
+            </Button>
+          )}
+
           {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
             <div className="flex items-center gap-2">
               <UserPicker id="approver" value={approverUserId ?? claim.approver_user_id ?? undefined} onChange={setApproverUserId} />

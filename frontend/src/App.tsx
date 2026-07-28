@@ -78,6 +78,7 @@ function App() {
         <Route path="expenses" element={<ExpenseClaimListPage />} />
         <Route path="expenses/new" element={<ExpenseClaimNewPage />} />
         <Route path="expenses/to-approve" element={<ExpenseClaimsToApprovePage />} />
+        <Route path="expenses/:id/edit" element={<ExpenseClaimNewPage />} />
         <Route path="expenses/:id" element={<ExpenseClaimDetailPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseClaimsApi from '../../api/expenseClaims'
@@ -89,6 +89,10 @@ function renderPage(categories: ExpenseCategory[] = [transportCategory, lodgingC
 }
 
 describe('ExpenseClaimNewPage', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows the category selection step without asking for a target period', async () => {
     renderPage()
 
@@ -98,22 +102,20 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.queryByLabelText('対象期間(終了)')).not.toBeInTheDocument()
   })
 
-  it('creates a draft claim with no body when a batch category is selected and shows the item entry tools', async () => {
-    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
-    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+  it('shows the item entry tools for a batch category without creating a draft claim yet', async () => {
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
 
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
-    await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
-
     expect(await screen.findByRole('tab', { name: '表形式入力' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '移動経路入力' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'テンプレートから生成' })).toBeInTheDocument()
+    expect(createClaim).not.toHaveBeenCalled()
   })
 
-  it('saves entered rows via the bulk items endpoint for a batch category', async () => {
+  it('creates a draft claim with no body only when the first rows are actually saved (batch category)', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([])
@@ -121,12 +123,15 @@ describe('ExpenseClaimNewPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
+
     await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
     await userEvent.type(screen.getByLabelText('1行目の日付'), '2026-07-04')
     await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
 
     await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
 
+    await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
     await waitFor(() =>
       expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalledWith('claim-1', [
         expect.objectContaining({ usage_date: '2026-07-04', amount: 420, category_id: 1 }),
@@ -134,7 +139,19 @@ describe('ExpenseClaimNewPage', () => {
     )
   })
 
-  it('shows the single-item form for a single-entry category and saves via the item endpoint', async () => {
+  it('shows the single-item form for a single-entry category without creating a draft claim yet', async () => {
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+
+    expect(await screen.findByLabelText('利用日')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '表形式入力' })).not.toBeInTheDocument()
+    expect(createClaim).not.toHaveBeenCalled()
+  })
+
+  it('creates a draft claim only when the first single item is saved, then keeps reusing it', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
@@ -153,15 +170,14 @@ describe('ExpenseClaimNewPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
-
-    await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
-    expect(screen.queryByRole('tab', { name: '表形式入力' })).not.toBeInTheDocument()
+    expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
 
     await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
     await userEvent.type(screen.getByLabelText('金額'), '12000')
     await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
     await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
 
+    await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
     await waitFor(() =>
       expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalledWith('claim-1', {
         category_id: 2,
@@ -194,18 +210,34 @@ describe('ExpenseClaimNewPage', () => {
         ],
       }),
     )
+    vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
+      id: 'item-1',
+      category_id: 2,
+      usage_date: '2026-07-10',
+      description: 'ホテルABC',
+      amount: 12000,
+      project_id: null,
+      evidence_type: 'receipt_required',
+      fact_reference_type: null,
+      fact_reference_id: null,
+      commuting_deduction_amount: null,
+    })
 
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await userEvent.type(screen.getByLabelText('金額'), '12000')
+    await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+    await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
     await waitFor(() => expect(createClaim).toHaveBeenCalled())
-    const callCountAfterFirstSelection = createClaim.mock.calls.length
+    const callCountAfterFirstSave = createClaim.mock.calls.length
 
     await userEvent.click(await screen.findByRole('button', { name: '別の区分の明細を追加する' }))
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '交通費' }))
     await screen.findByRole('tab', { name: '表形式入力' })
-    expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSelection)
+    expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSave)
   })
 })

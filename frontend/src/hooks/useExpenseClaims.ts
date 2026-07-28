@@ -45,13 +45,15 @@ export function useExpenseClaimHistory(id: string | undefined) {
   })
 }
 
+function invalidateClaimQueries(queryClient: ReturnType<typeof useQueryClient>, id: string) {
+  void queryClient.invalidateQueries({ queryKey: detailKey(id) })
+  void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+  void queryClient.invalidateQueries({ queryKey: TO_APPROVE_KEY })
+}
+
 function useInvalidateClaim(id: string) {
   const queryClient = useQueryClient()
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: detailKey(id) })
-    void queryClient.invalidateQueries({ queryKey: LIST_KEY })
-    void queryClient.invalidateQueries({ queryKey: TO_APPROVE_KEY })
-  }
+  return () => invalidateClaimQueries(queryClient, id)
 }
 
 export function useCreateExpenseClaim() {
@@ -65,40 +67,47 @@ export function useCreateExpenseClaim() {
   })
 }
 
-export function useAddExpenseItem(claimId: string) {
-  const invalidate = useInvalidateClaim(claimId)
+/**
+ * claimIdはmutate時の引数として受け取る(hook生成時のclaimIdをクロージャで固定しない)。
+ * 経費精算の新規作成画面では、明細を初めて保存する瞬間まで下書き自体を作らないため、
+ * hook呼び出し時点ではまだclaimIdが確定していない。
+ */
+export function useAddExpenseItem() {
+  const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: SaveExpenseItemInput) => addExpenseItem(claimId, input),
-    onSuccess: invalidate,
+    mutationFn: ({ claimId, input }: { claimId: string; input: SaveExpenseItemInput }) =>
+      addExpenseItem(claimId, input),
+    onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }
 
-export function useAddExpenseItemsBulk(claimId: string) {
-  const invalidate = useInvalidateClaim(claimId)
+export function useAddExpenseItemsBulk() {
+  const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (items: SaveExpenseItemInput[]) => addExpenseItemsBulk(claimId, items),
-    onSuccess: invalidate,
+    mutationFn: ({ claimId, items }: { claimId: string; items: SaveExpenseItemInput[] }) =>
+      addExpenseItemsBulk(claimId, items),
+    onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }
 
-export function useUpdateExpenseItem(claimId: string) {
-  const invalidate = useInvalidateClaim(claimId)
+export function useUpdateExpenseItem() {
+  const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ itemId, input }: { itemId: string; input: SaveExpenseItemInput }) =>
+    mutationFn: ({ claimId, itemId, input }: { claimId: string; itemId: string; input: SaveExpenseItemInput }) =>
       updateExpenseItem(claimId, itemId, input),
-    onSuccess: invalidate,
+    onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }
 
-export function useDeleteExpenseItem(claimId: string) {
-  const invalidate = useInvalidateClaim(claimId)
+export function useDeleteExpenseItem() {
+  const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (itemId: string) => deleteExpenseItem(claimId, itemId),
-    onSuccess: invalidate,
+    mutationFn: ({ claimId, itemId }: { claimId: string; itemId: string }) => deleteExpenseItem(claimId, itemId),
+    onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }
 

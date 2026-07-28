@@ -39,11 +39,13 @@ export function ExpenseClaimListPage() {
               <TableHead>合計金額</TableHead>
               <TableHead>状態</TableHead>
               <TableHead>承認者</TableHead>
+              <TableHead>操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {claims.map((claim) => {
               const { label, tone } = expenseClaimStatusLabel(claim.status)
+              const isEditable = claim.status === 'draft' || claim.status === 'returned'
               return (
                 <TableRow key={claim.id}>
                   <TableCell>
@@ -60,6 +62,13 @@ export function ExpenseClaimListPage() {
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{claim.approver?.name ?? '-'}</TableCell>
+                  <TableCell>
+                    {isEditable && (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link to={`/expenses/${claim.id}/edit`}>編集を続ける</Link>
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               )
             })}
