@@ -12,6 +12,7 @@ const categories: ExpenseCategory[] = [
     description: null,
     evidence_type_default: 'fact_reference_available',
     entry_mode: 'batch',
+    field_definitions: null,
     receipt_required_threshold: null,
     approval_skip_threshold: null,
     is_active: true,

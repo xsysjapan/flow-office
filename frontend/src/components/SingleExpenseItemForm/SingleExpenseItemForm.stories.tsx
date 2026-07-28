@@ -47,3 +47,16 @@ export const Submitting: Story = {
     isSubmitting: true,
   },
 }
+
+export const WithFieldDefinitions: Story = {
+  args: {
+    fieldSet: 'generic',
+    fieldDefinitions: [
+      { key: 'origin', label: '出発地', type: 'text', required: true },
+      { key: 'trip_type', label: '片道・往復', type: 'select', options: [
+        { value: 'one_way', label: '片道' },
+        { value: 'round_trip', label: '往復' },
+      ] },
+    ],
+  },
+}

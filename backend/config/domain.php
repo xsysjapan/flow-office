@@ -124,6 +124,7 @@ use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\UpdateExpenseClaimTitle;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
 use App\Domain\ExpenseClaim\Handlers\AddExpenseItemHandler;
 use App\Domain\ExpenseClaim\Handlers\ApproveExpenseClaimHandler;
@@ -133,6 +134,7 @@ use App\Domain\ExpenseClaim\Handlers\DraftExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\RemoveExpenseItemHandler;
 use App\Domain\ExpenseClaim\Handlers\ReturnExpenseClaimHandler;
 use App\Domain\ExpenseClaim\Handlers\SubmitExpenseClaimHandler;
+use App\Domain\ExpenseClaim\Handlers\UpdateExpenseClaimTitleHandler;
 use App\Domain\ExpenseClaim\Handlers\UpdateExpenseItemHandler;
 use App\Domain\Integration\Commands\RegisterIntegration;
 use App\Domain\Integration\Commands\ReissueIntegrationToken;
@@ -274,6 +276,7 @@ return [
         ReturnExpenseClaim::class => ReturnExpenseClaimHandler::class,
         CancelExpenseClaim::class => CancelExpenseClaimHandler::class,
         DeleteExpenseClaim::class => DeleteExpenseClaimHandler::class,
+        UpdateExpenseClaimTitle::class => UpdateExpenseClaimTitleHandler::class,
 
         ClockIn::class => ClockInHandler::class,
         StartBreak::class => StartBreakHandler::class,

@@ -14,6 +14,7 @@ const transportCategory: ExpenseCategory = {
   description: null,
   evidence_type_default: 'fact_reference_available',
   entry_mode: 'batch',
+  field_definitions: null,
   receipt_required_threshold: null,
   approval_skip_threshold: 3000,
   is_active: true,
@@ -72,12 +73,38 @@ describe('ExpenseCategoryEditPage', () => {
         description: undefined,
         evidence_type_default: 'fact_reference_available',
         entry_mode: 'single',
+        field_definitions: null,
         receipt_required_threshold: undefined,
         approval_skip_threshold: undefined,
         is_active: true,
       }),
     )
     expect(await screen.findByText('経費区分一覧ページ')).toBeInTheDocument()
+  })
+
+  it('adds a field definition row and includes it in the create payload', async () => {
+    vi.spyOn(expenseCategoriesApi, 'createExpenseCategory').mockResolvedValue({
+      ...transportCategory,
+      id: 3,
+      code: 'transport2',
+    })
+    renderPage('/admin/expense-categories/new')
+
+    await userEvent.type(await screen.findByLabelText('コード'), 'transport2')
+    await userEvent.type(screen.getByLabelText('名称'), '交通費2')
+    await userEvent.click(screen.getByRole('button', { name: '項目を追加' }))
+    await userEvent.type(screen.getByLabelText('1番目の項目のキー'), 'origin')
+    await userEvent.type(screen.getByLabelText('1番目の項目の表示名'), '出発地')
+
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() =>
+      expect(expenseCategoriesApi.createExpenseCategory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          field_definitions: [{ key: 'origin', label: '出発地', type: 'text', required: false }],
+        }),
+      ),
+    )
   })
 
   it('updates an existing expense category', async () => {
@@ -94,6 +121,7 @@ describe('ExpenseCategoryEditPage', () => {
         description: undefined,
         evidence_type_default: 'fact_reference_available',
         entry_mode: 'batch',
+        field_definitions: null,
         receipt_required_threshold: undefined,
         approval_skip_threshold: 3000,
         is_active: true,

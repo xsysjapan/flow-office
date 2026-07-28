@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/expense-claims/to-approve', [ExpenseClaimController::class, 'indexToApprove']);
     Route::get('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'show']);
     Route::post('/expense-claims', [ExpenseClaimController::class, 'store']);
+    Route::patch('/expense-claims/{expenseClaim}/title', [ExpenseClaimController::class, 'updateTitle']);
     Route::post('/expense-claims/{expenseClaim}/items', [ExpenseClaimController::class, 'addItem']);
     Route::post('/expense-claims/{expenseClaim}/items/bulk', [ExpenseClaimController::class, 'bulkAddItems']);
     Route::put('/expense-claims/{expenseClaim}/items/{item}', [ExpenseClaimController::class, 'updateItem']);

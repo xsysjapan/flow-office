@@ -25,6 +25,9 @@ class ExpenseItemResource extends JsonResource
             'fact_reference_id' => $this->fact_reference_id,
             'commuting_deduction_amount' => $this->commuting_deduction_amount,
             'net_amount' => $this->netAmount(),
+            'payment_bearer' => $this->payment_bearer,
+            'reimbursement_amount' => $this->reimbursement_amount,
+            'attributes' => $this->attributes,
             'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
         ];
     }

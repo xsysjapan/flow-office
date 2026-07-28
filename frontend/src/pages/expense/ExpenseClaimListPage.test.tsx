@@ -84,7 +84,28 @@ describe('ExpenseClaimListPage', () => {
 
     await screen.findByRole('link', { name: '2026-07-01 〜 2026-07-31' })
     expect(screen.getByText('下書き')).toBeInTheDocument()
-    expect(screen.getByText('-')).toBeInTheDocument()
+    expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows the claim title when one has been set', async () => {
+    const claim: ExpenseClaim = {
+      id: 'expense-claim-titled',
+      employee_id: 'employee-1',
+      title: '大阪出張分',
+      period_from: '2026-07-01',
+      period_to: '2026-07-05',
+      status: 'draft',
+      approver_user_id: null,
+      total_amount: 0,
+      submitted_at: null,
+      approved_at: null,
+      items: [],
+    }
+    vi.spyOn(expenseClaimsApi, 'fetchMyExpenseClaims').mockResolvedValue(paginated([claim]))
+
+    renderPage()
+
+    expect(await screen.findByText('大阪出張分')).toBeInTheDocument()
   })
 
   it('shows a dash for the period when it has not been calculated yet (no items saved)', async () => {

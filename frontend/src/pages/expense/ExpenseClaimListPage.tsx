@@ -38,6 +38,7 @@ export function ExpenseClaimListPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>タイトル</TableHead>
               <TableHead>対象期間</TableHead>
               <TableHead>明細件数</TableHead>
               <TableHead>合計金額</TableHead>
@@ -53,6 +54,7 @@ export function ExpenseClaimListPage() {
               const isDeletable = claim.status === 'draft'
               return (
                 <TableRow key={claim.id}>
+                  <TableCell className="text-foreground">{claim.title ?? '-'}</TableCell>
                   <TableCell>
                     <Link
                       to={`/expenses/${claim.id}`}

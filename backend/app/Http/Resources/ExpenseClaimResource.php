@@ -16,6 +16,7 @@ class ExpenseClaimResource extends JsonResource
             'id' => $this->id,
             'employee_id' => $this->employee_id,
             'employee' => new UserResource($this->whenLoaded('employee')),
+            'title' => $this->title,
             'period_from' => $this->period_from?->toDateString(),
             'period_to' => $this->period_to?->toDateString(),
             'status' => $this->status,

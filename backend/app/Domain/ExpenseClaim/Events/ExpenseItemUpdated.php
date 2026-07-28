@@ -20,5 +20,7 @@ class ExpenseItemUpdated extends ShouldBeStored
         public readonly ?string $factReferenceType,
         public readonly ?string $factReferenceId,
         public readonly int $commutingDeductionAmount,
+        public readonly string $paymentBearer,
+        public readonly ?array $attributes,
     ) {}
 }

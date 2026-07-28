@@ -8,6 +8,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Aggregates\ExpenseClaimAggregate;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
 use App\Domain\ExpenseClaim\Support\ExpenseEvidenceTypeResolver;
+use App\Domain\ExpenseClaim\Support\ExpenseItemAttributesValidator;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseClaimStatus;
@@ -41,6 +42,8 @@ class AddExpenseItemHandler implements CommandHandler
         }
 
         $evidenceType = ExpenseEvidenceTypeResolver::resolve($category, $command->amount, $command->evidenceType);
+        $attributes = ExpenseItemAttributesValidator::validate($category, $command->attributes);
+        $paymentBearer = $command->paymentBearer ?? ExpenseItem::PAYMENT_BEARER_EMPLOYEE;
 
         $itemId = (string) Str::uuid();
 
@@ -56,6 +59,8 @@ class AddExpenseItemHandler implements CommandHandler
                 factReferenceType: $command->factReferenceType,
                 factReferenceId: $command->factReferenceId,
                 commutingDeductionAmount: $command->commutingDeductionAmount,
+                paymentBearer: $paymentBearer,
+                attributes: $attributes,
             )
             ->persist();
 

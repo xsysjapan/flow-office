@@ -30,6 +30,7 @@ import {
   useDeleteExpenseItem,
   useExpenseClaim,
   useSubmitExpenseClaim,
+  useUpdateExpenseClaimTitle,
   useUpdateExpenseItem,
 } from '../../hooks/useExpenseClaims'
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
@@ -393,6 +394,7 @@ export function ExpenseClaimNewPage() {
             <SingleExpenseItemForm
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
+              fieldDefinitions={selectedCategory.field_definitions}
               onSubmit={(input) => void handleSaveSingleItem(input)}
               isSubmitting={createClaim.isPending || addItem.isPending}
             />
@@ -451,9 +453,31 @@ function SavedItemsAndSubmit({
 }) {
   const period =
     claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
+  const updateTitle = useUpdateExpenseClaimTitle()
+  const [titleInput, setTitleInput] = useState(claim.title ?? '')
 
   return (
     <>
+      <Card title="申請タイトル(任意)">
+        {updateTitle.error && <ErrorMessage error={updateTitle.error} />}
+        <div className="flex items-center gap-2">
+          <Input
+            aria-label="申請タイトル"
+            placeholder="例: 7月分の立替経費、大阪出張分"
+            value={titleInput}
+            onChange={(e) => setTitleInput(e.target.value)}
+          />
+          <Button
+            variant="secondary"
+            isLoading={updateTitle.isPending}
+            disabled={titleInput === (claim.title ?? '')}
+            onClick={() => updateTitle.mutate({ claimId: claim.id, title: titleInput || null })}
+          >
+            保存
+          </Button>
+        </div>
+      </Card>
+
       <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
         {claim.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のフォームから追加してください。</p>

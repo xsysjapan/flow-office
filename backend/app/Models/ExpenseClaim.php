@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ExpenseClaimProjectorがstored_eventsから作成・更新する。
  */
 #[Fillable([
-    'id', 'employee_id', 'period_from', 'period_to', 'status',
+    'id', 'employee_id', 'title', 'period_from', 'period_to', 'status',
     'approver_user_id', 'total_amount', 'submitted_at', 'approved_at',
 ])]
 class ExpenseClaim extends Model

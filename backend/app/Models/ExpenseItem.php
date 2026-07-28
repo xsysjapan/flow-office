@@ -19,10 +19,21 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 #[Fillable([
     'id', 'claim_id', 'category_id', 'usage_date', 'description', 'amount', 'project_id',
     'evidence_type', 'fact_reference_type', 'fact_reference_id', 'commuting_deduction_amount',
+    'payment_bearer', 'reimbursement_amount', 'attributes',
 ])]
 class ExpenseItem extends Model
 {
     use HasUuids;
+
+    public const PAYMENT_BEARER_EMPLOYEE = 'employee';
+
+    public const PAYMENT_BEARER_COMPANY = 'company';
+
+    public const PAYMENT_BEARER_CORPORATE_CARD = 'corporate_card';
+
+    public const PAYMENT_BEARER_CUSTOMER = 'customer';
+
+    public const PAYMENT_BEARER_OTHER = 'other';
 
     public $incrementing = false;
 
@@ -32,6 +43,7 @@ class ExpenseItem extends Model
     {
         return [
             'usage_date' => 'date',
+            'attributes' => 'array',
         ];
     }
 

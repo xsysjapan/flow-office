@@ -167,4 +167,10 @@ describe('ExpenseClaimDetailPage', () => {
 
     expect(await screen.findByText('経費精算(対象期間未確定)')).toBeInTheDocument()
   })
+
+  it('shows the claim title instead of the generic label when one has been set', async () => {
+    renderPage({ ...inReviewClaim, title: '大阪出張分' })
+
+    expect(await screen.findByText(`大阪出張分(${inReviewClaim.period_from} 〜 ${inReviewClaim.period_to})`)).toBeInTheDocument()
+  })
 })

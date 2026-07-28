@@ -22,5 +22,7 @@ class UpdateExpenseItem implements Command
         public readonly ?string $factReferenceType = null,
         public readonly ?string $factReferenceId = null,
         public readonly int $commutingDeductionAmount = 0,
+        public readonly ?string $paymentBearer = null,
+        public readonly ?array $attributes = null,
     ) {}
 }

@@ -29,6 +29,8 @@ describe('SingleExpenseItemForm', () => {
         usage_date: '2026-07-10',
         amount: 8000,
         description: '居酒屋 花 - 取引先との懇親会 (2名: 山田太郎、鈴木一郎)',
+        payment_bearer: 'employee',
+        attributes: undefined,
       })
     })
 
@@ -70,6 +72,8 @@ describe('SingleExpenseItemForm', () => {
         usage_date: '2026-07-11',
         amount: 12000,
         description: 'ホテルABC - 出張1泊',
+        payment_bearer: 'employee',
+        attributes: undefined,
       })
     })
 
@@ -88,6 +92,8 @@ describe('SingleExpenseItemForm', () => {
         usage_date: '2026-07-11',
         amount: 12000,
         description: 'ホテルABC',
+        payment_bearer: 'employee',
+        attributes: undefined,
       })
     })
 
@@ -114,6 +120,8 @@ describe('SingleExpenseItemForm', () => {
         usage_date: '2026-07-12',
         amount: 3000,
         description: '文具店 - ノート・ペン購入',
+        payment_bearer: 'employee',
+        attributes: undefined,
       })
     })
 
@@ -132,6 +140,8 @@ describe('SingleExpenseItemForm', () => {
         usage_date: '2026-07-12',
         amount: 3000,
         description: '文具店',
+        payment_bearer: 'employee',
+        attributes: undefined,
       })
     })
 
@@ -147,6 +157,45 @@ describe('SingleExpenseItemForm', () => {
 
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
       expect(button).toBeEnabled()
+    })
+  })
+
+  describe('payment_bearer and attributes', () => {
+    it('defaults payment_bearer to employee and lets it be changed', async () => {
+      const onSubmit = vi.fn()
+      render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
+
+      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await userEvent.type(screen.getByLabelText('金額'), '3000')
+      await userEvent.type(screen.getByLabelText('取引先'), '文具店')
+      await userEvent.selectOptions(screen.getByLabelText('支払方法'), '法人カード')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ payment_bearer: 'corporate_card' }))
+    })
+
+    it('renders field definitions dynamically and saves values into attributes', async () => {
+      const onSubmit = vi.fn()
+      render(
+        <SingleExpenseItemForm
+          fieldSet="generic"
+          categoryId={4}
+          fieldDefinitions={[{ key: 'origin', label: '出発地', type: 'text', required: true }]}
+          onSubmit={onSubmit}
+        />,
+      )
+
+      const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
+      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await userEvent.type(screen.getByLabelText('金額'), '3000')
+      await userEvent.type(screen.getByLabelText('取引先'), '文具店')
+      expect(button).toBeDisabled()
+
+      await userEvent.type(screen.getByLabelText('出発地'), '名古屋')
+      expect(button).toBeEnabled()
+      await userEvent.click(button)
+
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ attributes: { origin: '名古屋' } }))
     })
   })
 })

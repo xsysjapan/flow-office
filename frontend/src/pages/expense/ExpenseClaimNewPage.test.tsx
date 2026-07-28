@@ -32,6 +32,7 @@ const transportCategory: ExpenseCategory = {
   description: null,
   evidence_type_default: 'fact_reference_available',
   entry_mode: 'batch',
+  field_definitions: null,
   receipt_required_threshold: null,
   approval_skip_threshold: null,
   is_active: true,
@@ -44,6 +45,7 @@ const lodgingCategory: ExpenseCategory = {
   description: null,
   evidence_type_default: 'receipt_required',
   entry_mode: 'single',
+  field_definitions: null,
   receipt_required_threshold: 0,
   approval_skip_threshold: null,
   is_active: true,
@@ -184,12 +186,12 @@ describe('ExpenseClaimNewPage', () => {
 
     await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
     await waitFor(() =>
-      expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalledWith('claim-1', {
+      expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalledWith('claim-1', expect.objectContaining({
         category_id: 2,
         usage_date: '2026-07-10',
         amount: 12000,
         description: 'ホテルABC',
-      }),
+      })),
     )
 
     expect(await screen.findByLabelText('宿泊先名')).toHaveValue('')
@@ -220,6 +222,40 @@ describe('ExpenseClaimNewPage', () => {
 
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
+  })
+
+  it('lets the applicant set an optional title for the claim', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const updateTitle = vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    const titleField = await screen.findByLabelText('申請タイトル')
+    const saveButton = screen.getByRole('button', { name: '保存' })
+    expect(saveButton).toBeDisabled()
+
+    await userEvent.type(titleField, '大阪出張分')
+    expect(saveButton).toBeEnabled()
+    await userEvent.click(saveButton)
+
+    await waitFor(() => expect(updateTitle).toHaveBeenCalledWith('claim-1', '大阪出張分'))
   })
 
   it('does not create a second claim when returning to pick another category (UC-X013)', async () => {

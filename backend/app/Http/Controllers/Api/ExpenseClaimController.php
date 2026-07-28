@@ -11,6 +11,7 @@ use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
 use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
+use App\Domain\ExpenseClaim\Commands\UpdateExpenseClaimTitle;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ExpenseClaimHistoryEntryResource;
@@ -103,6 +104,30 @@ class ExpenseClaimController extends Controller
         return (new ExpenseClaimResource($claim))->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
+    #[OA\Patch(
+        path: '/expense-claims/{expenseClaim}/title',
+        operationId: 'expenseClaims.updateTitle',
+        summary: '経費精算のタイトルを設定・変更する(任意項目)',
+        tags: ['経費精算'],
+        parameters: [new OA\Parameter(name: 'expenseClaim', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [new OA\Property(property: 'title', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function updateTitle(Request $request, ExpenseClaim $expenseClaim, CommandBus $commandBus): ExpenseClaimResource
+    {
+        $this->authorizeOwnership($request, $expenseClaim);
+
+        $data = $request->validate(['title' => ['nullable', 'string', 'max:255']]);
+
+        $updated = $commandBus->dispatch(new UpdateExpenseClaimTitle(
+            claimId: $expenseClaim->id,
+            updatedByUserId: $request->user()->id,
+            title: $data['title'] ?? null,
+        ));
+
+        return new ExpenseClaimResource($updated);
+    }
+
     #[OA\Post(
         path: '/expense-claims/{expenseClaim}/items',
         operationId: 'expenseClaims.addItem',
@@ -183,6 +208,8 @@ class ExpenseClaimController extends Controller
             factReferenceType: $data['fact_reference_type'] ?? null,
             factReferenceId: $data['fact_reference_id'] ?? null,
             commutingDeductionAmount: $data['commuting_deduction_amount'] ?? 0,
+            paymentBearer: $data['payment_bearer'] ?? null,
+            attributes: $data['attributes'] ?? null,
         ));
 
         return new ExpenseItemResource($updated);
@@ -380,6 +407,8 @@ class ExpenseClaimController extends Controller
             'fact_reference_type' => ['nullable', 'string', 'max:100'],
             'fact_reference_id' => ['nullable', 'string', 'max:100'],
             'commuting_deduction_amount' => ['nullable', 'integer', 'min:0'],
+            'payment_bearer' => ['nullable', 'string', 'in:employee,company,corporate_card,customer,other'],
+            'attributes' => ['nullable', 'array'],
         ])->validate();
     }
 
@@ -400,6 +429,8 @@ class ExpenseClaimController extends Controller
             factReferenceType: $data['fact_reference_type'] ?? null,
             factReferenceId: $data['fact_reference_id'] ?? null,
             commutingDeductionAmount: $data['commuting_deduction_amount'] ?? 0,
+            paymentBearer: $data['payment_bearer'] ?? null,
+            attributes: $data['attributes'] ?? null,
         );
     }
 }

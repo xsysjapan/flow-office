@@ -8,6 +8,7 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimTitleUpdated;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
@@ -57,6 +58,9 @@ class ExpenseClaimProjector extends Projector
                 'fact_reference_type' => $event->factReferenceType,
                 'fact_reference_id' => $event->factReferenceId,
                 'commuting_deduction_amount' => $event->commutingDeductionAmount,
+                'payment_bearer' => $event->paymentBearer,
+                'reimbursement_amount' => $this->calculateReimbursement($event->amount, $event->commutingDeductionAmount, $event->paymentBearer),
+                'attributes' => $event->attributes,
             ],
         );
 
@@ -76,6 +80,9 @@ class ExpenseClaimProjector extends Projector
             'fact_reference_type' => $event->factReferenceType,
             'fact_reference_id' => $event->factReferenceId,
             'commuting_deduction_amount' => $event->commutingDeductionAmount,
+            'payment_bearer' => $event->paymentBearer,
+            'reimbursement_amount' => $this->calculateReimbursement($event->amount, $event->commutingDeductionAmount, $event->paymentBearer),
+            'attributes' => $event->attributes,
         ]);
 
         $this->recalculateTotal($event->aggregateRootUuid());
@@ -114,6 +121,13 @@ class ExpenseClaimProjector extends Projector
         ]);
     }
 
+    public function onExpenseClaimTitleUpdated(ExpenseClaimTitleUpdated $event): void
+    {
+        ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
+            'title' => $event->title,
+        ]);
+    }
+
     public function onExpenseClaimCancelled(ExpenseClaimCancelled $event): void
     {
         ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
@@ -131,10 +145,26 @@ class ExpenseClaimProjector extends Projector
         ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 
+    /**
+     * 「経費精算機能 設計・実装指示書」6.3/6.4: 会社から社員への返金額(reimbursement_amount)。
+     * 法人カード等(payment_bearer!=employee)は会社が既に直接支払っているため0円になる。
+     */
+    private function calculateReimbursement(int $amount, int $commutingDeductionAmount, string $paymentBearer): int
+    {
+        if ($paymentBearer !== ExpenseItem::PAYMENT_BEARER_EMPLOYEE) {
+            return 0;
+        }
+
+        return $amount - $commutingDeductionAmount;
+    }
+
+    /**
+     * total_amountは「会社から社員へ返金する総額」を表す。法人カード等で支払った明細は
+     * reimbursement_amountが0なので、集計から自然に除外される。
+     */
     private function recalculateTotal(string $claimId): void
     {
-        $total = ExpenseItem::query()->where('claim_id', $claimId)->get()
-            ->sum(fn (ExpenseItem $item) => $item->amount - $item->commuting_deduction_amount);
+        $total = ExpenseItem::query()->where('claim_id', $claimId)->sum('reimbursement_amount');
 
         ExpenseClaim::query()->whereKey($claimId)->update(['total_amount' => $total]);
     }

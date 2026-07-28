@@ -13,6 +13,7 @@ import {
   fetchMyExpenseClaims,
   returnExpenseClaim,
   submitExpenseClaim,
+  updateExpenseClaimTitle,
   updateExpenseItem,
   type SaveExpenseItemInput,
 } from '../api/expenseClaims'
@@ -155,5 +156,16 @@ export function useDeleteExpenseClaim() {
   return useMutation({
     mutationFn: (claimId: string) => deleteExpenseClaim(claimId),
     onSuccess: (_data, claimId) => invalidateClaimQueries(queryClient, claimId),
+  })
+}
+
+/** 申請タイトル(任意項目)を設定・変更する。 */
+export function useUpdateExpenseClaimTitle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ claimId, title }: { claimId: string; title: string | null }) =>
+      updateExpenseClaimTitle(claimId, title),
+    onSuccess: (_data, { claimId }) => invalidateClaimQueries(queryClient, claimId),
   })
 }

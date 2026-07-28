@@ -9,7 +9,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
-import type { ExpenseCategoryEntryMode, ExpenseEvidenceType } from '../../api/types'
+import type { ExpenseCategoryEntryMode, ExpenseCategoryFieldDefinition, ExpenseEvidenceType } from '../../api/types'
 import {
   useCreateExpenseCategory,
   useExpenseCategories,
@@ -26,6 +26,20 @@ const entryModeOptions: { value: ExpenseCategoryEntryMode; label: string }[] = [
   { value: 'batch', label: 'まとめ入力(交通費専用: 表形式・移動経路・テンプレート)' },
   { value: 'single', label: '1件入力(区分専用フォームで続けて何度でも入力できる)' },
 ]
+
+const fieldTypeOptions: { value: ExpenseCategoryFieldDefinition['type']; label: string }[] = [
+  { value: 'text', label: 'テキスト' },
+  { value: 'number', label: '数値' },
+  { value: 'date', label: '日付' },
+  { value: 'select', label: '選択肢' },
+  { value: 'boolean', label: 'はい/いいえ' },
+]
+
+let fieldRowSeq = 0
+function newFieldRow(): ExpenseCategoryFieldDefinition & { rowId: number } {
+  fieldRowSeq += 1
+  return { rowId: fieldRowSeq, key: '', label: '', type: 'text', required: false }
+}
 
 /**
  * UC-X001: 管理者が経費区分マスタを作成・編集する。
@@ -49,6 +63,9 @@ export function ExpenseCategoryEditPage() {
   const [description, setDescription] = useState('')
   const [evidenceTypeDefault, setEvidenceTypeDefault] = useState<ExpenseEvidenceType>('fact_reference_available')
   const [entryMode, setEntryMode] = useState<ExpenseCategoryEntryMode>('single')
+  const [fieldDefinitions, setFieldDefinitions] = useState<Array<ExpenseCategoryFieldDefinition & { rowId: number }>>(
+    [],
+  )
   const [receiptRequiredThreshold, setReceiptRequiredThreshold] = useState('')
   const [approvalSkipThreshold, setApprovalSkipThreshold] = useState('')
   const [isActive, setIsActive] = useState(true)
@@ -60,6 +77,7 @@ export function ExpenseCategoryEditPage() {
     setDescription(existing.description ?? '')
     setEvidenceTypeDefault(existing.evidence_type_default)
     setEntryMode(existing.entry_mode)
+    setFieldDefinitions((existing.field_definitions ?? []).map((field) => ({ ...field, rowId: (fieldRowSeq += 1) })))
     setReceiptRequiredThreshold(
       existing.receipt_required_threshold != null ? String(existing.receipt_required_threshold) : '',
     )
@@ -75,13 +93,24 @@ export function ExpenseCategoryEditPage() {
   const isBusy = createCategory.isPending || updateCategory.isPending
   const error = createCategory.error ?? updateCategory.error
 
+  const addFieldDefinitionRow = () => setFieldDefinitions((rows) => [...rows, newFieldRow()])
+  const removeFieldDefinitionRow = (rowId: number) =>
+    setFieldDefinitions((rows) => rows.filter((row) => row.rowId !== rowId))
+  const updateFieldDefinitionRow = (rowId: number, patch: Partial<ExpenseCategoryFieldDefinition>) =>
+    setFieldDefinitions((rows) => rows.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)))
+
   const handleSave = async () => {
+    const definedFields = fieldDefinitions
+      .filter((row) => row.key && row.label)
+      .map(({ rowId: _rowId, ...field }) => field)
+
     const input = {
       code,
       name,
       description: description || undefined,
       evidence_type_default: evidenceTypeDefault,
       entry_mode: entryMode,
+      field_definitions: definedFields.length > 0 ? definedFields : null,
       receipt_required_threshold: receiptRequiredThreshold ? Number(receiptRequiredThreshold) : undefined,
       approval_skip_threshold: approvalSkipThreshold ? Number(approvalSkipThreshold) : undefined,
       is_active: isActive,
@@ -141,6 +170,57 @@ export function ExpenseCategoryEditPage() {
           ))}
         </NativeSelect>
       </FormField>
+
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">追加入力項目(任意)</span>
+          <Button variant="secondary" size="sm" onClick={addFieldDefinitionRow}>
+            項目を追加
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          この区分で明細に追加入力させたい項目を定義します。ここで定義したキーだけが保存できます。
+        </p>
+        {fieldDefinitions.map((row, index) => (
+          <div key={row.rowId} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-5">
+            <Input
+              aria-label={`${index + 1}番目の項目のキー`}
+              placeholder="キー(例: origin)"
+              value={row.key}
+              onChange={(e) => updateFieldDefinitionRow(row.rowId, { key: e.target.value })}
+            />
+            <Input
+              aria-label={`${index + 1}番目の項目の表示名`}
+              placeholder="表示名(例: 出発地)"
+              value={row.label}
+              onChange={(e) => updateFieldDefinitionRow(row.rowId, { label: e.target.value })}
+            />
+            <NativeSelect
+              aria-label={`${index + 1}番目の項目の種類`}
+              value={row.type}
+              onChange={(e) =>
+                updateFieldDefinitionRow(row.rowId, { type: e.target.value as ExpenseCategoryFieldDefinition['type'] })
+              }
+            >
+              {fieldTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                checked={row.required ?? false}
+                onCheckedChange={(checked) => updateFieldDefinitionRow(row.rowId, { required: checked === true })}
+              />
+              必須
+            </label>
+            <Button variant="danger" size="sm" onClick={() => removeFieldDefinitionRow(row.rowId)}>
+              削除
+            </Button>
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="レシート必須しきい値(円・任意)" htmlFor="receipt-required-threshold">

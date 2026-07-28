@@ -90,9 +90,11 @@ export function ExpenseClaimDetailPage() {
   const isApprover = user?.id === claim.approver_user_id
   const actionError = submitClaim.error ?? approveClaim.error ?? returnClaim.error ?? cancelClaim.error
 
+  const periodLabel = claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
+
   return (
     <Card
-      title={`経費精算(${claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'})`}
+      title={claim.title ? `${claim.title}(${periodLabel})` : `経費精算(${periodLabel})`}
       actions={<Badge tone={tone}>{label}</Badge>}
     >
       {actionError && <ErrorMessage error={actionError} />}

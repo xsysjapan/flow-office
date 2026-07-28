@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
+import type { ExpenseCategoryFieldDefinition, ExpensePaymentBearer } from '../../api/types'
 import { Button } from '../Button/Button'
 import { FormField } from '../FormField/FormField'
+import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
+import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
+import { paymentBearerLabel } from '../../utils/statusLabels'
 
 export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic'
 
@@ -11,6 +15,8 @@ export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
   fieldSet: SingleExpenseItemFieldSet
   categoryId: number
+  /** 「経費精算機能 設計・実装指示書」7.2: 区分固有の追加入力項目。attributesとして保存する。 */
+  fieldDefinitions?: ExpenseCategoryFieldDefinition[] | null
   onSubmit: (input: SaveExpenseItemInput) => void
   isSubmitting?: boolean
 }
@@ -21,20 +27,39 @@ const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   generic: '消耗品・その他の経費を入力',
 }
 
+const PAYMENT_BEARERS: ExpensePaymentBearer[] = ['employee', 'corporate_card', 'company', 'customer', 'other']
+
+/** field_definitionsから受け取った値を、typeに応じてJSON保存用の値に変換する。 */
+function coerceAttributeValue(field: ExpenseCategoryFieldDefinition, raw: string | boolean): unknown {
+  if (field.type === 'number') return raw === '' ? null : Number(raw)
+  if (field.type === 'boolean') return Boolean(raw)
+  return raw === '' ? null : raw
+}
+
 /**
  * UC-X004b〜d: 会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。
  * `fieldSet`によって追加入力項目とdescriptionの整形フォーマットのみが切り替わり、
  * 利用日・金額の共通フィールドと「保存後にフォームをリセットして続けて入力できる」
  * 挙動はどのfieldSetでも共通(バックエンドのデータ構造は増やさない、
  * docs/30-usecases-expense.md UC-X004b〜d)。
+ * fieldDefinitionsが設定された区分では、その追加項目を動的に表示しattributesへ保存する
+ * (「経費精算機能 設計・実装指示書」6.5/7.2)。
  */
-export function SingleExpenseItemForm({ fieldSet, categoryId, onSubmit, isSubmitting }: SingleExpenseItemFormProps) {
+export function SingleExpenseItemForm({
+  fieldSet,
+  categoryId,
+  fieldDefinitions,
+  onSubmit,
+  isSubmitting,
+}: SingleExpenseItemFormProps) {
   const [usageDate, setUsageDate] = useState('')
   const [amount, setAmount] = useState('')
   const [payee, setPayee] = useState('') // 取引先(会食)/宿泊先名(宿泊)/取引先(消耗品・その他)
   const [content, setContent] = useState('') // 内容
   const [participants, setParticipants] = useState('') // 参加者氏名(会食のみ)
   const [participantCount, setParticipantCount] = useState('') // 参加人数(会食のみ)
+  const [paymentBearer, setPaymentBearer] = useState<ExpensePaymentBearer>('employee')
+  const [attributeValues, setAttributeValues] = useState<Record<string, string | boolean>>({})
 
   const reset = () => {
     setUsageDate('')
@@ -43,10 +68,19 @@ export function SingleExpenseItemForm({ fieldSet, categoryId, onSubmit, isSubmit
     setContent('')
     setParticipants('')
     setParticipantCount('')
+    setPaymentBearer('employee')
+    setAttributeValues({})
   }
 
+  const hasRequiredAttributes = (fieldDefinitions ?? [])
+    .filter((field) => field.required)
+    .every((field) => {
+      const value = attributeValues[field.key]
+      return field.type === 'boolean' ? true : Boolean(value)
+    })
+
   const isValid = (() => {
-    if (!usageDate || !amount) return false
+    if (!usageDate || !amount || !hasRequiredAttributes) return false
     if (fieldSet === 'meal') {
       return Boolean(payee && participants && participantCount && content)
     }
@@ -66,6 +100,15 @@ export function SingleExpenseItemForm({ fieldSet, categoryId, onSubmit, isSubmit
     return content ? `${payee} - ${content}` : payee
   }
 
+  const buildAttributes = (): Record<string, unknown> | undefined => {
+    if (!fieldDefinitions || fieldDefinitions.length === 0) return undefined
+    const attributes: Record<string, unknown> = {}
+    for (const field of fieldDefinitions) {
+      attributes[field.key] = coerceAttributeValue(field, attributeValues[field.key] ?? '')
+    }
+    return attributes
+  }
+
   const handleSubmit = () => {
     if (!isValid) return
     onSubmit({
@@ -73,6 +116,8 @@ export function SingleExpenseItemForm({ fieldSet, categoryId, onSubmit, isSubmit
       usage_date: usageDate,
       amount: Number(amount),
       description: buildDescription(),
+      payment_bearer: paymentBearer,
+      attributes: buildAttributes(),
     })
     reset()
   }
@@ -152,6 +197,57 @@ export function SingleExpenseItemForm({ fieldSet, categoryId, onSubmit, isSubmit
           </FormField>
         </>
       )}
+
+      <FormField label="支払方法" htmlFor="single-item-payment-bearer">
+        <NativeSelect
+          id="single-item-payment-bearer"
+          value={paymentBearer}
+          onChange={(e) => setPaymentBearer(e.target.value as ExpensePaymentBearer)}
+        >
+          {PAYMENT_BEARERS.map((bearer) => (
+            <option key={bearer} value={bearer}>
+              {paymentBearerLabel(bearer)}
+            </option>
+          ))}
+        </NativeSelect>
+      </FormField>
+
+      {fieldDefinitions?.map((field) => (
+        <FormField key={field.key} label={field.label} htmlFor={`single-item-attr-${field.key}`} required={field.required}>
+          {field.type === 'boolean' ? (
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                id={`single-item-attr-${field.key}`}
+                checked={Boolean(attributeValues[field.key])}
+                onCheckedChange={(checked) =>
+                  setAttributeValues((prev) => ({ ...prev, [field.key]: checked === true }))
+                }
+              />
+              {field.label}
+            </label>
+          ) : field.type === 'select' ? (
+            <NativeSelect
+              id={`single-item-attr-${field.key}`}
+              value={(attributeValues[field.key] as string) ?? ''}
+              onChange={(e) => setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+            >
+              <option value="">選択してください</option>
+              {field.options?.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          ) : (
+            <Input
+              id={`single-item-attr-${field.key}`}
+              type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+              value={(attributeValues[field.key] as string) ?? ''}
+              onChange={(e) => setAttributeValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+            />
+          )}
+        </FormField>
+      ))}
 
       <div>
         <Button disabled={!isValid} isLoading={isSubmitting} onClick={handleSubmit}>

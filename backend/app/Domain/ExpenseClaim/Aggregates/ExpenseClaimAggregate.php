@@ -9,6 +9,7 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimTitleUpdated;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
@@ -47,6 +48,8 @@ class ExpenseClaimAggregate extends AggregateRoot
         ?string $factReferenceType,
         ?string $factReferenceId,
         int $commutingDeductionAmount,
+        string $paymentBearer,
+        ?array $attributes,
     ): self {
         $this->recordThat(new ExpenseItemAdded(
             itemId: $itemId,
@@ -59,6 +62,8 @@ class ExpenseClaimAggregate extends AggregateRoot
             factReferenceType: $factReferenceType,
             factReferenceId: $factReferenceId,
             commutingDeductionAmount: $commutingDeductionAmount,
+            paymentBearer: $paymentBearer,
+            attributes: $attributes,
         ));
 
         return $this;
@@ -75,6 +80,8 @@ class ExpenseClaimAggregate extends AggregateRoot
         ?string $factReferenceType,
         ?string $factReferenceId,
         int $commutingDeductionAmount,
+        string $paymentBearer,
+        ?array $attributes,
     ): self {
         $this->assertItemExists($itemId);
 
@@ -89,6 +96,8 @@ class ExpenseClaimAggregate extends AggregateRoot
             factReferenceType: $factReferenceType,
             factReferenceId: $factReferenceId,
             commutingDeductionAmount: $commutingDeductionAmount,
+            paymentBearer: $paymentBearer,
+            attributes: $attributes,
         ));
 
         return $this;
@@ -99,6 +108,13 @@ class ExpenseClaimAggregate extends AggregateRoot
         $this->assertItemExists($itemId);
 
         $this->recordThat(new ExpenseItemRemoved(itemId: $itemId));
+
+        return $this;
+    }
+
+    public function updateTitle(?string $title): self
+    {
+        $this->recordThat(new ExpenseClaimTitleUpdated(title: $title));
 
         return $this;
     }

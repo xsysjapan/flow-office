@@ -5,6 +5,7 @@ import type {
   ExpenseEvidenceType,
   ExpenseFactReferenceType,
   ExpenseItem,
+  ExpensePaymentBearer,
   Paginated,
 } from './types'
 
@@ -39,6 +40,8 @@ export interface SaveExpenseItemInput {
   fact_reference_type?: ExpenseFactReferenceType
   fact_reference_id?: string
   commuting_deduction_amount?: number
+  payment_bearer?: ExpensePaymentBearer
+  attributes?: Record<string, unknown>
 }
 
 export function addExpenseItem(claimId: string, input: SaveExpenseItemInput): Promise<ExpenseItem> {
@@ -85,6 +88,11 @@ export function cancelExpenseClaim(claimId: string, reason: string): Promise<Exp
 /** UC-X010: 不要な下書き(申請前のみ)を削除する。 */
 export function deleteExpenseClaim(claimId: string): Promise<void> {
   return apiFetch(`/expense-claims/${claimId}`, { method: 'DELETE' })
+}
+
+/** 申請タイトル(任意項目)を設定・変更する。 */
+export function updateExpenseClaimTitle(claimId: string, title: string | null): Promise<ExpenseClaim> {
+  return apiFetch(`/expense-claims/${claimId}/title`, { method: 'PATCH', body: { title } })
 }
 
 export function fetchExpenseClaimHistory(claimId: string): Promise<ExpenseClaimHistoryEntry[]> {
