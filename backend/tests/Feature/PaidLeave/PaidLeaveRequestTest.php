@@ -6,6 +6,7 @@ use App\Models\AttendanceDay;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveUsage;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
@@ -138,6 +139,59 @@ class PaidLeaveRequestTest extends TestCase
 
         $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertStatus(422);
+    }
+
+    /**
+     * 通常勤務は運用上employee_shift_assignmentsが事前展開されないことが多いため、
+     * 勤務予定が無くてもシステムのデフォルト働き方(カレンダー未設定)から平日を
+     * 所定労働日とみなして申請できる(ScheduledWorkingDayResolver参照)。
+     */
+    public function test_a_leave_request_without_a_shift_assignment_succeeds_on_a_weekday_when_the_default_work_style_has_no_calendar(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $defaultWorkStyle = WorkStyle::query()->create([
+            'code' => 'default-'.$employee->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'calendar_id' => null, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
+
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        // 2026-08-10は月曜日(平日)。employee_shift_assignmentsの行は無い。
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated();
+    }
+
+    public function test_a_leave_request_without_a_shift_assignment_is_rejected_on_a_weekend_when_the_default_work_style_has_no_calendar(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $defaultWorkStyle = WorkStyle::query()->create([
+            'code' => 'default-'.$employee->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'calendar_id' => null, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
+
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        // 2026-08-15は土曜日。
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-15',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
         ])->assertStatus(422);
