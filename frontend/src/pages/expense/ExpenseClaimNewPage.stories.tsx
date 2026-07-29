@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import type { ExpenseCategory, Paginated, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
@@ -99,7 +99,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'UC-X004: 対象期間は聞かず、まず経費区分を選ぶ。区分のentry_modeがbatch(交通費)ならプリセットから追加できる表形式入力、singleなら区分専用の1件入力フォームに自動的に切り替わる。',
+          '経費精算を新規開始すると、まず「個別に経費登録」「まとめて経費登録」を選ばせる。個別の場合はそのまま経費区分選択(UC-X004)へ進み、区分のentry_modeがbatch(交通費)ならプリセットから追加できる表形式入力、singleなら区分専用の1件入力フォームに自動的に切り替わる。',
       },
     },
   },
@@ -108,7 +108,17 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** UC-X004: 対象期間は聞かず、まず経費区分を選ぶ初期状態。 */
+/** 経費精算を新規開始した直後の初期状態。個別/まとめての登録方法を選ばせる。 */
+export const EntryModeSelection: Story = {
+  render: withSeeded(),
+}
+
+/** UC-X004: 「個別に経費登録」を選んだ後、対象期間は聞かず、まず経費区分を選ぶ。 */
 export const CategorySelection: Story = {
   render: withSeeded(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole('button', { name: '個別に登録する' }))
+    await expect(await canvas.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+  },
 }

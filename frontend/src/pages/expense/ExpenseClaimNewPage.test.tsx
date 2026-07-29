@@ -96,13 +96,28 @@ function renderPage(
   )
 }
 
+/** 「個別に経費登録」を選び、経費区分選択ステップへ進む。多くのテストは登録方法の
+ *  選択自体ではなく、その先の区分選択・入力フォームの挙動を検証するために使う。 */
+async function selectIndividualEntryMode() {
+  await userEvent.click(await screen.findByRole('button', { name: '個別に登録する' }))
+}
+
 describe('ExpenseClaimNewPage', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('shows the category selection step without asking for a target period', async () => {
+  it('shows the entry mode selection step first when starting a brand new claim', async () => {
     renderPage()
+
+    expect(await screen.findByRole('button', { name: '個別に登録する' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'まとめて登録する' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '交通費' })).not.toBeInTheDocument()
+  })
+
+  it('shows the category selection step after choosing 個別に経費登録, without asking for a target period', async () => {
+    renderPage()
+    await selectIndividualEntryMode()
 
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
@@ -110,10 +125,102 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.queryByLabelText('対象期間(終了)')).not.toBeInTheDocument()
   })
 
+  it('lets the user go back from category selection to the entry mode choice', async () => {
+    renderPage()
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '登録方法の選択に戻る' }))
+
+    expect(await screen.findByRole('button', { name: '個別に登録する' })).toBeInTheDocument()
+  })
+
+  it('shows a title step with clickable suggestions when choosing まとめて経費登録, and creates the claim with the chosen title', async () => {
+    vi.setSystemTime(new Date('2026-07-15T00:00:00+09:00'))
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    const updateTitle = vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(
+      draftClaim({ title: '2026年7月分交通費' }),
+    )
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+
+    expect(await screen.findByLabelText('タイトル')).toHaveValue('')
+    const suggestion = screen.getByRole('button', { name: '2026年7月分交通費' })
+    await userEvent.click(suggestion)
+
+    await waitFor(() => expect(createClaim).toHaveBeenCalledWith())
+    await waitFor(() => expect(updateTitle).toHaveBeenCalledWith('claim-1', '2026年7月分交通費'))
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+
+    vi.useRealTimers()
+  })
+
+  it('lets the user type a custom title in the まとめて経費登録 flow', async () => {
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    const updateTitle = vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+
+    const nextButton = screen.getByRole('button', { name: '次へ' })
+    expect(nextButton).toBeDisabled()
+
+    await userEvent.type(await screen.findByLabelText('タイトル'), '大阪出張分')
+    expect(nextButton).toBeEnabled()
+    await userEvent.click(nextButton)
+
+    await waitFor(() => expect(createClaim).toHaveBeenCalledWith())
+    await waitFor(() => expect(updateTitle).toHaveBeenCalledWith('claim-1', '大阪出張分'))
+  })
+
+  it('lets the user go back from the title step to the entry mode choice', async () => {
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+    await userEvent.click(await screen.findByRole('button', { name: '登録方法の選択に戻る' }))
+
+    expect(await screen.findByRole('button', { name: '個別に登録する' })).toBeInTheDocument()
+  })
+
+  it('suggests a title from the first saved item when using 個別に経費登録', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
+      id: 'item-1',
+      category_id: 2,
+      usage_date: '2026-07-10',
+      description: 'ホテルABC',
+      amount: 12000,
+      project_id: null,
+      evidence_type: 'receipt_required',
+      fact_reference_type: null,
+      fact_reference_id: null,
+      commuting_deduction_amount: null,
+    })
+    const updateTitle = vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(
+      draftClaim({ title: '宿泊費(2026-07-10)' }),
+    )
+
+    renderPage()
+    await selectIndividualEntryMode()
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await userEvent.type(screen.getByLabelText('金額'), '12000')
+    await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+    await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+    await waitFor(() =>
+      expect(updateTitle).toHaveBeenCalledWith('claim-1', '宿泊費(2026-07-10)'),
+    )
+  })
+
   it('shows the item entry tools for a batch category without creating a draft claim yet', async () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
 
     renderPage()
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
@@ -165,6 +272,7 @@ describe('ExpenseClaimNewPage', () => {
     })
 
     renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
@@ -182,8 +290,10 @@ describe('ExpenseClaimNewPage', () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([])
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
 
     renderPage()
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
     expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
@@ -206,6 +316,7 @@ describe('ExpenseClaimNewPage', () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
 
     renderPage()
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
 
@@ -217,6 +328,7 @@ describe('ExpenseClaimNewPage', () => {
   it('creates a draft claim only when the first single item is saved, then keeps reusing it', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
       id: 'item-1',
       category_id: 2,
@@ -231,6 +343,7 @@ describe('ExpenseClaimNewPage', () => {
     })
 
     renderPage()
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
     expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
@@ -316,6 +429,7 @@ describe('ExpenseClaimNewPage', () => {
 
   it('does not create a second claim when returning to pick another category (UC-X013)', async () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
       draftClaim({
         items: [
@@ -348,6 +462,7 @@ describe('ExpenseClaimNewPage', () => {
     })
 
     renderPage()
+    await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
     await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')

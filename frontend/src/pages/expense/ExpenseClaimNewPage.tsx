@@ -135,14 +135,25 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
 function CategorySelectionStep({
   categories,
   onSelect,
+  onBack,
 }: {
   categories: ExpenseCategory[]
   onSelect: (category: ExpenseCategory) => void
+  onBack?: () => void
 }) {
   const activeCategories = categories.filter((category) => category.is_active)
 
   return (
-    <Card title="経費区分を選ぶ">
+    <Card
+      title="経費区分を選ぶ"
+      actions={
+        onBack && (
+          <Button variant="secondary" size="sm" onClick={onBack}>
+            登録方法の選択に戻る
+          </Button>
+        )
+      }
+    >
       <p className="mb-3 text-sm text-muted-foreground">
         対象期間の入力は不要です。まず精算したい経費区分を選んでください。
       </p>
@@ -155,6 +166,112 @@ function CategorySelectionStep({
       </div>
     </Card>
   )
+}
+
+type ExpenseClaimEntryMode = 'individual' | 'bulk'
+
+/** 経費精算を開始する最初の分岐。1件をすぐ登録したいのか(タイトルは登録内容から
+ *  自動的に提案する)、複数件をまとめて1つの申請にしたいのか(先にタイトルを決める)を
+ *  最初に選ばせる。 */
+function EntryModeSelectionStep({ onSelect }: { onSelect: (mode: ExpenseClaimEntryMode) => void }) {
+  return (
+    <Card title="経費精算を始める">
+      <p className="mb-3 text-sm text-muted-foreground">登録方法を選んでください。</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+          <h3 className="font-semibold text-foreground">個別に経費登録</h3>
+          <p className="flex-1 text-sm text-muted-foreground">
+            1件の経費をすぐに登録します。タイトルは登録内容から自動的に提案します。
+          </p>
+          <div>
+            <Button onClick={() => onSelect('individual')}>個別に登録する</Button>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+          <h3 className="font-semibold text-foreground">まとめて経費登録</h3>
+          <p className="flex-1 text-sm text-muted-foreground">
+            複数の経費をまとめて1つの申請にします。まず申請のタイトルを入力してください。
+          </p>
+          <div>
+            <Button onClick={() => onSelect('bulk')}>まとめて登録する</Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/** よく使われるタイトルの候補。年月は現在日時から組み立てる。クリックするとそのまま
+ *  タイトルとして決定できる(入力の手間を省く)。 */
+function suggestedBulkTitles(): string[] {
+  const now = new Date()
+  const label = `${now.getFullYear()}年${now.getMonth() + 1}月分`
+  return [`${label}経費`, `${label}交通費`, '出張精算']
+}
+
+/** UC-X004(まとめて経費登録): 明細を入力する前に、まず申請のタイトルを決める。
+ *  よく使う候補をクリックするだけで決定できるようにし、自由入力も許容する。 */
+function BulkTitleStep({
+  onSubmit,
+  onBack,
+  isSubmitting,
+  error,
+}: {
+  onSubmit: (title: string) => void
+  onBack: () => void
+  isSubmitting: boolean
+  error: unknown
+}) {
+  const [title, setTitle] = useState('')
+  const suggestions = suggestedBulkTitles()
+
+  return (
+    <Card
+      title="申請タイトルを入力"
+      actions={
+        <Button variant="secondary" size="sm" onClick={onBack}>
+          登録方法の選択に戻る
+        </Button>
+      }
+    >
+      {error !== null && error !== undefined && <ErrorMessage error={error} />}
+      <p className="mb-3 text-sm text-muted-foreground">例: 2026年7月分交通費、大阪出張分</p>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        {suggestions.map((suggestion) => (
+          <Button
+            key={suggestion}
+            type="button"
+            variant="secondary"
+            size="sm"
+            isLoading={isSubmitting}
+            onClick={() => onSubmit(suggestion)}
+          >
+            {suggestion}
+          </Button>
+        ))}
+      </div>
+
+      <FormField label="タイトル" htmlFor="bulk-claim-title" required>
+        <Input
+          id="bulk-claim-title"
+          placeholder="例: 2026年7月分交通費"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </FormField>
+
+      <Button disabled={!title.trim()} isLoading={isSubmitting} onClick={() => onSubmit(title.trim())}>
+        次へ
+      </Button>
+    </Card>
+  )
+}
+
+/** 「個別に経費登録」で保存された最初の明細から、申請タイトルの候補を組み立てる
+ *  (例: 「宿泊費(2026-07-20)」)。ユーザーは後から自由に変更できる。 */
+function suggestIndividualTitle(categoryName: string | undefined, usageDate: string): string {
+  return usageDate ? `${categoryName ?? '経費精算'}(${usageDate})` : (categoryName ?? '経費精算')
 }
 
 /** 明細の追加・修正・削除ができる(=編集を再開できる)ステータス。backendの
@@ -178,21 +295,27 @@ export function ExpenseClaimNewPage() {
   const [searchParams] = useSearchParams()
   const categoryCodeParam = searchParams.get('category')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
+  const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
 
   const createClaim = useCreateExpenseClaim()
+  const startClaimTitle = useUpdateExpenseClaimTitle()
   const { data: claim, isLoading: isLoadingClaim, error: claimError } = useExpenseClaim(claimId)
   const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useExpenseCategories()
 
   // ?category=のショートカットはページ表示時に1回だけ適用する。「区分を変更する」で
   // 選択を解除した後にこのeffectが再実行され、同じ区分へ戻されてしまわないようにする。
+  // メニューからのショートカットは「個別に経費登録」相当として扱い、登録方法選択を省略する。
   const appliedCategoryShortcut = useRef(false)
   useEffect(() => {
     if (routeClaimId || appliedCategoryShortcut.current || !categoryCodeParam || !categories) return
     appliedCategoryShortcut.current = true
     const shortcutCategory = categories.find((category) => category.code === categoryCodeParam && category.is_active)
-    if (shortcutCategory) setSelectedCategoryId(shortcutCategory.id)
+    if (shortcutCategory) {
+      setEntryMode('individual')
+      setSelectedCategoryId(shortcutCategory.id)
+    }
   }, [routeClaimId, categoryCodeParam, categories])
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, toData, reset } =
@@ -218,6 +341,16 @@ export function ExpenseClaimNewPage() {
     return created.id
   }
 
+  const handleSelectEntryMode = (mode: ExpenseClaimEntryMode) => {
+    setEntryMode(mode)
+  }
+
+  /** 「まとめて経費登録」: 先にタイトルを確定させてから下書きを作成する。 */
+  const handleStartBulkClaim = async (title: string) => {
+    const id = await ensureClaimId()
+    await startClaimTitle.mutateAsync({ claimId: id, title })
+  }
+
   const handleSelectCategory = (category: ExpenseCategory) => {
     setSelectedCategoryId(category.id)
   }
@@ -225,14 +358,24 @@ export function ExpenseClaimNewPage() {
   const handleSaveItems = async () => {
     const items = toData().filter((item) => item.usage_date && item.amount)
     if (items.length === 0) return
+    const wasNewClaim = !claimId
     const id = await ensureClaimId()
     await addItemsBulk.mutateAsync({ claimId: id, items })
+    if (wasNewClaim && entryMode === 'individual') {
+      const categoryName = categories?.find((category) => category.id === items[0].category_id)?.name
+      void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, items[0].usage_date) })
+    }
     reset([])
   }
 
   const handleSaveSingleItem = async (input: SaveExpenseItemInput) => {
+    const wasNewClaim = !claimId
     const id = await ensureClaimId()
     await addItem.mutateAsync({ claimId: id, input })
+    if (wasNewClaim && entryMode === 'individual') {
+      const categoryName = categories?.find((category) => category.id === input.category_id)?.name
+      void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, input.usage_date) })
+    }
   }
 
   const handleSubmit = async () => {
@@ -257,12 +400,33 @@ export function ExpenseClaimNewPage() {
     )
   }
 
+  // 新規作成のみ(下書き再開・区分ショートカットを除く)。まず登録方法を選ばせる。
+  if (!claimId && !entryMode && !categoryCodeParam) {
+    return <EntryModeSelectionStep onSelect={handleSelectEntryMode} />
+  }
+
+  // 「まとめて経費登録」は明細入力の前に申請タイトルを確定させる。
+  if (!claimId && entryMode === 'bulk') {
+    return (
+      <BulkTitleStep
+        onBack={() => setEntryMode(undefined)}
+        onSubmit={(title) => void handleStartBulkClaim(title)}
+        isSubmitting={createClaim.isPending || startClaimTitle.isPending}
+        error={createClaim.error ?? startClaimTitle.error}
+      />
+    )
+  }
+
   if (!selectedCategory) {
     return (
       <div className="flex flex-col gap-6">
         {categoriesError && <ErrorMessage error={categoriesError} />}
         {createClaim.error && <ErrorMessage error={createClaim.error} />}
-        <CategorySelectionStep categories={categories ?? []} onSelect={handleSelectCategory} />
+        <CategorySelectionStep
+          categories={categories ?? []}
+          onSelect={handleSelectCategory}
+          onBack={!claimId ? () => setEntryMode(undefined) : undefined}
+        />
 
         {claim && (
           <SavedItemsAndSubmit
@@ -387,6 +551,12 @@ function SavedItemsAndSubmit({
     claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
   const updateTitle = useUpdateExpenseClaimTitle()
   const [titleInput, setTitleInput] = useState(claim.title ?? '')
+  // 「個別に経費登録」では明細保存後にタイトルが自動提案される。ユーザーが自分で編集を
+  // 始めるまでは、そのバックグラウンド更新をこの入力欄に反映し続ける。
+  const [titleEditedByUser, setTitleEditedByUser] = useState(false)
+  useEffect(() => {
+    if (!titleEditedByUser) setTitleInput(claim.title ?? '')
+  }, [claim.title, titleEditedByUser])
 
   return (
     <>
@@ -397,13 +567,21 @@ function SavedItemsAndSubmit({
             aria-label="申請タイトル"
             placeholder="例: 7月分の立替経費、大阪出張分"
             value={titleInput}
-            onChange={(e) => setTitleInput(e.target.value)}
+            onChange={(e) => {
+              setTitleInput(e.target.value)
+              setTitleEditedByUser(true)
+            }}
           />
           <Button
             variant="secondary"
             isLoading={updateTitle.isPending}
             disabled={titleInput === (claim.title ?? '')}
-            onClick={() => updateTitle.mutate({ claimId: claim.id, title: titleInput || null })}
+            onClick={() =>
+              updateTitle.mutate(
+                { claimId: claim.id, title: titleInput || null },
+                { onSuccess: () => setTitleEditedByUser(false) },
+              )
+            }
           >
             保存
           </Button>
