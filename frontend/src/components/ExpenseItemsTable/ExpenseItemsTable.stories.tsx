@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { ExpenseItemsTable } from './ExpenseItemsTable'
 import { useEditableRows } from '../../hooks/useEditableRows'
@@ -39,6 +40,7 @@ const sampleRows: SaveExpenseItemInput[] = [
 function Demo({ initialRows }: { initialRows: SaveExpenseItemInput[] }) {
   const { rows, addRow, updateRow, removeRow, duplicateRow, appendRows, moveRow } =
     useEditableRows<SaveExpenseItemInput>(initialRows)
+  const [rowFiles, setRowFiles] = useState<Record<number, File | null>>({})
 
   return (
     <ExpenseItemsTable
@@ -50,6 +52,8 @@ function Demo({ initialRows }: { initialRows: SaveExpenseItemInput[] }) {
       onDuplicateRow={duplicateRow}
       onMoveRow={moveRow}
       onPasteRows={appendRows}
+      rowFiles={rowFiles}
+      onRowFileChange={(rowId, file) => setRowFiles((prev) => ({ ...prev, [rowId]: file }))}
     />
   )
 }

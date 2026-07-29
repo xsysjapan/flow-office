@@ -133,6 +133,24 @@ describe('ExpenseItemsTable', () => {
     expect(screen.queryByLabelText('2行目の出発地')).not.toBeInTheDocument()
   })
 
+  it('lets a receipt file be selected per row before the item is saved, and shows the selected file name', async () => {
+    const props = baseProps()
+    const onRowFileChange = vi.fn()
+    const { rerender } = render(<ExpenseItemsTable {...props} onRowFileChange={onRowFileChange} />)
+
+    const file = new File(['dummy'], 'receipt.png', { type: 'image/png' })
+    const fileInput = screen.getByLabelText('1行目の領収書') as HTMLInputElement
+    await userEvent.upload(fileInput, file)
+
+    expect(onRowFileChange).toHaveBeenCalledWith(1, file)
+    expect(screen.queryByLabelText('2行目の領収書')).toBeInTheDocument()
+
+    // 呼び出し側(親)がrowFilesを更新して初めてファイル名が表示される(このコンポーネント自身は
+    // ファイルを状態として持たず、選択イベントを親に通知するだけ)。
+    rerender(<ExpenseItemsTable {...props} rowFiles={{ 1: file }} onRowFileChange={onRowFileChange} />)
+    expect(screen.getByText('receipt.png')).toBeInTheDocument()
+  })
+
   it('applies bulk fields to checked rows only', async () => {
     const user = userEvent.setup()
     const props = baseProps()

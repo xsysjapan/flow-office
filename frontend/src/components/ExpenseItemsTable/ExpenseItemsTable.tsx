@@ -19,7 +19,15 @@ export interface ExpenseItemsTableProps {
   onDuplicateRow: (rowId: number) => void
   onMoveRow: (rowId: number, direction: 'up' | 'down') => void
   onPasteRows: (rows: SaveExpenseItemInput[]) => void
+  /** 行ごとに選択中の領収書ファイル(まだサーバーに送っていない下書き段階)。
+   *  明細は保存時にまとめて作成されるため、ファイルは呼び出し側が保持し、
+   *  作成された明細のIDが確定してからアップロードする。 */
+  rowFiles?: Record<number, File | null>
+  onRowFileChange?: (rowId: number, file: File | null) => void
 }
+
+/** 経費明細の添付ファイルとして許可される拡張子(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。 */
+const RECEIPT_ACCEPT = '.pdf,.jpg,.jpeg,.png'
 
 /** 貼り付けテキストを "usage_date,amount,description" のタブ/カンマ区切り行としてパースする
  *  (UC-X006手順3)。categoryは含まれないため呼び出し側で既定値を補う。 */
@@ -62,6 +70,8 @@ export function ExpenseItemsTable({
   onDuplicateRow,
   onMoveRow,
   onPasteRows,
+  rowFiles = {},
+  onRowFileChange,
 }: ExpenseItemsTableProps) {
   const [selectedRowIds, setSelectedRowIds] = useState<number[]>([])
   const [showPasteArea, setShowPasteArea] = useState(false)
@@ -171,6 +181,7 @@ export function ExpenseItemsTable({
             <TableHead>経費区分</TableHead>
             <TableHead>金額</TableHead>
             <TableHead>内容</TableHead>
+            <TableHead>領収書</TableHead>
             <TableHead>操作</TableHead>
           </TableRow>
         </TableHeader>
@@ -241,6 +252,18 @@ export function ExpenseItemsTable({
                   value={row.description ?? ''}
                   onChange={(e) => onUpdateRow(row.rowId, { description: e.target.value })}
                 />
+              </TableCell>
+              <TableCell>
+                <input
+                  aria-label={`${index + 1}行目の領収書`}
+                  type="file"
+                  accept={RECEIPT_ACCEPT}
+                  className="w-32 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border file:border-input file:bg-background file:px-2 file:py-0.5 file:text-xs file:font-medium file:text-foreground"
+                  onChange={(e) => onRowFileChange?.(row.rowId, e.target.files?.[0] ?? null)}
+                />
+                {rowFiles[row.rowId] && (
+                  <p className="mt-1 text-xs text-muted-foreground">{rowFiles[row.rowId]?.name}</p>
+                )}
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1">

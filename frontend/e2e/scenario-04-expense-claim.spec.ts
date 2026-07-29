@@ -49,12 +49,19 @@ function randomAmountAboveApprovalSkipThreshold(): string {
 /**
  * `expense_categories.receipt_required_threshold`(消耗品・その他=3000円)を超える金額で
  * 保存した明細には領収書の添付が必須になる(宿泊費・会食は金額によらず常に必須)。
- * 明細一覧の「領収書」列にあるファイル入力にダミーファイルをアップロードする。
- * `rowIndex`は明細一覧テーブル内で何番目のファイル入力かを指定する(まとめ入力で
- * 複数明細を保存した場合、行ごとに1つずつファイル入力が並ぶため)。
+ * 明細の入力時点(単発入力フォームの「領収書(任意)」欄)でダミーファイルを選択する。
+ * 明細の保存と同時にアップロードされるため、保存後に別途添付する操作は不要になる。
  */
-async function uploadReceipt(page: Page, rowIndex = 0): Promise<void> {
-  await page.locator('input[type="file"]').nth(rowIndex).setInputFiles(DUMMY_RECEIPT_PATH)
+async function selectReceiptOnSingleItemForm(page: Page): Promise<void> {
+  await page.getByLabel('領収書(任意)').setInputFiles(DUMMY_RECEIPT_PATH)
+}
+
+/**
+ * 表形式(まとめ)入力で、指定した行の「領収書」ファイル入力にダミーファイルを選択する。
+ * 明細を保存すると、行ごとに選択したファイルがそれぞれの明細に紐づけてアップロードされる。
+ */
+async function selectReceiptOnBatchRow(page: Page, rowNumber: number): Promise<void> {
+  await page.getByLabel(`${rowNumber}行目の領収書`).setInputFiles(DUMMY_RECEIPT_PATH)
 }
 
 /**
@@ -96,10 +103,13 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await applicantPage.getByLabel('1行目の出発地').fill('自宅')
     await applicantPage.getByLabel('1行目の到着地').fill('本社')
     await expect(applicantPage.getByLabel('1行目の内容')).toHaveValue('自宅 → 本社')
+    // 明細の保存より前に、表形式入力の行ごとの領収書欄でファイルを選択できることを確認する。
+    await selectReceiptOnBatchRow(applicantPage, 1)
 
     await applicantPage.getByRole('button', { name: /明細を保存する/ }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
+    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
 
     await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
     await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -240,11 +250,14 @@ for (const scenario of singleCategoryScenarios) {
       await applicantPage.getByRole('button', { name: scenario.categoryButtonName, exact: true }).click()
 
       await scenario.fill(applicantPage, usageDateStr, amount)
+      // 宿泊費・会食は常に、消耗品・その他はこの金額(3000円超)ではレシート添付が必須。
+      // 保存する前にフォーム上の「領収書(任意)」欄でファイルを選択し、明細作成と同時に
+      // 添付されることを確認する。
+      await selectReceiptOnSingleItemForm(applicantPage)
       await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
       await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
-      // 宿泊費・会食は常に、消耗品・その他はこの金額(3000円超)ではレシート添付が必須。
-      await uploadReceipt(applicantPage)
+      await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
 
       await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
       await applicantPage.getByRole('button', { name: '申請する' }).click()
@@ -318,9 +331,12 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await applicantPage.getByLabel('2行目の金額').fill(transportAmount2)
     await applicantPage.getByLabel('2行目の出発地').fill('本社')
     await applicantPage.getByLabel('2行目の到着地').fill('客先')
+    // 表形式入力でも、保存前に行ごとに領収書を選択できることを確認する(1行目のみ添付)。
+    await selectReceiptOnBatchRow(applicantPage, 1)
     await applicantPage.getByRole('button', { name: /明細を保存する\(2件\)/ }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(2件/)).toBeVisible()
+    await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
 
     // 3. UC-X013: 別の区分(宿泊費)の明細を同じ申請に追加する。
     await applicantPage.getByRole('button', { name: '別の区分の明細を追加する' }).click()
@@ -328,11 +344,12 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await applicantPage.getByLabel('利用日').fill(usageDateStr3)
     await applicantPage.getByLabel('金額').fill(lodgingAmount)
     await applicantPage.getByLabel('宿泊先名').fill('ホテルXYZ')
+    // 宿泊費は金額によらずレシート必須。単発入力フォームの「領収書(任意)」欄で
+    // 保存前に選択する。
+    await selectReceiptOnSingleItemForm(applicantPage)
     await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(3件/)).toBeVisible()
-    // 宿泊費は金額によらずレシート必須。3件のうち最後(宿泊費)の行にのみ添付する。
-    await uploadReceipt(applicantPage, 2)
 
     // タイトルはタイトル入力ステップで確定済みのまま変更していないことを確認する。
     await expect(applicantPage.getByLabel('申請タイトル')).toHaveValue(title)

@@ -31,6 +31,7 @@ import {
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
+import { useUploadAttachment } from '../../hooks/useAttachments'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { workLocationTypeLabel } from '../../utils/statusLabels'
 
@@ -321,14 +322,19 @@ export function ExpenseClaimNewPage() {
     }
   }, [routeClaimId, categoryCodeParam, categories])
 
-  const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, toData, reset } =
+  const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
     useEditableRows<SaveExpenseItemInput>([])
+  // 表形式入力(バッチ)は、明細の保存(まとめてAPIへ送信)より前に領収書を選ばせたいため、
+  // 行(rowId)ごとに選択中のファイルをこの画面側で保持しておく。明細作成後、返ってきた
+  // 明細IDに対して選択済みのファイルをアップロードする。
+  const [rowFiles, setRowFiles] = useState<Record<number, File | null>>({})
   const addItem = useAddExpenseItem()
   const addItemsBulk = useAddExpenseItemsBulk()
   const updateItem = useUpdateExpenseItem()
   const deleteClaimMutation = useDeleteExpenseClaim()
   const deleteItem = useDeleteExpenseItem()
   const submitClaim = useSubmitExpenseClaim(claimId ?? '')
+  const uploadAttachment = useUploadAttachment()
 
   if (isLoadingCategories) return <LoadingState />
   if (categoriesError) return <ErrorMessage error={categoriesError} fallback="経費区分の取得に失敗しました。" />
@@ -359,22 +365,38 @@ export function ExpenseClaimNewPage() {
   }
 
   const handleSaveItems = async () => {
-    const items = toData().filter((item) => item.usage_date && item.amount)
-    if (items.length === 0) return
+    // rowIdを保ったまま絞り込むことで、保存後に返ってくる明細と選択済みファイル
+    // (rowFiles)を行単位で対応付けられるようにする(toData()はrowIdを剥がしてしまう)。
+    const validRows = rows.filter((row) => row.usage_date && row.amount)
+    if (validRows.length === 0) return
+    const items = validRows.map(({ rowId, ...rest }) => {
+      void rowId
+      return rest
+    })
     const wasNewClaim = !claimId
     const id = await ensureClaimId()
-    await addItemsBulk.mutateAsync({ claimId: id, items })
+    const createdItems = await addItemsBulk.mutateAsync({ claimId: id, items })
+    await Promise.all(
+      createdItems.map((item, index) => {
+        const file = rowFiles[validRows[index].rowId]
+        return file ? uploadAttachment.mutateAsync({ ownerType: 'expense_item', ownerId: item.id, file }) : undefined
+      }),
+    )
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === items[0].category_id)?.name
       void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, items[0].usage_date) })
     }
     reset([])
+    setRowFiles({})
   }
 
-  const handleSaveSingleItem = async (input: SaveExpenseItemInput) => {
+  const handleSaveSingleItem = async (input: SaveExpenseItemInput, receiptFile: File | null) => {
     const wasNewClaim = !claimId
     const id = await ensureClaimId()
-    await addItem.mutateAsync({ claimId: id, input })
+    const createdItem = await addItem.mutateAsync({ claimId: id, input })
+    if (receiptFile) {
+      await uploadAttachment.mutateAsync({ ownerType: 'expense_item', ownerId: createdItem.id, file: receiptFile })
+    }
     if (wasNewClaim && entryMode === 'individual') {
       const categoryName = categories?.find((category) => category.id === input.category_id)?.name
       void startClaimTitle.mutateAsync({ claimId: id, title: suggestIndividualTitle(categoryName, input.usage_date) })
@@ -478,30 +500,34 @@ export function ExpenseClaimNewPage() {
                 onDuplicateRow={duplicateRow}
                 onMoveRow={moveRow}
                 onPasteRows={appendRows}
+                rowFiles={rowFiles}
+                onRowFileChange={(rowId, file) => setRowFiles((prev) => ({ ...prev, [rowId]: file }))}
               />
             </div>
 
             {rows.length > 0 && (
               <div className="mt-4">
                 <Button
-                  isLoading={createClaim.isPending || addItemsBulk.isPending}
+                  isLoading={createClaim.isPending || addItemsBulk.isPending || uploadAttachment.isPending}
                   onClick={() => void handleSaveItems()}
                 >
                   明細を保存する({rows.length}件)
                 </Button>
                 {addItemsBulk.error && <ErrorMessage error={addItemsBulk.error} />}
+                {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
               </div>
             )}
           </>
         ) : (
           <>
             {addItem.error && <ErrorMessage error={addItem.error} />}
+            {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
             <SingleExpenseItemForm
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
               fieldDefinitions={selectedCategory.field_definitions}
-              onSubmit={(input) => void handleSaveSingleItem(input)}
-              isSubmitting={createClaim.isPending || addItem.isPending}
+              onSubmit={(input, receiptFile) => void handleSaveSingleItem(input, receiptFile)}
+              isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
             />
           </>
         )}

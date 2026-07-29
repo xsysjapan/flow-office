@@ -17,9 +17,14 @@ export interface SingleExpenseItemFormProps {
   categoryId: number
   /** 「経費精算機能 設計・実装指示書」7.2: 区分固有の追加入力項目。attributesとして保存する。 */
   fieldDefinitions?: ExpenseCategoryFieldDefinition[] | null
-  onSubmit: (input: SaveExpenseItemInput) => void
+  /** 明細の作成と同じ操作で領収書を添付できるよう、選択中のファイルも合わせて渡す
+   *  (呼び出し側が明細作成後にこのファイルをアップロードする)。 */
+  onSubmit: (input: SaveExpenseItemInput, receiptFile: File | null) => void
   isSubmitting?: boolean
 }
+
+/** 経費明細の添付ファイルとして許可される拡張子(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。 */
+const RECEIPT_ACCEPT = '.pdf,.jpg,.jpeg,.png'
 
 const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   meal: '会食・接待費を入力',
@@ -61,6 +66,8 @@ export function SingleExpenseItemForm({
   const [participantCount, setParticipantCount] = useState('') // 参加人数(会食のみ)
   const [paymentBearer, setPaymentBearer] = useState<ExpensePaymentBearer>('employee')
   const [attributeValues, setAttributeValues] = useState<Record<string, string | boolean>>({})
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptInputKey, setReceiptInputKey] = useState(0)
 
   const reset = () => {
     setUsageDate('')
@@ -71,6 +78,9 @@ export function SingleExpenseItemForm({
     setParticipantCount('')
     setPaymentBearer('employee')
     setAttributeValues({})
+    setReceiptFile(null)
+    // input[type=file]はvalueをプログラムから空にできないため、keyを変えて再マウントする。
+    setReceiptInputKey((key) => key + 1)
   }
 
   const hasRequiredAttributes = (fieldDefinitions ?? [])
@@ -118,14 +128,17 @@ export function SingleExpenseItemForm({
 
   const handleSubmit = () => {
     if (!isValid) return
-    onSubmit({
-      category_id: categoryId,
-      usage_date: usageDate,
-      amount: Number(amount),
-      description: buildDescription(),
-      payment_bearer: paymentBearer,
-      attributes: buildAttributes(),
-    })
+    onSubmit(
+      {
+        category_id: categoryId,
+        usage_date: usageDate,
+        amount: Number(amount),
+        description: buildDescription(),
+        payment_bearer: paymentBearer,
+        attributes: buildAttributes(),
+      },
+      receiptFile,
+    )
     reset()
   }
 
@@ -267,6 +280,18 @@ export function SingleExpenseItemForm({
           )}
         </FormField>
       ))}
+
+      <FormField label="領収書(任意)" htmlFor="single-item-receipt-file">
+        <input
+          key={receiptInputKey}
+          id="single-item-receipt-file"
+          type="file"
+          accept={RECEIPT_ACCEPT}
+          className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-sm file:font-medium file:text-foreground"
+          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">この場で選択すると、明細の保存と同時に添付されます。後から追加・変更することもできます。</p>
+      </FormField>
 
       <div>
         <Button disabled={!isValid} isLoading={isSubmitting} onClick={handleSubmit}>

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseClaimsApi from '../../api/expenseClaims'
@@ -364,6 +365,111 @@ describe('ExpenseClaimNewPage', () => {
     )
 
     expect(await screen.findByLabelText('宿泊先名')).toHaveValue('')
+  })
+
+  it('uploads a receipt selected on the single-item form right after the item is created', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'addExpenseItem').mockResolvedValue({
+      id: 'item-1',
+      category_id: 2,
+      usage_date: '2026-07-10',
+      description: 'ホテルABC',
+      amount: 12000,
+      project_id: null,
+      evidence_type: 'receipt_required',
+      fact_reference_type: null,
+      fact_reference_id: null,
+      commuting_deduction_amount: null,
+    })
+    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
+      id: 'attachment-1',
+      file_name: 'receipt.png',
+      file_size: 5,
+      mime_type: 'image/png',
+      uploaded_by: 'applicant-1',
+      created_at: '2026-07-10T00:00:00Z',
+    })
+
+    renderPage()
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await userEvent.type(screen.getByLabelText('金額'), '12000')
+    await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
+
+    const file = new File(['dummy'], 'receipt.png', { type: 'image/png' })
+    await userEvent.upload(screen.getByLabelText('領収書(任意)'), file)
+    await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+    await waitFor(() => expect(expenseClaimsApi.addExpenseItem).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(uploadAttachment).toHaveBeenCalledWith('expense_item', 'item-1', file),
+    )
+  })
+
+  it('uploads receipts selected per row on the batch table right after the items are created, matching them by row order', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([
+      {
+        id: 'item-1',
+        category_id: 1,
+        usage_date: '2026-07-04',
+        description: null,
+        amount: 420,
+        project_id: null,
+        evidence_type: 'fact_reference_available',
+        fact_reference_type: null,
+        fact_reference_id: null,
+        commuting_deduction_amount: null,
+      },
+      {
+        id: 'item-2',
+        category_id: 1,
+        usage_date: '2026-07-05',
+        description: null,
+        amount: 800,
+        project_id: null,
+        evidence_type: 'fact_reference_available',
+        fact_reference_type: null,
+        fact_reference_id: null,
+        commuting_deduction_amount: null,
+      },
+    ])
+    const uploadAttachment = vi.spyOn(attachmentsApi, 'uploadAttachment').mockResolvedValue({
+      id: 'attachment-1',
+      file_name: 'receipt.png',
+      file_size: 5,
+      mime_type: 'image/png',
+      uploaded_by: 'applicant-1',
+      created_at: '2026-07-10T00:00:00Z',
+    })
+
+    renderPage()
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
+    await userEvent.type(screen.getByLabelText('1行目の日付'), '2026-07-04')
+    await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
+    const file1 = new File(['dummy-1'], 'row1.png', { type: 'image/png' })
+    await userEvent.upload(screen.getByLabelText('1行目の領収書'), file1)
+
+    await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
+    await userEvent.type(screen.getByLabelText('2行目の日付'), '2026-07-05')
+    await userEvent.type(screen.getByLabelText('2行目の金額'), '800')
+    // 2行目は領収書を選択しない(全行に必須ではないことの確認を兼ねる)。
+
+    await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
+
+    await waitFor(() => expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalled())
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalledWith('expense_item', 'item-1', file1))
+    expect(uploadAttachment).toHaveBeenCalledTimes(1)
   })
 
   it('skips the category selection step when a ?category= shortcut param matches an active category', async () => {
