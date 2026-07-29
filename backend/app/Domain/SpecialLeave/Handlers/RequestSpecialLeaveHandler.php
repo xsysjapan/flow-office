@@ -2,6 +2,7 @@
 
 namespace App\Domain\SpecialLeave\Handlers;
 
+use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -17,7 +18,9 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
+use App\Models\WorkStyle;
 use App\Support\FrontendUrl;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -29,6 +32,8 @@ use Illuminate\Support\Str;
  */
 class RequestSpecialLeaveHandler implements CommandHandler
 {
+    public function __construct(private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver) {}
+
     public function handle(Command $command): SpecialLeaveRequest
     {
         assert($command instanceof RequestSpecialLeave);
@@ -44,15 +49,30 @@ class RequestSpecialLeaveHandler implements CommandHandler
             ->whereDate('work_date', $command->targetDate)
             ->first();
 
-        if ($shiftAssignment === null || ! $shiftAssignment->is_working_day) {
-            throw new DomainRuleException('勤務予定日ではないため特別休暇を申請できません。');
+        $targetDate = Carbon::parse($command->targetDate);
+        $workStyle = $shiftAssignment?->workStyle;
+
+        if ($shiftAssignment !== null) {
+            if (! $shiftAssignment->is_working_day) {
+                throw new DomainRuleException('勤務予定日ではないため特別休暇を申請できません。');
+            }
+        } else {
+            // 通常勤務(シフト非対象)は運用上employee_shift_assignmentsが事前展開されないことが
+            // 多いため、勤務予定が無い日は「未展開」として扱い、その月に割り当てられた働き方
+            // (無ければシステムのデフォルト働き方)から所定労働日かどうかを判定する
+            // (ScheduledWorkingDayResolver参照)。
+            $workStyle = $this->scheduledWorkingDayResolver->resolveWorkStyle($command->userId, $targetDate);
+
+            if (! $this->scheduledWorkingDayResolver->isWorkingDay($command->userId, $targetDate)) {
+                throw new DomainRuleException('勤務予定日ではないため特別休暇を申請できません。');
+            }
         }
 
         if ($this->alreadyHasLeaveOnDate($command->userId, $command->targetDate)) {
             throw new DomainRuleException('この日は既に有給または特別休暇を申請済みです。');
         }
 
-        $requestedDays = $this->resolveRequestedDays($command, $shiftAssignment);
+        $requestedDays = $this->resolveRequestedDays($command, $workStyle);
 
         $remainingDays = (float) SpecialLeaveGrant::query()
             ->availableOn($command->targetDate)
@@ -120,7 +140,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
             ->exists();
     }
 
-    private function resolveRequestedDays(RequestSpecialLeave $command, EmployeeShiftAssignment $shiftAssignment): float
+    private function resolveRequestedDays(RequestSpecialLeave $command, ?WorkStyle $workStyle): float
     {
         if ($command->leaveType === PaidLeaveType::FULL) {
             return 1.0;
@@ -135,7 +155,11 @@ class RequestSpecialLeaveHandler implements CommandHandler
                 throw new DomainRuleException('時間単位の場合は取得時間を指定してください。');
             }
 
-            $prescribedDailyMinutes = $shiftAssignment->workStyle->prescribed_daily_minutes;
+            if ($workStyle === null) {
+                throw new DomainRuleException('働き方が特定できないため時間単位の特別休暇を申請できません。');
+            }
+
+            $prescribedDailyMinutes = $workStyle->prescribed_daily_minutes;
             $requestedDays = round(($command->hours * 60) / $prescribedDailyMinutes, 1);
 
             if ($requestedDays <= 0 || $requestedDays >= 1) {
