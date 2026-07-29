@@ -45,6 +45,7 @@ Teams通知に集中する。
 | 27 | [27-release-runbook.md](./27-release-runbook.md) | 本番(XSERVER)リリース手順 |
 | 28 | [28-github-actions-deploy.md](./28-github-actions-deploy.md) | GitHub Actionsによる自動デプロイ |
 | 29 | [29-event-sourcing-framework-migration.md](./29-event-sourcing-framework-migration.md) | spatie/laravel-event-sourcingへの移行方針・作業順 |
+| 30 | [30-usecases-expense.md](./30-usecases-expense.md) | 経費精算ユースケース (UC-X001~) |
 
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。

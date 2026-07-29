@@ -12,14 +12,6 @@ class RequestTypeSeeder extends Seeder
 {
     public function run(): void
     {
-        // UC-B004: 未着手→確認中→(不備あり↔確認中)→支払予定→完了。いつでも取消可能。
-        $expenseTransitions = [
-            'not_started' => ['in_review', 'cancelled'],
-            'in_review' => ['needs_fix', 'payment_scheduled', 'cancelled'],
-            'needs_fix' => ['in_review', 'cancelled'],
-            'payment_scheduled' => ['completed', 'cancelled'],
-        ];
-
         // UC-B005: 未着手→確認中→発注済→発送済→完了。
         $businessCardTransitions = [
             'not_started' => ['in_review', 'cancelled'],
@@ -39,40 +31,11 @@ class RequestTypeSeeder extends Seeder
             'shipped' => ['completed'],
         ];
 
+        // 通勤費・業務交通費・その他経費は docs/30-usecases-expense.md の専用ドメイン
+        // (expense_claims / expense_items) に統合したため、'expense_reimbursement'/
+        // 'commuting_expense' の汎用申請種別は定義しない。
+
         $types = [
-            [
-                'code' => 'expense_reimbursement',
-                'name' => '経費精算',
-                'description' => '業務で発生した経費の精算申請',
-                'form_schema' => [
-                    ['key' => 'amount', 'label' => '金額', 'type' => 'number', 'required' => true],
-                    ['key' => 'expense_date', 'label' => '利用日', 'type' => 'date', 'required' => true],
-                    ['key' => 'purpose', 'label' => '用途', 'type' => 'text', 'required' => true],
-                    ['key' => 'account_item', 'label' => '勘定科目', 'type' => 'text', 'required' => true],
-                ],
-                'requires_attachment' => true,
-                'attachment_max_size_kb' => 5120,
-                'attachment_allowed_extensions' => ['pdf', 'jpg', 'jpeg', 'png'],
-                'requires_backoffice_task' => true,
-                'backoffice_task_type' => 'expense_reimbursement',
-                'backoffice_department' => '経理部',
-                'export_amount_field' => 'amount',
-                'allowed_status_transitions' => $expenseTransitions,
-            ],
-            [
-                'code' => 'commuting_expense',
-                'name' => '交通費精算',
-                'description' => '通勤・出張にかかる交通費の精算申請',
-                'form_schema' => [
-                    ['key' => 'amount', 'label' => '金額', 'type' => 'number', 'required' => true],
-                    ['key' => 'route', 'label' => '経路', 'type' => 'text', 'required' => true],
-                ],
-                'requires_backoffice_task' => true,
-                'backoffice_task_type' => 'expense_reimbursement',
-                'backoffice_department' => '経理部',
-                'export_amount_field' => 'amount',
-                'allowed_status_transitions' => $expenseTransitions,
-            ],
             [
                 'code' => 'business_card',
                 'name' => '名刺申請',

@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\BackOfficeTask;
-use App\Models\WorkflowRequest;
+use App\Models\ExpenseClaim;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -102,18 +102,19 @@ class ExportController extends Controller
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
-        // どのrequest_typeを会計/振込CSVの対象にするかはハードコードせず、
-        // request_types.export_amount_field(金額として扱うform_dataのキー)の設定有無で判定する。
+        // UC-X012: 経費精算専用ドメイン(expense_claims)の承認済みバックオフィスタスクのみが
+        // 対象。旧汎用ワークフロー方式(request_types.export_amount_field)は廃止した
+        // (docs/30-usecases-expense.md)。
         $tasks = BackOfficeTask::query()
-            ->with(['source.applicant', 'source.requestType'])
+            ->with(['source.employee'])
+            ->where('source_type', 'expense_claim')
             ->whereIn('status', ['payment_scheduled', 'completed'])
             ->whereBetween('created_at', [
                 Carbon::parse($data['from'])->startOfDay(),
                 Carbon::parse($data['to'])->endOfDay(),
             ])
             ->get()
-            ->filter(fn (BackOfficeTask $task) => $task->source instanceof WorkflowRequest
-                && $task->source->requestType?->export_amount_field !== null)
+            ->filter(fn (BackOfficeTask $task) => $task->source instanceof ExpenseClaim)
             ->values();
 
         $eventStore->append(
@@ -129,16 +130,17 @@ class ExportController extends Controller
 
         return response()->streamDownload(function () use ($tasks) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['task_id', 'title', 'applicant_name', 'amount', 'status', 'created_at']);
+            fputcsv($handle, ['task_id', 'title', 'employee_name', 'amount', 'status', 'created_at']);
 
             foreach ($tasks as $task) {
-                $amountField = $task->source?->requestType?->export_amount_field;
+                /** @var ExpenseClaim|null $claim */
+                $claim = $task->source;
 
                 fputcsv($handle, [
                     $task->id,
                     $task->title,
-                    $task->source?->applicant?->name,
-                    $amountField !== null ? ($task->source?->form_data[$amountField] ?? '') : '',
+                    $claim?->employee?->name,
+                    $claim?->total_amount ?? '',
                     $task->status,
                     $task->created_at->toDateString(),
                 ]);

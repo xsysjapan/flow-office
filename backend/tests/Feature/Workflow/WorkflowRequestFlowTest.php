@@ -23,11 +23,11 @@ class WorkflowRequestFlowTest extends TestCase
         $approver = User::factory()->create();
 
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement',
-            'name' => '経費精算',
+            'code' => 'business_card',
+            'name' => '名刺申請',
             'form_schema' => [['key' => 'amount', 'label' => '金額', 'type' => 'number', 'required' => true]],
             'requires_backoffice_task' => true,
-            'backoffice_task_type' => 'expense_reimbursement',
+            'backoffice_task_type' => 'business_card',
             'backoffice_department' => '経理部',
             'is_active' => true,
         ]);

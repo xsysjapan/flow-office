@@ -30,8 +30,8 @@ class BackOfficeTaskStatusTransitionTest extends TestCase
     {
         $applicant = User::factory()->create();
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
-            'requires_backoffice_task' => true, 'backoffice_task_type' => 'expense_reimbursement',
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
+            'requires_backoffice_task' => true, 'backoffice_task_type' => 'business_card',
             'allowed_status_transitions' => $transitions,
         ]);
         $workflowRequest = WorkflowRequest::query()->create([
@@ -41,7 +41,7 @@ class BackOfficeTaskStatusTransitionTest extends TestCase
 
         return BackOfficeTask::query()->create([
             'source_type' => 'workflow_request', 'source_id' => $workflowRequest->id,
-            'task_type' => 'expense_reimbursement', 'title' => '経費精算: タクシー代', 'status' => $initialStatus,
+            'task_type' => 'business_card', 'title' => '名刺申請: 名刺100枚', 'status' => $initialStatus,
         ]);
     }
 

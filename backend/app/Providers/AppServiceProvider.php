@@ -11,6 +11,8 @@ use App\Domain\User\Graph\MicrosoftGraphClient;
 use App\Domain\User\LocalAzureProvider;
 use App\Domain\User\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
+use App\Models\ExpenseClaim;
+use App\Models\ExpenseItem;
 use App\Models\WorkflowRequest;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -60,6 +62,8 @@ class AppServiceProvider extends ServiceProvider
         Relation::morphMap([
             'workflow_request' => WorkflowRequest::class,
             'attendance_day' => AttendanceDay::class,
+            'expense_claim' => ExpenseClaim::class,
+            'expense_item' => ExpenseItem::class,
         ]);
 
         // 単体リソースを "data" キーで包まない(ページネーション付きコレクションは

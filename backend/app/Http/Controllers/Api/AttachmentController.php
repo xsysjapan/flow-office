@@ -10,6 +10,7 @@ use App\Http\Resources\AttachmentResource;
 use App\Models\Attachment;
 use App\Models\AttendanceDay;
 use App\Models\BackOfficeTask;
+use App\Models\ExpenseItem;
 use App\Models\WorkflowRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,7 +42,14 @@ class AttachmentController extends Controller
     private const OWNER_TYPE_MAP = [
         'workflow_request' => WorkflowRequest::class,
         'attendance_day' => AttendanceDay::class,
+        'expense_item' => ExpenseItem::class,
     ];
+
+    /**
+     * UC-X005: 経費明細の領収書添付。expense_categoriesは申請種別マスタのような
+     * サイズ/拡張子設定を持たないため、既定値のみを適用する。
+     */
+    private const EXPENSE_ITEM_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 
     #[OA\Get(
         path: '/attachments',
@@ -131,7 +139,7 @@ class AttachmentController extends Controller
     /**
      * @param  class-string  $ownerClass
      */
-    private function authorizeOwner(Request $request, string $ownerClass, int|string $ownerId): WorkflowRequest|AttendanceDay
+    private function authorizeOwner(Request $request, string $ownerClass, int|string $ownerId): WorkflowRequest|AttendanceDay|ExpenseItem
     {
         $owner = $ownerClass::query()->findOrFail($ownerId);
         $user = $request->user();
@@ -139,6 +147,17 @@ class AttachmentController extends Controller
         if ($owner instanceof WorkflowRequest) {
             abort_unless(
                 $owner->applicant_user_id === $user->id || $owner->approver_user_id === $user->id,
+                Response::HTTP_FORBIDDEN,
+                'この添付ファイルにアクセスする権限がありません。'
+            );
+
+            return $owner;
+        }
+
+        if ($owner instanceof ExpenseItem) {
+            $claim = $owner->claim;
+            abort_unless(
+                $claim !== null && ($claim->employee_id === $user->id || $claim->approver_user_id === $user->id),
                 Response::HTTP_FORBIDDEN,
                 'この添付ファイルにアクセスする権限がありません。'
             );
@@ -179,6 +198,22 @@ class AttachmentController extends Controller
             return;
         }
 
+        if ($owner instanceof ExpenseItem) {
+            $claim = $owner->claim;
+            $isEmployeeOrApprover = $claim !== null
+                && in_array($user->id, [$claim->employee_id, $claim->approver_user_id], true);
+            $isAssignedBackOfficeStaff = $claim !== null && BackOfficeTask::query()
+                ->where('source_type', 'expense_claim')
+                ->where('source_id', $claim->id)
+                ->where('assigned_user_id', $user->id)
+                ->exists();
+
+            abort_unless($isEmployeeOrApprover || $isAssignedBackOfficeStaff, Response::HTTP_FORBIDDEN,
+                'この添付ファイルにアクセスする権限がありません。');
+
+            return;
+        }
+
         abort(Response::HTTP_FORBIDDEN, 'この添付ファイルにアクセスする権限がありません。');
     }
 
@@ -187,7 +222,7 @@ class AttachmentController extends Controller
      * workflow_requestは申請種別マスタ(request_types)の設定を使う(未設定ならサイズのみ既定値で制限し、
      * 拡張子は制限しない)。それ以外のowner(勤怠実績等)は申請種別を持たないため、既定値のみを適用する。
      */
-    private function assertWithinAttachmentLimits(WorkflowRequest|AttendanceDay $owner, int $fileSize, string $extension): void
+    private function assertWithinAttachmentLimits(WorkflowRequest|AttendanceDay|ExpenseItem $owner, int $fileSize, string $extension): void
     {
         $maxSizeKb = self::DEFAULT_MAX_SIZE_KB;
         $allowedExtensions = null;
@@ -196,6 +231,10 @@ class AttachmentController extends Controller
             $requestType = $owner->requestType;
             $maxSizeKb = $requestType?->attachment_max_size_kb ?? self::DEFAULT_MAX_SIZE_KB;
             $allowedExtensions = $requestType?->attachment_allowed_extensions;
+        }
+
+        if ($owner instanceof ExpenseItem) {
+            $allowedExtensions = self::EXPENSE_ITEM_ALLOWED_EXTENSIONS;
         }
 
         if ($fileSize > $maxSizeKb * 1024) {

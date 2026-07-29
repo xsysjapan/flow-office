@@ -16,6 +16,9 @@ use App\Http\Controllers\Api\DevicePunchController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
+use App\Http\Controllers\Api\ExpenseCategoryController;
+use App\Http\Controllers\Api\ExpenseClaimController;
+use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
@@ -74,8 +77,12 @@ Route::post('/dev/reset-database', DevDatabaseResetController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
-    Route::get('/users', [UserController::class, 'index']);
-    Route::get('/users/{user}', [UserController::class, 'show']);
+    // 入社日・退社日・雇用区分・ロールを含む一覧・詳細はrole:admin,hr_staff限定。
+    // 承認者選択(UserPicker)等、一般社員も使う軽量な検索は下のUserController::search
+    // (/users/search)を使う。
+    Route::get('/users', [UserController::class, 'index'])->middleware('role:admin,hr_staff');
+    Route::get('/users/search', [UserController::class, 'search']);
+    Route::get('/users/{user}', [UserController::class, 'show'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('role:admin,hr_staff');
     Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('role:admin,hr_staff');
@@ -108,6 +115,36 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attachments', [AttachmentController::class, 'index']);
     Route::post('/attachments', [AttachmentController::class, 'store']);
     Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download']);
+
+    // --- 経費精算 (docs/30-usecases-expense.md UC-X001〜UC-X012) ---
+    Route::get('/expense-categories', [ExpenseCategoryController::class, 'index']);
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/expense-categories', [ExpenseCategoryController::class, 'store']);
+        Route::put('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
+        Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
+    });
+
+    Route::get('/expense-entry-presets', [ExpenseEntryPresetController::class, 'index']);
+    Route::post('/expense-entry-presets', [ExpenseEntryPresetController::class, 'store']);
+    Route::put('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'update']);
+    Route::delete('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'destroy']);
+    Route::post('/expense-entry-presets/{expenseEntryPreset}/apply', [ExpenseEntryPresetController::class, 'apply']);
+
+    Route::get('/expense-claims/mine', [ExpenseClaimController::class, 'indexMine']);
+    Route::get('/expense-claims/to-approve', [ExpenseClaimController::class, 'indexToApprove']);
+    Route::get('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'show']);
+    Route::post('/expense-claims', [ExpenseClaimController::class, 'store']);
+    Route::patch('/expense-claims/{expenseClaim}/title', [ExpenseClaimController::class, 'updateTitle']);
+    Route::post('/expense-claims/{expenseClaim}/items', [ExpenseClaimController::class, 'addItem']);
+    Route::post('/expense-claims/{expenseClaim}/items/bulk', [ExpenseClaimController::class, 'bulkAddItems']);
+    Route::put('/expense-claims/{expenseClaim}/items/{item}', [ExpenseClaimController::class, 'updateItem']);
+    Route::delete('/expense-claims/{expenseClaim}/items/{item}', [ExpenseClaimController::class, 'removeItem']);
+    Route::post('/expense-claims/{expenseClaim}/submit', [ExpenseClaimController::class, 'submit']);
+    Route::post('/expense-claims/{expenseClaim}/approve', [ExpenseClaimController::class, 'approve']);
+    Route::post('/expense-claims/{expenseClaim}/return', [ExpenseClaimController::class, 'return']);
+    Route::post('/expense-claims/{expenseClaim}/cancel', [ExpenseClaimController::class, 'cancel']);
+    Route::delete('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'destroy']);
+    Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
     Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,admin')->group(function () {

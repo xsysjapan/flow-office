@@ -29,7 +29,7 @@ class AttachmentTest extends TestCase
     private function makeWorkflowRequest(User $applicant, User $approver, ?RequestType $requestType = null): WorkflowRequest
     {
         $requestType ??= RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
         ]);
 
         return WorkflowRequest::query()->create([
@@ -63,7 +63,7 @@ class AttachmentTest extends TestCase
         $applicant = User::factory()->create();
         $approver = User::factory()->create();
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
             'attachment_max_size_kb' => 50,
         ]);
         $workflowRequest = $this->makeWorkflowRequest($applicant, $approver, $requestType);
@@ -80,7 +80,7 @@ class AttachmentTest extends TestCase
         $applicant = User::factory()->create();
         $approver = User::factory()->create();
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement', 'name' => '経費精算', 'form_schema' => [], 'is_active' => true,
+            'code' => 'business_card', 'name' => '名刺申請', 'form_schema' => [], 'is_active' => true,
             'attachment_allowed_extensions' => ['pdf'],
         ]);
         $workflowRequest = $this->makeWorkflowRequest($applicant, $approver, $requestType);
@@ -125,7 +125,7 @@ class AttachmentTest extends TestCase
         $workflowRequest = $this->makeWorkflowRequest($applicant, $approver);
         BackOfficeTask::query()->create([
             'source_type' => 'workflow_request', 'source_id' => $workflowRequest->id,
-            'task_type' => 'expense_reimbursement', 'title' => '経費精算', 'status' => 'in_review',
+            'task_type' => 'business_card', 'title' => '名刺申請', 'status' => 'in_review',
             'assigned_user_id' => $staff->id,
         ]);
 

@@ -27,8 +27,8 @@ class AuditLogTest extends TestCase
         $applicant = User::factory()->create();
 
         $requestType = RequestType::query()->create([
-            'code' => 'expense_reimbursement',
-            'name' => '経費精算',
+            'code' => 'business_card',
+            'name' => '名刺申請',
             'form_schema' => [],
             'is_active' => true,
         ]);

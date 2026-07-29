@@ -51,6 +51,16 @@ use App\Domain\Device\Events\DeviceScopeGranted;
 use App\Domain\Device\Events\DeviceSettingsUpdated;
 use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionEnded;
 use App\Domain\DeviceAdminSession\Events\DeviceAdminSessionStarted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimTitleUpdated;
+use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
+use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
+use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -302,6 +312,17 @@ return [
         'backoffice_task.assigned' => BackOfficeTaskAssigned::class,
         'backoffice_task.completed' => BackOfficeTaskCompleted::class,
         'backoffice_task.status_changed' => BackOfficeTaskStatusChanged::class,
+
+        'expense_claim.drafted' => ExpenseClaimDrafted::class,
+        'expense_claim.item_added' => ExpenseItemAdded::class,
+        'expense_claim.item_updated' => ExpenseItemUpdated::class,
+        'expense_claim.item_removed' => ExpenseItemRemoved::class,
+        'expense_claim.submitted' => ExpenseClaimSubmitted::class,
+        'expense_claim.approved' => ExpenseClaimApproved::class,
+        'expense_claim.returned' => ExpenseClaimReturned::class,
+        'expense_claim.cancelled' => ExpenseClaimCancelled::class,
+        'expense_claim.deleted' => ExpenseClaimDeleted::class,
+        'expense_claim.title_updated' => ExpenseClaimTitleUpdated::class,
     ],
 
     /*

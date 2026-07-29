@@ -34,7 +34,7 @@ function withSeeded(seedTypes: SpecialLeaveType[], seedRules: SpecialLeaveGrantR
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['special-leave', 'types'], seedTypes)
   queryClient.setQueryData(['special-leave', 'grant-rules'], seedRules)
-  queryClient.setQueryData(['users', ''], paginatedUsers)
+  queryClient.setQueryData(['users', 'search', '', 100], paginatedUsers)
 
   return function Decorator() {
     return (

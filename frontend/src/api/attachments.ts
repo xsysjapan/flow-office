@@ -1,7 +1,7 @@
 import { apiFetch, getToken } from './client'
 import type { Attachment } from './types'
 
-export type AttachmentOwnerType = 'workflow_request'
+export type AttachmentOwnerType = 'workflow_request' | 'expense_item'
 
 export function fetchAttachments(ownerType: AttachmentOwnerType, ownerId: string): Promise<Attachment[]> {
   return apiFetch('/attachments', { query: { owner_type: ownerType, owner_id: ownerId } })

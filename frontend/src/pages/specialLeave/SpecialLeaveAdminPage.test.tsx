@@ -102,7 +102,7 @@ describe('SpecialLeaveAdminPage', () => {
       meta: { current_page: 1, last_page: 1, total: 1 },
       links: { next: null, prev: null },
     }
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
     vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantsForUser').mockResolvedValue([])
     vi.spyOn(specialLeaveApi, 'grantSpecialLeave').mockResolvedValue({
       id: 'grant-1',

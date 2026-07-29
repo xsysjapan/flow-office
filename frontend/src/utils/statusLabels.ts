@@ -3,6 +3,8 @@ import type {
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
+  ExpenseClaimStatus,
+  ExpensePaymentBearer,
   LegalHolidayWarning,
   PaidLeaveRequestStatus,
   PaidLeaveType,
@@ -69,6 +71,31 @@ const backOfficeTaskStatusMeta: Record<BackOfficeTaskStatus, StatusMeta> = {
 
 export function workflowRequestStatusLabel(status: WorkflowRequestStatus): StatusMeta {
   return workflowRequestStatusMeta[status]
+}
+
+const expenseClaimStatusMeta: Record<ExpenseClaimStatus, StatusMeta> = {
+  draft: { label: '下書き', tone: 'neutral' },
+  in_review: { label: '申請中', tone: 'info' },
+  returned: { label: '差戻し', tone: 'warning' },
+  approved: { label: '承認済み', tone: 'success' },
+  cancelled: { label: '取消', tone: 'danger' },
+}
+
+export function expenseClaimStatusLabel(status: ExpenseClaimStatus): StatusMeta {
+  return expenseClaimStatusMeta[status]
+}
+
+const paymentBearerLabels: Record<ExpensePaymentBearer, string> = {
+  employee: '個人立替',
+  company: '会社支払い',
+  corporate_card: '法人カード',
+  customer: '先方負担',
+  other: 'その他',
+}
+
+/** 「経費精算機能 設計・実装指示書」6.4: 誰が支払ったかの表示ラベル。 */
+export function paymentBearerLabel(bearer: ExpensePaymentBearer): string {
+  return paymentBearerLabels[bearer]
 }
 
 export function attendanceMonthStatusLabel(status: AttendanceMonthStatus): StatusMeta {

@@ -54,7 +54,7 @@ function renderPage() {
 describe('WorkflowRequestNewPage', () => {
   it('shows dynamic fields for the selected request type', async () => {
     vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([expenseType])
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } })
 
     renderPage()
 
@@ -66,7 +66,7 @@ describe('WorkflowRequestNewPage', () => {
 
   it('creates and submits the request, then navigates to the detail page', async () => {
     vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([expenseType])
-    vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({ data: [approver], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({ data: [approver], meta: { current_page: 1, last_page: 1, total: 1 }, links: { next: null, prev: null } })
 
     const created: WorkflowRequest = {
       id: 'workflow-request-42',

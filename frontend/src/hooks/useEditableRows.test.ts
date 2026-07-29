@@ -58,4 +58,44 @@ describe('useEditableRows', () => {
 
     expect(result.current.toData()).toEqual([{ label: 'a', days: 1 }])
   })
+
+  it('duplicates a row right after the original', () => {
+    const { result } = renderHook(() => useEditableRows<Step>([{ label: 'a', days: 1 }, { label: 'b', days: 2 }]))
+    const [first] = result.current.rows
+
+    act(() => result.current.duplicateRow(first.rowId))
+
+    expect(result.current.rows.map((r) => r.label)).toEqual(['a', 'a', 'b'])
+    expect(result.current.rows[0].rowId).not.toBe(result.current.rows[1].rowId)
+  })
+
+  it('appends multiple rows at once with appendRows', () => {
+    const { result } = renderHook(() => useEditableRows<Step>([{ label: 'a', days: 1 }]))
+
+    act(() => result.current.appendRows([{ label: 'b', days: 2 }, { label: 'c', days: 3 }]))
+
+    expect(result.current.rows.map((r) => r.label)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('moves a row up or down with moveRow', () => {
+    const { result } = renderHook(() =>
+      useEditableRows<Step>([{ label: 'a', days: 1 }, { label: 'b', days: 2 }, { label: 'c', days: 3 }]),
+    )
+    const [, second] = result.current.rows
+
+    act(() => result.current.moveRow(second.rowId, 'up'))
+    expect(result.current.rows.map((r) => r.label)).toEqual(['b', 'a', 'c'])
+
+    act(() => result.current.moveRow(second.rowId, 'down'))
+    expect(result.current.rows.map((r) => r.label)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('does not move a row past the boundaries', () => {
+    const { result } = renderHook(() => useEditableRows<Step>([{ label: 'a', days: 1 }, { label: 'b', days: 2 }]))
+    const [first] = result.current.rows
+
+    act(() => result.current.moveRow(first.rowId, 'up'))
+
+    expect(result.current.rows.map((r) => r.label)).toEqual(['a', 'b'])
+  })
 })

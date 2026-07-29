@@ -46,7 +46,7 @@ const submittedRequest: SpecialLeaveRequest = {
 
 function renderPage(requests: SpecialLeaveRequest[] = [], types: SpecialLeaveType[] = [birthdayType]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(approverSearchResult)
+  vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(types)
   vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue(requests)
 

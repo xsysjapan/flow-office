@@ -42,7 +42,7 @@ const submittedRequest: PaidLeaveRequest = {
 
 function renderPage(requests: PaidLeaveRequest[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue(approverSearchResult)
+  vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(requests)
 
   return render(

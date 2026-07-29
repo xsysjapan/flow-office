@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout/AppLayout'
 import { AdminLayout } from './components/AdminLayout/AdminLayout'
 import { RequireAuth } from './auth/RequireAuth'
+import { RequireAdminRoute } from './auth/RequireAdminRoute'
 import { AuthCallbackPage } from './pages/auth/AuthCallbackPage'
 import { LoginPage } from './pages/auth/LoginPage'
 import { OnboardingPage } from './pages/auth/OnboardingPage'
@@ -9,6 +10,14 @@ import { TodayAttendancePage } from './pages/attendance/TodayAttendancePage'
 import { WeekAttendancePage } from './pages/attendance/WeekAttendancePage'
 import { AttendanceDayPage } from './pages/attendance/AttendanceDayPage'
 import { AttendanceMonthDetailPage } from './pages/attendance/AttendanceMonthDetailPage'
+import { ExpenseCategoryListPage } from './pages/expense/ExpenseCategoryListPage'
+import { ExpenseCategoryEditPage } from './pages/expense/ExpenseCategoryEditPage'
+import { ExpenseEntryPresetListPage } from './pages/expense/ExpenseEntryPresetListPage'
+import { ExpenseEntryPresetEditPage } from './pages/expense/ExpenseEntryPresetEditPage'
+import { ExpenseClaimListPage } from './pages/expense/ExpenseClaimListPage'
+import { ExpenseClaimsToApprovePage } from './pages/expense/ExpenseClaimsToApprovePage'
+import { ExpenseClaimNewPage } from './pages/expense/ExpenseClaimNewPage'
+import { ExpenseClaimDetailPage } from './pages/expense/ExpenseClaimDetailPage'
 import { WorkflowRequestListPage } from './pages/workflow/WorkflowRequestListPage'
 import { WorkflowRequestNewPage } from './pages/workflow/WorkflowRequestNewPage'
 import { WorkflowRequestDetailPage } from './pages/workflow/WorkflowRequestDetailPage'
@@ -66,6 +75,14 @@ function App() {
         <Route path="requests/new" element={<WorkflowRequestNewPage />} />
         <Route path="requests/:id" element={<WorkflowRequestDetailPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="expenses" element={<ExpenseClaimListPage />} />
+        <Route path="expenses/new" element={<ExpenseClaimNewPage />} />
+        <Route path="expenses/to-approve" element={<ExpenseClaimsToApprovePage />} />
+        <Route path="expenses/presets" element={<ExpenseEntryPresetListPage />} />
+        <Route path="expenses/presets/new" element={<ExpenseEntryPresetEditPage />} />
+        <Route path="expenses/presets/:id" element={<ExpenseEntryPresetEditPage />} />
+        <Route path="expenses/:id/edit" element={<ExpenseClaimNewPage />} />
+        <Route path="expenses/:id" element={<ExpenseClaimDetailPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
         <Route path="attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
@@ -80,12 +97,21 @@ function App() {
         <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="admin" element={<AdminLayout />}>
+        <Route
+          path="admin"
+          element={
+            <RequireAdminRoute>
+              <AdminLayout />
+            </RequireAdminRoute>
+          }
+        >
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<UserListPage />} />
           <Route path="users/:id" element={<UserRoleEditPage />} />
           <Route path="request-types" element={<RequestTypeListPage />} />
           <Route path="request-types/:id" element={<RequestTypeEditPage />} />
+          <Route path="expense-categories" element={<ExpenseCategoryListPage />} />
+          <Route path="expense-categories/:id" element={<ExpenseCategoryEditPage />} />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
           <Route path="work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
           <Route path="work-styles" element={<WorkStylesPage />} />

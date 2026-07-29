@@ -18,6 +18,19 @@ export interface User {
   sso_linked?: boolean
 }
 
+/**
+ * GET /users/search が返す軽量なユーザー情報。承認者選択(UserPicker)等、一般社員も使う
+ * 用途向けで、入社日・退社日・雇用区分・ロールのような管理者向けの機微な項目は含まない
+ * (それらが必要な場合はrole:admin,hr_staff限定のUserを使う)。
+ */
+export interface UserSearchResult {
+  id: string
+  name: string
+  email: string
+  department: string | null
+  job_title: string | null
+}
+
 export interface Role {
   id: number
   code: string
@@ -816,6 +829,131 @@ export interface Notification {
   queued_at: string
   sent_at: string | null
   confirmed_at: string | null
+}
+
+/** docs/30-usecases-expense.md UC-X001: 経費区分マスタ。区分ごとの証憑要件・承認省略しきい値は
+ *  すべてマスタ設定で、区分追加のためにコードを変更しない。 */
+export type ExpenseEvidenceType = 'fact_reference_available' | 'receipt_required' | 'receipt_optional'
+
+/** UC-X001手順3/UC-X004: `batch`は交通費専用のまとめ入力ツール(表形式・移動経路・
+ *  テンプレート)、`single`は区分専用の1件入力フォーム(続けて何度でも入力できる)。 */
+export type ExpenseCategoryEntryMode = 'batch' | 'single'
+
+/** 経費区分固有の入力項目定義(field_definitions)。expense_items.attributesに保存できる
+ *  キーをここで定義したものだけに限定する(「経費精算機能 設計・実装指示書」7.2)。 */
+export interface ExpenseCategoryFieldDefinition {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'date' | 'select' | 'boolean'
+  required?: boolean
+  options?: Array<{ value: string; label: string }>
+}
+
+export interface ExpenseCategory {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  evidence_type_default: ExpenseEvidenceType
+  entry_mode: ExpenseCategoryEntryMode
+  /** 区分固有の追加入力項目。未設定(null)ならattributesの内容を制限しない。 */
+  field_definitions: ExpenseCategoryFieldDefinition[] | null
+  /** レシート添付が必須となる金額しきい値(円)。未設定(null)なら金額によらずevidence_type_defaultに従う。 */
+  receipt_required_threshold: number | null
+  /** UC-X011 手順5: この金額以下の明細は承認を1段階省略できる。未設定(null)なら省略なし。 */
+  approval_skip_threshold: number | null
+  is_active: boolean
+}
+
+/** 「経費精算機能 設計・実装指示書」9.4: personal(本人のみ編集)・company(経理・管理者のみ
+ *  編集、全社員が利用可)・system(経理・管理者のみ編集、標準プリセット)は`visibility`の違いの
+ *  みで表現し、テーブル・振る舞いを分けない。 */
+export type ExpenseEntryPresetVisibility = 'personal' | 'company' | 'system'
+
+/** 表示上の分類。適用処理自体はdefinitionの件数に従うため、内部の挙動は共通。 */
+export type ExpenseEntryPresetType = 'single_item' | 'multiple_items'
+
+/** プリセットが生成する経費明細1件分の下書き定義。 */
+export interface ExpenseEntryPresetDefinitionItem {
+  category_id: number
+  description?: string | null
+  amount?: number | null
+  payment_bearer?: ExpensePaymentBearer | null
+  attributes?: Record<string, unknown> | null
+}
+
+export interface ExpenseEntryPreset {
+  id: number
+  visibility: ExpenseEntryPresetVisibility
+  /** personal/company/systemの違いに関わらず、company/systemはnull。 */
+  owner_user_id: string | null
+  name: string
+  description: string | null
+  preset_type: ExpenseEntryPresetType
+  definition: ExpenseEntryPresetDefinitionItem[]
+  is_active: boolean
+  usage_count: number
+  last_used_at: string | null
+  created_by: string | null
+}
+
+export type ExpenseClaimStatus = 'draft' | 'in_review' | 'returned' | 'approved' | 'cancelled'
+
+/** UC-X004/X011: 経費明細が参照する勤怠実績・予定・出張申請の種別。金額計算・確定判定には
+ *  使わず、入力補助・承認時の突合せ表示にのみ使う(docs/30-usecases-expense.md)。 */
+export type ExpenseFactReferenceType = 'attendance_day' | 'schedule' | 'business_trip'
+
+/** 誰が支払ったか。法人カード等(employee以外)はreimbursement_amountが0円になる
+ *  (「経費精算機能 設計・実装指示書」6.4)。 */
+export type ExpensePaymentBearer = 'employee' | 'company' | 'corporate_card' | 'customer' | 'other'
+
+export interface ExpenseItem {
+  id: string
+  claim_id?: string
+  category_id: number
+  category?: Pick<ExpenseCategory, 'id' | 'code' | 'name' | 'evidence_type_default'>
+  usage_date: string
+  /** 内容(自由記述)。交通費の場合は「出発地 → 到着地(手段)」形式の1行テキストをUI側で整形して設定する。 */
+  description: string | null
+  amount: number
+  project_id: string | null
+  evidence_type: ExpenseEvidenceType
+  fact_reference_type: ExpenseFactReferenceType | null
+  fact_reference_id: string | null
+  /** UC-X009: 定期区間重複の自己申告による控除額。会社負担額はamount - commuting_deduction_amount。 */
+  commuting_deduction_amount: number | null
+  payment_bearer?: ExpensePaymentBearer
+  /** 会社から社員へ返金する金額。payment_bearerがemployee以外なら0円(派生値・サーバー算出)。 */
+  reimbursement_amount?: number
+  /** 区分固有の構造化データ。category.field_definitionsで定義したキーのみ許可される。 */
+  attributes?: Record<string, unknown> | null
+  attachments?: Attachment[]
+}
+
+export interface ExpenseClaim {
+  id: string
+  employee_id: string
+  employee?: User
+  /** 任意項目。「7月分の立替経費」等の申請タイトル。未設定時はUI側で対象期間から表示名を組み立てる。 */
+  title?: string | null
+  /** 保存済み明細のusage_dateの最小値・最大値から自動算出される派生値。明細が無い作成直後はnull(原則2)。 */
+  period_from: string | null
+  period_to: string | null
+  status: ExpenseClaimStatus
+  approver_user_id: string | null
+  approver?: User
+  total_amount: number
+  submitted_at: string | null
+  approved_at: string | null
+  items: ExpenseItem[]
+}
+
+export interface ExpenseClaimHistoryEntry {
+  id: number
+  action: 'drafted' | 'submitted' | 'approved' | 'returned' | 'cancelled'
+  actor_user_id: string | null
+  comment: string | null
+  occurred_at: string
 }
 
 export interface Paginated<T> {
