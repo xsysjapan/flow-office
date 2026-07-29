@@ -17,8 +17,9 @@ const DUMMY_RECEIPT_PATH = path.resolve(CURRENT_DIR, 'support/fixtures/dummy-rec
  * 汎用申請ワークフロー(request_types)は経由しない。
  *
  * 前半(交通費)は新規作成〜明細入力〜申請〜承認〜経理バックオフィスタスク処理〜経費CSV出力
- * までのフルサイクルを確認する。後半は残り4区分(宿泊費・会食・消耗品・その他)それぞれの
- * 単一申請シナリオ(個別登録→区分専用フォームへの入力→申請→承認)を確認する。
+ * までのフルサイクルを確認する。中盤は残り4区分(宿泊費・会食・消耗品・その他)それぞれの
+ * 単一申請シナリオ(個別登録→区分専用フォームへの入力→申請→承認)を確認する。後半は
+ * 「まとめて経費登録」(タイトル先入力→複数区分にまたがる複数明細→申請→承認)を確認する。
  */
 
 /** 同一日に何度実行しても一覧上の行が一意に識別できるよう、対象日を遠い未来のランダムな
@@ -49,10 +50,21 @@ function randomAmountAboveApprovalSkipThreshold(): string {
  * `expense_categories.receipt_required_threshold`(消耗品・その他=3000円)を超える金額で
  * 保存した明細には領収書の添付が必須になる(宿泊費・会食は金額によらず常に必須)。
  * 明細一覧の「領収書」列にあるファイル入力にダミーファイルをアップロードする。
+ * `rowIndex`は明細一覧テーブル内で何番目のファイル入力かを指定する(まとめ入力で
+ * 複数明細を保存した場合、行ごとに1つずつファイル入力が並ぶため)。
  */
-async function uploadReceipt(page: Page): Promise<void> {
-  await page.locator('input[type="file"]').setInputFiles(DUMMY_RECEIPT_PATH)
-  await expect(page.getByText('領収書の添付が必要です')).not.toBeVisible()
+async function uploadReceipt(page: Page, rowIndex = 0): Promise<void> {
+  await page.locator('input[type="file"]').nth(rowIndex).setInputFiles(DUMMY_RECEIPT_PATH)
+}
+
+/**
+ * ExpenseClaimNewPage.tsxの`suggestedBulkTitles()`と同じロジックで、
+ * 「まとめて経費登録」のタイトル候補チップの文言を組み立てる。
+ */
+function suggestedBulkTitles(): string[] {
+  const now = new Date()
+  const label = `${now.getFullYear()}年${now.getMonth() + 1}月分`
+  return [`${label}経費`, `${label}交通費`, '出張精算']
 }
 
 test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク処理〜CSV出力', async ({ browser }) => {
@@ -255,3 +267,98 @@ for (const scenario of singleCategoryScenarios) {
     }
   })
 }
+
+/**
+ * 「まとめて経費登録」(タイトルを先に入力してから複数区分の明細を積み上げる)シナリオ。
+ * 個別登録との違いは (1) 区分選択の前にタイトル入力ステップがあり、候補チップを
+ * クリックするだけでタイトル確定と同時に下書きが作成される点、(2) 交通費(複数行の
+ * まとめ入力)と宿泊費(区分をまたいだ追加、UC-X013)の明細を1つの申請にまとめる点。
+ */
+test('経費精算(まとめて登録)の新規作成〜複数区分明細入力〜申請〜承認', async ({ browser }) => {
+  test.setTimeout(60000)
+
+  const transportAmount1 = randomAmountAboveApprovalSkipThreshold()
+  const transportAmount2 = randomAmountAboveApprovalSkipThreshold()
+  const lodgingAmount = randomAmountAboveApprovalSkipThreshold()
+  // claim.period_from/period_toは保存済み明細のusage_dateの最小値・最大値から自動算出される
+  // (原則2)。承認待ち一覧の行は期間表示で特定するため、3件の日付を昇順で固定しておく。
+  const baseDate = new Date(`${randomFutureDate()}T00:00:00`)
+  const usageDateStr1 = baseDate.toISOString().slice(0, 10)
+  const usageDateStr2 = new Date(baseDate.getTime() + 1 * 86400000).toISOString().slice(0, 10)
+  const usageDateStr3 = new Date(baseDate.getTime() + 2 * 86400000).toISOString().slice(0, 10)
+  const title = suggestedBulkTitles()[1] // "YYYY年M月分交通費"
+
+  const applicantContext = await browser.newContext()
+  const approverContext = await browser.newContext()
+
+  try {
+    const applicantPage = await applicantContext.newPage()
+    const approverPage = await approverContext.newPage()
+
+    // 1. 高橋健太が「まとめて経費登録」を選び、タイトル候補チップをクリックして
+    //    下書き作成とタイトル確定を同時に行う(明細入力より前にタイトルが決まる点が
+    //    個別登録との違い)。
+    await loginAs(applicantPage, SCENARIO_USERS.punchEmployee)
+    await applicantPage.goto('/expenses/new')
+    await applicantPage.getByRole('button', { name: 'まとめて登録する' }).click()
+    await applicantPage.getByRole('button', { name: title, exact: true }).click()
+
+    // タイトル確定後、区分選択画面に進む(対象期間はまだ聞かれない)。
+    await expect(applicantPage.getByRole('button', { name: '交通費' })).toBeVisible()
+
+    // 2. 交通費を選び、2件まとめて保存する。
+    await applicantPage.getByRole('button', { name: '交通費' }).click()
+    await applicantPage.getByRole('button', { name: '行を追加' }).click()
+    await applicantPage.getByLabel('1行目の日付').fill(usageDateStr1)
+    await applicantPage.getByLabel('1行目の金額').fill(transportAmount1)
+    await applicantPage.getByLabel('1行目の出発地').fill('自宅')
+    await applicantPage.getByLabel('1行目の到着地').fill('本社')
+    await applicantPage.getByRole('button', { name: '行を追加' }).click()
+    await applicantPage.getByLabel('2行目の日付').fill(usageDateStr2)
+    await applicantPage.getByLabel('2行目の金額').fill(transportAmount2)
+    await applicantPage.getByLabel('2行目の出発地').fill('本社')
+    await applicantPage.getByLabel('2行目の到着地').fill('客先')
+    await applicantPage.getByRole('button', { name: /明細を保存する\(2件\)/ }).click()
+
+    await expect(applicantPage.getByText(/保存済みの明細\(2件/)).toBeVisible()
+
+    // 3. UC-X013: 別の区分(宿泊費)の明細を同じ申請に追加する。
+    await applicantPage.getByRole('button', { name: '別の区分の明細を追加する' }).click()
+    await applicantPage.getByRole('button', { name: '宿泊費', exact: true }).click()
+    await applicantPage.getByLabel('利用日').fill(usageDateStr3)
+    await applicantPage.getByLabel('金額').fill(lodgingAmount)
+    await applicantPage.getByLabel('宿泊先名').fill('ホテルXYZ')
+    await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
+
+    await expect(applicantPage.getByText(/保存済みの明細\(3件/)).toBeVisible()
+    // 宿泊費は金額によらずレシート必須。3件のうち最後(宿泊費)の行にのみ添付する。
+    await uploadReceipt(applicantPage, 2)
+
+    // タイトルはタイトル入力ステップで確定済みのまま変更していないことを確認する。
+    await expect(applicantPage.getByLabel('申請タイトル')).toHaveValue(title)
+
+    // 4. 承認者を指定して申請する。
+    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
+    await applicantPage.getByRole('button', { name: '申請する' }).click()
+    await expect(applicantPage.getByRole('status', { name: '申請中' })).toBeVisible()
+    const claimUrl = applicantPage.url()
+
+    // 5. 渡辺直樹が承認する。承認待ち一覧の行は期間(明細usage_dateの最小〜最大)で表示される
+    //    ため、対象期間(1件目〜3件目の日付)で行を特定する。詳細画面ではタイトルも確認する。
+    await loginAs(approverPage, SCENARIO_USERS.approver)
+    await approverPage.goto('/expenses/to-approve')
+    const approvalRow = approverPage.getByRole('row', { name: new RegExp(`${usageDateStr1}.*${usageDateStr3}`) })
+    await expect(approvalRow).toBeVisible()
+    await approvalRow.getByRole('link').click()
+    await expect(approverPage.getByRole('heading', { name: new RegExp(title) })).toBeVisible()
+    await expect(approverPage.getByRole('heading', { name: '明細(3件)' })).toBeVisible()
+    await approverPage.getByRole('button', { name: '承認する' }).click()
+    await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
+
+    await applicantPage.goto(claimUrl)
+    await expect(applicantPage.getByRole('status', { name: '承認済み' })).toBeVisible()
+  } finally {
+    await applicantContext.close()
+    await approverContext.close()
+  }
+})
