@@ -56,11 +56,6 @@ export const adminNavGroups: AdminNavGroup[] = [
     roles: [ROLE.ADMIN, ROLE.ACCOUNTING_STAFF],
     items: [
       { to: '/admin/expense-categories', label: '経費区分', description: '経費区分ごとの証憑要件・承認省略ルールを管理する' },
-      {
-        to: '/admin/expense-route-templates',
-        label: '移動区間テンプレート(全社共有)',
-        description: '全社員が利用できる移動区間テンプレートを管理する',
-      },
     ],
   },
   {

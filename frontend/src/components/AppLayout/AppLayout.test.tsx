@@ -124,6 +124,7 @@ describe('AppLayout', () => {
     await userEvent.click(await screen.findByRole('button', { name: '経費精算' }))
     expect(await screen.findByRole('menuitem', { name: '経費精算一覧' })).toHaveAttribute('href', '/expenses')
     expect(screen.getByRole('menuitem', { name: '経費精算(新規作成)' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '入力プリセット' })).toHaveAttribute('href', '/expenses/presets')
   })
 
   it('links 月次勤怠 to the current month detail page', async () => {

@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             RequestTypeSeeder::class,
             EmploymentCategorySeeder::class,
             ExpenseCategorySeeder::class,
+            ExpenseEntryPresetSeeder::class,
         ]);
 
         $admin = User::query()->firstOrCreate(

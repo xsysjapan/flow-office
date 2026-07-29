@@ -12,8 +12,8 @@ import { AttendanceDayPage } from './pages/attendance/AttendanceDayPage'
 import { AttendanceMonthDetailPage } from './pages/attendance/AttendanceMonthDetailPage'
 import { ExpenseCategoryListPage } from './pages/expense/ExpenseCategoryListPage'
 import { ExpenseCategoryEditPage } from './pages/expense/ExpenseCategoryEditPage'
-import { ExpenseRouteTemplateListPage } from './pages/expense/ExpenseRouteTemplateListPage'
-import { ExpenseRouteTemplateEditPage } from './pages/expense/ExpenseRouteTemplateEditPage'
+import { ExpenseEntryPresetListPage } from './pages/expense/ExpenseEntryPresetListPage'
+import { ExpenseEntryPresetEditPage } from './pages/expense/ExpenseEntryPresetEditPage'
 import { ExpenseClaimListPage } from './pages/expense/ExpenseClaimListPage'
 import { ExpenseClaimsToApprovePage } from './pages/expense/ExpenseClaimsToApprovePage'
 import { ExpenseClaimNewPage } from './pages/expense/ExpenseClaimNewPage'
@@ -78,6 +78,9 @@ function App() {
         <Route path="expenses" element={<ExpenseClaimListPage />} />
         <Route path="expenses/new" element={<ExpenseClaimNewPage />} />
         <Route path="expenses/to-approve" element={<ExpenseClaimsToApprovePage />} />
+        <Route path="expenses/presets" element={<ExpenseEntryPresetListPage />} />
+        <Route path="expenses/presets/new" element={<ExpenseEntryPresetEditPage />} />
+        <Route path="expenses/presets/:id" element={<ExpenseEntryPresetEditPage />} />
         <Route path="expenses/:id/edit" element={<ExpenseClaimNewPage />} />
         <Route path="expenses/:id" element={<ExpenseClaimDetailPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
@@ -109,8 +112,6 @@ function App() {
           <Route path="request-types/:id" element={<RequestTypeEditPage />} />
           <Route path="expense-categories" element={<ExpenseCategoryListPage />} />
           <Route path="expense-categories/:id" element={<ExpenseCategoryEditPage />} />
-          <Route path="expense-route-templates" element={<ExpenseRouteTemplateListPage />} />
-          <Route path="expense-route-templates/:id" element={<ExpenseRouteTemplateEditPage />} />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
           <Route path="work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
           <Route path="work-styles" element={<WorkStylesPage />} />

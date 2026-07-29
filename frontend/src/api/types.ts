@@ -865,22 +865,36 @@ export interface ExpenseCategory {
   is_active: boolean
 }
 
-/** UC-X002/X003: 個人(personal)・全社共有(company)は`scope`の違いのみで、テーブル・振る舞いを
- *  分けない。編集権限は個人用は本人のみ、全社共有は経理・管理者のみ。 */
-export type ExpenseRouteTemplateScope = 'personal' | 'company'
+/** 「経費精算機能 設計・実装指示書」9.4: personal(本人のみ編集)・company(経理・管理者のみ
+ *  編集、全社員が利用可)・system(経理・管理者のみ編集、標準プリセット)は`visibility`の違いの
+ *  みで表現し、テーブル・振る舞いを分けない。 */
+export type ExpenseEntryPresetVisibility = 'personal' | 'company' | 'system'
 
-export interface ExpenseRouteTemplate {
-  id: number
-  scope: ExpenseRouteTemplateScope
-  /** personalスコープの所有者。companyスコープはnull。 */
-  employee_id: string | null
-  name: string
-  origin: string
-  destination: string
-  transport_type: string
-  amount: number
+/** 表示上の分類。適用処理自体はdefinitionの件数に従うため、内部の挙動は共通。 */
+export type ExpenseEntryPresetType = 'single_item' | 'multiple_items'
+
+/** プリセットが生成する経費明細1件分の下書き定義。 */
+export interface ExpenseEntryPresetDefinitionItem {
   category_id: number
+  description?: string | null
+  amount?: number | null
+  payment_bearer?: ExpensePaymentBearer | null
+  attributes?: Record<string, unknown> | null
+}
+
+export interface ExpenseEntryPreset {
+  id: number
+  visibility: ExpenseEntryPresetVisibility
+  /** personal/company/systemの違いに関わらず、company/systemはnull。 */
+  owner_user_id: string | null
+  name: string
+  description: string | null
+  preset_type: ExpenseEntryPresetType
+  definition: ExpenseEntryPresetDefinitionItem[]
   is_active: boolean
+  usage_count: number
+  last_used_at: string | null
+  created_by: string | null
 }
 
 export type ExpenseClaimStatus = 'draft' | 'in_review' | 'returned' | 'approved' | 'cancelled'

@@ -18,7 +18,7 @@ use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExpenseCategoryController;
 use App\Http\Controllers\Api\ExpenseClaimController;
-use App\Http\Controllers\Api\ExpenseRouteTemplateController;
+use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
@@ -124,10 +124,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
     });
 
-    Route::get('/expense-route-templates', [ExpenseRouteTemplateController::class, 'index']);
-    Route::post('/expense-route-templates', [ExpenseRouteTemplateController::class, 'store']);
-    Route::put('/expense-route-templates/{expenseRouteTemplate}', [ExpenseRouteTemplateController::class, 'update']);
-    Route::delete('/expense-route-templates/{expenseRouteTemplate}', [ExpenseRouteTemplateController::class, 'destroy']);
+    Route::get('/expense-entry-presets', [ExpenseEntryPresetController::class, 'index']);
+    Route::post('/expense-entry-presets', [ExpenseEntryPresetController::class, 'store']);
+    Route::put('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'update']);
+    Route::delete('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'destroy']);
+    Route::post('/expense-entry-presets/{expenseEntryPreset}/apply', [ExpenseEntryPresetController::class, 'apply']);
 
     Route::get('/expense-claims/mine', [ExpenseClaimController::class, 'indexMine']);
     Route::get('/expense-claims/to-approve', [ExpenseClaimController::class, 'indexToApprove']);

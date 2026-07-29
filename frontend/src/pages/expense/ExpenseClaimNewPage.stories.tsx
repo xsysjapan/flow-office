@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { fn } from 'storybook/test'
-import type { ExpenseCategory, ExpenseRouteTemplate, Paginated, User } from '../../api/types'
+import type { ExpenseCategory, Paginated, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
 
@@ -55,21 +55,6 @@ const categories: ExpenseCategory[] = [
   },
 ]
 
-const templates: ExpenseRouteTemplate[] = [
-  {
-    id: 1,
-    scope: 'personal',
-    employee_id: 'applicant-1',
-    name: '自宅⇔会社',
-    origin: '自宅',
-    destination: '会社',
-    transport_type: '電車',
-    amount: 420,
-    category_id: 1,
-    is_active: true,
-  },
-]
-
 const emptyUsers: Paginated<User> = {
   data: [],
   meta: { current_page: 1, last_page: 1, total: 0 },
@@ -79,7 +64,7 @@ const emptyUsers: Paginated<User> = {
 function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['expense-categories', false], categories)
-  queryClient.setQueryData(['expense-route-templates'], templates)
+  queryClient.setQueryData(['expense-entry-presets'], [])
   queryClient.setQueryData(['users', ''], emptyUsers)
 
   const authValue: AuthContextValue = {
@@ -114,7 +99,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'UC-X004: 対象期間は聞かず、まず経費区分を選ぶ。区分のentry_modeがbatch(交通費)なら表形式・移動経路・テンプレートの3タブ、singleなら区分専用の1件入力フォームに自動的に切り替わる。',
+          'UC-X004: 対象期間は聞かず、まず経費区分を選ぶ。区分のentry_modeがbatch(交通費)ならプリセットから追加できる表形式入力、singleなら区分専用の1件入力フォームに自動的に切り替わる。',
       },
     },
   },

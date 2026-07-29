@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as expenseClaimsApi from '../../api/expenseClaims'
-import * as expenseRouteTemplatesApi from '../../api/expenseRouteTemplates'
+import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import * as usersApi from '../../api/users'
-import type { ExpenseCategory, ExpenseClaim, User } from '../../api/types'
+import type { ExpenseCategory, ExpenseClaim, ExpenseEntryPreset, User } from '../../api/types'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
 
 const applicant: User = {
@@ -70,10 +70,11 @@ function draftClaim(overrides: Partial<ExpenseClaim> = {}): ExpenseClaim {
 function renderPage(
   categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
   initialPath = '/expenses/new',
+  presets: ExpenseEntryPreset[] = [],
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
-  vi.spyOn(expenseRouteTemplatesApi, 'fetchExpenseRouteTemplates').mockResolvedValue([])
+  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockResolvedValue(presets)
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
   vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({
     data: [],
@@ -116,10 +117,65 @@ describe('ExpenseClaimNewPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
-    expect(await screen.findByRole('tab', { name: '表形式入力' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '移動経路入力' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'テンプレートから生成' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '行を追加' })).toBeInTheDocument()
     expect(createClaim).not.toHaveBeenCalled()
+  })
+
+  it('lets a batch category be filled from a preset applicable to it, without showing presets for other categories', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 1,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '自宅⇔会社',
+        description: null,
+        preset_type: 'single_item',
+        definition: [{ category_id: 1, description: '自宅 → 会社(電車)', amount: 420 }],
+        is_active: true,
+        usage_count: 3,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+      {
+        id: 2,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '技術書購入',
+        description: null,
+        preset_type: 'single_item',
+        definition: [{ category_id: 2, description: '技術書購入', amount: 3000 }],
+        is_active: true,
+        usage_count: 1,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+    ]
+    const applyPreset = vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue({
+      id: 1,
+      visibility: 'personal',
+      owner_user_id: 'applicant-1',
+      name: '自宅⇔会社',
+      description: null,
+      preset_type: 'single_item',
+      definition: [{ category_id: 1, description: '自宅 → 会社(電車)', amount: 420 }],
+      is_active: true,
+      usage_count: 4,
+      last_used_at: null,
+      created_by: 'applicant-1',
+    })
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    expect(await screen.findByRole('button', { name: '自宅⇔会社(1件)' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '技術書購入(1件)' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '自宅⇔会社(1件)' }))
+
+    expect(applyPreset).toHaveBeenCalledWith(1)
+    expect(await screen.findByDisplayValue('自宅 → 会社(電車)')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: /1行目の金額/ })).toHaveValue(420)
   })
 
   it('creates a draft claim with no body only when the first rows are actually saved (batch category)', async () => {
@@ -154,7 +210,7 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
 
     expect(await screen.findByLabelText('利用日')).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: '表形式入力' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '行を追加' })).not.toBeInTheDocument()
     expect(createClaim).not.toHaveBeenCalled()
   })
 
@@ -305,7 +361,7 @@ describe('ExpenseClaimNewPage', () => {
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '交通費' }))
-    await screen.findByRole('tab', { name: '表形式入力' })
+    await screen.findByRole('button', { name: '行を追加' })
     expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSave)
   })
 

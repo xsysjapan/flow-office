@@ -3,14 +3,14 @@
 namespace Tests\Feature\ExpenseClaim;
 
 use App\Models\ExpenseCategory;
-use App\Models\ExpenseRouteTemplate;
+use App\Models\ExpenseEntryPreset;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * UC-X001〜UC-X003: 経費区分・移動区間テンプレートマスタのCRUDと権限。
+ * UC-X001: 経費区分マスタと入力プリセットのCRUDと権限。
  */
 class ExpenseMasterCrudTest extends TestCase
 {
@@ -57,7 +57,7 @@ class ExpenseMasterCrudTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('entry_mode');
     }
 
-    public function test_personal_route_template_is_editable_only_by_its_owner(): void
+    public function test_personal_preset_is_editable_only_by_its_owner(): void
     {
         $employee = User::factory()->create();
         $stranger = User::factory()->create();
@@ -65,25 +65,25 @@ class ExpenseMasterCrudTest extends TestCase
             'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);
 
-        $created = $this->actingAs($employee)->postJson('/api/expense-route-templates', [
-            'scope' => 'personal', 'name' => '自宅⇔会社', 'origin' => '自宅', 'destination' => '会社',
-            'transport_type' => 'train', 'amount' => 300, 'category_id' => $category->id,
+        $created = $this->actingAs($employee)->postJson('/api/expense-entry-presets', [
+            'visibility' => 'personal', 'name' => '自宅⇔会社', 'preset_type' => 'single_item',
+            'definition' => [['category_id' => $category->id, 'description' => '自宅 → 会社(電車)', 'amount' => 300]],
         ]);
         $created->assertCreated();
-        $templateId = $created->json('id');
+        $presetId = $created->json('id');
 
-        $this->actingAs($stranger)->putJson("/api/expense-route-templates/{$templateId}", [
-            'name' => '改ざん', 'origin' => '自宅', 'destination' => '会社',
-            'transport_type' => 'train', 'amount' => 999, 'category_id' => $category->id,
+        $this->actingAs($stranger)->putJson("/api/expense-entry-presets/{$presetId}", [
+            'name' => '改ざん', 'preset_type' => 'single_item',
+            'definition' => [['category_id' => $category->id, 'amount' => 999]],
         ])->assertForbidden();
 
-        $this->actingAs($employee)->putJson("/api/expense-route-templates/{$templateId}", [
-            'name' => '自宅⇔会社(更新)', 'origin' => '自宅', 'destination' => '会社',
-            'transport_type' => 'train', 'amount' => 320, 'category_id' => $category->id,
-        ])->assertOk()->assertJsonPath('amount', 320);
+        $this->actingAs($employee)->putJson("/api/expense-entry-presets/{$presetId}", [
+            'name' => '自宅⇔会社(更新)', 'preset_type' => 'single_item',
+            'definition' => [['category_id' => $category->id, 'description' => '自宅 → 会社(電車)', 'amount' => 320]],
+        ])->assertOk()->assertJsonPath('name', '自宅⇔会社(更新)');
     }
 
-    public function test_company_route_template_requires_accounting_or_admin_role(): void
+    public function test_company_preset_requires_accounting_or_admin_role(): void
     {
         $employee = User::factory()->create();
         $accountingStaff = User::factory()->create();
@@ -92,23 +92,23 @@ class ExpenseMasterCrudTest extends TestCase
             'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);
 
-        $this->actingAs($employee)->postJson('/api/expense-route-templates', [
-            'scope' => 'company', 'name' => '本社⇔A社', 'origin' => '本社', 'destination' => 'A社',
-            'transport_type' => 'train', 'amount' => 400, 'category_id' => $category->id,
+        $this->actingAs($employee)->postJson('/api/expense-entry-presets', [
+            'visibility' => 'company', 'name' => '本社⇔A社', 'preset_type' => 'single_item',
+            'definition' => [['category_id' => $category->id, 'description' => '本社 → A社(電車)', 'amount' => 400]],
         ])->assertForbidden();
 
-        $created = $this->actingAs($accountingStaff)->postJson('/api/expense-route-templates', [
-            'scope' => 'company', 'name' => '本社⇔A社', 'origin' => '本社', 'destination' => 'A社',
-            'transport_type' => 'train', 'amount' => 400, 'category_id' => $category->id,
+        $created = $this->actingAs($accountingStaff)->postJson('/api/expense-entry-presets', [
+            'visibility' => 'company', 'name' => '本社⇔A社', 'preset_type' => 'single_item',
+            'definition' => [['category_id' => $category->id, 'description' => '本社 → A社(電車)', 'amount' => 400]],
         ]);
         $created->assertCreated();
 
-        // 全社共有テンプレートは全社員の候補一覧に表示される。
-        $index = $this->actingAs($employee)->getJson('/api/expense-route-templates');
+        // 全社共有プリセットは全社員の候補一覧に表示される。
+        $index = $this->actingAs($employee)->getJson('/api/expense-entry-presets');
         $index->assertOk()->assertJsonCount(1);
     }
 
-    public function test_route_templates_index_merges_own_personal_and_all_company_templates(): void
+    public function test_presets_index_merges_own_personal_and_all_company_and_system_presets(): void
     {
         $employee = User::factory()->create();
         $otherEmployee = User::factory()->create();
@@ -118,27 +118,50 @@ class ExpenseMasterCrudTest extends TestCase
             'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);
 
-        ExpenseRouteTemplate::query()->create([
-            'scope' => 'personal', 'employee_id' => $employee->id, 'name' => '自分の経路',
-            'origin' => 'A', 'destination' => 'B', 'transport_type' => 'train', 'amount' => 100,
-            'category_id' => $category->id, 'created_by' => $employee->id,
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $employee->id, 'name' => '自分のプリセット',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 100]],
+            'created_by' => $employee->id,
         ]);
-        ExpenseRouteTemplate::query()->create([
-            'scope' => 'personal', 'employee_id' => $otherEmployee->id, 'name' => '他人の経路',
-            'origin' => 'C', 'destination' => 'D', 'transport_type' => 'train', 'amount' => 200,
-            'category_id' => $category->id, 'created_by' => $otherEmployee->id,
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $otherEmployee->id, 'name' => '他人のプリセット',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 200]],
+            'created_by' => $otherEmployee->id,
         ]);
-        ExpenseRouteTemplate::query()->create([
-            'scope' => 'company', 'name' => '全社共有経路',
-            'origin' => 'E', 'destination' => 'F', 'transport_type' => 'train', 'amount' => 300,
-            'category_id' => $category->id, 'created_by' => $accountingStaff->id,
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'company', 'name' => '全社共有プリセット',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 300]],
+            'created_by' => $accountingStaff->id,
+        ]);
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'system', 'name' => 'システム標準プリセット',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 400]],
         ]);
 
-        $response = $this->actingAs($employee)->getJson('/api/expense-route-templates');
+        $response = $this->actingAs($employee)->getJson('/api/expense-entry-presets');
         $response->assertOk();
         $names = collect($response->json())->pluck('name');
-        $this->assertContains('自分の経路', $names);
-        $this->assertContains('全社共有経路', $names);
-        $this->assertNotContains('他人の経路', $names);
+        $this->assertContains('自分のプリセット', $names);
+        $this->assertContains('全社共有プリセット', $names);
+        $this->assertContains('システム標準プリセット', $names);
+        $this->assertNotContains('他人のプリセット', $names);
+    }
+
+    public function test_applying_a_preset_increments_usage_count(): void
+    {
+        $employee = User::factory()->create();
+        $category = ExpenseCategory::query()->create([
+            'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
+        ]);
+        $preset = ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $employee->id, 'name' => '自宅⇔会社',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 300]],
+            'created_by' => $employee->id,
+        ]);
+
+        $this->actingAs($employee)->postJson("/api/expense-entry-presets/{$preset->id}/apply")
+            ->assertOk()->assertJsonPath('usage_count', 1);
+
+        $this->assertNotNull($preset->refresh()->last_used_at);
     }
 }

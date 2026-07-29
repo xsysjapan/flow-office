@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -8,19 +7,15 @@ import { Card } from '../../components/Card/Card'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
-import { ExpenseRouteBuilder } from '../../components/ExpenseRouteBuilder/ExpenseRouteBuilder'
-import { ExpenseTemplateBulkGenerator } from '../../components/ExpenseTemplateBulkGenerator/ExpenseTemplateBulkGenerator'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { SingleExpenseItemForm, type SingleExpenseItemFieldSet } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
-import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
-import type { ExpenseCategory } from '../../api/types'
+import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
 import { useWeek } from '../../hooks/useAttendance'
 import {
   useAddExpenseItem,
@@ -35,11 +30,7 @@ import {
 } from '../../hooks/useExpenseClaims'
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useEditableRows } from '../../hooks/useEditableRows'
-import {
-  useCreateExpenseRouteTemplate,
-  useDeleteExpenseRouteTemplate,
-  useExpenseRouteTemplates,
-} from '../../hooks/useExpenseRouteTemplates'
+import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { workLocationTypeLabel } from '../../utils/statusLabels'
 
@@ -86,88 +77,53 @@ function AttendanceReferenceLookup() {
   )
 }
 
-/** UC-X002: 本人の個人移動区間テンプレートをこの画面内で登録・削除する。 */
-function PersonalRouteTemplateManager({ employeeId }: { employeeId: string }) {
-  const { data: templates } = useExpenseRouteTemplates()
-  const { data: categories } = useExpenseCategories()
-  const createTemplate = useCreateExpenseRouteTemplate()
-  const deleteTemplate = useDeleteExpenseRouteTemplate()
+/** プリセットの下書き定義1件をuseEditableRows用の行データへ変換する。利用日は
+ *  プリセットには持たせず(利用のたびに変わるため)、ここでは空のまま生成し、
+ *  ユーザーが確認・入力してから保存する(「経費精算機能 設計・実装指示書」9.1)。 */
+function presetItemToRow(item: ExpenseEntryPreset['definition'][number]): SaveExpenseItemInput {
+  return {
+    category_id: item.category_id,
+    usage_date: '',
+    amount: item.amount ?? 0,
+    description: item.description ?? undefined,
+    payment_bearer: item.payment_bearer ?? undefined,
+    attributes: item.attributes ?? undefined,
+  }
+}
 
-  const [name, setName] = useState('')
-  const [origin, setOrigin] = useState('')
-  const [destination, setDestination] = useState('')
-  const [transportType, setTransportType] = useState('')
-  const [amount, setAmount] = useState('')
-  const [categoryId, setCategoryId] = useState<number | ''>('')
+/** 交通費はUC-X002/X003の移動区間テンプレートを廃止し、経費全体で共通の入力プリセットに
+ *  一本化する。この区分に関係する明細を1件以上含むプリセットだけを候補として表示し、
+ *  クリックすると明細の下書き行を追加する(保存は既存の表形式レビューで行う)。 */
+function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
+  const { data: presets, isLoading, error } = useExpenseEntryPresets()
+  const applyPreset = useApplyExpenseEntryPreset()
 
-  const personalTemplates = (templates ?? []).filter(
-    (t) => t.scope === 'personal' && t.employee_id === employeeId,
+  const applicablePresets = (presets ?? []).filter((preset) =>
+    preset.definition.some((item) => item.category_id === categoryId),
   )
 
-  const canCreate = name && origin && destination && amount && categoryId !== ''
-
-  const handleCreate = () => {
-    if (!canCreate) return
-    createTemplate.mutate(
-      {
-        scope: 'personal',
-        employee_id: employeeId,
-        name,
-        origin,
-        destination,
-        transport_type: transportType,
-        amount: Number(amount),
-        category_id: Number(categoryId),
-      },
-      {
-        onSuccess: () => {
-          setName('')
-          setOrigin('')
-          setDestination('')
-          setTransportType('')
-          setAmount('')
-          setCategoryId('')
-        },
-      },
-    )
-  }
+  if (isLoading) return null
+  if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+  if (applicablePresets.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-3">
-      {personalTemplates.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {personalTemplates.map((template) => (
-            <li key={template.id} className="flex items-center justify-between gap-2 border-b border-border py-1.5 text-sm last:border-b-0">
-              <span className="text-foreground">
-                {template.name}({template.origin} ⇔ {template.destination}, {template.amount.toLocaleString()}円)
-              </span>
-              <Button variant="danger" size="sm" onClick={() => deleteTemplate.mutate(template.id)}>
-                削除
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Input placeholder="テンプレート名" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input placeholder="出発地" value={origin} onChange={(e) => setOrigin(e.target.value)} />
-        <Input placeholder="到着地" value={destination} onChange={(e) => setDestination(e.target.value)} />
-        <Input placeholder="交通手段" value={transportType} onChange={(e) => setTransportType(e.target.value)} />
-        <Input type="number" placeholder="金額" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <NativeSelect value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')}>
-          <option value="">経費区分を選択</option>
-          {categories?.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
-      <div>
-        <Button variant="secondary" disabled={!canCreate} isLoading={createTemplate.isPending} onClick={handleCreate}>
-          個人テンプレートを追加
-        </Button>
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <span className="text-sm font-medium text-foreground">プリセットから追加</span>
+      <div className="flex flex-wrap gap-2">
+        {applicablePresets.map((preset) => (
+          <Button
+            key={preset.id}
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              applyPreset.mutate(preset.id)
+              onApply(preset.definition.map(presetItemToRow))
+            }}
+          >
+            {preset.name}({preset.definition.length}件)
+          </Button>
+        ))}
       </div>
     </div>
   )
@@ -218,7 +174,6 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  */
 export function ExpenseClaimNewPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
   const { id: routeClaimId } = useParams<{ id?: string }>()
   const [searchParams] = useSearchParams()
   const categoryCodeParam = searchParams.get('category')
@@ -229,7 +184,6 @@ export function ExpenseClaimNewPage() {
   const createClaim = useCreateExpenseClaim()
   const { data: claim, isLoading: isLoadingClaim, error: claimError } = useExpenseClaim(claimId)
   const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useExpenseCategories()
-  const { data: templates } = useExpenseRouteTemplates()
 
   // ?category=のショートカットはページ表示時に1回だけ適用する。「区分を変更する」で
   // 選択を解除した後にこのeffectが再実行され、同じ区分へ戻されてしまわないようにする。
@@ -343,38 +297,22 @@ export function ExpenseClaimNewPage() {
           <>
             <AttendanceReferenceLookup />
 
-            <Tabs defaultValue="table" className="mt-4">
-              <TabsList>
-                <TabsTrigger value="table">表形式入力</TabsTrigger>
-                <TabsTrigger value="route">移動経路入力</TabsTrigger>
-                <TabsTrigger value="template">テンプレートから生成</TabsTrigger>
-              </TabsList>
+            <div className="mt-4">
+              <PresetPicker categoryId={selectedCategory.id} onApply={appendRows} />
+            </div>
 
-              <TabsContent value="table">
-                <ExpenseItemsTable
-                  rows={rows}
-                  categories={categories ?? []}
-                  onAddRow={() => addRow(emptyItem(selectedCategory.id))}
-                  onUpdateRow={updateRow}
-                  onRemoveRow={removeRow}
-                  onDuplicateRow={duplicateRow}
-                  onMoveRow={moveRow}
-                  onPasteRows={appendRows}
-                />
-              </TabsContent>
-
-              <TabsContent value="route">
-                <ExpenseRouteBuilder
-                  categories={categories ?? []}
-                  defaultCategoryId={selectedCategory.id}
-                  onGenerate={appendRows}
-                />
-              </TabsContent>
-
-              <TabsContent value="template">
-                <ExpenseTemplateBulkGenerator templates={templates ?? []} onGenerate={appendRows} />
-              </TabsContent>
-            </Tabs>
+            <div className="mt-4">
+              <ExpenseItemsTable
+                rows={rows}
+                categories={categories ?? []}
+                onAddRow={() => addRow(emptyItem(selectedCategory.id))}
+                onUpdateRow={updateRow}
+                onRemoveRow={removeRow}
+                onDuplicateRow={duplicateRow}
+                onMoveRow={moveRow}
+                onPasteRows={appendRows}
+              />
+            </div>
 
             {rows.length > 0 && (
               <div className="mt-4">
@@ -401,12 +339,6 @@ export function ExpenseClaimNewPage() {
           </>
         )}
       </Card>
-
-      {selectedCategory.entry_mode === 'batch' && (
-        <Card title="個人の移動区間テンプレート">
-          {user && <PersonalRouteTemplateManager employeeId={user.id} />}
-        </Card>
-      )}
 
       {claim && (
         <SavedItemsAndSubmit

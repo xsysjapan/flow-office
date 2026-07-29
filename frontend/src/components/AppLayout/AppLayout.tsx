@@ -68,6 +68,7 @@ function navGroups(
       { to: '/expenses', label: '経費精算一覧' },
       { to: '/expenses/new', label: '経費精算(新規作成)' },
       ...expenseCategoryShortcuts,
+      { to: '/expenses/presets', label: '入力プリセット' },
     ],
   },
   {
