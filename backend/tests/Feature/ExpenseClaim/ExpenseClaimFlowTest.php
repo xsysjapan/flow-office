@@ -4,6 +4,7 @@ namespace Tests\Feature\ExpenseClaim;
 
 use App\Models\BackOfficeTask;
 use App\Models\ExpenseCategory;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -52,6 +53,49 @@ class ExpenseClaimFlowTest extends TestCase
         $this->assertNotNull($task, 'バックオフィスタスクが自動生成されていること');
         $this->assertSame('expense_reimbursement', $task->task_type);
         $this->assertSame('not_started', $task->status);
+    }
+
+    /**
+     * 回帰テスト: 経費精算から自動生成されたバックオフィスタスク(`source`がExpenseClaim)は
+     * WorkflowRequestのような`requestType`リレーションを持たないため、ステータス変更時に
+     * 「未定義のリレーション」エラーにならないことを確認する
+     * (ChangeBackOfficeTaskStatusHandlerが`source.requestType`を無条件にeager loadしていた
+     * ことによる不具合)。
+     */
+    public function test_expense_claim_sourced_task_status_can_be_changed_without_request_type_error(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $accountingStaff = User::factory()->create();
+        $accountingStaff->roles()->attach(Role::query()->firstOrCreate(['code' => Role::ACCOUNTING_STAFF], ['name' => '経理担当者']));
+        $category = $this->makeCategory();
+
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
+            'category_id' => $category->id, 'description' => '自宅 → 会社(電車)',
+            'amount' => 500, 'usage_date' => '2026-07-01',
+        ]);
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit", [
+            'approver_user_id' => $approver->id,
+        ]);
+        $this->actingAs($approver)->postJson("/api/expense-claims/{$claimId}/approve");
+
+        $task = BackOfficeTask::query()->where('source_type', 'expense_claim')->where('source_id', $claimId)->firstOrFail();
+
+        $response = $this->actingAs($accountingStaff)->postJson("/api/backoffice-tasks/{$task->id}/assign", [
+            'assigned_user_id' => $accountingStaff->id,
+        ]);
+        $response->assertOk();
+
+        $response = $this->actingAs($accountingStaff)->postJson("/api/backoffice-tasks/{$task->id}/status", [
+            'status' => 'payment_scheduled',
+        ]);
+        $response->assertOk()->assertJsonPath('status', 'payment_scheduled');
+
+        $response = $this->actingAs($accountingStaff)->postJson("/api/backoffice-tasks/{$task->id}/status", [
+            'status' => 'completed',
+        ]);
+        $response->assertOk()->assertJsonPath('status', 'completed');
     }
 
     public function test_bulk_add_items_creates_multiple_items_and_totals_amount(): void

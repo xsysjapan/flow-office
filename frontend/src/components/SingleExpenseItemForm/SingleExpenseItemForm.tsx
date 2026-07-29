@@ -9,7 +9,7 @@ import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
 import { paymentBearerLabel } from '../../utils/statusLabels'
 
-export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic'
+export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic' | 'other'
 
 export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
@@ -24,7 +24,8 @@ export interface SingleExpenseItemFormProps {
 const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   meal: '会食・接待費を入力',
   lodging: '宿泊費を入力',
-  generic: '消耗品・その他の経費を入力',
+  generic: '消耗品の経費を入力',
+  other: 'その他の経費を入力',
 }
 
 const PAYMENT_BEARERS: ExpensePaymentBearer[] = ['employee', 'corporate_card', 'company', 'customer', 'other']
@@ -87,6 +88,11 @@ export function SingleExpenseItemForm({
     if (fieldSet === 'lodging') {
       return Boolean(payee)
     }
+    if (fieldSet === 'other') {
+      // その他は取引先が無い経費(例: 郵送料の実費精算等)もあるため、取引先は任意とし、
+      // 取引先・内容のどちらか一方が入力されていれば足りるとする。
+      return Boolean(payee || content)
+    }
     return Boolean(payee)
   })()
 
@@ -94,8 +100,9 @@ export function SingleExpenseItemForm({
     if (fieldSet === 'meal') {
       return `${payee} - ${content} (${participantCount}名: ${participants})`
     }
-    if (fieldSet === 'lodging') {
-      return content ? `${payee} - ${content}` : payee
+    if (fieldSet === 'other') {
+      if (payee && content) return `${payee} - ${content}`
+      return payee || content
     }
     return content ? `${payee} - ${content}` : payee
   }
@@ -190,6 +197,18 @@ export function SingleExpenseItemForm({
       {fieldSet === 'generic' && (
         <>
           <FormField label="取引先" htmlFor="single-item-payee" required>
+            <Input id="single-item-payee" value={payee} onChange={(e) => setPayee(e.target.value)} />
+          </FormField>
+          <FormField label="内容" htmlFor="single-item-content">
+            <Textarea id="single-item-content" value={content} onChange={(e) => setContent(e.target.value)} />
+          </FormField>
+        </>
+      )}
+
+      {fieldSet === 'other' && (
+        <>
+          <p className="text-xs text-muted-foreground">取引先・内容のいずれかは入力してください(取引先が無い経費もあるため両方必須にはしません)</p>
+          <FormField label="取引先" htmlFor="single-item-payee">
             <Input id="single-item-payee" value={payee} onChange={(e) => setPayee(e.target.value)} />
           </FormField>
           <FormField label="内容" htmlFor="single-item-content">

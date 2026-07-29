@@ -38,11 +38,14 @@ function emptyItem(categoryId?: number): SaveExpenseItemInput {
   return { category_id: categoryId ?? 0, usage_date: '', amount: 0 }
 }
 
-/** UC-X004b〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊以外は
- *  すべて汎用(取引先+内容)の`generic`にまとめ、区分が増えてもフロント分岐を増やさない。 */
+/** UC-X004b〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊・その他以外は
+ *  すべて汎用(取引先必須+内容)の`generic`にまとめ、区分が増えてもフロント分岐を増やさない。
+ *  「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため、取引先を任意項目にした
+ *  専用の`other`を使う。 */
 function fieldSetForCategory(category: ExpenseCategory): SingleExpenseItemFieldSet {
   if (category.code === 'meal') return 'meal'
   if (category.code === 'lodging') return 'lodging'
+  if (category.code === 'other') return 'other'
   return 'generic'
 }
 

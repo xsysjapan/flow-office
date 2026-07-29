@@ -41,6 +41,18 @@ function parsePastedRows(text: string, defaultCategoryId: number): SaveExpenseIt
     })
 }
 
+/** 出発地/到着地の2項目から`description`用の1行テキストを組み立てる
+ *  (docs/30-usecases-expense.md UC-X004a: 「出発地 → 到着地」の所定フォーマット)。 */
+function composeRouteDescription(departure: string, destination: string): string {
+  if (!departure && !destination) return ''
+  return `${departure} → ${destination}`
+}
+
+/** この区分が交通費(entry_mode='batch')かどうか。出発地/到着地の入力補助を出し分ける。 */
+function isBatchCategory(categories: ExpenseCategory[], categoryId: number): boolean {
+  return categories.find((c) => c.id === categoryId)?.entry_mode === 'batch'
+}
+
 export function ExpenseItemsTable({
   rows,
   categories,
@@ -57,6 +69,15 @@ export function ExpenseItemsTable({
   const [bulkDate, setBulkDate] = useState('')
   const [bulkDescription, setBulkDescription] = useState('')
   const [bulkProjectId, setBulkProjectId] = useState('')
+  // 出発地/到着地はdescriptionに合成して保存するため、入力中の値だけをローカルに保持する。
+  const [routeParts, setRouteParts] = useState<Record<number, { departure: string; destination: string }>>({})
+
+  function updateRoutePart(rowId: number, part: 'departure' | 'destination', value: string) {
+    const current = routeParts[rowId] ?? { departure: '', destination: '' }
+    const next = { ...current, [part]: value }
+    setRouteParts((prev) => ({ ...prev, [rowId]: next }))
+    onUpdateRow(rowId, { description: composeRouteDescription(next.departure, next.destination) })
+  }
 
   const total = rows.reduce((sum, row) => sum + (row.amount || 0), 0)
 
@@ -193,8 +214,30 @@ export function ExpenseItemsTable({
                 />
               </TableCell>
               <TableCell>
+                {isBatchCategory(categories, row.category_id) && (
+                  <div className="mb-1 flex items-center gap-1">
+                    <Input
+                      aria-label={`${index + 1}行目の出発地`}
+                      placeholder="出発地"
+                      className="w-24"
+                      value={routeParts[row.rowId]?.departure ?? ''}
+                      onChange={(e) => updateRoutePart(row.rowId, 'departure', e.target.value)}
+                    />
+                    <span aria-hidden="true" className="text-muted-foreground">
+                      →
+                    </span>
+                    <Input
+                      aria-label={`${index + 1}行目の到着地`}
+                      placeholder="到着地"
+                      className="w-24"
+                      value={routeParts[row.rowId]?.destination ?? ''}
+                      onChange={(e) => updateRoutePart(row.rowId, 'destination', e.target.value)}
+                    />
+                  </div>
+                )}
                 <Input
                   aria-label={`${index + 1}行目の内容`}
+                  placeholder={isBatchCategory(categories, row.category_id) ? '例: (電車)、交通手段の補足など' : undefined}
                   value={row.description ?? ''}
                   onChange={(e) => onUpdateRow(row.rowId, { description: e.target.value })}
                 />

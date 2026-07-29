@@ -121,6 +121,18 @@ describe('ExpenseItemsTable', () => {
     ])
   })
 
+  it('shows 出発地/到着地 inputs for a batch category(交通費) row and composes them into 内容', async () => {
+    const user = userEvent.setup()
+    const props = baseProps()
+    render(<ExpenseItemsTable {...props} />)
+
+    await user.type(screen.getByLabelText('1行目の出発地'), '自宅')
+    await user.type(screen.getByLabelText('1行目の到着地'), '本社')
+
+    expect(props.onUpdateRow).toHaveBeenLastCalledWith(1, { description: '自宅 → 本社' })
+    expect(screen.queryByLabelText('2行目の出発地')).not.toBeInTheDocument()
+  })
+
   it('applies bulk fields to checked rows only', async () => {
     const user = userEvent.setup()
     const props = baseProps()

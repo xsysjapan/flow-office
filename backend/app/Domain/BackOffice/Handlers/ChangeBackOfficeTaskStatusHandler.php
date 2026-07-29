@@ -27,7 +27,11 @@ class ChangeBackOfficeTaskStatusHandler implements CommandHandler
             throw new InvalidArgumentException("不正なステータス [{$command->newStatus}] です。");
         }
 
-        $task = BackOfficeTask::query()->with('source.requestType')->findOrFail($command->backOfficeTaskId);
+        // sourceはWorkflowRequest以外(ExpenseClaim等、request_typeを持たないモデル)にも
+        // morphする。'source.requestType'を無条件にeager loadするとWorkflowRequest以外の
+        // 発生源で「未定義のリレーション」エラーになるため、requestTypeは下のinstanceof判定後に
+        // WorkflowRequestに対してのみ遅延ロードする。
+        $task = BackOfficeTask::query()->with('source')->findOrFail($command->backOfficeTaskId);
         $this->assertAllowedTransition($task, $command->newStatus);
 
         $previousStatus = $task->status;

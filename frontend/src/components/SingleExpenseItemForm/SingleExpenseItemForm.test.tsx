@@ -160,6 +160,48 @@ describe('SingleExpenseItemForm', () => {
     })
   })
 
+  describe('fieldSet=other', () => {
+    it('does not require a payee, only usage date/amount and one of payee/content', async () => {
+      const onSubmit = vi.fn()
+      render(<SingleExpenseItemForm fieldSet="other" categoryId={5} onSubmit={onSubmit} />)
+
+      const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
+      expect(button).toBeDisabled()
+
+      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-13')
+      await userEvent.type(screen.getByLabelText('金額'), '500')
+      expect(button).toBeDisabled()
+
+      await userEvent.type(screen.getByLabelText('内容'), '郵送料の実費精算')
+      expect(button).toBeEnabled()
+      await userEvent.click(button)
+
+      expect(onSubmit).toHaveBeenCalledWith({
+        category_id: 5,
+        usage_date: '2026-07-13',
+        amount: 500,
+        description: '郵送料の実費精算',
+        payment_bearer: 'employee',
+        attributes: undefined,
+      })
+    })
+
+    it('formats description with both payee and content when a payee is also given', async () => {
+      const onSubmit = vi.fn()
+      render(<SingleExpenseItemForm fieldSet="other" categoryId={5} onSubmit={onSubmit} />)
+
+      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-13')
+      await userEvent.type(screen.getByLabelText('金額'), '500')
+      await userEvent.type(screen.getByLabelText('取引先'), '日本郵便')
+      await userEvent.type(screen.getByLabelText('内容'), '郵送料')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ description: '日本郵便 - 郵送料' }),
+      )
+    })
+  })
+
   describe('payment_bearer and attributes', () => {
     it('defaults payment_bearer to employee and lets it be changed', async () => {
       const onSubmit = vi.fn()

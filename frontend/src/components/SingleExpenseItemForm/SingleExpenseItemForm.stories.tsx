@@ -41,6 +41,13 @@ export const Generic: Story = {
   },
 }
 
+/** 「その他」は取引先が無い経費(郵送料の実費精算等)もあるため取引先を任意項目にしている。 */
+export const Other: Story = {
+  args: {
+    fieldSet: 'other',
+  },
+}
+
 export const Submitting: Story = {
   args: {
     fieldSet: 'generic',
