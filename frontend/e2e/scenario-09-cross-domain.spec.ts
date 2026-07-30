@@ -357,7 +357,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await approverPage.goto('/approvals')
     const expenseApprovalRow = approverPage.getByRole('row', { name: expenseTitle })
     await expect(expenseApprovalRow).toBeVisible()
-    await expenseApprovalRow.getByRole('link', { name: expenseTitle }).click()
+    await expenseApprovalRow.getByRole('button', { name: expenseTitle }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
@@ -395,7 +395,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await approverPage.goto('/approvals')
     const cardApprovalRow = approverPage.getByRole('row', { name: cardTitle })
     await expect(cardApprovalRow).toBeVisible()
-    await cardApprovalRow.getByRole('link', { name: cardTitle }).click()
+    await cardApprovalRow.getByRole('button', { name: cardTitle }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 

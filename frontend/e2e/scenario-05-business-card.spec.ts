@@ -44,7 +44,7 @@ test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', 
     await approverPage.goto('/approvals')
     const approvalRow = approverPage.getByRole('row', { name: title })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('link', { name: title }).click()
+    await approvalRow.getByRole('button', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 

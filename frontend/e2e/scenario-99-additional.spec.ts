@@ -35,7 +35,7 @@ test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
     // 承認者が差し戻す。
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await approverPage.goto('/approvals')
-    await approverPage.getByRole('row', { name: title }).getByRole('link', { name: title }).click()
+    await approverPage.getByRole('row', { name: title }).getByRole('button', { name: title }).click()
     await approverPage.getByPlaceholder('差戻しコメント').fill('内容を確認してください')
     await approverPage.getByRole('button', { name: '差戻す' }).click()
     await expect(approverPage.getByRole('status', { name: '差戻し' })).toBeVisible()
@@ -46,8 +46,9 @@ test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
     await applicantPage.getByRole('button', { name: '提出する' }).click()
     await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
 
-    // 承認者が今度は承認する。
+    // 承認者が今度は承認する(統合承認画面はモーダルのため、再読み込み後は行を開き直す)。
     await approverPage.reload()
+    await approverPage.getByRole('row', { name: title }).getByRole('button', { name: title }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
   } finally {

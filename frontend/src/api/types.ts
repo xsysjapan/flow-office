@@ -132,6 +132,75 @@ export interface RequestFormFieldSchema {
 
 export type WorkflowRequestStatus = 'draft' | 'submitted' | 'approved' | 'returned' | 'cancelled'
 
+/**
+ * 統合承認画面(UC-W003/UC-W004・UC-A009・UC-X011)向け: この汎用申請が別ドメインの
+ * 実データ(月次勤怠・経費精算)に紐づく申請かどうか。nullなら通常の汎用申請
+ * (form_data・添付ファイルのみ)。紐づく場合、承認・差戻しは`/workflow-requests/{id}/approve`
+ * ではなく対象ドメインの既存API(attendance-months/expense-claims)を呼ぶ必要がある。
+ */
+export type WorkflowRequestSubjectType = 'attendance_month' | 'expense_claim' | null
+
+/** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
+export interface AttendanceMonthSubjectSummary {
+  year_month: string
+  status: AttendanceMonthStatus
+}
+
+export interface ExpenseClaimSubjectSummary {
+  title: string | null
+  status: ExpenseClaimStatus
+  total_amount: number
+}
+
+export type WorkflowRequestSubjectSummary = AttendanceMonthSubjectSummary | ExpenseClaimSubjectSummary
+
+/** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
+export interface WorkflowRequestAttendanceMonthSubject {
+  type: 'attendance_month'
+  id: string
+  user_id: string
+  year_month: string
+  status: AttendanceMonthStatus
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  return_comment: string | null
+  days: Array<{
+    id: string
+    work_date: string
+    status: AttendanceDayStatus
+    actual_start_at: string | null
+    actual_end_at: string | null
+    breaks: Array<{ id: number; break_start_at: string | null; break_end_at: string | null }>
+  }>
+}
+
+export interface WorkflowRequestExpenseClaimSubject {
+  type: 'expense_claim'
+  id: string
+  employee_id: string
+  title: string | null
+  status: ExpenseClaimStatus
+  total_amount: number
+  period_from: string | null
+  period_to: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  items: Array<{
+    id: string
+    category_id: number
+    category_name: string | null
+    usage_date: string
+    description: string | null
+    amount: number
+    commuting_deduction_amount: number | null
+    reimbursement_amount: number | null
+    payment_bearer: ExpensePaymentBearer | null
+  }>
+}
+
+export type WorkflowRequestSubject = WorkflowRequestAttendanceMonthSubject | WorkflowRequestExpenseClaimSubject
+
 export interface WorkflowRequest {
   id: string
   title: string
@@ -146,6 +215,12 @@ export interface WorkflowRequest {
   cancelled_at: string | null
   created_at: string | null
   attachments?: Attachment[]
+  /** 統合承認画面向け。一覧・詳細のいずれにも含まれる。未設定(古いレスポンス)はnull相当として扱う。 */
+  subject_type?: WorkflowRequestSubjectType
+  /** 一覧でのみ設定される要約。詳細取得時はsubjectを使う。 */
+  subject_summary?: WorkflowRequestSubjectSummary | null
+  /** GET /workflow-requests/{id}でのみ設定される、対象ドメインの実データ詳細。 */
+  subject?: WorkflowRequestSubject
 }
 
 export type AttendanceDayStatus = 'not_started' | 'working' | 'on_break' | 'clocked_out'
