@@ -74,11 +74,129 @@ class WorkflowRequestController extends Controller
         parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function show(Request $request, WorkflowRequest $workflowRequest): WorkflowRequestResource
+    public function show(Request $request, WorkflowRequest $workflowRequest): JsonResponse
     {
-        return new WorkflowRequestResource(
-            $workflowRequest->load(['requestType', 'applicant', 'approver', 'attachments'])
-        );
+        $workflowRequest->load(['requestType', 'applicant', 'approver', 'attachments']);
+
+        // AppServiceProviderでJsonResource::withoutWrapping()しているため、他のエンドポイント
+        // と同じくトップレベルを"data"でラップしない(WorkflowRequestResourceの形状に合わせる)。
+        // resolve()経由で呼ぶことで、$this->when()が返すMissingValueが正しくフィルタされる
+        // (toArray()を直接呼ぶとMissingValueがそのまま残ってしまう)。
+        $data = (new WorkflowRequestResource($workflowRequest))->resolve($request);
+
+        if ($workflowRequest->subject_type === null) {
+            return response()->json($data);
+        }
+
+        $this->authorizeSubjectAccess($workflowRequest, $request->user());
+
+        $data['subject'] = match ($workflowRequest->subject_type) {
+            'attendance_month' => $this->buildAttendanceMonthSubject($workflowRequest->subject_id),
+            'expense_claim' => $this->buildExpenseClaimSubject($workflowRequest->subject_id),
+            default => null,
+        };
+
+        return response()->json($data);
+    }
+
+    /**
+     * subject_type付きの行(月次勤怠申請・経費精算申請)の詳細を閲覧できるのは、
+     * 申請者・承認者、またはentity_sharesで自分宛に共有されている場合のみ
+     * (ルートCLAUDE.md「絶対に外してはいけない設計原則」12・docs/25参照の考え方を
+     * 他ドメインにも適用)。
+     */
+    private function authorizeSubjectAccess(WorkflowRequest $workflowRequest, User $user): void
+    {
+        if ($user->id === $workflowRequest->applicant_user_id || $user->id === $workflowRequest->approver_user_id) {
+            return;
+        }
+
+        $isShared = EntityShare::query()
+            ->where('shareable_type', $workflowRequest->subject_type)
+            ->where('shareable_id', $workflowRequest->subject_id)
+            ->where('shared_with_user_id', $user->id)
+            ->exists();
+
+        abort_unless($isShared, 403, 'この申請を閲覧する権限がありません。');
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildAttendanceMonthSubject(?string $subjectId): ?array
+    {
+        $month = AttendanceMonth::query()->find($subjectId);
+
+        if ($month === null) {
+            return null;
+        }
+
+        $days = AttendanceDay::query()
+            ->with('breaks')
+            ->where('user_id', $month->user_id)
+            ->where('work_date', 'like', "{$month->year_month}%")
+            ->orderBy('work_date')
+            ->get();
+
+        return [
+            'type' => 'attendance_month',
+            'id' => $month->id,
+            'user_id' => $month->user_id,
+            'year_month' => $month->year_month,
+            'status' => $month->status,
+            'submitted_at' => $month->submitted_at?->toIso8601String(),
+            'approved_at' => $month->approved_at?->toIso8601String(),
+            'returned_at' => $month->returned_at?->toIso8601String(),
+            'return_comment' => $month->return_comment,
+            'days' => $days->map(fn (AttendanceDay $day) => [
+                'id' => $day->id,
+                'work_date' => $day->work_date?->toDateString(),
+                'status' => $day->status,
+                'actual_start_at' => $day->actual_start_at?->toIso8601String(),
+                'actual_end_at' => $day->actual_end_at?->toIso8601String(),
+                'breaks' => $day->breaks->map(fn ($break) => [
+                    'id' => $break->id,
+                    'break_start_at' => $break->break_start_at?->toIso8601String(),
+                    'break_end_at' => $break->break_end_at?->toIso8601String(),
+                ])->all(),
+            ])->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildExpenseClaimSubject(?string $subjectId): ?array
+    {
+        $claim = ExpenseClaim::query()->with('items.category')->find($subjectId);
+
+        if ($claim === null) {
+            return null;
+        }
+
+        return [
+            'type' => 'expense_claim',
+            'id' => $claim->id,
+            'employee_id' => $claim->employee_id,
+            'title' => $claim->title,
+            'status' => $claim->status,
+            'total_amount' => $claim->total_amount,
+            'period_from' => $claim->period_from?->toDateString(),
+            'period_to' => $claim->period_to?->toDateString(),
+            'submitted_at' => $claim->submitted_at?->toIso8601String(),
+            'approved_at' => $claim->approved_at?->toIso8601String(),
+            'items' => $claim->items->map(fn ($item) => [
+                'id' => $item->id,
+                'category_id' => $item->category_id,
+                'category_name' => $item->category?->name,
+                'usage_date' => $item->usage_date?->toDateString(),
+                'description' => $item->description,
+                'amount' => $item->amount,
+                'commuting_deduction_amount' => $item->commuting_deduction_amount,
+                'reimbursement_amount' => $item->reimbursement_amount,
+                'payment_bearer' => $item->payment_bearer,
+            ])->all(),
+        ];
     }
 
     #[OA\Post(
