@@ -36,6 +36,10 @@ class UpdateExpenseItemHandler implements CommandHandler
             throw new DomainRuleException('この経費精算は現在のステータスからは明細を編集できません。');
         }
 
+        if ($claim->isLocked()) {
+            throw new DomainRuleException('この経費精算は提出によりロックされているため明細を編集できません。');
+        }
+
         $category = ExpenseCategory::query()->where('is_active', true)->find($command->categoryId);
         if ($category === null) {
             throw new DomainRuleException('経費区分が存在しないか無効です。');

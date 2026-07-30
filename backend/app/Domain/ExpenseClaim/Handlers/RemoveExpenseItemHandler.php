@@ -33,6 +33,10 @@ class RemoveExpenseItemHandler implements CommandHandler
             throw new DomainRuleException('この経費精算は現在のステータスからは明細を削除できません。');
         }
 
+        if ($claim->isLocked()) {
+            throw new DomainRuleException('この経費精算は提出によりロックされているため明細を削除できません。');
+        }
+
         ExpenseClaimAggregate::retrieve($claim->id)
             ->removeItem($item->id)
             ->persist();

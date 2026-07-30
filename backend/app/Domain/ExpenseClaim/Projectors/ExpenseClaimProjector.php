@@ -125,6 +125,52 @@ class ExpenseClaimProjector extends Projector
         ]);
     }
 
+    /**
+     * UC-X010: 提出時にclaim全体(明細含む)を編集不可にする。
+     */
+    public function onExpenseClaimLocked(ExpenseClaimLocked $event): void
+    {
+        ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
+            'locked_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * UC-X011: 差戻し時に提出時のロックを解除する。
+     */
+    public function onExpenseClaimUnlocked(ExpenseClaimUnlocked $event): void
+    {
+        ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
+            'unlocked_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * UC-X010: 提出時にclaim全体(明細含む)を承認者へ開示したことをentity_sharesへ記録する。
+     * entity_sharesは追記専用ログ(ルートCLAUDE.md「絶対に外してはいけない設計原則」)のため、
+     * リプレイ時の重複作成を避けるためexistsチェックを行う。
+     */
+    public function onExpenseClaimShared(ExpenseClaimShared $event): void
+    {
+        $alreadyShared = EntityShare::query()
+            ->where('shareable_type', 'expense_claim')
+            ->where('shareable_id', $event->aggregateRootUuid())
+            ->where('shared_with_user_id', $event->sharedWithUserId)
+            ->exists();
+
+        if ($alreadyShared) {
+            return;
+        }
+
+        EntityShare::query()->create([
+            'shareable_type' => 'expense_claim',
+            'shareable_id' => $event->aggregateRootUuid(),
+            'shared_with_user_id' => $event->sharedWithUserId,
+            'shared_by_user_id' => $event->sharedByUserId,
+            'shared_at' => $event->createdAt(),
+        ]);
+    }
+
     public function onExpenseClaimTitleUpdated(ExpenseClaimTitleUpdated $event): void
     {
         ExpenseClaim::query()->whereKey($event->aggregateRootUuid())->update([
