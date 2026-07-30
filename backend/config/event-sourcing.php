@@ -12,8 +12,11 @@ use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
+use App\Domain\Attendance\Events\AttendanceMonthShared;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
+use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
@@ -229,6 +232,9 @@ return [
         'attendance_month.approved' => AttendanceMonthApproved::class,
         'attendance_month.returned' => AttendanceMonthReturned::class,
         'attendance_month.closed' => AttendanceMonthClosed::class,
+        'attendance_month.locked' => AttendanceMonthLocked::class,
+        'attendance_month.shared' => AttendanceMonthShared::class,
+        'attendance_month.unlocked' => AttendanceMonthUnlocked::class,
 
         'work_calendar.created' => WorkCalendarCreated::class,
         'work_calendar.days_updated' => WorkCalendarDaysUpdated::class,

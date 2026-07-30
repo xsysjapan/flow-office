@@ -4,10 +4,15 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
+use App\Domain\Attendance\Events\AttendanceMonthShared;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
+use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
+use App\Models\AttendanceLock;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\EntityShare;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -54,6 +59,71 @@ class AttendanceMonthProjector extends Projector
         AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => AttendanceMonthStatus::CLOSED,
             'closed_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * UC-A008: 提出時に対象月(period_start_date〜period_end_date)の日次勤怠を編集不可にする。
+     * 同一の(user_id, scope_type, period_start_date, period_end_date, locked_at)でupdateOrCreate
+     * することで、projections:rebuildによるイベント再生時にも行を重複作成しない
+     * (locked_atはイベント記録時のcreatedAt()で、再生時も同じ値になる)。
+     */
+    public function onAttendanceMonthLocked(AttendanceMonthLocked $event): void
+    {
+        AttendanceLock::query()->updateOrCreate(
+            [
+                'scope_type' => AttendanceLock::SCOPE_MONTH,
+                'user_id' => $event->userId,
+                'period_start_date' => $event->periodStartDate,
+                'period_end_date' => $event->periodEndDate,
+                'locked_at' => $event->createdAt(),
+            ],
+            [
+                'unlocked_at' => null,
+                'workflow_request_id' => $event->workflowRequestId,
+            ],
+        );
+    }
+
+    /**
+     * UC-A010: 差戻し時に提出時のロックを解除する。まだ解除されていない対象期間のロック行を
+     * 探して更新するため、再生時に重複更新しても結果は変わらない(冪等)。
+     */
+    public function onAttendanceMonthUnlocked(AttendanceMonthUnlocked $event): void
+    {
+        AttendanceLock::query()
+            ->where('scope_type', AttendanceLock::SCOPE_MONTH)
+            ->where('user_id', $event->userId)
+            ->where('period_start_date', $event->periodStartDate)
+            ->where('period_end_date', $event->periodEndDate)
+            ->whereNull('unlocked_at')
+            ->update(['unlocked_at' => $event->createdAt()]);
+    }
+
+    /**
+     * UC-A008: 提出時に対象月の日次勤怠一式を承認者へ開示したことをentity_sharesへ記録する。
+     * entity_sharesは追記専用ログ(ルートCLAUDE.md「絶対に外してはいけない設計原則」)のため、
+     * リプレイ時の重複作成を避けるためexistsチェックを行う。
+     */
+    public function onAttendanceMonthShared(AttendanceMonthShared $event): void
+    {
+        $alreadyShared = EntityShare::query()
+            ->where('shareable_type', 'attendance_month')
+            ->where('shareable_id', $event->aggregateRootUuid())
+            ->where('shared_with_user_id', $event->sharedWithUserId)
+            ->where('shared_at', $event->createdAt())
+            ->exists();
+
+        if ($alreadyShared) {
+            return;
+        }
+
+        EntityShare::query()->create([
+            'shareable_type' => 'attendance_month',
+            'shareable_id' => $event->aggregateRootUuid(),
+            'shared_with_user_id' => $event->sharedWithUserId,
+            'shared_by_user_id' => $event->sharedByUserId,
+            'shared_at' => $event->createdAt(),
         ]);
     }
 }

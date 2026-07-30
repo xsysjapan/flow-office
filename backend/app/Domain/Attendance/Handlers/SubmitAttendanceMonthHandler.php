@@ -15,6 +15,7 @@ use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
 use App\Support\FrontendUrl;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -48,9 +49,11 @@ class SubmitAttendanceMonthHandler implements CommandHandler
 
         $monthId = $month->id ?? (string) Str::uuid();
         $snapshot = $this->buildSnapshot($command->userId, $command->yearMonth);
+        $periodStart = "{$command->yearMonth}-01";
+        $periodEnd = Carbon::parse($periodStart)->endOfMonth()->toDateString();
 
         AttendanceMonthAggregate::retrieve($monthId)
-            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot)
+            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd)
             ->persist();
 
         $month = AttendanceMonth::query()->findOrFail($monthId);

@@ -26,6 +26,40 @@ class WorkflowRequestResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
+            // subject_type/subject_idを持つ行(月次勤怠申請・経費精算申請)は一覧・詳細を横断
+            // 表示するための読み取りモデル(WorkflowRequestSubjectProjector参照)。
+            // 一覧では軽量な要約のみ返し、詳細情報はshow()側でsubject_summaryではなく
+            // 別のsubjectキー(該当ドメインの全体データ)として組み立てる。
+            'subject_type' => $this->subject_type,
+            'subject_summary' => $this->when(
+                $this->subject_type !== null,
+                fn () => $this->buildSubjectSummary(),
+            ),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildSubjectSummary(): ?array
+    {
+        $subject = $this->resource->subjectModel();
+
+        if ($subject === null) {
+            return null;
+        }
+
+        return match ($this->subject_type) {
+            'attendance_month' => [
+                'year_month' => $subject->year_month,
+                'status' => $subject->status,
+            ],
+            'expense_claim' => [
+                'title' => $subject->title,
+                'status' => $subject->status,
+                'total_amount' => $subject->total_amount,
+            ],
+            default => null,
+        };
     }
 }

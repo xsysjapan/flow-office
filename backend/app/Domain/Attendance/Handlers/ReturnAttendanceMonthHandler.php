@@ -12,6 +12,7 @@ use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\User;
 use App\Support\FrontendUrl;
+use Illuminate\Support\Carbon;
 
 /**
  * UC-A010: 承認者が月次勤怠を差戻しする。
@@ -34,8 +35,11 @@ class ReturnAttendanceMonthHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
+        $periodStart = "{$month->year_month}-01";
+        $periodEnd = Carbon::parse($periodStart)->endOfMonth()->toDateString();
+
         AttendanceMonthAggregate::retrieve($month->id)
-            ->returnToApplicant($command->returnedByUserId, $command->comment)
+            ->returnToApplicant($month->user_id, $command->returnedByUserId, $command->comment, $periodStart, $periodEnd)
             ->persist();
 
         $month = AttendanceMonth::query()->findOrFail($command->attendanceMonthId);

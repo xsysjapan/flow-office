@@ -16,8 +16,14 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * 作成できないため、コマンド側で生成できるUUIDにしている
  * (.claude/skills/add-projection「集約ルートのUUID化」参照)。この行自体も
  * WorkflowRequestProjector が stored_events から作成・更新する。
+ *
+ * `subject_type`/`subject_id`が設定されている行(`attendance_month`/`expense_claim`)は、
+ * 月次勤怠申請・経費精算申請を横断一覧するための読み取りモデルとして
+ * `WorkflowRequestSubjectProjector`が他ドメインのイベントから作成・更新する。この場合
+ * `request_type_id`は常にnullで、フォーム内容は`form_data`ではなく対象ドメインの正データ
+ * (`attendance_months`/`expense_claims`)を参照する。
  */
-#[Fillable(['id', 'request_type_id', 'title', 'applicant_user_id', 'approver_user_id', 'status', 'form_data', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'request_type_id', 'title', 'applicant_user_id', 'approver_user_id', 'status', 'form_data', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at', 'subject_type', 'subject_id'])]
 class WorkflowRequest extends Model
 {
     use HasUuids;
@@ -35,6 +41,20 @@ class WorkflowRequest extends Model
             'returned_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    /**
+     * subject_type/subject_idが指す他ドメインの正データを都度取得する。一覧・詳細表示の
+     * 都度呼ばれる想定のため、キャッシュはしない(呼び出し側でN+1を気にする必要がある場合は
+     * 個別に対応する)。
+     */
+    public function subjectModel(): AttendanceMonth|ExpenseClaim|null
+    {
+        return match ($this->subject_type) {
+            'attendance_month' => AttendanceMonth::query()->find($this->subject_id),
+            'expense_claim' => ExpenseClaim::query()->find($this->subject_id),
+            default => null,
+        };
     }
 
     /**

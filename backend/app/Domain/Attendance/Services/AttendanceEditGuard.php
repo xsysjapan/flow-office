@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Services;
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceLock;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 
@@ -48,6 +49,10 @@ class AttendanceEditGuard
     {
         if ($day !== null && $day->isLocked()) {
             return '締め後の勤怠は修正申請から変更してください。';
+        }
+
+        if (AttendanceLock::hasActiveLockCovering($userId, $workDate)) {
+            return '提出済み以降の月次勤怠に含まれる日次勤怠は修正申請から変更してください。';
         }
 
         $month = AttendanceMonth::query()
