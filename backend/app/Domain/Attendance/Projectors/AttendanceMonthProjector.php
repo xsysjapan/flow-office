@@ -64,25 +64,36 @@ class AttendanceMonthProjector extends Projector
 
     /**
      * UC-A008: 提出時に対象月(period_start_date〜period_end_date)の日次勤怠を編集不可にする。
-     * 同一の(user_id, scope_type, period_start_date, period_end_date, locked_at)でupdateOrCreate
-     * することで、projections:rebuildによるイベント再生時にも行を重複作成しない
-     * (locked_atはイベント記録時のcreatedAt()で、再生時も同じ値になる)。
+     * 同一の(user_id, scope_type, period_start_date, period_end_date, locked_at)の行が既に
+     * 存在すれば更新するだけにすることで、projections:rebuildによるイベント再生時にも行を
+     * 重複作成しない(locked_atはイベント記録時のcreatedAt()で、再生時も同じ値になる)。
+     * date型カラムは日時文字列で保存されるため、日付部分の一致判定にはwhereDate()を使う。
      */
     public function onAttendanceMonthLocked(AttendanceMonthLocked $event): void
     {
-        AttendanceLock::query()->updateOrCreate(
-            [
-                'scope_type' => AttendanceLock::SCOPE_MONTH,
-                'user_id' => $event->userId,
-                'period_start_date' => $event->periodStartDate,
-                'period_end_date' => $event->periodEndDate,
-                'locked_at' => $event->createdAt(),
-            ],
-            [
-                'unlocked_at' => null,
-                'workflow_request_id' => $event->workflowRequestId,
-            ],
-        );
+        $existing = AttendanceLock::query()
+            ->where('scope_type', AttendanceLock::SCOPE_MONTH)
+            ->where('user_id', $event->userId)
+            ->whereDate('period_start_date', $event->periodStartDate)
+            ->whereDate('period_end_date', $event->periodEndDate)
+            ->where('locked_at', $event->createdAt())
+            ->first();
+
+        $attributes = [
+            'scope_type' => AttendanceLock::SCOPE_MONTH,
+            'user_id' => $event->userId,
+            'period_start_date' => $event->periodStartDate,
+            'period_end_date' => $event->periodEndDate,
+            'locked_at' => $event->createdAt(),
+            'unlocked_at' => null,
+            'workflow_request_id' => $event->workflowRequestId,
+        ];
+
+        if ($existing !== null) {
+            $existing->update($attributes);
+        } else {
+            AttendanceLock::query()->create($attributes);
+        }
     }
 
     /**
@@ -94,8 +105,8 @@ class AttendanceMonthProjector extends Projector
         AttendanceLock::query()
             ->where('scope_type', AttendanceLock::SCOPE_MONTH)
             ->where('user_id', $event->userId)
-            ->where('period_start_date', $event->periodStartDate)
-            ->where('period_end_date', $event->periodEndDate)
+            ->whereDate('period_start_date', $event->periodStartDate)
+            ->whereDate('period_end_date', $event->periodEndDate)
             ->whereNull('unlocked_at')
             ->update(['unlocked_at' => $event->createdAt()]);
     }

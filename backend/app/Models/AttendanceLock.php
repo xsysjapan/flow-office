@@ -50,8 +50,8 @@ class AttendanceLock extends Model
     {
         return static::query()
             ->where('user_id', $userId)
-            ->where('period_start_date', '<=', $workDate)
-            ->where('period_end_date', '>=', $workDate)
+            ->whereDate('period_start_date', '<=', $workDate)
+            ->whereDate('period_end_date', '>=', $workDate)
             ->whereNull('unlocked_at')
             ->exists();
     }
