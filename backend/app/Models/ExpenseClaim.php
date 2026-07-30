@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'id', 'employee_id', 'title', 'period_from', 'period_to', 'status',
     'approver_user_id', 'total_amount', 'submitted_at', 'approved_at',
+    'locked_at', 'unlocked_at',
 ])]
 class ExpenseClaim extends Model
 {
@@ -35,7 +36,18 @@ class ExpenseClaim extends Model
             'period_to' => 'date',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
+            'locked_at' => 'datetime',
+            'unlocked_at' => 'datetime',
         ];
+    }
+
+    /**
+     * 提出時ロック中(かつ差戻し等で解除されていない)かどうか。UpdateExpenseItemHandler等の
+     * 編集系Handlerが編集ガードに使う(UC-X010/UC-X011)。
+     */
+    public function isLocked(): bool
+    {
+        return $this->locked_at !== null && $this->unlocked_at === null;
     }
 
     /**

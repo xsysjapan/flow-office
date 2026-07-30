@@ -7,9 +7,12 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimLocked;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimShared;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimTitleUpdated;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimUnlocked;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
@@ -126,6 +129,14 @@ class ExpenseClaimAggregate extends AggregateRoot
             submittedByUserId: $submittedByUserId,
         ));
 
+        // 提出したclaim全体(明細含む)を編集不可にし、承認者へ開示する
+        // (ルートCLAUDE.md「絶対に外してはいけない設計原則」1・原則11の周辺: 提出時ロック・共有)。
+        $this->recordThat(new ExpenseClaimLocked(lockedByUserId: $submittedByUserId));
+        $this->recordThat(new ExpenseClaimShared(
+            sharedWithUserId: $approverUserId,
+            sharedByUserId: $submittedByUserId,
+        ));
+
         return $this;
     }
 
@@ -139,6 +150,9 @@ class ExpenseClaimAggregate extends AggregateRoot
     public function returnClaim(string $returnedByUserId, string $comment): self
     {
         $this->recordThat(new ExpenseClaimReturned(returnedByUserId: $returnedByUserId, comment: $comment));
+
+        // 差戻し時に提出時のロックを解除し、再編集できるようにする。
+        $this->recordThat(new ExpenseClaimUnlocked(unlockedByUserId: $returnedByUserId));
 
         return $this;
     }

@@ -55,9 +55,12 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimApproved;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimCancelled;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDeleted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimDrafted;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimLocked;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimReturned;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimShared;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimSubmitted;
 use App\Domain\ExpenseClaim\Events\ExpenseClaimTitleUpdated;
+use App\Domain\ExpenseClaim\Events\ExpenseClaimUnlocked;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
@@ -323,6 +326,9 @@ return [
         'expense_claim.cancelled' => ExpenseClaimCancelled::class,
         'expense_claim.deleted' => ExpenseClaimDeleted::class,
         'expense_claim.title_updated' => ExpenseClaimTitleUpdated::class,
+        'expense_claim.locked' => ExpenseClaimLocked::class,
+        'expense_claim.unlocked' => ExpenseClaimUnlocked::class,
+        'expense_claim.shared' => ExpenseClaimShared::class,
     ],
 
     /*
