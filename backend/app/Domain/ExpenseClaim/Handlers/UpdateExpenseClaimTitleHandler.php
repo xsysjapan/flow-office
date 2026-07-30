@@ -29,6 +29,10 @@ class UpdateExpenseClaimTitleHandler implements CommandHandler
             throw new DomainRuleException('この経費精算は現在のステータスからはタイトルを変更できません。');
         }
 
+        if ($claim->isLocked()) {
+            throw new DomainRuleException('この経費精算は提出によりロックされているためタイトルを変更できません。');
+        }
+
         ExpenseClaimAggregate::retrieve($claim->id)
             ->updateTitle($command->title)
             ->persist();
