@@ -343,34 +343,51 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     // 月次締め後も、同月内に発生した交通費精算の後処理(承認〜経理タスク完了)が
     // 支障なく進められることを確認する(CLAUDE.md「バックオフィス処理は承認とは
     // 別ステータス系列で管理する」の回帰確認)。
+    // 交通費精算は経費精算専用ドメイン(docs/30-usecases-expense.md)に移行済みで、
+    // 汎用申請ワークフロー(request_types)の「交通費精算」は既に廃止されている
+    // (scenario-04-expense-claim.spec.tsと同じ経費精算ドメインの操作手順に合わせる)。
     const amount = String(1000 + Math.floor(Math.random() * 8000))
-    const expenseTitle = `E2Eテスト§5-16交通費_${amount}`
-    await applicantPage.goto('/requests/new')
-    await applicantPage.getByLabel('申請種別').selectOption({ label: '交通費精算' })
-    await applicantPage.getByLabel('タイトル').fill(expenseTitle)
-    await applicantPage.getByLabel('金額').fill(amount)
-    await applicantPage.getByLabel('経路').fill('自宅最寄駅→本社最寄駅')
-    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
-    await applicantPage.getByRole('button', { name: '提出する' }).click()
-    await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
+    const usageDate = new Date()
+    usageDate.setDate(usageDate.getDate() + 1000 + Math.floor(Math.random() * 8000))
+    const usageDateStr = usageDate.toISOString().slice(0, 10)
 
-    await approverPage.goto('/approvals')
-    const expenseApprovalRow = approverPage.getByRole('row', { name: expenseTitle })
+    await applicantPage.goto('/expenses/new')
+    await applicantPage.getByRole('button', { name: '個別に登録する' }).click()
+    await applicantPage.getByRole('button', { name: '交通費' }).click()
+
+    await applicantPage.getByRole('button', { name: '行を追加' }).click()
+    await applicantPage.getByLabel('1行目の日付').fill(usageDateStr)
+    await applicantPage.getByLabel('1行目の金額').fill(amount)
+    await applicantPage.getByLabel('1行目の出発地').fill('自宅最寄駅')
+    await applicantPage.getByLabel('1行目の到着地').fill('本社最寄駅')
+
+    await applicantPage.getByRole('button', { name: /明細を保存する/ }).click()
+    await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
+
+    await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
+    await applicantPage.getByRole('button', { name: '申請する' }).click()
+    await expect(applicantPage.getByRole('status', { name: '申請中' })).toBeVisible()
+
+    await approverPage.goto('/expenses/to-approve')
+    const expenseApprovalRow = approverPage.getByRole('row', { name: new RegExp(usageDateStr) })
     await expect(expenseApprovalRow).toBeVisible()
-    await expenseApprovalRow.getByRole('button', { name: expenseTitle }).click()
+    await expenseApprovalRow.getByRole('link').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
+    // タイトルは「経費精算: 高橋 健太 (期間)」形式で金額を含まないため、同じ社員が
+    // 他のテスト(scenario-04等)で作成した経費精算タスクと区別できるよう、
+    // 明細のusage_dateを含む対象期間の年月で絞り込む(strict modeの複数該当エラー回避)。
     await accountingPage.goto('/backoffice-tasks')
-    const expenseTaskRow = accountingPage.getByRole('row', { name: expenseTitle })
+    const expenseTaskRow = accountingPage.getByRole('row', { name: new RegExp(`経費精算.*高橋 健太.*${usageDateStr.slice(0, 7)}`) })
     await expect(expenseTaskRow).toBeVisible()
-    await expenseTaskRow.getByRole('link', { name: expenseTitle }).click()
+    await expenseTaskRow.getByRole('link').click()
     await pickUser(accountingPage, '担当者', SCENARIO_USERS.accountingStaff, 'makoto.kobayashi@example.com')
     await accountingPage.getByRole('button', { name: '割り当てる' }).click()
     await expect(accountingPage.getByText('未割り当て')).toHaveCount(0)
 
-    // request_types.allowed_status_transitions(経費精算系)により、割り当て時点で自動的に
-    // in_reviewになり、そこから直接payment_scheduledへ進む(processingは経由しない)。
+    // task_type='expense_reimbursement'固定の許可遷移(未着手→確認中→支払予定→完了)により、
+    // 割り当て時点で自動的に確認中になる。
     for (const step of [
       { value: 'payment_scheduled', label: '支払予定' },
       { value: 'completed', label: '完了' },
