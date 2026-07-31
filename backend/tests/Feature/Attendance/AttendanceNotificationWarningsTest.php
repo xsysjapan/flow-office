@@ -22,11 +22,11 @@ class AttendanceNotificationWarningsTest extends TestCase
     {
         SystemSetting::current()->update(['attendance_submission_deadline_day' => 5]);
 
-        $submitted = User::factory()->create(['employment_status' => 'active']);
+        $submitted = User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-01-01']);
         AttendanceMonth::query()->create(['user_id' => $submitted->id, 'year_month' => '2026-06', 'status' => 'submitted']);
 
-        $unsubmitted = User::factory()->create(['employment_status' => 'active']);
-        $inactive = User::factory()->create(['employment_status' => 'resigned']);
+        $unsubmitted = User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-01-01']);
+        $inactive = User::factory()->create(['employment_status' => 'resigned', 'usage_start_date' => '2026-01-01']);
 
         $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance(asOf: '2026-07-06'));
 
@@ -36,7 +36,7 @@ class AttendanceNotificationWarningsTest extends TestCase
     public function test_does_not_warn_before_the_submission_deadline_day(): void
     {
         SystemSetting::current()->update(['attendance_submission_deadline_day' => 5]);
-        User::factory()->create(['employment_status' => 'active']);
+        User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-01-01']);
 
         $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance(asOf: '2026-07-03'));
 
@@ -49,8 +49,12 @@ class AttendanceNotificationWarningsTest extends TestCase
 
         // 対象月(2026-06)より後に利用開始 → フォロー対象外。
         User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-07-01']);
-        // 対象月(2026-06)より後に入社 → フォロー対象外。
-        User::factory()->create(['employment_status' => 'active', 'hire_date' => '2026-07-01']);
+        // 利用開始日は対象月以前だが、対象月より後に入社 → フォロー対象外。
+        User::factory()->create([
+            'employment_status' => 'active',
+            'usage_start_date' => '2026-01-01',
+            'hire_date' => '2026-07-01',
+        ]);
         // 対象月中に利用開始・入社済み → フォロー対象。
         User::factory()->create([
             'employment_status' => 'active',
@@ -63,11 +67,22 @@ class AttendanceNotificationWarningsTest extends TestCase
         $this->assertSame(1, $count);
     }
 
+    public function test_does_not_warn_users_whose_usage_start_date_is_unset(): void
+    {
+        SystemSetting::current()->update(['attendance_submission_deadline_day' => 5]);
+
+        User::factory()->create(['employment_status' => 'active', 'usage_start_date' => null]);
+
+        $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance(asOf: '2026-07-06'));
+
+        $this->assertSame(0, $count);
+    }
+
     public function test_warns_about_months_not_yet_closed_within_the_warning_window_before_the_deadline(): void
     {
         SystemSetting::current()->update(['attendance_month_close_deadline_day' => 10]);
-        $userA = User::factory()->create();
-        $userB = User::factory()->create();
+        $userA = User::factory()->create(['usage_start_date' => '2026-01-01']);
+        $userB = User::factory()->create(['usage_start_date' => '2026-01-01']);
         AttendanceMonth::query()->create(['user_id' => $userA->id, 'year_month' => '2026-06', 'status' => 'approved']);
         AttendanceMonth::query()->create(['user_id' => $userB->id, 'year_month' => '2026-06', 'status' => 'closed']);
 

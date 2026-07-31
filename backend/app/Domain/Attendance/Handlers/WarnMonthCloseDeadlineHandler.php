@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
  * (`system_settings.attendance_month_close_deadline_day`、当月の日)が近づいたら管理部
  * (ADMIN/GENERAL_AFFAIRS_STAFFロールの各ユーザー)へ警告する。
  * 提出済み(submitted)・承認済み(approved)のいずれもまだ「締め」(closed)ではないため対象になる。
- * 対象者の利用開始日・入社日が対象月より後の場合は集計対象外とする。
+ * 対象者の利用開始日が未設定、または利用開始日・入社日が対象月より後の場合は集計対象外とする。
  *
  * @implements CommandHandler<WarnMonthCloseDeadline>
  */
@@ -42,14 +42,19 @@ class WarnMonthCloseDeadlineHandler implements CommandHandler
             return 0;
         }
 
-        $targetYearMonth = $today->copy()->subMonthNoOverflow()->format('Y-m');
-        $targetMonthEnd = Carbon::createFromFormat('Y-m', $targetYearMonth)->endOfMonth()->toDateString();
+        $targetMonth = $today->copy()->subMonthNoOverflow();
+        $targetYearMonth = $targetMonth->format('Y-m');
+        // Carbon::createFromFormat('Y-m', ...)は日付部分を「実行時点の日」で補完するため、
+        // 対象月より日数が少ない月(例: 6月)を31日に実行すると7月扱いに繰り上がってしまう。
+        // 文字列を再パースせず$targetMonthから直接endOfMonth()を求めることでこれを避ける。
+        $targetMonthEnd = $targetMonth->copy()->endOfMonth()->toDateString();
 
         $notClosedCount = AttendanceMonth::query()
             ->where('year_month', $targetYearMonth)
             ->whereIn('status', [AttendanceMonthStatus::SUBMITTED, AttendanceMonthStatus::APPROVED])
             ->whereHas('user', function ($query) use ($targetMonthEnd) {
-                $query->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $targetMonthEnd))
+                $query->whereNotNull('usage_start_date')
+                    ->whereDate('usage_start_date', '<=', $targetMonthEnd)
                     ->where(fn ($q) => $q->whereNull('hire_date')->orWhereDate('hire_date', '<=', $targetMonthEnd));
             })
             ->count();
