@@ -14,7 +14,6 @@ use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
-use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Services\AttendanceApproverAccess;
 use App\Domain\Attendance\Services\AttendanceDayDefaultsResolver;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
@@ -22,6 +21,9 @@ use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
 use App\Http\Resources\AttendanceMonthResource;
@@ -31,6 +33,8 @@ use App\Models\AttendanceMonthStatus;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
 use App\Models\SystemSetting;
+use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestStatus;
 use App\Models\WorkLocationType;
 use App\Support\LocalDateTime;
 use Illuminate\Http\JsonResponse;
@@ -633,13 +637,24 @@ class AttendanceController extends Controller
     {
         $data = $request->validate(['approver_user_id' => ['required', 'string', 'exists:users,id']]);
 
-        $month = $commandBus->dispatch(new SubmitAttendanceMonth(
-            userId: $request->user()->id,
-            yearMonth: $yearMonth,
+        // 月次勤怠申請はworkflow_requestの下書き作成を起点にする。集約ID(subject_id)だけを
+        // 先に確定させ、実際の提出(attendance_month.submitted/locked/shared)と
+        // workflow_requestの提出はReactorのカスケードで同期的に行われる。
+        $attendanceMonthId = AttendanceMonth::resolveIdFor($request->user()->id, $yearMonth);
+
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: "{$yearMonth} 月次勤怠",
+            formData: [],
             approverUserId: $data['approver_user_id'],
+            subjectType: 'attendance_month',
+            subjectId: $attendanceMonthId,
         ));
 
-        return new AttendanceMonthResource($month->load('approver'));
+        $month = AttendanceMonth::query()->with('approver')->findOrFail($attendanceMonthId);
+
+        return new AttendanceMonthResource($month);
     }
 
     #[OA\Post(
@@ -652,7 +667,15 @@ class AttendanceController extends Controller
     )]
     public function approveMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
-        $commandBus->dispatch(new ApproveAttendanceMonth($attendanceMonth->id, $request->user()->id));
+        $workflowRequest = $this->submittedWorkflowRequestFor($attendanceMonth);
+
+        if ($workflowRequest !== null) {
+            $commandBus->dispatch(new ApproveWorkflowRequest($workflowRequest->id, $request->user()->id));
+        } else {
+            // 提出経路の変更前に提出された月次勤怠(対応するworkflow_requestが無い行)は、
+            // 承認できなくならないよう従来通り直接承認する。
+            $commandBus->dispatch(new ApproveAttendanceMonth($attendanceMonth->id, $request->user()->id));
+        }
 
         return new AttendanceMonthResource($attendanceMonth->refresh()->load('approver'));
     }
@@ -670,9 +693,30 @@ class AttendanceController extends Controller
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        $commandBus->dispatch(new ReturnAttendanceMonth($attendanceMonth->id, $request->user()->id, $data['comment']));
+        $workflowRequest = $this->submittedWorkflowRequestFor($attendanceMonth);
+
+        if ($workflowRequest !== null) {
+            $commandBus->dispatch(new ReturnWorkflowRequest($workflowRequest->id, $request->user()->id, $data['comment']));
+        } else {
+            $commandBus->dispatch(new ReturnAttendanceMonth($attendanceMonth->id, $request->user()->id, $data['comment']));
+        }
 
         return new AttendanceMonthResource($attendanceMonth->refresh()->load('approver'));
+    }
+
+    /**
+     * 月次勤怠に紐づく提出済みのworkflow_request(申請本体)を取得する。提出経路が
+     * DraftWorkflowRequest起点になっているため通常は必ず存在するが、変更前に提出された
+     * 行のために null を返せるようにしている。
+     */
+    private function submittedWorkflowRequestFor(AttendanceMonth $attendanceMonth): ?WorkflowRequest
+    {
+        return WorkflowRequest::query()
+            ->where('subject_type', 'attendance_month')
+            ->where('subject_id', $attendanceMonth->id)
+            ->where('status', WorkflowRequestStatus::SUBMITTED)
+            ->latest('submitted_at')
+            ->first();
     }
 
     /**

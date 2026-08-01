@@ -8,13 +8,10 @@ use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
-use App\Models\User;
-use App\Support\FrontendUrl;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -47,7 +44,9 @@ class SubmitAttendanceMonthHandler implements CommandHandler
             throw new DomainRuleException('勤務中・休憩中の日があるため提出できません。退勤してから提出してください。');
         }
 
-        $monthId = $month->id ?? (string) Str::uuid();
+        // 月次勤怠申請(workflow_requestの下書きが先に作られる経路)では、subject_idとして
+        // 確定済みの集約IDがコマンドに載ってくるのでそれを優先する。
+        $monthId = $command->attendanceMonthId ?? $month->id ?? (string) Str::uuid();
         $snapshot = $this->buildSnapshot($command->userId, $command->yearMonth);
         $periodStart = "{$command->yearMonth}-01";
         $periodEnd = Carbon::parse($periodStart)->endOfMonth()->toDateString();
@@ -56,19 +55,9 @@ class SubmitAttendanceMonthHandler implements CommandHandler
             ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd)
             ->persist();
 
-        $month = AttendanceMonth::query()->findOrFail($monthId);
-
-        $approver = User::find($command->approverUserId);
-        if ($approver !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $approver,
-                title: '月次勤怠の承認依頼',
-                summary: "{$command->yearMonth} の月次勤怠が提出されました。",
-                detailUrl: FrontendUrl::path('/attendance/months/to-approve'),
-            );
-        }
-
-        return $month;
+        // 承認依頼の通知はSubmitWorkflowRequestHandler(WorkflowRequestNotificationContent)に
+        // 一本化しているため、ここでは送らない。
+        return AttendanceMonth::query()->findOrFail($monthId);
     }
 
     /** 出勤中・休憩中のまま確定していない日が対象月内にあれば提出させない。 */

@@ -7,11 +7,8 @@ use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
-use App\Models\User;
-use App\Support\FrontendUrl;
 use Illuminate\Support\Carbon;
 
 /**
@@ -42,18 +39,8 @@ class ReturnAttendanceMonthHandler implements CommandHandler
             ->returnToApplicant($month->user_id, $command->returnedByUserId, $command->comment, $periodStart, $periodEnd)
             ->persist();
 
-        $month = AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
-
-        $applicant = User::find($month->user_id);
-        if ($applicant !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $applicant,
-                title: '月次勤怠が差戻されました',
-                summary: "{$month->year_month} の月次勤怠が差し戻されました: {$command->comment}",
-                detailUrl: FrontendUrl::path("/attendance/months/{$month->year_month}"),
-            );
-        }
-
-        return $month;
+        // 差戻し通知はReturnWorkflowRequestHandler(WorkflowRequestNotificationContent)に
+        // 一本化しているため、ここでは送らない。
+        return AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
     }
 }

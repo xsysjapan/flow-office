@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 /**
  * 月次勤怠 (docs/07-usecases-attendance.md UC-A007〜UC-A011)。
@@ -32,6 +33,22 @@ class AttendanceMonth extends Model
             'returned_at' => 'datetime',
             'closed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * (user_id, year_month)に対応する集約ID(attendance_months.id)を返す。行がまだ無い月
+     * (初回提出)ではUUIDを新規採番するだけで、行は作らない(行の作成は
+     * AttendanceMonthProjectorがattendance_month.submittedイベントから行う)。
+     *
+     * 月次勤怠申請は「workflow_requestの下書き作成 → Reactorが月次勤怠を提出」という順で
+     * 進むため、下書きのsubject_idに載せる集約IDを提出より先に確定させる必要がある。
+     */
+    public static function resolveIdFor(string $userId, string $yearMonth): string
+    {
+        return static::query()
+            ->where('user_id', $userId)
+            ->where('year_month', $yearMonth)
+            ->value('id') ?? (string) Str::uuid();
     }
 
     /**

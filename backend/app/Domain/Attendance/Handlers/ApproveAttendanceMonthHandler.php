@@ -7,11 +7,8 @@ use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
-use App\Models\User;
-use App\Support\FrontendUrl;
 
 /**
  * UC-A009: 承認者が月次勤怠を承認する。
@@ -36,18 +33,8 @@ class ApproveAttendanceMonthHandler implements CommandHandler
 
         AttendanceMonthAggregate::retrieve($month->id)->approve($command->approvedByUserId)->persist();
 
-        $month = AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
-
-        $applicant = User::find($month->user_id);
-        if ($applicant !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $applicant,
-                title: '月次勤怠が承認されました',
-                summary: "{$month->year_month} の月次勤怠が承認されました。バックオフィス確認対象になります。",
-                detailUrl: FrontendUrl::path("/attendance/months/{$month->year_month}"),
-            );
-        }
-
-        return $month;
+        // 承認通知はApproveWorkflowRequestHandler(WorkflowRequestNotificationContent)に
+        // 一本化しているため、ここでは送らない。
+        return AttendanceMonth::query()->findOrFail($command->attendanceMonthId);
     }
 }

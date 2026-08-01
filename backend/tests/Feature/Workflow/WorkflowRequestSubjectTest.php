@@ -2,9 +2,8 @@
 
 namespace Tests\Feature\Workflow;
 
-use App\Domain\EventSourcing\CommandBus;
-use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Jobs\SendNotificationJob;
+use App\Models\AttendanceMonth;
 use App\Models\EntityShare;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
@@ -29,19 +28,21 @@ use Tests\TestCase;
  * - show()がsubject_typeに応じて詳細情報を出し分け、共有されていない第三者は403になること
  * を確認する。
  *
- * 後続フェーズでAttendanceMonth/ExpenseClaim側のReactorがこのDraft呼び出しを担うため、
- * ここではテストコードから直接Draftコマンドを発行している。
+ * Draftコマンドの発行は月次勤怠・経費精算それぞれの提出APIが担い、以降の提出・承認・
+ * 差戻しはReactorが対象ドメインの集約へ伝播させるため、ここでは各ドメインの提出APIを
+ * 起点にしている。
  */
 class WorkflowRequestSubjectTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
-     * 月次勤怠を提出し、そのattendance_monthを対象とするworkflow_requestを下書き作成する。
+     * 月次勤怠を提出する。提出APIはworkflow_requestの下書き作成を起点にしており、Reactorの
+     * カスケードでattendance_monthの提出とworkflow_requestの提出まで同期的に完了する。
      *
      * @return array{0: WorkflowRequest, 1: string}
      */
-    private function draftAttendanceMonthRequest(User $employee, User $approver, string $yearMonth): array
+    private function submitAttendanceMonthRequest(User $employee, User $approver, string $yearMonth): array
     {
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
@@ -50,15 +51,11 @@ class WorkflowRequestSubjectTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertSuccessful()->json('id');
 
-        $request = app(CommandBus::class)->dispatch(new DraftWorkflowRequest(
-            requestTypeCode: null,
-            applicantUserId: $employee->id,
-            title: "{$yearMonth} 月次勤怠",
-            formData: [],
-            approverUserId: $approver->id,
-            subjectType: 'attendance_month',
-            subjectId: $monthId,
-        ));
+        $request = WorkflowRequest::query()
+            ->where('subject_type', 'attendance_month')
+            ->where('subject_id', $monthId)
+            ->latest('created_at')
+            ->firstOrFail();
 
         return [$request, $monthId];
     }
@@ -94,13 +91,13 @@ class WorkflowRequestSubjectTest extends TestCase
         return [$request, $claimId];
     }
 
-    public function test_drafting_with_a_subject_creates_a_workflow_request_row(): void
+    public function test_submitting_a_monthly_attendance_creates_a_workflow_request_row(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $yearMonth = Carbon::today($employee->timezone)->format('Y-m');
 
-        [$request, $monthId] = $this->draftAttendanceMonthRequest($employee, $approver, $yearMonth);
+        [$request, $monthId] = $this->submitAttendanceMonthRequest($employee, $approver, $yearMonth);
 
         $workflowRequest = WorkflowRequest::query()
             ->where('subject_type', 'attendance_month')
@@ -110,18 +107,17 @@ class WorkflowRequestSubjectTest extends TestCase
         $this->assertSame($monthId, $workflowRequest->subject_id);
         $this->assertSame($employee->id, $workflowRequest->applicant_user_id);
         $this->assertSame($approver->id, $workflowRequest->approver_user_id);
-        $this->assertSame('draft', $workflowRequest->status);
         $this->assertNull($workflowRequest->request_type_id);
-
-        // 申請種別マスタを持たない行でも、汎用申請と同じ提出・承認フローを通れる。
-        $this->actingAs($employee)->postJson("/api/workflow-requests/{$workflowRequest->id}/submit")->assertOk();
-        $workflowRequest->refresh();
+        // 月次勤怠の提出APIがDraft→Reactor経由の提出まで進めるため、この時点で提出済み。
         $this->assertSame('submitted', $workflowRequest->status);
 
+        // 申請種別マスタを持たない行でも、汎用申請と同じ承認フローを通れる。
         $this->actingAs($approver)->postJson("/api/workflow-requests/{$workflowRequest->id}/approve")->assertOk();
         $workflowRequest->refresh();
         $this->assertSame('approved', $workflowRequest->status);
         $this->assertNotNull($workflowRequest->approved_at);
+        // workflow_requestの承認がReactor経由でAttendanceMonth集約にも伝播する。
+        $this->assertSame('approved', AttendanceMonth::query()->findOrFail($monthId)->status);
     }
 
     public function test_returning_a_monthly_attendance_request_updates_the_workflow_request_row(): void
@@ -130,9 +126,8 @@ class WorkflowRequestSubjectTest extends TestCase
         $approver = User::factory()->create();
         $yearMonth = Carbon::today($employee->timezone)->format('Y-m');
 
-        [$request] = $this->draftAttendanceMonthRequest($employee, $approver, $yearMonth);
+        [$request, $monthId] = $this->submitAttendanceMonthRequest($employee, $approver, $yearMonth);
 
-        $this->actingAs($employee)->postJson("/api/workflow-requests/{$request->id}/submit")->assertOk();
         $this->actingAs($approver)->postJson("/api/workflow-requests/{$request->id}/return", [
             'comment' => '不備があります',
         ])->assertOk();
@@ -140,6 +135,8 @@ class WorkflowRequestSubjectTest extends TestCase
         $request->refresh();
         $this->assertSame('returned', $request->status);
         $this->assertNotNull($request->returned_at);
+        // 差戻しもReactor経由でAttendanceMonth集約に伝播する(提出時のロックも解除される)。
+        $this->assertSame('returned', AttendanceMonth::query()->findOrFail($monthId)->status);
     }
 
     public function test_drafting_an_expense_claim_subject_creates_a_workflow_request_row(): void
@@ -175,11 +172,16 @@ class WorkflowRequestSubjectTest extends TestCase
         $approver = User::factory()->create();
         $yearMonth = Carbon::today($employee->timezone)->format('Y-m');
 
-        [$request] = $this->draftAttendanceMonthRequest($employee, $approver, $yearMonth);
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
 
         Queue::fake();
 
-        $this->actingAs($employee)->postJson("/api/workflow-requests/{$request->id}/submit")->assertOk();
+        // 月次勤怠の提出・差戻し・再提出・承認はすべて勤怠側のエンドポイントから行うが、
+        // 通知はworkflow_request側のHandlerに一本化されている。
+        $monthId = $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful()->json('id');
         Queue::assertPushed(
             SendNotificationJob::class,
             fn (SendNotificationJob $job) => $job->title === '月次勤怠の承認依頼'
@@ -187,7 +189,7 @@ class WorkflowRequestSubjectTest extends TestCase
                 && str_ends_with((string) $job->detailUrl, '/attendance/months/to-approve'),
         );
 
-        $this->actingAs($approver)->postJson("/api/workflow-requests/{$request->id}/return", [
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/return", [
             'comment' => '不備があります',
         ])->assertOk();
         Queue::assertPushed(
@@ -196,8 +198,10 @@ class WorkflowRequestSubjectTest extends TestCase
                 && $job->summary === "{$yearMonth} の月次勤怠が差し戻されました: 不備があります",
         );
 
-        $this->actingAs($employee)->postJson("/api/workflow-requests/{$request->id}/submit")->assertOk();
-        $this->actingAs($approver)->postJson("/api/workflow-requests/{$request->id}/approve")->assertOk();
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+        $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
         Queue::assertPushed(
             SendNotificationJob::class,
             fn (SendNotificationJob $job) => $job->title === '月次勤怠が承認されました'
@@ -244,7 +248,7 @@ class WorkflowRequestSubjectTest extends TestCase
         $approver = User::factory()->create();
         $yearMonth = Carbon::today($employee->timezone)->format('Y-m');
 
-        [$workflowRequest] = $this->draftAttendanceMonthRequest($employee, $approver, $yearMonth);
+        [$workflowRequest] = $this->submitAttendanceMonthRequest($employee, $approver, $yearMonth);
 
         $response = $this->actingAs($employee)->getJson("/api/workflow-requests/{$workflowRequest->id}");
         $response->assertOk();
@@ -279,7 +283,7 @@ class WorkflowRequestSubjectTest extends TestCase
         $stranger = User::factory()->create();
         $yearMonth = Carbon::today($employee->timezone)->format('Y-m');
 
-        [$workflowRequest] = $this->draftAttendanceMonthRequest($employee, $approver, $yearMonth);
+        [$workflowRequest] = $this->submitAttendanceMonthRequest($employee, $approver, $yearMonth);
 
         $this->actingAs($stranger)->getJson("/api/workflow-requests/{$workflowRequest->id}")->assertForbidden();
     }
