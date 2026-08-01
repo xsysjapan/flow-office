@@ -20,6 +20,7 @@ use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
+use App\Domain\Attendance\Events\AttendanceSubmissionReminderExcluded;
 use App\Domain\Attendance\Events\EmployeeRotationAssigned;
 use App\Domain\Attendance\Events\EmployeeShiftAssigned;
 use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
@@ -235,6 +236,8 @@ return [
         'attendance_month.locked' => AttendanceMonthLocked::class,
         'attendance_month.shared' => AttendanceMonthShared::class,
         'attendance_month.unlocked' => AttendanceMonthUnlocked::class,
+
+        'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 
         'work_calendar.created' => WorkCalendarCreated::class,
         'work_calendar.days_updated' => WorkCalendarDaysUpdated::class,

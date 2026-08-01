@@ -151,7 +151,9 @@ class DefaultWorkStyleFallbackTest extends TestCase
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
         $shift = $this->createWorkStyle('shift', 420);
-        $pastYearMonth = now()->subMonth()->format('Y-m');
+        // subMonth()は月末日(29〜31日)に実行すると繰り上がって当月に戻ってしまうことがあるため、
+        // 日付部分を繰り上げないsubMonthNoOverflow()で確実に前月を得る。
+        $pastYearMonth = now()->subMonthNoOverflow()->format('Y-m');
 
         $created = $this->actingAs($admin)->postJson('/api/user-work-style-monthly-assignments', [
             'user_id' => $employee->id, 'year_month' => $pastYearMonth, 'work_style_id' => $shift->id,

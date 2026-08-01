@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
 import type { ExpenseCategoryFieldDefinition, ExpensePaymentBearer } from '../../api/types'
 import { Button } from '../Button/Button'
+import { DatePicker } from '../DatePicker/DatePicker'
 import { FormField } from '../FormField/FormField'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
@@ -148,11 +149,10 @@ export function SingleExpenseItemForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="利用日" htmlFor="single-item-usage-date" required>
-          <Input
+          <DatePicker
             id="single-item-usage-date"
-            type="date"
-            value={usageDate}
-            onChange={(e) => setUsageDate(e.target.value)}
+            value={usageDate || undefined}
+            onChange={(date) => setUsageDate(date ?? '')}
           />
         </FormField>
 

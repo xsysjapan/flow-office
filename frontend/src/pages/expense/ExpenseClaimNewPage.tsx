@@ -5,6 +5,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
 import { FormField } from '../../components/FormField/FormField'
@@ -61,11 +62,10 @@ function AttendanceReferenceLookup() {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <FormField label="対象日の勤怠実績を確認" htmlFor="attendance-reference-date">
-        <Input
+        <DatePicker
           id="attendance-reference-date"
-          type="date"
-          value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
+          value={targetDate || undefined}
+          onChange={(date) => setTargetDate(date ?? '')}
         />
       </FormField>
       {targetDate && (

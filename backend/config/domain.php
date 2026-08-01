@@ -21,6 +21,7 @@ use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
+use App\Domain\Attendance\Commands\ExcludeAttendanceSubmissionReminder;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
@@ -59,6 +60,7 @@ use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\ExcludeAttendanceSubmissionReminderHandler;
 use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
 use App\Domain\Attendance\Handlers\GenerateEmployeeShiftAssignmentsHandler;
@@ -320,6 +322,7 @@ return [
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
+        ExcludeAttendanceSubmissionReminder::class => ExcludeAttendanceSubmissionReminderHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,
         GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,

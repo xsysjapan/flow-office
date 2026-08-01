@@ -55,6 +55,17 @@ dropdown-menu, tooltip, separator, skeleton, alert, popover, command, sheet が�
 分離)は求めない。ドメインコンポーネント(`frontend/src/components/<Name>/`)を作る/直す
 ときは、これらの`ui/`プリミティブを内部で使うこと。
 
+## 日付・時刻入力
+
+日付・時刻を入力させる箇所では、生の`<input type="date">`/`type="time">`(shadcn風の
+`ui/input.tsx`にネイティブ`type`を指定しただけのもの)を直接使わない。必ず
+`frontend/src/components/DatePicker/DatePicker.tsx`(日付、値は`"YYYY-MM-DD"`文字列)・
+`frontend/src/components/TimePicker/`(時刻)・`frontend/src/components/DateTimePicker/`
+(日時)のいずれかのドメインコンポーネントを使う。ブラウザ・OSごとに見た目が異なる
+ネイティブpickerを避け、アプリ全体で同じ見た目・操作性(カレンダーポップオーバー、
+相対日付ショートカット等)に揃えるため。新しい画面・コンポーネントを作るときはもちろん、
+既存コードに`type="date"`の`Input`を見つけたら気付いた範囲で`DatePicker`に置き換える。
+
 ## 禁止事項
 
 すべての情報をカードで囲う / 不要なグラデーション / 強い影 / 過剰な角丸 / 原色の多用 /
