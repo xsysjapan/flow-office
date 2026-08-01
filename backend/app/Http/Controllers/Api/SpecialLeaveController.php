@@ -225,7 +225,7 @@ class SpecialLeaveController extends Controller
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
     {
         // system_settings.special_leave_requires_approval=falseの場合、承認ワークフローを
-        // 経由せずその場で申請→自動承認(消化)まで完結させる(PaidLeaveController::storeRequest
+        // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(PaidLeaveController::storeRequest
         // と同じ考え方。有給側とはビジネスロジックを分けて実装するため、判定・分岐も独立させる)。
         $requiresApproval = SystemSetting::current()->special_leave_requires_approval;
 

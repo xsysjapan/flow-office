@@ -210,8 +210,8 @@ export function SystemSettingsPage() {
 
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">休暇申請の承認設定</h3>
       <p className="mb-4 text-sm text-muted-foreground">
-        オフにすると、その休暇種別の申請は承認者を指定しなくてもよくなり、申請と同時に自動承認
-        される。
+        オフにすると、その休暇種別の申請は承認者を指定しなくてもよくなり、承認不要のまま申請と
+        同時に確定する。
       </p>
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">

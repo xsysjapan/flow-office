@@ -16,7 +16,7 @@ use OpenApi\Attributes as OA;
 class SystemSettingController extends Controller
 {
     #[OA\Get(
-        path: '/system-settings',
+        path: '/admin/system-settings',
         operationId: 'systemSettings.show',
         summary: 'システム設定を取得する',
         tags: ['システム設定'],
@@ -28,7 +28,7 @@ class SystemSettingController extends Controller
     }
 
     #[OA\Put(
-        path: '/system-settings',
+        path: '/admin/system-settings',
         operationId: 'systemSettings.update',
         summary: 'システム設定を更新する',
         tags: ['システム設定'],

@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 有給・特別休暇の申請を承認ワークフロー無しで即時消化(自動承認)にするかどうかの
+ * 有給・特別休暇の申請を承認ワークフロー無しで即時消化(承認不要)にするかどうかの
  * システム全体設定。既定はtrue(承認必須。現行の挙動を維持する)。
  */
 return new class extends Migration

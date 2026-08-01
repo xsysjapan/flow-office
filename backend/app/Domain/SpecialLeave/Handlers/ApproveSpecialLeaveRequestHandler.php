@@ -48,7 +48,7 @@ class ApproveSpecialLeaveRequestHandler implements CommandHandler
             throw new DomainRuleException('提出済みの特別休暇申請のみ承認できます。');
         }
 
-        // approvedByUserIdがnullの場合は「承認ワークフロー不要」設定による自動承認
+        // approvedByUserIdがnullの場合は「承認ワークフロー不要」設定による承認不要の即時確定
         // (SpecialLeaveController::storeRequest参照)であり、承認者チェックそのものを行わない。
         if ($command->approvedByUserId !== null && $request->approver_user_id !== $command->approvedByUserId) {
             throw new DomainRuleException('指定された承認者のみ承認できます。');

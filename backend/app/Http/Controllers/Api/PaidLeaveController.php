@@ -170,7 +170,7 @@ class PaidLeaveController extends Controller
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
     {
         // system_settings.paid_leave_requires_approval=falseの場合、承認ワークフローを
-        // 経由せずその場で申請→自動承認(消化)まで完結させる(ルートCLAUDE.md
+        // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(ルートCLAUDE.md
         // 「AIは勤怠ルールを決定しない」とは無関係の、承認要否そのものをマスタ化した設定)。
         $requiresApproval = SystemSetting::current()->paid_leave_requires_approval;
 

@@ -2,8 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as authApi from '../api/auth'
 import { clearToken, setToken } from '../api/client'
-import * as leaveApprovalSettingsApi from '../api/leaveApprovalSettings'
-import type { LeaveApprovalSettings, User } from '../api/types'
+import * as publicSystemSettingsApi from '../api/publicSystemSettings'
+import type { PublicSystemSettings, User } from '../api/types'
 import { AuthProvider } from '../auth/AuthContext'
 import { useAppSettings } from './useAppSettings'
 import { AppSettingsProvider } from './AppSettingsContext'
@@ -18,19 +18,24 @@ const testUser: User = {
   last_login_at: null,
 }
 
-const relaxedSettings: LeaveApprovalSettings = {
+const relaxedSettings: PublicSystemSettings = {
   paid_leave_requires_approval: false,
   special_leave_requires_approval: false,
+  default_timezone: 'Asia/Tokyo',
+  default_work_style_id: null,
+  default_work_style: null,
+  attendance_submission_deadline_day: 5,
+  attendance_month_close_deadline_day: 10,
 }
 
 function Probe() {
-  const { leaveApprovalSettings, isLoading } = useAppSettings()
+  const { systemSettings, isLoading } = useAppSettings()
 
   return (
     <div>
       <p data-testid="loading">{String(isLoading)}</p>
-      <p data-testid="paid">{String(leaveApprovalSettings.paid_leave_requires_approval)}</p>
-      <p data-testid="special">{String(leaveApprovalSettings.special_leave_requires_approval)}</p>
+      <p data-testid="paid">{String(systemSettings.paid_leave_requires_approval)}</p>
+      <p data-testid="special">{String(systemSettings.special_leave_requires_approval)}</p>
     </div>
   )
 }
@@ -53,7 +58,7 @@ describe('AppSettingsContext', () => {
 
   it('exposes fail-open defaults before the fetch resolves (or when unauthenticated)', async () => {
     const fetchSpy = vi
-      .spyOn(leaveApprovalSettingsApi, 'fetchLeaveApprovalSettings')
+      .spyOn(publicSystemSettingsApi, 'fetchPublicSystemSettings')
       .mockResolvedValue(relaxedSettings)
 
     renderWithProviders()
@@ -69,7 +74,7 @@ describe('AppSettingsContext', () => {
   it('updates to the fetched values once authenticated', async () => {
     setToken('issued-token')
     vi.spyOn(authApi, 'fetchCurrentUser').mockResolvedValue(testUser)
-    vi.spyOn(leaveApprovalSettingsApi, 'fetchLeaveApprovalSettings').mockResolvedValue(relaxedSettings)
+    vi.spyOn(publicSystemSettingsApi, 'fetchPublicSystemSettings').mockResolvedValue(relaxedSettings)
 
     renderWithProviders()
 

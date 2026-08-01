@@ -78,7 +78,7 @@ export interface CreateSpecialLeaveRequestInput {
   target_date: string
   leave_type: PaidLeaveType
   hours?: number
-  /** system_settings.special_leave_requires_approval が false の場合は省略可(自動承認)。 */
+  /** system_settings.special_leave_requires_approval が false の場合は省略可(承認不要)。 */
   approver_user_id?: string
   reason?: string
 }

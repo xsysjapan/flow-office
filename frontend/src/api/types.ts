@@ -104,12 +104,18 @@ export interface UpdateSystemSettingsInput
 }
 
 /**
- * `GET /leave-approval-settings` のレスポンス。認証済みなら誰でも参照できる(承認不要の
- * 場合に申請フォームで承認者入力を必須にしないため)。system_settingsの一部を切り出したもの。
+ * `GET /system-settings` のレスポンス。認証済みなら誰でも参照できる、管理者専用ではない
+ * bootstrap用のシステム設定一式(system_settingsの非管理者向け部分を切り出したもの)。
+ * フロントエンドの初期化時に必要な設定はここから取得する。
  */
-export interface LeaveApprovalSettings {
+export interface PublicSystemSettings {
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  default_timezone: string
+  default_work_style_id: string | null
+  default_work_style: Pick<WorkStyle, 'id' | 'code' | 'name'> | null
+  attendance_submission_deadline_day: number
+  attendance_month_close_deadline_day: number
 }
 
 export interface RequestType {

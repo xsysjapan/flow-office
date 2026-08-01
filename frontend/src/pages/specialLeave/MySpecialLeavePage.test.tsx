@@ -59,9 +59,14 @@ function renderPage(
     <QueryClientProvider client={queryClient}>
       <AppSettingsContext.Provider
         value={{
-          leaveApprovalSettings: {
+          systemSettings: {
             paid_leave_requires_approval: true,
             special_leave_requires_approval: specialLeaveRequiresApproval,
+            default_timezone: 'Asia/Tokyo',
+            default_work_style_id: null,
+            default_work_style: null,
+            attendance_submission_deadline_day: 5,
+            attendance_month_close_deadline_day: 10,
           },
           isLoading: false,
         }}

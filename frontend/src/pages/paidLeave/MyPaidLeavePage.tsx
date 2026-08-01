@@ -29,8 +29,8 @@ const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
 ]
 
 function PaidLeaveRequestForm() {
-  const { leaveApprovalSettings } = useAppSettings()
-  const approvalRequired = leaveApprovalSettings.paid_leave_requires_approval
+  const { systemSettings } = useAppSettings()
+  const approvalRequired = systemSettings.paid_leave_requires_approval
 
   const [targetDate, setTargetDate] = useState('')
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
@@ -105,7 +105,7 @@ function PaidLeaveRequestForm() {
           <UserPicker id="paid-leave-approver" value={approverUserId} onChange={setApproverUserId} />
           {!approvalRequired && (
             <p className="mt-1 text-xs text-muted-foreground">
-              現在の設定では有給申請は承認不要で自動承認されます。承認者の指定は任意です。
+              現在の設定では有給申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
             </p>
           )}
         </FormField>

@@ -22,12 +22,12 @@ use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
-use App\Http\Controllers\Api\LeaveApprovalSettingsController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
+use App\Http\Controllers\Api\PublicSystemSettingController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RotationPatternController;
@@ -242,10 +242,12 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('role:admin,hr_staff');
     });
 
-    // 有給・特別休暇の申請フォームが承認者指定を必須にすべきかを判定するための軽量設定参照。
-    // SystemSettingController(/admin/system-settings、role:admin限定、M365設定等を含む)とは
-    // 別に、認証済みなら誰でも参照できるエンドポイントとしてここ(/system-settings)に分離する。
-    Route::get('/system-settings', [LeaveApprovalSettingsController::class, 'show']);
+    // フロントエンド起動時のブートストラップ設定(デフォルトタイムゾーン・デフォルト働き方・
+    // 勤怠提出/締め期限日・有給/特別休暇の承認要否)をまとめて返す軽量エンドポイント。
+    // SystemSettingController(/admin/system-settings、role:admin限定、M365設定・通知メール設定等の
+    // 機微な項目を含む)とは別に、認証済みなら誰でも参照できるエンドポイントとしてここ
+    // (/system-settings、PublicSystemSettingController)に分離する。
+    Route::get('/system-settings', [PublicSystemSettingController::class, 'show']);
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
@@ -339,7 +341,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv']);
 
         // システム設定 (docs/06-usecases-auth.md UC-003)。認証済みなら誰でも参照できる
-        // 安全なサブセットは /system-settings (LeaveApprovalSettingsController) 側にある。
+        // 安全なサブセットは /system-settings (PublicSystemSettingController) 側にある。
         Route::get('/system-settings', [SystemSettingController::class, 'show']);
         Route::put('/system-settings', [SystemSettingController::class, 'update']);
 
