@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceImportPreviewController;
 use App\Http\Controllers\Api\AttendancePunchController;
+use App\Http\Controllers\Api\AttendanceSubmissionReminderExclusionController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
@@ -247,6 +248,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth']);
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])
             ->middleware('role:admin,hr_staff');
+    });
+
+    // --- 勤怠未提出督促の個別除外 (誤ってその月を提出対象にしてしまった等の例外的対応。
+    // usage_start_date/hire_dateによる除外条件とは別の汎用的な除外リスト) ---
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
+        Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
     });
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---

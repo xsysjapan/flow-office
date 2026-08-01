@@ -71,6 +71,10 @@
 - `attendance.daily_calculation_adjusted` (日次登録後、区分ごとの時間を手動で補正する。
   実績が再編集され`attendance.day_calculated`が再発生すると解除される)
 - `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
+- `attendance.submission_reminder_excluded` (管理者が特定の社員×年月を勤怠未提出督促
+  (WarnUnsubmittedAttendanceHandler)の対象から個別に除外する。誤ってその月を提出対象に
+  してしまった場合等の例外的対応で、usage_start_date/hire_dateによる除外条件とは別の
+  汎用的な除外リストとして持つ)
 - `attendance_punch.recorded` (payloadに`deviceId`/`authenticationKeyId`/`actorUserId`/
   `integrationId`/`offline`/`idempotencyKey`/`requestId`を追加。docs/23〜docs/25の端末・
   認証キー・アプリ連携経由の打刻に対応するための追記であり、イベント種別自体は増やさない。

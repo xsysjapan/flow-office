@@ -2,9 +2,17 @@
 
 namespace Tests\Feature\User;
 
+use App\Domain\EventSourcing\EventStore;
+use App\Domain\User\Commands\SyncUsersFromMs365;
+use App\Domain\User\Graph\MicrosoftGraphClient;
+use App\Domain\User\Graph\MicrosoftGraphUser;
+use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
+use App\Domain\User\SsoAuthenticator;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Tests\TestCase;
 
 /**
@@ -96,5 +104,88 @@ class UserHireDateTest extends TestCase
         $this->actingAs($employee)->putJson("/api/users/{$other->id}/usage-start-date", [
             'usage_start_date' => '2026-07-01',
         ])->assertForbidden();
+    }
+
+    public function test_sso_first_login_defaults_usage_start_date_to_the_creation_date(): void
+    {
+        Role::query()->create(['code' => Role::EMPLOYEE, 'name' => '一般社員']);
+        $authenticator = app(SsoAuthenticator::class);
+        $ssoUser = $this->fakeSocialiteUser('entra-usd-1', 'テスト新人', 'shinjin@example.com');
+
+        Carbon::setTestNow('2026-07-31 09:00:00');
+        try {
+            $user = $authenticator->handle($ssoUser);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->assertNotNull($user->usage_start_date);
+        $this->assertSame('2026-07-31', $user->usage_start_date->toDateString());
+    }
+
+    public function test_ms365_sync_does_not_overwrite_an_existing_users_usage_start_date(): void
+    {
+        $user = User::factory()->create(['entra_user_id' => 'entra-usd-2', 'usage_start_date' => '2024-04-01']);
+
+        $handler = new SyncUsersFromMs365Handler(
+            new FakeMicrosoftGraphClientForUsageStartDateTest([
+                new MicrosoftGraphUser('entra-usd-2', $user->name, $user->email, $user->department, $user->job_title, true),
+            ]),
+            app(EventStore::class),
+        );
+
+        $handler->handle(new SyncUsersFromMs365);
+
+        $this->assertSame('2024-04-01', $user->refresh()->usage_start_date->toDateString());
+    }
+
+    private function fakeSocialiteUser(string $id, string $name, string $email): SocialiteUser
+    {
+        return new class($id, $name, $email) implements SocialiteUser
+        {
+            public function __construct(
+                private readonly string $id,
+                private readonly string $name,
+                private readonly string $email,
+            ) {}
+
+            public function getId()
+            {
+                return $this->id;
+            }
+
+            public function getNickname()
+            {
+                return null;
+            }
+
+            public function getName()
+            {
+                return $this->name;
+            }
+
+            public function getEmail()
+            {
+                return $this->email;
+            }
+
+            public function getAvatar()
+            {
+                return null;
+            }
+        };
+    }
+}
+
+class FakeMicrosoftGraphClientForUsageStartDateTest implements MicrosoftGraphClient
+{
+    /**
+     * @param  array<int, MicrosoftGraphUser>  $users
+     */
+    public function __construct(private readonly array $users) {}
+
+    public function listUsers(): iterable
+    {
+        return $this->users;
     }
 }

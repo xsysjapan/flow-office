@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { SingleExpenseItemForm } from './SingleExpenseItemForm'
 
 describe('SingleExpenseItemForm', () => {
@@ -12,7 +13,7 @@ describe('SingleExpenseItemForm', () => {
       const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
       expect(button).toBeDisabled()
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-10')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
       await userEvent.type(screen.getByLabelText('金額'), '8000')
       expect(button).toBeDisabled()
 
@@ -41,7 +42,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="meal" categoryId={2} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-10')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-10')
       await userEvent.type(screen.getByLabelText('金額'), '8000')
       await userEvent.type(screen.getByLabelText('取引先'), '居酒屋 花')
       await userEvent.type(screen.getByLabelText('参加者氏名'), '山田太郎')
@@ -49,7 +50,7 @@ describe('SingleExpenseItemForm', () => {
       await userEvent.type(screen.getByLabelText('内容'), '懇親会')
       await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
 
-      expect(screen.getByLabelText('利用日')).toHaveValue('')
+      expect(screen.getByLabelText('利用日')).toHaveTextContent('日付を選択')
       expect(screen.getByLabelText('金額')).toHaveValue(null)
       expect(screen.getByLabelText('取引先')).toHaveValue('')
       expect(screen.getByLabelText('参加者氏名')).toHaveValue('')
@@ -63,7 +64,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="lodging" categoryId={3} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-11')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-11')
       await userEvent.type(screen.getByLabelText('金額'), '12000')
       await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
       await userEvent.type(screen.getByLabelText('内容'), '出張1泊')
@@ -87,7 +88,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="lodging" categoryId={3} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-11')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-11')
       await userEvent.type(screen.getByLabelText('金額'), '12000')
       await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
 
@@ -117,7 +118,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
       await userEvent.type(screen.getByLabelText('内容'), 'ノート・ペン購入')
@@ -141,7 +142,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
 
@@ -166,7 +167,7 @@ describe('SingleExpenseItemForm', () => {
       const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
       expect(button).toBeDisabled()
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       expect(button).toBeDisabled()
 
@@ -183,7 +184,7 @@ describe('SingleExpenseItemForm', () => {
       const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
       expect(button).toBeDisabled()
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-13')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-13')
       await userEvent.type(screen.getByLabelText('金額'), '500')
       expect(button).toBeDisabled()
 
@@ -208,7 +209,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="other" categoryId={5} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-13')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-13')
       await userEvent.type(screen.getByLabelText('金額'), '500')
       await userEvent.type(screen.getByLabelText('取引先'), '日本郵便')
       await userEvent.type(screen.getByLabelText('内容'), '郵送料')
@@ -226,7 +227,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
       await userEvent.selectOptions(screen.getByLabelText('支払方法'), '法人カード')
@@ -247,7 +248,7 @@ describe('SingleExpenseItemForm', () => {
       )
 
       const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
       expect(button).toBeDisabled()
@@ -265,7 +266,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
 
@@ -286,7 +287,7 @@ describe('SingleExpenseItemForm', () => {
       const onSubmit = vi.fn()
       render(<SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} />)
 
-      await userEvent.type(screen.getByLabelText('利用日'), '2026-07-12')
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
       await userEvent.type(screen.getByLabelText('金額'), '3000')
       await userEvent.type(screen.getByLabelText('取引先'), '文具店')
       await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))

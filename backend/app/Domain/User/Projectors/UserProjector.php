@@ -33,6 +33,9 @@ class UserProjector extends Projector
                 'email' => $event->email,
                 'employment_status' => 'active',
                 'timezone' => SystemSetting::current()->default_timezone,
+                // usage_start_date未設定のまま在籍月より前の督促が誤送信されるのを防ぐため、
+                // 新規作成時はイベント記録日をデフォルト設定する。管理者は後から上書き可能。
+                'usage_start_date' => $event->createdAt()->toDateString(),
             ],
         );
 
@@ -52,6 +55,9 @@ class UserProjector extends Projector
                 'email' => $event->email,
                 'employment_status' => 'active',
                 'timezone' => SystemSetting::current()->default_timezone,
+                // usage_start_date未設定のまま在籍月より前の督促が誤送信されるのを防ぐため、
+                // 新規作成時はイベント記録日をデフォルト設定する。管理者は後から上書き可能。
+                'usage_start_date' => $event->createdAt()->toDateString(),
             ],
         );
 
@@ -77,6 +83,9 @@ class UserProjector extends Projector
                 // timezoneはMS365に存在する属性ではないため、新規作成時のみシステム設定の
                 // デフォルトを設定し、既存行のtimezoneは上書きしない。
                 'timezone' => $existing->timezone ?? SystemSetting::current()->default_timezone,
+                // usage_start_dateも同様に、新規作成時のみイベント記録日をデフォルト設定し、
+                // 既存行(手動設定済みの可能性がある)は絶対に上書きしない。
+                'usage_start_date' => $existing->usage_start_date ?? $event->createdAt()->toDateString(),
             ],
         );
     }

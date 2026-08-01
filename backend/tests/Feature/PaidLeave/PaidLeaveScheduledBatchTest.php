@@ -178,6 +178,35 @@ class PaidLeaveScheduledBatchTest extends TestCase
         $this->assertNull($expiringLater->refresh()->expiry_warned_at);
     }
 
+    public function test_warn_expiring_determines_each_users_today_using_their_own_timezone_not_the_company_default(): void
+    {
+        // UTC 2026-08-10 03:00は、Asia/Tokyo(UTC+9)では2026-08-10 12:00(8/10)だが、
+        // America/Los_Angeles(夏時間UTC-7)では2026-08-09 20:00(8/9)であり、日付が
+        // ユーザーごとに異なる。asOfを渡さない場合、会社既定のタイムゾーン(Asia/Tokyo)を
+        // 全員に適用するのではなく、各社員の`users.timezone`基準の「今日」で
+        // 期限切れ判定できていることを確認する(同じexpires_onでも扱いが変わる)。
+        $tokyoUser = User::factory()->create(['timezone' => 'Asia/Tokyo']);
+        $laUser = User::factory()->create(['timezone' => 'America/Los_Angeles']);
+
+        // Tokyoの「今日」(8/10)からはすでに過ぎているため対象外になるが、
+        // LAの「今日」(8/9)からはちょうど当日(下限境界)のため対象になる。
+        $tokyoGrant = PaidLeaveGrant::query()->create([
+            'user_id' => $tokyoUser->id, 'granted_on' => '2024-08-10', 'expires_on' => '2026-08-09',
+            'granted_days' => 10, 'used_days' => 2, 'remaining_days' => 8,
+        ]);
+        $laGrant = PaidLeaveGrant::query()->create([
+            'user_id' => $laUser->id, 'granted_on' => '2024-08-10', 'expires_on' => '2026-08-09',
+            'granted_days' => 10, 'used_days' => 2, 'remaining_days' => 8,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-08-10 03:00:00', 'UTC'));
+        $count = app(CommandBus::class)->dispatch(new WarnExpiringPaidLeave);
+
+        $this->assertSame(1, $count);
+        $this->assertNull($tokyoGrant->refresh()->expiry_warned_at);
+        $this->assertNotNull($laGrant->refresh()->expiry_warned_at);
+    }
+
     public function test_warn_expiring_does_not_renotify_an_already_warned_grant(): void
     {
         $today = Carbon::parse('2026-08-10');

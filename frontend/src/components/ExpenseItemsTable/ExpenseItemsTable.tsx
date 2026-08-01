@@ -4,6 +4,7 @@ import type { EditableRow } from '../../hooks/useEditableRows'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
 import type { ExpenseCategory } from '../../api/types'
 import { Button } from '../Button/Button'
+import { DatePicker } from '../DatePicker/DatePicker'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Checkbox } from '../ui/checkbox'
@@ -149,7 +150,11 @@ export function ExpenseItemsTable({
             <label htmlFor="expense-items-bulk-date" className="text-xs font-medium text-foreground">
               日付
             </label>
-            <Input id="expense-items-bulk-date" type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
+            <DatePicker
+              id="expense-items-bulk-date"
+              value={bulkDate || undefined}
+              onChange={(date) => setBulkDate(date ?? '')}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="expense-items-bulk-description" className="text-xs font-medium text-foreground">
@@ -196,11 +201,10 @@ export function ExpenseItemsTable({
                 />
               </TableCell>
               <TableCell>
-                <Input
-                  type="date"
+                <DatePicker
                   aria-label={`${index + 1}行目の日付`}
-                  value={row.usage_date}
-                  onChange={(e) => onUpdateRow(row.rowId, { usage_date: e.target.value })}
+                  value={row.usage_date || undefined}
+                  onChange={(date) => onUpdateRow(row.rowId, { usage_date: date ?? '' })}
                 />
               </TableCell>
               <TableCell>

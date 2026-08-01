@@ -37,7 +37,9 @@ class WeeklyOvertimeCalculator
      */
     public function calculateForMonth(string $userId, string $yearMonth): array
     {
-        $monthStart = Carbon::createFromFormat('Y-m', $yearMonth)->startOfMonth();
+        // 'Y-m'のみだと日付部分が実行時点の日で補完され、対象月の日数を超える日(29〜31日)に
+        // 実行すると翌月へ繰り上がってしまうため、日付を明示して安全にパースする。
+        $monthStart = Carbon::createFromFormat('Y-m-d', "{$yearMonth}-01")->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
         $weekStartsOn = $this->resolveWeekStartsOn($userId, $monthStart, $monthEnd);
 

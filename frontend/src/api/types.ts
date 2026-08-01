@@ -956,6 +956,20 @@ export interface ExpenseClaimHistoryEntry {
   occurred_at: string
 }
 
+/** 勤怠未提出督促(WarnUnsubmittedAttendanceHandler)の対象から個別に除外された
+ *  社員×年月の組み合わせ。usage_start_date/hire_dateによる除外条件とは別の、
+ *  管理者による汎用的な例外的対応の記録(docs/17-events.md
+ *  attendance.submission_reminder_excluded)。 */
+export interface AttendanceSubmissionReminderExclusion {
+  id: string
+  user_id: string
+  user?: Pick<User, 'id' | 'name'>
+  year_month: string
+  reason: string
+  excluded_by_user_id: string
+  created_at: string | null
+}
+
 export interface Paginated<T> {
   data: T[]
   meta: {

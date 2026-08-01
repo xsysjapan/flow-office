@@ -12,7 +12,9 @@ use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\DailyBatchTimezoneGroups;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -43,50 +45,63 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
     {
         assert($command instanceof GrantScheduledPaidLeave);
 
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today();
+        $defaultTimezone = SystemSetting::current()->default_timezone;
         $grantedIds = [];
 
         $rules = PaidLeaveGrantRule::query()->where('is_active', true)->with('steps')->get();
 
+        // `asOf`未指定(cronからの実運用)の場合、会社既定のタイムゾーンではなく社員本人の
+        // `users.timezone`基準で「今日」を判定する。タイムゾーンごとに対象社員を絞り、
+        // それぞれの「今日」で記念日・出勤率判定を行う(DailyBatchTimezoneGroups参照)。
+        // ルール×タイムゾーングループの全組み合わせを回す。
+        $timezoneGroups = DailyBatchTimezoneGroups::resolve(
+            $command->asOf,
+            User::query()->whereNotNull('hire_date'),
+        );
+
         foreach ($rules as $rule) {
-            foreach ($this->eligibleUsers($rule, $today) as $user) {
-                $months = $this->monthsOfServiceOnAnniversary($user->hire_date, $today);
+            foreach ($timezoneGroups as $group) {
+                $today = $group['today'];
 
-                if ($months === null || $months < $rule->first_grant_after_months) {
-                    continue;
+                foreach ($this->eligibleUsers($rule, $today, $group['timezone'], $defaultTimezone) as $user) {
+                    $months = $this->monthsOfServiceOnAnniversary($user->hire_date, $today);
+
+                    if ($months === null || $months < $rule->first_grant_after_months) {
+                        continue;
+                    }
+
+                    $cycleOffset = $months - $rule->first_grant_after_months;
+                    if ($cycleOffset % $rule->grant_cycle_months !== 0) {
+                        continue;
+                    }
+
+                    $alreadyGrantedToday = PaidLeaveGrant::query()
+                        ->where('user_id', $user->id)
+                        ->whereDate('granted_on', $today->toDateString())
+                        ->exists();
+                    if ($alreadyGrantedToday) {
+                        continue;
+                    }
+
+                    $grantDays = $this->resolveGrantDays($rule, $months);
+                    if ($grantDays <= 0) {
+                        continue;
+                    }
+
+                    if (! $this->meetsAttendanceRate($user, $rule, $today)) {
+                        continue;
+                    }
+
+                    $grant = $this->commandBus->dispatch(new GrantPaidLeave(
+                        userId: $user->id,
+                        grantedOn: $today->toDateString(),
+                        expiresOn: $today->copy()->addYears(2)->toDateString(),
+                        grantedDays: (float) $grantDays,
+                        grantReason: "自動付与（{$rule->name}、勤続{$months}か月）",
+                    ));
+
+                    $grantedIds[] = $grant->id;
                 }
-
-                $cycleOffset = $months - $rule->first_grant_after_months;
-                if ($cycleOffset % $rule->grant_cycle_months !== 0) {
-                    continue;
-                }
-
-                $alreadyGrantedToday = PaidLeaveGrant::query()
-                    ->where('user_id', $user->id)
-                    ->whereDate('granted_on', $today->toDateString())
-                    ->exists();
-                if ($alreadyGrantedToday) {
-                    continue;
-                }
-
-                $grantDays = $this->resolveGrantDays($rule, $months);
-                if ($grantDays <= 0) {
-                    continue;
-                }
-
-                if (! $this->meetsAttendanceRate($user, $rule, $today)) {
-                    continue;
-                }
-
-                $grant = $this->commandBus->dispatch(new GrantPaidLeave(
-                    userId: $user->id,
-                    grantedOn: $today->toDateString(),
-                    expiresOn: $today->copy()->addYears(2)->toDateString(),
-                    grantedDays: (float) $grantDays,
-                    grantReason: "自動付与（{$rule->name}、勤続{$months}か月）",
-                ));
-
-                $grantedIds[] = $grant->id;
             }
         }
 
@@ -96,10 +111,11 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
     /**
      * @return Collection<int, User>
      */
-    private function eligibleUsers(PaidLeaveGrantRule $rule, Carbon $today): Collection
+    private function eligibleUsers(PaidLeaveGrantRule $rule, Carbon $today, string $timezone, string $defaultTimezone): Collection
     {
         $query = User::query()
             ->whereNotNull('hire_date')
+            ->where(DailyBatchTimezoneGroups::constraint($timezone, $defaultTimezone))
             ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
