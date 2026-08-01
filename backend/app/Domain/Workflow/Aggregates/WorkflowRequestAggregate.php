@@ -23,12 +23,14 @@ class WorkflowRequestAggregate extends AggregateRoot
      * @param  array<string, mixed>  $formData
      */
     public function draft(
-        int $requestTypeId,
-        string $requestTypeCode,
+        ?int $requestTypeId,
+        ?string $requestTypeCode,
         string $applicantUserId,
         string $title,
         array $formData,
         ?string $approverUserId,
+        ?string $subjectType = null,
+        ?string $subjectId = null,
     ): self {
         $this->recordThat(new WorkflowRequestDrafted(
             requestTypeId: $requestTypeId,
@@ -37,6 +39,8 @@ class WorkflowRequestAggregate extends AggregateRoot
             title: $title,
             formData: $formData,
             approverUserId: $approverUserId,
+            subjectType: $subjectType,
+            subjectId: $subjectId,
         ));
 
         return $this;

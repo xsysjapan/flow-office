@@ -28,6 +28,8 @@ class WorkflowRequestProjector extends Projector
                 'approver_user_id' => $event->approverUserId,
                 'status' => WorkflowRequestStatus::DRAFT,
                 'form_data' => $event->formData,
+                'subject_type' => $event->subjectType,
+                'subject_id' => $event->subjectId,
             ],
         );
     }

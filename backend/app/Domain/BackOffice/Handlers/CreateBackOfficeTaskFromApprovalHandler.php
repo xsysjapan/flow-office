@@ -28,7 +28,10 @@ class CreateBackOfficeTaskFromApprovalHandler implements CommandHandler
         $workflowRequest = WorkflowRequest::query()->with('requestType')->findOrFail($command->workflowRequestId);
         $requestType = $workflowRequest->requestType;
 
-        if (! $requestType->requires_backoffice_task) {
+        // subject_type付きの申請(月次勤怠・経費精算)は申請種別マスタを持たない(requestTypeが
+        // null)。バックオフィスタスクの自動生成は申請種別マスタの設定に紐づく機能のため、
+        // 対象外として何もしない。
+        if ($requestType === null || ! $requestType->requires_backoffice_task) {
             return null;
         }
 

@@ -26,8 +26,8 @@ class WorkflowRequestResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
-            // subject_type/subject_idを持つ行(月次勤怠申請・経費精算申請)は一覧・詳細を横断
-            // 表示するための読み取りモデル(WorkflowRequestSubjectProjector参照)。
+            // subject_type/subject_idを持つ行(月次勤怠申請・経費精算申請)は、対象ドメインの
+            // 正データを指す申請(DraftWorkflowRequestにsubjectを渡して作成される)。
             // 一覧では軽量な要約のみ返し、詳細情報はshow()側でsubject_summaryではなく
             // 別のsubjectキー(該当ドメインの全体データ)として組み立てる。
             'subject_type' => $this->subject_type,

@@ -18,8 +18,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * WorkflowRequestProjector が stored_events から作成・更新する。
  *
  * `subject_type`/`subject_id`が設定されている行(`attendance_month`/`expense_claim`)は、
- * 月次勤怠申請・経費精算申請を横断一覧するための読み取りモデルとして
- * `WorkflowRequestSubjectProjector`が他ドメインのイベントから作成・更新する。この場合
+ * 月次勤怠申請・経費精算申請の申請そのもの。`DraftWorkflowRequest`にsubjectを渡して
+ * 作成し、以降の提出・承認・差戻しも汎用申請と同じCommand/Handlerで行う。この場合
  * `request_type_id`は常にnullで、フォーム内容は`form_data`ではなく対象ドメインの正データ
  * (`attendance_months`/`expense_claims`)を参照する。
  */
