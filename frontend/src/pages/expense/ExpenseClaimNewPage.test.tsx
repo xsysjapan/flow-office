@@ -10,6 +10,7 @@ import * as expenseClaimsApi from '../../api/expenseClaims'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import * as usersApi from '../../api/users'
 import type { ExpenseCategory, ExpenseClaim, ExpenseEntryPreset, User } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
 
 const applicant: User = {
@@ -207,7 +208,8 @@ describe('ExpenseClaimNewPage', () => {
     renderPage()
     await selectIndividualEntryMode()
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
-    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await screen.findByLabelText('利用日')
+    await pickDate(userEvent.setup(), '利用日', '2026-07-10')
     await userEvent.type(screen.getByLabelText('金額'), '12000')
     await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
     await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
@@ -300,7 +302,7 @@ describe('ExpenseClaimNewPage', () => {
     expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
 
     await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
-    await userEvent.type(screen.getByLabelText('1行目の日付'), '2026-07-04')
+    await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
     await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
 
     await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
@@ -349,7 +351,8 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
     expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
 
-    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await screen.findByLabelText('利用日')
+    await pickDate(userEvent.setup(), '利用日', '2026-07-10')
     await userEvent.type(screen.getByLabelText('金額'), '12000')
     await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
     await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
@@ -396,7 +399,8 @@ describe('ExpenseClaimNewPage', () => {
     await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
-    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await screen.findByLabelText('利用日')
+    await pickDate(userEvent.setup(), '利用日', '2026-07-10')
     await userEvent.type(screen.getByLabelText('金額'), '12000')
     await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
 
@@ -455,13 +459,13 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
     await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
-    await userEvent.type(screen.getByLabelText('1行目の日付'), '2026-07-04')
+    await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
     await userEvent.type(screen.getByLabelText('1行目の金額'), '420')
     const file1 = new File(['dummy-1'], 'row1.png', { type: 'image/png' })
     await userEvent.upload(screen.getByLabelText('1行目の領収書'), file1)
 
     await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
-    await userEvent.type(screen.getByLabelText('2行目の日付'), '2026-07-05')
+    await pickDate(userEvent.setup(), '2行目の日付', '2026-07-05')
     await userEvent.type(screen.getByLabelText('2行目の金額'), '800')
     // 2行目は領収書を選択しない(全行に必須ではないことの確認を兼ねる)。
 
@@ -571,7 +575,8 @@ describe('ExpenseClaimNewPage', () => {
     await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
-    await userEvent.type(await screen.findByLabelText('利用日'), '2026-07-10')
+    await screen.findByLabelText('利用日')
+    await pickDate(userEvent.setup(), '利用日', '2026-07-10')
     await userEvent.type(screen.getByLabelText('金額'), '12000')
     await userEvent.type(screen.getByLabelText('宿泊先名'), 'ホテルABC')
     await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
