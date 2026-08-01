@@ -31,6 +31,8 @@ class SystemSettingResource extends JsonResource
             'notification_mail_enabled' => $this->notification_mail_enabled,
             'notification_mail_sender_address' => $this->notification_mail_sender_address,
             'notification_mail_sender_name' => $this->notification_mail_sender_name,
+            'paid_leave_requires_approval' => $this->paid_leave_requires_approval,
+            'special_leave_requires_approval' => $this->special_leave_requires_approval,
         ];
     }
 }

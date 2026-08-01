@@ -40,7 +40,7 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
         return $this;
     }
 
-    public function approve(string $approvedByUserId): self
+    public function approve(?string $approvedByUserId): self
     {
         $this->recordThat(new SpecialLeaveRequestApproved(approvedByUserId: $approvedByUserId));
 

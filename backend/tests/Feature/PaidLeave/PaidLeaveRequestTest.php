@@ -416,6 +416,67 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertSame('submitted', PaidLeaveRequest::query()->findOrFail($requestId)->status);
     }
 
+    /**
+     * system_settings.paid_leave_requires_approval=falseの場合、承認ワークフローを経由せず
+     * 申請と同時に自動承認(消化)まで完結する。
+     */
+    public function test_when_approval_is_not_required_the_request_is_auto_approved_without_a_workflow_request(): void
+    {
+        SystemSetting::current()->update(['paid_leave_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $grant = PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'reason' => '私用のため',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'approved');
+        $requestId = $response->json('id');
+
+        $this->assertSame(0, WorkflowRequest::query()->where('subject_id', $requestId)->count());
+
+        $this->assertEquals(9.0, (float) $grant->refresh()->remaining_days);
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertNotNull($day);
+        $this->assertSame('paid_leave_full', $day->work_type);
+    }
+
+    /**
+     * 承認不要設定でも残数不足なら422を返し、PaidLeaveRequest行が孤立して残らないこと
+     * (RequestPaidLeave→ApprovePaidLeaveRequestの2段発行を1トランザクションで包んでいるため)。
+     */
+    public function test_when_approval_is_not_required_insufficient_balance_returns_422_without_an_orphan_request(): void
+    {
+        SystemSetting::current()->update(['paid_leave_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $grant = PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
+        ]);
+
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(0, PaidLeaveRequest::query()->count());
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+    }
+
     public function test_cancelling_a_request_also_cancels_the_workflow_request(): void
     {
         $employee = User::factory()->create();

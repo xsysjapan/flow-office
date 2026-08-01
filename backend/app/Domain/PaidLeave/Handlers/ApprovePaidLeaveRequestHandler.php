@@ -51,7 +51,9 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
             throw new DomainRuleException('提出済みの有給申請のみ承認できます。');
         }
 
-        if ($request->approver_user_id !== $command->approvedByUserId) {
+        // approvedByUserIdがnullの場合は「承認ワークフロー不要」設定による自動承認
+        // (PaidLeaveController::storeRequest参照)であり、承認者チェックそのものを行わない。
+        if ($command->approvedByUserId !== null && $request->approver_user_id !== $command->approvedByUserId) {
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 

@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\IntegrationController;
+use App\Http\Controllers\Api\LeaveApprovalSettingsController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\NotificationController;
@@ -256,6 +257,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
         Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
     });
+
+    // 有給・特別休暇の申請フォームが承認者指定を必須にすべきかを判定するための軽量設定参照。
+    // SystemSettingController(role:admin限定、M365設定等を含む)とは別に、認証済みなら
+    // 誰でも参照できるエンドポイントとして分離する。
+    Route::get('/leave-approval-settings', [LeaveApprovalSettingsController::class, 'show']);
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');

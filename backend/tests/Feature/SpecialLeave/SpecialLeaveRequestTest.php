@@ -376,6 +376,69 @@ class SpecialLeaveRequestTest extends TestCase
         $this->assertStringEndsWith('/special-leave/history', $employeeNotifications[0]['detail_url']);
     }
 
+    /**
+     * system_settings.special_leave_requires_approval=falseの場合、承認ワークフローを経由せず
+     * 申請と同時に自動承認(消化)まで完結する。
+     */
+    public function test_when_approval_is_not_required_the_request_is_auto_approved_without_a_workflow_request(): void
+    {
+        SystemSetting::current()->update(['special_leave_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        $type = $this->createType();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $grant = SpecialLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
+            'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'approved');
+        $requestId = $response->json('id');
+
+        $this->assertSame(0, WorkflowRequest::query()->where('subject_id', $requestId)->count());
+        $this->assertEquals(9.0, (float) $grant->refresh()->remaining_days);
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertNotNull($day);
+    }
+
+    /**
+     * 承認不要設定でも残数不足なら422を返し、SpecialLeaveRequest行が孤立して残らないこと。
+     */
+    public function test_when_approval_is_not_required_insufficient_balance_returns_422_without_an_orphan_request(): void
+    {
+        SystemSetting::current()->update(['special_leave_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        $type = $this->createType();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $grant = SpecialLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
+            'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
+        ]);
+
+        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(0, SpecialLeaveRequest::query()->count());
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+    }
+
     public function test_employee_can_cancel_their_own_submitted_request(): void
     {
         $employee = User::factory()->create();

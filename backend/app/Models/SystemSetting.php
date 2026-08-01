@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Crypt;
     'notification_mail_enabled', 'notification_mail_sender_address', 'notification_mail_sender_name',
     'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_mock_enabled',
     'onboarding_started_at', 'onboarding_completed_at',
+    'paid_leave_requires_approval', 'special_leave_requires_approval',
 ])]
 class SystemSetting extends Model
 {
@@ -29,6 +30,8 @@ class SystemSetting extends Model
         return [
             'notification_mail_enabled' => 'boolean',
             'm365_mock_enabled' => 'boolean',
+            'paid_leave_requires_approval' => 'boolean',
+            'special_leave_requires_approval' => 'boolean',
             // クライアントシークレットは平文でDBに保持しない (Laravelのencrypted castで暗号化する)。
             'm365_client_secret' => 'encrypted',
             'onboarding_started_at' => 'datetime',
@@ -60,6 +63,10 @@ class SystemSetting extends Model
             'm365_client_id' => config('services.azure.client_id'),
             'm365_client_secret' => config('services.azure.client_secret'),
             'onboarding_completed_at' => config('services.azure.mock_enabled') ? now() : null,
+            // firstOrCreate()はinsert後にDBから再SELECTしないため、ここで明示しないと
+            // (DBのカラムdefaultはtrueでも)モデル上はnull=falsyになってしまう。
+            'paid_leave_requires_approval' => true,
+            'special_leave_requires_approval' => true,
         ]);
 
         // system_settingsは内部的なシングルトン設定であり、REST的な「作成された
