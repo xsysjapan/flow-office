@@ -14,6 +14,47 @@ KEEP_RELEASES="${5:-5}"
 
 RELEASE_DIR="$BASE_DIR/releases/$RELEASE"
 
+# migrate --force が失敗すると、このスクリプトは`set -e`によりその場で停止し、
+# 3.以降の`current`切替まで到達しない(=本番は古いリリースのまま)。MySQLは
+# CREATE TABLE/ALTER TABLE等のDDLをトランザクション内でもロールバックせず即コミット
+# するため、「テーブル作成自体は成功したが、直後の記録処理でmigrateコマンドが
+# 中断し(SSH切断等)、migrationsテーブルへの記録に失敗した」状態が起こり得る。
+# この状態になると、次回以降のデプロイも同じマイグレーションで
+# 「table already exists」として同一の理由で失敗し続け、`current`が永遠に
+# 進まなくなる(2026-08-01に本番で実際に発生。docs/27-release-runbook.md
+# 「8. リハーサルで発見した注意点」参照)。
+#
+# migrate失敗時にその場の診断情報(migrate:statusの全出力)をログに残すことで、
+# 次回以降この障害が起きた際に切り分けの往復を発生させず、その場で復旧手順に
+# 進めるようにする。
+run_migrate() {
+  local app_dir="$1"
+  if ! (cd "$app_dir" && "$PHP_BIN" artisan migrate --force); then
+    {
+      echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      echo "!! migrate --force failed: $app_dir (release $RELEASE)"
+      echo "!! 'current' will NOT be switched — production stays on the previous release."
+      echo "!!"
+      echo "!! If the error is '...already exists', this is likely a migration that was"
+      echo "!! partially applied during an earlier failed deploy: MySQL commits DDL"
+      echo "!! (CREATE/ALTER TABLE) immediately even if migrate itself later fails or the"
+      echo "!! SSH session drops before the migrations table row is written. Every future"
+      echo "!! deploy will keep failing identically on the same migration until this is"
+      echo "!! fixed manually. Recovery steps (see docs/27-release-runbook.md):"
+      echo "!!   1. Confirm the actual table/column matches the migration file"
+      echo "!!      (SHOW CREATE TABLE <table>;)"
+      echo "!!   2. If it matches, insert the missing row into the migrations table:"
+      echo "!!      INSERT INTO migrations (migration, batch)"
+      echo "!!      VALUES ('<migration_file_name_without_php>', (SELECT batch FROM (SELECT MAX(batch)+1 AS batch FROM migrations) t));"
+      echo "!!"
+      echo "!! Current migrate:status ($app_dir):"
+      (cd "$app_dir" && "$PHP_BIN" artisan migrate:status) || true
+      echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    } >&2
+    exit 1
+  fi
+}
+
 if [ ! -d "$RELEASE_DIR/backend" ] || [ ! -d "$RELEASE_DIR/mcp" ] || [ ! -d "$RELEASE_DIR/frontend/dist" ]; then
   echo "release directory is incomplete: $RELEASE_DIR" >&2
   exit 1
@@ -59,7 +100,7 @@ chmod 600 "$BASE_DIR/shared/mcp/storage/oauth-private.key" "$BASE_DIR/shared/mcp
 
 echo "== backend: migrate & cache =="
 cd "$RELEASE_DIR/backend"
-"$PHP_BIN" artisan migrate --force
+run_migrate "$RELEASE_DIR/backend"
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
 "$PHP_BIN" artisan view:cache
@@ -68,7 +109,7 @@ cd "$RELEASE_DIR/backend"
 
 echo "== mcp: migrate & cache =="
 cd "$RELEASE_DIR/mcp"
-"$PHP_BIN" artisan migrate --force
+run_migrate "$RELEASE_DIR/mcp"
 "$PHP_BIN" artisan config:cache
 # route:cacheは実行しない: mcp/はJSON-RPCエンドポイントをアプリのルート('/'、
 # mcp/routes/api.php)に持ち、/flow-office/mcpのようなURLサブパスにマウントする
