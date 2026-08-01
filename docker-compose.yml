@@ -6,6 +6,8 @@ services:
     volumes:
       - .:/workspaces/flow-office:cached
       - /workspaces/flow-office/frontend/node_modules
+      - /workspaces/flow-office/backend/vendor
+      - /workspaces/flow-office/mcp/vendor
     working_dir: /workspaces/flow-office
     command: .devcontainer/start.sh
     ports:
