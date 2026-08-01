@@ -12,6 +12,7 @@ use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -36,7 +37,9 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
     {
         assert($command instanceof GrantScheduledSpecialLeave);
 
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today();
+        // サーバーのタイムゾーン(UTC)ではなくsystem_settings.default_timezone(既定Asia/Tokyo)
+        // 基準の「今日」で判定する(JST 0:00〜9:00はUTCでは前日になるため)。
+        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today(SystemSetting::current()->default_timezone);
         $grantedIds = [];
 
         $rules = SpecialLeaveGrantRule::query()->where('is_active', true)->with(['steps', 'specialLeaveType'])->get();

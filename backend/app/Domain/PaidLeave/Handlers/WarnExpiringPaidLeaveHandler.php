@@ -8,6 +8,7 @@ use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
+use App\Models\SystemSetting;
 use Illuminate\Support\Carbon;
 
 /**
@@ -28,7 +29,9 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
     {
         assert($command instanceof WarnExpiringPaidLeave);
 
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today();
+        // サーバーのタイムゾーン(UTC)ではなくsystem_settings.default_timezone(既定Asia/Tokyo)
+        // 基準の「今日」で判定する(JST 0:00〜9:00はUTCでは前日になるため)。
+        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today(SystemSetting::current()->default_timezone);
         $threshold = $today->copy()->addDays(self::WARNING_WINDOW_DAYS);
 
         $grants = PaidLeaveGrant::query()

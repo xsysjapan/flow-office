@@ -34,8 +34,13 @@ class WarnMonthCloseDeadlineHandler implements CommandHandler
     {
         assert($command instanceof WarnMonthCloseDeadline);
 
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today();
-        $deadlineDay = SystemSetting::current()->attendance_month_close_deadline_day;
+        $systemSetting = SystemSetting::current();
+        // サーバーのタイムゾーン(config('app.timezone')、XSERVER上はUTC)ではなく
+        // `system_settings.default_timezone`(既定Asia/Tokyo)基準の「今日」で判定する。
+        // UTCで判定すると、日本時間の日付・月と実行時のUTCの日付・月がずれる時間帯
+        // (JST 0:00〜9:00はUTCでは前日)で締め日・対象月の判定を誤るため。
+        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today($systemSetting->default_timezone);
+        $deadlineDay = $systemSetting->attendance_month_close_deadline_day;
         $warningStartDay = max(1, $deadlineDay - self::WARNING_WINDOW_DAYS);
 
         if ($today->day < $warningStartDay || $today->day > $deadlineDay) {

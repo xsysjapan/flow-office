@@ -5,10 +5,12 @@ namespace Tests\Feature\Attendance;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\EventSourcing\CommandBus;
+use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -76,6 +78,25 @@ class AttendanceNotificationWarningsTest extends TestCase
         $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance(asOf: '2026-07-06'));
 
         $this->assertSame(0, $count);
+    }
+
+    public function test_determines_the_target_month_using_the_default_timezone_not_the_server_timezone(): void
+    {
+        // config('app.timezone')はUTCだが、system_settings.default_timezoneは既定でAsia/Tokyo。
+        // UTC 2026-06-30 20:00は日本時間では2026-07-01 05:00であり、日付・月をまたぐ。
+        // asOfを渡さない(cronからの実行を模した)場合、UTCの「今日」(6/30)ではなく
+        // Asia/Tokyoの「今日」(7/1)を基準に、対象月を6月と判定できていることを確認する。
+        $this->assertSame('Asia/Tokyo', SystemSetting::current()->default_timezone);
+        SystemSetting::current()->update(['attendance_submission_deadline_day' => 1]);
+
+        $user = User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-01-01']);
+
+        Queue::fake();
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-06-30 20:00:00', 'UTC'));
+        $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance);
+
+        $this->assertSame(1, $count);
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains($job->summary, '2026-06'));
     }
 
     public function test_warns_about_months_not_yet_closed_within_the_warning_window_before_the_deadline(): void
