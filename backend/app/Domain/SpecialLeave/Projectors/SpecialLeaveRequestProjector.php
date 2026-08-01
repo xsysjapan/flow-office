@@ -6,6 +6,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -23,13 +24,12 @@ class SpecialLeaveRequestProjector extends Projector
                 'user_id' => $event->userId,
                 'special_leave_type_id' => $event->specialLeaveTypeId,
                 'approver_user_id' => $event->approverUserId,
-                'status' => SpecialLeaveRequestStatus::SUBMITTED,
+                'status' => SpecialLeaveRequestStatus::DRAFT,
                 'leave_type' => $event->leaveType,
                 'target_date' => $event->targetDate,
                 'hours' => $event->hours,
                 'requested_days' => $event->requestedDays,
                 'reason' => $event->reason,
-                'submitted_at' => $event->createdAt(),
             ],
         );
     }
@@ -55,6 +55,14 @@ class SpecialLeaveRequestProjector extends Projector
         SpecialLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => SpecialLeaveRequestStatus::CANCELLED,
             'cancelled_at' => $event->createdAt(),
+        ]);
+    }
+
+    public function onSpecialLeaveRequestShared(SpecialLeaveRequestShared $event): void
+    {
+        SpecialLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => SpecialLeaveRequestStatus::SUBMITTED,
+            'submitted_at' => $event->createdAt(),
         ]);
     }
 }

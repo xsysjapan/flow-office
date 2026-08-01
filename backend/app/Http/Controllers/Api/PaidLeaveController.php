@@ -9,6 +9,10 @@ use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
+use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
@@ -19,6 +23,7 @@ use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
+use App\Models\WorkflowRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -168,16 +173,33 @@ class PaidLeaveController extends Controller
             'reason' => ['nullable', 'string'],
         ]);
 
-        $paidLeaveRequest = $commandBus->dispatch(new RequestPaidLeave(
-            userId: $request->user()->id,
-            targetDate: $data['target_date'],
-            leaveType: $data['leave_type'],
-            hours: isset($data['hours']) ? (float) $data['hours'] : null,
+        // UC-P003: 有給申請はworkflow_requestの下書き作成を起点にする。PaidLeaveRequest集約への
+        // RequestPaidLeaveはPaidLeaveRequestOnWorkflowRequestDraftedReactorが発行する
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: $data['target_date'].' の有給申請',
+            formData: [
+                'target_date' => $data['target_date'],
+                'leave_type' => $data['leave_type'],
+                'hours' => $data['hours'] ?? null,
+                'reason' => $data['reason'] ?? null,
+            ],
             approverUserId: $data['approver_user_id'],
-            reason: $data['reason'] ?? null,
+            subjectType: WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST,
         ));
 
-        return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
+        // workflow_request作成直後ではまだPaidLeaveRequestは作成されていないため、
+        // 別途QueryしてリソースResponseを返す。RequestPaidLeaveはReactorが作成する。
+        $paidLeaveRequest = PaidLeaveRequest::query()
+            ->where('user_id', $request->user()->id)
+            ->where('approver_user_id', $data['approver_user_id'])
+            ->whereDate('target_date', $data['target_date'])
+            ->latest()
+            ->first();
+
+        return (new PaidLeaveRequestResource($paidLeaveRequest?->load('user', 'approver') ?? new PaidLeaveRequest()))->response()->setStatusCode(201);
     }
 
     #[OA\Get(
@@ -230,7 +252,20 @@ class PaidLeaveController extends Controller
     )]
     public function approveRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
     {
-        $commandBus->dispatch(new ApprovePaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
+        // UC-P004: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // ApproveWorkflowRequestを発行する。
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST)
+            ->where('subject_id', $paidLeaveRequest->id)
+            ->latest()
+            ->first();
+
+        if ($workflowRequest !== null) {
+            $commandBus->dispatch(new ApproveWorkflowRequest(
+                workflowRequestId: $workflowRequest->id,
+                approvedByUserId: $request->user()->id,
+            ));
+        }
 
         return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
     }
@@ -248,7 +283,21 @@ class PaidLeaveController extends Controller
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        $commandBus->dispatch(new ReturnPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id, $data['comment']));
+        // UC-P004 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // ReturnWorkflowRequestを発行する。
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST)
+            ->where('subject_id', $paidLeaveRequest->id)
+            ->latest()
+            ->first();
+
+        if ($workflowRequest !== null) {
+            $commandBus->dispatch(new ReturnWorkflowRequest(
+                workflowRequestId: $workflowRequest->id,
+                returnedByUserId: $request->user()->id,
+                comment: $data['comment'],
+            ));
+        }
 
         return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
     }

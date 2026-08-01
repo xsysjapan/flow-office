@@ -6,6 +6,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -56,6 +57,13 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
     public function cancel(string $cancelledByUserId): self
     {
         $this->recordThat(new SpecialLeaveRequestCancelled(cancelledByUserId: $cancelledByUserId));
+
+        return $this;
+    }
+
+    public function share(string $workflowRequestId): self
+    {
+        $this->recordThat(new SpecialLeaveRequestShared(workflowRequestId: $workflowRequestId));
 
         return $this;
     }

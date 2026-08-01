@@ -8,7 +8,6 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
-use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
@@ -17,9 +16,8 @@ use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
-use App\Models\User;
+use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
-use App\Support\FrontendUrl;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -86,7 +84,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
 
         $requestId = (string) Str::uuid();
 
-        SpecialLeaveRequestAggregate::retrieve($requestId)
+        $aggregate = SpecialLeaveRequestAggregate::retrieve($requestId)
             ->request(
                 userId: $command->userId,
                 specialLeaveTypeId: $command->specialLeaveTypeId,
@@ -96,22 +94,24 @@ class RequestSpecialLeaveHandler implements CommandHandler
                 requestedDays: $requestedDays,
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
-            )
-            ->persist();
-
-        $request = SpecialLeaveRequest::query()->findOrFail($requestId);
-
-        $approver = User::find($command->approverUserId);
-        if ($approver !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $approver,
-                title: '特別休暇申請の承認依頼',
-                summary: "{$command->targetDate} の{$specialLeaveType->name}の申請が提出されました。",
-                detailUrl: FrontendUrl::path('/special-leave/to-approve'),
             );
+
+        // workflow_requestが指定されている場合、SpecialLeaveRequestSharedイベントを発行して
+        // workflow_requestの提出を促す(ReactorからのRequestSpecialLeaveのみこのIDを持つ)。
+        if ($command->workflowRequestId !== null) {
+            $aggregate->share(workflowRequestId: $command->workflowRequestId);
+
+            // workflow_requestのsubject_idを更新する
+            WorkflowRequest::query()->findOrFail($command->workflowRequestId)
+                ->update(['subject_id' => $requestId]);
         }
 
-        return $request;
+        $aggregate->persist();
+
+        // 通知はSubmitWorkflowRequestHandlerが一括して送るため、ここでは送らない
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)
+
+        return SpecialLeaveRequest::query()->findOrFail($requestId);
     }
 
     /**

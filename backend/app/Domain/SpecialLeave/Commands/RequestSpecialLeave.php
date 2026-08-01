@@ -14,5 +14,6 @@ class RequestSpecialLeave implements Command
         public readonly ?float $hours,
         public readonly string $approverUserId,
         public readonly ?string $reason,
+        public readonly ?string $workflowRequestId = null,
     ) {}
 }

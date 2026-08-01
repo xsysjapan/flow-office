@@ -8,7 +8,6 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
-use App\Jobs\SendNotificationJob;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
@@ -16,9 +15,8 @@ use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
-use App\Models\User;
+use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
-use App\Support\FrontendUrl;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -93,7 +91,7 @@ class RequestPaidLeaveHandler implements CommandHandler
 
         $requestId = (string) Str::uuid();
 
-        PaidLeaveRequestAggregate::retrieve($requestId)
+        $aggregate = PaidLeaveRequestAggregate::retrieve($requestId)
             ->request(
                 userId: $command->userId,
                 targetDate: $command->targetDate,
@@ -102,22 +100,24 @@ class RequestPaidLeaveHandler implements CommandHandler
                 requestedDays: $requestedDays,
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
-            )
-            ->persist();
-
-        $request = PaidLeaveRequest::query()->findOrFail($requestId);
-
-        $approver = User::find($command->approverUserId);
-        if ($approver !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $approver,
-                title: '有給申請の承認依頼',
-                summary: "{$command->targetDate} の有給申請が提出されました。",
-                detailUrl: FrontendUrl::path('/paid-leave/to-approve'),
             );
+
+        // workflow_requestが指定されている場合、PaidLeaveRequestSharedイベントを発行して
+        // workflow_requestの提出を促す(ReactorからのRequestPaidLeaveのみこのIDを持つ)。
+        if ($command->workflowRequestId !== null) {
+            $aggregate->share(workflowRequestId: $command->workflowRequestId);
+
+            // workflow_requestのsubject_idを更新する
+            WorkflowRequest::query()->findOrFail($command->workflowRequestId)
+                ->update(['subject_id' => $requestId]);
         }
 
-        return $request;
+        $aggregate->persist();
+
+        // 通知はSubmitWorkflowRequestHandlerが一括して送るため、ここでは送らない
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)
+
+        return PaidLeaveRequest::query()->findOrFail($requestId);
     }
 
     private function resolveRequestedDays(RequestPaidLeave $command, ?WorkStyle $workStyle): float

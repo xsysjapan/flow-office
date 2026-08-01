@@ -22,6 +22,10 @@ final class WorkflowRequestNotificationContent
 
     public const EXPENSE_CLAIM = 'expense_claim';
 
+    public const PAID_LEAVE_REQUEST = 'paid_leave_request';
+
+    public const SPECIAL_LEAVE_REQUEST = 'special_leave_request';
+
     private function __construct(
         public readonly string $title,
         public readonly string $summary,
@@ -40,6 +44,16 @@ final class WorkflowRequestNotificationContent
                 title: '経費精算の承認依頼',
                 summary: '「'.self::claimTitle($workflowRequest).'」の経費精算が提出されました。',
                 detailUrl: FrontendUrl::path('/expenses/to-approve'),
+            ),
+            self::PAID_LEAVE_REQUEST => new self(
+                title: '有給休暇申請の承認依頼',
+                summary: '有給休暇申請が提出されました。',
+                detailUrl: FrontendUrl::path('/paid-leave/to-approve'),
+            ),
+            self::SPECIAL_LEAVE_REQUEST => new self(
+                title: '特別休暇申請の承認依頼',
+                summary: '特別休暇申請が提出されました。',
+                detailUrl: FrontendUrl::path('/special-leave/to-approve'),
             ),
             default => new self(
                 title: '承認依頼',
@@ -62,6 +76,16 @@ final class WorkflowRequestNotificationContent
                 summary: '「'.self::claimTitle($workflowRequest).'」の経費精算が承認されました。',
                 detailUrl: FrontendUrl::path('/expenses/'.$workflowRequest->subject_id),
             ),
+            self::PAID_LEAVE_REQUEST => new self(
+                title: '有給休暇申請が承認されました',
+                summary: '有給休暇申請が承認されました。',
+                detailUrl: FrontendUrl::path('/paid-leave/requests'),
+            ),
+            self::SPECIAL_LEAVE_REQUEST => new self(
+                title: '特別休暇申請が承認されました',
+                summary: '特別休暇申請が承認されました。',
+                detailUrl: FrontendUrl::path('/special-leave/requests'),
+            ),
             default => new self(
                 title: '承認完了',
                 summary: "「{$workflowRequest->title}」が承認されました。",
@@ -82,6 +106,16 @@ final class WorkflowRequestNotificationContent
                 title: '経費精算が差戻されました',
                 summary: '「'.self::claimTitle($workflowRequest)."」の経費精算が差し戻されました: {$comment}",
                 detailUrl: FrontendUrl::path('/expenses/'.$workflowRequest->subject_id),
+            ),
+            self::PAID_LEAVE_REQUEST => new self(
+                title: '有給休暇申請が差戻されました',
+                summary: "有給休暇申請が差し戻されました: {$comment}",
+                detailUrl: FrontendUrl::path('/paid-leave/requests'),
+            ),
+            self::SPECIAL_LEAVE_REQUEST => new self(
+                title: '特別休暇申請が差戻されました',
+                summary: "特別休暇申請が差し戻されました: {$comment}",
+                detailUrl: FrontendUrl::path('/special-leave/requests'),
             ),
             default => new self(
                 title: '差戻し',

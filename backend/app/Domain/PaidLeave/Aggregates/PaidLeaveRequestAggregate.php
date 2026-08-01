@@ -6,6 +6,7 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
+use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -56,6 +57,13 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     public function cancel(string $cancelledByUserId): self
     {
         $this->recordThat(new PaidLeaveRequestCancelled(cancelledByUserId: $cancelledByUserId));
+
+        return $this;
+    }
+
+    public function share(string $workflowRequestId): self
+    {
+        $this->recordThat(new PaidLeaveRequestShared(workflowRequestId: $workflowRequestId));
 
         return $this;
     }
