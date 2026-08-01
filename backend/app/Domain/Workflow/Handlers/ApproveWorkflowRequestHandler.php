@@ -28,7 +28,10 @@ class ApproveWorkflowRequestHandler implements CommandHandler
             throw new DomainRuleException('提出済みの申請のみ承認できます。');
         }
 
-        if ($workflowRequest->approver_user_id !== $command->approvedByUserId) {
+        // approvedByUserIdがnullの場合は経費精算等のapproval_skip_thresholdによる自動承認
+        // (Reactor経由のシステム操作)であり、承認者本人によるリクエストではないためチェックを
+        // スキップする。
+        if ($command->approvedByUserId !== null && $workflowRequest->approver_user_id !== $command->approvedByUserId) {
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 

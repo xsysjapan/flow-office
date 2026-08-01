@@ -11,6 +11,7 @@ class ApproveWorkflowRequest implements Command
 {
     public function __construct(
         public readonly string $workflowRequestId,
-        public readonly string $approvedByUserId,
+        // nullは、経費精算のapproval_skip_threshold等による自動承認(承認者確認を1段階省略)を表す。
+        public readonly ?string $approvedByUserId,
     ) {}
 }

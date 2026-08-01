@@ -6,6 +6,7 @@ use App\Models\BackOfficeTask;
 use App\Models\ExpenseCategory;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -176,6 +177,16 @@ class ExpenseClaimFlowTest extends TestCase
 
         $task = BackOfficeTask::query()->where('source_type', 'expense_claim')->where('source_id', $claimId)->first();
         $this->assertNotNull($task);
+
+        // 自動承認(承認者操作を経ない)でも、workflow_request起点のオーケストレーションが
+        // 取り残されず「approved」まで正しく追従すること(ApproveWorkflowRequestOnExpenseClaim
+        // AutoApprovedReactor経由)。
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', 'expense_claim')
+            ->where('subject_id', $claimId)
+            ->first();
+        $this->assertNotNull($workflowRequest);
+        $this->assertSame('approved', $workflowRequest->status);
     }
 
     public function test_only_the_designated_approver_can_approve(): void

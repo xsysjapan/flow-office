@@ -56,7 +56,7 @@ class WorkflowRequestAggregate extends AggregateRoot
         return $this;
     }
 
-    public function approve(string $approvedByUserId): self
+    public function approve(?string $approvedByUserId): self
     {
         $this->recordThat(new WorkflowRequestApproved(approvedByUserId: $approvedByUserId));
 

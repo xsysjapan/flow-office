@@ -25,6 +25,14 @@ class ExpenseClaimApprovalOnWorkflowRequestApprovedReactor extends Reactor
             return;
         }
 
+        // approvedByUserIdがnullの場合、この承認はExpenseClaim側のapproval_skip_thresholdに
+        // よる自動承認をApproveWorkflowRequestOnExpenseClaimAutoApprovedReactor経由で
+        // 折り返しただけであり、ExpenseClaimは既に承認済みのため下流への伝播は不要
+        // (ApproveExpenseClaimは承認者IDを必須とするコマンドでもある)。
+        if ($event->approvedByUserId === null) {
+            return;
+        }
+
         $this->commandBus->dispatch(new ApproveExpenseClaim(
             claimId: $workflowRequest->subject_id,
             approvedByUserId: $event->approvedByUserId,

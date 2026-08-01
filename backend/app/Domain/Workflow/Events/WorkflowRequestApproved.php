@@ -11,6 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class WorkflowRequestApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $approvedByUserId,
+        // nullは、経費精算のapproval_skip_threshold等による自動承認を表す。
+        public readonly ?string $approvedByUserId,
     ) {}
 }
