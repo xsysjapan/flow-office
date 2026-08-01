@@ -16,7 +16,6 @@ use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
-use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -82,7 +81,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
             throw new DomainRuleException('特別休暇の残数が不足しています。');
         }
 
-        $requestId = (string) Str::uuid();
+        $requestId = $command->requestId ?? (string) Str::uuid();
 
         $aggregate = SpecialLeaveRequestAggregate::retrieve($requestId)
             ->request(
@@ -100,10 +99,6 @@ class RequestSpecialLeaveHandler implements CommandHandler
         // workflow_requestの提出を促す(ReactorからのRequestSpecialLeaveのみこのIDを持つ)。
         if ($command->workflowRequestId !== null) {
             $aggregate->share(workflowRequestId: $command->workflowRequestId);
-
-            // workflow_requestのsubject_idを更新する
-            WorkflowRequest::query()->findOrFail($command->workflowRequestId)
-                ->update(['subject_id' => $requestId]);
         }
 
         $aggregate->persist();

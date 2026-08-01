@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
-use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
-use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
-use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -26,9 +24,11 @@ use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -232,6 +232,11 @@ class SpecialLeaveController extends Controller
         // UC-P003: 特別休暇申請はworkflow_requestの下書き作成を起点にする。SpecialLeaveRequest集約への
         // RequestSpecialLeaveはSpecialLeaveRequestOnWorkflowRequestDraftedReactorが発行する
         // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        // SpecialLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
+        // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
+        // (ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+        $requestId = (string) Str::uuid();
+
         $commandBus->dispatch(new DraftWorkflowRequest(
             requestTypeCode: null,
             applicantUserId: $request->user()->id,
@@ -245,18 +250,12 @@ class SpecialLeaveController extends Controller
             ],
             approverUserId: $data['approver_user_id'],
             subjectType: WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST,
+            subjectId: $requestId,
         ));
 
-        // workflow_request作成直後ではまだSpecialLeaveRequestは作成されていないため、
-        // 別途QueryしてリソースResponseを返す。RequestSpecialLeaveはReactorが作成する。
-        $specialLeaveRequest = SpecialLeaveRequest::query()
-            ->where('user_id', $request->user()->id)
-            ->where('approver_user_id', $data['approver_user_id'])
-            ->whereDate('target_date', $data['target_date'])
-            ->latest()
-            ->first();
+        $specialLeaveRequest = SpecialLeaveRequest::query()->findOrFail($requestId);
 
-        return (new SpecialLeaveRequestResource($specialLeaveRequest?->load('user', 'approver', 'specialLeaveType') ?? new SpecialLeaveRequest()))->response()->setStatusCode(201);
+        return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
     }
 
     #[OA\Get(
@@ -308,18 +307,13 @@ class SpecialLeaveController extends Controller
     {
         // UC-P004: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
         // ApproveWorkflowRequestを発行する。
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST)
-            ->where('subject_id', $specialLeaveRequest->id)
-            ->latest()
-            ->first();
-
-        if ($workflowRequest !== null) {
-            $commandBus->dispatch(new ApproveWorkflowRequest(
-                workflowRequestId: $workflowRequest->id,
-                approvedByUserId: $request->user()->id,
-            ));
-        }
+        $commandBus->dispatch(new ApproveWorkflowRequest(
+            workflowRequestId: $this->submittedWorkflowRequestId(
+                $specialLeaveRequest,
+                '対応する申請が見つからないため承認できません。',
+            ),
+            approvedByUserId: $request->user()->id,
+        ));
 
         return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
     }
@@ -339,19 +333,14 @@ class SpecialLeaveController extends Controller
 
         // UC-P004 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
         // ReturnWorkflowRequestを発行する。
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST)
-            ->where('subject_id', $specialLeaveRequest->id)
-            ->latest()
-            ->first();
-
-        if ($workflowRequest !== null) {
-            $commandBus->dispatch(new ReturnWorkflowRequest(
-                workflowRequestId: $workflowRequest->id,
-                returnedByUserId: $request->user()->id,
-                comment: $data['comment'],
-            ));
-        }
+        $commandBus->dispatch(new ReturnWorkflowRequest(
+            workflowRequestId: $this->submittedWorkflowRequestId(
+                $specialLeaveRequest,
+                '対応する申請が見つからないため差し戻せません。',
+            ),
+            returnedByUserId: $request->user()->id,
+            comment: $data['comment'],
+        ));
 
         return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
     }
@@ -409,5 +398,26 @@ class SpecialLeaveController extends Controller
         );
 
         return StoredEventResource::collection($events);
+    }
+
+    /**
+     * 承認・差戻し対象のworkflow_request(subject_type=special_leave_request)を特定する。
+     * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
+     * DomainRuleExceptionを投げる。
+     */
+    private function submittedWorkflowRequestId(SpecialLeaveRequest $specialLeaveRequest, string $message): string
+    {
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST)
+            ->where('subject_id', $specialLeaveRequest->id)
+            ->where('status', WorkflowRequestStatus::SUBMITTED)
+            ->latest()
+            ->first();
+
+        if ($workflowRequest === null) {
+            throw new DomainRuleException($message);
+        }
+
+        return $workflowRequest->id;
     }
 }

@@ -43,6 +43,7 @@ class PaidLeaveRequestOnWorkflowRequestDraftedReactor extends Reactor
             approverUserId: $workflowRequest->approver_user_id,
             reason: $formData['reason'] ?? null,
             workflowRequestId: $event->aggregateRootUuid(),
+            requestId: $workflowRequest->subject_id,
         ));
     }
 }

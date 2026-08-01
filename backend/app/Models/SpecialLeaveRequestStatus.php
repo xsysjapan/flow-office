@@ -4,8 +4,6 @@ namespace App\Models;
 
 final class SpecialLeaveRequestStatus
 {
-    public const DRAFT = 'draft';
-
     public const SUBMITTED = 'submitted';
 
     public const APPROVED = 'approved';

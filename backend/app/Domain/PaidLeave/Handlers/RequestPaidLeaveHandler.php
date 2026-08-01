@@ -15,7 +15,6 @@ use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
-use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -89,7 +88,7 @@ class RequestPaidLeaveHandler implements CommandHandler
             throw new DomainRuleException('有給残数が不足しています。');
         }
 
-        $requestId = (string) Str::uuid();
+        $requestId = $command->requestId ?? (string) Str::uuid();
 
         $aggregate = PaidLeaveRequestAggregate::retrieve($requestId)
             ->request(
@@ -106,10 +105,6 @@ class RequestPaidLeaveHandler implements CommandHandler
         // workflow_requestの提出を促す(ReactorからのRequestPaidLeaveのみこのIDを持つ)。
         if ($command->workflowRequestId !== null) {
             $aggregate->share(workflowRequestId: $command->workflowRequestId);
-
-            // workflow_requestのsubject_idを更新する
-            WorkflowRequest::query()->findOrFail($command->workflowRequestId)
-                ->update(['subject_id' => $requestId]);
         }
 
         $aggregate->persist();

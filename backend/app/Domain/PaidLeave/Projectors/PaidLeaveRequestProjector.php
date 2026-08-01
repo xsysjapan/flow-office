@@ -6,7 +6,6 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
-use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -23,12 +22,13 @@ class PaidLeaveRequestProjector extends Projector
             [
                 'user_id' => $event->userId,
                 'approver_user_id' => $event->approverUserId,
-                'status' => PaidLeaveRequestStatus::DRAFT,
+                'status' => PaidLeaveRequestStatus::SUBMITTED,
                 'leave_type' => $event->leaveType,
                 'target_date' => $event->targetDate,
                 'hours' => $event->hours,
                 'requested_days' => $event->requestedDays,
                 'reason' => $event->reason,
+                'submitted_at' => $event->createdAt(),
             ],
         );
     }
@@ -54,14 +54,6 @@ class PaidLeaveRequestProjector extends Projector
         PaidLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => PaidLeaveRequestStatus::CANCELLED,
             'cancelled_at' => $event->createdAt(),
-        ]);
-    }
-
-    public function onPaidLeaveRequestShared(PaidLeaveRequestShared $event): void
-    {
-        PaidLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
-            'status' => PaidLeaveRequestStatus::SUBMITTED,
-            'submitted_at' => $event->createdAt(),
         ]);
     }
 }
