@@ -93,10 +93,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---
     Route::get('/request-types', [RequestTypeController::class, 'index']);
-    Route::middleware('role:admin')->group(function () {
-        Route::post('/request-types', [RequestTypeController::class, 'store']);
-        Route::put('/request-types/{requestType}', [RequestTypeController::class, 'update']);
-    });
 
     // --- 汎用申請 (docs/10-usecases-workflow.md UC-W002〜UC-W005) ---
     Route::get('/workflow-requests/mine', [WorkflowRequestController::class, 'indexMine']);
@@ -120,11 +116,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 経費精算 (docs/30-usecases-expense.md UC-X001〜UC-X012) ---
     Route::get('/expense-categories', [ExpenseCategoryController::class, 'index']);
-    Route::middleware('role:admin')->group(function () {
-        Route::post('/expense-categories', [ExpenseCategoryController::class, 'store']);
-        Route::put('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
-        Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
-    });
 
     Route::get('/expense-entry-presets', [ExpenseEntryPresetController::class, 'index']);
     Route::post('/expense-entry-presets', [ExpenseEntryPresetController::class, 'store']);
@@ -251,17 +242,10 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('role:admin,hr_staff');
     });
 
-    // --- 勤怠未提出督促の個別除外 (誤ってその月を提出対象にしてしまった等の例外的対応。
-    // usage_start_date/hire_dateによる除外条件とは別の汎用的な除外リスト) ---
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
-        Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
-    });
-
     // 有給・特別休暇の申請フォームが承認者指定を必須にすべきかを判定するための軽量設定参照。
-    // SystemSettingController(role:admin限定、M365設定等を含む)とは別に、認証済みなら
-    // 誰でも参照できるエンドポイントとして分離する。
-    Route::get('/leave-approval-settings', [LeaveApprovalSettingsController::class, 'show']);
+    // SystemSettingController(/admin/system-settings、role:admin限定、M365設定等を含む)とは
+    // 別に、認証済みなら誰でも参照できるエンドポイントとしてここ(/system-settings)に分離する。
+    Route::get('/system-settings', [LeaveApprovalSettingsController::class, 'show']);
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
@@ -301,16 +285,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
     });
 
-    // --- 監査ログ (docs/15-usecases-admin.md UC-M003) ---
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/audit-log', [AuditLogController::class, 'index']);
-        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv']);
-    });
-
-    // --- システム設定 (docs/06-usecases-auth.md UC-003) ---
-    Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('role:admin');
-    Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('role:admin');
-
     // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
     Route::get('/users/me/devices', [DeviceController::class, 'indexMine']);
     Route::post('/users/me/devices', [DeviceController::class, 'storePersonal']);
@@ -322,16 +296,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/devices/pairing/claim', [DeviceController::class, 'claimPairing'])
         ->middleware('ability:device:claim-pairing')
         ->name('devices.pairing.claim');
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/devices', [DeviceController::class, 'index']);
-        Route::post('/devices', [DeviceController::class, 'store']);
-        Route::get('/devices/{device}', [DeviceController::class, 'show']);
-        Route::patch('/devices/{device}', [DeviceController::class, 'update']);
-        Route::patch('/devices/{device}/roles', [DeviceController::class, 'updateRoles']);
-        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
-        Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
-        Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
-    });
     // 停止・有効化・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
     // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。
     Route::post('/devices/{device}/disable', [DeviceController::class, 'disable']);
@@ -352,6 +316,43 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/me/integrations', [IntegrationController::class, 'store']);
     Route::post('/users/me/integrations/{integration}/reissue', [IntegrationController::class, 'reissue']);
     Route::post('/users/me/integrations/{integration}/revoke', [IntegrationController::class, 'revoke']);
+
+    // --- 管理者専用エンドポイント (role:admin単独のもののみ。role:admin,hr_staffのものは
+    //     元の場所のまま。docs/15-usecases-admin.md UC-M001〜UC-M003, docs/23-usecases-devices.md,
+    //     docs/06-usecases-auth.md UC-003) ---
+    Route::prefix('admin')->middleware('role:admin')->group(function () {
+        // 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002)
+        Route::post('/request-types', [RequestTypeController::class, 'store']);
+        Route::put('/request-types/{requestType}', [RequestTypeController::class, 'update']);
+
+        // 経費精算 カテゴリマスタ (docs/30-usecases-expense.md)
+        Route::post('/expense-categories', [ExpenseCategoryController::class, 'store']);
+        Route::put('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
+        Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
+
+        // 勤怠未提出督促の個別除外
+        Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
+        Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
+
+        // 監査ログ (docs/15-usecases-admin.md UC-M003)
+        Route::get('/audit-log', [AuditLogController::class, 'index']);
+        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv']);
+
+        // システム設定 (docs/06-usecases-auth.md UC-003)。認証済みなら誰でも参照できる
+        // 安全なサブセットは /system-settings (LeaveApprovalSettingsController) 側にある。
+        Route::get('/system-settings', [SystemSettingController::class, 'show']);
+        Route::put('/system-settings', [SystemSettingController::class, 'update']);
+
+        // 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005)
+        Route::get('/devices', [DeviceController::class, 'index']);
+        Route::post('/devices', [DeviceController::class, 'store']);
+        Route::get('/devices/{device}', [DeviceController::class, 'show']);
+        Route::patch('/devices/{device}', [DeviceController::class, 'update']);
+        Route::patch('/devices/{device}/roles', [DeviceController::class, 'updateRoles']);
+        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
+        Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
+        Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
+    });
 });
 
 // --- 端末打刻 (docs/07-usecases-attendance.md UC-A020、docs/23-usecases-devices.md UC-D002) ---

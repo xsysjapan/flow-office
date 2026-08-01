@@ -21,13 +21,13 @@ export interface SaveExpenseCategoryInput {
 }
 
 export function createExpenseCategory(input: SaveExpenseCategoryInput): Promise<ExpenseCategory> {
-  return apiFetch('/expense-categories', { method: 'POST', body: input })
+  return apiFetch('/admin/expense-categories', { method: 'POST', body: input })
 }
 
 export function updateExpenseCategory(id: number, input: SaveExpenseCategoryInput): Promise<ExpenseCategory> {
-  return apiFetch(`/expense-categories/${id}`, { method: 'PUT', body: input })
+  return apiFetch(`/admin/expense-categories/${id}`, { method: 'PUT', body: input })
 }
 
 export function deleteExpenseCategory(id: number): Promise<void> {
-  return apiFetch(`/expense-categories/${id}`, { method: 'DELETE' })
+  return apiFetch(`/admin/expense-categories/${id}`, { method: 'DELETE' })
 }

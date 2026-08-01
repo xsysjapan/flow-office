@@ -5,7 +5,7 @@ import type { AttendanceSubmissionReminderExclusion } from './types'
 export function fetchAttendanceSubmissionReminderExclusions(
   userId?: string,
 ): Promise<AttendanceSubmissionReminderExclusion[]> {
-  return apiFetch('/attendance-submission-reminder-exclusions', { query: { user_id: userId } })
+  return apiFetch('/admin/attendance-submission-reminder-exclusions', { query: { user_id: userId } })
 }
 
 export interface ExcludeAttendanceSubmissionReminderInput {
@@ -18,5 +18,5 @@ export interface ExcludeAttendanceSubmissionReminderInput {
 export function excludeAttendanceSubmissionReminder(
   input: ExcludeAttendanceSubmissionReminderInput,
 ): Promise<AttendanceSubmissionReminderExclusion> {
-  return apiFetch('/attendance-submission-reminder-exclusions', { method: 'POST', body: input })
+  return apiFetch('/admin/attendance-submission-reminder-exclusions', { method: 'POST', body: input })
 }

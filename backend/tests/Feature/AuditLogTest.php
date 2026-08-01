@@ -39,14 +39,14 @@ class AuditLogTest extends TestCase
             'form_data' => [],
         ])->assertCreated();
 
-        $matching = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=workflow_request');
+        $matching = $this->actingAs($admin)->getJson('/api/admin/audit-log?aggregate_type=workflow_request');
         $matching->assertOk();
         $data = $matching->json('data');
         $this->assertCount(1, $data);
         $this->assertSame('workflow_request.drafted', $data[0]['event_type']);
         $this->assertSame('タクシー代', $data[0]['payload']['title']);
 
-        $unrelated = $this->actingAs($admin)->getJson('/api/audit-log?aggregate_type=backoffice_task');
+        $unrelated = $this->actingAs($admin)->getJson('/api/admin/audit-log?aggregate_type=backoffice_task');
         $unrelated->assertOk();
         $this->assertCount(0, $unrelated->json('data'));
     }
@@ -55,6 +55,6 @@ class AuditLogTest extends TestCase
     {
         $employee = User::factory()->create();
 
-        $this->actingAs($employee)->getJson('/api/audit-log')->assertForbidden();
+        $this->actingAs($employee)->getJson('/api/admin/audit-log')->assertForbidden();
     }
 }

@@ -8,7 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * GET /api/leave-approval-settings: 有給・特別休暇の申請フォームが承認者指定を必須にすべきかを
+ * GET /api/system-settings: 有給・特別休暇の申請フォームが承認者指定を必須にすべきかを
  * 判断するための軽量エンドポイント。SystemSettingResource(role:admin限定)とは別に、
  * 一般社員も参照できる必要がある。
  */
@@ -25,7 +25,7 @@ class LeaveApprovalSettingsTest extends TestCase
 
         $employee = User::factory()->create();
 
-        $response = $this->actingAs($employee)->getJson('/api/leave-approval-settings');
+        $response = $this->actingAs($employee)->getJson('/api/system-settings');
 
         $response->assertOk();
         $response->assertExactJson([
@@ -36,6 +36,6 @@ class LeaveApprovalSettingsTest extends TestCase
 
     public function test_unauthenticated_requests_are_rejected(): void
     {
-        $this->getJson('/api/leave-approval-settings')->assertUnauthorized();
+        $this->getJson('/api/system-settings')->assertUnauthorized();
     }
 }

@@ -12,7 +12,7 @@ export interface AuditLogFilters {
 }
 
 export function fetchAuditLog(filters: AuditLogFilters = {}): Promise<Paginated<StoredEvent>> {
-  return apiFetch('/audit-log', { query: filters })
+  return apiFetch('/admin/audit-log', { query: filters })
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
@@ -22,7 +22,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
  * クリックイベントを合成する(apiFetchのJSON前提の処理には乗せない)。
  */
 export async function downloadAuditLogCsv(filters: AuditLogFilters = {}): Promise<void> {
-  const url = new URL('audit-log/export', `${API_BASE_URL.replace(/\/?$/, '/')}`)
+  const url = new URL('admin/audit-log/export', `${API_BASE_URL.replace(/\/?$/, '/')}`)
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined) url.searchParams.set(key, String(value))
   }

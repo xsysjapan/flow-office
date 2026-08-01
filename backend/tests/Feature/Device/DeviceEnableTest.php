@@ -58,7 +58,7 @@ class DeviceEnableTest extends TestCase
 
         $this->actingAs($admin)->postJson("/api/devices/{$device->id}/enable")->assertSuccessful();
 
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$device->id}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$device->id}/pairing");
         $pairing->assertSuccessful();
         $this->assertNotEmpty($pairing->json('claim_token'));
 

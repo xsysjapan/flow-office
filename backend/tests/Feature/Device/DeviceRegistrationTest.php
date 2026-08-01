@@ -33,7 +33,7 @@ class DeviceRegistrationTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->actingAs($admin)->postJson('/api/devices', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => '本社1階受付',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
@@ -49,7 +49,7 @@ class DeviceRegistrationTest extends TestCase
         $this->assertSame(DeviceOwnerType::ORGANIZATION_SHARED, $device->owner_type);
 
         // 管理者の認証済みトークンだけを根拠に、一時ペアリングトークン(claim token)を発行する。
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $pairing->assertSuccessful();
         $claimToken = $pairing->json('claim_token');
         $this->assertNotEmpty($claimToken);
@@ -80,14 +80,14 @@ class DeviceRegistrationTest extends TestCase
     public function test_claim_token_cannot_be_reused_after_claiming(): void
     {
         $admin = $this->admin();
-        $response = $this->actingAs($admin)->postJson('/api/devices', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => '倉庫入口',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
         ]);
         $deviceId = $response->json('id');
 
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $claimToken = $pairing->json('claim_token');
 
         $this->app['auth']->forgetGuards();
@@ -113,7 +113,7 @@ class DeviceRegistrationTest extends TestCase
     {
         $employee = User::factory()->create();
 
-        $this->actingAs($employee)->postJson('/api/devices', [
+        $this->actingAs($employee)->postJson('/api/admin/devices', [
             'name' => '不正端末',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
@@ -166,14 +166,14 @@ class DeviceRegistrationTest extends TestCase
     public function test_a_pending_claim_token_cannot_be_used_after_the_device_is_revoked(): void
     {
         $admin = $this->admin();
-        $response = $this->actingAs($admin)->postJson('/api/devices', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => '紛失した端末',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
         ]);
         $deviceId = $response->json('id');
 
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $claimToken = $pairing->json('claim_token');
 
         // claim token発行後、端末を紛失したものとして失効させる。
@@ -190,14 +190,14 @@ class DeviceRegistrationTest extends TestCase
     public function test_a_pending_claim_token_cannot_be_used_after_the_device_is_disabled(): void
     {
         $admin = $this->admin();
-        $response = $this->actingAs($admin)->postJson('/api/devices', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => '一時停止端末',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
         ]);
         $deviceId = $response->json('id');
 
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $claimToken = $pairing->json('claim_token');
 
         $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/disable")->assertSuccessful();
@@ -209,14 +209,14 @@ class DeviceRegistrationTest extends TestCase
     public function test_admin_can_reissue_pairing_for_an_already_paired_device(): void
     {
         $admin = $this->admin();
-        $response = $this->actingAs($admin)->postJson('/api/devices', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => '本社2階受付',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::ATTENDANCE_READER],
         ]);
         $deviceId = $response->json('id');
 
-        $firstPairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $firstPairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $firstClaimToken = $firstPairing->json('claim_token');
         $this->app['auth']->forgetGuards();
         $this->withToken($firstClaimToken)->postJson('/api/devices/pairing/claim')->assertSuccessful();
@@ -227,7 +227,7 @@ class DeviceRegistrationTest extends TestCase
         // Androidアプリを削除した等の理由で本トークンを失った場合でも、activeのまま
         // 再度ペアリング用トークンを発行し直せる。
         $this->app['auth']->forgetGuards();
-        $reissue = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $reissue = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $reissue->assertSuccessful();
         $secondClaimToken = $reissue->json('claim_token');
         $this->assertNotEmpty($secondClaimToken);
@@ -261,7 +261,7 @@ class DeviceRegistrationTest extends TestCase
             'disabled_at' => now(),
         ]);
 
-        $this->actingAs($admin)->postJson("/api/devices/{$device->id}/pairing")->assertUnprocessable();
+        $this->actingAs($admin)->postJson("/api/admin/devices/{$device->id}/pairing")->assertUnprocessable();
     }
 
     public function test_admin_can_update_device_roles(): void
@@ -270,7 +270,7 @@ class DeviceRegistrationTest extends TestCase
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
         $device->roles()->create(['role_type' => DeviceRoleType::ATTENDANCE_READER]);
 
-        $response = $this->actingAs($admin)->patchJson("/api/devices/{$device->id}/roles", [
+        $response = $this->actingAs($admin)->patchJson("/api/admin/devices/{$device->id}/roles", [
             'role_types' => [DeviceRoleType::AUTHENTICATION_DEVICE, DeviceRoleType::ACCESS_CONTROL],
         ]);
 
@@ -297,7 +297,7 @@ class DeviceRegistrationTest extends TestCase
         $admin = $this->admin();
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
 
-        $this->actingAs($admin)->patchJson("/api/devices/{$device->id}/roles", [
+        $this->actingAs($admin)->patchJson("/api/admin/devices/{$device->id}/roles", [
             'role_types' => [],
         ])->assertUnprocessable();
     }
@@ -311,7 +311,7 @@ class DeviceRegistrationTest extends TestCase
             'disabled_at' => now(),
         ]);
 
-        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
+        $this->actingAs($admin)->deleteJson("/api/admin/devices/{$device->id}")->assertNoContent();
 
         $this->assertSoftDeleted('devices', ['id' => $device->id]);
         $this->assertTrue(
@@ -330,7 +330,7 @@ class DeviceRegistrationTest extends TestCase
             'status' => DeviceStatus::PENDING_PAIRING,
         ]);
 
-        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertUnprocessable();
+        $this->actingAs($admin)->deleteJson("/api/admin/devices/{$device->id}")->assertUnprocessable();
 
         $this->assertDatabaseHas('devices', ['id' => $device->id, 'deleted_at' => null]);
     }
@@ -342,13 +342,13 @@ class DeviceRegistrationTest extends TestCase
             'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
             'status' => DeviceStatus::REVOKED,
         ]);
-        $this->actingAs($admin)->deleteJson("/api/devices/{$device->id}")->assertNoContent();
+        $this->actingAs($admin)->deleteJson("/api/admin/devices/{$device->id}")->assertNoContent();
 
-        $default = $this->actingAs($admin)->getJson('/api/devices');
+        $default = $this->actingAs($admin)->getJson('/api/admin/devices');
         $default->assertSuccessful();
         $this->assertNotContains($device->id, array_column($default->json('data'), 'id'));
 
-        $withTrashed = $this->actingAs($admin)->getJson('/api/devices?with_trashed=1');
+        $withTrashed = $this->actingAs($admin)->getJson('/api/admin/devices?with_trashed=1');
         $withTrashed->assertSuccessful();
         $this->assertContains($device->id, array_column($withTrashed->json('data'), 'id'));
     }
@@ -358,7 +358,7 @@ class DeviceRegistrationTest extends TestCase
         $admin = $this->admin();
         Device::factory()->count(25)->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
 
-        $response = $this->actingAs($admin)->getJson('/api/devices');
+        $response = $this->actingAs($admin)->getJson('/api/admin/devices');
 
         $response->assertSuccessful();
         $this->assertCount(20, $response->json('data'));

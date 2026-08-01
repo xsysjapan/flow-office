@@ -6,5 +6,5 @@ import type { LeaveApprovalSettings } from './types'
  * 参照できる(申請フォームで承認者入力を必須にするかどうかの判定に使うため)。
  */
 export function fetchLeaveApprovalSettings(): Promise<LeaveApprovalSettings> {
-  return apiFetch('/leave-approval-settings')
+  return apiFetch('/system-settings')
 }

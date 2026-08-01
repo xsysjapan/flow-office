@@ -32,7 +32,7 @@ class DeviceAdminModeTest extends TestCase
      */
     private function activateDevice(User $admin): string
     {
-        $registered = $this->actingAs($admin)->postJson('/api/devices', [
+        $registered = $this->actingAs($admin)->postJson('/api/admin/devices', [
             'name' => 'エントランス端末',
             'device_type' => DeviceType::ANDROID,
             'role_types' => [DeviceRoleType::AUTHENTICATION_DEVICE],
@@ -40,11 +40,11 @@ class DeviceAdminModeTest extends TestCase
         $registered->assertCreated();
         $deviceId = $registered->json('id');
 
-        $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/scopes", [
+        $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/scopes", [
             'scope' => DeviceScopeType::ADMIN_MODE,
         ])->assertSuccessful();
 
-        $pairing = $this->actingAs($admin)->postJson("/api/devices/{$deviceId}/pairing");
+        $pairing = $this->actingAs($admin)->postJson("/api/admin/devices/{$deviceId}/pairing");
         $claimToken = $pairing->json('claim_token');
 
         $this->app['auth']->forgetGuards();

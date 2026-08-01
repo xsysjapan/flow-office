@@ -120,7 +120,7 @@ class AttendanceSubmissionReminderExclusionTest extends TestCase
         $admin = $this->admin();
         $target = User::factory()->create();
 
-        $response = $this->actingAs($admin)->postJson('/api/attendance-submission-reminder-exclusions', [
+        $response = $this->actingAs($admin)->postJson('/api/admin/attendance-submission-reminder-exclusions', [
             'user_id' => $target->id,
             'year_month' => '2026-06',
             'reason' => '誤って対象月にしていたため',
@@ -137,7 +137,7 @@ class AttendanceSubmissionReminderExclusionTest extends TestCase
         $employee = User::factory()->create();
         $target = User::factory()->create();
 
-        $this->actingAs($employee)->postJson('/api/attendance-submission-reminder-exclusions', [
+        $this->actingAs($employee)->postJson('/api/admin/attendance-submission-reminder-exclusions', [
             'user_id' => $target->id,
             'year_month' => '2026-06',
             'reason' => '理由',
@@ -157,7 +157,7 @@ class AttendanceSubmissionReminderExclusionTest extends TestCase
             'user_id' => $other->id, 'year_month' => '2026-05', 'reason' => '別社員分', 'excluded_by_user_id' => $admin->id,
         ]);
 
-        $response = $this->actingAs($admin)->getJson("/api/attendance-submission-reminder-exclusions?user_id={$target->id}");
+        $response = $this->actingAs($admin)->getJson("/api/admin/attendance-submission-reminder-exclusions?user_id={$target->id}");
 
         $response->assertOk();
         $this->assertCount(1, $response->json());

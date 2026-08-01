@@ -24,13 +24,13 @@ class ExpenseMasterCrudTest extends TestCase
 
         $payload = ['code' => 'transportation', 'name' => '交通費', 'entry_mode' => 'batch'];
 
-        $this->actingAs($employee)->postJson('/api/expense-categories', $payload)->assertForbidden();
+        $this->actingAs($employee)->postJson('/api/admin/expense-categories', $payload)->assertForbidden();
 
-        $created = $this->actingAs($admin)->postJson('/api/expense-categories', $payload);
+        $created = $this->actingAs($admin)->postJson('/api/admin/expense-categories', $payload);
         $created->assertCreated()->assertJsonPath('entry_mode', 'batch');
 
         $categoryId = $created->json('id');
-        $this->actingAs($admin)->putJson("/api/expense-categories/{$categoryId}", [
+        $this->actingAs($admin)->putJson("/api/admin/expense-categories/{$categoryId}", [
             'code' => 'transportation', 'name' => '交通費(更新)', 'entry_mode' => 'batch',
         ])->assertOk()->assertJsonPath('name', '交通費(更新)');
 
@@ -42,17 +42,17 @@ class ExpenseMasterCrudTest extends TestCase
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
-        $this->actingAs($admin)->postJson('/api/expense-categories', [
+        $this->actingAs($admin)->postJson('/api/admin/expense-categories', [
             'code' => 'meal', 'name' => '会食', 'entry_mode' => 'weekly',
         ])->assertStatus(422)->assertJsonValidationErrors('entry_mode');
 
-        $created = $this->actingAs($admin)->postJson('/api/expense-categories', [
+        $created = $this->actingAs($admin)->postJson('/api/admin/expense-categories', [
             'code' => 'meal', 'name' => '会食', 'entry_mode' => 'single',
         ]);
         $created->assertCreated();
 
         $categoryId = $created->json('id');
-        $this->actingAs($admin)->putJson("/api/expense-categories/{$categoryId}", [
+        $this->actingAs($admin)->putJson("/api/admin/expense-categories/{$categoryId}", [
             'code' => 'meal', 'name' => '会食', 'entry_mode' => 'weekly',
         ])->assertStatus(422)->assertJsonValidationErrors('entry_mode');
     }

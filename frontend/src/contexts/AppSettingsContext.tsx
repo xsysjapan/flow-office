@@ -34,7 +34,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // `/leave-approval-settings` は認証必須のため、ログイン確定前に叩いても401になるだけ。
+    // `/system-settings`(LeaveApprovalSettingsController)は認証必須のため、ログイン確定前に
+    // 叩いても401になるだけ。
     if (status === 'loading') return
 
     if (status !== 'authenticated') {

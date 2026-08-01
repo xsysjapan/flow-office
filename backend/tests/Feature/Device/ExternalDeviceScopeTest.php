@@ -37,7 +37,7 @@ class ExternalDeviceScopeTest extends TestCase
             'device_type' => DeviceType::EXTERNAL_SYSTEM,
         ]);
 
-        $response = $this->actingAs($admin)->postJson("/api/devices/{$device->id}/scopes", [
+        $response = $this->actingAs($admin)->postJson("/api/admin/devices/{$device->id}/scopes", [
             'scope' => DeviceScopeType::ATTENDANCE_CLOCK,
         ]);
 
@@ -51,7 +51,7 @@ class ExternalDeviceScopeTest extends TestCase
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
         $token = $device->createToken('external', [DeviceScopeType::ATTENDANCE_READ_RESULT]);
 
-        $this->actingAs($admin)->postJson("/api/devices/{$device->id}/scopes", [
+        $this->actingAs($admin)->postJson("/api/admin/devices/{$device->id}/scopes", [
             'scope' => DeviceScopeType::ATTENDANCE_CLOCK,
         ])->assertSuccessful();
 

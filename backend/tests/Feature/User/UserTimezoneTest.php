@@ -92,11 +92,11 @@ class UserTimezoneTest extends TestCase
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
-        $this->actingAs($admin)->getJson('/api/system-settings')
+        $this->actingAs($admin)->getJson('/api/admin/system-settings')
             ->assertOk()
             ->assertJsonPath('default_timezone', 'Asia/Tokyo');
 
-        $this->actingAs($admin)->putJson('/api/system-settings', ['default_timezone' => 'America/New_York'])
+        $this->actingAs($admin)->putJson('/api/admin/system-settings', ['default_timezone' => 'America/New_York'])
             ->assertOk()
             ->assertJsonPath('default_timezone', 'America/New_York');
 
@@ -107,7 +107,7 @@ class UserTimezoneTest extends TestCase
     {
         $employee = User::factory()->create();
 
-        $this->actingAs($employee)->putJson('/api/system-settings', ['default_timezone' => 'America/New_York'])
+        $this->actingAs($employee)->putJson('/api/admin/system-settings', ['default_timezone' => 'America/New_York'])
             ->assertForbidden();
     }
 

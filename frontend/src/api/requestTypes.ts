@@ -23,9 +23,9 @@ export interface SaveRequestTypeInput {
 }
 
 export function createRequestType(input: SaveRequestTypeInput): Promise<RequestType> {
-  return apiFetch('/request-types', { method: 'POST', body: input })
+  return apiFetch('/admin/request-types', { method: 'POST', body: input })
 }
 
 export function updateRequestType(id: number, input: SaveRequestTypeInput): Promise<RequestType> {
-  return apiFetch(`/request-types/${id}`, { method: 'PUT', body: input })
+  return apiFetch(`/admin/request-types/${id}`, { method: 'PUT', body: input })
 }

@@ -36,7 +36,7 @@ class DeviceDetailAndSettingsTest extends TestCase
             'location_name' => '本社1階受付',
         ]);
 
-        $response = $this->actingAs($admin)->getJson("/api/devices/{$device->id}");
+        $response = $this->actingAs($admin)->getJson("/api/admin/devices/{$device->id}");
 
         $response->assertSuccessful();
         $response->assertJsonPath('id', $device->id);
@@ -48,7 +48,7 @@ class DeviceDetailAndSettingsTest extends TestCase
         $employee = User::factory()->create();
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
 
-        $this->actingAs($employee)->getJson("/api/devices/{$device->id}")->assertForbidden();
+        $this->actingAs($employee)->getJson("/api/admin/devices/{$device->id}")->assertForbidden();
     }
 
     public function test_admin_can_update_device_settings(): void
@@ -60,7 +60,7 @@ class DeviceDetailAndSettingsTest extends TestCase
             'location_name' => '本社1階受付',
         ]);
 
-        $response = $this->actingAs($admin)->patchJson("/api/devices/{$device->id}", [
+        $response = $this->actingAs($admin)->patchJson("/api/admin/devices/{$device->id}", [
             'name' => $device->name,
             'location_name' => '本社2階会議室',
             'require_location' => true,
@@ -77,7 +77,7 @@ class DeviceDetailAndSettingsTest extends TestCase
         $admin = $this->admin();
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
 
-        $this->actingAs($admin)->patchJson("/api/devices/{$device->id}", [
+        $this->actingAs($admin)->patchJson("/api/admin/devices/{$device->id}", [
             'name' => $device->name,
             'location_name' => '倉庫入口',
         ])->assertSuccessful();
@@ -95,7 +95,7 @@ class DeviceDetailAndSettingsTest extends TestCase
         $employee = User::factory()->create();
         $device = Device::factory()->create(['owner_type' => DeviceOwnerType::ORGANIZATION_SHARED]);
 
-        $this->actingAs($employee)->patchJson("/api/devices/{$device->id}", [
+        $this->actingAs($employee)->patchJson("/api/admin/devices/{$device->id}", [
             'name' => $device->name,
         ])->assertForbidden();
     }

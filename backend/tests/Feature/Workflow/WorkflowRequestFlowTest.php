@@ -176,7 +176,7 @@ class WorkflowRequestFlowTest extends TestCase
             'backoffice_task_type' => 'business_card',
         ];
 
-        $this->actingAs($employee)->postJson('/api/request-types', $payload)->assertForbidden();
-        $this->actingAs($admin)->postJson('/api/request-types', $payload)->assertCreated();
+        $this->actingAs($employee)->postJson('/api/admin/request-types', $payload)->assertForbidden();
+        $this->actingAs($admin)->postJson('/api/admin/request-types', $payload)->assertCreated();
     }
 }
