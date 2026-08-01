@@ -20,8 +20,9 @@ docs/        設計ドキュメント(全体の目次は docs/README.md)
 バックエンドとフロントエンドは別々にデプロイされることを前提にする。認証はSanctumの
 Bearerトークン方式(Cookieベースではない)。
 
-`backend/`・`frontend/`・`mcp/` にはそれぞれ`CLAUDE.md`があり、各ディレクトリ配下の
-構成・ナビゲーションはそちらを参照する(このファイルには重複して書かない)。
+`backend/`・`frontend/`・`mcp/` にはそれぞれ`CLAUDE.md`があり、セットアップ手順・
+ディレクトリ構成・スキル一覧はそちらを参照する(このファイルには重複して書かない)。
+作業対象のディレクトリに応じて該当ファイルだけを読む。
 
 ## 効率的なコード参照とサブエージェントへの委譲
 
@@ -48,6 +49,20 @@ Bearerトークン方式(Cookieベースではない)。
 - 大規模な調査・レビュー・移行など、明確に「サブエージェントで並行処理してほしい」
   という指示がユーザーから出た場合のみWorkflowツールでの多段オーケストレーションを
   検討する(通常のタスクでは使わない)。
+- 数ファイル以上の実装・調査タスクに着手する前に、`.claude/skills/task-brief`に沿って
+  目的・確認対象・実装対象・対象外・検証方法を先に確定させる(単純な1行修正や質問には
+  使わない)。対象外を明示することで、頼まれていない範囲まで調べたり直したりしない。
+
+### トークン使用量を抑える
+
+- 会話が長引いたら`/compact`(要約して継続)や`/clear`(無関係な次のタスクに移る際に
+  破棄)を使い、肥大化したら`/context`で内訳を確認する。
+- ソース全文・diff・ログ全文をメインの会話に貼らない。サブエージェントには要約のみを
+  戻させ、詳細はサブエージェント側のコンテキストに留める。
+- ファイルを広く`cat`的に読まず、Grep/Globで対象箇所だけを開く(このファイルの
+  「効率的なコード参照」も参照)。ただし、探索を減らそうとして必要な確認を省略し、
+  誤った変更→手戻りで結果的に読み直しが増えることの方が高くつく。範囲を絞ることと、
+  対象範囲内をきちんと確認することは両立させる。
 
 ## 絶対に外してはいけない設計原則
 
@@ -87,79 +102,3 @@ Bearerトークン方式(Cookieベースではない)。
 
 `docs/README.md` の目次を参照。ユースケースは `docs/06`〜`docs/15` に、テーブル定義は
 `docs/16-database-schema.md`、イベント一覧は `docs/17-events.md` にある。
-
-## バックエンド (backend/)
-
-Laravel API。実装を始める前に必ず `docs/02-tech-stack.md` と `docs/03-architecture.md`
-を読むこと。
-
-```
-cd backend
-composer install
-cp .env.example .env && php artisan key:generate
-touch database/database.sqlite   # ローカル開発はsqlite、本番はMySQL
-php artisan migrate --seed
-php artisan serve                # http://localhost:8000
-php artisan test
-```
-
-### 開発でよく使うパターン (スキル)
-
-`.claude/skills/` 配下に、この設計に沿った実装を素早く・一貫して行うためのスキルがある。
-該当する作業をする際は必ず参照すること。
-
-- `add-domain-event` — 新しいドメインイベント(Command/Event/Projector反映)を追加する
-- `add-projection` — 新しいProjection Table + Projector + 再生成コマンドを追加する
-- `add-workflow-request-type` — 新しい汎用申請種別(申請種別マスタ)を追加する
-- `add-notification` — 新しいメール通知種別をDBキュー経由で追加する
-- `attendance-calc-review` — 勤怠集計ロジック変更時のセルフレビューチェックリスト
-
-### 常駐プロセスを前提にしない
-
-XSERVER上ではDB queue + cron前提の`schedule:run`のみで運用する。supervisor常駐worker
-などを前提にしない(`docs/02-tech-stack.md`)。
-
-## フロントエンド (frontend/)
-
-Vite + React + TypeScript。UIコンポーネントはStorybookで確認できる。
-
-```
-cd frontend
-npm install
-cp .env.example .env   # VITE_API_BASE_URL をbackendのURLに合わせる
-npm run dev             # http://localhost:5173
-npm run storybook       # http://localhost:6006
-npm run build
-npm run test             # Vitest単体テスト(jsdom)
-npm run test:storybook   # Storybookのstoryをブラウザで描画するテスト
-npm run build-storybook
-```
-
-`VITE_API_BASE_URL`(既定値 `http://localhost:8000/api`)経由でbackendのAPIを呼び出す。
-認証はSanctumのBearerトークンで、`localStorage`に保存する(`frontend/src/api/client.ts`)。
-
-コンポーネントを追加する際は必ず `.stories.tsx` と `.test.tsx` を一緒に作ること。
-
-### 開発でよく使うパターン (スキル)
-
-- `add-frontend-component` — 新しいUIコンポーネント(story/test付き)を追加する
-- `add-api-hook` — 新しいbackend APIエンドポイントに対応する型・APIクライアント関数・
-  React Queryフックを追加する
-- `add-page` — 新しい画面(ルーティング込み)を追加する
-
-## MCPサーバー (mcp/)
-
-backend/とは別のLaravelアプリ(独立したcomposer.json・DB)。backend/のDBには一切アクセス
-せず、backendの個人連携Sanctumトークン(UC-I001)を使ってHTTP経由でAPIを呼び出すだけの
-クライアントである。詳細は mcp/README.md と docs/25-usecases-integrations-mcp.md を参照。
-
-```
-cd mcp
-composer install
-cp .env.example .env && php artisan key:generate
-php artisan mcp:oauth-keys      # OAuth2アクセストークン署名用のRSA鍵ペアを生成する
-touch database/database.sqlite
-php artisan migrate
-php artisan serve --port=8090
-php artisan test
-```
