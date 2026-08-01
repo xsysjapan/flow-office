@@ -3,16 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
-use App\Domain\ExpenseClaim\Commands\ApproveExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\CancelExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DeleteExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\DraftExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\RemoveExpenseItem;
-use App\Domain\ExpenseClaim\Commands\ReturnExpenseClaim;
-use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseClaimTitle;
 use App\Domain\ExpenseClaim\Commands\UpdateExpenseItem;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
+use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ExpenseClaimHistoryEntryResource;
 use App\Http\Resources\ExpenseClaimResource;
@@ -20,6 +22,8 @@ use App\Http\Resources\ExpenseItemResource;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseClaimHistoryEntry;
 use App\Models\ExpenseItem;
+use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -253,13 +257,20 @@ class ExpenseClaimController extends Controller
             'approver_user_id' => ['required', 'string', 'exists:users,id'],
         ]);
 
-        $commandBus->dispatch(new SubmitExpenseClaim(
-            claimId: $expenseClaim->id,
+        // 提出はworkflow_requestの下書き作成を起点にする。ExpenseClaim集約への
+        // SubmitExpenseClaimはExpenseClaimSubmitOnWorkflowRequestDraftedReactorが発行する
+        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
+        $commandBus->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $request->user()->id,
+            title: $expenseClaim->title ?? '経費精算',
+            formData: [],
             approverUserId: $data['approver_user_id'],
-            submittedByUserId: $request->user()->id,
+            subjectType: WorkflowRequestNotificationContent::EXPENSE_CLAIM,
+            subjectId: $expenseClaim->id,
         ));
 
-        return new ExpenseClaimResource($expenseClaim->refresh()->load(['employee', 'approver']));
+        return new ExpenseClaimResource($this->freshClaim($expenseClaim->id));
     }
 
     #[OA\Post(
@@ -272,12 +283,12 @@ class ExpenseClaimController extends Controller
     )]
     public function approve(Request $request, ExpenseClaim $expenseClaim, CommandBus $commandBus): ExpenseClaimResource
     {
-        $commandBus->dispatch(new ApproveExpenseClaim(
-            claimId: $expenseClaim->id,
+        $commandBus->dispatch(new ApproveWorkflowRequest(
+            workflowRequestId: $this->submittedWorkflowRequestId($expenseClaim, '申請中の経費精算のみ承認できます。'),
             approvedByUserId: $request->user()->id,
         ));
 
-        return new ExpenseClaimResource($expenseClaim->refresh()->load(['employee', 'approver']));
+        return new ExpenseClaimResource($this->freshClaim($expenseClaim->id));
     }
 
     #[OA\Post(
@@ -293,13 +304,13 @@ class ExpenseClaimController extends Controller
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        $commandBus->dispatch(new ReturnExpenseClaim(
-            claimId: $expenseClaim->id,
+        $commandBus->dispatch(new ReturnWorkflowRequest(
+            workflowRequestId: $this->submittedWorkflowRequestId($expenseClaim, '申請中の経費精算のみ差戻しできます。'),
             returnedByUserId: $request->user()->id,
             comment: $data['comment'],
         ));
 
-        return new ExpenseClaimResource($expenseClaim->refresh()->load(['employee', 'approver']));
+        return new ExpenseClaimResource($this->freshClaim($expenseClaim->id));
     }
 
     #[OA\Post(
@@ -362,6 +373,34 @@ class ExpenseClaimController extends Controller
             ->get();
 
         return ExpenseClaimHistoryEntryResource::collection($entries);
+    }
+
+    /**
+     * 提出・承認・差戻し後の最新状態を返す。Reactor経由でExpenseClaim側が更新されるため、
+     * コントローラが保持しているインスタンスではなく必ず取得し直す。
+     */
+    private function freshClaim(string $claimId): ExpenseClaim
+    {
+        return ExpenseClaim::query()->with(['employee', 'approver'])->findOrFail($claimId);
+    }
+
+    /**
+     * 承認・差戻し対象のworkflow_request(subject_type=expense_claim)を特定する。
+     */
+    private function submittedWorkflowRequestId(ExpenseClaim $expenseClaim, string $message): string
+    {
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', WorkflowRequestNotificationContent::EXPENSE_CLAIM)
+            ->where('subject_id', $expenseClaim->id)
+            ->where('status', WorkflowRequestStatus::SUBMITTED)
+            ->latest()
+            ->first();
+
+        if ($workflowRequest === null) {
+            throw new DomainRuleException($message);
+        }
+
+        return $workflowRequest->id;
     }
 
     private function authorizeOwnership(Request $request, ExpenseClaim $expenseClaim): void

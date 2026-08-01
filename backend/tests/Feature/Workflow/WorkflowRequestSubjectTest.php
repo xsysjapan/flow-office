@@ -7,6 +7,7 @@ use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Jobs\SendNotificationJob;
 use App\Models\EntityShare;
 use App\Models\ExpenseCategory;
+use App\Models\ExpenseClaim;
 use App\Models\RequestType;
 use App\Models\User;
 use App\Models\WorkflowRequest;
@@ -63,7 +64,9 @@ class WorkflowRequestSubjectTest extends TestCase
     }
 
     /**
-     * 経費精算を作成・提出し、そのexpense_claimを対象とするworkflow_requestを下書き作成する。
+     * 経費精算を作成・提出する。提出APIがDraftWorkflowRequest(subject_type=expense_claim)を
+     * 発行し、Reactorがclaimの提出とworkflow_requestの提出まで進めるため、ここでは
+     * 生成されたworkflow_requestを取得して返すだけでよい。
      *
      * @return array{0: WorkflowRequest, 1: string}
      */
@@ -83,15 +86,10 @@ class WorkflowRequestSubjectTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertOk();
 
-        $request = app(CommandBus::class)->dispatch(new DraftWorkflowRequest(
-            requestTypeCode: null,
-            applicantUserId: $employee->id,
-            title: '経費精算申請',
-            formData: [],
-            approverUserId: $approver->id,
-            subjectType: 'expense_claim',
-            subjectId: $claimId,
-        ));
+        $request = WorkflowRequest::query()
+            ->where('subject_type', 'expense_claim')
+            ->where('subject_id', $claimId)
+            ->firstOrFail();
 
         return [$request, $claimId];
     }
@@ -160,12 +158,15 @@ class WorkflowRequestSubjectTest extends TestCase
         $this->assertSame($employee->id, $workflowRequest->applicant_user_id);
         $this->assertSame($approver->id, $workflowRequest->approver_user_id);
         $this->assertNull($workflowRequest->request_type_id);
+        // 経費精算の提出APIがDraft→Reactor経由の提出まで進めるため、この時点で提出済み。
+        $this->assertSame('submitted', $workflowRequest->status);
 
-        $this->actingAs($employee)->postJson("/api/workflow-requests/{$workflowRequest->id}/submit")->assertOk();
         $this->actingAs($approver)->postJson("/api/workflow-requests/{$workflowRequest->id}/approve")->assertOk();
 
         $workflowRequest->refresh();
         $this->assertSame('approved', $workflowRequest->status);
+        // workflow_requestの承認がReactor経由でExpenseClaim集約にも伝播する。
+        $this->assertSame('approved', ExpenseClaim::query()->findOrFail($claimId)->status);
     }
 
     public function test_notifications_use_subject_specific_wording(): void
