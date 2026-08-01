@@ -31,6 +31,8 @@ export function SystemSettingsPage() {
   const [notificationMailEnabled, setNotificationMailEnabled] = useState(false)
   const [notificationMailSenderAddress, setNotificationMailSenderAddress] = useState('')
   const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
+  const [paidLeaveRequiresApproval, setPaidLeaveRequiresApproval] = useState(true)
+  const [specialLeaveRequiresApproval, setSpecialLeaveRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -48,6 +50,8 @@ export function SystemSettingsPage() {
     setNotificationMailEnabled(data.notification_mail_enabled)
     setNotificationMailSenderAddress(data.notification_mail_sender_address ?? '')
     setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
+    setPaidLeaveRequiresApproval(data.paid_leave_requires_approval)
+    setSpecialLeaveRequiresApproval(data.special_leave_requires_approval)
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -71,6 +75,8 @@ export function SystemSettingsPage() {
         notification_mail_enabled: notificationMailEnabled,
         notification_mail_sender_address: notificationMailSenderAddress || null,
         notification_mail_sender_name: notificationMailSenderName || null,
+        paid_leave_requires_approval: paidLeaveRequiresApproval,
+        special_leave_requires_approval: specialLeaveRequiresApproval,
       },
       {
         onSuccess: () => {
@@ -201,6 +207,34 @@ export function SystemSettingsPage() {
           }}
         />
       </FormField>
+
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">休暇申請の承認設定</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        オフにすると、その休暇種別の申請は承認者を指定しなくてもよくなり、申請と同時に自動承認
+        される。
+      </p>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={paidLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setPaidLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        有給休暇の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={specialLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setSpecialLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        特別休暇の申請に承認を必須にする
+      </label>
 
       <Button
         isLoading={updateSettings.isPending}

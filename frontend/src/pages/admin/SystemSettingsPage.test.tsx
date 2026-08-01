@@ -18,6 +18,8 @@ const settings: SystemSettings = {
   notification_mail_enabled: false,
   notification_mail_sender_address: null,
   notification_mail_sender_name: null,
+  paid_leave_requires_approval: true,
+  special_leave_requires_approval: true,
 }
 
 function renderPage() {
@@ -62,6 +64,8 @@ describe('SystemSettingsPage', () => {
         notification_mail_enabled: false,
         notification_mail_sender_address: null,
         notification_mail_sender_name: null,
+        paid_leave_requires_approval: true,
+        special_leave_requires_approval: true,
       }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()

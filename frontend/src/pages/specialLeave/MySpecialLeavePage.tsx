@@ -12,6 +12,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { PaidLeaveType } from '../../api/types'
+import { useAppSettings } from '../../contexts/useAppSettings'
 import {
   useCancelSpecialLeaveRequest,
   useCreateSpecialLeaveRequest,
@@ -32,6 +33,9 @@ function SpecialLeaveRequestForm() {
   const { data: types } = useSpecialLeaveTypes()
   const activeTypes = (types ?? []).filter((type) => type.is_active)
 
+  const { leaveApprovalSettings } = useAppSettings()
+  const approvalRequired = leaveApprovalSettings.special_leave_requires_approval
+
   const [specialLeaveTypeId, setSpecialLeaveTypeId] = useState<number | undefined>(undefined)
   const [targetDate, setTargetDate] = useState('')
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
@@ -41,10 +45,15 @@ function SpecialLeaveRequestForm() {
 
   const createRequest = useCreateSpecialLeaveRequest()
 
-  const canSubmit = specialLeaveTypeId && targetDate && approverUserId && (leaveType !== 'hourly' || Number(hours) > 0)
+  const canSubmit =
+    specialLeaveTypeId &&
+    targetDate &&
+    (!approvalRequired || approverUserId) &&
+    (leaveType !== 'hourly' || Number(hours) > 0)
 
   const handleSubmit = () => {
-    if (!specialLeaveTypeId || !approverUserId) return
+    if (!specialLeaveTypeId) return
+    if (approvalRequired && !approverUserId) return
 
     createRequest.mutate(
       {
@@ -52,7 +61,7 @@ function SpecialLeaveRequestForm() {
         target_date: targetDate,
         leave_type: leaveType,
         hours: leaveType === 'hourly' ? Number(hours) : undefined,
-        approver_user_id: approverUserId,
+        approver_user_id: approverUserId || undefined,
         reason: reason || undefined,
       },
       {
@@ -117,8 +126,17 @@ function SpecialLeaveRequestForm() {
           </FormField>
         )}
 
-        <FormField label="承認者" htmlFor="special-leave-approver" required>
+        <FormField
+          label={approvalRequired ? '承認者' : '承認者(任意)'}
+          htmlFor="special-leave-approver"
+          required={approvalRequired}
+        >
           <UserPicker id="special-leave-approver" value={approverUserId} onChange={setApproverUserId} />
+          {!approvalRequired && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              現在の設定では特別休暇申請は承認不要で自動承認されます。承認者の指定は任意です。
+            </p>
+          )}
         </FormField>
 
         <FormField label="理由(任意)" htmlFor="special-leave-reason">

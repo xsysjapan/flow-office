@@ -91,6 +91,9 @@ export interface SystemSettings {
   notification_mail_enabled: boolean
   notification_mail_sender_address: string | null
   notification_mail_sender_name: string | null
+  /** UC-P003/UC-S003: 有給・特別休暇の申請に承認者による承認を必須にするか。 */
+  paid_leave_requires_approval: boolean
+  special_leave_requires_approval: boolean
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
@@ -98,6 +101,15 @@ export interface UpdateSystemSettingsInput
   extends Omit<SystemSettings, 'default_work_style' | 'm365_client_secret_configured'> {
   /** 省略すると既存のシークレットを変更しない。 */
   m365_client_secret?: string
+}
+
+/**
+ * `GET /leave-approval-settings` のレスポンス。認証済みなら誰でも参照できる(承認不要の
+ * 場合に申請フォームで承認者入力を必須にしないため)。system_settingsの一部を切り出したもの。
+ */
+export interface LeaveApprovalSettings {
+  paid_leave_requires_approval: boolean
+  special_leave_requires_approval: boolean
 }
 
 export interface RequestType {

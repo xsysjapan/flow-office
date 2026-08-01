@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type { Paginated, SpecialLeaveGrant, SpecialLeaveRequest, SpecialLeaveType, User } from '../../api/types'
+import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { MySpecialLeavePage } from './MySpecialLeavePage'
 
@@ -44,7 +45,11 @@ const submittedRequest: SpecialLeaveRequest = {
   cancelled_at: null,
 }
 
-function renderPage(requests: SpecialLeaveRequest[] = [], types: SpecialLeaveType[] = [birthdayType]) {
+function renderPage(
+  requests: SpecialLeaveRequest[] = [],
+  types: SpecialLeaveType[] = [birthdayType],
+  specialLeaveRequiresApproval = true,
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(types)
@@ -52,9 +57,19 @@ function renderPage(requests: SpecialLeaveRequest[] = [], types: SpecialLeaveTyp
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <MySpecialLeavePage />
-      </MemoryRouter>
+      <AppSettingsContext.Provider
+        value={{
+          leaveApprovalSettings: {
+            paid_leave_requires_approval: true,
+            special_leave_requires_approval: specialLeaveRequiresApproval,
+          },
+          isLoading: false,
+        }}
+      >
+        <MemoryRouter>
+          <MySpecialLeavePage />
+        </MemoryRouter>
+      </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -118,6 +133,31 @@ describe('MySpecialLeavePage', () => {
         leave_type: 'full',
         hours: undefined,
         approver_user_id: approver.id,
+        reason: undefined,
+      }),
+    )
+  })
+
+  it('allows submitting without an approver when approval is not required', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockResolvedValue(submittedRequest)
+
+    renderPage([], [birthdayType], false)
+    await screen.findByText('特別休暇申請はまだありません。')
+
+    expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('特別休暇の種類'), '誕生日休暇')
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
+    await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+    await waitFor(() =>
+      expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenCalledWith({
+        special_leave_type_id: birthdayType.id,
+        target_date: '2026-08-10',
+        leave_type: 'full',
+        hours: undefined,
+        approver_user_id: undefined,
         reason: undefined,
       }),
     )

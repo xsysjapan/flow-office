@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthContext.tsx'
+import { AppSettingsProvider } from './contexts/AppSettingsContext.tsx'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AuthProvider>
-          <App />
+          <AppSettingsProvider>
+            <App />
+          </AppSettingsProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

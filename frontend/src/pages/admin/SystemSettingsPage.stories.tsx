@@ -15,6 +15,8 @@ const settings: SystemSettings = {
   notification_mail_enabled: false,
   notification_mail_sender_address: null,
   notification_mail_sender_name: null,
+  paid_leave_requires_approval: true,
+  special_leave_requires_approval: true,
 }
 
 function withSeeded() {

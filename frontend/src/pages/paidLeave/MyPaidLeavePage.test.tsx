@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
 import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../api/types'
+import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { MyPaidLeavePage } from './MyPaidLeavePage'
 
@@ -40,16 +41,26 @@ const submittedRequest: PaidLeaveRequest = {
   cancelled_at: null,
 }
 
-function renderPage(requests: PaidLeaveRequest[] = []) {
+function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(requests)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <MyPaidLeavePage />
-      </MemoryRouter>
+      <AppSettingsContext.Provider
+        value={{
+          leaveApprovalSettings: {
+            paid_leave_requires_approval: paidLeaveRequiresApproval,
+            special_leave_requires_approval: true,
+          },
+          isLoading: false,
+        }}
+      >
+        <MemoryRouter>
+          <MyPaidLeavePage />
+        </MemoryRouter>
+      </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -145,6 +156,29 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
 
     expect(screen.getByRole('button', { name: '申請する' })).toBeDisabled()
+  })
+
+  it('allows submitting without an approver when approval is not required', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+
+    renderPage([], false)
+    await screen.findByText('有給申請はまだありません。')
+
+    expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+
+    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
+    await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledWith({
+        target_date: '2026-08-10',
+        leave_type: 'full',
+        hours: undefined,
+        approver_user_id: undefined,
+        reason: undefined,
+      }),
+    )
   })
 
   it('shows submitted requests and cancels them', async () => {
