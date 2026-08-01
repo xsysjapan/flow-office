@@ -4,6 +4,7 @@ namespace Tests\Feature\ExpenseClaim;
 
 use App\Models\ExpenseCategory;
 use App\Models\User;
+use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -78,6 +79,28 @@ class ExpenseClaimReturnAndCancelTest extends TestCase
         $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/cancel", [
             'reason' => '不要になった',
         ])->assertOk()->assertJsonPath('status', 'cancelled');
+    }
+
+    public function test_cancelling_a_submitted_claim_also_cancels_the_workflow_request(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $category = ExpenseCategory::query()->create([
+            'code' => 'transportation', 'name' => '交通費',
+            'evidence_type_default' => ExpenseCategory::EVIDENCE_FACT_REFERENCE_AVAILABLE,
+        ]);
+
+        $claimId = $this->draftWithItem($employee, $category);
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit", [
+            'approver_user_id' => $approver->id,
+        ])->assertOk();
+
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/cancel", [
+            'reason' => '不要になった',
+        ])->assertOk()->assertJsonPath('status', 'cancelled');
+
+        $workflowRequest = WorkflowRequest::query()->where('subject_id', $claimId)->firstOrFail();
+        $this->assertSame('cancelled', $workflowRequest->status);
     }
 
     public function test_approved_claim_cannot_be_cancelled(): void
