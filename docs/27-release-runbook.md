@@ -250,6 +250,35 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   `mcp:oauth-keys`が生成した鍵ファイルも一緒に緩んでしまい、league/oauth2-serverの
   権限チェックで500エラーになる。鍵ファイルは常に600を維持すること。
 
+- **migrate失敗が`current`の切替をブロックし、以後のデプロイも同じ理由で失敗し続ける**:
+  MySQLはDDL(`CREATE TABLE`/`ALTER TABLE`等)をトランザクション内でもロールバックせず
+  即コミットする。そのため「テーブル作成自体はDB上で成功したが、直後の`migrations`
+  テーブルへの記録処理でmigrateコマンド自体が中断した(SSHセッション切断等)」状態が
+  起こり得る。`activate-release.sh`は`migrate --force`が失敗するとその場で停止し
+  `current`の切替まで到達しないため、本番は古いリリースのままになる。この状態になると、
+  次回以降のデプロイでも**同一のマイグレーションが「table already exists」等で
+  同じ理由により失敗し続け**、誰かが手動で気づいて復旧しない限り`current`が永遠に
+  進まない(2026-08-01に本番で実際に発生。約3日分のマージがデプロイされないまま
+  気づかれなかった)。
+
+  `activate-release.sh`はmigrate失敗時に`migrate:status`の全出力を診断情報として
+  ログに残すようにしてある(`run_migrate`関数)。復旧手順:
+  1. GitHub Actionsのデプロイログで、失敗したmigrate:statusの出力を確認し、
+     どのマイグレーションが`Pending`のまま止まっているか特定する
+     (手元で確認する場合は対象アプリのディレクトリで`php artisan migrate:status`)
+  2. 該当テーブル/カラムが実際のDBに存在するか、マイグレーション定義と一致するかを
+     `SHOW CREATE TABLE <table>;`等で確認する
+  3. 一致していれば(=単なる記録漏れ)、`migrations`テーブルに手動で行を追加する:
+     ```sql
+     SELECT MAX(batch) FROM migrations;  -- 現在の最大batch番号を確認
+     INSERT INTO migrations (migration, batch)
+     VALUES ('<マイグレーションファイル名(.php抜き)>', <上記+1>);
+     ```
+  4. 一致していなければ(=作成が構造の途中で中断した可能性)、不足しているカラム/
+     制約を`ALTER TABLE`で個別に補うか、テーブルを`DROP`してから再デプロイで
+     作り直す(どちらが安全かはデータの有無で判断する)
+  5. GitHub Actionsのデプロイを再実行する(`workflow_dispatch`または空コミットpush)
+
 ## 9. 未対応の既知課題
 
 - mcp/にCIワークフローが存在しない(`.github/workflows/`にbackend用・frontend用のみ)。

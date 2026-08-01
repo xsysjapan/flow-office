@@ -13,7 +13,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::createIfNotExists('attendance_submission_reminder_exclusions', function (Blueprint $table) {
+        Schema::create('attendance_submission_reminder_exclusions', function (Blueprint $table) {
             // 集約ID(aggregate_id)としてstored_eventsに書き込まれるため、DB採番ではなく
             // コマンド側で生成できるUUIDにする(AttendanceSubmissionReminderExclusionProjector
             // 経由で行えるようにするため。docs/29-event-sourcing-framework-migration.md参照)。
