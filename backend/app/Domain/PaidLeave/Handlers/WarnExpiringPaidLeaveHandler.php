@@ -9,7 +9,8 @@ use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use App\Models\SystemSetting;
-use Illuminate\Support\Carbon;
+use App\Models\User;
+use App\Support\DailyBatchTimezoneGroups;
 
 /**
  * UC-P005: 有給消滅警告を出す。有効期限90日以内・残日数ありの付与を対象に、
@@ -29,35 +30,46 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
     {
         assert($command instanceof WarnExpiringPaidLeave);
 
-        // サーバーのタイムゾーン(UTC)ではなくsystem_settings.default_timezone(既定Asia/Tokyo)
-        // 基準の「今日」で判定する(JST 0:00〜9:00はUTCでは前日になるため)。
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today(SystemSetting::current()->default_timezone);
-        $threshold = $today->copy()->addDays(self::WARNING_WINDOW_DAYS);
+        $defaultTimezone = SystemSetting::current()->default_timezone;
+        $warnedCount = 0;
 
-        $grants = PaidLeaveGrant::query()
-            ->with('user')
-            ->where('remaining_days', '>', 0)
-            ->whereNull('expiry_warned_at')
-            ->whereDate('expires_on', '>=', $today->toDateString())
-            ->whereDate('expires_on', '<=', $threshold->toDateString())
-            ->get();
+        // `asOf`未指定(cronからの実運用)の場合、会社既定のタイムゾーンではなく社員本人の
+        // `users.timezone`基準で「今日」を判定する。タイムゾーンごとの分類対象は既存コードに
+        // 合わせて在籍中の社員全体とする(DailyBatchTimezoneGroups参照)。
+        $activeUsersQuery = User::query()->where('employment_status', 'active');
 
-        foreach ($grants as $grant) {
-            $message = "{$grant->user->name}さんの有給休暇 {$grant->remaining_days}日が".
-                "{$grant->expires_on->toDateString()}に失効します。";
+        foreach (DailyBatchTimezoneGroups::resolve($command->asOf, $activeUsersQuery) as $group) {
+            $today = $group['today'];
+            $threshold = $today->copy()->addDays(self::WARNING_WINDOW_DAYS);
 
-            SendNotificationJob::enqueue(
-                recipient: $grant->user,
-                title: '有給休暇の失効警告',
-                summary: $message,
-                detailUrl: null,
-            );
+            $grants = PaidLeaveGrant::query()
+                ->with('user')
+                ->where('remaining_days', '>', 0)
+                ->whereNull('expiry_warned_at')
+                ->whereDate('expires_on', '>=', $today->toDateString())
+                ->whereDate('expires_on', '<=', $threshold->toDateString())
+                ->whereHas('user', DailyBatchTimezoneGroups::constraint($group['timezone'], $defaultTimezone))
+                ->get();
 
-            PaidLeaveGrantAggregate::retrieve($grant->id)
-                ->raiseWarning($grant->user_id, 'expiry', $message)
-                ->persist();
+            foreach ($grants as $grant) {
+                $message = "{$grant->user->name}さんの有給休暇 {$grant->remaining_days}日が".
+                    "{$grant->expires_on->toDateString()}に失効します。";
+
+                SendNotificationJob::enqueue(
+                    recipient: $grant->user,
+                    title: '有給休暇の失効警告',
+                    summary: $message,
+                    detailUrl: null,
+                );
+
+                PaidLeaveGrantAggregate::retrieve($grant->id)
+                    ->raiseWarning($grant->user_id, 'expiry', $message)
+                    ->persist();
+            }
+
+            $warnedCount += $grants->count();
         }
 
-        return $grants->count();
+        return $warnedCount;
     }
 }

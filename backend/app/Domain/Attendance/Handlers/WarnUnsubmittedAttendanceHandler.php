@@ -11,7 +11,7 @@ use App\Models\AttendanceMonthStatus;
 use App\Models\AttendanceSubmissionReminderExclusion;
 use App\Models\SystemSetting;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\DailyBatchTimezoneGroups;
 
 /**
  * UC-N001「勤怠未提出」: 前月分の勤怠がまだ提出されていない社員に警告する。
@@ -37,51 +37,59 @@ class WarnUnsubmittedAttendanceHandler implements CommandHandler
         assert($command instanceof WarnUnsubmittedAttendance);
 
         $systemSetting = SystemSetting::current();
-        // サーバーのタイムゾーン(config('app.timezone')、XSERVER上はUTC)ではなく
-        // `system_settings.default_timezone`(既定Asia/Tokyo)基準の「今日」で判定する。
-        // UTCで判定すると、日本時間の日付・月と実行時のUTCの日付・月がずれる時間帯
-        // (JST 0:00〜9:00はUTCでは前日)で締め日・対象月の判定を誤るため。
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today($systemSetting->default_timezone);
+        $defaultTimezone = $systemSetting->default_timezone;
         $deadlineDay = $systemSetting->attendance_submission_deadline_day;
 
-        if ($today->day < $deadlineDay) {
-            return 0;
+        $activeUsersQuery = User::query()->where('employment_status', 'active');
+        $warnedCount = 0;
+
+        // `asOf`未指定(cronからの実運用)の場合、会社既定のタイムゾーンではなく社員本人の
+        // `users.timezone`基準で「今日」を判定する。タイムゾーンごとに対象社員を絞り、
+        // それぞれの「今日」で締め日・対象月の判定を行う(DailyBatchTimezoneGroups参照)。
+        foreach (DailyBatchTimezoneGroups::resolve($command->asOf, $activeUsersQuery) as $group) {
+            $today = $group['today'];
+
+            if ($today->day < $deadlineDay) {
+                continue;
+            }
+
+            $targetMonth = $today->copy()->subMonthNoOverflow();
+            $targetYearMonth = $targetMonth->format('Y-m');
+            // Carbon::createFromFormat('Y-m', ...)は日付部分を「実行時点の日」で補完するため、
+            // 対象月より日数が少ない月(例: 6月)を31日に実行すると7月扱いに繰り上がってしまう。
+            // 文字列を再パースせず$targetMonthから直接endOfMonth()を求めることでこれを避ける。
+            $targetMonthEnd = $targetMonth->copy()->endOfMonth()->toDateString();
+
+            $submittedUserIds = AttendanceMonth::query()
+                ->where('year_month', $targetYearMonth)
+                ->whereIn('status', [AttendanceMonthStatus::SUBMITTED, AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
+                ->pluck('user_id');
+
+            $excludedUserIds = AttendanceSubmissionReminderExclusion::query()
+                ->where('year_month', $targetYearMonth)
+                ->pluck('user_id');
+
+            $unsubmittedUsers = (clone $activeUsersQuery)
+                ->where(DailyBatchTimezoneGroups::constraint($group['timezone'], $defaultTimezone))
+                ->whereNotIn('id', $submittedUserIds)
+                ->whereNotIn('id', $excludedUserIds)
+                ->whereNotNull('usage_start_date')
+                ->whereDate('usage_start_date', '<=', $targetMonthEnd)
+                ->where(fn ($query) => $query->whereNull('hire_date')->orWhereDate('hire_date', '<=', $targetMonthEnd))
+                ->get(['id', 'name', 'email']);
+
+            foreach ($unsubmittedUsers as $user) {
+                SendNotificationJob::enqueue(
+                    recipient: $user,
+                    title: '勤怠未提出',
+                    summary: "{$user->name}さんの{$targetYearMonth}分の勤怠がまだ提出されていません。",
+                    detailUrl: null,
+                );
+            }
+
+            $warnedCount += $unsubmittedUsers->count();
         }
 
-        $targetMonth = $today->copy()->subMonthNoOverflow();
-        $targetYearMonth = $targetMonth->format('Y-m');
-        // Carbon::createFromFormat('Y-m', ...)は日付部分を「実行時点の日」で補完するため、
-        // 対象月より日数が少ない月(例: 6月)を31日に実行すると7月扱いに繰り上がってしまう。
-        // 文字列を再パースせず$targetMonthから直接endOfMonth()を求めることでこれを避ける。
-        $targetMonthEnd = $targetMonth->copy()->endOfMonth()->toDateString();
-
-        $submittedUserIds = AttendanceMonth::query()
-            ->where('year_month', $targetYearMonth)
-            ->whereIn('status', [AttendanceMonthStatus::SUBMITTED, AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
-            ->pluck('user_id');
-
-        $excludedUserIds = AttendanceSubmissionReminderExclusion::query()
-            ->where('year_month', $targetYearMonth)
-            ->pluck('user_id');
-
-        $unsubmittedUsers = User::query()
-            ->where('employment_status', 'active')
-            ->whereNotIn('id', $submittedUserIds)
-            ->whereNotIn('id', $excludedUserIds)
-            ->whereNotNull('usage_start_date')
-            ->whereDate('usage_start_date', '<=', $targetMonthEnd)
-            ->where(fn ($query) => $query->whereNull('hire_date')->orWhereDate('hire_date', '<=', $targetMonthEnd))
-            ->get(['id', 'name', 'email']);
-
-        foreach ($unsubmittedUsers as $user) {
-            SendNotificationJob::enqueue(
-                recipient: $user,
-                title: '勤怠未提出',
-                summary: "{$user->name}さんの{$targetYearMonth}分の勤怠がまだ提出されていません。",
-                detailUrl: null,
-            );
-        }
-
-        return $unsubmittedUsers->count();
+        return $warnedCount;
     }
 }

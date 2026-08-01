@@ -33,9 +33,13 @@ class WarnFiveDayObligationHandler implements CommandHandler
     {
         assert($command instanceof WarnFiveDayObligation);
 
-        // サーバーのタイムゾーン(UTC)ではなくsystem_settings.default_timezone(既定Asia/Tokyo)
-        // 基準の「今日」で判定する(JST 0:00〜9:00はUTCでは前日になるため)。
-        $today = $command->asOf !== null ? Carbon::parse($command->asOf) : Carbon::today(SystemSetting::current()->default_timezone);
+        // このハンドラは対象をDBレベルの日付条件なしに全件取得し、foreachループの中で
+        // 日付判定するため、クエリをタイムゾーングループごとに分ける必要がない。
+        // `asOf`指定時(テスト・手動実行)は全員に同じ`$today`を使い、未指定時(cronからの
+        // 実運用)のみ、ループ内で各社員の`users.timezone`(NULLはsystem_settings.
+        // default_timezoneにフォールバック)を使ってその都度「今日」を計算する。
+        $asOfToday = $command->asOf !== null ? Carbon::parse($command->asOf) : null;
+        $defaultTimezone = SystemSetting::current()->default_timezone;
         $warnedCount = 0;
 
         $grants = PaidLeaveGrant::query()
@@ -45,6 +49,7 @@ class WarnFiveDayObligationHandler implements CommandHandler
             ->get();
 
         foreach ($grants as $grant) {
+            $today = $asOfToday ?? Carbon::today($grant->user->timezone ?? $defaultTimezone);
             $obligationDeadline = $grant->granted_on->copy()->addYear();
             $daysUntilDeadline = $today->diffInDays($obligationDeadline, false);
 

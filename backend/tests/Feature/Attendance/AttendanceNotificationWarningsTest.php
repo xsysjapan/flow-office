@@ -10,6 +10,7 @@ use App\Models\AttendanceMonth;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -92,11 +93,42 @@ class AttendanceNotificationWarningsTest extends TestCase
         $user = User::factory()->create(['employment_status' => 'active', 'usage_start_date' => '2026-01-01']);
 
         Queue::fake();
-        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-06-30 20:00:00', 'UTC'));
+        $this->travelTo(Carbon::parse('2026-06-30 20:00:00', 'UTC'));
         $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance);
 
         $this->assertSame(1, $count);
         Queue::assertPushed(SendNotificationJob::class, fn ($job) => str_contains($job->summary, '2026-06'));
+    }
+
+    public function test_determines_each_users_target_month_using_their_own_timezone_not_the_company_default(): void
+    {
+        // UTC 2026-07-01 01:00は、Asia/Tokyo(UTC+9)では2026-07-01 10:00(7/1)だが、
+        // America/Los_Angeles(夏時間UTC-7)では2026-06-30 18:00(6/30)であり、日付・月が
+        // ユーザーごとに異なる。asOfを渡さない場合、会社既定のタイムゾーン(Asia/Tokyo)を
+        // 全員に適用するのではなく、各社員の`users.timezone`基準の「今日」で対象月を
+        // 判定できていることを確認する。
+        $this->assertSame('Asia/Tokyo', SystemSetting::current()->default_timezone);
+        SystemSetting::current()->update(['attendance_submission_deadline_day' => 1]);
+
+        $tokyoUser = User::factory()->create([
+            'employment_status' => 'active',
+            'usage_start_date' => '2026-01-01',
+            'timezone' => 'Asia/Tokyo',
+        ]);
+        $laUser = User::factory()->create([
+            'employment_status' => 'active',
+            'usage_start_date' => '2026-01-01',
+            'timezone' => 'America/Los_Angeles',
+        ]);
+
+        Queue::fake();
+        $this->travelTo(Carbon::parse('2026-07-01 01:00:00', 'UTC'));
+        $count = app(CommandBus::class)->dispatch(new WarnUnsubmittedAttendance);
+
+        // Tokyoの「今日」は2026-07-01(対象月2026-06)、LAの「今日」は2026-06-30(対象月2026-05)。
+        $this->assertSame(2, $count);
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => $job->recipientUserId === $tokyoUser->id && str_contains($job->summary, '2026-06'));
+        Queue::assertPushed(SendNotificationJob::class, fn ($job) => $job->recipientUserId === $laUser->id && str_contains($job->summary, '2026-05'));
     }
 
     public function test_warns_about_months_not_yet_closed_within_the_warning_window_before_the_deadline(): void
