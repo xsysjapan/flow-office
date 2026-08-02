@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/ApprovalDetailPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -110,7 +111,24 @@ export function ApprovalsPage() {
   const [yearMonth, setYearMonth] = useState<string | undefined>(undefined)
   const [page, setPage] = useState(1)
   const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedId, setSelectedIdState] = useState<string | null>(() => searchParams.get('requestId'))
+
+  /** 詳細モーダルの開閉をURLの`requestId`クエリパラメータにも反映させる。`/approvals?requestId=<id>`
+   *  へ直接アクセスした場合に初期値としてもクエリパラメータを読む(useState初期化子側)ため、
+   *  行クリック・モーダルクローズの両方でこの関数を経由させて両者を同期させる。 */
+  function setSelectedId(id: string | null) {
+    setSelectedIdState(id)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (id) next.set('requestId', id)
+        else next.delete('requestId')
+        return next
+      },
+      { replace: true },
+    )
+  }
   const {
     data: selectedRequest,
     isLoading: isLoadingDetail,

@@ -7,6 +7,7 @@ use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkCalendar;
+use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -246,9 +247,14 @@ class AttendanceFlowTest extends TestCase
         $submit->assertSuccessful()->assertJsonPath('status', 'submitted');
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
 
-        // 承認依頼の通知には、承認待ち一覧へのリンクが付く。
+        $workflowRequestId = WorkflowRequest::query()
+            ->where('subject_type', 'attendance_month')
+            ->where('subject_id', $monthId)
+            ->value('id');
+
+        // 承認依頼の通知には、統合承認一覧の該当明細へのリンクが付く。
         $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
-        $this->assertStringEndsWith('/attendance/months/to-approve', $approverNotifications[0]['detail_url']);
+        $this->assertStringEndsWith("/approvals?requestId={$workflowRequestId}", $approverNotifications[0]['detail_url']);
 
         $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', true);
         $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [

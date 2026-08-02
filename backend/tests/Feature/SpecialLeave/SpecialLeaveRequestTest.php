@@ -77,9 +77,14 @@ class SpecialLeaveRequestTest extends TestCase
         $requestResponse->assertJsonPath('status', 'submitted');
         $requestId = $requestResponse->json('id');
 
-        // 承認依頼の通知には、特別休暇申請の承認待ち一覧へのリンクが付く。
+        $workflowRequestId = WorkflowRequest::query()
+            ->where('subject_type', 'special_leave_request')
+            ->where('subject_id', $requestId)
+            ->value('id');
+
+        // 承認依頼の通知には、統合承認一覧の該当明細へのリンクが付く。
         $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
-        $this->assertStringEndsWith('/special-leave/to-approve', $approverNotifications[0]['detail_url']);
+        $this->assertStringEndsWith("/approvals?requestId={$workflowRequestId}", $approverNotifications[0]['detail_url']);
 
         $approveResponse = $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve");
         $approveResponse->assertOk();

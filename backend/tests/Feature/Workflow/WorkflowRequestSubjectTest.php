@@ -188,11 +188,17 @@ class WorkflowRequestSubjectTest extends TestCase
         $monthId = $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
             'approver_user_id' => $approver->id,
         ])->assertSuccessful()->json('id');
+
+        $workflowRequestId = WorkflowRequest::query()
+            ->where('subject_type', 'attendance_month')
+            ->where('subject_id', $monthId)
+            ->value('id');
+
         Queue::assertPushed(
             SendNotificationJob::class,
             fn (SendNotificationJob $job) => $job->title === '月次勤怠の承認依頼'
                 && $job->summary === "{$yearMonth} の月次勤怠が提出されました。"
-                && str_ends_with((string) $job->detailUrl, '/attendance/months/to-approve'),
+                && str_ends_with((string) $job->detailUrl, "/approvals?requestId={$workflowRequestId}"),
         );
 
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/return", [
