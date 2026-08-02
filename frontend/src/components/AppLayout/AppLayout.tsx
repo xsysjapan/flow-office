@@ -1,19 +1,14 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
-  Briefcase,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
-  FileText,
   Menu,
-  Plug,
-  Receipt,
   Settings,
   type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../../auth/useAuth'
-import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { cn } from '../../lib/utils'
 import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
@@ -40,11 +35,11 @@ function navGroups(
   currentYearMonth: string,
   hasSpecialLeaveTypes: boolean,
   canCloseMonths: boolean,
-  expenseCategoryShortcuts: NavItem[],
+  canSeeBackOfficeTasks: boolean,
 ): NavGroup[] {
   return [
   {
-    label: '勤怠',
+    label: '勤怠・申請',
     icon: CalendarClock,
     items: [
       { to: '/', label: '今日の勤怠' },
@@ -52,51 +47,35 @@ function navGroups(
       { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
       { to: '/paid-leave', label: '有給' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
-      ...(canCloseMonths ? [{ to: '/attendance/months/close', label: '月次締め処理' }] : []),
-    ],
-  },
-  {
-    label: '申請',
-    icon: FileText,
-    items: [
-      { to: '/requests', label: '自分の申請' },
-      { to: '/requests/new', label: '新規申請' },
-    ],
-  },
-  {
-    label: '経費精算',
-    icon: Receipt,
-    items: [
-      { to: '/expenses', label: '経費精算一覧' },
-      { to: '/expenses/new', label: '経費精算(新規作成)' },
-      ...expenseCategoryShortcuts,
+      { to: '/expenses', label: '経費精算' },
       { to: '/expenses/presets', label: '入力プリセット' },
+      { to: '/requests', label: 'その他申請' },
     ],
   },
   {
     label: '承認',
     icon: CheckCircle2,
-    items: [{ to: '/approvals', label: '承認待ち' }],
+    items: [
+      { to: '/approvals', label: '承認待ち' },
+      ...(canSeeBackOfficeTasks ? [{ to: '/backoffice-tasks', label: 'タスク一覧' }] : []),
+    ],
   },
   {
-    label: '連携',
-    icon: Plug,
+    label: '設定・連携',
+    icon: Settings,
     items: [
       { to: '/account', label: 'アカウント設定' },
       { to: '/integrations', label: 'API・MCP連携' },
     ],
   },
   {
-    label: 'バックオフィス',
-    icon: Briefcase,
-    roles: [ROLE.BACKOFFICE_STAFF, ROLE.ACCOUNTING_STAFF, ROLE.GENERAL_AFFAIRS_STAFF, ROLE.ADMIN],
-    items: [{ to: '/backoffice-tasks', label: 'タスク一覧' }],
-  },
-  {
     label: '管理',
     icon: Settings,
     roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
-    items: [{ to: '/admin', label: '管理メニュー' }],
+    items: [
+      ...(canCloseMonths ? [{ to: '/attendance/months/close', label: '月次締め処理' }] : []),
+      { to: '/admin', label: '管理メニュー' },
+    ],
   },
   ]
 }
@@ -229,14 +208,13 @@ export function AppLayout() {
   const { data: specialLeaveTypes } = useSpecialLeaveTypes()
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
   const canCloseMonths = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
-  const { data: expenseCategories } = useExpenseCategories()
-  // よく使う経費区分をメニューから直接開けるようにする(区分選択ステップを省略する
-  // ショートカット)。区分自体はマスタなので、ここでは並び順そのままにコード→リンクへ
-  // 変換するだけで、特定区分をハードコードしない。
-  const expenseCategoryShortcuts: NavItem[] = (expenseCategories ?? [])
-    .filter((category) => category.is_active)
-    .map((category) => ({ to: `/expenses/new?category=${category.code}`, label: `経費精算(${category.name})` }))
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canCloseMonths, expenseCategoryShortcuts).filter(
+  const canSeeBackOfficeTasks = hasAnyRole(user?.roles, [
+    ROLE.BACKOFFICE_STAFF,
+    ROLE.ACCOUNTING_STAFF,
+    ROLE.GENERAL_AFFAIRS_STAFF,
+    ROLE.ADMIN,
+  ])
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canCloseMonths, canSeeBackOfficeTasks).filter(
     (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
   )
 
