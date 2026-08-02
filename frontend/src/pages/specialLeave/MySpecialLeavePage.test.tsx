@@ -62,6 +62,8 @@ function renderPage(
           systemSettings: {
             paid_leave_requires_approval: true,
             special_leave_requires_approval: specialLeaveRequiresApproval,
+            attendance_requires_approval: true,
+            expense_claim_requires_approval: true,
             default_timezone: 'Asia/Tokyo',
             default_work_style_id: null,
             default_work_style: null,

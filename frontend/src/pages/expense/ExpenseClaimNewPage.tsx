@@ -541,6 +541,7 @@ export function ExpenseClaimNewPage() {
         <SavedItemsAndSubmit
           claim={claim}
           approverUserId={approverUserId}
+          approvalRequired={approvalRequired}
           onApproverChange={setApproverUserId}
           onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
           onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}

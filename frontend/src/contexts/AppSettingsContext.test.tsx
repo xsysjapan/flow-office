@@ -21,6 +21,8 @@ const testUser: User = {
 const relaxedSettings: PublicSystemSettings = {
   paid_leave_requires_approval: false,
   special_leave_requires_approval: false,
+  attendance_requires_approval: true,
+  expense_claim_requires_approval: true,
   default_timezone: 'Asia/Tokyo',
   default_work_style_id: null,
   default_work_style: null,

@@ -612,7 +612,7 @@ describe('ExpenseClaimNewPage', () => {
 
   it('allows submitting without an approver when expense_claim_requires_approval is false', async () => {
     const submitClaim = vi.spyOn(expenseClaimsApi, 'submitExpenseClaim').mockResolvedValue(
-      draftClaim({ status: 'submitted' }),
+      draftClaim({ status: 'draft' }),
     )
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
       draftClaim({
