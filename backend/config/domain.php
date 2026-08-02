@@ -203,11 +203,13 @@ use App\Domain\User\Handlers\SetUserUsageStartDateHandler;
 use App\Domain\User\Handlers\StartOnboardingSsoHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
+use App\Domain\Workflow\Commands\BackfillAttendanceMonthWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Handlers\ApproveWorkflowRequestHandler;
+use App\Domain\Workflow\Handlers\BackfillAttendanceMonthWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
@@ -270,6 +272,7 @@ return [
         ApproveWorkflowRequest::class => ApproveWorkflowRequestHandler::class,
         ReturnWorkflowRequest::class => ReturnWorkflowRequestHandler::class,
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
+        BackfillAttendanceMonthWorkflowRequest::class => BackfillAttendanceMonthWorkflowRequestHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,
