@@ -23,6 +23,7 @@ use App\Models\WorkflowRequestHistoryEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
 /**
@@ -49,21 +50,48 @@ class WorkflowRequestController extends Controller
         return WorkflowRequestResource::collection($requests);
     }
 
+    /**
+     * UC-W004: 自分が承認者に指定された申請の一覧。既定では承認待ち(submitted)のみを返すが、
+     * ステータス・年月での絞り込みにより過去の承認履歴(approved/returned/cancelled)も
+     * 検索できる(AttendanceController::monthsToApproveと同じ絞り込み+ページングの形)。
+     * `status`を省略した場合は常に`submitted`のみを返す(既存呼び出し元との後方互換)。
+     * 一方、「すべて」を明示的に検索したい場合は`status=all`を渡す(絞り込みなしの意味の
+     * 予約語。draft状態の他人の下書きを検索させないよう、'draft'自体は許可しない)。
+     */
     #[OA\Get(
         path: '/workflow-requests/to-approve',
         operationId: 'workflowRequests.toApprove',
         summary: '承認待ち申請一覧を取得する',
         tags: ['汎用申請'],
+        parameters: [
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['submitted', 'approved', 'returned', 'cancelled', 'all'])),
+            new OA\Parameter(name: 'year_month', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function indexToApprove(Request $request): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'status' => ['nullable', Rule::in(['submitted', 'approved', 'returned', 'cancelled', 'all'])],
+            'year_month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $status = $data['status'] ?? 'submitted';
+        $yearMonth = $data['year_month'] ?? null;
+
         $requests = WorkflowRequest::query()
             ->with(['requestType', 'applicant', 'approver'])
             ->where('approver_user_id', $request->user()->id)
-            ->where('status', 'submitted')
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($yearMonth, function ($query, $yearMonth) {
+                [$year, $month] = explode('-', $yearMonth);
+
+                $query->whereYear('submitted_at', $year)->whereMonth('submitted_at', $month);
+            })
             ->latest()
-            ->paginate(20);
+            ->paginate($data['per_page'] ?? 20);
 
         return WorkflowRequestResource::collection($requests);
     }

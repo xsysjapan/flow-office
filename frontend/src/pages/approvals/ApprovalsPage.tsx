@@ -1,15 +1,31 @@
 import { useState } from 'react'
 import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/ApprovalDetailPanel'
 import { Badge } from '../../components/Badge/Badge'
+import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
+import type { FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
 import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
 import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
+
+const DEFAULT_STATUS: NonNullable<FetchWorkflowRequestsToApproveOptions['status']> = 'submitted'
+
+const STATUS_FILTER_OPTIONS: Array<{ value: NonNullable<FetchWorkflowRequestsToApproveOptions['status']>; label: string }> = [
+  { value: 'submitted', label: '承認待ち' },
+  { value: 'approved', label: '承認済み' },
+  { value: 'returned', label: '差戻し済み' },
+  { value: 'cancelled', label: '取消' },
+  { value: 'all', label: 'すべて' },
+]
 
 const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, string> = {
   attendance_month: '勤怠',
@@ -46,7 +62,10 @@ function formatSubmittedAt(value: string | null): string {
  * 切り替える(オブジェクト指向UI: どの種別の申請かをまず選び、その後で内容確認・操作する)。
  */
 export function ApprovalsPage() {
-  const { data, isLoading, error } = useWorkflowRequestsToApprove()
+  const [status, setStatus] = useState<NonNullable<FetchWorkflowRequestsToApproveOptions['status']>>(DEFAULT_STATUS)
+  const [yearMonth, setYearMonth] = useState<string | undefined>(undefined)
+  const [page, setPage] = useState(1)
+  const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const {
     data: selectedRequest,
@@ -57,6 +76,7 @@ export function ApprovalsPage() {
   const returnItem = useReturnApprovalItem()
 
   const requests = data?.data ?? []
+  const isFiltered = status !== DEFAULT_STATUS || Boolean(yearMonth)
 
   function closePanel() {
     setSelectedId(null)
@@ -64,13 +84,59 @@ export function ApprovalsPage() {
     returnItem.reset()
   }
 
+  function handleFilterChange(next: { status?: NonNullable<FetchWorkflowRequestsToApproveOptions['status']>; yearMonth?: string }) {
+    if (next.status !== undefined) setStatus(next.status)
+    if (next.yearMonth !== undefined) setYearMonth(next.yearMonth || undefined)
+    setPage(1)
+  }
+
+  function clearFilters() {
+    setStatus(DEFAULT_STATUS)
+    setYearMonth(undefined)
+    setPage(1)
+  }
+
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="承認待ち一覧の取得に失敗しました。" />
 
   return (
     <Card title="承認待ち">
+      <div className="mb-4 flex flex-wrap items-end gap-4">
+        <div className="w-40">
+          <FormField label="状態" htmlFor="approvals-status">
+            <NativeSelect
+              id="approvals-status"
+              value={status}
+              onChange={(event) => handleFilterChange({ status: event.target.value as NonNullable<FetchWorkflowRequestsToApproveOptions['status']> })}
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </div>
+        <div className="w-48">
+          <FormField label="年月" htmlFor="approvals-year-month">
+            <YearMonthPicker
+              id="approvals-year-month"
+              value={yearMonth}
+              onChange={(value) => handleFilterChange({ yearMonth: value ?? '' })}
+            />
+          </FormField>
+        </div>
+        {isFiltered && (
+          <Button variant="secondary" onClick={clearFilters}>
+            フィルターをクリア
+          </Button>
+        )}
+      </div>
+
       {requests.length === 0 ? (
-        <p className="text-sm text-muted-foreground">承認待ちの申請はありません。</p>
+        <p className="text-sm text-muted-foreground">
+          {isFiltered ? '条件に一致する申請はありません。' : '承認待ちの申請はありません。'}
+        </p>
       ) : (
         <Table>
           <TableHeader>
@@ -110,6 +176,8 @@ export function ApprovalsPage() {
           </TableBody>
         </Table>
       )}
+
+      {data && <Pagination currentPage={data.meta.current_page} lastPage={data.meta.last_page} total={data.meta.total} onPageChange={setPage} />}
 
       <Dialog open={selectedId !== null} onOpenChange={(open) => !open && closePanel()}>
         <DialogContent className="max-w-2xl">

@@ -1,12 +1,24 @@
 import { apiFetch } from './client'
-import type { Paginated, WorkflowRequest, WorkflowRequestHistoryEntry } from './types'
+import type { Paginated, WorkflowRequest, WorkflowRequestHistoryEntry, WorkflowRequestStatus } from './types'
 
 export function fetchMyWorkflowRequests(): Promise<Paginated<WorkflowRequest>> {
   return apiFetch('/workflow-requests/mine')
 }
 
-export function fetchWorkflowRequestsToApprove(): Promise<Paginated<WorkflowRequest>> {
-  return apiFetch('/workflow-requests/to-approve')
+export interface FetchWorkflowRequestsToApproveOptions {
+  status?: WorkflowRequestStatus | 'all'
+  yearMonth?: string
+  page?: number
+  perPage?: number
+}
+
+/** UC-W004: 承認待ち申請一覧。既定は承認待ち(submitted)のみだが、ステータス
+ *  ('all'を渡すと絞り込みなし)・年月での絞り込みとページングに対応する。 */
+export function fetchWorkflowRequestsToApprove(options: FetchWorkflowRequestsToApproveOptions = {}): Promise<Paginated<WorkflowRequest>> {
+  const { status, yearMonth, page, perPage } = options
+  return apiFetch('/workflow-requests/to-approve', {
+    query: { status, year_month: yearMonth, page, per_page: perPage },
+  })
 }
 
 export function fetchWorkflowRequest(id: string): Promise<WorkflowRequest> {

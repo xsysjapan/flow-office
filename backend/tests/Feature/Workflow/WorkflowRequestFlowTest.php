@@ -162,6 +162,128 @@ class WorkflowRequestFlowTest extends TestCase
         $this->actingAs($stranger)->getJson("/api/workflow-requests/{$draft['id']}/history")->assertForbidden();
     }
 
+    /**
+     * @return array{applicant: User, approver: User, requestType: RequestType}
+     */
+    private function makeApprovableRequestType(): array
+    {
+        $applicant = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $requestType = RequestType::query()->create([
+            'code' => 'general_request',
+            'name' => '一般申請',
+            'form_schema' => [],
+            'requires_backoffice_task' => false,
+            'is_active' => true,
+        ]);
+
+        return ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType];
+    }
+
+    private function createSubmittedRequest(User $applicant, User $approver, RequestType $requestType, string $title = 'テスト申請'): string
+    {
+        $draft = $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => $title,
+            'form_data' => [],
+            'approver_user_id' => $approver->id,
+        ])->json();
+
+        $this->actingAs($applicant)->postJson("/api/workflow-requests/{$draft['id']}/submit");
+
+        return $draft['id'];
+    }
+
+    public function test_index_to_approve_defaults_to_submitted_only(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $pendingId = $this->createSubmittedRequest($applicant, $approver, $requestType, '承認待ち申請');
+        $approvedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '承認済み申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$approvedId}/approve");
+
+        $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve');
+
+        $response->assertOk()->assertJsonCount(1, 'data');
+        $this->assertSame($pendingId, $response->json('data.0.id'));
+    }
+
+    public function test_index_to_approve_filters_by_status(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '承認待ち申請');
+        $approvedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '承認済み申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$approvedId}/approve");
+
+        $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=approved');
+
+        $response->assertOk()->assertJsonCount(1, 'data');
+        $this->assertSame($approvedId, $response->json('data.0.id'));
+        $this->assertSame('approved', $response->json('data.0.status'));
+    }
+
+    public function test_index_to_approve_status_all_returns_every_status(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '承認待ち申請');
+        $approvedId = $this->createSubmittedRequest($applicant, $approver, $requestType, '承認済み申請');
+        $this->actingAs($approver)->postJson("/api/workflow-requests/{$approvedId}/approve");
+
+        $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=all');
+
+        $response->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function test_index_to_approve_filters_by_year_month_of_submitted_at(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        $matchingId = $this->createSubmittedRequest($applicant, $approver, $requestType, '対象月の申請');
+        \App\Models\WorkflowRequest::query()->whereKey($matchingId)->update(['submitted_at' => '2026-06-15 10:00:00']);
+
+        $otherId = $this->createSubmittedRequest($applicant, $approver, $requestType, '別月の申請');
+        \App\Models\WorkflowRequest::query()->whereKey($otherId)->update(['submitted_at' => '2026-07-15 10:00:00']);
+
+        $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=all&year_month=2026-06');
+
+        $response->assertOk()->assertJsonCount(1, 'data');
+        $this->assertSame($matchingId, $response->json('data.0.id'));
+    }
+
+    public function test_index_to_approve_paginates_with_per_page(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->createSubmittedRequest($applicant, $approver, $requestType, "申請{$i}");
+        }
+
+        $page1 = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?per_page=2&page=1');
+        $page1->assertOk()->assertJsonCount(2, 'data');
+        $this->assertSame(1, $page1->json('meta.current_page'));
+        $this->assertSame(2, $page1->json('meta.last_page'));
+        $this->assertSame(3, $page1->json('meta.total'));
+
+        $page2 = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?per_page=2&page=2');
+        $page2->assertOk()->assertJsonCount(1, 'data');
+        $this->assertSame(2, $page2->json('meta.current_page'));
+    }
+
+    public function test_index_to_approve_never_returns_requests_where_caller_is_not_approver(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
+        $stranger = User::factory()->create();
+
+        $this->createSubmittedRequest($applicant, $approver, $requestType, '他人の承認待ち申請');
+
+        $response = $this->actingAs($stranger)->getJson('/api/workflow-requests/to-approve?status=all');
+
+        $response->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_admin_can_manage_request_types_but_others_cannot(): void
     {
         $admin = User::factory()->create();

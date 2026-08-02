@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   approveWorkflowRequest,
   cancelWorkflowRequest,
@@ -10,6 +10,7 @@ import {
   returnWorkflowRequest,
   submitWorkflowRequest,
   type CreateWorkflowRequestInput,
+  type FetchWorkflowRequestsToApproveOptions,
 } from '../api/workflowRequests'
 
 const LIST_KEY = ['workflow-requests', 'mine']
@@ -19,8 +20,12 @@ export function useMyWorkflowRequests() {
   return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyWorkflowRequests })
 }
 
-export function useWorkflowRequestsToApprove() {
-  return useQuery({ queryKey: TO_APPROVE_KEY, queryFn: fetchWorkflowRequestsToApprove })
+export function useWorkflowRequestsToApprove(options: FetchWorkflowRequestsToApproveOptions = {}) {
+  return useQuery({
+    queryKey: [...TO_APPROVE_KEY, options.status ?? '', options.yearMonth ?? '', options.page ?? 1],
+    queryFn: () => fetchWorkflowRequestsToApprove(options),
+    placeholderData: keepPreviousData,
+  })
 }
 
 export function useWorkflowRequest(id: string) {

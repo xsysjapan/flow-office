@@ -184,4 +184,70 @@ describe('ApprovalsPage', () => {
 
     expect(approveWorkflowRequest).toHaveBeenCalledWith('workflow-request-1')
   })
+
+  it('sends status=submitted on initial load', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('名刺作成申請')
+
+    expect(fetchToApprove).toHaveBeenCalledWith({ status: 'submitted', yearMonth: undefined, page: 1 })
+  })
+
+  it('changing the status filter refetches with the new status and resets to page 1', async () => {
+    const user = userEvent.setup()
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+    await screen.findByText('名刺作成申請')
+
+    await user.selectOptions(screen.getByLabelText('状態'), '承認済み')
+
+    expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'approved', yearMonth: undefined, page: 1 })
+  })
+
+  it('the "すべて" option omits filtering by sending status=all', async () => {
+    const user = userEvent.setup()
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+    await screen.findByText('名刺作成申請')
+
+    await user.selectOptions(screen.getByLabelText('状態'), 'すべて')
+
+    expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'all', yearMonth: undefined, page: 1 })
+  })
+
+  it('pagination controls call onPageChange and refetch with the new page', async () => {
+    const user = userEvent.setup()
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 2, total: 2 },
+      links: { next: null, prev: null },
+    }
+    const fetchToApprove = vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+    await screen.findByText('名刺作成申請')
+
+    await user.click(screen.getByRole('button', { name: '次のページ' }))
+
+    expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'submitted', yearMonth: undefined, page: 2 })
+  })
 })
