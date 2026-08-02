@@ -12,7 +12,7 @@ import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { AttendanceDay } from '../../api/types'
 import { useAttendanceMonth, usePunches, useWeek } from '../../hooks/useAttendance'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
-import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
+import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
   attendanceDayDisplayLabel,
@@ -414,6 +414,7 @@ export function DailyReferenceView({
               title="この日の集計"
               totals={day.calculation}
               absenceDays={day.calculation.absence_minutes ? 1 : undefined}
+              specialLeaveBreakdown={specialLeaveTypeBreakdown([day])}
             />
           )}
         </div>

@@ -43,7 +43,7 @@ function zeroWeeklyTotals(): WeeklyAttendanceTotals {
  *  special_leave_type_idごとにグルーピングする。バックエンドのMonthlyOvertimeCalculator.
  *  calculateSpecialLeaveBreakdownと同じ考え方(全休・半休はused_daysを、時間単位はminutesを
  *  合算する)を、クライアントサイドで週次分に対して行う。 */
-function specialLeaveTypeBreakdown(days: AttendanceDay[]): AttendanceSpecialLeaveBreakdownItem[] {
+export function specialLeaveTypeBreakdown(days: AttendanceDay[]): AttendanceSpecialLeaveBreakdownItem[] {
   const byType = new Map<string, AttendanceSpecialLeaveBreakdownItem>()
 
   for (const day of days) {

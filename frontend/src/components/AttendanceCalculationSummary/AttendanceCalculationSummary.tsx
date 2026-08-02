@@ -71,10 +71,11 @@ export function AttendanceCalculationSummary({
     || !!totals.special_leave_minutes
     || absenceDays !== undefined
 
-  // 特別休暇の内訳は、渡されていて2種類以上ある場合のみ内訳行として表示する(1種類のみの場合は
-  // 合計行と重複するだけなので、合計行のみで足りる)。
+  // 特別休暇は種類がわかりにくいという声があったため、渡されていれば1種類のみでも
+  // 内訳行(種類名付き)を表示する(合計行は「特別休暇」としか出ないため、種類名は
+  // この内訳行でしか分からない)。
   const specialLeaveTypeBreakdown = (specialLeaveBreakdown ?? []).filter((item) => item.days !== 0 || item.minutes !== 0)
-  const showSpecialLeaveTypeBreakdown = specialLeaveTypeBreakdown.length > 1
+  const showSpecialLeaveTypeBreakdown = specialLeaveTypeBreakdown.length > 0
 
   // 給与計算上の労働時間(payroll_work_minutes)は裁量労働制・みなし労働時間制以外では
   // work_minutesと一致するため、異なる場合のみ別行で表示する(常に両方出すと大半のケースで

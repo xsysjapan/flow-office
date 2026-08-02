@@ -88,7 +88,7 @@ describe('AttendanceCalculationSummary', () => {
     expect(screen.getByText('うちリフレッシュ休暇')).toBeInTheDocument()
   })
 
-  it('does not show a per-type breakdown when only 1 special leave type is present', () => {
+  it('shows a per-type breakdown even when only 1 special leave type is present', () => {
     render(
       <AttendanceCalculationSummary
         title="今月の集計"
@@ -96,6 +96,21 @@ describe('AttendanceCalculationSummary', () => {
         showAllLeaveTotals
         specialLeaveBreakdown={[
           { special_leave_type_id: 'type-1', special_leave_type_name: '誕生日休暇', days: 1, minutes: 0 },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('うち誕生日休暇')).toBeInTheDocument()
+  })
+
+  it('does not show a breakdown row when no special leave was taken', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={{ ...totals, special_leave_days: 0 }}
+        showAllLeaveTotals
+        specialLeaveBreakdown={[
+          { special_leave_type_id: 'type-1', special_leave_type_name: '誕生日休暇', days: 0, minutes: 0 },
         ]}
       />,
     )
