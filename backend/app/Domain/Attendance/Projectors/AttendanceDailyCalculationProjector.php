@@ -66,9 +66,15 @@ class AttendanceDailyCalculationProjector extends Projector
     {
         $attendanceDayId = $event->aggregateRootUuid();
 
-        if (! AttendanceDay::query()->whereKey($attendanceDayId)->exists()) {
+        $existing = AttendanceDay::query()->whereKey($attendanceDayId)->first();
+
+        if ($existing === null) {
             return;
         }
+
+        // payrollWorkMinutesがnull(この項目が追加される前に記録された古いイベントの再生時のみ
+        // 起こりうる)の場合、直前の計算行の値をそのまま保持する。
+        $payrollWorkMinutes = $event->payrollWorkMinutes ?? $existing->calculation?->payroll_work_minutes ?? $event->prescribedWorkMinutes;
 
         AttendanceDailyCalculation::query()->updateOrCreate(
             ['attendance_day_id' => $attendanceDayId],
@@ -85,7 +91,7 @@ class AttendanceDailyCalculationProjector extends Projector
                 'late_night_statutory_excess_overtime_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
                 'legal_holiday_work_minutes' => $event->legalHolidayWorkMinutes,
                 'prescribed_holiday_work_minutes' => $event->prescribedHolidayWorkMinutes,
-                'payroll_work_minutes' => $event->payrollWorkMinutes,
+                'payroll_work_minutes' => $payrollWorkMinutes,
                 'late_night_legal_holiday_work_minutes' => $event->lateNightLegalHolidayWorkMinutes,
                 'is_manually_adjusted' => true,
                 'adjusted_by_user_id' => $event->adjustedByUserId,
