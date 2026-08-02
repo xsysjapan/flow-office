@@ -14,7 +14,7 @@ if [ ! -f .env ]; then
   sed -i 's/^MICROSOFT_TENANT_ID=.*/MICROSOFT_TENANT_ID=mock/' .env
 fi
 
-if [ ! -d vendor ]; then
+if [ ! -d vendor ] || [ -z "$(ls -A vendor)" ]; then
   composer install
 fi
 
@@ -69,7 +69,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
-if [ ! -d vendor ]; then
+if [ ! -d vendor ] || [ -z "$(ls -A vendor)" ]; then
   composer install
 fi
 
