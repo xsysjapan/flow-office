@@ -8,6 +8,7 @@ use App\Domain\User\Events\UserLoggedIn;
 use App\Domain\User\Events\UserMigratedFromLegacy;
 use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Domain\User\Events\UserRolesChanged;
+use App\Domain\User\Events\UserRolesMigratedFromLegacy;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
@@ -112,6 +113,17 @@ class UserProjector extends Projector
         }
 
         $roleIds = Role::query()->whereIn('code', $event->newRoleCodes)->pluck('id');
+        $user->roles()->sync($roleIds);
+    }
+
+    public function onUserRolesMigratedFromLegacy(UserRolesMigratedFromLegacy $event): void
+    {
+        $user = User::query()->find($event->aggregateRootUuid());
+        if ($user === null) {
+            return;
+        }
+
+        $roleIds = Role::query()->whereIn('code', $event->roleCodes)->pluck('id');
         $user->roles()->sync($roleIds);
     }
 

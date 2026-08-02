@@ -22,9 +22,9 @@ use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
-use App\Domain\Attendance\Commands\ExcludeAttendanceSubmissionReminder;
 use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
 use App\Domain\Attendance\Commands\EndBreak;
+use App\Domain\Attendance\Commands\ExcludeAttendanceSubmissionReminder;
 use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\GeneratePatternShiftAssignments;
@@ -62,9 +62,9 @@ use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
-use App\Domain\Attendance\Handlers\ExcludeAttendanceSubmissionReminderHandler;
 use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
+use App\Domain\Attendance\Handlers\ExcludeAttendanceSubmissionReminderHandler;
 use App\Domain\Attendance\Handlers\GenerateEmployeeShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternAttendanceDaysHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternShiftAssignmentsHandler;
@@ -89,9 +89,11 @@ use App\Domain\AuthenticationKey\Handlers\IssueAuthenticationKeyHandler;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
+use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromExpenseClaimApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
+use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -114,8 +116,6 @@ use App\Domain\Device\Handlers\RevokeDeviceHandler;
 use App\Domain\Device\Handlers\UpdateDeviceRolesHandler;
 use App\Domain\Device\Handlers\UpdateDeviceSettingsHandler;
 use App\Domain\Device\Handlers\WarnStaleDevicesHandler;
-use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromExpenseClaimApproval;
-use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
 use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSession;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSessionBootstrap;
@@ -179,6 +179,7 @@ use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
+use App\Domain\User\Commands\BackfillUserRoles;
 use App\Domain\User\Commands\CompleteOnboardingSsoLink;
 use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
 use App\Domain\User\Commands\LinkSsoAccount;
@@ -190,6 +191,7 @@ use App\Domain\User\Commands\SetUserUsageStartDate;
 use App\Domain\User\Commands\StartOnboardingSso;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
+use App\Domain\User\Handlers\BackfillUserRolesHandler;
 use App\Domain\User\Handlers\CompleteOnboardingSsoLinkHandler;
 use App\Domain\User\Handlers\CompleteOnboardingWithLocalPasswordHandler;
 use App\Domain\User\Handlers\LinkSsoAccountHandler;
@@ -325,6 +327,7 @@ return [
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
         BackfillAttendanceMonthLockShare::class => BackfillAttendanceMonthLockShareHandler::class,
+        BackfillUserRoles::class => BackfillUserRolesHandler::class,
         ExcludeAttendanceSubmissionReminder::class => ExcludeAttendanceSubmissionReminderHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,

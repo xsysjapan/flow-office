@@ -11,6 +11,7 @@
   `auth_method`が`sso`(実際のEntra IDログイン結果で作成、entra_user_id設定済み)か
   `local`(ローカルパスワードで作成)かを区別する)
 - `user.roles_changed` (UC-M001 権限を設定する)
+- `user.roles_migrated_from_legacy` (Seeder等で直接作成された既存ロール割り当ての移行時点スナップショット)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで

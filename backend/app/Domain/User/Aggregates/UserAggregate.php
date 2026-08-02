@@ -7,6 +7,7 @@ use App\Domain\User\Events\UserHireDateSet;
 use App\Domain\User\Events\UserLoggedIn;
 use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Domain\User\Events\UserRolesChanged;
+use App\Domain\User\Events\UserRolesMigratedFromLegacy;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
@@ -85,6 +86,16 @@ class UserAggregate extends AggregateRoot
             newRoleCodes: $newRoleCodes,
             changedByUserId: $changedByUserId,
         ));
+
+        return $this;
+    }
+
+    /**
+     * @param  array<int, string>  $roleCodes
+     */
+    public function migrateRolesFromLegacy(array $roleCodes): self
+    {
+        $this->recordThat(new UserRolesMigratedFromLegacy(roleCodes: $roleCodes));
 
         return $this;
     }

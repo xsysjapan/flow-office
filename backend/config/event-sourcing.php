@@ -95,6 +95,7 @@ use App\Domain\User\Events\UserLoggedIn;
 use App\Domain\User\Events\UserMigratedFromLegacy;
 use App\Domain\User\Events\UserOnboardedAsAdmin;
 use App\Domain\User\Events\UserRolesChanged;
+use App\Domain\User\Events\UserRolesMigratedFromLegacy;
 use App\Domain\User\Events\UserSsoAccountLinked;
 use App\Domain\User\Events\UserSyncedFromMs365;
 use App\Domain\User\Events\UserTerminationDateSet;
@@ -319,6 +320,7 @@ return [
         'user.sso_account_linked' => UserSsoAccountLinked::class,
         'user.logged_in' => UserLoggedIn::class,
         'user.roles_changed' => UserRolesChanged::class,
+        'user.roles_migrated_from_legacy' => UserRolesMigratedFromLegacy::class,
         'user.hire_date_set' => UserHireDateSet::class,
         'user.termination_date_set' => UserTerminationDateSet::class,
         'user.usage_start_date_set' => UserUsageStartDateSet::class,

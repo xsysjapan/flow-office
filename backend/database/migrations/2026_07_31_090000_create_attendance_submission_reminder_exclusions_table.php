@@ -21,10 +21,11 @@ return new class extends Migration
             $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('year_month', 7); // 'YYYY-MM'
             $table->text('reason');
-            $table->foreignUuid('excluded_by_user_id')->constrained('users');
+            $table->foreignUuid('excluded_by_user_id');
             $table->timestamps();
 
-            $table->unique(['user_id', 'year_month']);
+            $table->unique(['user_id', 'year_month'], 'att_sub_rem_excl_user_month_unique');
+            $table->foreign('excluded_by_user_id', 'att_sub_rem_excl_by_user_fk')->references('id')->on('users');
         });
     }
 
