@@ -16,6 +16,11 @@ export default defineConfig({
   // '/flow-office/'を指定する。未指定時(ローカル開発・Storybook・テスト)はルート'/'のまま。
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [react(), tailwindcss()],
+  server: {
+    watch: {
+      usePolling: true,
+    }
+  },
   test: {
     projects: [{
       extends: true,

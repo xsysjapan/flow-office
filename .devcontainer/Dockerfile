@@ -37,3 +37,5 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends caddy ngrok \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+COPY php.ini /usr/local/etc/php/conf.d/zz-flow-office.ini
