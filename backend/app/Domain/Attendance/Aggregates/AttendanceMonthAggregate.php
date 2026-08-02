@@ -38,15 +38,38 @@ class AttendanceMonthAggregate extends AggregateRoot
 
         // 提出した月次勤怠(対象月の日次勤怠一式)を編集不可にし、承認者へ開示する
         // (ルートCLAUDE.md「絶対に外してはいけない設計原則」1・原則11の周辺: 提出時ロック・共有)。
+        $this->lock(userId: $userId, periodStartDate: $periodStartDate, periodEndDate: $periodEndDate, lockedByUserId: $userId);
+        $this->share(sharedWithUserId: $approverUserId, sharedByUserId: $userId);
+
+        return $this;
+    }
+
+    /**
+     * 対象月の日次勤怠一式を編集不可にする。通常はsubmit()内から呼ばれるが、
+     * BackfillAttendanceMonthLockShareHandlerが、このイベントが導入される前に提出済み
+     * だった月に対して事後的にロックを補完する用途でも直接呼び出す。
+     */
+    public function lock(string $userId, string $periodStartDate, string $periodEndDate, string $lockedByUserId): self
+    {
         $this->recordThat(new AttendanceMonthLocked(
             userId: $userId,
             periodStartDate: $periodStartDate,
             periodEndDate: $periodEndDate,
-            lockedByUserId: $userId,
+            lockedByUserId: $lockedByUserId,
         ));
+
+        return $this;
+    }
+
+    /**
+     * 対象月の日次勤怠一式を承認者へ開示する。通常はsubmit()内から呼ばれるが、
+     * BackfillAttendanceMonthLockShareHandlerが事後的な共有の補完にも直接呼び出す。
+     */
+    public function share(string $sharedWithUserId, string $sharedByUserId): self
+    {
         $this->recordThat(new AttendanceMonthShared(
-            sharedWithUserId: $approverUserId,
-            sharedByUserId: $userId,
+            sharedWithUserId: $sharedWithUserId,
+            sharedByUserId: $sharedByUserId,
         ));
 
         return $this;
