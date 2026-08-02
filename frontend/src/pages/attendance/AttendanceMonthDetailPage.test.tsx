@@ -13,6 +13,7 @@ import type {
   Paginated,
   User,
 } from '../../api/types'
+import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { AttendanceMonthDetailPage } from './AttendanceMonthDetailPage'
 
 const yearMonth = '2026-07'
@@ -93,15 +94,32 @@ const dayRecord: AttendanceDay = {
   calculation: null,
 }
 
-function renderPage(initialYearMonth = yearMonth) {
+function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/attendance/months/${initialYearMonth}`]}>
-        <Routes>
-          <Route path="/attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <AppSettingsContext.Provider
+        value={{
+          systemSettings: {
+            paid_leave_requires_approval: true,
+            special_leave_requires_approval: true,
+            attendance_requires_approval: attendanceRequiresApproval,
+            expense_claim_requires_approval: true,
+            default_timezone: 'Asia/Tokyo',
+            default_work_style_id: null,
+            default_work_style: null,
+            attendance_submission_deadline_day: 5,
+            attendance_month_close_deadline_day: 10,
+          },
+          isLoading: false,
+        }}
+      >
+        <MemoryRouter initialEntries={[`/attendance/months/${initialYearMonth}`]}>
+          <Routes>
+            <Route path="/attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -305,6 +323,28 @@ describe('AttendanceMonthDetailPage', () => {
     const dialog = await screen.findByRole('dialog')
 
     expect(within(dialog).getByRole('button', { name: '提出する' })).toBeDisabled()
+  })
+
+  it('allows submitting without an approver when attendance_requires_approval is false', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: notSubmittedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedApprover)
+    vi.spyOn(attendanceApi, 'submitMonth').mockResolvedValue({ ...notSubmittedMonth, status: 'submitted' })
+
+    renderPage(yearMonth, false)
+
+    await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/現在の設定では承認者の指定は不要です/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '提出する' })).not.toBeDisabled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '提出する' }))
+
+    await waitFor(() => expect(attendanceApi.submitMonth).toHaveBeenCalledWith(yearMonth, undefined))
   })
 
   it('shows legal holiday warning badges', async () => {

@@ -66,10 +66,11 @@ export function deleteExpenseItem(claimId: string, itemId: string): Promise<void
   return apiFetch(`/expense-claims/${claimId}/items/${itemId}`, { method: 'DELETE' })
 }
 
-export function submitExpenseClaim(claimId: string, approverUserId: string): Promise<ExpenseClaim> {
+/** system_settings.expense_claim_requires_approval が false の場合は approverUserId を省略できる(承認不要)。 */
+export function submitExpenseClaim(claimId: string, approverUserId?: string): Promise<ExpenseClaim> {
   return apiFetch(`/expense-claims/${claimId}/submit`, {
     method: 'POST',
-    body: { approver_user_id: approverUserId },
+    body: approverUserId ? { approver_user_id: approverUserId } : {},
   })
 }
 

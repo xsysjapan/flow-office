@@ -117,7 +117,7 @@ export function useSubmitExpenseClaim(claimId: string) {
   const invalidate = useInvalidateClaim(claimId)
 
   return useMutation({
-    mutationFn: (approverUserId: string) => submitExpenseClaim(claimId, approverUserId),
+    mutationFn: (approverUserId?: string) => submitExpenseClaim(claimId, approverUserId),
     onSuccess: invalidate,
   })
 }

@@ -224,7 +224,7 @@ export function useSubmitMonth(yearMonth: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (approverUserId: string) => submitMonth(yearMonth, approverUserId),
+    mutationFn: (approverUserId?: string) => submitMonth(yearMonth, approverUserId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', yearMonth] })
       void queryClient.invalidateQueries({ queryKey: ['attendance', 'months', 'mine'] })

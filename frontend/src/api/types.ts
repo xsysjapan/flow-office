@@ -94,6 +94,9 @@ export interface SystemSettings {
   /** UC-P003/UC-S003: 有給・特別休暇の申請に承認者による承認を必須にするか。 */
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  /** 月次勤怠の提出・経費精算の申請に承認者による承認を必須にするか。 */
+  attendance_requires_approval: boolean
+  expense_claim_requires_approval: boolean
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
@@ -111,6 +114,8 @@ export interface UpdateSystemSettingsInput
 export interface PublicSystemSettings {
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  attendance_requires_approval: boolean
+  expense_claim_requires_approval: boolean
   default_timezone: string
   default_work_style_id: string | null
   default_work_style: Pick<WorkStyle, 'id' | 'code' | 'name'> | null

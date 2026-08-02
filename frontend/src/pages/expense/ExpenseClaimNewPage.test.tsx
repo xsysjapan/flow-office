@@ -10,6 +10,7 @@ import * as expenseClaimsApi from '../../api/expenseClaims'
 import * as expenseEntryPresetsApi from '../../api/expenseEntryPresets'
 import * as usersApi from '../../api/users'
 import type { ExpenseCategory, ExpenseClaim, ExpenseEntryPreset, User } from '../../api/types'
+import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { ExpenseClaimNewPage } from './ExpenseClaimNewPage'
 
@@ -73,6 +74,7 @@ function renderPage(
   categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
   initialPath = '/expenses/new',
   presets: ExpenseEntryPreset[] = [],
+  expenseClaimRequiresApproval = true,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
@@ -86,14 +88,31 @@ function renderPage(
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialPath]}>
-        <Routes>
-          <Route path="/expenses" element={<p>経費精算一覧</p>} />
-          <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
-          <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
-          <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
-        </Routes>
-      </MemoryRouter>
+      <AppSettingsContext.Provider
+        value={{
+          systemSettings: {
+            paid_leave_requires_approval: true,
+            special_leave_requires_approval: true,
+            attendance_requires_approval: true,
+            expense_claim_requires_approval: expenseClaimRequiresApproval,
+            default_timezone: 'Asia/Tokyo',
+            default_work_style_id: null,
+            default_work_style: null,
+            attendance_submission_deadline_day: 5,
+            attendance_month_close_deadline_day: 10,
+          },
+          isLoading: false,
+        }}
+      >
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="/expenses" element={<p>経費精算一覧</p>} />
+            <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
+            <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
+            <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
+          </Routes>
+        </MemoryRouter>
+      </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -589,6 +608,41 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '交通費' }))
     await screen.findByRole('button', { name: '行を追加' })
     expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSave)
+  })
+
+  it('allows submitting without an approver when expense_claim_requires_approval is false', async () => {
+    const submitClaim = vi.spyOn(expenseClaimsApi, 'submitExpenseClaim').mockResolvedValue(
+      draftClaim({ status: 'submitted' }),
+    )
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit', [], false)
+
+    expect(await screen.findByLabelText('承認者(任意)')).toBeInTheDocument()
+    expect(screen.getByText(/現在の設定では経費精算の申請に承認は不要です/)).toBeInTheDocument()
+    const submitButton = screen.getByRole('button', { name: '申請する' })
+    expect(submitButton).not.toBeDisabled()
+
+    await userEvent.click(submitButton)
+
+    await waitFor(() => expect(submitClaim).toHaveBeenCalledWith('claim-1', undefined))
   })
 
   it('lets the applicant delete an unwanted draft while resuming its edit', async () => {

@@ -33,6 +33,8 @@ export function SystemSettingsPage() {
   const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
   const [paidLeaveRequiresApproval, setPaidLeaveRequiresApproval] = useState(true)
   const [specialLeaveRequiresApproval, setSpecialLeaveRequiresApproval] = useState(true)
+  const [attendanceRequiresApproval, setAttendanceRequiresApproval] = useState(true)
+  const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -52,6 +54,8 @@ export function SystemSettingsPage() {
     setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
     setPaidLeaveRequiresApproval(data.paid_leave_requires_approval)
     setSpecialLeaveRequiresApproval(data.special_leave_requires_approval)
+    setAttendanceRequiresApproval(data.attendance_requires_approval)
+    setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -77,6 +81,8 @@ export function SystemSettingsPage() {
         notification_mail_sender_name: notificationMailSenderName || null,
         paid_leave_requires_approval: paidLeaveRequiresApproval,
         special_leave_requires_approval: specialLeaveRequiresApproval,
+        attendance_requires_approval: attendanceRequiresApproval,
+        expense_claim_requires_approval: expenseClaimRequiresApproval,
       },
       {
         onSuccess: () => {
@@ -234,6 +240,34 @@ export function SystemSettingsPage() {
           }}
         />
         特別休暇の申請に承認を必須にする
+      </label>
+
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">勤怠・経費精算の承認設定</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        オフにすると、承認者を指定しなくても提出・申請できるようになり、承認不要のまま提出・申請と
+        同時に確定する。
+      </p>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={attendanceRequiresApproval}
+          onCheckedChange={(checked) => {
+            setAttendanceRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        月次勤怠の提出に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={expenseClaimRequiresApproval}
+          onCheckedChange={(checked) => {
+            setExpenseClaimRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        経費精算の申請に承認を必須にする
       </label>
 
       <Button

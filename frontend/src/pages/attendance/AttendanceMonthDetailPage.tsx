@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
+import { useAppSettings } from '../../contexts/useAppSettings'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { Badge } from '../../components/Badge/Badge'
@@ -76,6 +77,9 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
 
 /** 「提出する」押下で開き、提出先の承認者を選んでから確定するモーダル。 */
 function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
+  const { systemSettings } = useAppSettings()
+  const approvalRequired = systemSettings.attendance_requires_approval
+
   const [isOpen, setIsOpen] = useState(false)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const submitMonth = useSubmitMonth(yearMonth)
@@ -97,19 +101,23 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
           <DialogTitle>月次勤怠を提出しますか?</DialogTitle>
           <DialogDescription>
             {yearMonth} の月次勤怠を提出します。提出先の承認者を選んでください。提出すると、承認・差戻しされるまでこの月の日次勤怠・打刻ログは編集できなくなります。
+            {!approvalRequired && '現在の設定では承認者の指定は不要です。提出すると同時に確定します。'}
           </DialogDescription>
         </DialogHeader>
         {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
         <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+        {!approvalRequired && (
+          <p className="text-xs text-muted-foreground">承認者の指定は任意です。</p>
+        )}
         <DialogFooter>
           <Button variant="secondary" onClick={() => setIsOpen(false)}>
             キャンセル
           </Button>
           <Button
             isLoading={submitMonth.isPending}
-            disabled={!approverUserId}
+            disabled={approvalRequired && !approverUserId}
             onClick={() =>
-              submitMonth.mutate(approverUserId as string, {
+              submitMonth.mutate(approverUserId, {
                 onSuccess: () => setIsOpen(false),
               })
             }

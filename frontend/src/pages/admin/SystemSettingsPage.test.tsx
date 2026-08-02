@@ -20,6 +20,8 @@ const settings: SystemSettings = {
   notification_mail_sender_name: null,
   paid_leave_requires_approval: true,
   special_leave_requires_approval: true,
+  attendance_requires_approval: true,
+  expense_claim_requires_approval: true,
 }
 
 function renderPage() {
@@ -66,9 +68,39 @@ describe('SystemSettingsPage', () => {
         notification_mail_sender_name: null,
         paid_leave_requires_approval: true,
         special_leave_requires_approval: true,
+        attendance_requires_approval: true,
+        expense_claim_requires_approval: true,
       }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()
+  })
+
+  it('toggles the attendance and expense-claim approval checkboxes and includes them when saving', async () => {
+    vi.spyOn(systemSettingsApi, 'updateSystemSettings').mockResolvedValue(settings)
+    renderPage()
+
+    await screen.findByLabelText('既定タイムゾーン')
+
+    const attendanceCheckbox = screen.getByRole('checkbox', { name: '月次勤怠の提出に承認を必須にする' })
+    const expenseCheckbox = screen.getByRole('checkbox', { name: '経費精算の申請に承認を必須にする' })
+    expect(attendanceCheckbox).toBeChecked()
+    expect(expenseCheckbox).toBeChecked()
+
+    await userEvent.click(attendanceCheckbox)
+    await userEvent.click(expenseCheckbox)
+    expect(attendanceCheckbox).not.toBeChecked()
+    expect(expenseCheckbox).not.toBeChecked()
+
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() =>
+      expect(systemSettingsApi.updateSystemSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attendance_requires_approval: false,
+          expense_claim_requires_approval: false,
+        }),
+      ),
+    )
   })
 
   it('shows an error message when saving fails', async () => {

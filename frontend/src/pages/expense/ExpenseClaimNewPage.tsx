@@ -17,6 +17,7 @@ import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
 import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
+import { useAppSettings } from '../../contexts/useAppSettings'
 import { useWeek } from '../../hooks/useAttendance'
 import {
   useAddExpenseItem,
@@ -294,6 +295,8 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  * フォームを表示する。
  */
 export function ExpenseClaimNewPage() {
+  const { systemSettings } = useAppSettings()
+  const approvalRequired = systemSettings.expense_claim_requires_approval
   const navigate = useNavigate()
   const { id: routeClaimId } = useParams<{ id?: string }>()
   const [searchParams] = useSearchParams()
@@ -404,7 +407,7 @@ export function ExpenseClaimNewPage() {
   }
 
   const handleSubmit = async () => {
-    if (!claimId || !approverUserId) return
+    if (!claimId || (approvalRequired && !approverUserId)) return
     await submitClaim.mutateAsync(approverUserId)
     navigate(`/expenses/${claimId}`)
   }
@@ -457,6 +460,7 @@ export function ExpenseClaimNewPage() {
           <SavedItemsAndSubmit
             claim={claim}
             approverUserId={approverUserId}
+            approvalRequired={approvalRequired}
             onApproverChange={setApproverUserId}
             onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
             onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
@@ -558,6 +562,7 @@ export function ExpenseClaimNewPage() {
 function SavedItemsAndSubmit({
   claim,
   approverUserId,
+  approvalRequired,
   onApproverChange,
   onUpdateItem,
   onDeleteItem,
@@ -568,6 +573,7 @@ function SavedItemsAndSubmit({
 }: {
   claim: NonNullable<ReturnType<typeof useExpenseClaim>['data']>
   approverUserId: string | undefined
+  approvalRequired: boolean
   onApproverChange: (userId: string | undefined) => void
   onUpdateItem: (itemId: string, input: SaveExpenseItemInput) => void
   onDeleteItem: (itemId: string) => void
@@ -705,13 +711,22 @@ function SavedItemsAndSubmit({
       <Card title="申請する">
         {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
         {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
-        <FormField label="承認者" htmlFor="approver" required>
+        <FormField
+          label={approvalRequired ? '承認者' : '承認者(任意)'}
+          htmlFor="approver"
+          required={approvalRequired}
+        >
           <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
+          {!approvalRequired && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
+            </p>
+          )}
         </FormField>
         <div className="flex items-center gap-3">
           <Button
             isLoading={submitClaim.isPending}
-            disabled={!approverUserId || claim.items.length === 0}
+            disabled={(approvalRequired && !approverUserId) || claim.items.length === 0}
             onClick={onSubmit}
           >
             申請する

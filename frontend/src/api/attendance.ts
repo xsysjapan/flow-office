@@ -218,10 +218,11 @@ export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }
 
-export function submitMonth(yearMonth: string, approverUserId: string): Promise<AttendanceMonth> {
+/** system_settings.attendance_requires_approval が false の場合は approverUserId を省略できる(承認不要)。 */
+export function submitMonth(yearMonth: string, approverUserId?: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance/months/${yearMonth}/submit`, {
     method: 'POST',
-    body: { approver_user_id: approverUserId },
+    body: approverUserId ? { approver_user_id: approverUserId } : {},
   })
 }
 
