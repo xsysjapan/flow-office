@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { AttendanceDay } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
-import { attendanceDayStatusLabel } from '../../utils/statusLabels'
+import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
 import { Duration } from '../Duration/Duration'
 
@@ -25,7 +25,7 @@ export interface AttendanceDayRowProps {
  * (オブジェクト指向UI: 日という対象を選んでから操作する)。
  */
 export function AttendanceDayRow({ date, day, warnings = [] }: AttendanceDayRowProps) {
-  const { label, tone } = day ? attendanceDayStatusLabel(day.status) : { label: '未入力', tone: 'neutral' as const }
+  const { label, tone } = day ? attendanceDayDisplayLabel(day) : { label: '未入力', tone: 'neutral' as const }
 
   return (
     <li>

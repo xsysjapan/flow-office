@@ -112,6 +112,44 @@ export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMet
   return attendanceDayStatusMeta[status]
 }
 
+const PAID_LEAVE_WORK_TYPE_PREFIX = 'paid_leave_'
+const SPECIAL_LEAVE_WORK_TYPE_PREFIX = 'special_leave_'
+
+/**
+ * 全休の有給・特別休暇はバックエンドが意図的に attendance_days.status を 'clocked_out' に
+ * しているため(「退勤忘れ」警告の誤検知を避けるため。backend/app/Domain/Attendance/
+ * Services/AttendanceCalculator.php 参照)、statusだけを見ると休暇日なのに「退勤済み」と
+ * 表示されてしまう。attendance_days.work_type(paid_leave_ / special_leave_ 接頭辞, PaidLeaveType
+ * ::toAttendanceWorkType() / SpecialLeaveWorkType::toAttendanceWorkType() 参照)を優先して見る。
+ */
+function leaveWorkTypeLabel(workType: string | null | undefined): string | null {
+  if (!workType) return null
+  if (workType.startsWith(PAID_LEAVE_WORK_TYPE_PREFIX)) {
+    const unit = workType.slice(PAID_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
+    return `有給休暇(${paidLeaveTypeLabels[unit] ?? unit})`
+  }
+  if (workType.startsWith(SPECIAL_LEAVE_WORK_TYPE_PREFIX)) {
+    const unit = workType.slice(SPECIAL_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
+    return `特別休暇(${paidLeaveTypeLabels[unit] ?? unit})`
+  }
+  return null
+}
+
+/**
+ * 勤怠日1件分の表示ラベル。全休の有給・特別休暇はwork_typeから休暇種別・取得単位を
+ * 表示し、それ以外はattendanceDayStatusLabel()と同じstatusベースの表示にフォールバックする。
+ */
+export function attendanceDayDisplayLabel(day: {
+  status: AttendanceDayStatus
+  work_type: string | null | undefined
+}): StatusMeta {
+  const leaveLabel = leaveWorkTypeLabel(day.work_type)
+  if (leaveLabel) {
+    return { label: leaveLabel, tone: 'info' }
+  }
+  return attendanceDayStatusLabel(day.status)
+}
+
 export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {
   return backOfficeTaskStatusMeta[status]
 }

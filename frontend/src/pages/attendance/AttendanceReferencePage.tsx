@@ -15,7 +15,7 @@ import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
-  attendanceDayStatusLabel,
+  attendanceDayDisplayLabel,
   attendanceMonthStatusLabel,
   legalHolidayWarningLabel,
   punchStatusLabel,
@@ -49,7 +49,7 @@ function ReadOnlyDayRow({
   day: AttendanceDay | undefined
   onSelect?: (date: string) => void
 }) {
-  const { label, tone } = day ? attendanceDayStatusLabel(day.status) : { label: '未入力', tone: 'neutral' as const }
+  const { label, tone } = day ? attendanceDayDisplayLabel(day) : { label: '未入力', tone: 'neutral' as const }
   const warnings = dayWarnings(date, day, formatDate(new Date()))
 
   const content = (
@@ -299,7 +299,7 @@ export function DailyReferenceView({
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
   const { data, isLoading, error } = useWeek(monday, userId)
   const day = data?.find((d) => d.work_date === date)
-  const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
+  const statusMeta = day ? attendanceDayDisplayLabel(day) : null
 
   return (
     <>

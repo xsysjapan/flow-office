@@ -46,7 +46,7 @@ import {
   offsetMinutesToString,
 } from '../../utils/offsetDateTime'
 import {
-  attendanceDayStatusLabel,
+  attendanceDayDisplayLabel,
   punchStatusLabel,
   punchTypeLabel,
   WORK_LOCATION_TYPE_OPTIONS,
@@ -871,7 +871,7 @@ export function AttendanceDayPage() {
 
   const day = weekDays?.find((d) => d.work_date === date)
   const locked = monthLocked || day?.is_locked === true
-  const statusMeta = day ? attendanceDayStatusLabel(day.status) : null
+  const statusMeta = day ? attendanceDayDisplayLabel(day) : null
   const today = formatDate(new Date())
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
     ? 1

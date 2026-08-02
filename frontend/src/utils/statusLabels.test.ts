@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from '../api/types'
 import {
+  attendanceDayDisplayLabel,
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
   paidLeaveEventDetail,
@@ -38,6 +39,52 @@ describe('statusLabels', () => {
   it('maps attendance day statuses to a Japanese label and tone', () => {
     expect(attendanceDayStatusLabel('on_break')).toEqual({ label: '休憩中', tone: 'warning' })
     expect(attendanceDayStatusLabel('clocked_out')).toEqual({ label: '退勤済み', tone: 'success' })
+  })
+
+  it('falls back to the status label when work_type is not a leave day (attendanceDayDisplayLabel)', () => {
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: null })).toEqual({
+      label: '退勤済み',
+      tone: 'success',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'working', work_type: undefined })).toEqual({
+      label: '勤務中',
+      tone: 'info',
+    })
+  })
+
+  it('shows a leave-specific label instead of the clocked_out override (attendanceDayDisplayLabel)', () => {
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_full' })).toEqual({
+      label: '有給休暇(全休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_am_half' })).toEqual({
+      label: '有給休暇(午前半休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_pm_half' })).toEqual({
+      label: '有給休暇(午後半休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_hourly' })).toEqual({
+      label: '有給休暇(時間休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_full' })).toEqual({
+      label: '特別休暇(全休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_am_half' })).toEqual({
+      label: '特別休暇(午前半休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_pm_half' })).toEqual({
+      label: '特別休暇(午後半休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_hourly' })).toEqual({
+      label: '特別休暇(時間休)',
+      tone: 'info',
+    })
   })
 
   it('maps work location types to a Japanese label and lists them as select options', () => {

@@ -11,7 +11,7 @@ import { useAttendanceMonth, useClockIn, useClockOut, useEndBreak, useStartBreak
 import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
-import { attendanceDayStatusLabel } from '../../utils/statusLabels'
+import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
 import type { AttendanceDay, FlexSettlementSummary } from '../../api/types'
 
 /** 1秒ごとに現在時刻を更新し、画面上部のライブクロックと経過時間計算に使う。 */
@@ -156,7 +156,7 @@ export function TodayAttendancePage() {
   if (!day) return null
 
   const actionError = clockIn.error ?? startBreak.error ?? endBreak.error ?? clockOut.error
-  const { label, tone } = attendanceDayStatusLabel(day.status)
+  const { label, tone } = attendanceDayDisplayLabel(day)
   const StatusIcon = statusIcons[day.status]
 
   return (
