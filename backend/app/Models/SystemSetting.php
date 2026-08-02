@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Crypt;
     'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_mock_enabled',
     'onboarding_started_at', 'onboarding_completed_at',
     'paid_leave_requires_approval', 'special_leave_requires_approval',
+    'attendance_requires_approval', 'expense_claim_requires_approval',
 ])]
 class SystemSetting extends Model
 {
@@ -32,6 +33,8 @@ class SystemSetting extends Model
             'm365_mock_enabled' => 'boolean',
             'paid_leave_requires_approval' => 'boolean',
             'special_leave_requires_approval' => 'boolean',
+            'attendance_requires_approval' => 'boolean',
+            'expense_claim_requires_approval' => 'boolean',
             // クライアントシークレットは平文でDBに保持しない (Laravelのencrypted castで暗号化する)。
             'm365_client_secret' => 'encrypted',
             'onboarding_started_at' => 'datetime',
@@ -67,6 +70,8 @@ class SystemSetting extends Model
             // (DBのカラムdefaultはtrueでも)モデル上はnull=falsyになってしまう。
             'paid_leave_requires_approval' => true,
             'special_leave_requires_approval' => true,
+            'attendance_requires_approval' => true,
+            'expense_claim_requires_approval' => true,
         ]);
 
         // system_settingsは内部的なシングルトン設定であり、REST的な「作成された

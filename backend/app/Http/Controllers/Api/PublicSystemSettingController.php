@@ -38,6 +38,8 @@ class PublicSystemSettingController extends Controller
             'attendance_month_close_deadline_day' => $settings->attendance_month_close_deadline_day,
             'paid_leave_requires_approval' => $settings->paid_leave_requires_approval,
             'special_leave_requires_approval' => $settings->special_leave_requires_approval,
+            'attendance_requires_approval' => $settings->attendance_requires_approval,
+            'expense_claim_requires_approval' => $settings->expense_claim_requires_approval,
         ]);
     }
 }

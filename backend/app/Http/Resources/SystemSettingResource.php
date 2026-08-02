@@ -33,6 +33,8 @@ class SystemSettingResource extends JsonResource
             'notification_mail_sender_name' => $this->notification_mail_sender_name,
             'paid_leave_requires_approval' => $this->paid_leave_requires_approval,
             'special_leave_requires_approval' => $this->special_leave_requires_approval,
+            'attendance_requires_approval' => $this->attendance_requires_approval,
+            'expense_claim_requires_approval' => $this->expense_claim_requires_approval,
         ];
     }
 }

@@ -10,9 +10,9 @@ use Tests\TestCase;
 
 /**
  * GET /api/system-settings: フロントエンドの起動時ブートストラップ設定(デフォルト
- * タイムゾーン・デフォルト働き方・勤怠提出/締め期限日・有給/特別休暇の承認要否)を
- * まとめて返す軽量エンドポイント。SystemSettingResource(role:admin限定、M365設定・
- * 通知メール設定等の機微な項目を含む)とは別に、一般社員も参照できる必要がある。
+ * タイムゾーン・デフォルト働き方・勤怠提出/締め期限日・有給/特別休暇/月次勤怠/経費精算の
+ * 承認要否)をまとめて返す軽量エンドポイント。SystemSettingResource(role:admin限定、
+ * M365設定・通知メール設定等の機微な項目を含む)とは別に、一般社員も参照できる必要がある。
  */
 class PublicSystemSettingTest extends TestCase
 {
@@ -51,6 +51,8 @@ class PublicSystemSettingTest extends TestCase
             'attendance_month_close_deadline_day' => 10,
             'paid_leave_requires_approval' => false,
             'special_leave_requires_approval' => true,
+            'attendance_requires_approval' => false,
+            'expense_claim_requires_approval' => true,
         ]);
 
         $employee = User::factory()->create();
@@ -70,6 +72,8 @@ class PublicSystemSettingTest extends TestCase
             'attendance_month_close_deadline_day' => 10,
             'paid_leave_requires_approval' => false,
             'special_leave_requires_approval' => true,
+            'attendance_requires_approval' => false,
+            'expense_claim_requires_approval' => true,
         ]);
     }
 
