@@ -7,12 +7,13 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
+import { Checkbox } from '../../components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
-import type { FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
+import { fetchWorkflowRequest, type FetchWorkflowRequestsToApproveOptions } from '../../api/workflowRequests'
 import { useApproveApprovalItem, useReturnApprovalItem } from '../../hooks/useApprovals'
 import { useWorkflowRequest, useWorkflowRequestsToApprove } from '../../hooks/useWorkflowRequests'
 import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestStatusLabel } from '../../utils/statusLabels'
@@ -36,6 +37,49 @@ const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, str
 
 function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {
   return subjectType ? SUBJECT_TYPE_LABELS[subjectType] : '申請'
+}
+
+/**
+ * 一覧行に表示する補足情報(種別バッジだけでは判別できない内容、特に特別休暇の
+ * 具体的な休暇種別名)。詳細モーダルを開かなくても一覧だけで内容が分かるようにする。
+ * 一覧のsubject_summaryだけで組み立て、詳細取得(subject)を待たない。
+ */
+function subjectSubtitle(request: WorkflowRequest): string | null {
+  const summary = request.subject_summary
+  if (!summary) return null
+
+  if (request.subject_type === 'attendance_month' && 'year_month' in summary) {
+    return summary.year_month
+  }
+  if (request.subject_type === 'expense_claim' && 'total_amount' in summary) {
+    const amount = `${summary.total_amount.toLocaleString()}円`
+    return request.applicant?.name ? `${request.applicant.name} / ${amount}` : amount
+  }
+  if (request.subject_type === 'special_leave_request' && 'special_leave_type_name' in summary) {
+    return [summary.target_date, summary.special_leave_type_name].filter(Boolean).join(' ') || null
+  }
+  if (request.subject_type === 'paid_leave_request' && 'leave_type_label' in summary) {
+    return [summary.target_date, summary.leave_type_label].filter(Boolean).join(' ') || null
+  }
+  return null
+}
+
+/**
+ * 一覧行にチェックボックスを出すかどうか(承認待ち一覧のsubject_summaryだけで判定)。
+ * attendance_month・expense_claimはsubject_summaryに独自ステータスが含まれるためそれで
+ * 判定する(ApprovalDetailPanelのisActionableと同じ閾値: submitted/in_review)。
+ * paid_leave_request・special_leave_requestのsubject_summaryには独自ステータスが含まれない
+ * ため、一覧が既にフィルタしているワークフロー自体のstatusで代用する。
+ */
+function isRowActionable(request: WorkflowRequest): boolean {
+  const summary = request.subject_summary
+  if (request.subject_type === 'attendance_month' && summary && 'year_month' in summary) {
+    return summary.status === 'submitted'
+  }
+  if (request.subject_type === 'expense_claim' && summary && 'total_amount' in summary) {
+    return summary.status === 'in_review'
+  }
+  return request.status === 'submitted'
 }
 
 /** 一覧行のステータスバッジ。詳細取得前でも一覧のsubject_summaryだけでラベル付けできるように、
@@ -75,6 +119,10 @@ export function ApprovalsPage() {
   const approveItem = useApproveApprovalItem()
   const returnItem = useReturnApprovalItem()
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
+  const [bulkApproveError, setBulkApproveError] = useState<Error | null>(null)
+
   const requests = data?.data ?? []
   const isFiltered = status !== DEFAULT_STATUS || Boolean(yearMonth)
 
@@ -88,19 +136,71 @@ export function ApprovalsPage() {
     if (next.status !== undefined) setStatus(next.status)
     if (next.yearMonth !== undefined) setYearMonth(next.yearMonth || undefined)
     setPage(1)
+    setSelectedIds(new Set())
   }
 
   function clearFilters() {
     setStatus(DEFAULT_STATUS)
     setYearMonth(undefined)
     setPage(1)
+    setSelectedIds(new Set())
+  }
+
+  function handlePageChange(nextPage: number) {
+    setPage(nextPage)
+    setSelectedIds(new Set())
+  }
+
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /** 選択した各申請の実データ(subject)を個別に取得したうえで、一覧のsubject_summaryだけでは
+   *  判別できない対象ドメインの承認API(useApproveApprovalItem)へ1件ずつ振り分ける。
+   *  バックエンドに一括承認エンドポイントは存在しないため、Promise.allでのクライアント側
+   *  ファンアウトで実現する。 */
+  async function handleBulkApprove() {
+    if (selectedIds.size === 0) return
+    setBulkApproveError(null)
+    setIsBulkApproving(true)
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(async (id) => {
+          const detail = await fetchWorkflowRequest(id)
+          return approveItem.mutateAsync(detail)
+        }),
+      )
+      setSelectedIds(new Set())
+    } catch (e) {
+      setBulkApproveError(e as Error)
+    } finally {
+      setIsBulkApproving(false)
+    }
   }
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="承認待ち一覧の取得に失敗しました。" />
 
   return (
-    <Card title="承認待ち">
+    <Card
+      title="承認待ち"
+      actions={
+        selectedIds.size > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
+            <Button onClick={() => void handleBulkApprove()} isLoading={isBulkApproving}>
+              まとめて承認する
+            </Button>
+          </div>
+        ) : undefined
+      }
+    >
+      {bulkApproveError && <ErrorMessage error={bulkApproveError} />}
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <div className="w-40">
           <FormField label="状態" htmlFor="approvals-status">
@@ -141,6 +241,7 @@ export function ApprovalsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead aria-hidden="true" />
               <TableHead>種別</TableHead>
               <TableHead>タイトル</TableHead>
               <TableHead>申請者</TableHead>
@@ -151,8 +252,20 @@ export function ApprovalsPage() {
           <TableBody>
             {requests.map((request) => {
               const { label, tone } = rowStatusMeta(request)
+              const subtitle = subjectSubtitle(request)
+              const selected = selectedIds.has(request.id)
               return (
-                <TableRow key={request.id}>
+                <TableRow key={request.id} data-state={selected ? 'selected' : undefined}>
+                  <TableCell>
+                    {isRowActionable(request) && (
+                      <Checkbox
+                        checked={selected}
+                        disabled={isBulkApproving}
+                        onCheckedChange={() => toggleRow(request.id)}
+                        aria-label={`${request.title}を選択`}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
                   </TableCell>
@@ -164,6 +277,7 @@ export function ApprovalsPage() {
                     >
                       {request.title}
                     </button>
+                    {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{request.applicant?.name}</TableCell>
                   <TableCell>
@@ -177,7 +291,14 @@ export function ApprovalsPage() {
         </Table>
       )}
 
-      {data && <Pagination currentPage={data.meta.current_page} lastPage={data.meta.last_page} total={data.meta.total} onPageChange={setPage} />}
+      {data && (
+        <Pagination
+          currentPage={data.meta.current_page}
+          lastPage={data.meta.last_page}
+          total={data.meta.total}
+          onPageChange={handlePageChange}
+        />
+      )}
 
       <Dialog open={selectedId !== null} onOpenChange={(open) => !open && closePanel()}>
         <DialogContent className="max-w-2xl">

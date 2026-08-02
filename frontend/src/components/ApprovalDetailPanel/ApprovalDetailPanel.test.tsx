@@ -1,10 +1,28 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
-import type { WorkflowRequest } from '../../api/types'
+import * as attendanceApi from '../../api/attendance'
+import type { AttendanceMonthlyCalculationTotals, WorkflowRequest } from '../../api/types'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
+
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
+}
 
 const applicant = {
   id: 'applicant-1',
@@ -115,13 +133,77 @@ describe('ApprovalDetailPanel', () => {
     expect(await screen.findByLabelText('添付ファイル')).toBeInTheDocument()
   })
 
-  it('shows the daily breakdown for an attendance month subject', () => {
+  it('shows the monthly drilldown by default for an attendance month subject', async () => {
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+
     renderPanel(attendanceRequest)
 
-    expect(screen.getByText('2026-07')).toBeInTheDocument()
-    expect(screen.getByText('2026-07-01')).toBeInTheDocument()
-    expect(screen.getByText('09:00 〜 18:00')).toBeInTheDocument()
-    expect(screen.getByText('12:00〜13:00')).toBeInTheDocument()
+    expect(screen.getAllByText('2026-07').length).toBeGreaterThan(0)
+    expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
+    expect(await screen.findByText('2026-07-01(水)')).toBeInTheDocument()
+  })
+
+  it('switches between 月次・週次・日次 for an attendance month subject', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+
+    renderPanel(attendanceRequest)
+
+    await screen.findByRole('heading', { name: '月次勤怠' })
+
+    await user.click(screen.getByRole('button', { name: '週次' }))
+    expect(await screen.findByRole('heading', { name: '週次勤怠' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '日次' }))
+    expect(await screen.findByRole('heading', { name: '日次勤怠' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '月次' }))
+    expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
+  })
+
+  it('drills into the daily view when a day row is selected from the monthly view', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [
+        {
+          id: 'day-1',
+          user_id: 'applicant-1',
+          work_date: '2026-07-01',
+          status: 'clocked_out',
+          actual_start_at: '2026-07-01T09:00:00+09:00',
+          actual_end_at: '2026-07-01T18:00:00+09:00',
+          work_type: null,
+          note: null,
+          is_locked: false,
+          breaks: [],
+          calculation: null,
+        },
+      ],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+
+    renderPanel(attendanceRequest)
+
+    await user.click(await screen.findByText('2026-07-01(水)'))
+
+    expect(await screen.findByRole('heading', { name: '日次勤怠' })).toBeInTheDocument()
+    await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalled())
   })
 
   it('shows the expense items for an expense claim subject', () => {

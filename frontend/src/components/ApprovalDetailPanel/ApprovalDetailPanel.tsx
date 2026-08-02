@@ -6,9 +6,9 @@ import type {
   WorkflowRequestPaidLeaveRequestSubject,
   WorkflowRequestSpecialLeaveRequestSubject,
 } from '../../api/types'
-import { isoToTimeLiteral } from '../../utils/offsetDateTime'
+import { DailyReferenceView, MonthlyReferenceView, WeeklyReferenceView } from '../../pages/attendance/AttendanceReferencePage'
+import { datesInMonth } from '../../utils/weekDates'
 import {
-  attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
   expenseClaimStatusLabel,
   paidLeaveRequestStatusLabel,
@@ -85,8 +85,31 @@ function WorkflowRequestSubjectView({ request }: { request: WorkflowRequest }) {
   )
 }
 
+type AttendanceSubjectViewMode = 'month' | 'week' | 'day'
+
+const ATTENDANCE_SUBJECT_VIEW_MODES: Array<{ key: AttendanceSubjectViewMode; label: string }> = [
+  { key: 'month', label: '月次' },
+  { key: 'week', label: '週次' },
+  { key: 'day', label: '日次' },
+]
+
+/**
+ * 承認者が月次勤怠申請の対象社員の実際の勤務表を月次・週次・日次で確認するための
+ * タブ切り替え(AttendanceReferencePageのVIEW_MODESと同じ見た目に揃える)。
+ * 月次一覧の行を選ぶと日次タブへ切り替わる(MonthAttendanceReview/旧MonthsToApprovePageと
+ * 同じドリルダウン導線)。レビュー対象はこの申請の年月に限定し、他の月には遷移できない。
+ */
 function AttendanceMonthSubjectView({ subject }: { subject: WorkflowRequestAttendanceMonthSubject }) {
   const { label, tone } = attendanceMonthStatusLabel(subject.status)
+  const [viewMode, setViewMode] = useState<AttendanceSubjectViewMode>('month')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const dates = datesInMonth(subject.year_month)
+  const dateRange = { min: dates[0], max: dates[dates.length - 1] }
+
+  function handleSelectDate(date: string) {
+    setSelectedDate(date)
+    setViewMode('day')
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -102,48 +125,39 @@ function AttendanceMonthSubjectView({ subject }: { subject: WorkflowRequestAtten
       )}
 
       <div className="flex flex-col gap-2">
-        <SectionHeading>{`日別の内訳(${subject.days.length}日)`}</SectionHeading>
-        {subject.days.length === 0 ? (
-          <p className="text-sm text-muted-foreground">実績がありません。</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>勤務日</TableHead>
-                <TableHead>状態</TableHead>
-                <TableHead>出退勤</TableHead>
-                <TableHead>休憩</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {subject.days.map((day) => {
-                const dayMeta = attendanceDayStatusLabel(day.status)
-                return (
-                  <TableRow key={day.id}>
-                    <TableCell className="text-muted-foreground">{day.work_date}</TableCell>
-                    <TableCell>
-                      <Badge tone={dayMeta.tone}>{dayMeta.label}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {isoToTimeLiteral(day.actual_start_at) || '--:--'} 〜{' '}
-                      {isoToTimeLiteral(day.actual_end_at) || '--:--'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {day.breaks.length === 0
-                        ? '-'
-                        : day.breaks
-                            .map(
-                              (b) =>
-                                `${isoToTimeLiteral(b.break_start_at) || '--:--'}〜${isoToTimeLiteral(b.break_end_at) || '--:--'}`,
-                            )
-                            .join(', ')}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        )}
+        <SectionHeading>実際の勤務表</SectionHeading>
+        <div className="flex gap-2">
+          {ATTENDANCE_SUBJECT_VIEW_MODES.map((mode) => (
+            <Button
+              key={mode.key}
+              type="button"
+              variant={viewMode === mode.key ? 'primary' : 'secondary'}
+              onClick={() => setViewMode(mode.key)}
+            >
+              {mode.label}
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-6 rounded-md border border-border p-3">
+          {viewMode === 'month' && (
+            <MonthlyReferenceView
+              userId={subject.user_id}
+              restrictToYearMonth={subject.year_month}
+              onSelectDate={handleSelectDate}
+            />
+          )}
+          {viewMode === 'week' && <WeeklyReferenceView userId={subject.user_id} />}
+          {viewMode === 'day' && (
+            <DailyReferenceView
+              key={selectedDate ?? dates[0]}
+              userId={subject.user_id}
+              initialDate={selectedDate ?? dates[0]}
+              dateRange={dateRange}
+              onBack={() => setViewMode('month')}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

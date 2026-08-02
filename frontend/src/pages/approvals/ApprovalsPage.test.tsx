@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
 import * as expenseClaimsApi from '../../api/expenseClaims'
@@ -66,6 +66,37 @@ const expenseRow: WorkflowRequest = {
   subject_summary: { title: '7月分の立替経費', status: 'in_review', total_amount: 3000 },
 }
 
+const specialLeaveRow: WorkflowRequest = {
+  ...genericRequest,
+  id: 'workflow-request-4',
+  title: '特別休暇申請',
+  subject_type: 'special_leave_request',
+  subject_summary: {
+    target_date: '2026-08-10',
+    leave_type: 'full',
+    leave_type_label: '全休',
+    special_leave_type_name: '慶弔休暇(忌引)',
+    hours: null,
+    requested_days: 1,
+    reason: null,
+  },
+}
+
+const paidLeaveRow: WorkflowRequest = {
+  ...genericRequest,
+  id: 'workflow-request-5',
+  title: '有給申請',
+  subject_type: 'paid_leave_request',
+  subject_summary: {
+    target_date: '2026-08-12',
+    leave_type: 'am_half',
+    leave_type_label: '半休',
+    hours: null,
+    requested_days: 0.5,
+    reason: null,
+  },
+}
+
 const expenseDetail: WorkflowRequest = {
   ...expenseRow,
   subject: {
@@ -96,6 +127,10 @@ function renderPage() {
 }
 
 describe('ApprovalsPage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('shows an empty state when there is nothing to approve', async () => {
     const empty: Paginated<WorkflowRequest> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(empty)
@@ -249,5 +284,135 @@ describe('ApprovalsPage', () => {
     await user.click(screen.getByRole('button', { name: '次のページ' }))
 
     expect(fetchToApprove).toHaveBeenLastCalledWith({ status: 'submitted', yearMonth: undefined, page: 2 })
+  })
+
+  it('shows a subtitle line with the specific special-leave type name, distinguishing it from other special leaves', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [specialLeaveRow, paidLeaveRow],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('特別休暇申請')
+    expect(screen.getByText('2026-08-10 慶弔休暇(忌引)')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-12 半休')).toBeInTheDocument()
+  })
+
+  it('shows the year_month subtitle for an attendance month row', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [attendanceRow],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('2026-07 月次勤怠')
+    expect(screen.getAllByText('2026-07').length).toBeGreaterThan(0)
+  })
+
+  it('only shows a selection checkbox for actionable rows', async () => {
+    const approvedAttendanceRow: WorkflowRequest = {
+      ...attendanceRow,
+      id: 'workflow-request-approved',
+      title: '2026-06 月次勤怠(承認済み)',
+      subject_summary: { year_month: '2026-06', status: 'approved' },
+    }
+    const withData: Paginated<WorkflowRequest> = {
+      data: [attendanceRow, approvedAttendanceRow],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('2026-07 月次勤怠')
+    expect(screen.getByLabelText('2026-07 月次勤怠を選択')).toBeInTheDocument()
+    expect(screen.queryByLabelText('2026-06 月次勤怠(承認済み)を選択')).not.toBeInTheDocument()
+  })
+
+  it('bulk-approves selected rows, calling the approve mutation once per selected id and clearing selection', async () => {
+    const user = userEvent.setup()
+    const secondGenericRequest: WorkflowRequest = {
+      ...genericRequest,
+      id: 'workflow-request-generic-2',
+      title: '交通費申請',
+    }
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest, secondGenericRequest],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockImplementation((id: string) =>
+      Promise.resolve(id === genericRequest.id ? genericRequest : secondGenericRequest),
+    )
+    const approveWorkflowRequest = vi.spyOn(workflowRequestsApi, 'approveWorkflowRequest').mockResolvedValue({} as never)
+
+    renderPage()
+
+    await screen.findByText('名刺作成申請')
+
+    await user.click(screen.getByLabelText('名刺作成申請を選択'))
+    await user.click(screen.getByLabelText('交通費申請を選択'))
+    expect(await screen.findByText('2件を選択中')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'まとめて承認する' }))
+
+    await waitFor(() => expect(approveWorkflowRequest).toHaveBeenCalledTimes(2))
+    expect(approveWorkflowRequest).toHaveBeenCalledWith(genericRequest.id)
+    expect(approveWorkflowRequest).toHaveBeenCalledWith(secondGenericRequest.id)
+    await waitFor(() => expect(screen.queryByText(/件を選択中/)).not.toBeInTheDocument())
+  })
+
+  it('clears selection when the status filter changes', async () => {
+    const user = userEvent.setup()
+    const secondGenericRequest: WorkflowRequest = {
+      ...genericRequest,
+      id: 'workflow-request-generic-2',
+      title: '交通費申請',
+    }
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest, secondGenericRequest],
+      meta: { current_page: 1, last_page: 1, total: 2 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('名刺作成申請')
+    await user.click(screen.getByLabelText('名刺作成申請を選択'))
+    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('状態'), '承認済み')
+
+    expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument()
+  })
+
+  it('clears selection when the year-month filter changes', async () => {
+    const user = userEvent.setup()
+    const withData: Paginated<WorkflowRequest> = {
+      data: [genericRequest],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+
+    renderPage()
+
+    await screen.findByText('名刺作成申請')
+    await user.click(screen.getByLabelText('名刺作成申請を選択'))
+    expect(await screen.findByText('1件を選択中')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '年月' }))
+    await user.click(screen.getByRole('button', { name: '今月' }))
+
+    await waitFor(() => expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument())
   })
 })
