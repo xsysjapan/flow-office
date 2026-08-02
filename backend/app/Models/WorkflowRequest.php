@@ -48,11 +48,13 @@ class WorkflowRequest extends Model
      * 都度呼ばれる想定のため、キャッシュはしない(呼び出し側でN+1を気にする必要がある場合は
      * 個別に対応する)。
      */
-    public function subjectModel(): AttendanceMonth|ExpenseClaim|null
+    public function subjectModel(): AttendanceMonth|ExpenseClaim|PaidLeaveRequest|SpecialLeaveRequest|null
     {
         return match ($this->subject_type) {
             'attendance_month' => AttendanceMonth::query()->find($this->subject_id),
             'expense_claim' => ExpenseClaim::query()->find($this->subject_id),
+            'paid_leave_request' => PaidLeaveRequest::query()->with(['user'])->find($this->subject_id),
+            'special_leave_request' => SpecialLeaveRequest::query()->with(['user', 'specialLeaveType'])->find($this->subject_id),
             default => null,
         };
     }

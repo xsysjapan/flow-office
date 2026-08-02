@@ -59,6 +59,39 @@ class WorkflowRequestResource extends JsonResource
                 'status' => $subject->status,
                 'total_amount' => $subject->total_amount,
             ],
+            'paid_leave_request' => [
+                'target_date' => $subject->target_date?->toDateString(),
+                'leave_type' => $subject->leave_type,
+                'leave_type_label' => $this->leaveTypeLabel($subject->leave_type),
+                'hours' => $subject->hours !== null ? (float) $subject->hours : null,
+                'requested_days' => (float) $subject->requested_days,
+                'reason' => $subject->reason,
+            ],
+            'special_leave_request' => [
+                'target_date' => $subject->target_date?->toDateString(),
+                'leave_type' => $subject->leave_type,
+                'leave_type_label' => $this->leaveTypeLabel($subject->leave_type),
+                'special_leave_type_name' => $subject->specialLeaveType?->name,
+                'hours' => $subject->hours !== null ? (float) $subject->hours : null,
+                'requested_days' => (float) $subject->requested_days,
+                'reason' => $subject->reason,
+            ],
+            default => null,
+        };
+    }
+
+    /**
+     * PaidLeaveRequest/SpecialLeaveRequestの`leave_type`(full/am_half/pm_half/hourly)を
+     * 日本語ラベルに変換する。frontend/src/utils/statusLabels.tsの
+     * paidLeaveTypeLabelsと表記を揃えている。
+     */
+    public static function leaveTypeLabel(?string $leaveType): ?string
+    {
+        return match ($leaveType) {
+            'full' => '全休',
+            'am_half' => '午前半休',
+            'pm_half' => '午後半休',
+            'hourly' => '時間休',
             default => null,
         };
     }

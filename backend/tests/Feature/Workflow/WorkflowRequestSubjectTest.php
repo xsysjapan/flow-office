@@ -8,8 +8,14 @@ use App\Models\EntityShare;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
 use App\Models\RequestType;
+use App\Models\EmployeeShiftAssignment;
+use App\Models\PaidLeaveGrant;
+use App\Models\SpecialLeaveGrant;
+use App\Models\SpecialLeaveType;
 use App\Models\User;
+use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
+use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -240,6 +246,154 @@ class WorkflowRequestSubjectTest extends TestCase
             fn (SendNotificationJob $job) => $job->title === '承認依頼'
                 && $job->summary === '「テスト申請」の承認依頼が届いています。',
         );
+    }
+
+    /**
+     * 有給・特別休暇は「勤務予定日」でなければ申請できないため
+     * (tests/Feature/PaidLeave/PaidLeaveRequestTest::createWorkingDayShiftと同じ形)、
+     * 対象日にEmployeeShiftAssignmentを用意する。
+     */
+    private function createWorkingDayShift(User $user, string $date): EmployeeShiftAssignment
+    {
+        $calendar = WorkCalendar::query()->create([
+            'name' => '2026年度', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'week_starts_on' => 1, 'status' => 'published',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard-'.$user->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '09:00', 'default_end_time' => '18:00',
+            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+
+        return EmployeeShiftAssignment::query()->create([
+            'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
+            'planned_break_minutes' => 60,
+        ]);
+    }
+
+    /**
+     * 有給を申請する(system_settings.paid_leave_requires_approval=true前提のデフォルト設定)。
+     * PaidLeaveController::storeRequestがworkflow_requestの下書き作成を起点にし、Reactorが
+     * PaidLeaveRequest集約への申請・workflow_requestの提出まで同期的に進める。
+     *
+     * @return array{0: WorkflowRequest, 1: string}
+     */
+    private function submitPaidLeaveRequest(User $employee, User $approver, string $targetDate): array
+    {
+        $this->createWorkingDayShift($employee, $targetDate);
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => $targetDate,
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '私用のため',
+        ])->assertCreated()->json('id');
+
+        $request = WorkflowRequest::query()
+            ->where('subject_type', 'paid_leave_request')
+            ->where('subject_id', $requestId)
+            ->firstOrFail();
+
+        return [$request, $requestId];
+    }
+
+    /**
+     * 特別休暇を申請する(submitPaidLeaveRequestと同じ形)。
+     *
+     * @return array{0: WorkflowRequest, 1: string}
+     */
+    private function submitSpecialLeaveRequest(User $employee, User $approver, string $targetDate): array
+    {
+        $this->createWorkingDayShift($employee, $targetDate);
+        $type = SpecialLeaveType::query()->create(['name' => '慶弔休暇', 'is_active' => true]);
+        SpecialLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
+            'granted_on' => '2026-07-01', 'expires_on' => null,
+            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => $targetDate,
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '結婚式のため',
+        ])->assertCreated()->json('id');
+
+        $request = WorkflowRequest::query()
+            ->where('subject_type', 'special_leave_request')
+            ->where('subject_id', $requestId)
+            ->firstOrFail();
+
+        return [$request, $requestId];
+    }
+
+    public function test_show_returns_paid_leave_request_summary_for_the_applicant(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        [$workflowRequest] = $this->submitPaidLeaveRequest($employee, $approver, '2026-08-10');
+
+        $response = $this->actingAs($employee)->getJson("/api/workflow-requests/{$workflowRequest->id}");
+        $response->assertOk();
+        $this->assertSame('paid_leave_request', $response->json('subject_type'));
+        $this->assertSame('2026-08-10', $response->json('subject_summary.target_date'));
+        $this->assertSame('全休', $response->json('subject_summary.leave_type_label'));
+        $this->assertSame('私用のため', $response->json('subject_summary.reason'));
+        $this->assertSame('paid_leave_request', $response->json('subject.type'));
+        $this->assertSame('2026-08-10', $response->json('subject.target_date'));
+        $this->assertSame('全休', $response->json('subject.leave_type_label'));
+        $this->assertSame('私用のため', $response->json('subject.reason'));
+
+        // 承認者(共有先)も同じ詳細を閲覧できる。
+        $this->actingAs($approver)->getJson("/api/workflow-requests/{$workflowRequest->id}")->assertOk();
+    }
+
+    public function test_to_approve_list_includes_paid_leave_request_summary(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        [$workflowRequest] = $this->submitPaidLeaveRequest($employee, $approver, '2026-08-11');
+
+        $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve');
+        $response->assertOk();
+
+        $row = collect($response->json('data'))->firstWhere('id', $workflowRequest->id);
+        $this->assertNotNull($row);
+        $this->assertSame('paid_leave_request', $row['subject_type']);
+        $this->assertSame('2026-08-11', $row['subject_summary']['target_date']);
+        $this->assertSame('全休', $row['subject_summary']['leave_type_label']);
+    }
+
+    public function test_show_returns_special_leave_request_summary_for_the_applicant(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        [$workflowRequest] = $this->submitSpecialLeaveRequest($employee, $approver, '2026-08-12');
+
+        $response = $this->actingAs($employee)->getJson("/api/workflow-requests/{$workflowRequest->id}");
+        $response->assertOk();
+        $this->assertSame('special_leave_request', $response->json('subject_type'));
+        $this->assertSame('2026-08-12', $response->json('subject_summary.target_date'));
+        $this->assertSame('慶弔休暇', $response->json('subject_summary.special_leave_type_name'));
+        $this->assertSame('全休', $response->json('subject_summary.leave_type_label'));
+        $this->assertSame('結婚式のため', $response->json('subject_summary.reason'));
+        $this->assertSame('special_leave_request', $response->json('subject.type'));
+        $this->assertSame('慶弔休暇', $response->json('subject.special_leave_type_name'));
+
+        // 承認者(共有先)も同じ詳細を閲覧できる。
+        $this->actingAs($approver)->getJson("/api/workflow-requests/{$workflowRequest->id}")->assertOk();
     }
 
     public function test_show_returns_attendance_month_days_and_breaks_for_the_applicant(): void

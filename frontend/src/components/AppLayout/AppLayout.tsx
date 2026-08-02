@@ -39,6 +39,7 @@ interface NavGroup {
 function navGroups(
   currentYearMonth: string,
   hasSpecialLeaveTypes: boolean,
+  canCloseMonths: boolean,
   expenseCategoryShortcuts: NavItem[],
 ): NavGroup[] {
   return [
@@ -51,6 +52,7 @@ function navGroups(
       { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
       { to: '/paid-leave', label: '有給' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
+      ...(canCloseMonths ? [{ to: '/attendance/months/close', label: '月次締め処理' }] : []),
     ],
   },
   {
@@ -232,6 +234,7 @@ export function AppLayout() {
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data: specialLeaveTypes } = useSpecialLeaveTypes()
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
+  const canCloseMonths = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
   const { data: expenseCategories } = useExpenseCategories()
   // よく使う経費区分をメニューから直接開けるようにする(区分選択ステップを省略する
   // ショートカット)。区分自体はマスタなので、ここでは並び順そのままにコード→リンクへ
@@ -239,7 +242,7 @@ export function AppLayout() {
   const expenseCategoryShortcuts: NavItem[] = (expenseCategories ?? [])
     .filter((category) => category.is_active)
     .map((category) => ({ to: `/expenses/new?category=${category.code}`, label: `経費精算(${category.name})` }))
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, expenseCategoryShortcuts).filter(
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canCloseMonths, expenseCategoryShortcuts).filter(
     (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
   )
 

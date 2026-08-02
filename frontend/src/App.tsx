@@ -24,6 +24,7 @@ import { WorkflowRequestDetailPage } from './pages/workflow/WorkflowRequestDetai
 import { ApprovalsPage } from './pages/approvals/ApprovalsPage'
 import { AttendanceMonthsPage } from './pages/attendance/AttendanceMonthsPage'
 import { MonthsToApprovePage } from './pages/attendance/MonthsToApprovePage'
+import { AttendanceMonthCloseoutPage } from './pages/attendance/AttendanceMonthCloseoutPage'
 import { MyPaidLeavePage } from './pages/paidLeave/MyPaidLeavePage'
 import { MyPaidLeaveHistoryPage } from './pages/paidLeave/MyPaidLeaveHistoryPage'
 import { PaidLeaveRequestsToApprovePage } from './pages/paidLeave/PaidLeaveRequestsToApprovePage'
@@ -85,6 +86,7 @@ function App() {
         <Route path="expenses/:id" element={<ExpenseClaimDetailPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
         <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
+        <Route path="attendance/months/close" element={<AttendanceMonthCloseoutPage />} />
         <Route path="attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
