@@ -37,6 +37,7 @@ import {
   useWeek,
 } from '../../hooks/useAttendance'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
+import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
   browserOffsetString,
   combineDatetimeLocalWithOffset,
@@ -931,6 +932,7 @@ export function AttendanceDayPage() {
                   title="この日の集計"
                   totals={day.calculation}
                   absenceDays={day.calculation.absence_minutes ? absenceDays : undefined}
+                  specialLeaveBreakdown={specialLeaveTypeBreakdown([day])}
                 />
 
                 <div className="flex items-center gap-2">
