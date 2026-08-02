@@ -157,6 +157,55 @@ export function SystemSettingsPage() {
         </p>
       </FormField>
 
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">承認設定</h3>
+      <p className="mb-4 text-sm text-muted-foreground">
+        オフにすると、その申請は承認者を指定しなくてもよくなり、承認不要のまま申請と同時に確定する。
+      </p>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={attendanceRequiresApproval}
+          onCheckedChange={(checked) => {
+            setAttendanceRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        月次勤怠の提出に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={paidLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setPaidLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        有給休暇の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={specialLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setSpecialLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        特別休暇の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={expenseClaimRequiresApproval}
+          onCheckedChange={(checked) => {
+            setExpenseClaimRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        経費精算の申請に承認を必須にする
+      </label>
+
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>
       <p className="mb-4 text-sm text-muted-foreground">
         SSOログイン・MS365ユーザー同期・メール通知(Graph API <code>sendMail</code>)で共有する
@@ -213,62 +262,6 @@ export function SystemSettingsPage() {
           }}
         />
       </FormField>
-
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">休暇申請の承認設定</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        オフにすると、その休暇種別の申請は承認者を指定しなくてもよくなり、承認不要のまま申請と
-        同時に確定する。
-      </p>
-
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={paidLeaveRequiresApproval}
-          onCheckedChange={(checked) => {
-            setPaidLeaveRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
-        />
-        有給休暇の申請に承認を必須にする
-      </label>
-
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={specialLeaveRequiresApproval}
-          onCheckedChange={(checked) => {
-            setSpecialLeaveRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
-        />
-        特別休暇の申請に承認を必須にする
-      </label>
-
-      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">勤怠・経費精算の承認設定</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        オフにすると、承認者を指定しなくても提出・申請できるようになり、承認不要のまま提出・申請と
-        同時に確定する。
-      </p>
-
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={attendanceRequiresApproval}
-          onCheckedChange={(checked) => {
-            setAttendanceRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
-        />
-        月次勤怠の提出に承認を必須にする
-      </label>
-
-      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          checked={expenseClaimRequiresApproval}
-          onCheckedChange={(checked) => {
-            setExpenseClaimRequiresApproval(checked === true)
-            setSavedMessage(false)
-          }}
-        />
-        経費精算の申請に承認を必須にする
-      </label>
 
       <Button
         isLoading={updateSettings.isPending}
