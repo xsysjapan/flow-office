@@ -635,7 +635,20 @@ class AttendanceController extends Controller
     )]
     public function submitMonth(Request $request, string $yearMonth, CommandBus $commandBus): AttendanceMonthResource
     {
-        $data = $request->validate(['approver_user_id' => ['required', 'string', 'exists:users,id']]);
+        // system_settings.attendance_requires_approval=falseの場合でも、月次勤怠申請は
+        // (PaidLeaveと異なり)workflow_requestのオーケストレーションを経由させたまま、
+        // 承認者省略時のプレースホルダIDだけを立てる。実際の自動承認はSubmitAttendanceMonthHandlerが
+        // ExpenseClaimのapproval_skip_thresholdと同じ仕組みで行う。
+        $requiresApproval = SystemSetting::current()->attendance_requires_approval;
+
+        $data = $request->validate([
+            'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
+        ]);
+
+        // AttendanceMonthAggregate::submit()のapproverUserIdは非null必須のため、指定が無い場合は
+        // 申請者自身のIDをプレースホルダとして使う(PaidLeaveControllerと同じ理由。このパスの
+        // 申請は即座にapprovedになるため、実質的な承認者としては使われない)。
+        $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
 
         // 月次勤怠申請はworkflow_requestの下書き作成を起点にする。集約ID(subject_id)だけを
         // 先に確定させ、実際の提出(attendance_month.submitted/locked/shared)と
@@ -647,7 +660,7 @@ class AttendanceController extends Controller
             applicantUserId: $request->user()->id,
             title: "{$yearMonth} 月次勤怠",
             formData: [],
-            approverUserId: $data['approver_user_id'],
+            approverUserId: $approverUserId,
             subjectType: 'attendance_month',
             subjectId: $attendanceMonthId,
         ));

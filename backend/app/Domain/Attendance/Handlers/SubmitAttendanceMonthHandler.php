@@ -12,6 +12,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\SystemSetting;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -51,9 +52,17 @@ class SubmitAttendanceMonthHandler implements CommandHandler
         $periodStart = "{$command->yearMonth}-01";
         $periodEnd = Carbon::parse($periodStart)->endOfMonth()->toDateString();
 
-        AttendanceMonthAggregate::retrieve($monthId)
-            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd)
-            ->persist();
+        $aggregate = AttendanceMonthAggregate::retrieve($monthId)
+            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd);
+
+        // attendance_requires_approval=falseの場合、承認ワークフロー無しで提出と同時に
+        // 承認不要のまま即時確定する(ExpenseClaimのapproval_skip_thresholdによる
+        // 自動承認と同じ仕組み)。
+        if (! SystemSetting::current()->attendance_requires_approval) {
+            $aggregate->approve(approvedByUserId: null);
+        }
+
+        $aggregate->persist();
 
         // 承認依頼の通知はSubmitWorkflowRequestHandler(WorkflowRequestNotificationContent)に
         // 一本化しているため、ここでは送らない。

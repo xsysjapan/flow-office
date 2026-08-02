@@ -26,6 +26,15 @@ class AttendanceMonthApprovalOnWorkflowRequestApprovedReactor extends Reactor
             return;
         }
 
+        // approvedByUserIdがnullの場合、この承認はattendance_requires_approval=falseによる
+        // 自動承認をApproveWorkflowRequestOnAttendanceMonthApprovedReactor経由で折り返した
+        // だけであり、AttendanceMonthは既に承認済みのため下流への伝播は不要
+        // (ApproveAttendanceMonthは承認者IDを必須とするコマンドでもある。
+        // ExpenseClaimApprovalOnWorkflowRequestApprovedReactorと同じ理由)。
+        if ($event->approvedByUserId === null) {
+            return;
+        }
+
         $this->commandBus->dispatch(new ApproveAttendanceMonth(
             $workflowRequest->subject_id,
             $event->approvedByUserId,

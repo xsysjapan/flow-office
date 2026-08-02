@@ -22,6 +22,7 @@ use App\Http\Resources\ExpenseItemResource;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseClaimHistoryEntry;
 use App\Models\ExpenseItem;
+use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
@@ -253,9 +254,19 @@ class ExpenseClaimController extends Controller
     {
         $this->authorizeOwnership($request, $expenseClaim);
 
+        // system_settings.expense_claim_requires_approval=falseの場合、承認者指定は任意にする
+        // (ルートCLAUDE.md「法務判断が必要な値はマスタ化する」とは別の、承認要否そのものを
+        // マスタ化した設定)。
+        $requiresApproval = SystemSetting::current()->expense_claim_requires_approval;
+
         $data = $request->validate([
-            'approver_user_id' => ['required', 'string', 'exists:users,id'],
+            'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
         ]);
+
+        // SubmitExpenseClaimHandlerの$autoApprove判定(承認不要設定時はapproverUserIdが
+        // 実質使われない)があるため、指定が無い場合は申請者自身のIDをプレースホルダとして使う
+        // (ExpenseClaimSubmitOnWorkflowRequestDraftedReactorのnull-approverガードを回避するため)。
+        $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
 
         // 提出はworkflow_requestの下書き作成を起点にする。ExpenseClaim集約への
         // SubmitExpenseClaimはExpenseClaimSubmitOnWorkflowRequestDraftedReactorが発行する
@@ -265,7 +276,7 @@ class ExpenseClaimController extends Controller
             applicantUserId: $request->user()->id,
             title: $expenseClaim->title ?? '経費精算',
             formData: [],
-            approverUserId: $data['approver_user_id'],
+            approverUserId: $approverUserId,
             subjectType: WorkflowRequestNotificationContent::EXPENSE_CLAIM,
             subjectId: $expenseClaim->id,
         ));

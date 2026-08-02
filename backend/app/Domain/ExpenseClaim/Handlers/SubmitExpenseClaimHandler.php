@@ -10,11 +10,12 @@ use App\Domain\ExpenseClaim\Commands\SubmitExpenseClaim;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseClaimStatus;
+use App\Models\SystemSetting;
 
 /**
  * UC-X010 手順3〜4 / UC-X011 手順5: 承認者を指定して申請する。
- * expense_categories.approval_skip_threshold により、明細すべてがしきい値以下の区分・金額
- * であれば承認確認を1段階省略し、提出と同時に自動承認する
+ * expense_categories.approval_skip_threshold または system_settings.expense_claim_requires_approval=false
+ * により、明細すべてがしきい値以下、またはシステム全体で承認不要設定の場合は提出と同時に自動承認する。
  * (docs/30-usecases-expense.md「実装上のポイント」)。
  *
  * @implements CommandHandler<SubmitExpenseClaim>
@@ -49,11 +50,12 @@ class SubmitExpenseClaimHandler implements CommandHandler
             }
         }
 
-        $autoApprove = $items->every(
-            fn ($item) => $item->category !== null
-                && $item->category->approval_skip_threshold !== null
-                && $item->amount <= $item->category->approval_skip_threshold
-        );
+        $autoApprove = ! SystemSetting::current()->expense_claim_requires_approval
+            || $items->every(
+                fn ($item) => $item->category !== null
+                    && $item->category->approval_skip_threshold !== null
+                    && $item->amount <= $item->category->approval_skip_threshold
+            );
 
         $aggregate = ExpenseClaimAggregate::retrieve($claim->id)
             ->submit(approverUserId: $command->approverUserId, submittedByUserId: $command->submittedByUserId);

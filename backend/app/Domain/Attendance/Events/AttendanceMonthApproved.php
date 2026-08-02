@@ -12,6 +12,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class AttendanceMonthApproved extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $approvedByUserId,
+        public readonly ?string $approvedByUserId,
     ) {}
 }

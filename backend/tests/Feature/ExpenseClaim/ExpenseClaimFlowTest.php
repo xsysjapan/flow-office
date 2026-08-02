@@ -5,6 +5,7 @@ namespace Tests\Feature\ExpenseClaim;
 use App\Models\BackOfficeTask;
 use App\Models\ExpenseCategory;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -187,6 +188,49 @@ class ExpenseClaimFlowTest extends TestCase
             ->first();
         $this->assertNotNull($workflowRequest);
         $this->assertSame('approved', $workflowRequest->status);
+    }
+
+    public function test_auto_approves_without_approver_when_system_setting_disables_approval(): void
+    {
+        SystemSetting::current()->update(['expense_claim_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        // しきい値なし・金額もそれなりに大きい明細(通常のしきい値自動承認は対象外)。
+        $category = $this->makeCategory();
+
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
+            'category_id' => $category->id, 'amount' => 50000,
+        ])->assertCreated();
+
+        $submit = $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit");
+
+        $submit->assertOk()->assertJsonPath('status', 'approved');
+
+        $workflowRequest = WorkflowRequest::query()
+            ->where('subject_type', 'expense_claim')
+            ->where('subject_id', $claimId)
+            ->first();
+        if ($workflowRequest !== null) {
+            $this->assertSame('approved', $workflowRequest->status);
+        }
+    }
+
+    public function test_submitting_without_approver_still_fails_when_system_setting_requires_approval(): void
+    {
+        $this->assertTrue(SystemSetting::current()->expense_claim_requires_approval);
+
+        $employee = User::factory()->create();
+        // しきい値未設定 → 通常のしきい値自動承認の対象外。
+        $category = $this->makeCategory();
+
+        $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/items", [
+            'category_id' => $category->id, 'amount' => 500,
+        ])->assertCreated();
+
+        $this->actingAs($employee)->postJson("/api/expense-claims/{$claimId}/submit")
+            ->assertStatus(422);
     }
 
     public function test_only_the_designated_approver_can_approve(): void
