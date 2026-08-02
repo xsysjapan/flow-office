@@ -14,11 +14,6 @@ export function fetchMyExpenseClaims(): Promise<Paginated<ExpenseClaim>> {
   return apiFetch('/expense-claims/mine')
 }
 
-/** UC-X011: 自分が承認者に指定されている経費精算一覧。 */
-export function fetchExpenseClaimsToApprove(): Promise<Paginated<ExpenseClaim>> {
-  return apiFetch('/expense-claims/to-approve')
-}
-
 export function fetchExpenseClaim(id: string): Promise<ExpenseClaim> {
   return apiFetch(`/expense-claims/${id}`)
 }

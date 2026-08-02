@@ -280,22 +280,25 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
       await submitMonth(actor.page, approverId, yearMonth)
     }
 
-    await approverPage.goto('/attendance/months/to-approve')
-    for (const userId of userIds) {
+    // 統合承認画面(/approvals)には労働時間制度によらず全員分の月次勤怠申請が表示される
+    // ことを確認したうえで、行ごとに詳細パネルを開いて個別に承認する(統合承認画面には
+    // MonthsToApprovePageにあった複数選択・一括承認は無いため、1件ずつ処理する)。
+    await approverPage.goto('/approvals')
+    for (const actor of actors) {
+      const applicantName = actor.name.replace(/\(.*\)$/, '')
       await expect(
-        approverPage.getByRole('checkbox', { name: `${yearMonth}(社員ID: ${userId})を選択` }),
+        approverPage.getByRole('row', { name: `${yearMonth} 月次勤怠` }).filter({ hasText: applicantName }),
       ).toBeVisible()
     }
 
-    // 4件をまとめて選択し、一括承認する(UC-A009)。
-    for (const userId of userIds) {
-      await approverPage.getByRole('checkbox', { name: `${yearMonth}(社員ID: ${userId})を選択` }).check()
-    }
-    await approverPage.getByRole('button', { name: 'まとめて承認する' }).click()
-    for (const userId of userIds) {
-      await expect(
-        approverPage.getByRole('checkbox', { name: `${yearMonth}(社員ID: ${userId})を選択` }),
-      ).toHaveCount(0)
+    for (const actor of actors) {
+      const applicantName = actor.name.replace(/\(.*\)$/, '')
+      await approverPage.goto('/approvals')
+      const row = approverPage.getByRole('row', { name: `${yearMonth} 月次勤怠` }).filter({ hasText: applicantName })
+      await expect(row).toBeVisible()
+      await row.getByRole('button', { name: `${yearMonth} 月次勤怠` }).click()
+      await approverPage.getByRole('button', { name: '承認する' }).click()
+      await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
     }
 
     // 管理者が労働時間制度によらず全員分を締められることを確認する。
@@ -368,10 +371,14 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await applicantPage.getByRole('button', { name: '申請する' }).click()
     await expect(applicantPage.getByRole('status', { name: '申請中' })).toBeVisible()
 
-    await approverPage.goto('/expenses/to-approve')
-    const expenseApprovalRow = approverPage.getByRole('row', { name: new RegExp(usageDateStr) })
+    await approverPage.goto('/approvals')
+    // 個別登録では申請タイトルは既定値「経費精算」のまま(明細のusage_dateは統合承認画面の
+    // 一覧行には表示されないため、代わりに申請者名で行を特定する)。
+    const expenseApprovalRow = approverPage
+      .getByRole('row', { name: '経費精算' })
+      .filter({ hasText: SCENARIO_USERS.punchEmployee })
     await expect(expenseApprovalRow).toBeVisible()
-    await expenseApprovalRow.getByRole('link').click()
+    await expenseApprovalRow.getByRole('button', { name: '経費精算' }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 

@@ -69,10 +69,6 @@ export function fetchMySpecialLeaveRequests(): Promise<SpecialLeaveRequest[]> {
   return apiFetch('/special-leave/requests/mine')
 }
 
-export function fetchSpecialLeaveRequestsToApprove(): Promise<SpecialLeaveRequest[]> {
-  return apiFetch('/special-leave/requests/to-approve')
-}
-
 export interface CreateSpecialLeaveRequestInput {
   special_leave_type_id: number
   target_date: string
@@ -85,14 +81,6 @@ export interface CreateSpecialLeaveRequestInput {
 
 export function createSpecialLeaveRequest(input: CreateSpecialLeaveRequestInput): Promise<SpecialLeaveRequest> {
   return apiFetch('/special-leave/requests', { method: 'POST', body: input })
-}
-
-export function approveSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
-  return apiFetch(`/special-leave/requests/${id}/approve`, { method: 'POST' })
-}
-
-export function returnSpecialLeaveRequest(id: string, comment: string): Promise<SpecialLeaveRequest> {
-  return apiFetch(`/special-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
 export function cancelSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {

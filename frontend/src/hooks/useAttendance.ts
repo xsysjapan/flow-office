@@ -1,7 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adjustAttendanceDailyCalculation,
-  approveMonth,
   clockIn,
   clockOut,
   closeMonth,
@@ -21,7 +20,6 @@ import {
   fetchWeek,
   generateAttendancePattern,
   previewAttendancePattern,
-  returnMonth,
   startBreak,
   submitMonth,
   updateAttendanceDay,
@@ -263,24 +261,6 @@ function useInvalidateMonths() {
     void queryClient.invalidateQueries({ queryKey: MY_MONTHS_KEY })
     void queryClient.invalidateQueries({ queryKey: MONTHS_TO_APPROVE_KEY })
   }
-}
-
-export function useApproveMonth() {
-  const invalidate = useInvalidateMonths()
-
-  return useMutation({
-    mutationFn: (id: string) => approveMonth(id),
-    onSuccess: () => invalidate(),
-  })
-}
-
-export function useReturnMonth() {
-  const invalidate = useInvalidateMonths()
-
-  return useMutation({
-    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnMonth(id, comment),
-    onSuccess: () => invalidate(),
-  })
 }
 
 export function useCloseMonth() {

@@ -121,11 +121,12 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
     })
 
     await loginAs(approverPage, SCENARIO_USERS.approver)
-    await approverPage.goto('/paid-leave/to-approve')
-    const approvalRow = approverPage.locator('li', { hasText: targetDate })
+    await approverPage.goto('/approvals')
+    const approvalRow = approverPage.getByRole('row', { name: new RegExp(targetDate) })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('button', { name: '承認する' }).click()
-    await expect(approvalRow).toHaveCount(0)
+    await approvalRow.getByRole('button', { name: new RegExp(targetDate) }).click()
+    await approverPage.getByRole('button', { name: '承認する' }).click()
+    await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 勤怠週次画面で対象日が有給扱いになり、退勤していないのに「打刻漏れ」警告が
     // 出ないことを確認する(UC-P004: attendance_days.work_type=paid_leave_full,
@@ -173,11 +174,12 @@ test('半休を申請〜承認し、勤怠日に反映される', async ({ brows
     })
 
     await loginAs(approverPage, SCENARIO_USERS.approver)
-    await approverPage.goto('/paid-leave/to-approve')
-    const approvalRow = approverPage.locator('li', { hasText: targetDate })
+    await approverPage.goto('/approvals')
+    const approvalRow = approverPage.getByRole('row', { name: new RegExp(targetDate) })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('button', { name: '承認する' }).click()
-    await expect(approvalRow).toHaveCount(0)
+    await approvalRow.getByRole('button', { name: new RegExp(targetDate) }).click()
+    await approverPage.getByRole('button', { name: '承認する' }).click()
+    await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await applicantPage.reload()
     await expect(

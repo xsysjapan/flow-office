@@ -43,10 +43,6 @@ export function fetchMyPaidLeaveRequests(): Promise<PaidLeaveRequest[]> {
   return apiFetch('/paid-leave/requests/mine')
 }
 
-export function fetchPaidLeaveRequestsToApprove(): Promise<PaidLeaveRequest[]> {
-  return apiFetch('/paid-leave/requests/to-approve')
-}
-
 export interface CreatePaidLeaveRequestInput {
   target_date: string
   leave_type: PaidLeaveType
@@ -58,14 +54,6 @@ export interface CreatePaidLeaveRequestInput {
 
 export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Promise<PaidLeaveRequest> {
   return apiFetch('/paid-leave/requests', { method: 'POST', body: input })
-}
-
-export function approvePaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
-  return apiFetch(`/paid-leave/requests/${id}/approve`, { method: 'POST' })
-}
-
-export function returnPaidLeaveRequest(id: string, comment: string): Promise<PaidLeaveRequest> {
-  return apiFetch(`/paid-leave/requests/${id}/return`, { method: 'POST', body: { comment } })
 }
 
 export function cancelPaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {

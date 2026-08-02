@@ -3,12 +3,15 @@ import type {
   WorkflowRequest,
   WorkflowRequestAttendanceMonthSubject,
   WorkflowRequestExpenseClaimSubject,
+  WorkflowRequestPaidLeaveRequestSubject,
+  WorkflowRequestSpecialLeaveRequestSubject,
 } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
   expenseClaimStatusLabel,
+  paidLeaveRequestStatusLabel,
   paymentBearerLabel,
   workflowRequestStatusLabel,
 } from '../../utils/statusLabels'
@@ -32,7 +35,22 @@ function isActionable(request: WorkflowRequest): boolean {
   if (request.subject_type === 'expense_claim') {
     return request.subject?.type === 'expense_claim' && request.subject.status === 'in_review'
   }
+  if (request.subject_type === 'paid_leave_request') {
+    return request.subject?.type === 'paid_leave_request' && request.subject.status === 'submitted'
+  }
+  if (request.subject_type === 'special_leave_request') {
+    return request.subject?.type === 'special_leave_request' && request.subject.status === 'submitted'
+  }
   return request.status === 'submitted'
+}
+
+/** 有給・特別休暇申請の日数/時間表示。時間休(hourly)のみ時間で表示し、それ以外は日数で表示する
+ *  (MyPaidLeavePageと同じ考え方)。 */
+function leaveRequestedAmountLabel(subject: { leave_type: string; hours: number | null; requested_days: number }): string {
+  if (subject.leave_type === 'hourly' && subject.hours !== null) {
+    return `${subject.hours}時間`
+  }
+  return `${subject.requested_days}日`
 }
 
 function WorkflowRequestSubjectView({ request }: { request: WorkflowRequest }) {
@@ -183,6 +201,54 @@ function ExpenseClaimSubjectView({ subject }: { subject: WorkflowRequestExpenseC
   )
 }
 
+function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaidLeaveRequestSubject }) {
+  const { label, tone } = paidLeaveRequestStatusLabel(subject.status)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">対象日</dt>
+        <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">種別</dt>
+        <dd className="text-foreground">{subject.leave_type_label}</dd>
+        <dt className="font-medium text-muted-foreground">日数/時間</dt>
+        <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
+        <dt className="font-medium text-muted-foreground">理由</dt>
+        <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+      </dl>
+    </div>
+  )
+}
+
+function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestSpecialLeaveRequestSubject }) {
+  const { label, tone } = paidLeaveRequestStatusLabel(subject.status)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">対象日</dt>
+        <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">休暇種別</dt>
+        <dd className="text-foreground">{subject.special_leave_type_name ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">種別</dt>
+        <dd className="text-foreground">{subject.leave_type_label}</dd>
+        <dt className="font-medium text-muted-foreground">日数/時間</dt>
+        <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
+        <dt className="font-medium text-muted-foreground">理由</dt>
+        <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+      </dl>
+    </div>
+  )
+}
+
 export interface ApprovalDetailPanelProps {
   request: WorkflowRequest
   approveIsPending?: boolean
@@ -193,8 +259,9 @@ export interface ApprovalDetailPanelProps {
 }
 
 /**
- * 統合承認画面の詳細パネル。`request.subject_type`(null/attendance_month/expense_claim)に
- * 応じて表示内容(汎用申請のform_data・月次勤怠の日別内訳・経費精算の明細)を切り替える。
+ * 統合承認画面の詳細パネル。`request.subject_type`(null/attendance_month/expense_claim/
+ * paid_leave_request/special_leave_request)に応じて表示内容(汎用申請のform_data・月次勤怠の
+ * 日別内訳・経費精算の明細・有給/特別休暇申請の内容)を切り替える。
  * 承認・差戻しの実際のAPI呼び出し(対象ドメインへの振り分け)は呼び出し側
  * (hooks/useApprovals)に委ね、このコンポーネントは表示とコールバック呼び出しのみを行う。
  */
@@ -226,6 +293,14 @@ export function ApprovalDetailPanel({
 
       {request.subject_type === 'expense_claim' && request.subject?.type === 'expense_claim' && (
         <ExpenseClaimSubjectView subject={request.subject} />
+      )}
+
+      {request.subject_type === 'paid_leave_request' && request.subject?.type === 'paid_leave_request' && (
+        <PaidLeaveRequestSubjectView subject={request.subject} />
+      )}
+
+      {request.subject_type === 'special_leave_request' && request.subject?.type === 'special_leave_request' && (
+        <SpecialLeaveRequestSubjectView subject={request.subject} />
       )}
 
       {!request.subject_type && <WorkflowRequestSubjectView request={request} />}

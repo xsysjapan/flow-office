@@ -14,6 +14,8 @@ import { attendanceMonthStatusLabel, expenseClaimStatusLabel, workflowRequestSta
 const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, string> = {
   attendance_month: '勤怠',
   expense_claim: '経費',
+  paid_leave_request: '有給',
+  special_leave_request: '特別休暇',
 }
 
 function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {

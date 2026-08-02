@@ -15,7 +15,6 @@ import { ExpenseCategoryEditPage } from './pages/expense/ExpenseCategoryEditPage
 import { ExpenseEntryPresetListPage } from './pages/expense/ExpenseEntryPresetListPage'
 import { ExpenseEntryPresetEditPage } from './pages/expense/ExpenseEntryPresetEditPage'
 import { ExpenseClaimListPage } from './pages/expense/ExpenseClaimListPage'
-import { ExpenseClaimsToApprovePage } from './pages/expense/ExpenseClaimsToApprovePage'
 import { ExpenseClaimNewPage } from './pages/expense/ExpenseClaimNewPage'
 import { ExpenseClaimDetailPage } from './pages/expense/ExpenseClaimDetailPage'
 import { WorkflowRequestListPage } from './pages/workflow/WorkflowRequestListPage'
@@ -23,14 +22,11 @@ import { WorkflowRequestNewPage } from './pages/workflow/WorkflowRequestNewPage'
 import { WorkflowRequestDetailPage } from './pages/workflow/WorkflowRequestDetailPage'
 import { ApprovalsPage } from './pages/approvals/ApprovalsPage'
 import { AttendanceMonthsPage } from './pages/attendance/AttendanceMonthsPage'
-import { MonthsToApprovePage } from './pages/attendance/MonthsToApprovePage'
 import { AttendanceMonthCloseoutPage } from './pages/attendance/AttendanceMonthCloseoutPage'
 import { MyPaidLeavePage } from './pages/paidLeave/MyPaidLeavePage'
 import { MyPaidLeaveHistoryPage } from './pages/paidLeave/MyPaidLeaveHistoryPage'
-import { PaidLeaveRequestsToApprovePage } from './pages/paidLeave/PaidLeaveRequestsToApprovePage'
 import { MySpecialLeavePage } from './pages/specialLeave/MySpecialLeavePage'
 import { MySpecialLeaveHistoryPage } from './pages/specialLeave/MySpecialLeaveHistoryPage'
-import { SpecialLeaveRequestsToApprovePage } from './pages/specialLeave/SpecialLeaveRequestsToApprovePage'
 import { BackOfficeTaskListPage } from './pages/backOffice/BackOfficeTaskListPage'
 import { BackOfficeTaskDetailPage } from './pages/backOffice/BackOfficeTaskDetailPage'
 import { UserListPage } from './pages/admin/UserListPage'
@@ -78,22 +74,18 @@ function App() {
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="expenses" element={<ExpenseClaimListPage />} />
         <Route path="expenses/new" element={<ExpenseClaimNewPage />} />
-        <Route path="expenses/to-approve" element={<ExpenseClaimsToApprovePage />} />
         <Route path="expenses/presets" element={<ExpenseEntryPresetListPage />} />
         <Route path="expenses/presets/new" element={<ExpenseEntryPresetEditPage />} />
         <Route path="expenses/presets/:id" element={<ExpenseEntryPresetEditPage />} />
         <Route path="expenses/:id/edit" element={<ExpenseClaimNewPage />} />
         <Route path="expenses/:id" element={<ExpenseClaimDetailPage />} />
         <Route path="attendance/months" element={<AttendanceMonthsPage />} />
-        <Route path="attendance/months/to-approve" element={<MonthsToApprovePage />} />
         <Route path="attendance/months/close" element={<AttendanceMonthCloseoutPage />} />
         <Route path="attendance/months/:yearMonth" element={<AttendanceMonthDetailPage />} />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
-        <Route path="paid-leave/to-approve" element={<PaidLeaveRequestsToApprovePage />} />
         <Route path="special-leave" element={<MySpecialLeavePage />} />
         <Route path="special-leave/history" element={<MySpecialLeaveHistoryPage />} />
-        <Route path="special-leave/to-approve" element={<SpecialLeaveRequestsToApprovePage />} />
         <Route path="backoffice-tasks" element={<BackOfficeTaskListPage />} />
         <Route path="backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
         <Route path="account" element={<AccountSettingsPage />} />

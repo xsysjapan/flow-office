@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  approveSpecialLeaveRequest,
   cancelSpecialLeaveRequest,
   createSpecialLeaveGrantRule,
   createSpecialLeaveRequest,
@@ -11,10 +10,8 @@ import {
   fetchSpecialLeaveGrantRules,
   fetchSpecialLeaveGrantsForUser,
   fetchSpecialLeaveHistoryForUser,
-  fetchSpecialLeaveRequestsToApprove,
   fetchSpecialLeaveTypes,
   grantSpecialLeave,
-  returnSpecialLeaveRequest,
   updateSpecialLeaveType,
   type CreateSpecialLeaveGrantRuleInput,
   type CreateSpecialLeaveRequestInput,
@@ -27,7 +24,6 @@ const TYPES_KEY = ['special-leave', 'types']
 const RULES_KEY = ['special-leave', 'grant-rules']
 const MY_GRANTS_KEY = ['special-leave', 'grants', 'mine']
 const MY_REQUESTS_KEY = ['special-leave', 'requests', 'mine']
-const REQUESTS_TO_APPROVE_KEY = ['special-leave', 'requests', 'to-approve']
 
 /** 特別休暇メニューの表示可否(有効な種別が1件以上あるか)の判定にも使う。 */
 export function useSpecialLeaveTypes() {
@@ -98,10 +94,6 @@ export function useMySpecialLeaveRequests() {
   return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMySpecialLeaveRequests })
 }
 
-export function useSpecialLeaveRequestsToApprove() {
-  return useQuery({ queryKey: REQUESTS_TO_APPROVE_KEY, queryFn: fetchSpecialLeaveRequestsToApprove })
-}
-
 export function useCreateSpecialLeaveRequest() {
   const queryClient = useQueryClient()
 
@@ -118,27 +110,8 @@ function useInvalidateSpecialLeaveRequests() {
 
   return () => {
     void queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
-    void queryClient.invalidateQueries({ queryKey: REQUESTS_TO_APPROVE_KEY })
     void queryClient.invalidateQueries({ queryKey: MY_GRANTS_KEY })
   }
-}
-
-export function useApproveSpecialLeaveRequest() {
-  const invalidate = useInvalidateSpecialLeaveRequests()
-
-  return useMutation({
-    mutationFn: (id: string) => approveSpecialLeaveRequest(id),
-    onSuccess: () => invalidate(),
-  })
-}
-
-export function useReturnSpecialLeaveRequest() {
-  const invalidate = useInvalidateSpecialLeaveRequests()
-
-  return useMutation({
-    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnSpecialLeaveRequest(id, comment),
-    onSuccess: () => invalidate(),
-  })
 }
 
 export function useCancelSpecialLeaveRequest() {

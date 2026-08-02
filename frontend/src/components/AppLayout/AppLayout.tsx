@@ -76,13 +76,7 @@ function navGroups(
   {
     label: '承認',
     icon: CheckCircle2,
-    items: [
-      { to: '/approvals', label: '承認待ち' },
-      { to: '/attendance/months/to-approve', label: '月次勤怠承認' },
-      { to: '/paid-leave/to-approve', label: '有給申請承認' },
-      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave/to-approve', label: '特別休暇申請承認' }] : []),
-      { to: '/expenses/to-approve', label: '経費精算承認' },
-    ],
+    items: [{ to: '/approvals', label: '承認待ち' }],
   },
   {
     label: '連携',

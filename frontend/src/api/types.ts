@@ -161,7 +161,12 @@ export type WorkflowRequestStatus = 'draft' | 'submitted' | 'approved' | 'return
  * (form_data・添付ファイルのみ)。紐づく場合、承認・差戻しは`/workflow-requests/{id}/approve`
  * ではなく対象ドメインの既存API(attendance-months/expense-claims)を呼ぶ必要がある。
  */
-export type WorkflowRequestSubjectType = 'attendance_month' | 'expense_claim' | null
+export type WorkflowRequestSubjectType =
+  | 'attendance_month'
+  | 'expense_claim'
+  | 'paid_leave_request'
+  | 'special_leave_request'
+  | null
 
 /** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
 export interface AttendanceMonthSubjectSummary {
@@ -175,7 +180,30 @@ export interface ExpenseClaimSubjectSummary {
   total_amount: number
 }
 
-export type WorkflowRequestSubjectSummary = AttendanceMonthSubjectSummary | ExpenseClaimSubjectSummary
+export interface PaidLeaveRequestSubjectSummary {
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+}
+
+export interface SpecialLeaveRequestSubjectSummary {
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  special_leave_type_name: string | null
+  hours: number | null
+  requested_days: number
+  reason: string | null
+}
+
+export type WorkflowRequestSubjectSummary =
+  | AttendanceMonthSubjectSummary
+  | ExpenseClaimSubjectSummary
+  | PaidLeaveRequestSubjectSummary
+  | SpecialLeaveRequestSubjectSummary
 
 /** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
 export interface WorkflowRequestAttendanceMonthSubject {
@@ -222,7 +250,47 @@ export interface WorkflowRequestExpenseClaimSubject {
   }>
 }
 
-export type WorkflowRequestSubject = WorkflowRequestAttendanceMonthSubject | WorkflowRequestExpenseClaimSubject
+export interface WorkflowRequestPaidLeaveRequestSubject {
+  type: 'paid_leave_request'
+  id: string
+  user_id: string
+  status: PaidLeaveRequestStatus
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
+export interface WorkflowRequestSpecialLeaveRequestSubject {
+  type: 'special_leave_request'
+  id: string
+  user_id: string
+  status: PaidLeaveRequestStatus
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  special_leave_type_id: string
+  special_leave_type_name: string | null
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
+export type WorkflowRequestSubject =
+  | WorkflowRequestAttendanceMonthSubject
+  | WorkflowRequestExpenseClaimSubject
+  | WorkflowRequestPaidLeaveRequestSubject
+  | WorkflowRequestSpecialLeaveRequestSubject
 
 export interface WorkflowRequest {
   id: string

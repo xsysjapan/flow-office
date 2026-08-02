@@ -138,11 +138,10 @@ describe('AppLayout', () => {
     )
   })
 
-  it('shows the 承認 group links inside its dropdown menu', async () => {
+  it('shows 承認 as a direct link to the unified approvals screen (single-item group)', async () => {
     renderLayout()
 
-    await userEvent.click(screen.getByRole('button', { name: '承認' }))
-    expect(await screen.findByRole('menuitem', { name: '承認待ち' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '承認待ち' })).toHaveAttribute('href', '/approvals')
   })
 
   it('hides the 特別休暇 menu items when there is no active special leave type', async () => {
@@ -158,13 +157,6 @@ describe('AppLayout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
     expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
-  })
-
-  it('shows the 特別休暇申請承認 menu item under 承認 once an active special leave type exists', async () => {
-    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
-
-    await userEvent.click(screen.getByRole('button', { name: '承認' }))
-    expect(await screen.findByRole('menuitem', { name: '特別休暇申請承認' })).toBeInTheDocument()
   })
 
   it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {

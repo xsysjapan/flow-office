@@ -9,7 +9,6 @@ import {
   deleteExpenseItem,
   fetchExpenseClaim,
   fetchExpenseClaimHistory,
-  fetchExpenseClaimsToApprove,
   fetchMyExpenseClaims,
   returnExpenseClaim,
   submitExpenseClaim,
@@ -25,10 +24,6 @@ const historyKey = (id: string) => ['expense-claims', id, 'history']
 
 export function useMyExpenseClaims() {
   return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyExpenseClaims })
-}
-
-export function useExpenseClaimsToApprove() {
-  return useQuery({ queryKey: TO_APPROVE_KEY, queryFn: fetchExpenseClaimsToApprove })
 }
 
 export function useExpenseClaim(id: string | undefined) {

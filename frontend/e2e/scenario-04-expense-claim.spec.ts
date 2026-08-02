@@ -120,10 +120,12 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     // 2. 渡辺直樹が承認待ち一覧から開いて承認する。承認によりバックオフィスタスク(経理向け)が
     //    自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
-    await approverPage.goto('/expenses/to-approve')
-    const approvalRow = approverPage.getByRole('row', { name: new RegExp(usageDateStr) })
+    await approverPage.goto('/approvals')
+    // 個別登録では申請タイトルは既定値「経費精算」のまま(明細のusage_dateは統合承認画面の
+    // 一覧行には表示されないため、代わりに申請者名で行を特定する)。
+    const approvalRow = approverPage.getByRole('row', { name: '経費精算' }).filter({ hasText: SCENARIO_USERS.punchEmployee })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('link').click()
+    await approvalRow.getByRole('button', { name: '経費精算' }).click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
@@ -265,10 +267,10 @@ for (const scenario of singleCategoryScenarios) {
       const claimUrl = applicantPage.url()
 
       await loginAs(approverPage, SCENARIO_USERS.approver)
-      await approverPage.goto('/expenses/to-approve')
-      const approvalRow = approverPage.getByRole('row', { name: new RegExp(usageDateStr) })
+      await approverPage.goto('/approvals')
+      const approvalRow = approverPage.getByRole('row', { name: '経費精算' }).filter({ hasText: SCENARIO_USERS.punchEmployee })
       await expect(approvalRow).toBeVisible()
-      await approvalRow.getByRole('link').click()
+      await approvalRow.getByRole('button', { name: '経費精算' }).click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
@@ -360,14 +362,14 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     await expect(applicantPage.getByRole('status', { name: '申請中' })).toBeVisible()
     const claimUrl = applicantPage.url()
 
-    // 5. 渡辺直樹が承認する。承認待ち一覧の行は期間(明細usage_dateの最小〜最大)で表示される
-    //    ため、対象期間(1件目〜3件目の日付)で行を特定する。詳細画面ではタイトルも確認する。
+    // 5. 渡辺直樹が統合承認画面(/approvals)で承認する。「まとめて登録」ではタイトルを
+    //    先に確定しているため、行はそのタイトルで特定できる。詳細パネルでは明細件数も確認する。
     await loginAs(approverPage, SCENARIO_USERS.approver)
-    await approverPage.goto('/expenses/to-approve')
-    const approvalRow = approverPage.getByRole('row', { name: new RegExp(`${usageDateStr1}.*${usageDateStr3}`) })
+    await approverPage.goto('/approvals')
+    const approvalRow = approverPage.getByRole('row', { name: title })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('link').click()
-    await expect(approverPage.getByRole('heading', { name: new RegExp(title) })).toBeVisible()
+    await approvalRow.getByRole('button', { name: title }).click()
+    await expect(approverPage.getByRole('heading', { name: title })).toBeVisible()
     await expect(approverPage.getByRole('heading', { name: '明細(3件)' })).toBeVisible()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()

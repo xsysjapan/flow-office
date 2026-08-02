@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  approvePaidLeaveRequest,
   cancelPaidLeaveRequest,
   createPaidLeaveGrantRule,
   createPaidLeaveRequest,
@@ -10,9 +9,7 @@ import {
   fetchPaidLeaveGrantRules,
   fetchPaidLeaveGrantsForUser,
   fetchPaidLeaveHistoryForUser,
-  fetchPaidLeaveRequestsToApprove,
   grantPaidLeave,
-  returnPaidLeaveRequest,
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
   type GrantPaidLeaveInput,
@@ -21,7 +18,6 @@ import {
 const RULES_KEY = ['paid-leave', 'grant-rules']
 const MY_GRANTS_KEY = ['paid-leave', 'grants', 'mine']
 const MY_REQUESTS_KEY = ['paid-leave', 'requests', 'mine']
-const REQUESTS_TO_APPROVE_KEY = ['paid-leave', 'requests', 'to-approve']
 
 export function useMyPaidLeaveGrants() {
   return useQuery({ queryKey: MY_GRANTS_KEY, queryFn: fetchMyPaidLeaveGrants })
@@ -65,10 +61,6 @@ export function useMyPaidLeaveRequests() {
   return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMyPaidLeaveRequests })
 }
 
-export function usePaidLeaveRequestsToApprove() {
-  return useQuery({ queryKey: REQUESTS_TO_APPROVE_KEY, queryFn: fetchPaidLeaveRequestsToApprove })
-}
-
 export function useCreatePaidLeaveRequest() {
   const queryClient = useQueryClient()
 
@@ -85,27 +77,8 @@ function useInvalidatePaidLeaveRequests() {
 
   return () => {
     void queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
-    void queryClient.invalidateQueries({ queryKey: REQUESTS_TO_APPROVE_KEY })
     void queryClient.invalidateQueries({ queryKey: MY_GRANTS_KEY })
   }
-}
-
-export function useApprovePaidLeaveRequest() {
-  const invalidate = useInvalidatePaidLeaveRequests()
-
-  return useMutation({
-    mutationFn: (id: string) => approvePaidLeaveRequest(id),
-    onSuccess: () => invalidate(),
-  })
-}
-
-export function useReturnPaidLeaveRequest() {
-  const invalidate = useInvalidatePaidLeaveRequests()
-
-  return useMutation({
-    mutationFn: ({ id, comment }: { id: string; comment: string }) => returnPaidLeaveRequest(id, comment),
-    onSuccess: () => invalidate(),
-  })
 }
 
 export function useCancelPaidLeaveRequest() {
