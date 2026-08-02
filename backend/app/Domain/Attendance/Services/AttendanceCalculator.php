@@ -62,6 +62,14 @@ use Illuminate\Support\Carbon;
  *   場合は実績の内側)。実績と重なる部分だけを休憩と同様に労働時間・深夜時間から控除し、
  *   区間そのものの合計時間(実績の有無・重なりにかかわらず)を`absence_minutes`として
  *   集計する。
+ * - 半休(`work_type`が`_am_half`/`_pm_half`で終わる。`paid_leave_`/`special_leave_`
+ *   どちらのプレフィックスでも同様)の日は、所定労働時間(`prescribed_work_minutes`)を
+ *   `work_styles.prescribed_daily_minutes`の半分とする(半休で労働する残り半日分に対する
+ *   残業・不足判定の基準値を正しくするための調整)。全休(`_full`)・時間単位休暇(`_hourly`)・
+ *   通常勤務日(work_type=null等)は変更せず、常にフルの所定労働時間のままとする。この調整は
+ *   `prescribed_work_minutes`という基準値のみに影響し、有給・特別休暇の消化日数
+ *   (`PaidLeaveUsage`/`SpecialLeaveUsage`・`paid_leave_days`/`special_leave_days`)には
+ *   一切影響しない(決定事項であり、スコープ拡大ではない)。
  * - 有給休暇・特別休暇(全休・半休・時間単位)は`attendance_leave_segments`の対象外で、
  *   既存の`paid_leave_requests`/`special_leave_requests`/`attendance_days.work_type`/
  *   `paid_leave_usages`/`special_leave_usages`から`paid_leave_days`/`special_leave_days`
@@ -133,6 +141,14 @@ class AttendanceCalculator
         $shift = $day->shiftAssignment;
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
+
+        // 半休(_am_half/_pm_half)の日は所定労働時間を半分とする。全休・通常勤務日・時間単位
+        // 休暇は変更しない。休暇消費日数(PaidLeaveUsage/SpecialLeaveUsage)には影響しない。
+        $isHalfDayLeave = str_ends_with($day->work_type ?? '', '_am_half')
+            || str_ends_with($day->work_type ?? '', '_pm_half');
+        if ($isHalfDayLeave) {
+            $prescribedWorkMinutes = intdiv($prescribedWorkMinutes, 2);
+        }
 
         $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
