@@ -52,6 +52,19 @@ class AttendanceDayResource extends JsonResource
                 fn () => $this->leaveSegments->map(fn ($segment) => new AttendanceLeaveSegmentResource($segment, $utcOffsetMinutes)),
             ),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
+            // 特別休暇の種類ごとの内訳を週次集計(client-side aggregation)向けに提供する。
+            // 通常は1日1種類だが、複数grantにまたがる場合は行が分かれるためそのまま配列で返す
+            // (frontend/src/utils/attendanceWeeklyTotals.tsで種類ごとにグルーピングする)。
+            'special_leave_usages' => $this->whenLoaded(
+                'specialLeaveUsages',
+                fn () => $this->specialLeaveUsages->map(fn ($usage) => [
+                    'special_leave_type_id' => $usage->grant->special_leave_type_id,
+                    'special_leave_type_name' => $usage->grant->specialLeaveType->name,
+                    'usage_type' => $usage->usage_type,
+                    'used_days' => (float) $usage->used_days,
+                    'used_minutes' => $usage->used_minutes,
+                ]),
+            ),
             // 月60時間超残業(参考情報)。表示のたびに都度計算し、snapshotには含めない
             // (docs/07-usecases-attendance.md「月60時間超残業判定」参照)。
             'monthly_overtime' => $this->whenLoaded('calculation', fn () => $this->calculation

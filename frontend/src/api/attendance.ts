@@ -9,6 +9,7 @@ import type {
   AttendancePunch,
   FlexSettlementSummary,
   Paginated,
+  SpecialLeaveBreakdownEntry,
   WorkLocationType,
 } from './types'
 
@@ -214,6 +215,10 @@ export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
   monthly_calculation_totals: AttendanceMonthlyCalculationTotals
+  /** 特別休暇の種類ごとの内訳。バックエンドは常に返すが、既存のテストモック等との
+   *  互換性のためoptionalにしておく(未指定時はAttendanceCalculationSummaryが従来通り
+   *  合計のみを表示する)。 */
+  special_leave_breakdown?: SpecialLeaveBreakdownEntry[]
 }> {
   return apiFetch(`/attendance/months/${yearMonth}`, { query: { user_id: userId } })
 }

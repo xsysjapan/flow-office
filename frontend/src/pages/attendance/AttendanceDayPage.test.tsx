@@ -430,6 +430,29 @@ describe('AttendanceDayPage', () => {
     )
   })
 
+  it('adjusts the payroll work minutes (deemed-time override) alongside the calculated breakdown', async () => {
+    vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+    vi.spyOn(attendanceApi, 'adjustAttendanceDailyCalculation').mockResolvedValue({
+      ...recordedDay,
+      calculation: { ...recordedDay.calculation!, payroll_work_minutes: 540, is_manually_adjusted: true },
+    })
+    renderPage([recordedDay])
+
+    await userEvent.click(await screen.findByRole('button', { name: '集計値を修正' }))
+    const payrollInput = screen.getByLabelText('給与計算上の労働時間(分)(みなし時間等)')
+    await userEvent.clear(payrollInput)
+    await userEvent.type(payrollInput, '540')
+    await userEvent.type(screen.getByLabelText('補正理由(必須)'), 'みなし時間の個別補正')
+    await userEvent.click(screen.getByRole('button', { name: '補正を保存する' }))
+
+    await waitFor(() =>
+      expect(attendanceApi.adjustAttendanceDailyCalculation).toHaveBeenCalledWith(
+        'day-1',
+        expect.objectContaining({ payroll_work_minutes: 540, reason: 'みなし時間の個別補正' }),
+      ),
+    )
+  })
+
   it('shows leave segments and their aggregated minutes on the summary', async () => {
     vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
     renderPage([
@@ -485,6 +508,7 @@ describe('AttendanceDayPage', () => {
     expect(screen.getByLabelText('法定内残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('法定外残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('法定休日労働時間(分)')).toBeInTheDocument()
+    expect(screen.getByLabelText('給与計算上の労働時間(分)(みなし時間等)')).toBeInTheDocument()
     expect(screen.getByLabelText('うち深夜所定労働時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('うち深夜法定内残業時間(分)')).toBeInTheDocument()
     expect(screen.getByLabelText('うち深夜法定外残業時間(分)')).toBeInTheDocument()

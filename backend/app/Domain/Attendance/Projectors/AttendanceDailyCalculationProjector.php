@@ -85,6 +85,7 @@ class AttendanceDailyCalculationProjector extends Projector
                 'late_night_statutory_excess_overtime_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
                 'legal_holiday_work_minutes' => $event->legalHolidayWorkMinutes,
                 'prescribed_holiday_work_minutes' => $event->prescribedHolidayWorkMinutes,
+                'payroll_work_minutes' => $event->payrollWorkMinutes,
                 'late_night_legal_holiday_work_minutes' => $event->lateNightLegalHolidayWorkMinutes,
                 'is_manually_adjusted' => true,
                 'adjusted_by_user_id' => $event->adjustedByUserId,

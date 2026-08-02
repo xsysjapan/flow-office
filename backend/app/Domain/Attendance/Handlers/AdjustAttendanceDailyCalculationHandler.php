@@ -30,6 +30,10 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
 
         $this->guard->assertMutable($day, $day->user_id, $day->work_date->toDateString());
         $prescribedHolidayWorkMinutes = (int) ($day->calculation?->prescribed_holiday_work_minutes ?? 0);
+        // payroll_work_minutes(給与計算上の労働時間。裁量労働制のみなし時間はここに反映される)を
+        // 指定しなかった場合は現在値を維持する(他の区分と異なり、みなし時間が関係しない
+        // 通常の勤務形態では補正不要なため必須にしていない)。
+        $payrollWorkMinutes = $command->payrollWorkMinutes ?? (int) ($day->calculation?->payroll_work_minutes ?? 0);
 
         AttendanceDayAggregate::retrieve($day->id)
             ->adjustCalculation(
@@ -38,6 +42,7 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
                 statutoryExcessOvertimeMinutes: $command->statutoryExcessOvertimeMinutes,
                 legalHolidayWorkMinutes: $command->legalHolidayWorkMinutes,
                 prescribedHolidayWorkMinutes: $prescribedHolidayWorkMinutes,
+                payrollWorkMinutes: $payrollWorkMinutes,
                 lateNightPrescribedWorkMinutes: $command->lateNightPrescribedWorkMinutes,
                 lateNightStatutoryWithinOvertimeMinutes: $command->lateNightStatutoryWithinOvertimeMinutes,
                 lateNightStatutoryExcessOvertimeMinutes: $command->lateNightStatutoryExcessOvertimeMinutes,

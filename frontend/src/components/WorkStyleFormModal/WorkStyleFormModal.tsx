@@ -48,6 +48,7 @@ function emptyFormState(workStyle: WorkStyle | undefined) {
     workTimeSystem: workStyle?.work_time_system ?? '',
     prescribedDailyMinutes: workStyle ? String(workStyle.prescribed_daily_minutes) : '',
     prescribedWeeklyMinutes: workStyle ? String(workStyle.prescribed_weekly_minutes) : '',
+    deemedDailyMinutes: workStyle?.deemed_daily_minutes != null ? String(workStyle.deemed_daily_minutes) : '',
     defaultStartTime: workStyle?.default_start_time ?? '',
     defaultEndTime: workStyle?.default_end_time ?? '',
     defaultBreakMinutes: workStyle?.default_break_minutes != null ? String(workStyle.default_break_minutes) : '',
@@ -102,6 +103,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
   }, [open, workStyle?.id])
 
   const isFlex = form.workTimeSystem === 'flex'
+  const isDiscretionary = form.workTimeSystem === 'discretionary'
 
   const handleSubmit = () => {
     const input = {
@@ -110,6 +112,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
       work_time_system: form.workTimeSystem,
       prescribed_daily_minutes: Number(form.prescribedDailyMinutes),
       prescribed_weekly_minutes: Number(form.prescribedWeeklyMinutes),
+      deemed_daily_minutes: isDiscretionary && form.deemedDailyMinutes ? Number(form.deemedDailyMinutes) : undefined,
       default_start_time: form.defaultStartTime || undefined,
       default_end_time: form.defaultEndTime || undefined,
       default_break_minutes: form.defaultBreakMinutes ? Number(form.defaultBreakMinutes) : undefined,
@@ -336,6 +339,23 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
           </div>
         )}
 
+        {isDiscretionary && (
+          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+            <FormField label="みなし労働時間(分/日)" htmlFor="work-style-deemed-daily-minutes" required>
+              <Input
+                id="work-style-deemed-daily-minutes"
+                type="number"
+                min={1}
+                value={form.deemedDailyMinutes}
+                onChange={(e) => patch({ deemedDailyMinutes: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                裁量労働制の対象日は、実労働時間にかかわらずこの時間を給与計算上の労働時間として採用する。
+              </p>
+            </FormField>
+          </div>
+        )}
+
         {isFlex && (
           <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
             <FormField label="清算期間の起算日(任意)" htmlFor="work-style-settlement-start-day">
@@ -409,6 +429,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               !form.prescribedDailyMinutes ||
               !form.prescribedWeeklyMinutes ||
               (!isEditing && !form.calendarId) ||
+              (isDiscretionary && !form.deemedDailyMinutes) ||
               (form.isShiftBased && form.legalHolidayRule === 'four_weeks_four_days' && !form.fourWeekPeriodStartDate) ||
               (isFlex && form.coreTimeEnabled && (!form.coreTimeStart || !form.coreTimeEnd))
             }

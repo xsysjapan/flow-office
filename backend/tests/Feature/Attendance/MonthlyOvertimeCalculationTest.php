@@ -5,6 +5,8 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\SpecialLeaveGrant;
+use App\Models\SpecialLeaveType;
 use App\Models\User;
 use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
@@ -170,5 +172,75 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $this->assertSame(3600, $snapshot['statutory_excess_overtime_within_60h_minutes']);
         $this->assertSame(0, $snapshot['statutory_excess_overtime_over_60h_minutes']);
         $this->assertSame(720, $snapshot['late_night_statutory_excess_overtime_minutes'], '1日60分×12日');
+    }
+
+    /**
+     * UC-A007: 月次確認画面は特別休暇の内訳をspecial_leave_type_idごとに返す
+     * (.claude/skills/attendance-calc-review 参照。docs/07-usecases-attendance.md「不就労時間の処理区分」)。
+     */
+    public function test_month_endpoint_returns_the_special_leave_breakdown_by_type(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $birthdayType = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
+        $refreshType = SpecialLeaveType::query()->create(['name' => 'リフレッシュ休暇', 'is_active' => true]);
+
+        SpecialLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'special_leave_type_id' => $birthdayType->id,
+            'granted_on' => '2026-04-01', 'expires_on' => null,
+            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+        ]);
+        SpecialLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'special_leave_type_id' => $refreshType->id,
+            'granted_on' => '2026-04-01', 'expires_on' => null,
+            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+        ]);
+
+        // 全休(誕生日休暇) 2026-06-03。
+        EmployeeShiftAssignment::query()->create([
+            'user_id' => $employee->id, 'work_date' => '2026-06-03', 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => '2026-06-03 09:00:00', 'planned_end_at' => '2026-06-03 18:00:00',
+            'planned_break_minutes' => 60,
+        ]);
+        $birthdayRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $birthdayType->id,
+            'target_date' => '2026-06-03',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '誕生日のため',
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$birthdayRequestId}/approve")->assertOk();
+
+        // 時間単位(リフレッシュ休暇) 2026-06-04, 3時間。
+        EmployeeShiftAssignment::query()->create([
+            'user_id' => $employee->id, 'work_date' => '2026-06-04', 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => '2026-06-04 09:00:00', 'planned_end_at' => '2026-06-04 18:00:00',
+            'planned_break_minutes' => 60,
+        ]);
+        $refreshRequestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $refreshType->id,
+            'target_date' => '2026-06-04',
+            'leave_type' => 'hourly',
+            'hours' => 3,
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$refreshRequestId}/approve")->assertOk();
+
+        $response = $this->actingAs($employee)->getJson('/api/attendance/months/2026-06')->assertOk();
+        $breakdown = collect($response->json('special_leave_breakdown'))->keyBy('special_leave_type_name');
+
+        $this->assertEquals(1.0, $breakdown['誕生日休暇']['days']);
+        $this->assertEquals(0, $breakdown['誕生日休暇']['minutes']);
+        $this->assertEquals(0.0, $breakdown['リフレッシュ休暇']['days']);
+        $this->assertEquals(180, $breakdown['リフレッシュ休暇']['minutes']);
+
+        $totals = $response->json('monthly_calculation_totals');
+        $this->assertEquals(1.0, $totals['special_leave_days']);
+        $this->assertEquals(180, $totals['special_leave_minutes']);
     }
 }

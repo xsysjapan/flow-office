@@ -46,4 +46,60 @@ describe('AttendanceCalculationSummary', () => {
     expect(screen.getByText('有給日数')).toBeInTheDocument()
     expect(screen.getByText('特別休暇日数')).toBeInTheDocument()
   })
+
+  it('shows the total worked time when work_minutes is provided', () => {
+    render(<AttendanceCalculationSummary title="今月の集計" totals={{ ...totals, work_minutes: 9600 }} />)
+
+    expect(screen.getByText('実労働時間')).toBeInTheDocument()
+  })
+
+  it('does not show the total worked time row when work_minutes is absent', () => {
+    render(<AttendanceCalculationSummary title="今週の集計" totals={totals} />)
+
+    expect(screen.queryByText('実労働時間')).not.toBeInTheDocument()
+  })
+
+  it('shows a payroll work time row only when it differs from work_minutes', () => {
+    const { rerender } = render(
+      <AttendanceCalculationSummary title="今月の集計" totals={{ ...totals, work_minutes: 9600 }} payrollWorkMinutes={9600} />,
+    )
+    expect(screen.queryByText('給与計算上の労働時間')).not.toBeInTheDocument()
+
+    rerender(
+      <AttendanceCalculationSummary title="今月の集計" totals={{ ...totals, work_minutes: 9600 }} payrollWorkMinutes={9800} />,
+    )
+    expect(screen.getByText('給与計算上の労働時間')).toBeInTheDocument()
+  })
+
+  it('shows a per-type special leave breakdown when 2 or more types are present', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={{ ...totals, special_leave_days: 1.5, special_leave_minutes: 120 }}
+        showAllLeaveTotals
+        specialLeaveBreakdown={[
+          { special_leave_type_id: 'type-1', special_leave_type_name: '誕生日休暇', days: 1, minutes: 0 },
+          { special_leave_type_id: 'type-2', special_leave_type_name: 'リフレッシュ休暇', days: 0.5, minutes: 120 },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('うち誕生日休暇')).toBeInTheDocument()
+    expect(screen.getByText('うちリフレッシュ休暇')).toBeInTheDocument()
+  })
+
+  it('does not show a per-type breakdown when only 1 special leave type is present', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={{ ...totals, special_leave_days: 1 }}
+        showAllLeaveTotals
+        specialLeaveBreakdown={[
+          { special_leave_type_id: 'type-1', special_leave_type_name: '誕生日休暇', days: 1, minutes: 0 },
+        ]}
+      />,
+    )
+
+    expect(screen.queryByText('うち誕生日休暇')).not.toBeInTheDocument()
+  })
 })

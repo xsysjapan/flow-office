@@ -19,6 +19,7 @@ class AttendanceDailyCalculationAdjusted extends ShouldBeStored
         public readonly int $statutoryExcessOvertimeMinutes,
         public readonly int $legalHolidayWorkMinutes,
         public readonly int $prescribedHolidayWorkMinutes,
+        public readonly int $payrollWorkMinutes,
         public readonly int $lateNightPrescribedWorkMinutes,
         public readonly int $lateNightStatutoryWithinOvertimeMinutes,
         public readonly int $lateNightStatutoryExcessOvertimeMinutes,

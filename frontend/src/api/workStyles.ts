@@ -11,6 +11,7 @@ export interface CreateWorkStyleInput {
   work_time_system: string
   prescribed_daily_minutes: number
   prescribed_weekly_minutes: number
+  deemed_daily_minutes?: number | null
   default_start_time?: string
   default_end_time?: string
   default_break_minutes?: number

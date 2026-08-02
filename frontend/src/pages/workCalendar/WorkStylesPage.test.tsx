@@ -28,6 +28,7 @@ const workStyle: WorkStyle = {
   name: '標準勤務',
   work_time_system: '通常労働時間制',
   prescribed_daily_minutes: 480,
+  deemed_daily_minutes: null,
   prescribed_weekly_minutes: 2400,
   default_start_time: '09:00',
   default_end_time: '18:00',
@@ -208,6 +209,7 @@ describe('WorkStylesPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '裁量労働制')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
+    await userEvent.type(screen.getByLabelText('みなし労働時間(分/日)'), '540')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '登録する' }))
 
@@ -218,6 +220,7 @@ describe('WorkStylesPage', () => {
         work_time_system: 'discretionary',
         prescribed_daily_minutes: 480,
         prescribed_weekly_minutes: 2400,
+        deemed_daily_minutes: 540,
         default_start_time: undefined,
         default_end_time: undefined,
         default_break_minutes: undefined,

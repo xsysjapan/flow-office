@@ -4,6 +4,8 @@ namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
+use App\Models\PaidLeaveType;
+use App\Models\SpecialLeaveUsage;
 
 /**
  * 月60時間超残業(労基法37条、中小企業も2023年4月以降適用)の集計。
@@ -110,5 +112,40 @@ class MonthlyOvertimeCalculator
             'special_leave_days' => (float) $calculations->sum('special_leave_days'),
             'special_leave_minutes' => (int) $calculations->sum('special_leave_minutes'),
         ];
+    }
+
+    /**
+     * 対象月の特別休暇消化を`special_leave_type_id`ごとに内訳集計する(月次確認画面向け)。
+     * `calculateCategoryTotals`の`special_leave_days`/`special_leave_minutes`(単一合計)と
+     * 整合するよう、日数は全休・半休相当(`usage_type`がHOURLY以外)の`used_days`の合算、
+     * 時間は時間単位(`usage_type`がHOURLY)の`used_minutes`の合算とする(1件の特別休暇申請が
+     * 失効日の異なる複数`special_leave_grant`にまたがっても、`used_days`/`used_minutes`の
+     * 合計は`AttendanceCalculator`が日次計算する`special_leave_days`/`special_leave_minutes`と
+     * 一致する。SpecialLeaveUsage/SpecialLeaveGrant参照)。
+     *
+     * @return list<array{special_leave_type_id: string, special_leave_type_name: string, days: float, minutes: int}>
+     */
+    public function calculateSpecialLeaveBreakdown(string $userId, string $yearMonth): array
+    {
+        $usages = SpecialLeaveUsage::query()
+            ->where('user_id', $userId)
+            ->where('used_on', 'like', "{$yearMonth}%")
+            ->with('grant.specialLeaveType')
+            ->get();
+
+        return $usages
+            ->groupBy(fn (SpecialLeaveUsage $usage) => $usage->grant->special_leave_type_id)
+            ->map(function ($usagesForType) {
+                $grant = $usagesForType->first()->grant;
+
+                return [
+                    'special_leave_type_id' => $grant->special_leave_type_id,
+                    'special_leave_type_name' => $grant->specialLeaveType->name,
+                    'days' => (float) $usagesForType->where('usage_type', '!=', PaidLeaveType::HOURLY)->sum('used_days'),
+                    'minutes' => (int) $usagesForType->where('usage_type', PaidLeaveType::HOURLY)->sum('used_minutes'),
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

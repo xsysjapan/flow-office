@@ -325,6 +325,10 @@ export interface AttendanceBreak {
 export interface AttendanceDailyCalculation {
   planned_work_minutes: number
   work_minutes: number
+  /** 裁量労働制のみなし労働時間(work_styles.deemed_daily_minutes)。対象外の日はnull。 */
+  deemed_work_minutes?: number | null
+  /** 給与計算上の労働時間。通常はwork_minutesと同じだが、裁量労働制はdeemed_work_minutesを採用する。 */
+  payroll_work_minutes?: number
   prescribed_work_minutes: number
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
@@ -362,6 +366,8 @@ export interface AttendanceDailyCalculationAdjustment {
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
+  /** 給与計算上の労働時間(裁量労働制のみなし時間はここに反映される)。省略時は現在値を維持する。 */
+  payroll_work_minutes?: number
   late_night_prescribed_work_minutes: number
   late_night_statutory_within_overtime_minutes: number
   late_night_statutory_excess_overtime_minutes: number
@@ -383,6 +389,16 @@ export interface MonthlyOvertimeReference {
   cumulative_statutory_excess_overtime_minutes: number
   statutory_excess_overtime_within_60h_minutes: number
   statutory_excess_overtime_over_60h_minutes: number
+}
+
+/** 特別休暇の種類ごとの内訳(special_leave_type_id別)。daysは全休・半休相当の合計
+ *  (全休=1.0・半休=0.5)、minutesは時間単位特別休暇の消化時間(分)。全種類の合計は
+ *  AttendanceMonthlyCalculationTotals.special_leave_days/special_leave_minutesと一致する。 */
+export interface SpecialLeaveBreakdownEntry {
+  special_leave_type_id: string
+  special_leave_type_name: string
+  days: number
+  minutes: number
 }
 
 /** 月次確認画面(UC-A007)向けの、対象月全体の9区分の合計。提出前は都度計算した進捗の目安、
@@ -445,6 +461,15 @@ export interface AttendanceDay {
   monthly_overtime?: MonthlyOvertimeReference | null
   planned_start_at?: string | null
   planned_end_at?: string | null
+  /** その日の特別休暇消化の内訳(種類ごと)。通常は1件だが、失効日の異なる複数grantに
+   *  またがる場合は複数件になりうる(週次画面での種類別集計に使う。AttendanceDayResource参照)。 */
+  special_leave_usages?: Array<{
+    special_leave_type_id: string
+    special_leave_type_name: string
+    usage_type: 'full' | 'am_half' | 'pm_half' | 'hourly'
+    used_days: number
+    used_minutes: number | null
+  }>
 }
 
 export type PunchType = 'clock_in' | 'break_start' | 'break_end' | 'clock_out'
@@ -688,6 +713,9 @@ export interface WorkStyle {
   work_time_system: string
   prescribed_daily_minutes: number
   prescribed_weekly_minutes: number
+  /** 裁量労働制(work_time_system='discretionary')のみなし労働時間(分/日)。
+   *  対象日の給与計算上の労働時間(payroll_work_minutes)に採用される。対象外の勤務形態ではnull。 */
+  deemed_daily_minutes: number | null
   default_start_time: string | null
   default_end_time: string | null
   default_break_minutes: number

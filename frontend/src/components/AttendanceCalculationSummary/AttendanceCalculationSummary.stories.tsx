@@ -14,6 +14,7 @@ export const Monthly: Story = {
   args: {
     title: '今月の集計',
     totals: {
+      work_minutes: 10080,
       prescribed_work_minutes: 9600,
       statutory_within_overtime_minutes: 120,
       statutory_excess_overtime_minutes: 480,
@@ -25,11 +26,21 @@ export const Monthly: Story = {
       absence_minutes: 0,
       paid_leave_days: 1,
       paid_leave_minutes: 120,
-      special_leave_days: 0,
-      special_leave_minutes: 0,
+      special_leave_days: 1.5,
+      special_leave_minutes: 120,
     },
     statutoryExcessOver60hMinutes: 0,
     absenceDays: 0,
     showAllLeaveTotals: true,
+  },
+}
+
+export const MonthlyWithSpecialLeaveBreakdown: Story = {
+  args: {
+    ...Monthly.args,
+    specialLeaveBreakdown: [
+      { special_leave_type_id: 'type-1', special_leave_type_name: '誕生日休暇', days: 1, minutes: 0 },
+      { special_leave_type_id: 'type-2', special_leave_type_name: 'リフレッシュ休暇', days: 0.5, minutes: 120 },
+    ],
   },
 }

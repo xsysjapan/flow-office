@@ -9,6 +9,7 @@ const workStyle: WorkStyle = {
   name: '標準勤務',
   work_time_system: '通常労働時間制',
   prescribed_daily_minutes: 480,
+  deemed_daily_minutes: null,
   prescribed_weekly_minutes: 2400,
   default_start_time: '09:00',
   default_end_time: '18:00',

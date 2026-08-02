@@ -21,6 +21,7 @@ const workStyle: WorkStyle = {
   work_time_system: 'fixed',
   prescribed_daily_minutes: 480,
   prescribed_weekly_minutes: 2400,
+  deemed_daily_minutes: null,
   default_start_time: '09:00',
   default_end_time: '18:00',
   default_break_minutes: 60,

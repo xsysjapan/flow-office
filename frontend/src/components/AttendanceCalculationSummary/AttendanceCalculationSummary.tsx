@@ -1,7 +1,20 @@
 import type { ReactNode } from 'react'
 import { Duration } from '../Duration/Duration'
 
+/** 特別休暇の種類ごとの内訳(月次はバックエンド算出、週次はフロントエンドでの
+ *  クライアントサイド集計)。両者で同じ形にして本コンポーネントに渡す。 */
+export interface AttendanceSpecialLeaveBreakdownItem {
+  special_leave_type_id: string
+  special_leave_type_name: string
+  days: number
+  minutes: number
+}
+
 export interface AttendanceCalculationSummaryData {
+  /** 実労働時間(実際に働いた時間の合計)。給与計算上の労働時間(payroll_work_minutes)は
+   *  裁量労働制・みなし労働時間制以外では通常この値と一致するため、別行では表示しない
+   *  (実際に異なる場合のみ本コンポーネント側でpayrollWorkMinutesを併記する)。 */
+  work_minutes?: number
   prescribed_work_minutes: number
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
@@ -23,6 +36,12 @@ export interface AttendanceCalculationSummaryProps {
   statutoryExcessOver60hMinutes?: number
   absenceDays?: number
   showAllLeaveTotals?: boolean
+  /** 特別休暇の種類ごとの内訳。未指定の場合は従来通り合計(special_leave_days/minutes)のみ表示する。 */
+  specialLeaveBreakdown?: AttendanceSpecialLeaveBreakdownItem[]
+  /** 給与計算上の労働時間(裁量労働制等でwork_minutesと異なる場合のみ)。work_minutesと
+   *  一致する場合は表示しない(表示の重複を避けるため呼び出し側で判定せず、本コンポーネントに
+   *  常に渡してよい)。 */
+  payrollWorkMinutes?: number
 }
 
 function SummaryItem({ label, children }: { label: string; children: ReactNode }) {
@@ -41,6 +60,8 @@ export function AttendanceCalculationSummary({
   statutoryExcessOver60hMinutes,
   absenceDays,
   showAllLeaveTotals = false,
+  specialLeaveBreakdown,
+  payrollWorkMinutes,
 }: AttendanceCalculationSummaryProps) {
   const hasLeaveTotals = showAllLeaveTotals
     || !!totals.absence_minutes
@@ -50,10 +71,26 @@ export function AttendanceCalculationSummary({
     || !!totals.special_leave_minutes
     || absenceDays !== undefined
 
+  // 特別休暇の内訳は、渡されていて2種類以上ある場合のみ内訳行として表示する(1種類のみの場合は
+  // 合計行と重複するだけなので、合計行のみで足りる)。
+  const specialLeaveTypeBreakdown = (specialLeaveBreakdown ?? []).filter((item) => item.days !== 0 || item.minutes !== 0)
+  const showSpecialLeaveTypeBreakdown = specialLeaveTypeBreakdown.length > 1
+
+  // 給与計算上の労働時間(payroll_work_minutes)は裁量労働制・みなし労働時間制以外では
+  // work_minutesと一致するため、異なる場合のみ別行で表示する(常に両方出すと大半のケースで
+  // 同じ数字が並んで見づらいため)。
+  const showPayrollWorkMinutes = payrollWorkMinutes !== undefined && payrollWorkMinutes !== totals.work_minutes
+
   return (
     <section aria-labelledby={`${title}-summary`}>
       <h3 id={`${title}-summary`} className="mb-3 text-sm font-medium text-foreground">{title}</h3>
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+        {totals.work_minutes !== undefined && (
+          <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
+        )}
+        {showPayrollWorkMinutes && (
+          <SummaryItem label="給与計算上の労働時間"><Duration minutes={payrollWorkMinutes} /></SummaryItem>
+        )}
         <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
         <SummaryItem label="法定内残業時間"><Duration minutes={totals.statutory_within_overtime_minutes} /></SummaryItem>
         <SummaryItem label="法定外残業時間"><Duration minutes={totals.statutory_excess_overtime_minutes} /></SummaryItem>
@@ -75,6 +112,13 @@ export function AttendanceCalculationSummary({
           {(showAllLeaveTotals || !!totals.paid_leave_minutes) && <SummaryItem label="有給時間(時間単位)"><Duration minutes={totals.paid_leave_minutes ?? 0} /></SummaryItem>}
           {(showAllLeaveTotals || !!totals.special_leave_days) && <SummaryItem label="特別休暇日数">{totals.special_leave_days ?? 0}日</SummaryItem>}
           {(showAllLeaveTotals || !!totals.special_leave_minutes) && <SummaryItem label="特別休暇時間"><Duration minutes={totals.special_leave_minutes ?? 0} /></SummaryItem>}
+          {showSpecialLeaveTypeBreakdown && specialLeaveTypeBreakdown.map((item) => (
+            <SummaryItem key={item.special_leave_type_id} label={`うち${item.special_leave_type_name}`}>
+              {item.days > 0 && `${item.days}日`}
+              {item.days > 0 && item.minutes > 0 && ' '}
+              {item.minutes > 0 && <Duration minutes={item.minutes} />}
+            </SummaryItem>
+          ))}
         </dl>
       )}
     </section>

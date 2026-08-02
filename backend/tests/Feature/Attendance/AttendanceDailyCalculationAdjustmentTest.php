@@ -48,6 +48,71 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
         $this->assertTrue($calculation['is_manually_adjusted']);
     }
 
+    public function test_payroll_work_minutes_can_be_manually_adjusted(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-07-09';
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => $dateString,
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [['start' => "{$dateString}T12:00:00+09:00", 'end' => "{$dateString}T13:00:00+09:00"]],
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}/calculation", [
+            'prescribed_work_minutes' => 480,
+            'statutory_within_overtime_minutes' => 0,
+            'statutory_excess_overtime_minutes' => 0,
+            'legal_holiday_work_minutes' => 0,
+            'payroll_work_minutes' => 540,
+            'late_night_prescribed_work_minutes' => 0,
+            'late_night_statutory_within_overtime_minutes' => 0,
+            'late_night_statutory_excess_overtime_minutes' => 0,
+            'late_night_legal_holiday_work_minutes' => 0,
+            'reason' => 'みなし時間の個別補正',
+        ]);
+
+        $response->assertOk();
+        $calculation = $response->json('calculation');
+        $this->assertSame(540, $calculation['payroll_work_minutes']);
+        $this->assertTrue($calculation['is_manually_adjusted']);
+    }
+
+    public function test_payroll_work_minutes_is_preserved_when_omitted(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-07-09';
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => $dateString,
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [['start' => "{$dateString}T12:00:00+09:00", 'end' => "{$dateString}T13:00:00+09:00"]],
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $before = AttendanceDay::query()->find($dayId)->calculation->payroll_work_minutes;
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}/calculation", [
+            'prescribed_work_minutes' => 480,
+            'statutory_within_overtime_minutes' => 30,
+            'statutory_excess_overtime_minutes' => 0,
+            'legal_holiday_work_minutes' => 0,
+            'late_night_prescribed_work_minutes' => 0,
+            'late_night_statutory_within_overtime_minutes' => 0,
+            'late_night_statutory_excess_overtime_minutes' => 0,
+            'late_night_legal_holiday_work_minutes' => 0,
+            'reason' => 'payroll_work_minutesを指定しない補正',
+        ]);
+
+        $response->assertOk();
+        $this->assertSame($before, $response->json('calculation.payroll_work_minutes'));
+    }
+
     public function test_re_editing_the_day_resets_the_manual_adjustment(): void
     {
         $employee = User::factory()->create();

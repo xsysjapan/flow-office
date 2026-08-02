@@ -24,6 +24,7 @@ const workStyle: WorkStyle = {
   work_time_system: 'fixed',
   prescribed_daily_minutes: 480,
   prescribed_weekly_minutes: 2400,
+  deemed_daily_minutes: null,
   default_start_time: '09:00',
   default_end_time: '18:00',
   default_break_minutes: 60,
@@ -77,15 +78,33 @@ describe('WorkStyleFormModal', () => {
     await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '裁量労働制')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/日)'), '480')
     await userEvent.type(screen.getByLabelText('所定労働時間(分/週)'), '2400')
+    await userEvent.type(screen.getByLabelText('みなし労働時間(分/日)'), '540')
     await userEvent.selectOptions(screen.getByLabelText('カレンダー'), '2026年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '登録する' }))
 
     await waitFor(() =>
       expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'discretionary', name: '裁量労働制勤務', work_time_system: 'discretionary' }),
+        expect.objectContaining({
+          code: 'discretionary',
+          name: '裁量労働制勤務',
+          work_time_system: 'discretionary',
+          deemed_daily_minutes: 540,
+        }),
       ),
     )
   }, 15000)
+
+  it('shows the deemed-minutes field only for discretionary work styles', async () => {
+    renderModal()
+
+    expect(screen.queryByLabelText('みなし労働時間(分/日)')).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '裁量労働制')
+    expect(screen.getByLabelText('みなし労働時間(分/日)')).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '通常勤務')
+    expect(screen.queryByLabelText('みなし労働時間(分/日)')).not.toBeInTheDocument()
+  })
 
   it('pre-fills the form with the existing work style in edit mode and updates it', async () => {
     vi.spyOn(workStylesApi, 'updateWorkStyle').mockResolvedValue({ ...workStyle, name: '標準勤務(改)' })

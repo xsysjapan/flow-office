@@ -170,6 +170,7 @@ export function MonthlyReferenceView({
                   totals={data.monthly_calculation_totals}
                   statutoryExcessOver60hMinutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}
                   absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
+                  specialLeaveBreakdown={data.special_leave_breakdown}
                   showAllLeaveTotals
                 />
               </div>
@@ -198,7 +199,7 @@ export function WeeklyReferenceView({ userId }: { userId: string }) {
 
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
-  const { totals, absenceDays } = weeklyAttendanceTotals(data ?? [])
+  const { totals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
 
   return (
     <>
@@ -232,6 +233,7 @@ export function WeeklyReferenceView({ userId }: { userId: string }) {
               title="今週の集計"
               totals={totals}
               absenceDays={absenceDays}
+              specialLeaveBreakdown={specialLeaveBreakdown}
               showAllLeaveTotals
             />
           </div>

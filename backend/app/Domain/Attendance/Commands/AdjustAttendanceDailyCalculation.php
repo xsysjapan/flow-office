@@ -15,6 +15,7 @@ class AdjustAttendanceDailyCalculation implements Command
         public readonly int $statutoryWithinOvertimeMinutes,
         public readonly int $statutoryExcessOvertimeMinutes,
         public readonly int $legalHolidayWorkMinutes,
+        public readonly ?int $payrollWorkMinutes,
         public readonly int $lateNightPrescribedWorkMinutes,
         public readonly int $lateNightStatutoryWithinOvertimeMinutes,
         public readonly int $lateNightStatutoryExcessOvertimeMinutes,
