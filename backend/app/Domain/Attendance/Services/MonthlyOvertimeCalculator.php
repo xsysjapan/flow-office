@@ -23,10 +23,16 @@ use App\Models\SpecialLeaveUsage;
  *   二重計上が生じないため、`attendance_months.snapshot_json`に含めてよい。
  * - 法定休日労働はstatutory_excess_overtime_minutes自体に含まれないため、この60時間判定からも
  *   自然に除外される(AttendanceCalculatorが法定休日の日はstatutory_excess_overtime_minutesを0にする)。
+ * - 週40時間超残業(`weekly_statutory_excess_overtime_minutes`)は、`WeeklyOvertimeCalculator`が
+ *   週ごとに算出した`weekly_statutory_excess_overtime_minutes`(日8時間超で既に計上済みの分を
+ *   除いた、週40時間を超える分のみ)を月内の全週で単純合算する。日8時間超(法定外残業)・
+ *   月60時間超とは重複しない別区分の残業として加算する。
  */
 class MonthlyOvertimeCalculator
 {
     private const MONTHLY_STATUTORY_LIMIT_MINUTES = 3600; // 労基法37条: 月60時間
+
+    public function __construct(private readonly WeeklyOvertimeCalculator $weeklyOvertimeCalculator) {}
 
     /**
      * @return array{cumulative_statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int}
@@ -71,7 +77,7 @@ class MonthlyOvertimeCalculator
      * 月次確認画面・月次提出スナップショット向けの、対象月全体の集計(9区分の合計に加え、
      * 欠勤・有給・特別休暇の月次集計。docs/07-usecases-attendance.md「不就労時間の処理区分」参照)。
      *
-     * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int}
+     * @return array{work_minutes: int, payroll_work_minutes: int, prescribed_work_minutes: int, statutory_within_overtime_minutes: int, statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int, weekly_statutory_excess_overtime_minutes: int, late_night_work_minutes: int, late_night_prescribed_work_minutes: int, late_night_statutory_within_overtime_minutes: int, late_night_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int, prescribed_holiday_work_minutes: int, late_night_legal_holiday_work_minutes: int, absence_days: int, absence_minutes: int, paid_leave_days: float, paid_leave_minutes: int, special_leave_days: float, special_leave_minutes: int}
      */
     public function calculateCategoryTotals(string $userId, string $yearMonth): array
     {
@@ -83,6 +89,11 @@ class MonthlyOvertimeCalculator
         $calculations = AttendanceDailyCalculation::query()->whereIn('attendance_day_id', $dayIds)->get();
 
         $statutoryOvertimeTotal = (int) $calculations->sum('statutory_excess_overtime_minutes');
+
+        $weeklyOvertimeMinutes = array_sum(array_column(
+            $this->weeklyOvertimeCalculator->calculateForMonth($userId, $yearMonth),
+            'weekly_statutory_excess_overtime_minutes',
+        ));
 
         // 欠勤時間がその日の所定労働時間以上の日を「終日欠勤」とみなして日数に数える
         // (1時間の欠勤を1日欠勤として扱わないため。docs/07-usecases-attendance.md参照)。
@@ -98,6 +109,7 @@ class MonthlyOvertimeCalculator
             'statutory_excess_overtime_minutes' => $statutoryOvertimeTotal,
             'statutory_excess_overtime_within_60h_minutes' => min($statutoryOvertimeTotal, self::MONTHLY_STATUTORY_LIMIT_MINUTES),
             'statutory_excess_overtime_over_60h_minutes' => max(0, $statutoryOvertimeTotal - self::MONTHLY_STATUTORY_LIMIT_MINUTES),
+            'weekly_statutory_excess_overtime_minutes' => $weeklyOvertimeMinutes,
             'late_night_work_minutes' => (int) $calculations->sum('late_night_work_minutes'),
             'late_night_prescribed_work_minutes' => (int) $calculations->sum('late_night_prescribed_work_minutes'),
             'late_night_statutory_within_overtime_minutes' => (int) $calculations->sum('late_night_statutory_within_overtime_minutes'),

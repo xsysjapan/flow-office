@@ -14,9 +14,11 @@ use Tests\TestCase;
 
 /**
  * 週40時間判定(1週の法定労働時間)。日8時間超の判定(AttendanceCalculator)との二重計上を
- * 避けつつ、月次確認画面の参考情報(weekly_overtime_reference)として正しく計算されることを
- * 確認する。週次勤怠は日次勤怠の編集ビューであり、月次スナップショットには合算しない
- * (CLAUDE.md「週次勤怠は日次勤怠の編集ビュー」)。.claude/skills/attendance-calc-review 参照。
+ * 避けつつ、月次確認画面の週ごとの参考情報(weekly_overtime_reference)として正しく計算される
+ * ことを確認する。週次勤怠は日次勤怠の編集ビューであり、この週ごとの内訳自体は月次
+ * スナップショットには合算しない(CLAUDE.md「週次勤怠は日次勤怠の編集ビュー」)が、月内の
+ * 全週を合算した確定値は月60時間超と同様にmonthly_calculation_totals/snapshotの
+ * weekly_statutory_excess_overtime_minutesに含まれる。.claude/skills/attendance-calc-review 参照。
  */
 class WeeklyOvertimeCalculationTest extends TestCase
 {
@@ -172,18 +174,23 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $this->assertSame(300, $week['legal_holiday_work_minutes']);
     }
 
-    public function test_weekly_overtime_reference_is_not_folded_into_the_monthly_snapshot(): void
+    /**
+     * UC-A008: 週ごとの内訳(weekly_overtime_reference)自体はsnapshotに合算しないが、月内の
+     * 全週を合算した週40時間超残業の総量は月60時間超と同様に確定値としてsnapshotへ含める。
+     */
+    public function test_weekly_overtime_is_frozen_into_the_monthly_snapshot_on_submission(): void
     {
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeWorkStyle($calendar);
         $user = User::factory()->create();
 
+        // 06-01(月)〜06-06(土)を7時間労働(週42時間、週40時間超が120分)にする。
         foreach (['06-01', '06-02', '06-03', '06-04', '06-05', '06-06'] as $day) {
             $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '17:00');
         }
 
         $response = $this->submitMonth($user, '2026-06');
 
-        $this->assertArrayNotHasKey('weekly_statutory_excess_overtime_minutes', $response->json('snapshot'));
+        $this->assertSame(120, $response->json('snapshot.weekly_statutory_excess_overtime_minutes'));
     }
 }

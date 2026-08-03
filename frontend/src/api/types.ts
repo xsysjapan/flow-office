@@ -401,7 +401,7 @@ export interface SpecialLeaveBreakdownEntry {
   minutes: number
 }
 
-/** 月次確認画面(UC-A007)向けの、対象月全体の9区分の合計。提出前は都度計算した進捗の目安、
+/** 月次確認画面(UC-A007)向けの、対象月全体の10区分の合計。提出前は都度計算した進捗の目安、
  *  提出後はattendance_months.snapshot_jsonと同じ確定値になる。 */
 export interface AttendanceMonthlyCalculationTotals {
   work_minutes: number
@@ -411,6 +411,8 @@ export interface AttendanceMonthlyCalculationTotals {
   statutory_excess_overtime_minutes: number
   statutory_excess_overtime_within_60h_minutes: number
   statutory_excess_overtime_over_60h_minutes: number
+  /** 週40時間(労基法32条)超残業の月内全週合計。日8時間超・月60時間超とは別区分。 */
+  weekly_statutory_excess_overtime_minutes: number
   late_night_work_minutes: number
   late_night_prescribed_work_minutes: number
   late_night_statutory_within_overtime_minutes: number

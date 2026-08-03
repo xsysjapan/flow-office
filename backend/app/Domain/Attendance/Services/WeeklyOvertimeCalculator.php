@@ -12,8 +12,12 @@ use Illuminate\Support\Carbon;
  *
  * 注意 (.claude/skills/attendance-calc-review 参照):
  * - 週次勤怠は日次勤怠の編集ビューであり、月のように独立した集計単位ではない
- *   (CLAUDE.md「週次勤怠は日次勤怠の編集ビュー」)。そのため月次スナップショット
- *   (attendance_months.snapshot_json)には合算せず、Projectionとしても永続化しない。
+ *   (CLAUDE.md「週次勤怠は日次勤怠の編集ビュー」)。そのため本クラスが返す週ごとの内訳自体は
+ *   月次スナップショット(attendance_months.snapshot_json)には含めず、Projectionとしても
+ *   永続化しない。ただし月内の全週を合算した月間の週40時間超残業総量は、月60時間超と同様に
+ *   確定値として扱ってよいため、`MonthlyOvertimeCalculator::calculateCategoryTotals()`が
+ *   本クラスの`calculateForMonth()`を呼んで合算し、`weekly_statutory_excess_overtime_minutes`
+ *   として月次確認画面・月次提出スナップショットに含める。
  * - LegalHolidayRequirementChecker(UC-C005)と同じ考え方で、画面表示のたびに
  *   日次実績(attendance_daily_calculations)から都度再計算する読み取り専用の参考情報とする。
  * - 日8時間超で既に計上済みの時間(attendance_daily_calculations.statutory_excess_overtime_minutes)

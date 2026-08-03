@@ -34,6 +34,8 @@ export interface AttendanceCalculationSummaryProps {
   title: string
   totals: AttendanceCalculationSummaryData
   statutoryExcessOver60hMinutes?: number
+  /** 週40時間(労基法32条)超残業の月内全週合計。月次確認画面のみ指定する。 */
+  weeklyStatutoryExcessOvertimeMinutes?: number
   absenceDays?: number
   showAllLeaveTotals?: boolean
   /** 特別休暇の種類ごとの内訳。未指定の場合は従来通り合計(special_leave_days/minutes)のみ表示する。 */
@@ -58,6 +60,7 @@ export function AttendanceCalculationSummary({
   title,
   totals,
   statutoryExcessOver60hMinutes,
+  weeklyStatutoryExcessOvertimeMinutes,
   absenceDays,
   showAllLeaveTotals = false,
   specialLeaveBreakdown,
@@ -97,6 +100,9 @@ export function AttendanceCalculationSummary({
         <SummaryItem label="法定外残業時間"><Duration minutes={totals.statutory_excess_overtime_minutes} /></SummaryItem>
         {statutoryExcessOver60hMinutes !== undefined && (
           <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
+        )}
+        {weeklyStatutoryExcessOvertimeMinutes !== undefined && (
+          <SummaryItem label="うち週40時間超"><Duration minutes={weeklyStatutoryExcessOvertimeMinutes} /></SummaryItem>
         )}
         <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
         <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>

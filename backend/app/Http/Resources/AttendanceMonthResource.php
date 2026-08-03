@@ -29,8 +29,10 @@ class AttendanceMonthResource extends JsonResource
             'snapshot' => $this->snapshot_json,
             // UC-C005: シフト制の勤務形態のみ対象。承認をブロックせず警告として表示する。
             'legal_holiday_warnings' => app(LegalHolidayRequirementChecker::class)->check($this->user_id, $this->year_month),
-            // 週40時間(労基法32条)の参考情報。snapshotには含めず、表示のたびに都度計算する
-            // (週次勤怠は日次勤怠の編集ビューであり、月へ合算する独立集計単位ではないため)。
+            // 週40時間(労基法32条)の週ごとの内訳。この内訳自体はsnapshotには含めず、表示のたびに
+            // 都度計算する(週次勤怠は日次勤怠の編集ビューであり、月へ合算する独立集計単位ではない
+            // ため)。月内の全週を合算した確定値は`monthly_calculation_totals.weekly_statutory_
+            // excess_overtime_minutes`(月次提出後はsnapshot_jsonの同名キー)を参照する。
             'weekly_overtime_reference' => app(WeeklyOvertimeCalculator::class)->calculateForMonth($this->user_id, $this->year_month),
         ];
     }

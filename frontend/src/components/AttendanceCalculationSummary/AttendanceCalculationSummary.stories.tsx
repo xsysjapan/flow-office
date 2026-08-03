@@ -30,6 +30,7 @@ export const Monthly: Story = {
       special_leave_minutes: 120,
     },
     statutoryExcessOver60hMinutes: 0,
+    weeklyStatutoryExcessOvertimeMinutes: 0,
     absenceDays: 0,
     showAllLeaveTotals: true,
   },

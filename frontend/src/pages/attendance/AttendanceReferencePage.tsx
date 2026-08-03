@@ -169,6 +169,7 @@ export function MonthlyReferenceView({
                   title="今月の集計"
                   totals={data.monthly_calculation_totals}
                   statutoryExcessOver60hMinutes={data.monthly_calculation_totals.statutory_excess_overtime_over_60h_minutes}
+                  weeklyStatutoryExcessOvertimeMinutes={data.monthly_calculation_totals.weekly_statutory_excess_overtime_minutes}
                   absenceDays={data.monthly_calculation_totals.absence_days ?? 0}
                   specialLeaveBreakdown={data.special_leave_breakdown}
                   showAllLeaveTotals
