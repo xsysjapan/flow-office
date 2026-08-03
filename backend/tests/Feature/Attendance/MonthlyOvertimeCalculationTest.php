@@ -148,8 +148,8 @@ class MonthlyOvertimeCalculationTest extends TestCase
     }
 
     /**
-     * UC-A008: 月次提出時のスナップショットにも、9区分の合計(60時間以内/超の按分含む)を
-     * 確定値として保存する(週40時間の参考情報とは異なり、単純な按分のため二重計上にならない)。
+     * UC-A008: 月次提出時のスナップショットにも、法定内残業/法定外残業/月60時間超残業/深夜時間等の
+     * 合計(60時間以内/超の按分含む)を確定値として保存する。
      */
     public function test_submitting_the_month_freezes_the_monthly_calculation_totals_into_the_snapshot(): void
     {
@@ -172,6 +172,35 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $this->assertSame(3600, $snapshot['statutory_excess_overtime_within_60h_minutes']);
         $this->assertSame(0, $snapshot['statutory_excess_overtime_over_60h_minutes']);
         $this->assertSame(720, $snapshot['late_night_statutory_excess_overtime_minutes'], '1日60分×12日');
+    }
+
+    /**
+     * UC-A008: 週40時間(労基法32条)超残業も月60時間超と同様に、月次確認画面では都度計算した
+     * 進捗の目安として表示され、月次提出時にはその月内の全週を合算した値が確定値として
+     * スナップショットに保存される(WeeklyOvertimeCalculator参照)。
+     */
+    public function test_weekly_overtime_over_40_hours_is_frozen_into_the_snapshot_at_submission(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+
+        // 2026-06-01(月)〜06-06(土)の6日間、1日9時間(540分)勤務(日8時間超の60分/日は既に
+        // その日の法定外残業として計上済み)。週の所定内労働(480分/日)の合計は2,880分となり、
+        // 週40時間(2,400分)を480分超える。
+        foreach (['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05', '2026-06-06'] as $date) {
+            $this->recordDay($user, $workStyle, $date, '09:00', '19:00');
+        }
+
+        $monthResponse = $this->actingAs($user)->getJson('/api/attendance/months/2026-06')->assertOk();
+        $this->assertSame(480, $monthResponse->json('monthly_calculation_totals.weekly_statutory_excess_overtime_minutes'));
+
+        $approver = User::factory()->create();
+        $submitResponse = $this->actingAs($user)->postJson('/api/attendance/months/2026-06/submit', [
+            'approver_user_id' => $approver->id,
+        ])->assertSuccessful();
+
+        $this->assertSame(480, $submitResponse->json('snapshot.weekly_statutory_excess_overtime_minutes'));
     }
 
     /**

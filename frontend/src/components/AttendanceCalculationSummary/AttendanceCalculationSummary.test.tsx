@@ -47,6 +47,14 @@ describe('AttendanceCalculationSummary', () => {
     expect(screen.getByText('特別休暇日数')).toBeInTheDocument()
   })
 
+  it('shows the weekly 40h overtime total only when provided', () => {
+    const { rerender } = render(<AttendanceCalculationSummary title="今月の集計" totals={totals} />)
+    expect(screen.queryByText('うち週40時間超')).not.toBeInTheDocument()
+
+    rerender(<AttendanceCalculationSummary title="今月の集計" totals={totals} weeklyStatutoryExcessOvertimeMinutes={45} />)
+    expect(screen.getByText('うち週40時間超')).toBeInTheDocument()
+  })
+
   it('shows the total worked time when work_minutes is provided', () => {
     render(<AttendanceCalculationSummary title="今月の集計" totals={{ ...totals, work_minutes: 9600 }} />)
 

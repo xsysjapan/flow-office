@@ -620,7 +620,7 @@ class AttendanceController extends Controller
             // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
             // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
             'flex_settlement_summary' => app(FlexSettlementSummaryCalculator::class)->calculateForMonth($userId, $yearMonth),
-            // 9区分(法定内残業/法定外残業/月60時間超残業/深夜時間等)の月合計。提出前でも
+            // 法定内残業/法定外残業/月60時間超残業/週40時間超残業/深夜時間等の月合計。提出前でも
             // 進捗の目安として都度計算する(提出後はattendance_months.snapshot_jsonが確定値)。
             'monthly_calculation_totals' => app(MonthlyOvertimeCalculator::class)->calculateCategoryTotals($userId, $yearMonth),
             // 特別休暇の種類ごとの内訳(special_leave_type_id別)。上記totals内のspecial_leave_days/

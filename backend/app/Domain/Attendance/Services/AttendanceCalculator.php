@@ -29,9 +29,12 @@ use Illuminate\Support\Carbon;
  * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
  *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
  *   指定または自動推定した日かどうかで判定する。
- * - 週40時間を含む正確な週次/月次の法定外残業判定は、月次確認画面の参考情報
- *   (WeeklyOvertimeCalculator)として別途都度計算する。月60時間超の判定も同様に
- *   MonthlyOvertimeCalculatorが日次実績から都度計算する参考情報とし、ここでは計算しない。
+ * - 週40時間・月60時間超の法定外残業判定はここでは計算しない。週ごとの内訳は
+ *   WeeklyOvertimeCalculatorが日次実績から都度計算する表示専用の参考情報とし、月60時間超は
+ *   MonthlyOvertimeCalculatorが日次実績から都度計算する。どちらも月次確認画面では
+ *   月次提出前の進捗の目安として使われるが、月次提出時にはMonthlyOvertimeCalculatorが
+ *   両者を集計した値がattendance_months.snapshot_jsonへ確定値として記録される
+ *   (SubmitAttendanceMonthHandler参照)。
  * - 深夜時間帯(22:00〜05:00)の労働は、区分別に`late_night_prescribed_work_minutes`(所定労働の
  *   深夜)・`late_night_statutory_within_overtime_minutes`(法定内残業の深夜)・
  *   `late_night_statutory_excess_overtime_minutes`(法定外残業の深夜)の3区分に分解する。

@@ -15,6 +15,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   statutory_excess_overtime_minutes: 0,
   statutory_excess_overtime_within_60h_minutes: 0,
   statutory_excess_overtime_over_60h_minutes: 0,
+  weekly_statutory_excess_overtime_minutes: 0,
   late_night_work_minutes: 0,
   late_night_prescribed_work_minutes: 0,
   late_night_statutory_within_overtime_minutes: 0,
