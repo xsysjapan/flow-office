@@ -3,9 +3,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as expenseCategoriesApi from '../../api/expenseCategories'
 import * as specialLeaveApi from '../../api/specialLeave'
-import type { ExpenseCategory, SpecialLeaveType, User } from '../../api/types'
+import type { SpecialLeaveType, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { formatDate } from '../../utils/weekDates'
 import { AppLayout } from './AppLayout'
@@ -20,12 +19,7 @@ const mockUser: User = {
   last_login_at: null,
 }
 
-function renderLayout(
-  logout = vi.fn(),
-  user: User = mockUser,
-  specialLeaveTypes: SpecialLeaveType[] = [],
-  expenseCategories: ExpenseCategory[] = [],
-) {
+function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes: SpecialLeaveType[] = []) {
   const authValue: AuthContextValue = {
     user,
     status: 'authenticated',
@@ -36,7 +30,6 @@ function renderLayout(
   }
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(specialLeaveTypes)
-  vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(expenseCategories)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -69,68 +62,22 @@ describe('AppLayout', () => {
     expect(screen.getByText('開発部 ・ 管理者')).toBeInTheDocument()
   })
 
-  it('shows the 申請 group links inside its dropdown menu', async () => {
+  it('shows その他申請・経費精算・入力プリセット inside the 勤怠・申請 dropdown menu, without a separate 新規申請 or 新規作成 shortcut', async () => {
     renderLayout()
 
-    await userEvent.click(screen.getByRole('button', { name: '申請' }))
-    expect(await screen.findByRole('menuitem', { name: '自分の申請' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '新規申請' })).toBeInTheDocument()
-  })
-
-  it('shows a shortcut per active expense category that jumps straight into that category', async () => {
-    renderLayout(vi.fn(), mockUser, [], [
-      {
-        id: 1,
-        code: 'transportation',
-        name: '交通費',
-        description: null,
-        evidence_type_default: 'fact_reference_available',
-        entry_mode: 'batch',
-        field_definitions: null,
-        receipt_required_threshold: null,
-        approval_skip_threshold: null,
-        is_active: true,
-      },
-      {
-        id: 2,
-        code: 'supplies',
-        name: '消耗品',
-        description: null,
-        evidence_type_default: 'receipt_optional',
-        entry_mode: 'single',
-        field_definitions: null,
-        receipt_required_threshold: 3000,
-        approval_skip_threshold: 1000,
-        is_active: false,
-      },
-    ])
-
-    await userEvent.click(screen.getByRole('button', { name: '経費精算' }))
-
-    expect(await screen.findByRole('menuitem', { name: '経費精算(交通費)' })).toHaveAttribute(
-      'href',
-      '/expenses/new?category=transportation',
-    )
-    expect(screen.queryByRole('menuitem', { name: '経費精算(消耗品)' })).not.toBeInTheDocument()
-  })
-
-  it('keeps 経費精算 as its own menu group, separate from 申請', async () => {
-    renderLayout()
-
-    await userEvent.click(screen.getByRole('button', { name: '申請' }))
-    expect(screen.queryByRole('menuitem', { name: '経費精算一覧' })).not.toBeInTheDocument()
-    await userEvent.keyboard('{Escape}')
-
-    await userEvent.click(await screen.findByRole('button', { name: '経費精算' }))
-    expect(await screen.findByRole('menuitem', { name: '経費精算一覧' })).toHaveAttribute('href', '/expenses')
-    expect(screen.getByRole('menuitem', { name: '経費精算(新規作成)' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
+    expect(await screen.findByRole('menuitem', { name: 'その他申請' })).toHaveAttribute('href', '/requests')
+    expect(screen.getByRole('menuitem', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
     expect(screen.getByRole('menuitem', { name: '入力プリセット' })).toHaveAttribute('href', '/expenses/presets')
+    expect(screen.queryByRole('menuitem', { name: '新規申請' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '経費精算(新規作成)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '経費精算一覧' })).not.toBeInTheDocument()
   })
 
   it('links 月次勤怠 to the current month detail page', async () => {
     renderLayout()
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
 
     expect(await screen.findByRole('menuitem', { name: '月次勤怠' })).toHaveAttribute(
       'href',
@@ -138,31 +85,39 @@ describe('AppLayout', () => {
     )
   })
 
-  it('shows 承認 as a direct link to the unified approvals screen (single-item group)', async () => {
+  it('shows 承認 as a direct link to the unified approvals screen for a user without back-office roles', async () => {
     renderLayout()
 
     expect(await screen.findByRole('link', { name: '承認待ち' })).toHaveAttribute('href', '/approvals')
+    expect(screen.queryByRole('button', { name: '承認' })).not.toBeInTheDocument()
+  })
+
+  it('shows タスク一覧 under the 承認 group for a back-office-role user', async () => {
+    renderLayout(vi.fn(), { ...mockUser, roles: ['accounting_staff'] })
+
+    await userEvent.click(screen.getByRole('button', { name: '承認' }))
+    expect(await screen.findByRole('menuitem', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
   it('hides the 特別休暇 menu items when there is no active special leave type', async () => {
     renderLayout(vi.fn(), mockUser, [])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(await screen.findByRole('menuitem', { name: '有給' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
   })
 
-  it('shows the 特別休暇 menu item under 勤怠 once an active special leave type exists', async () => {
+  it('shows the 特別休暇 menu item once an active special leave type exists', async () => {
     renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
   })
 
   it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {
     renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false }])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠' }))
+    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
   })
 
@@ -179,14 +134,14 @@ describe('AppLayout', () => {
     renderLayout(vi.fn(), { ...mockUser, roles: ['employee'] })
 
     expect(screen.queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'タスク一覧' })).not.toBeInTheDocument()
   })
 
-  it('shows a single admin menu entry point for an admin user', () => {
+  it('shows 管理メニュー and 月次締め処理 under the 管理 group for an admin user', async () => {
     renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
 
-    expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '管理' }))
+    expect(await screen.findByRole('menuitem', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('menuitem', { name: '月次締め処理' })).toHaveAttribute('href', '/attendance/months/close')
   })
 
   it('opens a mobile menu drawer listing every group and its links', async () => {
@@ -196,7 +151,7 @@ describe('AppLayout', () => {
 
     expect(await screen.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '自分の申請' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'その他申請' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
@@ -206,7 +161,7 @@ describe('AppLayout', () => {
     renderLayout()
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
-    await userEvent.click(await screen.findByRole('link', { name: '自分の申請' }))
+    await userEvent.click(await screen.findByRole('link', { name: 'その他申請' }))
 
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })

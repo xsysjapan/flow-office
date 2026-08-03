@@ -38,22 +38,22 @@ final class WorkflowRequestNotificationContent
             self::ATTENDANCE_MONTH => new self(
                 title: '月次勤怠の承認依頼',
                 summary: self::yearMonth($workflowRequest).' の月次勤怠が提出されました。',
-                detailUrl: FrontendUrl::path('/attendance/months/to-approve'),
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             self::EXPENSE_CLAIM => new self(
                 title: '経費精算の承認依頼',
                 summary: '「'.self::claimTitle($workflowRequest).'」の経費精算が提出されました。',
-                detailUrl: FrontendUrl::path('/expenses/to-approve'),
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             self::PAID_LEAVE_REQUEST => new self(
                 title: '有給休暇申請の承認依頼',
                 summary: '有給休暇申請が提出されました。',
-                detailUrl: FrontendUrl::path('/paid-leave/to-approve'),
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             self::SPECIAL_LEAVE_REQUEST => new self(
                 title: '特別休暇申請の承認依頼',
                 summary: '特別休暇申請が提出されました。',
-                detailUrl: FrontendUrl::path('/special-leave/to-approve'),
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             default => new self(
                 title: '承認依頼',

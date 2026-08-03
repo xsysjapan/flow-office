@@ -114,12 +114,12 @@ const expenseDetail: WorkflowRequest = {
   },
 }
 
-function renderPage() {
+function renderPage(initialEntries?: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue([])
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <ApprovalsPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -393,6 +393,20 @@ describe('ApprovalsPage', () => {
     await user.selectOptions(screen.getByLabelText('状態'), '承認済み')
 
     expect(screen.queryByText('1件を選択中')).not.toBeInTheDocument()
+  })
+
+  it('opens the detail panel automatically when the URL has a requestId query parameter', async () => {
+    const withData: Paginated<WorkflowRequest> = {
+      data: [attendanceRow],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequestsToApprove').mockResolvedValue(withData)
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(attendanceDetail)
+
+    renderPage([`/approvals?requestId=${attendanceRow.id}`])
+
+    expect(await screen.findByRole('button', { name: '承認する' })).toBeInTheDocument()
   })
 
   it('clears selection when the year-month filter changes', async () => {

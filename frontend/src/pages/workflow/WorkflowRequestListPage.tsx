@@ -61,7 +61,7 @@ export function WorkflowRequestListPage() {
 
   return (
     <Card
-      title="自分の申請"
+      title="その他申請"
       actions={
         selectedIds.size > 0 ? (
           <div className="flex items-center gap-2">
@@ -78,7 +78,11 @@ export function WorkflowRequestListPage() {
               まとめて取り消す
             </Button>
           </div>
-        ) : undefined
+        ) : (
+          <Button asChild>
+            <Link to="/requests/new">新規作成</Link>
+          </Button>
+        )
       }
     >
       {bulkError && <ErrorMessage error={bulkError} />}
