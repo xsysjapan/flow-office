@@ -413,6 +413,18 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 カードのエラー処理、オフライン対応等)は`docs/23-usecases-devices.md`・
 `docs/24-usecases-authentication-keys.md`を参照。
 
+## 日次勤怠の区分 (day_classification)
+
+`attendance_days.day_classification`は、その勤務日が`working_day`(労働日)/
+`prescribed_holiday`(所定休日)/`legal_holiday`(法定休日)のいずれかを表す派生列である。
+`AttendanceCalculator`が日次計算時に`LegalHolidayResolver`による法定休日判定・
+`employee_shift_assignments.is_company_holiday`から算出し、`attendance_day.calculated`
+イベントのpayloadに含めて`AttendanceDailyCalculationProjector`が保存し直す(他の集計値と同様、
+実績が再編集され日次計算が再実行されるたびに最新化される派生データであり、手で書き換えない)。
+`employee_shift_assignments.day_type`(weekday/legal_holiday/company_holiday/
+special_working_day)とは別に、attendance_days向けに3値へ簡略化したものであり、値そのものは
+時間計算(所定労働・残業・深夜・休日労働等)には影響しない表示・参照用の分類情報である。
+
 ## 週40時間判定(日8時間判定との二重計上排除、参考情報)
 
 1日8時間超の法定時間外(`attendance_daily_calculations.statutory_excess_overtime_minutes`)とは別に、
@@ -426,7 +438,10 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
 - 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、日8時間・週40時間
   いずれの判定からも除外しない(`AttendanceCalculator`は法定休日のみを日次判定から除外し、
-  法定外休日は通常の労働日と同様に扱う)。
+  法定外休日は通常の労働日と同様に扱う)。ただし所定休日にはそもそも「所定」の時間が存在
+  しないため、`statutory_within_overtime_minutes`(法定内残業)には計上しない。所定休日の
+  実働は全て`prescribed_holiday_work_minutes`に計上し、そのうち1日8時間を超えた分のみを
+  別途`statutory_excess_overtime_minutes`(法定外残業)として計上する(二重計上しない)。
 - 月次確認画面(`AttendanceMonthResource`)には `weekly_overtime_reference` として、対象月に
    含まれる各週の労働時間・日次残業・週次残業を都度計算して表示する。あくまで参考情報であり、
   給与計算上の確定値としては扱わない。

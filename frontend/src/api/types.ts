@@ -455,6 +455,9 @@ export interface AttendanceDay {
   utc_offset_minutes?: number | null
   work_type: string | null
   work_location_type?: WorkLocationType | null
+  /** その勤務日の区分(労働日/所定休日/法定休日)。AttendanceCalculatorが日次計算のたびに
+   *  判定・保存する派生値。未計算(旧データ)の日はnull。 */
+  day_classification?: 'working_day' | 'prescribed_holiday' | 'legal_holiday' | null
   note: string | null
   is_locked: boolean
   breaks: AttendanceBreak[]

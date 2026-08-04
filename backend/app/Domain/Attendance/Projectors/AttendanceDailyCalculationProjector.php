@@ -25,11 +25,21 @@ class AttendanceDailyCalculationProjector extends Projector
         // UC-A015で日次勤怠(attendance_days)自体が削除されている場合、そのIDを参照する
         // 過去のイベントは再生成時にスキップする(親行が無い状態でupdateOrCreateすると
         // 外部キー制約違反になるため)。
-        if (! AttendanceDay::query()->whereKey($attendanceDayId)->exists()) {
+        $attendanceDay = AttendanceDay::query()->find($attendanceDayId);
+        if ($attendanceDay === null) {
             return;
         }
 
         $payload = $event->calculation;
+
+        // day_classification(working_day/prescribed_holiday/legal_holiday)は
+        // attendance_daily_calculationsではなくattendance_days側の派生列だが、
+        // AttendanceCalculatorが計算と同時に判定するためこのイベントのpayloadに含まれる。
+        // 古いイベント(この項目が追加される前)の再生時はキーが無いため既存値を維持する。
+        if (array_key_exists('day_classification', $payload)) {
+            $attendanceDay->day_classification = $payload['day_classification'];
+            $attendanceDay->save();
+        }
 
         AttendanceDailyCalculation::query()->updateOrCreate(
             ['attendance_day_id' => $attendanceDayId],
