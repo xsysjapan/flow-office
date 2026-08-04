@@ -8,6 +8,7 @@ use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
 use App\Domain\Attendance\Commands\BackfillAttendanceMonthLockShare;
+use App\Domain\Attendance\Commands\CancelSubmittedAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
@@ -48,6 +49,7 @@ use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
 use App\Domain\Attendance\Handlers\BackfillAttendanceMonthLockShareHandler;
+use App\Domain\Attendance\Handlers\CancelSubmittedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
@@ -326,6 +328,7 @@ return [
         SubmitAttendanceMonth::class => SubmitAttendanceMonthHandler::class,
         ApproveAttendanceMonth::class => ApproveAttendanceMonthHandler::class,
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,
+        CancelSubmittedAttendanceMonth::class => CancelSubmittedAttendanceMonthHandler::class,
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,

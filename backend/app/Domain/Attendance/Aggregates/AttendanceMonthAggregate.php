@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -97,6 +98,28 @@ class AttendanceMonthAggregate extends AggregateRoot
             periodStartDate: $periodStartDate,
             periodEndDate: $periodEndDate,
             unlockedByUserId: $returnedByUserId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 申請者自身が、提出済み・差戻し済みの月次勤怠申請(workflow_request)を取り消した際に、
+     * 未提出へ戻す(承認者による差戻しと異なり、差戻し理由は残らない)。
+     */
+    public function cancelSubmission(
+        string $userId,
+        string $cancelledByUserId,
+        string $periodStartDate,
+        string $periodEndDate,
+    ): self {
+        $this->recordThat(new AttendanceMonthSubmissionCancelled(cancelledByUserId: $cancelledByUserId));
+
+        $this->recordThat(new AttendanceMonthUnlocked(
+            userId: $userId,
+            periodStartDate: $periodStartDate,
+            periodEndDate: $periodEndDate,
+            unlockedByUserId: $cancelledByUserId,
         ));
 
         return $this;

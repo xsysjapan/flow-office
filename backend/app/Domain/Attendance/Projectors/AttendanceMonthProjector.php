@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
 use App\Models\AttendanceLock;
@@ -51,6 +52,19 @@ class AttendanceMonthProjector extends Projector
             'status' => AttendanceMonthStatus::RETURNED,
             'returned_at' => $event->createdAt(),
             'return_comment' => $event->comment,
+        ]);
+    }
+
+    /**
+     * UC-A010関連: 申請者自身が申請を取り消したら未提出へ戻す。差戻しと異なり、承認者からの
+     * 差戻し理由ではないためreturn_commentは残さない。
+     */
+    public function onAttendanceMonthSubmissionCancelled(AttendanceMonthSubmissionCancelled $event): void
+    {
+        AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => AttendanceMonthStatus::NOT_SUBMITTED,
+            'submitted_at' => null,
+            'return_comment' => null,
         ]);
     }
 

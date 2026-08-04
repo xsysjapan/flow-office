@@ -74,8 +74,8 @@ class AttendanceFlowTest extends TestCase
     }
 
     /**
-    * 所定労働時間(6時間)より長く法定8時間以内で働いた場合、深夜時間帯が「法定内残業」の
-    * 時間帯に完全に含まれるケース。所定労働・法定外残業の深夜はいずれも発生しない。
+     * 所定労働時間(6時間)より長く法定8時間以内で働いた場合、深夜時間帯が「法定内残業」の
+     * 時間帯に完全に含まれるケース。所定労働・法定外残業の深夜はいずれも発生しない。
      */
     public function test_late_night_overlapping_non_statutory_overtime_is_recorded_separately(): void
     {
@@ -315,6 +315,43 @@ class AttendanceFlowTest extends TestCase
 
         $resubmittedResponse = $this->actingAs($employee)->getJson("/api/attendance/months/{$yearMonth}");
         $this->assertNull($resubmittedResponse->json('month.return_comment'));
+    }
+
+    /**
+     * UC-A010関連: 申請者自身が承認者を自分自身に指定して提出した場合、提出済み・差戻し済みの
+     * 申請(workflow_request)を「取り消す」ことができる。取り消すと対象の月次勤怠も未提出へ戻り、
+     * 再提出できる(取り消し後もattendance_monthsが提出済み/差戻し済みのまま取り残されない)。
+     */
+    public function test_cancelling_a_submitted_request_returns_the_month_to_not_submitted(): void
+    {
+        $employee = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $yearMonth = $today->format('Y-m');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $employee->id,
+        ])->assertSuccessful()->assertJsonPath('status', 'submitted');
+        $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
+
+        $workflowRequestId = WorkflowRequest::query()
+            ->where('subject_type', 'attendance_month')
+            ->where('subject_id', $monthId)
+            ->value('id');
+
+        $this->actingAs($employee)->postJson("/api/workflow-requests/{$workflowRequestId}/cancel", [
+            'reason' => '内容を見直したいので取り消します',
+        ])->assertOk()->assertJsonPath('status', 'cancelled');
+
+        $monthResponse = $this->actingAs($employee)->getJson("/api/attendance/months/{$yearMonth}");
+        $monthResponse->assertSuccessful();
+        $this->assertSame('not_submitted', $monthResponse->json('month.status'));
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $employee->id,
+        ])->assertSuccessful()->assertJsonPath('status', 'submitted');
     }
 
     /**
