@@ -10,6 +10,7 @@ import type {
   PaidLeaveType,
   PunchStatus,
   PunchType,
+  ShiftSwapRequestStatus,
   StoredEvent,
   WorkflowRequestStatus,
   WorkLocationType,
@@ -44,6 +45,13 @@ const attendanceDayStatusMeta: Record<AttendanceDayStatus, StatusMeta> = {
 }
 
 const paidLeaveRequestStatusMeta: Record<PaidLeaveRequestStatus, StatusMeta> = {
+  submitted: { label: '申請中', tone: 'info' },
+  approved: { label: '承認済み', tone: 'success' },
+  returned: { label: '差戻し', tone: 'warning' },
+  cancelled: { label: '取消', tone: 'danger' },
+}
+
+const shiftSwapRequestStatusMeta: Record<ShiftSwapRequestStatus, StatusMeta> = {
   submitted: { label: '申請中', tone: 'info' },
   approved: { label: '承認済み', tone: 'success' },
   returned: { label: '差戻し', tone: 'warning' },
@@ -156,6 +164,10 @@ export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusM
 
 export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): StatusMeta {
   return paidLeaveRequestStatusMeta[status]
+}
+
+export function shiftSwapRequestStatusLabel(status: ShiftSwapRequestStatus): StatusMeta {
+  return shiftSwapRequestStatusMeta[status]
 }
 
 export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {

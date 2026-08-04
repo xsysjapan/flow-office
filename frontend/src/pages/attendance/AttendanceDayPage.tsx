@@ -6,9 +6,11 @@ import { AttendanceCalculationSummary } from '../../components/AttendanceCalcula
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { Duration } from '../../components/Duration/Duration'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { DateTimePicker } from '../../components/DateTimePicker/DateTimePicker'
+import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import {
   Dialog,
@@ -20,8 +22,10 @@ import {
 } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
+import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType, WorkLocationType } from '../../api/types'
 import type { AttendanceDayPunchLogAction } from '../../api/attendance'
+import { useAppSettings } from '../../contexts/useAppSettings'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
@@ -36,6 +40,7 @@ import {
   useUpdateAttendanceDay,
   useWeek,
 } from '../../hooks/useAttendance'
+import { useCreateShiftSwapRequest } from '../../hooks/useShiftSwap'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
@@ -864,6 +869,109 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
 }
 
 /**
+ * 休日(法定休日/所定休日)の日に、別の日へ振替える申請を行うダイアログ。
+ * 振替先日はカレンダー上での入力を制限せず(サーバー側のバリデーションに委ねる)、
+ * 承認要否(`shift_swap_requires_approval`)に応じて承認者欄の必須表示・説明文言を切り替える。
+ */
+function ShiftSwapRequestDialog({ targetDate }: { targetDate: string }) {
+  const { systemSettings } = useAppSettings()
+  const approvalRequired = systemSettings.shift_swap_requires_approval
+
+  const [isOpen, setIsOpen] = useState(false)
+  const [substituteDate, setSubstituteDate] = useState<string | undefined>(undefined)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+  const [reason, setReason] = useState('')
+  const [completed, setCompleted] = useState(false)
+  const createRequest = useCreateShiftSwapRequest()
+
+  const canSubmit = Boolean(substituteDate) && (!approvalRequired || Boolean(approverUserId))
+
+  const handleSubmit = () => {
+    if (!substituteDate) return
+    if (approvalRequired && !approverUserId) return
+
+    createRequest.mutate(
+      {
+        target_date: targetDate,
+        substitute_date: substituteDate,
+        approver_user_id: approverUserId || undefined,
+        reason: reason || undefined,
+      },
+      {
+        onSuccess: () => {
+          setIsOpen(false)
+          setCompleted(true)
+        },
+      },
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          setIsOpen(open)
+          if (open) {
+            setSubstituteDate(undefined)
+            setApproverUserId(undefined)
+            setReason('')
+            setCompleted(false)
+            createRequest.reset()
+          }
+        }}
+      >
+        <Button variant="secondary" onClick={() => setIsOpen(true)}>
+          振替休日を申請する
+        </Button>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>振替休日を申請する</DialogTitle>
+            <DialogDescription>
+              {targetDate} に出勤する代わりに、別の日を振替休日にします。
+              {approvalRequired ? '承認後にシフトが入れ替わります。' : '送信するとすぐにシフトが入れ替わります。'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {createRequest.error && <ErrorMessage error={createRequest.error} />}
+
+          <FormField label="振替先日(休みになる日)" htmlFor="shift-swap-substitute-date" required>
+            <DatePicker id="shift-swap-substitute-date" value={substituteDate} onChange={setSubstituteDate} />
+          </FormField>
+
+          <FormField
+            label={approvalRequired ? '承認者' : '承認者(任意)'}
+            htmlFor="shift-swap-approver"
+            required={approvalRequired}
+          >
+            <UserPicker id="shift-swap-approver" value={approverUserId} onChange={setApproverUserId} />
+            {!approvalRequired && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                現在の設定では振替休日申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
+              </p>
+            )}
+          </FormField>
+
+          <FormField label="理由(任意)" htmlFor="shift-swap-reason">
+            <Input id="shift-swap-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </FormField>
+
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setIsOpen(false)}>
+              キャンセル
+            </Button>
+            <Button isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
+              申請する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {completed && <p className="text-sm text-success">振替休日を申請しました。</p>}
+    </div>
+  )
+}
+
+/**
  * 日次勤怠画面。週次・月次画面から対象の日を選んで遷移する(オブジェクト指向UI)。
  * 実績の作成(UC-A016)・編集(UC-A005)・削除(UC-A015)と、当日の打刻履歴(UC-A012〜A014)を
  * 1画面にまとめ、任意の勤務日の実績を直接入力できるようにする。
@@ -886,6 +994,7 @@ export function AttendanceDayPage() {
   const locked = monthLocked || day?.is_locked === true
   const statusMeta = day ? attendanceDayDisplayLabel(day) : null
   const today = formatDate(new Date())
+  const isHoliday = day?.day_classification === 'prescribed_holiday' || day?.day_classification === 'legal_holiday'
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
     ? 1
     : 0
@@ -931,6 +1040,8 @@ export function AttendanceDayPage() {
         }
       >
         <p className="mb-3 text-sm text-muted-foreground">{date}({weekdayLabel(date)})</p>
+
+        {isHoliday && <ShiftSwapRequestDialog targetDate={date} />}
 
         {day && !isEditing && (
           <div className="flex flex-col gap-4 border-t border-border pt-4">

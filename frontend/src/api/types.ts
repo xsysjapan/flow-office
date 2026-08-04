@@ -94,6 +94,8 @@ export interface SystemSettings {
   /** UC-P003/UC-S003: 有給・特別休暇の申請に承認者による承認を必須にするか。 */
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  /** UC-A0xx: 振替休日申請に承認者による承認を必須にするか。falseの場合、申請すると同時に承認済みになる。 */
+  shift_swap_requires_approval: boolean
   /** 月次勤怠の提出・経費精算の申請に承認者による承認を必須にするか。 */
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
@@ -114,6 +116,7 @@ export interface UpdateSystemSettingsInput
 export interface PublicSystemSettings {
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  shift_swap_requires_approval: boolean
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
   default_timezone: string
@@ -166,6 +169,7 @@ export type WorkflowRequestSubjectType =
   | 'expense_claim'
   | 'paid_leave_request'
   | 'special_leave_request'
+  | 'shift_swap_request'
   | null
 
 /** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
@@ -199,11 +203,18 @@ export interface SpecialLeaveRequestSubjectSummary {
   reason: string | null
 }
 
+export interface ShiftSwapRequestSubjectSummary {
+  target_date: string | null
+  substitute_date: string | null
+  reason: string | null
+}
+
 export type WorkflowRequestSubjectSummary =
   | AttendanceMonthSubjectSummary
   | ExpenseClaimSubjectSummary
   | PaidLeaveRequestSubjectSummary
   | SpecialLeaveRequestSubjectSummary
+  | ShiftSwapRequestSubjectSummary
 
 /** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
 export interface WorkflowRequestAttendanceMonthSubject {
@@ -286,11 +297,27 @@ export interface WorkflowRequestSpecialLeaveRequestSubject {
   cancelled_at: string | null
 }
 
+export interface WorkflowRequestShiftSwapRequestSubject {
+  type: 'shift_swap_request'
+  id: string
+  user_id: string
+  status: ShiftSwapRequestStatus
+  target_date: string
+  substitute_date: string
+  reason: string | null
+  return_comment: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
 export type WorkflowRequestSubject =
   | WorkflowRequestAttendanceMonthSubject
   | WorkflowRequestExpenseClaimSubject
   | WorkflowRequestPaidLeaveRequestSubject
   | WorkflowRequestSpecialLeaveRequestSubject
+  | WorkflowRequestShiftSwapRequestSubject
 
 export interface WorkflowRequest {
   id: string
@@ -698,6 +725,28 @@ export interface SpecialLeaveRequest {
   approved_at: string | null
   returned_at: string | null
   cancelled_at: string | null
+}
+
+export type ShiftSwapRequestStatus = 'submitted' | 'approved' | 'returned' | 'cancelled'
+
+/** 振替休日申請。休日(法定休日/所定休日)の勤務日を、別の日(振替先日)の休みと入れ替える申請。 */
+export interface ShiftSwapRequest {
+  id: string
+  user_id: string
+  user?: User
+  approver?: User
+  status: ShiftSwapRequestStatus
+  /** 振替対象の休日(この日に出勤する)。 */
+  target_date: string
+  /** 振替先の休日(代わりに休む日)。 */
+  substitute_date: string
+  reason: string | null
+  return_comment: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+  created_at?: string | null
 }
 
 export interface WorkCalendarDay {

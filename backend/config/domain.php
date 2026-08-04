@@ -168,6 +168,14 @@ use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
+use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
+use App\Domain\ShiftSwap\Commands\CancelShiftSwapRequest;
+use App\Domain\ShiftSwap\Commands\RequestShiftSwap;
+use App\Domain\ShiftSwap\Commands\ReturnShiftSwapRequest;
+use App\Domain\ShiftSwap\Handlers\ApproveShiftSwapRequestHandler;
+use App\Domain\ShiftSwap\Handlers\CancelShiftSwapRequestHandler;
+use App\Domain\ShiftSwap\Handlers\RequestShiftSwapHandler;
+use App\Domain\ShiftSwap\Handlers\ReturnShiftSwapRequestHandler;
 use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
@@ -345,6 +353,11 @@ return [
         ApproveSpecialLeaveRequest::class => ApproveSpecialLeaveRequestHandler::class,
         ReturnSpecialLeaveRequest::class => ReturnSpecialLeaveRequestHandler::class,
         CancelSpecialLeaveRequest::class => CancelSpecialLeaveRequestHandler::class,
+
+        RequestShiftSwap::class => RequestShiftSwapHandler::class,
+        ApproveShiftSwapRequest::class => ApproveShiftSwapRequestHandler::class,
+        ReturnShiftSwapRequest::class => ReturnShiftSwapRequestHandler::class,
+        CancelShiftSwapRequest::class => CancelShiftSwapRequestHandler::class,
     ],
 
     /*

@@ -40,6 +40,7 @@ class PublicSystemSettingController extends Controller
             'special_leave_requires_approval' => $settings->special_leave_requires_approval,
             'attendance_requires_approval' => $settings->attendance_requires_approval,
             'expense_claim_requires_approval' => $settings->expense_claim_requires_approval,
+            'shift_swap_requires_approval' => $settings->shift_swap_requires_approval,
         ]);
     }
 }

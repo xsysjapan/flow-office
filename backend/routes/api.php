@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
+use App\Http\Controllers\Api\ShiftSwapRequestController;
 use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
@@ -289,6 +290,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
     });
+
+    // --- 振替休日申請(固定勤務の休日を別日の労働日と入れ替える。ビジネスロジックは
+    //     App\Domain\ShiftSwapとして独立させる) ---
+    Route::get('/shift-swap/requests/mine', [ShiftSwapRequestController::class, 'myRequests']);
+    Route::get('/shift-swap/requests/to-approve', [ShiftSwapRequestController::class, 'requestsToApprove']);
+    Route::post('/shift-swap/requests', [ShiftSwapRequestController::class, 'storeRequest']);
+    Route::get('/shift-swap/requests/{shiftSwapRequest}', [ShiftSwapRequestController::class, 'show']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/approve', [ShiftSwapRequestController::class, 'approveRequest']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/return', [ShiftSwapRequestController::class, 'returnRequest']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/cancel', [ShiftSwapRequestController::class, 'cancelRequest']);
 
     // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
     Route::get('/users/me/devices', [DeviceController::class, 'indexMine']);

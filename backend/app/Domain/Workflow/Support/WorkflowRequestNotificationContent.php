@@ -26,6 +26,8 @@ final class WorkflowRequestNotificationContent
 
     public const SPECIAL_LEAVE_REQUEST = 'special_leave_request';
 
+    public const SHIFT_SWAP_REQUEST = 'shift_swap_request';
+
     private function __construct(
         public readonly string $title,
         public readonly string $summary,
@@ -53,6 +55,11 @@ final class WorkflowRequestNotificationContent
             self::SPECIAL_LEAVE_REQUEST => new self(
                 title: '特別休暇申請の承認依頼',
                 summary: '特別休暇申請が提出されました。',
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
+            ),
+            self::SHIFT_SWAP_REQUEST => new self(
+                title: '振替休日申請の承認依頼',
+                summary: '振替休日申請が提出されました。',
                 detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             default => new self(
@@ -86,6 +93,11 @@ final class WorkflowRequestNotificationContent
                 summary: '特別休暇申請が承認されました。',
                 detailUrl: FrontendUrl::path('/special-leave/requests'),
             ),
+            self::SHIFT_SWAP_REQUEST => new self(
+                title: '振替休日申請が承認されました',
+                summary: '振替休日申請が承認されました。',
+                detailUrl: FrontendUrl::path('/shift-swap/requests'),
+            ),
             default => new self(
                 title: '承認完了',
                 summary: "「{$workflowRequest->title}」が承認されました。",
@@ -116,6 +128,11 @@ final class WorkflowRequestNotificationContent
                 title: '特別休暇申請が差戻されました',
                 summary: "特別休暇申請が差し戻されました: {$comment}",
                 detailUrl: FrontendUrl::path('/special-leave/requests'),
+            ),
+            self::SHIFT_SWAP_REQUEST => new self(
+                title: '振替休日申請が差戻されました',
+                summary: "振替休日申請が差し戻されました: {$comment}",
+                detailUrl: FrontendUrl::path('/shift-swap/requests'),
             ),
             default => new self(
                 title: '差戻し',

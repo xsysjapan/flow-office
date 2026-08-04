@@ -35,6 +35,7 @@ class SystemSettingResource extends JsonResource
             'special_leave_requires_approval' => $this->special_leave_requires_approval,
             'attendance_requires_approval' => $this->attendance_requires_approval,
             'expense_claim_requires_approval' => $this->expense_claim_requires_approval,
+            'shift_swap_requires_approval' => $this->shift_swap_requires_approval,
         ];
     }
 }

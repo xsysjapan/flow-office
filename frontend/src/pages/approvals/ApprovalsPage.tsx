@@ -34,6 +34,7 @@ const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, str
   expense_claim: '経費',
   paid_leave_request: '有給',
   special_leave_request: '特別休暇',
+  shift_swap_request: '振替休日',
 }
 
 function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {
@@ -61,6 +62,9 @@ function subjectSubtitle(request: WorkflowRequest): string | null {
   }
   if (request.subject_type === 'paid_leave_request' && 'leave_type_label' in summary) {
     return [summary.target_date, summary.leave_type_label].filter(Boolean).join(' ') || null
+  }
+  if (request.subject_type === 'shift_swap_request' && 'substitute_date' in summary) {
+    return [summary.target_date, '→', summary.substitute_date].filter(Boolean).join(' ') || null
   }
   return null
 }

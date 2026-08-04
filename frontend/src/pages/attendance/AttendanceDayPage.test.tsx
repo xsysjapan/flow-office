@@ -4,8 +4,19 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
-import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, AttendancePunch, User } from '../../api/types'
-import { pickDateTime } from '../../test-support/pickerInteractions'
+import * as shiftSwapApi from '../../api/shiftSwap'
+import * as usersApi from '../../api/users'
+import type {
+  AttendanceDay,
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  AttendancePunch,
+  Paginated,
+  ShiftSwapRequest,
+  User,
+} from '../../api/types'
+import { AppSettingsContext } from '../../contexts/AppSettingsContext'
+import { pickDate, pickDateTime } from '../../test-support/pickerInteractions'
 import { AttendanceDayPage } from './AttendanceDayPage'
 import { formatDate } from '../../utils/weekDates'
 
@@ -89,17 +100,35 @@ const recordedDay: AttendanceDay = {
   },
 }
 
-function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date) {
+function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/attendance/days/${routeDate}`]}>
-        <Routes>
-          <Route path="/attendance/days/:date" element={<AttendanceDayPage />} />
-        </Routes>
-      </MemoryRouter>
+      <AppSettingsContext.Provider
+        value={{
+          systemSettings: {
+            paid_leave_requires_approval: true,
+            special_leave_requires_approval: true,
+            shift_swap_requires_approval: shiftSwapRequiresApproval,
+            attendance_requires_approval: true,
+            expense_claim_requires_approval: true,
+            default_timezone: 'Asia/Tokyo',
+            default_work_style_id: null,
+            default_work_style: null,
+            attendance_submission_deadline_day: 5,
+            attendance_month_close_deadline_day: 10,
+          },
+          isLoading: false,
+        }}
+      >
+        <MemoryRouter initialEntries={[`/attendance/days/${routeDate}`]}>
+          <Routes>
+            <Route path="/attendance/days/:date" element={<AttendanceDayPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -575,5 +604,96 @@ describe('AttendanceDayPage', () => {
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
+  })
+
+  describe('振替休日申請', () => {
+    const holidayDay: AttendanceDay = { ...recordedDay, day_classification: 'legal_holiday' }
+    const approver: User = {
+      id: 'approver-1',
+      name: '承認者花子',
+      email: 'hanako@example.com',
+      department: null,
+      job_title: null,
+      employment_status: 'active',
+      last_login_at: null,
+    }
+    const approverSearchResult: Paginated<User> = {
+      data: [approver],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+    const createdRequest: ShiftSwapRequest = {
+      id: 'shift-swap-1',
+      user_id: 'user-1',
+      status: 'submitted',
+      target_date: date,
+      substitute_date: '2026-07-13',
+      reason: null,
+      return_comment: null,
+      submitted_at: '2026-07-06T00:00:00+09:00',
+      approved_at: null,
+      returned_at: null,
+      cancelled_at: null,
+    }
+
+    it('does not show the button on a working day', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+      expect(screen.queryByRole('button', { name: '振替休日を申請する' })).not.toBeInTheDocument()
+    })
+
+    it('shows the button on a legal-holiday day', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      renderPage([holidayDay])
+
+      expect(await screen.findByRole('button', { name: '振替休日を申請する' })).toBeInTheDocument()
+    })
+
+    it('submits a shift swap request with a substitute date and approver', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
+      vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
+      renderPage([holidayDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '振替休日を申請する' }))
+      await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
+      await userEvent.click(screen.getByLabelText('承認者'))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+      await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+      await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+      await waitFor(() =>
+        expect(shiftSwapApi.createShiftSwapRequest).toHaveBeenCalledWith({
+          target_date: date,
+          substitute_date: '2026-07-13',
+          approver_user_id: approver.id,
+          reason: undefined,
+        }),
+      )
+      expect(await screen.findByText('振替休日を申請しました。')).toBeInTheDocument()
+    })
+
+    it('allows submitting without an approver when approval is not required', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
+      renderPage([holidayDay], date, false)
+
+      await userEvent.click(await screen.findByRole('button', { name: '振替休日を申請する' }))
+      expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+
+      await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
+      await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+      await waitFor(() =>
+        expect(shiftSwapApi.createShiftSwapRequest).toHaveBeenCalledWith({
+          target_date: date,
+          substitute_date: '2026-07-13',
+          approver_user_id: undefined,
+          reason: undefined,
+        }),
+      )
+    })
   })
 })

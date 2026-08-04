@@ -4,6 +4,7 @@ import type {
   WorkflowRequestAttendanceMonthSubject,
   WorkflowRequestExpenseClaimSubject,
   WorkflowRequestPaidLeaveRequestSubject,
+  WorkflowRequestShiftSwapRequestSubject,
   WorkflowRequestSpecialLeaveRequestSubject,
 } from '../../api/types'
 import { DailyReferenceView, MonthlyReferenceView, WeeklyReferenceView } from '../../pages/attendance/AttendanceReferencePage'
@@ -13,6 +14,7 @@ import {
   expenseClaimStatusLabel,
   paidLeaveRequestStatusLabel,
   paymentBearerLabel,
+  shiftSwapRequestStatusLabel,
   workflowRequestStatusLabel,
 } from '../../utils/statusLabels'
 import { AttachmentPanel } from '../AttachmentPanel/AttachmentPanel'
@@ -40,6 +42,9 @@ function isActionable(request: WorkflowRequest): boolean {
   }
   if (request.subject_type === 'special_leave_request') {
     return request.subject?.type === 'special_leave_request' && request.subject.status === 'submitted'
+  }
+  if (request.subject_type === 'shift_swap_request') {
+    return request.subject?.type === 'shift_swap_request' && request.subject.status === 'submitted'
   }
   return request.status === 'submitted'
 }
@@ -269,6 +274,33 @@ function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestS
   )
 }
 
+function ShiftSwapRequestSubjectView({ subject }: { subject: WorkflowRequestShiftSwapRequestSubject }) {
+  const { label, tone } = shiftSwapRequestStatusLabel(subject.status)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+
+      {subject.return_comment && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+          差戻し理由: {subject.return_comment}
+        </div>
+      )}
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">対象日(出勤日)</dt>
+        <dd className="text-foreground">{subject.target_date}</dd>
+        <dt className="font-medium text-muted-foreground">振替先日(休みになる日)</dt>
+        <dd className="text-foreground">{subject.substitute_date}</dd>
+        <dt className="font-medium text-muted-foreground">理由</dt>
+        <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+      </dl>
+    </div>
+  )
+}
+
 export interface ApprovalDetailPanelProps {
   request: WorkflowRequest
   approveIsPending?: boolean
@@ -323,6 +355,10 @@ export function ApprovalDetailPanel({
 
       {request.subject_type === 'special_leave_request' && request.subject?.type === 'special_leave_request' && (
         <SpecialLeaveRequestSubjectView subject={request.subject} />
+      )}
+
+      {request.subject_type === 'shift_swap_request' && request.subject?.type === 'shift_swap_request' && (
+        <ShiftSwapRequestSubjectView subject={request.subject} />
       )}
 
       {!request.subject_type && <WorkflowRequestSubjectView request={request} />}

@@ -83,6 +83,11 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestCancelled;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequested;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestReturned;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
@@ -315,6 +320,12 @@ return [
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+
+        'shift_swap.requested' => ShiftSwapRequested::class,
+        'shift_swap.request_approved' => ShiftSwapRequestApproved::class,
+        'shift_swap.request_returned' => ShiftSwapRequestReturned::class,
+        'shift_swap.request_cancelled' => ShiftSwapRequestCancelled::class,
+        'shift_swap.request_shared' => ShiftSwapRequestShared::class,
 
         'user.onboarded_as_admin' => UserOnboardedAsAdmin::class,
         'user.created_from_sso_login' => UserCreatedFromSsoLogin::class,
