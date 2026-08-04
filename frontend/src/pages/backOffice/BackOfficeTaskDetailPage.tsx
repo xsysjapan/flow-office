@@ -17,12 +17,15 @@ import {
 } from '../../hooks/useBackOfficeTasks'
 import { useAttendanceMonthById, useCloseMonth } from '../../hooks/useAttendance'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
+import { MonthlyReferenceView } from '../attendance/AttendanceReferencePage'
 
 /**
  * 月次勤怠承認(attendance.month_approved)から自動生成されたバックオフィスタスク専用の
  * 締め処理セクション。汎用ステータス変更フォームとは独立させ、締め済みなら編集不可であることを
  * 明示する(絶対に外してはいけない設計原則3: 月次側は日次実績の集計・確定結果であり、
- * ここでは締めるかどうかだけを操作対象にする)。
+ * ここでは締めるかどうかだけを操作対象にする)。締めは不可逆操作のため、締める前に
+ * 対象社員の実績・法定休日警告を確認できるようにする(旧AttendanceMonthCloseoutPageに
+ * あった確認導線を統合)。
  */
 function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceMonthId: string }) {
   const { data: month, isLoading, error, refetch } = useAttendanceMonthById(attendanceMonthId)
@@ -42,12 +45,17 @@ function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceM
         month.status === 'closed' ? (
           <p className="text-sm text-muted-foreground">締め処理後は修正することはできません。</p>
         ) : (
-          <Button
-            isLoading={closeMonth.isPending}
-            onClick={() => closeMonth.mutate(attendanceMonthId, { onSuccess: () => void refetch() })}
-          >
-            締める
-          </Button>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 rounded-md border border-border p-3">
+              <MonthlyReferenceView userId={month.user_id} restrictToYearMonth={month.year_month} />
+            </div>
+            <Button
+              isLoading={closeMonth.isPending}
+              onClick={() => closeMonth.mutate(attendanceMonthId, { onSuccess: () => void refetch() })}
+            >
+              締める
+            </Button>
+          </div>
         )
       ) : null}
     </div>
@@ -129,7 +137,7 @@ export function BackOfficeTaskDetailPage() {
         </div>
       )}
 
-      {task.task_type === 'attendance_month_confirmation' && (
+      {task.task_type === 'attendance_month_confirmation' && task.source_type === 'attendance_month' && (
         <AttendanceMonthConfirmationSection attendanceMonthId={task.source_id} />
       )}
 

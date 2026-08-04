@@ -268,7 +268,7 @@ class AttendanceCalculator
             'late_night_statutory_within_overtime_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
             'late_night_statutory_excess_overtime_minutes' => $lateNightStatutoryExcessOvertimeMinutes,
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
-            'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
+            'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? min($workMinutes, $legalDailyLimitMinutes) : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
             'core_time_violation' => $coreTimeViolation,
             'absence_minutes' => $absenceMinutes,

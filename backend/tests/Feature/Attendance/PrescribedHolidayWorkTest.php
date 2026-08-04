@@ -87,8 +87,10 @@ class PrescribedHolidayWorkTest extends TestCase
     }
 
     /**
-     * 所定休日に8時間を超えて働いた場合、超過分のみ法定外残業に計上される。
-     * prescribed_holiday_work_minutesは実働全体(超過分含む)を計上する。
+     * 所定休日に8時間を超えて働いた場合、超過分のみ法定外残業に計上され、
+     * prescribed_holiday_work_minutesは8時間分に留める(超過分を法定外残業とprescribed_holiday
+     * の両方に二重計上しない。prescribed_holiday_work_minutes + statutory_excess_overtime_minutes
+     * = work_minutesとなることを確認する)。
      */
     public function test_prescribed_holiday_work_over_eight_hours_counts_excess_only_once(): void
     {
@@ -111,12 +113,16 @@ class PrescribedHolidayWorkTest extends TestCase
         $calculation = $response->json('calculation');
 
         $this->assertSame(540, $calculation['work_minutes']);
-        // prescribed_holiday_work_minutesは実働全体(540分)を計上する。
-        $this->assertSame(540, $calculation['prescribed_holiday_work_minutes']);
+        // prescribed_holiday_work_minutesは8時間(480分)分のみ計上し、超過分は含めない
+        // (超過分はstatutory_excess_overtime_minutes側で計上するため、両方に計上しない)。
+        $this->assertSame(480, $calculation['prescribed_holiday_work_minutes']);
         // 法定内残業には計上しない(所定休日に「所定」は存在しないため)。
         $this->assertSame(0, $calculation['statutory_within_overtime_minutes']);
         // 8時間(480分)を超えた60分のみ法定外残業として計上する(二重計上しない)。
         $this->assertSame(60, $calculation['statutory_excess_overtime_minutes']);
+        // prescribed_holiday_work_minutes + statutory_excess_overtime_minutes = work_minutes
+        // (二重計上も欠落もないことの確認)。
+        $this->assertSame($calculation['work_minutes'], $calculation['prescribed_holiday_work_minutes'] + $calculation['statutory_excess_overtime_minutes']);
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $dateString)->firstOrFail();
         $this->assertSame('prescribed_holiday', $day->day_classification);

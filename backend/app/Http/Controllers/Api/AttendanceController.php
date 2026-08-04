@@ -678,7 +678,9 @@ class AttendanceController extends Controller
     /**
      * idで単一の月次勤怠を取得する軽量エンドポイント。バックオフィスタスク(source_id =
      * attendance_months.id)からリンクする際に、対象の社員・対象年月・ステータスだけを
-     * 素早く参照するために使う。
+     * 素早く参照するために使う。本人・承認者・管理者に加え、締め処理(close、
+     * role:admin,hr_staff)を行う人事部担当者もバックオフィスタスクから参照する必要が
+     * あるため、hr_staffも許可する。
      */
     #[OA\Get(
         path: '/attendance-months/{attendanceMonth}',
@@ -686,10 +688,18 @@ class AttendanceController extends Controller
         summary: '月次勤怠を1件取得する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden')],
     )]
-    public function showMonth(AttendanceMonth $attendanceMonth): AttendanceMonthResource
+    public function showMonth(Request $request, AttendanceMonth $attendanceMonth): AttendanceMonthResource
     {
+        if ($attendanceMonth->user_id !== $request->user()->id
+            && ! $request->user()->hasRole(Role::ADMIN)
+            && ! $request->user()->hasRole(Role::HR_STAFF)
+            && ! app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth($request->user()->id, $attendanceMonth->user_id, [$attendanceMonth->year_month])
+        ) {
+            abort(403, '他の社員の月次勤怠を閲覧する権限がありません。');
+        }
+
         return new AttendanceMonthResource($attendanceMonth->load(['user', 'approver']));
     }
 

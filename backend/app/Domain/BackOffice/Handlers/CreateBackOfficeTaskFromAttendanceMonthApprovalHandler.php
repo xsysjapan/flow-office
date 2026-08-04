@@ -34,6 +34,17 @@ class CreateBackOfficeTaskFromAttendanceMonthApprovalHandler implements CommandH
 
         $month = AttendanceMonth::query()->with('user')->findOrFail($command->attendanceMonthId);
 
+        // 差戻し→再提出→再承認で同じ月が複数回承認されうるため、既に同じ月次勤怠に対する
+        // タスクが存在する場合は重複作成しない(経費精算版には無いガードだが、月次勤怠は
+        // 差戻し再承認の頻度が経費精算より高いため必要)。
+        $existingTask = BackOfficeTask::query()
+            ->where('source_type', 'attendance_month')
+            ->where('source_id', $month->id)
+            ->first();
+        if ($existingTask !== null) {
+            return $existingTask;
+        }
+
         $title = "月次勤怠確認: {$month->user?->name} ({$month->year_month})";
 
         $backOfficeTaskId = (string) Str::uuid();

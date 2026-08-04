@@ -106,17 +106,6 @@ class ExportController extends Controller
         $data = $this->validateAttendanceExportRequest($request);
         $months = $this->resolveAttendanceMonths($data);
 
-        $eventStore->append(
-            aggregateType: 'export',
-            aggregateId: (string) Str::uuid(),
-            event: new ExportCreated(
-                exportType: $months->count() > 1 ? 'attendance_xlsx_zip' : 'attendance_xlsx',
-                params: $data,
-                requestedByUserId: $request->user()->id,
-                rowCount: $months->count(),
-            ),
-        );
-
         if ($months->count() <= 1) {
             $spreadsheet = $months->isEmpty()
                 ? $builder->buildEmpty($data['year_month'])
@@ -127,13 +116,37 @@ class ExportController extends Controller
             $writer->save('php://output');
             $contents = ob_get_clean();
 
+            $eventStore->append(
+                aggregateType: 'export',
+                aggregateId: (string) Str::uuid(),
+                event: new ExportCreated(
+                    exportType: 'attendance_xlsx',
+                    params: $data,
+                    requestedByUserId: $request->user()->id,
+                    rowCount: $months->count(),
+                ),
+            );
+
             return response($contents, 200, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'Content-Disposition' => 'attachment; filename="attendance_'.$data['year_month'].'.xlsx"',
             ]);
         }
 
-        return $this->buildAttendanceExcelZip($months, $data['year_month'], $builder);
+        $response = $this->buildAttendanceExcelZip($months, $data['year_month'], $builder);
+
+        $eventStore->append(
+            aggregateType: 'export',
+            aggregateId: (string) Str::uuid(),
+            event: new ExportCreated(
+                exportType: 'attendance_xlsx_zip',
+                params: $data,
+                requestedByUserId: $request->user()->id,
+                rowCount: $months->count(),
+            ),
+        );
+
+        return $response;
     }
 
     /**
@@ -151,15 +164,20 @@ class ExportController extends Controller
 
         try {
             $zip = new ZipArchive;
-            $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+            $openResult = $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+            if ($openResult !== true) {
+                throw new \RuntimeException("ZIPファイルの作成に失敗しました(エラーコード: {$openResult})。");
+            }
 
             foreach ($months as $month) {
                 $spreadsheet = $builder->buildForMonth($month, $yearMonth);
                 $xlsxPath = $tmpDir.'/'.$month->user_id.'_'.$yearMonth.'_'.Str::uuid().'.xlsx';
 
+                // save()が失敗した場合でも部分的に書き出されたファイルをfinallyで削除できるよう、
+                // save()の前にパスを登録しておく。
+                $xlsxPaths[] = $xlsxPath;
                 $writer = new Xlsx($spreadsheet);
                 $writer->save($xlsxPath);
-                $xlsxPaths[] = $xlsxPath;
 
                 $zip->addFile($xlsxPath, $month->user_id.'_'.$yearMonth.'.xlsx');
             }

@@ -308,7 +308,9 @@ export function ApprovalDetailPanel({
       </dl>
 
       {request.subject_type === 'attendance_month' && request.subject?.type === 'attendance_month' && (
-        <AttendanceMonthSubjectView subject={request.subject} />
+        // key={request.id}: 同一コンポーネントインスタンスのまま別の申請(別の対象月)に
+        // 差し替わった場合でも、内部のviewMode/週次weekStart等のstateを確実にリセットする。
+        <AttendanceMonthSubjectView key={request.id} subject={request.subject} />
       )}
 
       {request.subject_type === 'expense_claim' && request.subject?.type === 'expense_claim' && (

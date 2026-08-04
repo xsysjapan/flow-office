@@ -144,7 +144,8 @@ export function AttendanceExportPage() {
           Excelダウンロード
         </Button>
         <p className="text-xs text-muted-foreground">
-          対象社員を複数指定した場合はZIPが、単一指定または対象が1件のみの場合は.xlsxがダウンロードされます。
+          対象社員を指定した場合、または指定なしで対象月の承認済み社員が1名の場合は.xlsxが、
+          指定なしで対象が複数名の場合は全員分をまとめたZIPがダウンロードされます。
         </p>
       </div>
     </Card>
