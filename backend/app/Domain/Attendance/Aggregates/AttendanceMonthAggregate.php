@@ -46,9 +46,7 @@ class AttendanceMonthAggregate extends AggregateRoot
     }
 
     /**
-     * 対象月の日次勤怠一式を編集不可にする。通常はsubmit()内から呼ばれるが、
-     * BackfillAttendanceMonthLockShareHandlerが、このイベントが導入される前に提出済み
-     * だった月に対して事後的にロックを補完する用途でも直接呼び出す。
+     * 対象月の日次勤怠一式を編集不可にする。通常はsubmit()内から呼ばれる。
      */
     public function lock(string $userId, string $periodStartDate, string $periodEndDate, string $lockedByUserId): self
     {
@@ -63,8 +61,7 @@ class AttendanceMonthAggregate extends AggregateRoot
     }
 
     /**
-     * 対象月の日次勤怠一式を承認者へ開示する。通常はsubmit()内から呼ばれるが、
-     * BackfillAttendanceMonthLockShareHandlerが事後的な共有の補完にも直接呼び出す。
+     * 対象月の日次勤怠一式を承認者へ開示する。通常はsubmit()内から呼ばれる。
      */
     public function share(string $sharedWithUserId, string $sharedByUserId): self
     {
