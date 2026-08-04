@@ -873,7 +873,7 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
  * 振替先日はカレンダー上での入力を制限せず(サーバー側のバリデーションに委ねる)、
  * 承認要否(`shift_swap_requires_approval`)に応じて承認者欄の必須表示・説明文言を切り替える。
  */
-function ShiftSwapRequestDialog({ targetDate }: { targetDate: string }) {
+function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: string; targetIsHoliday: boolean }) {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.shift_swap_requires_approval
 
@@ -922,20 +922,26 @@ function ShiftSwapRequestDialog({ targetDate }: { targetDate: string }) {
         }}
       >
         <Button variant="secondary" onClick={() => setIsOpen(true)}>
-          振替休日を申請する
+          {targetIsHoliday ? '振替休日を申請する' : 'この日を振替休日にする'}
         </Button>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>振替休日を申請する</DialogTitle>
             <DialogDescription>
-              {targetDate} に出勤する代わりに、別の日を振替休日にします。
+              {targetIsHoliday
+                ? `${targetDate} に出勤する代わりに、別の日を休みにします。`
+                : `${targetDate} を休みにする代わりに、別の日に出勤します。`}
               {approvalRequired ? '承認後にシフトが入れ替わります。' : '送信するとすぐにシフトが入れ替わります。'}
             </DialogDescription>
           </DialogHeader>
 
           {createRequest.error && <ErrorMessage error={createRequest.error} />}
 
-          <FormField label="振替先日(休みになる日)" htmlFor="shift-swap-substitute-date" required>
+          <FormField
+            label={targetIsHoliday ? '振替先日(休みになる日)' : '振替先日(出勤する日)'}
+            htmlFor="shift-swap-substitute-date"
+            required
+          >
             <DatePicker id="shift-swap-substitute-date" value={substituteDate} onChange={setSubstituteDate} />
           </FormField>
 
@@ -1041,7 +1047,7 @@ export function AttendanceDayPage() {
       >
         <p className="mb-3 text-sm text-muted-foreground">{date}({weekdayLabel(date)})</p>
 
-        {isHoliday && <ShiftSwapRequestDialog targetDate={date} />}
+        <ShiftSwapRequestDialog targetDate={date} targetIsHoliday={isHoliday} />
 
         {day && !isEditing && (
           <div className="flex flex-col gap-4 border-t border-border pt-4">

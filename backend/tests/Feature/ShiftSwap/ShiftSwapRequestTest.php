@@ -100,7 +100,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->assertSame(0, ShiftSwapRequest::query()->count());
     }
 
-    public function test_a_working_day_cannot_be_the_target_of_a_shift_swap(): void
+    public function test_neither_date_being_a_holiday_is_rejected(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
@@ -115,6 +115,54 @@ class ShiftSwapRequestTest extends TestCase
         ]);
 
         $response->assertStatus(422);
+    }
+
+    public function test_both_dates_being_a_holiday_is_rejected(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $workStyle = $this->createWorkStyle();
+        $this->createWeekdays($employee, $workStyle);
+        $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
+        $this->createCompanyHolidayAssignment($employee, $workStyle, '2026-08-17');
+
+        $response = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+            'target_date' => '2026-08-16',
+            'substitute_date' => '2026-08-17',
+            'approver_user_id' => $approver->id,
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    /**
+     * target_dateを労働日、substitute_dateを休日にする(旧来と逆方向の)申請も許可される。
+     * 週の制約・週40時間判定は、休日である側(substitute_date)を基準に行われる。
+     */
+    public function test_a_working_day_can_be_set_as_the_target_with_a_holiday_as_the_substitute(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $workStyle = $this->createWorkStyle();
+        $this->createWeekdays($employee, $workStyle);
+        $this->createLegalHolidayAssignment($employee, $workStyle, '2026-08-16');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/shift-swap/requests', [
+            'target_date' => '2026-08-12',
+            'substitute_date' => '2026-08-16',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($approver)->postJson("/api/shift-swap/requests/{$requestId}/approve")
+            ->assertOk()->assertJsonPath('status', 'approved');
+
+        $target = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-12')->firstOrFail();
+        $this->assertFalse((bool) $target->is_working_day);
+        $this->assertTrue((bool) $target->is_legal_holiday);
+
+        $substitute = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
+        $this->assertTrue((bool) $substitute->is_working_day);
+        $this->assertFalse((bool) $substitute->is_legal_holiday);
     }
 
     public function test_a_legal_holiday_under_the_weekly_rule_cannot_be_swapped_to_a_different_week(): void

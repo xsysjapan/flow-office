@@ -636,12 +636,13 @@ describe('AttendanceDayPage', () => {
       cancelled_at: null,
     }
 
-    it('does not show the button on a working day', async () => {
+    it('shows the reversed-direction button on a working day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([recordedDay])
 
       await screen.findByText('日次勤怠')
       expect(screen.queryByRole('button', { name: '振替休日を申請する' })).not.toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'この日を振替休日にする' })).toBeInTheDocument()
     })
 
     it('shows the button on a legal-holiday day', async () => {

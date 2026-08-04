@@ -17,11 +17,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * 振替休日を申請する。対象日が固定勤務の休日であること・所定労働時間週40時間の制約・
- * 法定休日の振替は同一週内に限る制約(変形休日制を除く)を検証してから、
- * ShiftSwapRequestAggregate::request()を保存する。実際のシフト入れ替えはこの時点では
- * まだ行わず、承認時(ApproveShiftSwapRequestHandler)に実行する
- * (ルートCLAUDE.md「打刻と勤怠編集を区別する」と同様、申請と実行のタイミングを分離する)。
+ * 振替休日を申請する。対象日・振替先日のどちらを休日→労働日にし、どちらを労働日→休日に
+ * するかは問わない(対象日・振替先日のうち、現在休日である方を基準に検証する。休日→労働日
+ * (旧来の対象日側)・労働日→休日(旧来の振替先日側)のどちらの方向で申請しても同じ検証を行う)。
+ * 固定勤務であること・所定労働時間週40時間の制約・法定休日の振替は同一週内に限る制約
+ * (変形休日制を除く)を検証してから、ShiftSwapRequestAggregate::request()を保存する。
+ * 実際のシフト入れ替えはこの時点ではまだ行わず、承認時(ApproveShiftSwapRequestHandler)に
+ * 実行する(ルートCLAUDE.md「打刻と勤怠編集を区別する」と同様、申請と実行のタイミングを
+ * 分離する)。
  *
  * @implements CommandHandler<RequestShiftSwap>
  */
@@ -51,25 +54,40 @@ class RequestShiftSwapHandler implements CommandHandler
             ->whereDate('work_date', $command->targetDate)
             ->first();
 
-        $workStyle = $targetAssignment?->workStyle
-            ?? $this->workStyleFallbackResolver->resolveForUser($command->userId, $targetDate);
+        $substituteAssignment = EmployeeShiftAssignment::query()
+            ->with('workStyle.calendar')
+            ->where('user_id', $command->userId)
+            ->whereDate('work_date', $command->substituteDate)
+            ->first();
+
+        $targetIsHoliday = $this->isHoliday($targetAssignment);
+        $substituteIsHoliday = $this->isHoliday($substituteAssignment);
+
+        if ($targetIsHoliday && $substituteIsHoliday) {
+            throw new DomainRuleException('対象日・振替先のどちらか一方のみを休日にしてください。');
+        }
+        if (! $targetIsHoliday && ! $substituteIsHoliday) {
+            throw new DomainRuleException('対象日または振替先のいずれかが休日である必要があります。');
+        }
+
+        // 休日→労働日にする方を基準(holiday)、労働日→休日にする方を基準(workday)とする。
+        // 申請時のtarget_date/substitute_dateのどちらがどちらの方向でも扱えるようにする。
+        $holidayAssignment = $targetIsHoliday ? $targetAssignment : $substituteAssignment;
+        $holidayDate = $targetIsHoliday ? $targetDate : $substituteDate;
+        $workdayDate = $targetIsHoliday ? $substituteDate : $targetDate;
+
+        $workStyle = $holidayAssignment->workStyle
+            ?? $this->workStyleFallbackResolver->resolveForUser($command->userId, $holidayDate);
 
         if ($workStyle === null || $workStyle->work_time_system !== WorkStyle::WORK_TIME_SYSTEM_FIXED) {
             throw new DomainRuleException('固定勤務の社員のみ振替休日を申請できます。');
         }
 
-        if ($targetAssignment === null
-            || $targetAssignment->is_working_day
-            || ! ($targetAssignment->is_legal_holiday || $targetAssignment->is_company_holiday)
-        ) {
-            throw new DomainRuleException('対象日は休日ではないため振替できません。');
-        }
+        [$weekStart, $weekEnd] = $this->weekBoundariesFor($holidayDate, $workStyle);
 
-        [$weekStart, $weekEnd] = $this->weekBoundariesFor($targetDate, $workStyle);
-
-        if ($targetAssignment->is_legal_holiday
+        if ($holidayAssignment->is_legal_holiday
             && $workStyle->legal_holiday_rule !== WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS
-            && ($substituteDate->lt($weekStart) || $substituteDate->gt($weekEnd))
+            && ($workdayDate->lt($weekStart) || $workdayDate->gt($weekEnd))
         ) {
             throw new DomainRuleException('法定休日を振り替える場合、振替先は同一週内である必要があります。');
         }
@@ -79,12 +97,12 @@ class RequestShiftSwapHandler implements CommandHandler
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $weekStart->toDateString())
             ->whereDate('work_date', '<=', $weekEnd->toDateString())
-            ->whereDate('work_date', '!=', $targetDate->toDateString())
+            ->whereDate('work_date', '!=', $holidayDate->toDateString())
             ->get()
             ->sum(fn (EmployeeShiftAssignment $assignment) => $assignment->plannedWorkMinutes());
 
         if ($weeklyPlannedMinutes >= self::WEEKLY_STATUTORY_LIMIT_MINUTES) {
-            throw new DomainRuleException('対象日を含む週は既に所定労働時間が週40時間に達しているため振替できません。');
+            throw new DomainRuleException('休日を含む週は既に所定労働時間が週40時間に達しているため振替できません。');
         }
 
         $this->assertSwappable($command->userId, $command->targetDate);
@@ -131,6 +149,17 @@ class RequestShiftSwapHandler implements CommandHandler
         }
 
         $this->guard->assertMutable($day, $userId, $date);
+    }
+
+    /**
+     * 勤務予定行が存在し、労働日ではなく、法定休日または所定休日であるか。行が存在しない日は
+     * (シフト行が未展開なだけの通常の労働日として扱い)休日とはみなさない。
+     */
+    private function isHoliday(?EmployeeShiftAssignment $assignment): bool
+    {
+        return $assignment !== null
+            && ! $assignment->is_working_day
+            && ($assignment->is_legal_holiday || $assignment->is_company_holiday);
     }
 
     /**
