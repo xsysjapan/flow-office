@@ -30,9 +30,10 @@ function SpecialLeaveTypesCard() {
   const updateType = useUpdateSpecialLeaveType()
 
   const [name, setName] = useState('')
+  const [requiresGrant, setRequiresGrant] = useState(true)
 
   const handleCreate = () => {
-    createType.mutate({ name }, { onSuccess: () => setName('') })
+    createType.mutate({ name, requires_grant: requiresGrant }, { onSuccess: () => setName('') })
   }
 
   return (
@@ -54,27 +55,56 @@ function SpecialLeaveTypesCard() {
               <div className="flex items-center gap-3">
                 <strong className="text-sm font-semibold text-foreground">{type.name}</strong>
                 <span className="text-sm text-muted-foreground">{type.is_active ? '有効' : '無効'}</span>
+                <span className="text-sm text-muted-foreground">
+                  {type.requires_grant ? '要付与' : '付与不要(残数チェックなし)'}
+                </span>
               </div>
-              <Button
-                variant="secondary"
-                isLoading={updateType.isPending}
-                onClick={() => updateType.mutate({ id: type.id, input: { name: type.name, is_active: !type.is_active } })}
-              >
-                {type.is_active ? '無効にする' : '有効にする'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  isLoading={updateType.isPending}
+                  onClick={() =>
+                    updateType.mutate({
+                      id: type.id,
+                      input: { name: type.name, is_active: type.is_active, requires_grant: !type.requires_grant },
+                    })
+                  }
+                >
+                  {type.requires_grant ? '付与不要にする' : '要付与に戻す'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  isLoading={updateType.isPending}
+                  onClick={() =>
+                    updateType.mutate({
+                      id: type.id,
+                      input: { name: type.name, is_active: !type.is_active, requires_grant: type.requires_grant },
+                    })
+                  }
+                >
+                  {type.is_active ? '無効にする' : '有効にする'}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <FormField label="種類名(例: 誕生日休暇)" htmlFor="special-leave-type-name">
+        <FormField label="種類名(例: 誕生日休暇、代休)" htmlFor="special-leave-type-name">
           <Input id="special-leave-type-name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
         <Button isLoading={createType.isPending} disabled={!name} onClick={handleCreate}>
           追加する
         </Button>
       </div>
+      <label className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
+        <Checkbox checked={requiresGrant} onCheckedChange={(checked) => setRequiresGrant(checked === true)} />
+        事前の付与(残数)が必要
+      </label>
+      <p className="mt-1 text-xs text-muted-foreground">
+        チェックを外すと、忌引・代休のように事前の付与が無くても申請できる種類になります。
+      </p>
     </Card>
   )
 }

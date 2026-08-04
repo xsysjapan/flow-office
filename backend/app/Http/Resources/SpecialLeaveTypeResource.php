@@ -16,6 +16,7 @@ class SpecialLeaveTypeResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'is_active' => $this->is_active,
+            'requires_grant' => $this->requires_grant,
         ];
     }
 }

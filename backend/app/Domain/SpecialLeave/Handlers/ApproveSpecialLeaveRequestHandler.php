@@ -152,9 +152,13 @@ class ApproveSpecialLeaveRequestHandler implements CommandHandler
             $remainingToConsume -= $consume;
         }
 
-        if ($remainingToConsume > 0) {
+        if ($remainingToConsume > 0 && $request->specialLeaveType->requires_grant) {
             throw new DomainRuleException('特別休暇の残数が不足しているため承認できません。');
         }
+
+        // requires_grant=falseの種別(忌引・代休等)は、残数(付与)が無くても承認できる。
+        // 消化計画も付与が無い/足りない分については記録しない(存在しないSpecialLeaveGrantを
+        // 消費させることはできないため)。
 
         return $plan;
     }

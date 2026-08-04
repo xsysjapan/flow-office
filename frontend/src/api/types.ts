@@ -642,6 +642,8 @@ export interface SpecialLeaveType {
   id: number
   name: string
   is_active: boolean
+  /** falseの場合、事前の付与(残数)が無くても申請できる(忌引・代休等)。 */
+  requires_grant: boolean
 }
 
 /** 特別休暇の取得単位(全休/半休/時間休)は有給と同じ概念のためPaidLeaveTypeを再利用する。 */

@@ -8,7 +8,7 @@ import type { Paginated, SpecialLeaveGrant, SpecialLeaveGrantRule, SpecialLeaveT
 import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
-const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
+const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }
 
 const rule: SpecialLeaveGrantRule = {
   id: 1,
@@ -55,14 +55,16 @@ describe('SpecialLeaveAdminPage', () => {
   })
 
   it('creates a new special leave type with the entered name', async () => {
-    vi.spyOn(specialLeaveApi, 'createSpecialLeaveType').mockResolvedValue({ id: 2, name: 'リフレッシュ休暇', is_active: true })
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveType').mockResolvedValue({ id: 2, name: 'リフレッシュ休暇', is_active: true, requires_grant: true })
     renderPage([])
 
     await screen.findByText('特別休暇の種類はまだありません。作成するまで特別休暇メニューは表示されません。')
-    await userEvent.type(screen.getByLabelText('種類名(例: 誕生日休暇)'), 'リフレッシュ休暇')
+    await userEvent.type(screen.getByLabelText('種類名(例: 誕生日休暇、代休)'), 'リフレッシュ休暇')
     await userEvent.click(screen.getByRole('button', { name: '追加する' }))
 
-    await waitFor(() => expect(specialLeaveApi.createSpecialLeaveType).toHaveBeenCalledWith({ name: 'リフレッシュ休暇' }))
+    await waitFor(() =>
+      expect(specialLeaveApi.createSpecialLeaveType).toHaveBeenCalledWith({ name: 'リフレッシュ休暇', requires_grant: true }),
+    )
   })
 
   it('lists existing grant rules with their steps and expiry', async () => {

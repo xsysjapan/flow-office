@@ -5,8 +5,8 @@ import type { Paginated, SpecialLeaveGrant, SpecialLeaveRequest, SpecialLeaveTyp
 import { MySpecialLeavePage } from './MySpecialLeavePage'
 
 const types: SpecialLeaveType[] = [
-  { id: 1, name: '誕生日休暇', is_active: true },
-  { id: 2, name: 'リフレッシュ休暇', is_active: true },
+  { id: 1, name: '誕生日休暇', is_active: true, requires_grant: true },
+  { id: 2, name: 'リフレッシュ休暇', is_active: true, requires_grant: true },
 ]
 
 const grants: SpecialLeaveGrant[] = [

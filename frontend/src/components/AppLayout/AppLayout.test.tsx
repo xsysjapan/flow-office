@@ -108,14 +108,14 @@ describe('AppLayout', () => {
   })
 
   it('shows the 特別休暇 menu item once an active special leave type exists', async () => {
-    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }])
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
   })
 
   it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {
-    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false }])
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false, requires_grant: true }])
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()

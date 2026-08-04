@@ -26,7 +26,7 @@ const approverSearchResult: Paginated<User> = {
   links: { next: null, prev: null },
 }
 
-const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
+const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }
 
 const submittedRequest: SpecialLeaveRequest = {
   id: 'request-1',
