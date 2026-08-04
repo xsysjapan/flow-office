@@ -7,7 +7,7 @@ import type {
   WorkflowRequestSpecialLeaveRequestSubject,
 } from '../../api/types'
 import { DailyReferenceView, MonthlyReferenceView, WeeklyReferenceView } from '../../pages/attendance/AttendanceReferencePage'
-import { datesInMonth } from '../../utils/weekDates'
+import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import {
   attendanceMonthStatusLabel,
   expenseClaimStatusLabel,
@@ -105,6 +105,10 @@ function AttendanceMonthSubjectView({ subject }: { subject: WorkflowRequestAtten
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const dates = datesInMonth(subject.year_month)
   const dateRange = { min: dates[0], max: dates[dates.length - 1] }
+  const weekRange = {
+    min: formatDate(mondayOf(new Date(`${dates[0]}T00:00:00`))),
+    max: formatDate(mondayOf(new Date(`${dates[dates.length - 1]}T00:00:00`))),
+  }
 
   function handleSelectDate(date: string) {
     setSelectedDate(date)
@@ -147,7 +151,9 @@ function AttendanceMonthSubjectView({ subject }: { subject: WorkflowRequestAtten
               onSelectDate={handleSelectDate}
             />
           )}
-          {viewMode === 'week' && <WeeklyReferenceView userId={subject.user_id} />}
+          {viewMode === 'week' && (
+            <WeeklyReferenceView userId={subject.user_id} initialWeekStart={weekRange.min} weekRange={weekRange} />
+          )}
           {viewMode === 'day' && (
             <DailyReferenceView
               key={selectedDate ?? dates[0]}

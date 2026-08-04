@@ -193,8 +193,18 @@ export function MonthlyReferenceView({
   )
 }
 
-export function WeeklyReferenceView({ userId }: { userId: string }) {
-  const [weekStart, setWeekStart] = useState(() => formatDate(mondayOf(new Date())))
+export function WeeklyReferenceView({
+  userId,
+  initialWeekStart,
+  weekRange,
+}: {
+  userId: string
+  initialWeekStart?: string
+  /** 指定すると、前週・次週への移動をこの範囲内(両端とも週初=月曜日、含む)に限定する
+   *  (承認レビューで対象月の範囲外に遷移できないようにする用途)。 */
+  weekRange?: { min: string; max: string }
+}) {
+  const [weekStart, setWeekStart] = useState(() => initialWeekStart ?? formatDate(mondayOf(new Date())))
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const { data, isLoading, error } = useWeek(weekStart, userId)
 
@@ -208,13 +218,29 @@ export function WeeklyReferenceView({ userId }: { userId: string }) {
         title="週次勤怠"
         navigation={
           <div className="flex gap-2">
-            <Button variant="secondary" size="icon" title="前週" aria-label="前週" onClick={() => setWeekStart((prev) => addDays(prev, -7))}>
+            <Button
+              variant="secondary"
+              size="icon"
+              title="前週"
+              aria-label="前週"
+              disabled={weekRange !== undefined && weekStart <= weekRange.min}
+              onClick={() => setWeekStart((prev) => addDays(prev, -7))}
+            >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
-              今週
-            </Button>
-            <Button variant="secondary" size="icon" title="次週" aria-label="次週" onClick={() => setWeekStart((prev) => addDays(prev, 7))}>
+            {weekRange === undefined && (
+              <Button variant="secondary" disabled={weekStart === currentWeekStart} onClick={() => setWeekStart(currentWeekStart)}>
+                今週
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="icon"
+              title="次週"
+              aria-label="次週"
+              disabled={weekRange !== undefined && weekStart >= weekRange.max}
+              onClick={() => setWeekStart((prev) => addDays(prev, 7))}
+            >
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>

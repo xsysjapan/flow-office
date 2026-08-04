@@ -174,6 +174,35 @@ describe('ApprovalDetailPanel', () => {
     expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
   })
 
+  it('restricts weekly navigation to weeks within the requested month', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+
+    renderPanel(attendanceRequest)
+
+    await user.click(screen.getByRole('button', { name: '週次' }))
+    await screen.findByRole('heading', { name: '週次勤怠' })
+
+    // 2026-07は6/29(月)週から始まるので、対象月(2026-07)の範囲では前週へは移動できない。
+    expect(screen.getByRole('button', { name: '前週' })).toBeDisabled()
+    // 今週へジャンプするボタンは対象月の範囲を外れうるため表示しない。
+    expect(screen.queryByRole('button', { name: '今週' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+
+    expect(screen.getByRole('button', { name: '次週' })).toBeDisabled()
+  })
+
   it('drills into the daily view when a day row is selected from the monthly view', async () => {
     const user = userEvent.setup()
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
