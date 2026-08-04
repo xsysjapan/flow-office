@@ -193,4 +193,37 @@ class PrescribedHolidayWorkTest extends TestCase
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $dateString)->firstOrFail();
         $this->assertSame('legal_holiday', $day->day_classification);
     }
+
+    /**
+     * 所定休日労働のうち深夜時間帯(22:00〜05:00)にかかった分は
+     * late_night_prescribed_holiday_work_minutesにのみ計上し、late_night_work_minutesには
+     * 二重計上しない(late_night_legal_holiday_work_minutesが法定休日側でlate_night_work_minutes
+     * から除外されているのと同じ考え方)。
+     */
+    public function test_late_night_prescribed_holiday_work_is_not_double_counted_in_late_night_work_minutes(): void
+    {
+        $employee = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $today = Carbon::today($employee->timezone);
+        $this->makeCompanyHolidayShift($employee, $workStyle, $today);
+        $dateString = $today->toDateString();
+
+        // 20:00〜23:00勤務(休憩なし) => 実働3時間(180分)、うち22:00〜23:00の60分が深夜時間帯。
+        $response = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => $dateString,
+            'actual_start_at' => "{$dateString}T20:00:00+09:00",
+            'actual_end_at' => "{$dateString}T23:00:00+09:00",
+            'breaks' => [],
+            'reason' => '所定休日の深夜勤務',
+        ])->assertCreated();
+
+        $calculation = $response->json('calculation');
+
+        $this->assertSame(180, $calculation['work_minutes']);
+        $this->assertSame(180, $calculation['prescribed_holiday_work_minutes']);
+        $this->assertSame(60, $calculation['late_night_prescribed_holiday_work_minutes']);
+        // 所定休日の深夜労働はlate_night_work_minutesには計上しない(二重計上防止)。
+        $this->assertSame(0, $calculation['late_night_work_minutes']);
+    }
 }

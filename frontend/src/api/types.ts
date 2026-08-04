@@ -342,6 +342,8 @@ export interface AttendanceDailyCalculation {
   legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  /** 所定休日労働のうち22:00〜05:00の深夜時間帯と重なる分(late_night_work_minutesの内訳)。 */
+  late_night_prescribed_holiday_work_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
   /** 欠勤時間(分)。attendance_leave_segmentsの区間(遅刻・早退等)の合計時間。
@@ -366,12 +368,14 @@ export interface AttendanceDailyCalculationAdjustment {
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
+  prescribed_holiday_work_minutes: number
   /** 給与計算上の労働時間(裁量労働制のみなし時間はここに反映される)。省略時は現在値を維持する。 */
   payroll_work_minutes?: number
   late_night_prescribed_work_minutes: number
   late_night_statutory_within_overtime_minutes: number
   late_night_statutory_excess_overtime_minutes: number
   late_night_legal_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   reason: string
 }
 
@@ -420,6 +424,7 @@ export interface AttendanceMonthlyCalculationTotals {
   legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   /** 終日欠勤の日数(欠勤時間がその日の所定労働時間以上になった日を1日と数える)。 */
   absence_days?: number
   absence_minutes?: number

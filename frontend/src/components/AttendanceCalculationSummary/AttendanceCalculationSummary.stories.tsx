@@ -23,6 +23,8 @@ export const Monthly: Story = {
       late_night_statutory_excess_overtime_minutes: 60,
       legal_holiday_work_minutes: 0,
       late_night_legal_holiday_work_minutes: 0,
+      prescribed_holiday_work_minutes: 0,
+      late_night_prescribed_holiday_work_minutes: 0,
       absence_minutes: 0,
       paid_leave_days: 1,
       paid_leave_minutes: 120,

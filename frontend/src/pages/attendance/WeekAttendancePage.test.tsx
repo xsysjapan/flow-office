@@ -49,6 +49,7 @@ const mondayRecord: AttendanceDay = {
     legal_holiday_work_minutes: 0,
     prescribed_holiday_work_minutes: 0,
     late_night_legal_holiday_work_minutes: 0,
+    late_night_prescribed_holiday_work_minutes: 0,
     core_time_violation: false,
     is_manually_adjusted: false,
   },

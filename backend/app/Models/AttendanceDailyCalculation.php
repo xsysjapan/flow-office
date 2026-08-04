@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'late_night_prescribed_work_minutes', 'late_night_statutory_within_overtime_minutes',
     'late_night_statutory_excess_overtime_minutes',
     'legal_holiday_work_minutes', 'prescribed_holiday_work_minutes', 'late_night_legal_holiday_work_minutes',
+    'late_night_prescribed_holiday_work_minutes',
     'core_time_violation',
     'absence_minutes', 'special_leave_minutes', 'paid_leave_days', 'paid_leave_minutes', 'special_leave_days',
     'is_manually_adjusted', 'adjusted_by_user_id', 'adjusted_at',

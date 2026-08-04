@@ -39,6 +39,8 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => '休憩の取り方を考慮して補正',
         ]);
 
@@ -72,6 +74,8 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => 'みなし時間の個別補正',
         ]);
 
@@ -106,6 +110,8 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => 'payroll_work_minutesを指定しない補正',
         ]);
 
@@ -136,6 +142,8 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => '補正',
         ])->assertOk()->assertJsonPath('calculation.is_manually_adjusted', true);
 
@@ -173,8 +181,50 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => '他人の日次を補正しようとするテスト',
         ])->assertForbidden();
+    }
+
+    /**
+     * prescribed_holiday_work_minutes・late_night_prescribed_holiday_work_minutesは
+     * 手動補正できる(以前はprescribed_holiday_work_minutesは補正不可で、日次計算結果を
+     * そのままパススルーしているだけだった)。
+     */
+    public function test_prescribed_holiday_and_late_night_prescribed_holiday_work_minutes_can_be_manually_adjusted(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-07-09';
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id,
+            'work_date' => $dateString,
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [['start' => "{$dateString}T12:00:00+09:00", 'end' => "{$dateString}T13:00:00+09:00"]],
+            'reason' => '登録',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}/calculation", [
+            'prescribed_work_minutes' => 480,
+            'statutory_within_overtime_minutes' => 0,
+            'statutory_excess_overtime_minutes' => 0,
+            'legal_holiday_work_minutes' => 0,
+            'late_night_prescribed_work_minutes' => 0,
+            'late_night_statutory_within_overtime_minutes' => 0,
+            'late_night_statutory_excess_overtime_minutes' => 0,
+            'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 120,
+            'late_night_prescribed_holiday_work_minutes' => 30,
+            'reason' => '所定休日労働時間の補正',
+        ]);
+
+        $response->assertOk();
+        $calculation = $response->json('calculation');
+        $this->assertSame(120, $calculation['prescribed_holiday_work_minutes']);
+        $this->assertSame(30, $calculation['late_night_prescribed_holiday_work_minutes']);
+        $this->assertTrue($calculation['is_manually_adjusted']);
     }
 
     public function test_adjusting_a_locked_day_is_rejected(): void
@@ -199,6 +249,8 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'late_night_statutory_within_overtime_minutes' => 0,
             'late_night_statutory_excess_overtime_minutes' => 0,
             'late_night_legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 0,
+            'late_night_prescribed_holiday_work_minutes' => 0,
             'reason' => '締め後の補正テスト',
         ])->assertStatus(422);
     }

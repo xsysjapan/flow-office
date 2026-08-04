@@ -511,7 +511,7 @@ class AttendanceController extends Controller
         summary: '日次勤怠の区分ごとの時間を手動で補正する',
         tags: ['勤怠'],
         parameters: [new OA\Parameter(name: 'attendanceDay', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prescribed_work_minutes', 'statutory_within_overtime_minutes', 'statutory_excess_overtime_minutes', 'legal_holiday_work_minutes', 'late_night_prescribed_work_minutes', 'late_night_statutory_within_overtime_minutes', 'late_night_statutory_excess_overtime_minutes', 'late_night_legal_holiday_work_minutes', 'reason'], properties: [new OA\Property(property: 'prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'payroll_work_minutes', type: 'integer', nullable: true, description: '給与計算上の労働時間(裁量労働制のみなし時間の補正等に使用)。省略時は現在値を維持する'), new OA\Property(property: 'late_night_prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['prescribed_work_minutes', 'statutory_within_overtime_minutes', 'statutory_excess_overtime_minutes', 'legal_holiday_work_minutes', 'late_night_prescribed_work_minutes', 'late_night_statutory_within_overtime_minutes', 'late_night_statutory_excess_overtime_minutes', 'late_night_legal_holiday_work_minutes', 'prescribed_holiday_work_minutes', 'late_night_prescribed_holiday_work_minutes', 'reason'], properties: [new OA\Property(property: 'prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'payroll_work_minutes', type: 'integer', nullable: true, description: '給与計算上の労働時間(裁量労働制のみなし時間の補正等に使用)。省略時は現在値を維持する'), new OA\Property(property: 'late_night_prescribed_work_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_within_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_statutory_excess_overtime_minutes', type: 'integer'), new OA\Property(property: 'late_night_legal_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'prescribed_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'late_night_prescribed_holiday_work_minutes', type: 'integer'), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function adjustCalculation(Request $request, AttendanceDay $attendanceDay, CommandBus $commandBus): AttendanceDayResource
@@ -528,6 +528,8 @@ class AttendanceController extends Controller
             'late_night_statutory_within_overtime_minutes' => ['required', 'integer', 'min:0'],
             'late_night_statutory_excess_overtime_minutes' => ['required', 'integer', 'min:0'],
             'late_night_legal_holiday_work_minutes' => ['required', 'integer', 'min:0'],
+            'prescribed_holiday_work_minutes' => ['required', 'integer', 'min:0'],
+            'late_night_prescribed_holiday_work_minutes' => ['required', 'integer', 'min:0'],
             'reason' => ['required', 'string'],
         ]);
 
@@ -542,6 +544,8 @@ class AttendanceController extends Controller
             lateNightStatutoryWithinOvertimeMinutes: $data['late_night_statutory_within_overtime_minutes'],
             lateNightStatutoryExcessOvertimeMinutes: $data['late_night_statutory_excess_overtime_minutes'],
             lateNightLegalHolidayWorkMinutes: $data['late_night_legal_holiday_work_minutes'],
+            prescribedHolidayWorkMinutes: $data['prescribed_holiday_work_minutes'],
+            lateNightPrescribedHolidayWorkMinutes: $data['late_night_prescribed_holiday_work_minutes'],
             reason: $data['reason'],
             adjustedByUserId: $request->user()->id,
         ));

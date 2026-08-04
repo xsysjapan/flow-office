@@ -119,6 +119,7 @@ class AttendanceDayAggregate extends AggregateRoot
         int $lateNightStatutoryWithinOvertimeMinutes,
         int $lateNightStatutoryExcessOvertimeMinutes,
         int $lateNightLegalHolidayWorkMinutes,
+        int $lateNightPrescribedHolidayWorkMinutes,
         string $reason,
         string $adjustedByUserId,
     ): self {
@@ -133,6 +134,7 @@ class AttendanceDayAggregate extends AggregateRoot
             lateNightStatutoryWithinOvertimeMinutes: $lateNightStatutoryWithinOvertimeMinutes,
             lateNightStatutoryExcessOvertimeMinutes: $lateNightStatutoryExcessOvertimeMinutes,
             lateNightLegalHolidayWorkMinutes: $lateNightLegalHolidayWorkMinutes,
+            lateNightPrescribedHolidayWorkMinutes: $lateNightPrescribedHolidayWorkMinutes,
             reason: $reason,
             adjustedByUserId: $adjustedByUserId,
         ));

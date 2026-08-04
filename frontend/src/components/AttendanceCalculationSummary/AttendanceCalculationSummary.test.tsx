@@ -11,6 +11,8 @@ const totals = {
   late_night_statutory_excess_overtime_minutes: 0,
   legal_holiday_work_minutes: 0,
   late_night_legal_holiday_work_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_prescribed_holiday_work_minutes: 0,
 }
 
 describe('AttendanceCalculationSummary', () => {
@@ -28,6 +30,8 @@ describe('AttendanceCalculationSummary', () => {
     expect(screen.getByText('うち深夜法定内残業時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜法定外残業時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜法定休日労働時間')).toBeInTheDocument()
+    expect(screen.getByText('所定休日労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定休日労働時間')).toBeInTheDocument()
   })
 
   it('can show month-specific and leave totals', () => {

@@ -668,6 +668,8 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - legal_holiday_work_minutes
 - prescribed_holiday_work_minutes
 - late_night_legal_holiday_work_minutes
+- late_night_prescribed_holiday_work_minutes (所定休日労働のうち深夜時間帯にかかった分。
+  late_night_legal_holiday_work_minutesの所定休日版で、late_night_work_minutesには含まない)
 - is_manually_adjusted (日次登録後、区分ごとの時間を手動で補正したかどうか。実績
   (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance.day_calculated`)
   されると、falseに戻る)

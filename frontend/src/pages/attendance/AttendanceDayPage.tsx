@@ -754,11 +754,13 @@ interface AdjustmentFields {
   statutory_within_overtime_minutes: string
   statutory_excess_overtime_minutes: string
   legal_holiday_work_minutes: string
+  prescribed_holiday_work_minutes: string
   payroll_work_minutes: string
   late_night_prescribed_work_minutes: string
   late_night_statutory_within_overtime_minutes: string
   late_night_statutory_excess_overtime_minutes: string
   late_night_legal_holiday_work_minutes: string
+  late_night_prescribed_holiday_work_minutes: string
 }
 
 function adjustmentFieldsFrom(day: AttendanceDay): AdjustmentFields {
@@ -768,11 +770,13 @@ function adjustmentFieldsFrom(day: AttendanceDay): AdjustmentFields {
     statutory_within_overtime_minutes: String(c?.statutory_within_overtime_minutes ?? 0),
     statutory_excess_overtime_minutes: String(c?.statutory_excess_overtime_minutes ?? 0),
     legal_holiday_work_minutes: String(c?.legal_holiday_work_minutes ?? 0),
+    prescribed_holiday_work_minutes: String(c?.prescribed_holiday_work_minutes ?? 0),
     payroll_work_minutes: String(c?.payroll_work_minutes ?? 0),
     late_night_prescribed_work_minutes: String(c?.late_night_prescribed_work_minutes ?? 0),
     late_night_statutory_within_overtime_minutes: String(c?.late_night_statutory_within_overtime_minutes ?? 0),
     late_night_statutory_excess_overtime_minutes: String(c?.late_night_statutory_excess_overtime_minutes ?? 0),
     late_night_legal_holiday_work_minutes: String(c?.late_night_legal_holiday_work_minutes ?? 0),
+    late_night_prescribed_holiday_work_minutes: String(c?.late_night_prescribed_holiday_work_minutes ?? 0),
   }
 }
 
@@ -796,11 +800,13 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
           statutory_within_overtime_minutes: Number(fields.statutory_within_overtime_minutes),
           statutory_excess_overtime_minutes: Number(fields.statutory_excess_overtime_minutes),
           legal_holiday_work_minutes: Number(fields.legal_holiday_work_minutes),
+          prescribed_holiday_work_minutes: Number(fields.prescribed_holiday_work_minutes),
           payroll_work_minutes: Number(fields.payroll_work_minutes),
           late_night_prescribed_work_minutes: Number(fields.late_night_prescribed_work_minutes),
           late_night_statutory_within_overtime_minutes: Number(fields.late_night_statutory_within_overtime_minutes),
           late_night_statutory_excess_overtime_minutes: Number(fields.late_night_statutory_excess_overtime_minutes),
           late_night_legal_holiday_work_minutes: Number(fields.late_night_legal_holiday_work_minutes),
+          late_night_prescribed_holiday_work_minutes: Number(fields.late_night_prescribed_holiday_work_minutes),
           reason,
         },
       },
@@ -813,11 +819,13 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
     { key: 'statutory_within_overtime_minutes', label: '法定内残業時間(分)' },
     { key: 'statutory_excess_overtime_minutes', label: '法定外残業時間(分)' },
     { key: 'legal_holiday_work_minutes', label: '法定休日労働時間(分)' },
+    { key: 'prescribed_holiday_work_minutes', label: '所定休日労働時間(分)' },
     { key: 'payroll_work_minutes', label: '給与計算上の労働時間(分)(みなし時間等)' },
     { key: 'late_night_prescribed_work_minutes', label: 'うち深夜所定労働時間(分)' },
     { key: 'late_night_statutory_within_overtime_minutes', label: 'うち深夜法定内残業時間(分)' },
     { key: 'late_night_statutory_excess_overtime_minutes', label: 'うち深夜法定外残業時間(分)' },
     { key: 'late_night_legal_holiday_work_minutes', label: 'うち深夜法定休日労働時間(分)' },
+    { key: 'late_night_prescribed_holiday_work_minutes', label: 'うち深夜所定休日労働時間(分)' },
   ]
 
   return (

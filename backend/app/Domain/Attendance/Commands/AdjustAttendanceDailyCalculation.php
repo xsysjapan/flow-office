@@ -20,6 +20,8 @@ class AdjustAttendanceDailyCalculation implements Command
         public readonly int $lateNightStatutoryWithinOvertimeMinutes,
         public readonly int $lateNightStatutoryExcessOvertimeMinutes,
         public readonly int $lateNightLegalHolidayWorkMinutes,
+        public readonly int $prescribedHolidayWorkMinutes,
+        public readonly int $lateNightPrescribedHolidayWorkMinutes,
         public readonly string $reason,
         public readonly string $adjustedByUserId,
     ) {}

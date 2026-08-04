@@ -158,6 +158,7 @@ class AttendanceCalculator
 
         $isLegalHoliday = $shift !== null && $this->legalHolidayResolver->isLegalHoliday($shift);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
+        $lateNightPrescribedHolidayWorkMinutes = $isCompanyHoliday ? $lateNightWorkMinutes : 0;
         $dayClassification = match (true) {
             $isLegalHoliday => DayClassification::LEGAL_HOLIDAY,
             $isCompanyHoliday => DayClassification::PRESCRIBED_HOLIDAY,
@@ -263,13 +264,14 @@ class AttendanceCalculator
             'prescribed_work_minutes' => $prescribedWorkMinutes,
             'statutory_within_overtime_minutes' => $statutoryWithinOvertimeMinutes,
             'statutory_excess_overtime_minutes' => $statutoryExcessOvertimeMinutes,
-            'late_night_work_minutes' => $isLegalHoliday ? 0 : $lateNightWorkMinutes,
+            'late_night_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $lateNightWorkMinutes,
             'late_night_prescribed_work_minutes' => $lateNightPrescribedWorkMinutes,
             'late_night_statutory_within_overtime_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
             'late_night_statutory_excess_overtime_minutes' => $lateNightStatutoryExcessOvertimeMinutes,
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
             'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? min($workMinutes, $legalDailyLimitMinutes) : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
+            'late_night_prescribed_holiday_work_minutes' => $lateNightPrescribedHolidayWorkMinutes,
             'core_time_violation' => $coreTimeViolation,
             'absence_minutes' => $absenceMinutes,
             'special_leave_minutes' => $specialLeaveMinutes,

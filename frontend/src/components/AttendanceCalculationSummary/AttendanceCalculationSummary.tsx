@@ -23,6 +23,8 @@ export interface AttendanceCalculationSummaryData {
   late_night_statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  prescribed_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   absence_minutes?: number
   paid_leave_days?: number
   paid_leave_minutes?: number
@@ -96,8 +98,11 @@ export function AttendanceCalculationSummary({
           <SummaryItem label="給与計算上の労働時間"><Duration minutes={payrollWorkMinutes} /></SummaryItem>
         )}
         <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>
         <SummaryItem label="法定内残業時間"><Duration minutes={totals.statutory_within_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜法定内残業時間"><Duration minutes={totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
         <SummaryItem label="法定外残業時間"><Duration minutes={totals.statutory_excess_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜法定外残業時間"><Duration minutes={totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
         {statutoryExcessOver60hMinutes !== undefined && (
           <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
         )}
@@ -105,10 +110,9 @@ export function AttendanceCalculationSummary({
           <SummaryItem label="うち週40時間超"><Duration minutes={weeklyStatutoryExcessOvertimeMinutes} /></SummaryItem>
         )}
         <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定内残業時間"><Duration minutes={totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定外残業時間"><Duration minutes={totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
         <SummaryItem label="うち深夜法定休日労働時間"><Duration minutes={totals.late_night_legal_holiday_work_minutes} /></SummaryItem>
+        <SummaryItem label="所定休日労働時間"><Duration minutes={totals.prescribed_holiday_work_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜所定休日労働時間"><Duration minutes={totals.late_night_prescribed_holiday_work_minutes} /></SummaryItem>
       </dl>
 
       {hasLeaveTotals && (

@@ -27,6 +27,7 @@ class AttendanceDailyCalculationResource extends JsonResource
             'legal_holiday_work_minutes' => $this->legal_holiday_work_minutes,
             'prescribed_holiday_work_minutes' => $this->prescribed_holiday_work_minutes,
             'late_night_legal_holiday_work_minutes' => $this->late_night_legal_holiday_work_minutes,
+            'late_night_prescribed_holiday_work_minutes' => $this->late_night_prescribed_holiday_work_minutes,
             'core_time_violation' => $this->core_time_violation,
             'absence_minutes' => $this->absence_minutes,
             'special_leave_minutes' => $this->special_leave_minutes,

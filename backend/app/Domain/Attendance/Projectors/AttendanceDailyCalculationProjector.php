@@ -58,6 +58,7 @@ class AttendanceDailyCalculationProjector extends Projector
                 'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
                 'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
                 'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'],
+                'late_night_prescribed_holiday_work_minutes' => $payload['late_night_prescribed_holiday_work_minutes'] ?? 0,
                 'core_time_violation' => $payload['core_time_violation'] ?? false,
                 'absence_minutes' => $payload['absence_minutes'] ?? 0,
                 'special_leave_minutes' => $payload['special_leave_minutes'] ?? 0,
@@ -85,6 +86,10 @@ class AttendanceDailyCalculationProjector extends Projector
         // payrollWorkMinutesがnull(この項目が追加される前に記録された古いイベントの再生時のみ
         // 起こりうる)の場合、直前の計算行の値をそのまま保持する。
         $payrollWorkMinutes = $event->payrollWorkMinutes ?? $existing->calculation?->payroll_work_minutes ?? $event->prescribedWorkMinutes;
+        // lateNightPrescribedHolidayWorkMinutesがnull(この項目が追加される前に記録された古い
+        // イベントの再生時のみ起こりうる)の場合、直前の計算行の値をそのまま保持する。
+        $lateNightPrescribedHolidayWorkMinutes = $event->lateNightPrescribedHolidayWorkMinutes
+            ?? $existing->calculation?->late_night_prescribed_holiday_work_minutes ?? 0;
 
         AttendanceDailyCalculation::query()->updateOrCreate(
             ['attendance_day_id' => $attendanceDayId],
@@ -95,7 +100,8 @@ class AttendanceDailyCalculationProjector extends Projector
                 'late_night_work_minutes' => $event->lateNightPrescribedWorkMinutes
                     + $event->lateNightStatutoryWithinOvertimeMinutes
                     + $event->lateNightStatutoryExcessOvertimeMinutes
-                    + $event->lateNightLegalHolidayWorkMinutes,
+                    + $event->lateNightLegalHolidayWorkMinutes
+                    + $lateNightPrescribedHolidayWorkMinutes,
                 'late_night_prescribed_work_minutes' => $event->lateNightPrescribedWorkMinutes,
                 'late_night_statutory_within_overtime_minutes' => $event->lateNightStatutoryWithinOvertimeMinutes,
                 'late_night_statutory_excess_overtime_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
@@ -103,6 +109,7 @@ class AttendanceDailyCalculationProjector extends Projector
                 'prescribed_holiday_work_minutes' => $event->prescribedHolidayWorkMinutes,
                 'payroll_work_minutes' => $payrollWorkMinutes,
                 'late_night_legal_holiday_work_minutes' => $event->lateNightLegalHolidayWorkMinutes,
+                'late_night_prescribed_holiday_work_minutes' => $lateNightPrescribedHolidayWorkMinutes,
                 'is_manually_adjusted' => true,
                 'adjusted_by_user_id' => $event->adjustedByUserId,
                 'adjusted_at' => $event->createdAt(),
