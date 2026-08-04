@@ -1,5 +1,13 @@
 # 14. CSV出力ユースケース
 
+## Excel出力(UC-E001 拡張)
+
+`GET /exports/attendance.xlsx` で、同じ対象月抽出ロジック・権限チェックのまま、勤怠実績を
+見た目を整えた1つの`.xlsx`ファイル(月次サマリシート、対象社員が1名の場合のみ日別明細
+シートを追加)として出力できる(`ExportController::attendanceExcel()` /
+`App\Domain\Export\Services\AttendanceExcelBuilder`)。出力履歴は`export.created`
+イベントに`exportType: 'attendance_xlsx'`として記録する。
+
 ## UC-E001: 勤怠CSVを出力する
 
 1. 管理者が対象月を選択する

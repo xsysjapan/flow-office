@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\EventStore;
 use App\Domain\Export\Events\ExportCreated;
+use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\BackOfficeTask;
 use App\Models\ExpenseClaim;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -36,19 +40,8 @@ class ExportController extends Controller
     )]
     public function attendance(Request $request, EventStore $eventStore): StreamedResponse
     {
-        $data = $request->validate([
-            'year_month' => ['required', 'date_format:Y-m'],
-            'user_id' => ['nullable', 'array'],
-            'user_id.*' => ['string', 'exists:users,id'],
-        ]);
-
-        $months = AttendanceMonth::query()
-            ->with('user')
-            ->where('year_month', $data['year_month'])
-            ->whereIn('status', [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
-            ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
-            ->orderBy('user_id')
-            ->get();
+        $data = $this->validateAttendanceExportRequest($request);
+        $months = $this->resolveAttendanceMonths($data);
 
         $eventStore->append(
             aggregateType: 'export',
@@ -87,6 +80,48 @@ class ExportController extends Controller
 
             fclose($handle);
         }, 'attendance_'.$data['year_month'].'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * UC-E001: 勤怠実績をExcel(.xlsx)で出力する。attendance()と同じ対象月抽出ロジック
+     * (承認済み・締め済みのみ)・権限チェックを使い、見た目を整えた月次サマリ+
+     * (対象社員が1名の場合のみ)日別明細の2シート構成で出力する。
+     */
+    #[OA\Get(
+        path: '/exports/attendance.xlsx',
+        operationId: 'exports.attendanceExcel',
+        summary: '勤怠実績Excelを出力する',
+        tags: ['CSV出力'],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function attendanceExcel(Request $request, EventStore $eventStore, AttendanceExcelBuilder $builder): Response
+    {
+        $data = $this->validateAttendanceExportRequest($request);
+        $months = $this->resolveAttendanceMonths($data);
+
+        $eventStore->append(
+            aggregateType: 'export',
+            aggregateId: (string) Str::uuid(),
+            event: new ExportCreated(
+                exportType: 'attendance_xlsx',
+                params: $data,
+                requestedByUserId: $request->user()->id,
+                rowCount: $months->count(),
+            ),
+        );
+
+        $spreadsheet = $builder->build($months, $data['year_month']);
+
+        $writer = new Xlsx($spreadsheet);
+        ob_start();
+        $writer->save('php://output');
+        $contents = ob_get_clean();
+
+        return response($contents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="attendance_'.$data['year_month'].'.xlsx"',
+        ]);
     }
 
     #[OA\Get(
@@ -150,5 +185,35 @@ class ExportController extends Controller
 
             fclose($handle);
         }, 'expenses_'.$data['from'].'_'.$data['to'].'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * @return array{year_month: string, user_id?: array<int, string>}
+     */
+    private function validateAttendanceExportRequest(Request $request): array
+    {
+        return $request->validate([
+            'year_month' => ['required', 'date_format:Y-m'],
+            'user_id' => ['nullable', 'array'],
+            'user_id.*' => ['string', 'exists:users,id'],
+        ]);
+    }
+
+    /**
+     * attendance()・attendanceExcel()共通の対象月抽出ロジック。承認済み(UC-A009)・
+     * 締め済み(UC-A011)の月次勤怠のみを対象とする(docs/14-usecases-export.md)。
+     *
+     * @param  array{year_month: string, user_id?: array<int, string>}  $data
+     * @return Collection<int, AttendanceMonth>
+     */
+    private function resolveAttendanceMonths(array $data): Collection
+    {
+        return AttendanceMonth::query()
+            ->with('user')
+            ->where('year_month', $data['year_month'])
+            ->whereIn('status', [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
+            ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
+            ->orderBy('user_id')
+            ->get();
     }
 }
