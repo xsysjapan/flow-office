@@ -15,6 +15,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
 use App\Domain\Attendance\Events\AttendancePunchCorrected;
@@ -235,6 +236,7 @@ return [
         'attendance_month.submitted' => AttendanceMonthSubmitted::class,
         'attendance_month.approved' => AttendanceMonthApproved::class,
         'attendance_month.returned' => AttendanceMonthReturned::class,
+        'attendance_month.submission_cancelled' => AttendanceMonthSubmissionCancelled::class,
         'attendance_month.closed' => AttendanceMonthClosed::class,
         'attendance_month.locked' => AttendanceMonthLocked::class,
         'attendance_month.shared' => AttendanceMonthShared::class,
