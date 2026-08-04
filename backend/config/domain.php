@@ -7,7 +7,6 @@ use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
-use App\Domain\Attendance\Commands\BackfillAttendanceMonthLockShare;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
@@ -47,7 +46,6 @@ use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
-use App\Domain\Attendance\Handlers\BackfillAttendanceMonthLockShareHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
@@ -179,7 +177,6 @@ use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\User\Commands\AssignUserRoles;
-use App\Domain\User\Commands\BackfillUserRoles;
 use App\Domain\User\Commands\CompleteOnboardingSsoLink;
 use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
 use App\Domain\User\Commands\LinkSsoAccount;
@@ -191,7 +188,6 @@ use App\Domain\User\Commands\SetUserUsageStartDate;
 use App\Domain\User\Commands\StartOnboardingSso;
 use App\Domain\User\Commands\SyncUsersFromMs365;
 use App\Domain\User\Handlers\AssignUserRolesHandler;
-use App\Domain\User\Handlers\BackfillUserRolesHandler;
 use App\Domain\User\Handlers\CompleteOnboardingSsoLinkHandler;
 use App\Domain\User\Handlers\CompleteOnboardingWithLocalPasswordHandler;
 use App\Domain\User\Handlers\LinkSsoAccountHandler;
@@ -203,13 +199,11 @@ use App\Domain\User\Handlers\SetUserUsageStartDateHandler;
 use App\Domain\User\Handlers\StartOnboardingSsoHandler;
 use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
-use App\Domain\Workflow\Commands\BackfillAttendanceMonthWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Handlers\ApproveWorkflowRequestHandler;
-use App\Domain\Workflow\Handlers\BackfillAttendanceMonthWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
@@ -272,7 +266,6 @@ return [
         ApproveWorkflowRequest::class => ApproveWorkflowRequestHandler::class,
         ReturnWorkflowRequest::class => ReturnWorkflowRequestHandler::class,
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
-        BackfillAttendanceMonthWorkflowRequest::class => BackfillAttendanceMonthWorkflowRequestHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,
@@ -329,8 +322,6 @@ return [
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
-        BackfillAttendanceMonthLockShare::class => BackfillAttendanceMonthLockShareHandler::class,
-        BackfillUserRoles::class => BackfillUserRolesHandler::class,
         ExcludeAttendanceSubmissionReminder::class => ExcludeAttendanceSubmissionReminderHandler::class,
 
         GrantPaidLeave::class => GrantPaidLeaveHandler::class,
