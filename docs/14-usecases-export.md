@@ -21,6 +21,9 @@
   区切り文字)は取込先ソフトの仕様に合わせて設定可能にする。現時点では固定フォーマットの
   CSVのみ実装しており(`ExportController::attendance()` / `expenses()`)、取込先ソフトごとの
   フォーマット切り替えは後続フェーズとする。
-- 締め後の勤怠CSV(UC-E001)は [UC-A011 月次勤怠を締める](./07-usecases-attendance.md#uc-a011-管理部が月次勤怠を締める)
-  の後にのみ出力可能とする。実装では対象月の `attendance_months` が `closed` ステータスの
-  社員のみをCSVに含める(未締めの社員は自動的に除外される)。
+- 勤怠CSV(UC-E001)は [UC-A009 承認](./07-usecases-attendance.md#uc-a009-承認者が月次勤怠を承認する)
+  済み以降であれば出力可能とする(締め前でもバックオフィス確認のためにCSV/帳票を出力できる
+  必要があるため)。実装では対象月の `attendance_months` が `approved` または `closed`
+  ステータスの社員のみをCSVに含める(未承認・未提出の社員は自動的に除外される)。
+  締め([UC-A011](./07-usecases-attendance.md#uc-a011-月次勤怠を締める))自体はCSV出力の
+  前提条件ではない。

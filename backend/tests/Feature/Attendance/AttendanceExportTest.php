@@ -9,13 +9,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。
+ * UC-E001: 勤怠CSVを出力する。承認済み・締め後(UC-A011)の月次勤怠が対象
+ * (バックオフィス確認・締め前でもCSV/帳票を出力できる必要があるため、締め済みのみに
+ * 限定しない。docs/14-usecases-export.md参照)。
  */
 class AttendanceExportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_can_export_a_csv_of_closed_months_only(): void
+    public function test_admin_can_export_a_csv_of_approved_or_closed_months(): void
     {
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
@@ -36,11 +38,18 @@ class AttendanceExportTest extends TestCase
             ],
         ]);
 
-        $notClosedEmployee = User::factory()->create(['name' => '未締め社員']);
+        $approvedEmployee = User::factory()->create(['name' => '承認済み未締め社員']);
         AttendanceMonth::query()->create([
-            'user_id' => $notClosedEmployee->id,
+            'user_id' => $approvedEmployee->id,
             'year_month' => '2026-06',
             'status' => 'approved',
+        ]);
+
+        $submittedEmployee = User::factory()->create(['name' => '提出済み未承認社員']);
+        AttendanceMonth::query()->create([
+            'user_id' => $submittedEmployee->id,
+            'year_month' => '2026-06',
+            'status' => 'submitted',
         ]);
 
         $response = $this->actingAs($admin)->get('/api/exports/attendance?year_month=2026-06');
@@ -49,7 +58,8 @@ class AttendanceExportTest extends TestCase
         $csv = $response->streamedContent();
 
         $this->assertStringContainsString('締め済み社員', $csv);
-        $this->assertStringNotContainsString('未締め社員', $csv);
+        $this->assertStringContainsString('承認済み未締め社員', $csv);
+        $this->assertStringNotContainsString('提出済み未承認社員', $csv);
         $this->assertStringContainsString('120', $csv);
     }
 

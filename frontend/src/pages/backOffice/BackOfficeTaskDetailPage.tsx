@@ -15,7 +15,44 @@ import {
   useBackOfficeTask,
   useChangeBackOfficeTaskStatus,
 } from '../../hooks/useBackOfficeTasks'
+import { useAttendanceMonthById, useCloseMonth } from '../../hooks/useAttendance'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
+
+/**
+ * 月次勤怠承認(attendance.month_approved)から自動生成されたバックオフィスタスク専用の
+ * 締め処理セクション。汎用ステータス変更フォームとは独立させ、締め済みなら編集不可であることを
+ * 明示する(絶対に外してはいけない設計原則3: 月次側は日次実績の集計・確定結果であり、
+ * ここでは締めるかどうかだけを操作対象にする)。
+ */
+function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceMonthId: string }) {
+  const { data: month, isLoading, error, refetch } = useAttendanceMonthById(attendanceMonthId)
+  const closeMonth = useCloseMonth()
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">月次勤怠の締め処理</h3>
+
+      {closeMonth.error && <ErrorMessage error={closeMonth.error} />}
+
+      {isLoading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
+      ) : month ? (
+        month.status === 'closed' ? (
+          <p className="text-sm text-muted-foreground">締め処理後は修正することはできません。</p>
+        ) : (
+          <Button
+            isLoading={closeMonth.isPending}
+            onClick={() => closeMonth.mutate(attendanceMonthId, { onSuccess: () => void refetch() })}
+          >
+            締める
+          </Button>
+        )
+      ) : null}
+    </div>
+  )
+}
 
 const STATUS_OPTIONS: BackOfficeTaskStatus[] = [
   'not_started',
@@ -90,6 +127,10 @@ export function BackOfficeTaskDetailPage() {
             割り当てる
           </Button>
         </div>
+      )}
+
+      {task.task_type === 'attendance_month_confirmation' && (
+        <AttendanceMonthConfirmationSection attendanceMonthId={task.source_id} />
       )}
 
       <div className="mt-5 border-t border-border pt-4">

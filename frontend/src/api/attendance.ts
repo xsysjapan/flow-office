@@ -268,3 +268,8 @@ export function returnMonth(id: string, comment: string): Promise<AttendanceMont
 export function closeMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/close`, { method: 'POST' })
 }
+
+/** idで単一の月次勤怠を取得する。バックオフィスタスク詳細から締め状態を確認する用途。 */
+export function fetchAttendanceMonthById(id: string): Promise<AttendanceMonth> {
+  return apiFetch(`/attendance-months/${id}`)
+}

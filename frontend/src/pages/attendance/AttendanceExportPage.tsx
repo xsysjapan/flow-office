@@ -8,7 +8,7 @@ import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicke
 import { useDownloadAttendanceCsv } from '../../hooks/useAttendance'
 
 /**
- * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。
+ * UC-E001: 勤怠CSVを出力する。承認済み(approved)・締め済み(closed)どちらの月次勤怠も対象。
  */
 export function AttendanceExportPage() {
   const [yearMonth, setYearMonth] = useState('')
@@ -19,7 +19,7 @@ export function AttendanceExportPage() {
   return (
     <Card title="勤怠CSV出力">
       <p className="mb-4 text-sm text-muted-foreground">
-        締め処理が完了した月次勤怠のみがCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
+        承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
       </p>
 
       {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}

@@ -22,7 +22,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ExportController extends Controller
 {
     /**
-     * UC-E001: 勤怠CSVを出力する。締め後(UC-A011)の月次勤怠のみが対象。
+     * UC-E001: 勤怠CSVを出力する。承認済み(UC-A009)・締め済み(UC-A011)の月次勤怠が対象。
+     * 締め処理はバックオフィスタスク側の個別操作に変わったため、バックオフィス担当者が
+     * 締める前でも承認済みの時点でCSV/帳票を出力できる必要がある。
      */
     #[OA\Get(
         path: '/exports/attendance',
@@ -43,7 +45,7 @@ class ExportController extends Controller
         $months = AttendanceMonth::query()
             ->with('user')
             ->where('year_month', $data['year_month'])
-            ->where('status', AttendanceMonthStatus::CLOSED)
+            ->whereIn('status', [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
             ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
             ->orderBy('user_id')
             ->get();

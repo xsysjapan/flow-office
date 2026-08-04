@@ -140,7 +140,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
-    Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,admin')->group(function () {
+    Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,hr_staff,admin')->group(function () {
         Route::get('/backoffice-tasks/unassigned', [BackOfficeTaskController::class, 'indexUnassigned']);
         Route::get('/backoffice-tasks/mine', [BackOfficeTaskController::class, 'indexMine']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
@@ -236,6 +236,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('attendance-months')->group(function () {
+        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth']);
         Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth']);
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth']);
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])

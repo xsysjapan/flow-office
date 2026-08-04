@@ -675,6 +675,24 @@ class AttendanceController extends Controller
         return new AttendanceMonthResource($month);
     }
 
+    /**
+     * idで単一の月次勤怠を取得する軽量エンドポイント。バックオフィスタスク(source_id =
+     * attendance_months.id)からリンクする際に、対象の社員・対象年月・ステータスだけを
+     * 素早く参照するために使う。
+     */
+    #[OA\Get(
+        path: '/attendance-months/{attendanceMonth}',
+        operationId: 'attendanceMonths.show',
+        summary: '月次勤怠を1件取得する',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function showMonth(AttendanceMonth $attendanceMonth): AttendanceMonthResource
+    {
+        return new AttendanceMonthResource($attendanceMonth->load(['user', 'approver']));
+    }
+
     #[OA\Post(
         path: '/attendance-months/{attendanceMonth}/approve',
         operationId: 'attendanceMonths.approve',

@@ -11,6 +11,7 @@ import {
   deletePunch,
   endBreak,
   fetchAttendanceDayDefaults,
+  fetchAttendanceMonthById,
   fetchMonth,
   fetchMonthsForUser,
   fetchMonthsToApprove,
@@ -260,7 +261,16 @@ function useInvalidateMonths() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: MY_MONTHS_KEY })
     void queryClient.invalidateQueries({ queryKey: MONTHS_TO_APPROVE_KEY })
+    void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', 'by-id'] })
   }
+}
+
+/** バックオフィスタスク詳細から、idで単一の月次勤怠(締め状態)を取得する。 */
+export function useAttendanceMonthById(id: string) {
+  return useQuery({
+    queryKey: ['attendance', 'month', 'by-id', id],
+    queryFn: () => fetchAttendanceMonthById(id),
+  })
 }
 
 export function useCloseMonth() {

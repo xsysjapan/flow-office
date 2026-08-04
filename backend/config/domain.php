@@ -89,10 +89,12 @@ use App\Domain\AuthenticationKey\Handlers\IssueAuthenticationKeyHandler;
 use App\Domain\BackOffice\Commands\AssignBackOfficeTask;
 use App\Domain\BackOffice\Commands\ChangeBackOfficeTaskStatus;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromApproval;
+use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromAttendanceMonthApproval;
 use App\Domain\BackOffice\Commands\CreateBackOfficeTaskFromExpenseClaimApproval;
 use App\Domain\BackOffice\Handlers\AssignBackOfficeTaskHandler;
 use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
+use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromAttendanceMonthApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
@@ -271,6 +273,7 @@ return [
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,
+        CreateBackOfficeTaskFromAttendanceMonthApproval::class => CreateBackOfficeTaskFromAttendanceMonthApprovalHandler::class,
         AssignBackOfficeTask::class => AssignBackOfficeTaskHandler::class,
         ChangeBackOfficeTaskStatus::class => ChangeBackOfficeTaskStatusHandler::class,
 

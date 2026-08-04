@@ -34,7 +34,6 @@ interface NavGroup {
 function navGroups(
   currentYearMonth: string,
   hasSpecialLeaveTypes: boolean,
-  canCloseMonths: boolean,
   canSeeBackOfficeTasks: boolean,
 ): NavGroup[] {
   return [
@@ -73,7 +72,6 @@ function navGroups(
     icon: Settings,
     roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
     items: [
-      ...(canCloseMonths ? [{ to: '/attendance/months/close', label: '月次締め処理' }] : []),
       { to: '/admin', label: '管理メニュー' },
     ],
   },
@@ -207,14 +205,14 @@ export function AppLayout() {
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data: specialLeaveTypes } = useSpecialLeaveTypes()
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
-  const canCloseMonths = hasAnyRole(user?.roles, [ROLE.ADMIN, ROLE.HR_STAFF])
   const canSeeBackOfficeTasks = hasAnyRole(user?.roles, [
     ROLE.BACKOFFICE_STAFF,
     ROLE.ACCOUNTING_STAFF,
     ROLE.GENERAL_AFFAIRS_STAFF,
+    ROLE.HR_STAFF,
     ROLE.ADMIN,
   ])
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canCloseMonths, canSeeBackOfficeTasks).filter(
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canSeeBackOfficeTasks).filter(
     (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
   )
 
