@@ -33,7 +33,7 @@ import {
   type GenerateAttendancePatternInput,
   type PreviewAttendancePatternInput,
 } from '../api/attendance'
-import { downloadAttendanceCsv } from '../api/exports'
+import { downloadAttendanceCsv, downloadAttendanceExcel } from '../api/exports'
 import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
@@ -289,5 +289,16 @@ export function useCloseMonth() {
 export function useDownloadAttendanceCsv() {
   return useMutation({
     mutationFn: (filters: AttendanceExportFilters) => downloadAttendanceCsv(filters),
+  })
+}
+
+/**
+ * UC-E001: 勤怠Excel(単一社員・単一月次なら.xlsx、複数対象ならZIP)のダウンロード。
+ * downloadAttendanceCsvと同じ理由でuseMutationを使う。
+ */
+export function useDownloadAttendanceExcel() {
+  return useMutation({
+    mutationFn: (filters: Pick<AttendanceExportFilters, 'year_month' | 'user_id'>) =>
+      downloadAttendanceExcel(filters),
   })
 }

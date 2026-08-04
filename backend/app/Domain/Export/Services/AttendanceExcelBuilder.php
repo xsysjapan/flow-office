@@ -10,19 +10,17 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * UC-E001: 勤怠実績Excel出力(docs/14-usecases-export.md)。
  * ExportController::attendance()と同じデータソース(AttendanceMonth.snapshot_json /
  * AttendanceDay + AttendanceDailyCalculation)、同じ対象月抽出ロジック・権限チェックを流用し、
- * 見た目を整えた1つの.xlsxファイルとして組み立てる。
+ * 見た目を整えた.xlsxファイルとして組み立てる。
  *
- * シート構成:
- * - 「月次サマリ」: 対象月・社員ごとに1行(既存CSVと同じ集計項目)。
- * - 「日別明細」: 対象社員が1名の場合のみ追加。対象月のAttendanceDay+
- *   AttendanceDailyCalculationを日付順に1日1行で出力する。
+ * 対象社員1名分のワークブックは常に「月次サマリ」(1行)+「日別明細」の2シート構成
+ * (buildForMonth())。対象社員が複数の場合、ExportController側でbuildForMonth()を
+ * 社員ごとに呼び出し、ZIPにまとめて返す。
  */
 class AttendanceExcelBuilder
 {
@@ -46,28 +44,45 @@ class AttendanceExcelBuilder
     ];
 
     /**
-     * @param  Collection<int, AttendanceMonth>  $months
+     * 対象社員1名分のワークブックを組み立てる。「月次サマリ」(対象社員1行)+
+     * 「日別明細」(対象月のAttendanceDay+AttendanceDailyCalculationを日付順に1日1行)の
+     * 2シート構成。対象社員が複数いる場合はExportController側で社員ごとにこのメソッドを
+     * 呼び出し、ZIPにまとめる。
      */
-    public function build(Collection $months, string $yearMonth): Spreadsheet
+    public function buildForMonth(AttendanceMonth $month, string $yearMonth): Spreadsheet
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getProperties()
+            ->setTitle('勤怠実績 '.$yearMonth.' '.($month->user?->name ?? $month->user_id))
+            ->setCreator('flow-office');
+
+        $summarySheet = $spreadsheet->getActiveSheet();
+        $summarySheet->setTitle('月次サマリ');
+        $this->buildSummarySheet($summarySheet, collect([$month]), $yearMonth);
+
+        $detailSheet = $spreadsheet->createSheet();
+        $detailSheet->setTitle('日別明細');
+        $this->buildDetailSheet($detailSheet, $month, $yearMonth);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    /**
+     * 対象月次が0件の場合(該当社員なし)に、空の「月次サマリ」シートのみのワークブックを
+     * 返す。
+     */
+    public function buildEmpty(string $yearMonth): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet;
         $spreadsheet->getProperties()
             ->setTitle('勤怠実績 '.$yearMonth)
             ->setCreator('flow-office');
 
         $summarySheet = $spreadsheet->getActiveSheet();
         $summarySheet->setTitle('月次サマリ');
-        $this->buildSummarySheet($summarySheet, $months, $yearMonth);
-
-        if ($months->count() === 1) {
-            $detailSheet = $spreadsheet->createSheet();
-            $detailSheet->setTitle('日別明細');
-            $this->buildDetailSheet($detailSheet, $months->first(), $yearMonth);
-        }
-        // 対象社員が複数の場合は日別明細シートを省略する(1ファイルに全員分の日別明細を
-        // 含める機能は今回対象外。docs/14-usecases-export.md参照)。
-
-        $spreadsheet->setActiveSheetIndex(0);
+        $this->buildSummarySheet($summarySheet, collect(), $yearMonth);
 
         return $spreadsheet;
     }

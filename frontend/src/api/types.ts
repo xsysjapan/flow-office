@@ -548,10 +548,14 @@ export interface FlexSettlementSummary {
   legal_holiday_work_minutes: number
 }
 
+/** UC-E001: 勤怠CSV出力フォーマット。省略時は`generic`。 */
+export type AttendanceExportFormat = 'generic' | 'generic_tsv' | 'generic_sjis' | 'moneyforward' | 'freee'
+
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
 export interface AttendanceExportFilters {
   year_month: string
   user_id?: string
+  format?: AttendanceExportFormat
 }
 
 export type BackOfficeTaskStatus =

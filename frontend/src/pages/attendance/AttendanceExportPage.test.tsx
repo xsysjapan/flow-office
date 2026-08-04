@@ -31,7 +31,11 @@ describe('AttendanceExportPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
 
     await waitFor(() =>
-      expect(exportsApi.downloadAttendanceCsv).toHaveBeenCalledWith({ year_month: '2026-06', user_id: undefined }),
+      expect(exportsApi.downloadAttendanceCsv).toHaveBeenCalledWith({
+        year_month: '2026-06',
+        user_id: undefined,
+        format: 'generic',
+      }),
     )
   })
 
@@ -43,5 +47,48 @@ describe('AttendanceExportPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('取得に失敗しました')
+  })
+
+  it('downloads the CSV using the selected format', async () => {
+    vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
+    renderPage()
+
+    await pickYearMonth(userEvent.setup(), '対象月', '2026-06')
+    await userEvent.selectOptions(screen.getByLabelText('CSV出力フォーマット'), 'moneyforward')
+    await userEvent.click(screen.getByRole('button', { name: 'CSVダウンロード' }))
+
+    await waitFor(() =>
+      expect(exportsApi.downloadAttendanceCsv).toHaveBeenCalledWith({
+        year_month: '2026-06',
+        user_id: undefined,
+        format: 'moneyforward',
+      }),
+    )
+  })
+
+  it('shows the format description and documentation link for the selected format', async () => {
+    renderPage()
+
+    expect(screen.getByText(/どの給与計算ソフトでも列マッピング機能があれば取り込めます/)).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('CSV出力フォーマット'), 'freee')
+
+    expect(screen.getByText(/freee人事労務の勤怠データインポート/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'freee人事労務 勤怠データインポート' })).toHaveAttribute(
+      'href',
+      'https://support.freee.co.jp/hc/ja/articles/204922194',
+    )
+  })
+
+  it('downloads the Excel file for the entered year_month when clicked', async () => {
+    vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
+    renderPage()
+
+    await pickYearMonth(userEvent.setup(), '対象月', '2026-06')
+    await userEvent.click(screen.getByRole('button', { name: 'Excelダウンロード' }))
+
+    await waitFor(() =>
+      expect(exportsApi.downloadAttendanceExcel).toHaveBeenCalledWith({ year_month: '2026-06', user_id: undefined }),
+    )
   })
 })
