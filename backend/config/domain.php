@@ -96,6 +96,24 @@ use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromAttendanceMonthApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
+use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
+use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\ConfirmCompensatoryLeaveGrantsForMonth;
+use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
+use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeave\Commands\ReturnCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\SyncCompensatoryLeaveGrant;
+use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveGrantCancellationHandler;
+use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveGrantHandler;
+use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\ConfirmCompensatoryLeaveGrantsForMonthHandler;
+use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveGrantCancellationHandler;
+use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveHandler;
+use App\Domain\CompensatoryLeave\Handlers\ReturnCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\SyncCompensatoryLeaveGrantHandler;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -358,6 +376,16 @@ return [
         ApproveShiftSwapRequest::class => ApproveShiftSwapRequestHandler::class,
         ReturnShiftSwapRequest::class => ReturnShiftSwapRequestHandler::class,
         CancelShiftSwapRequest::class => CancelShiftSwapRequestHandler::class,
+
+        SyncCompensatoryLeaveGrant::class => SyncCompensatoryLeaveGrantHandler::class,
+        ConfirmCompensatoryLeaveGrantsForMonth::class => ConfirmCompensatoryLeaveGrantsForMonthHandler::class,
+        RequestCompensatoryLeave::class => RequestCompensatoryLeaveHandler::class,
+        ApproveCompensatoryLeaveRequest::class => ApproveCompensatoryLeaveRequestHandler::class,
+        ReturnCompensatoryLeaveRequest::class => ReturnCompensatoryLeaveRequestHandler::class,
+        CancelCompensatoryLeaveRequest::class => CancelCompensatoryLeaveRequestHandler::class,
+        CancelCompensatoryLeaveGrant::class => CancelCompensatoryLeaveGrantHandler::class,
+        RequestCompensatoryLeaveGrantCancellation::class => RequestCompensatoryLeaveGrantCancellationHandler::class,
+        ApproveCompensatoryLeaveGrantCancellation::class => ApproveCompensatoryLeaveGrantCancellationHandler::class,
     ],
 
     /*
@@ -374,7 +402,7 @@ return [
     |
     | 注意: spatie/laravel-event-sourcingに移行済みのドメイン(Attachment/Integration/
     | AuthenticationKey/Device/DeviceAdminSession/Notification/Workflow/BackOffice/
-    | PaidLeave/SpecialLeave/User/Attendance)のProjectorはここではなく
+    | PaidLeave/SpecialLeave/CompensatoryLeave/User/Attendance)のProjectorはここではなく
     | Spatie\EventSourcing\EventHandlers\Projectors\Projectorのサブクラスとして実装し、
     | config/event-sourcing.phpのauto_discover_projectors_and_reactorsで自動検出させる
     | (docs/29-event-sourcing-framework-migration.md参照)。AttendanceDailyCalculationProjector

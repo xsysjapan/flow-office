@@ -28,6 +28,8 @@ final class WorkflowRequestNotificationContent
 
     public const SHIFT_SWAP_REQUEST = 'shift_swap_request';
 
+    public const COMPENSATORY_LEAVE_REQUEST = 'compensatory_leave_request';
+
     private function __construct(
         public readonly string $title,
         public readonly string $summary,
@@ -60,6 +62,11 @@ final class WorkflowRequestNotificationContent
             self::SHIFT_SWAP_REQUEST => new self(
                 title: '振替休日申請の承認依頼',
                 summary: '振替休日申請が提出されました。',
+                detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
+            ),
+            self::COMPENSATORY_LEAVE_REQUEST => new self(
+                title: '代休申請の承認依頼',
+                summary: '代休申請が提出されました。',
                 detailUrl: FrontendUrl::path("/approvals?requestId={$workflowRequest->id}"),
             ),
             default => new self(
@@ -98,6 +105,11 @@ final class WorkflowRequestNotificationContent
                 summary: '振替休日申請が承認されました。',
                 detailUrl: FrontendUrl::path('/shift-swap/requests'),
             ),
+            self::COMPENSATORY_LEAVE_REQUEST => new self(
+                title: '代休申請が承認されました',
+                summary: '代休申請が承認されました。',
+                detailUrl: FrontendUrl::path('/compensatory-leave/requests'),
+            ),
             default => new self(
                 title: '承認完了',
                 summary: "「{$workflowRequest->title}」が承認されました。",
@@ -133,6 +145,11 @@ final class WorkflowRequestNotificationContent
                 title: '振替休日申請が差戻されました',
                 summary: "振替休日申請が差し戻されました: {$comment}",
                 detailUrl: FrontendUrl::path('/shift-swap/requests'),
+            ),
+            self::COMPENSATORY_LEAVE_REQUEST => new self(
+                title: '代休申請が差戻されました',
+                summary: "代休申請が差し戻されました: {$comment}",
+                detailUrl: FrontendUrl::path('/compensatory-leave/requests'),
             ),
             default => new self(
                 title: '差戻し',

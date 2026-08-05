@@ -44,6 +44,16 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
 use App\Domain\Device\Events\DeviceEnabled;
@@ -320,6 +330,17 @@ return [
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+
+        'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
+        'compensatory_leave.grant_removed' => CompensatoryLeaveGrantRemoved::class,
+        'compensatory_leave.grant_confirmed' => CompensatoryLeaveGrantConfirmed::class,
+        'compensatory_leave.grant_cancelled' => CompensatoryLeaveGrantCancelled::class,
+        'compensatory_leave.used' => CompensatoryLeaveUsed::class,
+        'compensatory_leave.requested' => CompensatoryLeaveRequested::class,
+        'compensatory_leave.request_shared' => CompensatoryLeaveRequestShared::class,
+        'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,
+        'compensatory_leave.request_returned' => CompensatoryLeaveRequestReturned::class,
+        'compensatory_leave.request_cancelled' => CompensatoryLeaveRequestCancelled::class,
 
         'shift_swap.requested' => ShiftSwapRequested::class,
         'shift_swap.request_approved' => ShiftSwapRequestApproved::class,

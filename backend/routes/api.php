@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
+use App\Http\Controllers\Api\CompensatoryLeaveController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
@@ -290,6 +291,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
     });
+
+    // --- 代休の残数管理・消化申請・承認(付与は休日出勤の勤怠実績から自動導出される。
+    //     ビジネスロジックはApp\Domain\CompensatoryLeaveとして完全に独立させる) ---
+    Route::get('/compensatory-leave/grants/mine', [CompensatoryLeaveController::class, 'myGrants']);
+    Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
+    Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove']);
+    Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/approve', [CompensatoryLeaveController::class, 'approveRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/return', [CompensatoryLeaveController::class, 'returnRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/cancel', [CompensatoryLeaveController::class, 'cancelRequest']);
+    Route::post('/compensatory-leave/grants/{grant}/request-cancellation', [CompensatoryLeaveController::class, 'requestGrantCancellation']);
+    Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation']);
 
     // --- 振替休日申請(固定勤務の休日を別日の労働日と入れ替える。ビジネスロジックは
     //     App\Domain\ShiftSwapとして独立させる) ---
