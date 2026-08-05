@@ -45,6 +45,7 @@ function navGroups(
       { to: '/attendance/week', label: '週次勤怠' },
       { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
       { to: '/paid-leave', label: '有給' },
+      { to: '/compensatory-leave', label: '代休' },
       ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
       { to: '/expenses', label: '経費精算' },
       { to: '/expenses/presets', label: '入力プリセット' },

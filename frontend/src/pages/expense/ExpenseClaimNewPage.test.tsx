@@ -96,6 +96,7 @@ function renderPage(
             shift_swap_requires_approval: true,
             attendance_requires_approval: true,
             expense_claim_requires_approval: expenseClaimRequiresApproval,
+            compensatory_leave_requires_approval: true,
             default_timezone: 'Asia/Tokyo',
             default_work_style_id: null,
             default_work_style: null,
