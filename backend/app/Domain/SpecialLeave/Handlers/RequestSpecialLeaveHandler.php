@@ -71,14 +71,18 @@ class RequestSpecialLeaveHandler implements CommandHandler
 
         $requestedDays = $this->resolveRequestedDays($command, $workStyle);
 
-        $remainingDays = (float) SpecialLeaveGrant::query()
-            ->availableOn($command->targetDate)
-            ->where('user_id', $command->userId)
-            ->where('special_leave_type_id', $command->specialLeaveTypeId)
-            ->sum('remaining_days');
+        // requires_grant=falseの種別(忌引・代休等、会社の制度上あらかじめ残数を付与しない
+        // 種別)は残数チェックをスキップする。
+        if ($specialLeaveType->requires_grant) {
+            $remainingDays = (float) SpecialLeaveGrant::query()
+                ->availableOn($command->targetDate)
+                ->where('user_id', $command->userId)
+                ->where('special_leave_type_id', $command->specialLeaveTypeId)
+                ->sum('remaining_days');
 
-        if ($remainingDays < $requestedDays) {
-            throw new DomainRuleException('特別休暇の残数が不足しています。');
+            if ($remainingDays < $requestedDays) {
+                throw new DomainRuleException('特別休暇の残数が不足しています。');
+            }
         }
 
         $requestId = $command->requestId ?? (string) Str::uuid();

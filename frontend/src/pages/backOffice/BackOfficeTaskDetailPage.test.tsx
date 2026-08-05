@@ -4,8 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
+import * as attendanceApi from '../../api/attendance'
 import * as usersApi from '../../api/users'
-import type { BackOfficeTask, Paginated, User } from '../../api/types'
+import type { AttendanceMonth, BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee: User = {
@@ -109,5 +110,67 @@ describe('BackOfficeTaskDetailPage', () => {
     await waitFor(() =>
       expect(backOfficeTasksApi.changeBackOfficeTaskStatus).toHaveBeenCalledWith('backoffice-task-1', 'processing', '発注しました'),
     )
+  })
+
+  describe('attendance_month_confirmation task', () => {
+    const attendanceMonthTask: BackOfficeTask = {
+      ...baseTask,
+      task_type: 'attendance_month_confirmation',
+      source_type: 'attendance_month',
+      source_id: 'attendance-month-1',
+    }
+
+    const baseMonth: AttendanceMonth = {
+      id: 'attendance-month-1',
+      user_id: 'user-1',
+      year_month: '2026-07',
+      status: 'approved',
+      approver: undefined,
+      submitted_at: '2026-07-31T00:00:00+09:00',
+      approved_at: '2026-08-01T00:00:00+09:00',
+      returned_at: null,
+      return_comment: null,
+      closed_at: null,
+      snapshot: null,
+      legal_holiday_warnings: [],
+    }
+
+    it('shows a 締める button when the attendance month is not closed', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+
+      renderPage(attendanceMonthTask)
+
+      expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
+      expect(screen.queryByText('締め処理後は修正することはできません。')).not.toBeInTheDocument()
+    })
+
+    it('closes the month and refetches when 締める is clicked', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      vi.spyOn(attendanceApi, 'closeMonth').mockResolvedValue({ ...baseMonth, status: 'closed' })
+
+      renderPage(attendanceMonthTask)
+
+      await userEvent.click(await screen.findByRole('button', { name: '締める' }))
+
+      await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith('attendance-month-1'))
+    })
+
+    it('hides the 締める button and shows a message when the attendance month is already closed', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'closed' })
+
+      renderPage(attendanceMonthTask)
+
+      expect(await screen.findByText('締め処理後は修正することはできません。')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '締める' })).not.toBeInTheDocument()
+    })
+
+    it('does not show the attendance month section for other task types', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+
+      renderPage(baseTask)
+
+      await screen.findByText('タクシー代の経理処理')
+      expect(screen.queryByText('月次勤怠の締め処理')).not.toBeInTheDocument()
+    })
   })
 })

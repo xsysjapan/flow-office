@@ -44,6 +44,16 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
 use App\Domain\Device\Events\DeviceEnabled;
@@ -83,6 +93,11 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestCancelled;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequested;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestReturned;
+use App\Domain\ShiftSwap\Events\ShiftSwapRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
@@ -315,6 +330,23 @@ return [
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+
+        'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
+        'compensatory_leave.grant_removed' => CompensatoryLeaveGrantRemoved::class,
+        'compensatory_leave.grant_confirmed' => CompensatoryLeaveGrantConfirmed::class,
+        'compensatory_leave.grant_cancelled' => CompensatoryLeaveGrantCancelled::class,
+        'compensatory_leave.used' => CompensatoryLeaveUsed::class,
+        'compensatory_leave.requested' => CompensatoryLeaveRequested::class,
+        'compensatory_leave.request_shared' => CompensatoryLeaveRequestShared::class,
+        'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,
+        'compensatory_leave.request_returned' => CompensatoryLeaveRequestReturned::class,
+        'compensatory_leave.request_cancelled' => CompensatoryLeaveRequestCancelled::class,
+
+        'shift_swap.requested' => ShiftSwapRequested::class,
+        'shift_swap.request_approved' => ShiftSwapRequestApproved::class,
+        'shift_swap.request_returned' => ShiftSwapRequestReturned::class,
+        'shift_swap.request_cancelled' => ShiftSwapRequestCancelled::class,
+        'shift_swap.request_shared' => ShiftSwapRequestShared::class,
 
         'user.onboarded_as_admin' => UserOnboardedAsAdmin::class,
         'user.created_from_sso_login' => UserCreatedFromSsoLogin::class,

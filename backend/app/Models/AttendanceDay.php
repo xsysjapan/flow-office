@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
  * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'utc_offset_minutes', 'work_type', 'work_location_type', 'note', 'locked_at'])]
+#[Fillable(['id', 'user_id', 'work_date', 'shift_assignment_id', 'status', 'source', 'actual_start_at', 'actual_end_at', 'utc_offset_minutes', 'work_type', 'work_location_type', 'day_classification', 'note', 'locked_at'])]
 class AttendanceDay extends Model
 {
     use HasUuids;

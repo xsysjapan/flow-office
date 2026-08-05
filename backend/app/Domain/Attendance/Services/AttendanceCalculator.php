@@ -6,6 +6,7 @@ use App\Domain\SpecialLeave\SpecialLeaveWorkType;
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceLeaveSegment;
+use App\Models\DayClassification;
 use App\Models\PaidLeaveType;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -157,6 +158,12 @@ class AttendanceCalculator
 
         $isLegalHoliday = $shift !== null && $this->legalHolidayResolver->isLegalHoliday($shift);
         $isCompanyHoliday = (bool) ($shift?->is_company_holiday) && ! $isLegalHoliday;
+        $lateNightPrescribedHolidayWorkMinutes = $isCompanyHoliday ? $lateNightWorkMinutes : 0;
+        $dayClassification = match (true) {
+            $isLegalHoliday => DayClassification::LEGAL_HOLIDAY,
+            $isCompanyHoliday => DayClassification::PRESCRIBED_HOLIDAY,
+            default => DayClassification::WORKING_DAY,
+        };
         $isMonthlyVariable = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE;
         $isDiscretionary = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY;
         $isManagerSupervisor = $workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR;
@@ -176,15 +183,20 @@ class AttendanceCalculator
             : self::LEGAL_DAILY_LIMIT_MINUTES;
 
         // 法定休日の労働は日8時間の判定に乗せず、全て法定休日労働として扱う。
-        // 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、1日8時間・
-        // 週40時間の判定からは除外しない(所定休日での「所定」は0分として扱う)。
+        // 所定休日(法定外休日)の労働は、`prescribed_holiday_work_minutes`にのみ計上する
+        // (所定休日にはそもそも「所定」の時間が存在しないため`statutory_within_overtime_minutes`
+        // には含めない)。ただし1日8時間(またはmonthly_variableの所定労働時間)を超えた分は
+        // 別途`statutory_excess_overtime_minutes`として計上する(prescribed_holiday_work_minutesと
+        // 重複計上しないよう、法定内残業側は常に0のままにする)。
         $statutoryWithinOvertimeMinutes = 0;
         $statutoryExcessOvertimeMinutes = 0;
         if (! $isLegalHoliday) {
-            $overtimeBaselineMinutes = $isCompanyHoliday ? 0 : ($isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes);
             $statutoryExcessOvertimeMinutes = max(0, $workMinutes - $legalDailyLimitMinutes);
-            $withinLegalMinutes = min($workMinutes, $legalDailyLimitMinutes);
-            $statutoryWithinOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
+            if (! $isCompanyHoliday) {
+                $overtimeBaselineMinutes = $isMonthlyVariable ? $plannedWorkMinutes : $prescribedWorkMinutes;
+                $withinLegalMinutes = min($workMinutes, $legalDailyLimitMinutes);
+                $statutoryWithinOvertimeMinutes = max(0, $withinLegalMinutes - $overtimeBaselineMinutes);
+            }
         }
 
         // 裁量労働制のみなし時間は8時間を超えた部分のみが法定時間外になる(所定内/所定外の
@@ -244,6 +256,7 @@ class AttendanceCalculator
         }
 
         return [
+            'day_classification' => $dayClassification,
             'planned_work_minutes' => $plannedWorkMinutes,
             'work_minutes' => $workMinutes,
             'deemed_work_minutes' => $deemedWorkMinutes > 0 ? $deemedWorkMinutes : null,
@@ -251,13 +264,14 @@ class AttendanceCalculator
             'prescribed_work_minutes' => $prescribedWorkMinutes,
             'statutory_within_overtime_minutes' => $statutoryWithinOvertimeMinutes,
             'statutory_excess_overtime_minutes' => $statutoryExcessOvertimeMinutes,
-            'late_night_work_minutes' => $isLegalHoliday ? 0 : $lateNightWorkMinutes,
+            'late_night_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $lateNightWorkMinutes,
             'late_night_prescribed_work_minutes' => $lateNightPrescribedWorkMinutes,
             'late_night_statutory_within_overtime_minutes' => $lateNightStatutoryWithinOvertimeMinutes,
             'late_night_statutory_excess_overtime_minutes' => $lateNightStatutoryExcessOvertimeMinutes,
             'legal_holiday_work_minutes' => ($isLegalHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
-            'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? $workMinutes : 0,
+            'prescribed_holiday_work_minutes' => ($isCompanyHoliday && ! $isManagerSupervisor) ? min($workMinutes, $legalDailyLimitMinutes) : 0,
             'late_night_legal_holiday_work_minutes' => $isLegalHoliday ? $lateNightWorkMinutes : 0,
+            'late_night_prescribed_holiday_work_minutes' => $lateNightPrescribedHolidayWorkMinutes,
             'core_time_violation' => $coreTimeViolation,
             'absence_minutes' => $absenceMinutes,
             'special_leave_minutes' => $specialLeaveMinutes,

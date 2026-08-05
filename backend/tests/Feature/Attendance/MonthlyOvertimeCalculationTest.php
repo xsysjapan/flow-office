@@ -47,11 +47,12 @@ class MonthlyOvertimeCalculationTest extends TestCase
         string $actualStart,
         string $actualEnd,
         bool $isLegalHoliday = false,
+        bool $isCompanyHoliday = false,
     ): AttendanceDay {
         $shift = EmployeeShiftAssignment::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
-            'day_type' => $isLegalHoliday ? 'legal_holiday' : 'weekday',
-            'is_working_day' => true, 'is_legal_holiday' => $isLegalHoliday, 'is_company_holiday' => false,
+            'day_type' => $isLegalHoliday ? 'legal_holiday' : ($isCompanyHoliday ? 'company_holiday' : 'weekday'),
+            'is_working_day' => ! $isCompanyHoliday, 'is_legal_holiday' => $isLegalHoliday, 'is_company_holiday' => $isCompanyHoliday,
             'planned_break_minutes' => 60,
         ]);
 
@@ -145,6 +146,42 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $this->assertSame(0, $totals['statutory_excess_overtime_over_60h_minutes']);
         $this->assertSame(60, $totals['late_night_work_minutes']);
         $this->assertSame(60, $totals['late_night_statutory_excess_overtime_minutes']);
+    }
+
+    /**
+     * 所定休日労働のうち深夜時間帯にかかった分(late_night_prescribed_holiday_work_minutes)は
+     * 月次集計にも合算される。
+     */
+    public function test_late_night_prescribed_holiday_work_minutes_is_aggregated_into_the_monthly_totals(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+
+        // 20:00〜23:00の所定休日勤務(休憩なし) => 深夜(22:00〜23:00)60分が
+        // late_night_prescribed_holiday_work_minutesに計上される。
+        $shift = EmployeeShiftAssignment::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'work_style_id' => $workStyle->id,
+            'day_type' => 'company_holiday', 'is_working_day' => false,
+            'is_legal_holiday' => false, 'is_company_holiday' => true,
+            'planned_break_minutes' => 0,
+        ]);
+        $day = AttendanceDay::query()->create([
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
+        ]);
+        $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
+            'actual_start_at' => '2026-06-01T20:00:00+09:00',
+            'actual_end_at' => '2026-06-01T23:00:00+09:00',
+            'breaks' => [],
+            'reason' => '所定休日の深夜勤務',
+        ])->assertOk();
+
+        $response = $this->actingAs($user)->getJson('/api/attendance/months/2026-06')->assertOk();
+        $totals = $response->json('monthly_calculation_totals');
+
+        $this->assertSame(60, $totals['late_night_prescribed_holiday_work_minutes']);
+        $this->assertSame(0, $totals['late_night_work_minutes'], '所定休日の深夜労働はlate_night_work_minutesに二重計上しない');
     }
 
     /**

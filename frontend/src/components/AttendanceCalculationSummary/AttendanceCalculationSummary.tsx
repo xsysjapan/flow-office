@@ -23,6 +23,8 @@ export interface AttendanceCalculationSummaryData {
   late_night_statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  prescribed_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   absence_minutes?: number
   paid_leave_days?: number
   paid_leave_minutes?: number
@@ -46,11 +48,18 @@ export interface AttendanceCalculationSummaryProps {
   payrollWorkMinutes?: number
 }
 
-function SummaryItem({ label, children }: { label: string; children: ReactNode }) {
+/** 通常はdt+ddの1組が2列(ラベル・値)を占める。`fullWidth`を指定すると、後続の項目が
+ *  ペア(合計値とその深夜内訳)としてずれずに並ぶよう、sm以上でも1行を単独で占有する
+ *  (実労働時間・給与計算上の労働時間のように、対応する深夜内訳を持たない項目に使う)。 */
+function SummaryItem({ label, children, fullWidth = false }: { label: string; children: ReactNode; fullWidth?: boolean }) {
   return (
     <>
       <dt className="whitespace-nowrap font-medium text-muted-foreground">{label}</dt>
-      <dd className="justify-self-end whitespace-nowrap text-foreground sm:justify-self-auto">{children}</dd>
+      <dd
+        className={`justify-self-end whitespace-nowrap text-foreground sm:justify-self-auto ${fullWidth ? 'sm:col-span-3' : ''}`}
+      >
+        {children}
+      </dd>
     </>
   )
 }
@@ -90,14 +99,17 @@ export function AttendanceCalculationSummary({
       <h3 id={`${title}-summary`} className="mb-3 text-sm font-medium text-foreground">{title}</h3>
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
         {totals.work_minutes !== undefined && (
-          <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
+          <SummaryItem label="実労働時間" fullWidth><Duration minutes={totals.work_minutes} /></SummaryItem>
         )}
         {showPayrollWorkMinutes && (
-          <SummaryItem label="給与計算上の労働時間"><Duration minutes={payrollWorkMinutes} /></SummaryItem>
+          <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
         )}
         <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>
         <SummaryItem label="法定内残業時間"><Duration minutes={totals.statutory_within_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜法定内残業時間"><Duration minutes={totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
         <SummaryItem label="法定外残業時間"><Duration minutes={totals.statutory_excess_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜法定外残業時間"><Duration minutes={totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
         {statutoryExcessOver60hMinutes !== undefined && (
           <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
         )}
@@ -105,10 +117,9 @@ export function AttendanceCalculationSummary({
           <SummaryItem label="うち週40時間超"><Duration minutes={weeklyStatutoryExcessOvertimeMinutes} /></SummaryItem>
         )}
         <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定内残業時間"><Duration minutes={totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定外残業時間"><Duration minutes={totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
         <SummaryItem label="うち深夜法定休日労働時間"><Duration minutes={totals.late_night_legal_holiday_work_minutes} /></SummaryItem>
+        <SummaryItem label="所定休日労働時間"><Duration minutes={totals.prescribed_holiday_work_minutes} /></SummaryItem>
+        <SummaryItem label="うち深夜所定休日労働時間"><Duration minutes={totals.late_night_prescribed_holiday_work_minutes} /></SummaryItem>
       </dl>
 
       {hasLeaveTotals && (

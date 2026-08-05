@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
+use App\Http\Controllers\Api\CompensatoryLeaveController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
+use App\Http\Controllers\Api\ShiftSwapRequestController;
 use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
@@ -140,7 +142,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
-    Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,admin')->group(function () {
+    Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,hr_staff,admin')->group(function () {
         Route::get('/backoffice-tasks/unassigned', [BackOfficeTaskController::class, 'indexUnassigned']);
         Route::get('/backoffice-tasks/mine', [BackOfficeTaskController::class, 'indexMine']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
@@ -148,8 +150,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/backoffice-tasks/{backOfficeTask}/status', [BackOfficeTaskController::class, 'changeStatus']);
     });
 
-    // --- CSV出力 (docs/14-usecases-export.md) ---
+    // --- CSV/Excel出力 (docs/14-usecases-export.md) ---
     Route::get('/exports/attendance', [ExportController::class, 'attendance'])
+        ->middleware('role:admin,hr_staff');
+    Route::get('/exports/attendance.xlsx', [ExportController::class, 'attendanceExcel'])
         ->middleware('role:admin,hr_staff');
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
         ->middleware('role:accounting_staff,admin');
@@ -236,6 +240,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('attendance-months')->group(function () {
+        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth']);
         Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth']);
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth']);
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])
@@ -286,6 +291,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
     });
+
+    // --- 代休の残数管理・消化申請・承認(付与は休日出勤の勤怠実績から自動導出される。
+    //     ビジネスロジックはApp\Domain\CompensatoryLeaveとして完全に独立させる) ---
+    Route::get('/compensatory-leave/grants/mine', [CompensatoryLeaveController::class, 'myGrants']);
+    Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
+    Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove']);
+    Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/approve', [CompensatoryLeaveController::class, 'approveRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/return', [CompensatoryLeaveController::class, 'returnRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/cancel', [CompensatoryLeaveController::class, 'cancelRequest']);
+    Route::post('/compensatory-leave/grants/{grant}/request-cancellation', [CompensatoryLeaveController::class, 'requestGrantCancellation']);
+    Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation']);
+
+    // --- 振替休日申請(固定勤務の休日を別日の労働日と入れ替える。ビジネスロジックは
+    //     App\Domain\ShiftSwapとして独立させる) ---
+    Route::get('/shift-swap/requests/mine', [ShiftSwapRequestController::class, 'myRequests']);
+    Route::get('/shift-swap/requests/to-approve', [ShiftSwapRequestController::class, 'requestsToApprove']);
+    Route::post('/shift-swap/requests', [ShiftSwapRequestController::class, 'storeRequest']);
+    Route::get('/shift-swap/requests/{shiftSwapRequest}', [ShiftSwapRequestController::class, 'show']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/approve', [ShiftSwapRequestController::class, 'approveRequest']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/return', [ShiftSwapRequestController::class, 'returnRequest']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/cancel', [ShiftSwapRequestController::class, 'cancelRequest']);
 
     // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
     Route::get('/users/me/devices', [DeviceController::class, 'indexMine']);

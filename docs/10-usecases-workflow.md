@@ -67,3 +67,11 @@
 - `requires_backoffice_task` が true の申請種別は、最終承認時に
   [11章 バックオフィス処理](./11-usecases-backoffice.md) の UC-B001 でタスクを自動生成する。
 - 添付ファイルは [12章](./12-usecases-attachment.md) の仕組みを共通利用する。
+- 有給休暇・特別休暇と同様、振替休日申請 (`App\Domain\ShiftSwap`) も承認とバックオフィス処理を
+  別ステータス系列で管理する専用申請ドメインとして実装する(`shift_swap_request`)。固定勤務の
+  社員のみ対象。対象日・振替先日のどちらを休日→労働日にし、どちらを労働日→休日にするかは
+  問わない(休日である側を基準に、休日区分・法定休日の同一週制約・週40時間の所定労働時間上限を
+  申請時に検証する。ただし両方とも休日、または両方とも労働日の組み合わせは拒否する)。
+  承認時に対象日・振替先日の `employee_shift_assignments` を丸ごと入れ替える。
+  `system_settings.shift_swap_requires_approval` が false の場合は承認ワークフローを経由せず
+  即時確定する(`special_leave_requires_approval` と同じ考え方)。

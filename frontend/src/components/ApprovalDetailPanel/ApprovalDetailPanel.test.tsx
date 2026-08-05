@@ -23,6 +23,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   legal_holiday_work_minutes: 0,
   prescribed_holiday_work_minutes: 0,
   late_night_legal_holiday_work_minutes: 0,
+  late_night_prescribed_holiday_work_minutes: 0,
 }
 
 const applicant = {
@@ -109,6 +110,27 @@ const expenseRequest: WorkflowRequest = {
   },
 }
 
+const shiftSwapRequest: WorkflowRequest = {
+  ...genericRequest,
+  id: 'workflow-request-4',
+  title: '振替休日申請',
+  subject_type: 'shift_swap_request',
+  subject: {
+    type: 'shift_swap_request',
+    id: 'shift-swap-request-1',
+    user_id: 'applicant-1',
+    status: 'submitted',
+    target_date: '2026-07-05',
+    substitute_date: '2026-07-12',
+    reason: '出張対応',
+    return_comment: null,
+    submitted_at: '2026-08-01T00:00:00+09:00',
+    approved_at: null,
+    returned_at: null,
+    cancelled_at: null,
+  },
+}
+
 function renderPanel(request: WorkflowRequest, overrides: Partial<Parameters<typeof ApprovalDetailPanel>[0]> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue([])
@@ -174,6 +196,35 @@ describe('ApprovalDetailPanel', () => {
     expect(await screen.findByRole('heading', { name: '月次勤怠' })).toBeInTheDocument()
   })
 
+  it('restricts weekly navigation to weeks within the requested month', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
+
+    renderPanel(attendanceRequest)
+
+    await user.click(screen.getByRole('button', { name: '週次' }))
+    await screen.findByRole('heading', { name: '週次勤怠' })
+
+    // 2026-07は6/29(月)週から始まるので、対象月(2026-07)の範囲では前週へは移動できない。
+    expect(screen.getByRole('button', { name: '前週' })).toBeDisabled()
+    // 今週へジャンプするボタンは対象月の範囲を外れうるため表示しない。
+    expect(screen.queryByRole('button', { name: '今週' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+    await user.click(screen.getByRole('button', { name: '次週' }))
+
+    expect(screen.getByRole('button', { name: '次週' })).toBeDisabled()
+  })
+
   it('drills into the daily view when a day row is selected from the monthly view', async () => {
     const user = userEvent.setup()
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
@@ -214,6 +265,27 @@ describe('ApprovalDetailPanel', () => {
     // 合計金額(dl)と明細1件分の金額(テーブル行)の両方に同じ表記が出る。
     expect(screen.getAllByText('3,000円')).toHaveLength(2)
     expect(screen.getByText('個人立替')).toBeInTheDocument()
+  })
+
+  it('shows the target date, substitute date, and status for a shift swap request subject', () => {
+    renderPanel(shiftSwapRequest)
+
+    expect(screen.getByText('2026-07-05')).toBeInTheDocument()
+    expect(screen.getByText('2026-07-12')).toBeInTheDocument()
+    expect(screen.getByText('出張対応')).toBeInTheDocument()
+    expect(screen.getByText('申請中')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '承認する' })).toBeInTheDocument()
+  })
+
+  it('disables actions for a shift swap request subject that is not submitted', () => {
+    const approvedShiftSwap: WorkflowRequest = {
+      ...shiftSwapRequest,
+      subject: { ...shiftSwapRequest.subject!, status: 'approved' },
+    }
+    renderPanel(approvedShiftSwap)
+
+    expect(screen.getByText('この申請は現在操作できません。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
   })
 
   it('calls onApprove when the approve button is clicked', async () => {

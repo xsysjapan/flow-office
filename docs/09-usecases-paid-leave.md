@@ -186,3 +186,24 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
   (欠勤ではなく有給消化であることは `attendance_days.work_type` で判別できるが、給与計算上の
   「有給分の賃金換算」は本実装のスコープ外。給与計算ソフト側で `work_type` を見て加算する、
   または後続フェーズで日次集計に有給分を組み込む対応が必要)。
+
+## 代休(`App\Domain\CompensatoryLeave`)
+
+有給・特別休暇とは異なり、代休の付与(Grant)は申請ではなく休日出勤の勤怠実績
+(`attendance_days`)から自動導出される。所定休日・法定休日に実働がある日次勤怠が
+保存される都度、`AttendanceDayCalculated`/`AttendanceDailyCalculationAdjusted`/
+`AttendanceDayDeleted` を購読するReactorが`SyncCompensatoryLeaveGrant`コマンドを発行し、
+`compensatory_leave_grants`(status=draft)を1対1(`attendance_day_id`ユニーク)で同期する。
+休日出勤でなくなった・実績が削除された場合、draft状態のGrantのみ取り消す
+(確定済みGrantは触らない。整合性は月次確認画面の警告`compensatory_leave_warnings`で扱う)。
+
+月次勤怠の提出(`AttendanceMonthSubmitted`)を受けて、対象月のdraft Grantを一括で
+`confirmed`に確定する(`system_settings.compensatory_leave_valid_days`が設定されていれば
+提出時点からのN日後を`expires_on`とし、未設定なら無期限)。確定後のGrantのみが消化申請
+(`compensatory_leave_requests`、特別休暇と同じ申請・承認・消化のフロー)の対象になる。
+取得単位(全休/半休/時間単位)は`system_settings.compensatory_leave_unit`
+(`daily`/`half_day`/`hourly`)で制限し、半休判定の閾値は
+`compensatory_leave_half_day_threshold_minutes`で設定する。未使用の確定済みGrantは
+取消申請でき(`compensatory_leave_grant_cancellations`)、`compensatory_leave_requires_approval`
+の設定に応じて即時取消/承認要のいずれかになる。詳細は`docs/03-architecture.md`・
+`app/Domain/CompensatoryLeave/`を参照。

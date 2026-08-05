@@ -34,6 +34,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   legal_holiday_work_minutes: 0,
   prescribed_holiday_work_minutes: 0,
   late_night_legal_holiday_work_minutes: 0,
+  late_night_prescribed_holiday_work_minutes: 0,
 }
 
 const currentUser: User = {
@@ -104,6 +105,7 @@ function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = t
           systemSettings: {
             paid_leave_requires_approval: true,
             special_leave_requires_approval: true,
+            shift_swap_requires_approval: true,
             attendance_requires_approval: attendanceRequiresApproval,
             expense_claim_requires_approval: true,
             default_timezone: 'Asia/Tokyo',

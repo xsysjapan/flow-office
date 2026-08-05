@@ -93,6 +93,7 @@ function renderPage(
           systemSettings: {
             paid_leave_requires_approval: true,
             special_leave_requires_approval: true,
+            shift_swap_requires_approval: true,
             attendance_requires_approval: true,
             expense_claim_requires_approval: expenseClaimRequiresApproval,
             default_timezone: 'Asia/Tokyo',

@@ -108,14 +108,14 @@ describe('AppLayout', () => {
   })
 
   it('shows the 特別休暇 menu item once an active special leave type exists', async () => {
-    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true }])
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }])
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
   })
 
   it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {
-    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false }])
+    renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false, requires_grant: true }])
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
@@ -136,12 +136,10 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
   })
 
-  it('shows 管理メニュー and 月次締め処理 under the 管理 group for an admin user', async () => {
+  it('shows 管理メニュー as a direct link for an admin user', async () => {
     renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
 
-    await userEvent.click(screen.getByRole('button', { name: '管理' }))
-    expect(await screen.findByRole('menuitem', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
-    expect(screen.getByRole('menuitem', { name: '月次締め処理' })).toHaveAttribute('href', '/attendance/months/close')
+    expect(await screen.findByRole('link', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
   })
 
   it('opens a mobile menu drawer listing every group and its links', async () => {

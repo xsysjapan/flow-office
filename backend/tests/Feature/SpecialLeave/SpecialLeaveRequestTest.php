@@ -103,6 +103,37 @@ class SpecialLeaveRequestTest extends TestCase
         $this->assertEquals(1.0, $day->calculation->special_leave_days);
     }
 
+    /**
+     * requires_grant=falseの種別(忌引・代休等)は、事前の付与(SpecialLeaveGrant)が
+     * 1件も無くても申請・承認でき、勤怠にも反映される。
+     */
+    public function test_a_type_without_requires_grant_can_be_requested_and_approved_without_any_grant(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $type = SpecialLeaveType::query()->create(['name' => '代休', 'is_active' => true, 'requires_grant' => false]);
+        $this->createWorkingDayShift($employee, '2026-08-10');
+
+        $requestResponse = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '休日出勤の代休',
+        ]);
+        $requestResponse->assertCreated();
+        $requestId = $requestResponse->json('id');
+
+        $approveResponse = $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve");
+        $approveResponse->assertOk();
+        $approveResponse->assertJsonPath('status', 'approved');
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertNotNull($day);
+        $this->assertSame('special_leave_full', $day->work_type);
+        $this->assertSame(0, SpecialLeaveGrant::query()->where('user_id', $employee->id)->count());
+    }
+
     public function test_hourly_special_leave_is_reflected_in_the_daily_calculation_minutes(): void
     {
         $employee = User::factory()->create();

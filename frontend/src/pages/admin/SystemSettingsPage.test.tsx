@@ -20,6 +20,7 @@ const settings: SystemSettings = {
   notification_mail_sender_name: null,
   paid_leave_requires_approval: true,
   special_leave_requires_approval: true,
+  shift_swap_requires_approval: true,
   attendance_requires_approval: true,
   expense_claim_requires_approval: true,
 }
@@ -68,6 +69,7 @@ describe('SystemSettingsPage', () => {
         notification_mail_sender_name: null,
         paid_leave_requires_approval: true,
         special_leave_requires_approval: true,
+        shift_swap_requires_approval: true,
         attendance_requires_approval: true,
         expense_claim_requires_approval: true,
       }),

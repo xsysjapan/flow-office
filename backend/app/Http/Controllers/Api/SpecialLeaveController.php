@@ -61,7 +61,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.types.store',
         summary: '特別休暇種別を作成する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'is_active', type: 'boolean')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'is_active', type: 'boolean'), new OA\Property(property: 'requires_grant', type: 'boolean', description: 'falseの場合、事前の付与(残数)が無くても申請できる(忌引・代休等)。省略時はtrue')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeType(Request $request): JsonResponse
@@ -69,9 +69,10 @@ class SpecialLeaveController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'is_active' => ['boolean'],
+            'requires_grant' => ['boolean'],
         ]);
 
-        $type = SpecialLeaveType::query()->create(['is_active' => true, ...$data]);
+        $type = SpecialLeaveType::query()->create(['is_active' => true, 'requires_grant' => true, ...$data]);
 
         return (new SpecialLeaveTypeResource($type))->response()->setStatusCode(201);
     }
@@ -82,7 +83,7 @@ class SpecialLeaveController extends Controller
         summary: '特別休暇種別を更新する',
         tags: ['特別休暇'],
         parameters: [new OA\Parameter(name: 'specialLeaveType', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'is_active', type: 'boolean')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'is_active', type: 'boolean'), new OA\Property(property: 'requires_grant', type: 'boolean')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function updateType(Request $request, SpecialLeaveType $specialLeaveType): SpecialLeaveTypeResource
@@ -90,6 +91,7 @@ class SpecialLeaveController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'is_active' => ['boolean'],
+            'requires_grant' => ['boolean'],
         ]);
 
         $specialLeaveType->update($data);

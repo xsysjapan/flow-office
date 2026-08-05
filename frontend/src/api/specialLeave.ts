@@ -8,6 +8,8 @@ export function fetchSpecialLeaveTypes(): Promise<SpecialLeaveType[]> {
 export interface CreateSpecialLeaveTypeInput {
   name: string
   is_active?: boolean
+  /** falseの場合、事前の付与(残数)が無くても申請できる(忌引・代休等)。省略時はtrue。 */
+  requires_grant?: boolean
 }
 
 export function createSpecialLeaveType(input: CreateSpecialLeaveTypeInput): Promise<SpecialLeaveType> {
@@ -17,6 +19,7 @@ export function createSpecialLeaveType(input: CreateSpecialLeaveTypeInput): Prom
 export interface UpdateSpecialLeaveTypeInput {
   name: string
   is_active?: boolean
+  requires_grant?: boolean
 }
 
 export function updateSpecialLeaveType(id: number, input: UpdateSpecialLeaveTypeInput): Promise<SpecialLeaveType> {

@@ -95,7 +95,8 @@ Handler側で行い、打刻自体は必ず成功させるUC-A012の原則とは
 ### 区分ごとの時間の手動補正
 
 日次登録後、所定労働時間・法定内残業時間・法定外残業時間・法定休日労働時間・
-深夜所定労働時間・深夜法定内残業時間・深夜法定外残業時間・深夜法定休日労働時間を
+所定休日労働時間・深夜所定労働時間・深夜法定内残業時間・深夜法定外残業時間・
+深夜法定休日労働時間・深夜所定休日労働時間を
 手動で補正できる(`attendance.daily_calculation_adjusted`イベント、
 `PUT /attendance/days/{id}/calculation`)。
 実績(出勤・退勤・休憩)が再編集され日次計算が再実行されると、この補正は解除される。
@@ -213,7 +214,8 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
    UC-C005参照)
 4. 承認する
 5. 月次ステータスを承認済みにする
-6. バックオフィス確認対象にする
+6. バックオフィス確認対象にする(人事部のバックオフィスタスクを自動作成する。
+   [11章 UC-B007](./11-usecases-backoffice.md)参照)
 7. `attendance.month_approved` イベントを記録する
 
 ## UC-A010: 承認者が月次勤怠を差戻しする
@@ -225,14 +227,25 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 5. 社員へ Teams 通知を送る
 6. 社員は修正後に再提出する
 
-## UC-A011: 管理部が月次勤怠を締める
+## UC-A011: 月次勤怠を締める
 
-1. 管理部が対象月を選択する
-2. 未提出、未承認、警告ありの社員を確認する
-3. 問題がなければ締め処理を実行する
-4. 対象月の日次勤怠をロックする
-5. 給与計算用CSVを出力可能にする
-6. `attendance.month_closed` イベントを記録する
+月次勤怠を承認すると、対象月は自動的にバックオフィス確認対象(人事部のバックオフィスタスク)
+になる([11章 UC-B007](./11-usecases-backoffice.md))。管理部が対象月を選択して社員全員分を
+一括で確認・締める専用画面は持たない。締めは、バックオフィスタスクを担当する人事部担当者が
+対象社員×対象月ごとに個別に行う。
+
+1. 人事部担当者が担当タスクから対象社員の月次勤怠実績を確認する
+2. 給与計算用CSVまたは帳票を出力する
+3. 問題がなければタスクから締め処理を実行する
+4. `attendance.month_closed` イベントを記録する
+
+締め後は`AttendanceEditGuard`により対象月の日次勤怠・打刻ログの通常編集が一律ロックされる
+(承認済み時点で既にロックされているため、締めによって新たにロックされるわけではない)。
+締め後は画面上に「締め処理後は修正することはできません」と表示し、修正が必要な場合は
+修正申請ワークフロー([10章](./10-usecases-workflow.md))を使うよう促す。
+
+給与計算用CSV/帳票の出力自体は締め前(承認済み時点)でも可能で、締めは
+「バックオフィス確認が完了し、以降その月の実績を変更しない」という意思表示として行う。
 
 ## UC-A012: 打刻ログを記録する
 
@@ -401,6 +414,18 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 カードのエラー処理、オフライン対応等)は`docs/23-usecases-devices.md`・
 `docs/24-usecases-authentication-keys.md`を参照。
 
+## 日次勤怠の区分 (day_classification)
+
+`attendance_days.day_classification`は、その勤務日が`working_day`(労働日)/
+`prescribed_holiday`(所定休日)/`legal_holiday`(法定休日)のいずれかを表す派生列である。
+`AttendanceCalculator`が日次計算時に`LegalHolidayResolver`による法定休日判定・
+`employee_shift_assignments.is_company_holiday`から算出し、`attendance_day.calculated`
+イベントのpayloadに含めて`AttendanceDailyCalculationProjector`が保存し直す(他の集計値と同様、
+実績が再編集され日次計算が再実行されるたびに最新化される派生データであり、手で書き換えない)。
+`employee_shift_assignments.day_type`(weekday/legal_holiday/company_holiday/
+special_working_day)とは別に、attendance_days向けに3値へ簡略化したものであり、値そのものは
+時間計算(所定労働・残業・深夜・休日労働等)には影響しない表示・参照用の分類情報である。
+
 ## 週40時間判定(日8時間判定との二重計上排除、参考情報)
 
 1日8時間超の法定時間外(`attendance_daily_calculations.statutory_excess_overtime_minutes`)とは別に、
@@ -414,7 +439,10 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 - 法定休日労働はこの週40時間の判定に含めない(法定休日労働は別枠の休日割増で扱う)。
 - 法定外休日(所定休日)の労働は、それだけを理由に休日割増は付けないが、日8時間・週40時間
   いずれの判定からも除外しない(`AttendanceCalculator`は法定休日のみを日次判定から除外し、
-  法定外休日は通常の労働日と同様に扱う)。
+  法定外休日は通常の労働日と同様に扱う)。ただし所定休日にはそもそも「所定」の時間が存在
+  しないため、`statutory_within_overtime_minutes`(法定内残業)には計上しない。所定休日の
+  実働は全て`prescribed_holiday_work_minutes`に計上し、そのうち1日8時間を超えた分のみを
+  別途`statutory_excess_overtime_minutes`(法定外残業)として計上する(二重計上しない)。
 - 月次確認画面(`AttendanceMonthResource`)には `weekly_overtime_reference` として、対象月に
    含まれる各週の労働時間・日次残業・週次残業を都度計算して表示する。あくまで参考情報であり、
   給与計算上の確定値としては扱わない。

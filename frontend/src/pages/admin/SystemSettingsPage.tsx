@@ -33,6 +33,7 @@ export function SystemSettingsPage() {
   const [notificationMailSenderName, setNotificationMailSenderName] = useState('')
   const [paidLeaveRequiresApproval, setPaidLeaveRequiresApproval] = useState(true)
   const [specialLeaveRequiresApproval, setSpecialLeaveRequiresApproval] = useState(true)
+  const [shiftSwapRequiresApproval, setShiftSwapRequiresApproval] = useState(true)
   const [attendanceRequiresApproval, setAttendanceRequiresApproval] = useState(true)
   const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
@@ -54,6 +55,7 @@ export function SystemSettingsPage() {
     setNotificationMailSenderName(data.notification_mail_sender_name ?? '')
     setPaidLeaveRequiresApproval(data.paid_leave_requires_approval)
     setSpecialLeaveRequiresApproval(data.special_leave_requires_approval)
+    setShiftSwapRequiresApproval(data.shift_swap_requires_approval)
     setAttendanceRequiresApproval(data.attendance_requires_approval)
     setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
   }, [data])
@@ -81,6 +83,7 @@ export function SystemSettingsPage() {
         notification_mail_sender_name: notificationMailSenderName || null,
         paid_leave_requires_approval: paidLeaveRequiresApproval,
         special_leave_requires_approval: specialLeaveRequiresApproval,
+        shift_swap_requires_approval: shiftSwapRequiresApproval,
         attendance_requires_approval: attendanceRequiresApproval,
         expense_claim_requires_approval: expenseClaimRequiresApproval,
       },
@@ -193,6 +196,17 @@ export function SystemSettingsPage() {
           }}
         />
         特別休暇の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={shiftSwapRequiresApproval}
+          onCheckedChange={(checked) => {
+            setShiftSwapRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        振替休日の申請に承認を必須にする
       </label>
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">

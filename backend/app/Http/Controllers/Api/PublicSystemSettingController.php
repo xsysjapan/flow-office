@@ -40,6 +40,12 @@ class PublicSystemSettingController extends Controller
             'special_leave_requires_approval' => $settings->special_leave_requires_approval,
             'attendance_requires_approval' => $settings->attendance_requires_approval,
             'expense_claim_requires_approval' => $settings->expense_claim_requires_approval,
+            'shift_swap_requires_approval' => $settings->shift_swap_requires_approval,
+            'compensatory_leave_enabled' => $settings->compensatory_leave_enabled,
+            'compensatory_leave_requires_approval' => $settings->compensatory_leave_requires_approval,
+            'compensatory_leave_unit' => $settings->compensatory_leave_unit,
+            'compensatory_leave_half_day_threshold_minutes' => $settings->compensatory_leave_half_day_threshold_minutes,
+            'compensatory_leave_valid_days' => $settings->compensatory_leave_valid_days,
         ]);
     }
 }

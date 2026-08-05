@@ -33,6 +33,7 @@ class AttendanceDayResource extends JsonResource
             'utc_offset_minutes' => $utcOffsetMinutes,
             'work_type' => $this->work_type,
             'work_location_type' => $this->work_location_type,
+            'day_classification' => $this->day_classification,
             'note' => $this->note,
             // 締め(locked_at)だけでなく、月次が提出済み以降のロックも合わせて反映する
             // (AttendanceEditGuard参照。previewAttendancePatternと同じ判定)。

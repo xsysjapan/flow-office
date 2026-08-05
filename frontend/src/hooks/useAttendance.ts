@@ -11,6 +11,7 @@ import {
   deletePunch,
   endBreak,
   fetchAttendanceDayDefaults,
+  fetchAttendanceMonthById,
   fetchMonth,
   fetchMonthsForUser,
   fetchMonthsToApprove,
@@ -32,7 +33,7 @@ import {
   type GenerateAttendancePatternInput,
   type PreviewAttendancePatternInput,
 } from '../api/attendance'
-import { downloadAttendanceCsv } from '../api/exports'
+import { downloadAttendanceCsv, downloadAttendanceExcel } from '../api/exports'
 import type { AttendanceDailyCalculationAdjustment, AttendanceExportFilters } from '../api/types'
 
 const TODAY_KEY = ['attendance', 'today']
@@ -260,7 +261,16 @@ function useInvalidateMonths() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: MY_MONTHS_KEY })
     void queryClient.invalidateQueries({ queryKey: MONTHS_TO_APPROVE_KEY })
+    void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', 'by-id'] })
   }
+}
+
+/** バックオフィスタスク詳細から、idで単一の月次勤怠(締め状態)を取得する。 */
+export function useAttendanceMonthById(id: string) {
+  return useQuery({
+    queryKey: ['attendance', 'month', 'by-id', id],
+    queryFn: () => fetchAttendanceMonthById(id),
+  })
 }
 
 export function useCloseMonth() {
@@ -279,5 +289,16 @@ export function useCloseMonth() {
 export function useDownloadAttendanceCsv() {
   return useMutation({
     mutationFn: (filters: AttendanceExportFilters) => downloadAttendanceCsv(filters),
+  })
+}
+
+/**
+ * UC-E001: 勤怠Excel(単一社員・単一月次なら.xlsx、複数対象ならZIP)のダウンロード。
+ * downloadAttendanceCsvと同じ理由でuseMutationを使う。
+ */
+export function useDownloadAttendanceExcel() {
+  return useMutation({
+    mutationFn: (filters: Pick<AttendanceExportFilters, 'year_month' | 'user_id'>) =>
+      downloadAttendanceExcel(filters),
   })
 }

@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\Crypt;
     'onboarding_started_at', 'onboarding_completed_at',
     'paid_leave_requires_approval', 'special_leave_requires_approval',
     'attendance_requires_approval', 'expense_claim_requires_approval',
+    'shift_swap_requires_approval',
+    'compensatory_leave_enabled', 'compensatory_leave_requires_approval', 'compensatory_leave_unit',
+    'compensatory_leave_half_day_threshold_minutes', 'compensatory_leave_valid_days',
 ])]
 class SystemSetting extends Model
 {
@@ -35,6 +38,9 @@ class SystemSetting extends Model
             'special_leave_requires_approval' => 'boolean',
             'attendance_requires_approval' => 'boolean',
             'expense_claim_requires_approval' => 'boolean',
+            'shift_swap_requires_approval' => 'boolean',
+            'compensatory_leave_enabled' => 'boolean',
+            'compensatory_leave_requires_approval' => 'boolean',
             // クライアントシークレットは平文でDBに保持しない (Laravelのencrypted castで暗号化する)。
             'm365_client_secret' => 'encrypted',
             'onboarding_started_at' => 'datetime',
@@ -72,6 +78,10 @@ class SystemSetting extends Model
             'special_leave_requires_approval' => true,
             'attendance_requires_approval' => true,
             'expense_claim_requires_approval' => true,
+            'shift_swap_requires_approval' => true,
+            'compensatory_leave_enabled' => false,
+            'compensatory_leave_requires_approval' => true,
+            'compensatory_leave_unit' => 'daily',
         ]);
 
         // system_settingsは内部的なシングルトン設定であり、REST的な「作成された

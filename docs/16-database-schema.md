@@ -411,6 +411,10 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
   リーダー(docs/23-usecases-devices.md)経由の打刻が日次勤怠に反映される際、使用した
   端末の`devices.default_work_location_type`から自動反映されるほか、日次編集(UC-A005)・
   出勤日新規作成(UC-A016)で手動選択もできる)
+- day_classification (`working_day`=労働日 / `prescribed_holiday`=所定休日 /
+  `legal_holiday`=法定休日。nullable。`AttendanceCalculator`が日次計算のたびに判定・
+  保存し直す派生値で、`employee_shift_assignments.day_type`の3値簡略版。時間計算自体には
+  影響しない。docs/07-usecases-attendance.md「日次勤怠の区分」参照)
 - note
 - locked_at
 - created_at / updated_at
@@ -664,6 +668,8 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - legal_holiday_work_minutes
 - prescribed_holiday_work_minutes
 - late_night_legal_holiday_work_minutes
+- late_night_prescribed_holiday_work_minutes (所定休日労働のうち深夜時間帯にかかった分。
+  late_night_legal_holiday_work_minutesの所定休日版で、late_night_work_minutesには含まない)
 - is_manually_adjusted (日次登録後、区分ごとの時間を手動で補正したかどうか。実績
   (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance.day_calculated`)
   されると、falseに戻る)

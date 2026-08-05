@@ -53,6 +53,7 @@ function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval
           systemSettings: {
             paid_leave_requires_approval: paidLeaveRequiresApproval,
             special_leave_requires_approval: true,
+            shift_swap_requires_approval: true,
             attendance_requires_approval: true,
             expense_claim_requires_approval: true,
             default_timezone: 'Asia/Tokyo',

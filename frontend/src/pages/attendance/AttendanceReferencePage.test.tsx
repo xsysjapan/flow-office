@@ -40,6 +40,7 @@ const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   legal_holiday_work_minutes: 0,
   prescribed_holiday_work_minutes: 0,
   late_night_legal_holiday_work_minutes: 0,
+  late_night_prescribed_holiday_work_minutes: 0,
 }
 
 function renderPage() {

@@ -94,6 +94,8 @@ export interface SystemSettings {
   /** UC-P003/UC-S003: 有給・特別休暇の申請に承認者による承認を必須にするか。 */
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  /** UC-A0xx: 振替休日申請に承認者による承認を必須にするか。falseの場合、申請すると同時に承認済みになる。 */
+  shift_swap_requires_approval: boolean
   /** 月次勤怠の提出・経費精算の申請に承認者による承認を必須にするか。 */
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
@@ -114,6 +116,7 @@ export interface UpdateSystemSettingsInput
 export interface PublicSystemSettings {
   paid_leave_requires_approval: boolean
   special_leave_requires_approval: boolean
+  shift_swap_requires_approval: boolean
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
   default_timezone: string
@@ -166,6 +169,7 @@ export type WorkflowRequestSubjectType =
   | 'expense_claim'
   | 'paid_leave_request'
   | 'special_leave_request'
+  | 'shift_swap_request'
   | null
 
 /** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
@@ -199,11 +203,18 @@ export interface SpecialLeaveRequestSubjectSummary {
   reason: string | null
 }
 
+export interface ShiftSwapRequestSubjectSummary {
+  target_date: string | null
+  substitute_date: string | null
+  reason: string | null
+}
+
 export type WorkflowRequestSubjectSummary =
   | AttendanceMonthSubjectSummary
   | ExpenseClaimSubjectSummary
   | PaidLeaveRequestSubjectSummary
   | SpecialLeaveRequestSubjectSummary
+  | ShiftSwapRequestSubjectSummary
 
 /** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
 export interface WorkflowRequestAttendanceMonthSubject {
@@ -286,11 +297,27 @@ export interface WorkflowRequestSpecialLeaveRequestSubject {
   cancelled_at: string | null
 }
 
+export interface WorkflowRequestShiftSwapRequestSubject {
+  type: 'shift_swap_request'
+  id: string
+  user_id: string
+  status: ShiftSwapRequestStatus
+  target_date: string
+  substitute_date: string
+  reason: string | null
+  return_comment: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
 export type WorkflowRequestSubject =
   | WorkflowRequestAttendanceMonthSubject
   | WorkflowRequestExpenseClaimSubject
   | WorkflowRequestPaidLeaveRequestSubject
   | WorkflowRequestSpecialLeaveRequestSubject
+  | WorkflowRequestShiftSwapRequestSubject
 
 export interface WorkflowRequest {
   id: string
@@ -342,6 +369,8 @@ export interface AttendanceDailyCalculation {
   legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  /** 所定休日労働のうち22:00〜05:00の深夜時間帯と重なる分(late_night_work_minutesの内訳)。 */
+  late_night_prescribed_holiday_work_minutes: number
   /** フレックスタイム制でコアタイムを設定した日、実際の勤務がコアタイムを全てカバーしていないか。 */
   core_time_violation: boolean
   /** 欠勤時間(分)。attendance_leave_segmentsの区間(遅刻・早退等)の合計時間。
@@ -366,12 +395,14 @@ export interface AttendanceDailyCalculationAdjustment {
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
   legal_holiday_work_minutes: number
+  prescribed_holiday_work_minutes: number
   /** 給与計算上の労働時間(裁量労働制のみなし時間はここに反映される)。省略時は現在値を維持する。 */
   payroll_work_minutes?: number
   late_night_prescribed_work_minutes: number
   late_night_statutory_within_overtime_minutes: number
   late_night_statutory_excess_overtime_minutes: number
   late_night_legal_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   reason: string
 }
 
@@ -420,6 +451,7 @@ export interface AttendanceMonthlyCalculationTotals {
   legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
+  late_night_prescribed_holiday_work_minutes: number
   /** 終日欠勤の日数(欠勤時間がその日の所定労働時間以上になった日を1日と数える)。 */
   absence_days?: number
   absence_minutes?: number
@@ -455,6 +487,9 @@ export interface AttendanceDay {
   utc_offset_minutes?: number | null
   work_type: string | null
   work_location_type?: WorkLocationType | null
+  /** その勤務日の区分(労働日/所定休日/法定休日)。AttendanceCalculatorが日次計算のたびに
+   *  判定・保存する派生値。未計算(旧データ)の日はnull。 */
+  day_classification?: 'working_day' | 'prescribed_holiday' | 'legal_holiday' | null
   note: string | null
   is_locked: boolean
   breaks: AttendanceBreak[]
@@ -545,10 +580,16 @@ export interface FlexSettlementSummary {
   legal_holiday_work_minutes: number
 }
 
+/** UC-E001: 勤怠CSV出力フォーマット。省略時は`generic`。 */
+export type AttendanceExportFormat = 'generic' | 'generic_tsv' | 'generic_sjis' | 'moneyforward' | 'freee'
+
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
 export interface AttendanceExportFilters {
-  year_month: string
-  user_id?: string
+  /** 複数月をまとめて出力できる(1件以上必須)。 */
+  year_month: string[]
+  /** 未指定(空配列)の場合は全社員が対象。 */
+  user_id?: string[]
+  format?: AttendanceExportFormat
 }
 
 export type BackOfficeTaskStatus =
@@ -630,6 +671,8 @@ export interface SpecialLeaveType {
   id: number
   name: string
   is_active: boolean
+  /** falseの場合、事前の付与(残数)が無くても申請できる(忌引・代休等)。 */
+  requires_grant: boolean
 }
 
 /** 特別休暇の取得単位(全休/半休/時間休)は有給と同じ概念のためPaidLeaveTypeを再利用する。 */
@@ -684,6 +727,28 @@ export interface SpecialLeaveRequest {
   approved_at: string | null
   returned_at: string | null
   cancelled_at: string | null
+}
+
+export type ShiftSwapRequestStatus = 'submitted' | 'approved' | 'returned' | 'cancelled'
+
+/** 振替休日申請。休日(法定休日/所定休日)の勤務日を、別の日(振替先日)の休みと入れ替える申請。 */
+export interface ShiftSwapRequest {
+  id: string
+  user_id: string
+  user?: User
+  approver?: User
+  status: ShiftSwapRequestStatus
+  /** 振替対象の休日(この日に出勤する)。 */
+  target_date: string
+  /** 振替先の休日(代わりに休む日)。 */
+  substitute_date: string
+  reason: string | null
+  return_comment: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+  created_at?: string | null
 }
 
 export interface WorkCalendarDay {

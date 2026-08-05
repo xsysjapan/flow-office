@@ -53,6 +53,7 @@ class PublicSystemSettingTest extends TestCase
             'special_leave_requires_approval' => true,
             'attendance_requires_approval' => false,
             'expense_claim_requires_approval' => true,
+            'shift_swap_requires_approval' => true,
         ]);
 
         $employee = User::factory()->create();
@@ -74,6 +75,12 @@ class PublicSystemSettingTest extends TestCase
             'special_leave_requires_approval' => true,
             'attendance_requires_approval' => false,
             'expense_claim_requires_approval' => true,
+            'shift_swap_requires_approval' => true,
+            'compensatory_leave_enabled' => false,
+            'compensatory_leave_requires_approval' => true,
+            'compensatory_leave_unit' => 'daily',
+            'compensatory_leave_half_day_threshold_minutes' => null,
+            'compensatory_leave_valid_days' => null,
         ]);
     }
 

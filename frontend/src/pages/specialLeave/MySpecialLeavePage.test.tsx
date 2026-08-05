@@ -26,7 +26,7 @@ const approverSearchResult: Paginated<User> = {
   links: { next: null, prev: null },
 }
 
-const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true }
+const birthdayType: SpecialLeaveType = { id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }
 
 const submittedRequest: SpecialLeaveRequest = {
   id: 'request-1',
@@ -62,6 +62,7 @@ function renderPage(
           systemSettings: {
             paid_leave_requires_approval: true,
             special_leave_requires_approval: specialLeaveRequiresApproval,
+            shift_swap_requires_approval: true,
             attendance_requires_approval: true,
             expense_claim_requires_approval: true,
             default_timezone: 'Asia/Tokyo',

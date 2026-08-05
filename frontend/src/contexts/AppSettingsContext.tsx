@@ -11,6 +11,7 @@ import type { PublicSystemSettings } from '../api/types'
 const DEFAULT_SYSTEM_SETTINGS: PublicSystemSettings = {
   paid_leave_requires_approval: true,
   special_leave_requires_approval: true,
+  shift_swap_requires_approval: true,
   attendance_requires_approval: true,
   expense_claim_requires_approval: true,
   default_timezone: 'Asia/Tokyo',

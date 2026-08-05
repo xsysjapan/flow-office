@@ -35,6 +35,12 @@ class SystemSettingResource extends JsonResource
             'special_leave_requires_approval' => $this->special_leave_requires_approval,
             'attendance_requires_approval' => $this->attendance_requires_approval,
             'expense_claim_requires_approval' => $this->expense_claim_requires_approval,
+            'shift_swap_requires_approval' => $this->shift_swap_requires_approval,
+            'compensatory_leave_enabled' => $this->compensatory_leave_enabled,
+            'compensatory_leave_requires_approval' => $this->compensatory_leave_requires_approval,
+            'compensatory_leave_unit' => $this->compensatory_leave_unit,
+            'compensatory_leave_half_day_threshold_minutes' => $this->compensatory_leave_half_day_threshold_minutes,
+            'compensatory_leave_valid_days' => $this->compensatory_leave_valid_days,
         ];
     }
 }
