@@ -636,20 +636,23 @@ describe('AttendanceDayPage', () => {
       cancelled_at: null,
     }
 
-    it('shows the reversed-direction button on a working day', async () => {
+    it('shows the reversed-direction menu item on a working day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([recordedDay])
 
       await screen.findByText('日次勤怠')
-      expect(screen.queryByRole('button', { name: '振替休日を申請する' })).not.toBeInTheDocument()
-      expect(await screen.findByRole('button', { name: 'この日を振替休日にする' })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      expect(screen.queryByRole('menuitem', { name: '振替休日を申請する' })).not.toBeInTheDocument()
+      expect(await screen.findByRole('menuitem', { name: 'この日を振替休日にする' })).toBeInTheDocument()
     })
 
-    it('shows the button on a legal-holiday day', async () => {
+    it('shows the menu item on a legal-holiday day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([holidayDay])
 
-      expect(await screen.findByRole('button', { name: '振替休日を申請する' })).toBeInTheDocument()
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      expect(await screen.findByRole('menuitem', { name: '振替休日を申請する' })).toBeInTheDocument()
     })
 
     it('submits a shift swap request with a substitute date and approver', async () => {
@@ -658,7 +661,9 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
       renderPage([holidayDay])
 
-      await userEvent.click(await screen.findByRole('button', { name: '振替休日を申請する' }))
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
       await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
       await userEvent.click(screen.getByLabelText('承認者'))
       await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
@@ -681,7 +686,9 @@ describe('AttendanceDayPage', () => {
       vi.spyOn(shiftSwapApi, 'createShiftSwapRequest').mockResolvedValue(createdRequest)
       renderPage([holidayDay], date, false)
 
-      await userEvent.click(await screen.findByRole('button', { name: '振替休日を申請する' }))
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
       expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
 
       await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')

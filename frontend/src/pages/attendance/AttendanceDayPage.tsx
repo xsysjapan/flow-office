@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarRange, ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
@@ -20,6 +20,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -873,11 +880,20 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
  * 振替先日はカレンダー上での入力を制限せず(サーバー側のバリデーションに委ねる)、
  * 承認要否(`shift_swap_requires_approval`)に応じて承認者欄の必須表示・説明文言を切り替える。
  */
-function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: string; targetIsHoliday: boolean }) {
+function ShiftSwapRequestDialog({
+  targetDate,
+  targetIsHoliday,
+  open,
+  onOpenChange,
+}: {
+  targetDate: string
+  targetIsHoliday: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.shift_swap_requires_approval
 
-  const [isOpen, setIsOpen] = useState(false)
   const [substituteDate, setSubstituteDate] = useState<string | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
@@ -899,7 +915,7 @@ function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: s
       },
       {
         onSuccess: () => {
-          setIsOpen(false)
+          onOpenChange(false)
           setCompleted(true)
         },
       },
@@ -909,10 +925,10 @@ function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: s
   return (
     <div className="flex flex-col items-start gap-2">
       <Dialog
-        open={isOpen}
-        onOpenChange={(open) => {
-          setIsOpen(open)
-          if (open) {
+        open={open}
+        onOpenChange={(nextOpen) => {
+          onOpenChange(nextOpen)
+          if (nextOpen) {
             setSubstituteDate(undefined)
             setApproverUserId(undefined)
             setReason('')
@@ -921,9 +937,6 @@ function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: s
           }
         }}
       >
-        <Button variant="secondary" onClick={() => setIsOpen(true)}>
-          {targetIsHoliday ? '振替休日を申請する' : 'この日を振替休日にする'}
-        </Button>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>振替休日を申請する</DialogTitle>
@@ -963,7 +976,7 @@ function ShiftSwapRequestDialog({ targetDate, targetIsHoliday }: { targetDate: s
           </FormField>
 
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsOpen(false)}>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
               キャンセル
             </Button>
             <Button isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
@@ -987,6 +1000,7 @@ export function AttendanceDayPage() {
   const navigate = useNavigate()
   const [isEditing, setIsEditing] = useState(false)
   const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
+  const [isShiftSwapOpen, setIsShiftSwapOpen] = useState(false)
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
   const { data: weekDays, isLoading, error } = useWeek(monday)
@@ -1013,6 +1027,25 @@ export function AttendanceDayPage() {
           <span className="flex items-center gap-1.5">
             {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}
             {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" aria-label="この日の操作">
+                  <MoreVertical aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setIsShiftSwapOpen(true)}>
+                  {isHoliday ? '振替休日を申請する' : 'この日を振替休日にする'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/paid-leave">有給休暇を申請する</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/special-leave">特別休暇を申請する</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </span>
         }
         navigation={
@@ -1047,7 +1080,12 @@ export function AttendanceDayPage() {
       >
         <p className="mb-3 text-sm text-muted-foreground">{date}({weekdayLabel(date)})</p>
 
-        <ShiftSwapRequestDialog targetDate={date} targetIsHoliday={isHoliday} />
+        <ShiftSwapRequestDialog
+          targetDate={date}
+          targetIsHoliday={isHoliday}
+          open={isShiftSwapOpen}
+          onOpenChange={setIsShiftSwapOpen}
+        />
 
         {day && !isEditing && (
           <div className="flex flex-col gap-4 border-t border-border pt-4">
