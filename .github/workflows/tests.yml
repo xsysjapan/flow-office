@@ -40,3 +40,57 @@ jobs:
 
       - name: Execute tests
         run: php artisan test
+
+  # 通常のtestsジョブはsqliteで実行するため、MySQL固有のDDL制約(識別子長64文字上限など)は
+  # ここでは検知できず、本番(XSERVER/MySQL)のmigrate --forceで初めて失敗することがあった
+  # (docs/27-release-runbook.md参照)。本番投入前にマイグレーションを実際にMySQLへ適用して
+  # 検証し、この種の不整合をデプロイ前のCIで検知できるようにする。
+  migrate-mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: flow_office_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Migrate against MySQL (schema-only check)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: flow_office_ci
+          DB_USERNAME: root
+          DB_PASSWORD: ""
+        run: |
+          php artisan migrate --force
+          php artisan migrate:rollback --force
+          php artisan migrate --force

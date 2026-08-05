@@ -236,10 +236,17 @@ cron設置後、`schedule:run`が実際に1分毎に発火しているか、DB�
   ヘルスチェックは`POST $BASE_URL/mcp/`を叩く)。mcp/のOAuthディスカバリー
   (`/mcp/.well-known/oauth-protected-resource`)が広告するリソースURLも、この制約に
   合わせて末尾スラッシュ付きにすることを今後検討すること。
-- **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`は、
-  テーブル名・カラム名が長いと64文字を超えてマイグレーションが失敗する。SQLite(ローカル
-  開発・CI)は無制限のため気づけない。長くなりそうな複合indexには明示的に短い名前を
-  指定すること。
+- **MySQLの識別子長制限(64文字)**: Laravelの自動命名する複合`unique`/`index`・外部キー
+  (`foreign`)制約名は、テーブル名・カラム名が長いと64文字を超えてマイグレーションが
+  失敗する。SQLite(ローカル開発・従来のCI)は無制限のため気づけない。長くなりそうな
+  複合index・外部キーには明示的に短い名前を指定すること
+  (`$table->foreignUuid('col')->constrained('table', 'id', '短い制約名')`、
+  `$table->index([...], '短いindex名')`)。
+  2026-08にこの理由で本番デプロイが失敗する事故が2度目に起きたため、
+  `.github/workflows/tests.yml`の`migrate-mysql`ジョブでPR・デプロイ前に実際のMySQLへ
+  `migrate`→`migrate:rollback`→`migrate`を通して検証するようにした(sqliteだけの
+  `tests`ジョブでは検知できないため、必ずMySQLで確認する)。このジョブが失敗する場合、
+  本番デプロイでも同じ理由で失敗する。
 - **マイグレーションの外部キー参照順序**: 参照先テーブルを作るマイグレーションより後に
   参照元を実行してしまうと、SQLiteでは無警告で通るがMySQLでは外部キーエラーになる。
 - **composer.json(`^8.3`)とcomposer.lockの不一致**: 現状`composer.lock`はsymfony系が
