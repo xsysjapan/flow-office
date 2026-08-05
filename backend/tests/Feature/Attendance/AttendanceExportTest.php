@@ -66,6 +66,78 @@ class AttendanceExportTest extends TestCase
         $this->assertStringContainsString('120', $csv);
     }
 
+    public function test_admin_can_export_a_csv_across_multiple_months_and_employees(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $employeeA = User::factory()->create(['name' => '社員A']);
+        $employeeB = User::factory()->create(['name' => '社員B']);
+        $employeeC = User::factory()->create(['name' => '対象外社員']);
+
+        foreach ([$employeeA, $employeeB, $employeeC] as $employee) {
+            foreach (['2026-06', '2026-07'] as $yearMonth) {
+                AttendanceMonth::query()->create([
+                    'user_id' => $employee->id,
+                    'year_month' => $yearMonth,
+                    'status' => 'approved',
+                ]);
+            }
+        }
+
+        $response = $this->actingAs($admin)->get(
+            '/api/exports/attendance?year_month[]=2026-06&year_month[]=2026-07&user_id[]='.$employeeA->id.'&user_id[]='.$employeeB->id
+        );
+
+        $response->assertSuccessful();
+        $this->assertStringContainsString('attendance_2026-06_2026-07.csv', $response->headers->get('Content-Disposition'));
+
+        $csv = $response->streamedContent();
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+
+        // ヘッダー1行 + (2社員 × 2ヶ月)の4行。対象外社員は含まれない。
+        $this->assertCount(5, $lines);
+        $this->assertStringContainsString('社員A', $csv);
+        $this->assertStringContainsString('社員B', $csv);
+        $this->assertStringNotContainsString('対象外社員', $csv);
+        $this->assertStringContainsString('2026-06', $csv);
+        $this->assertStringContainsString('2026-07', $csv);
+    }
+
+    public function test_admin_export_excel_zips_a_single_employee_across_multiple_months(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+
+        $employee = User::factory()->create(['name' => '複数月社員']);
+        foreach (['2026-06', '2026-07'] as $yearMonth) {
+            AttendanceMonth::query()->create([
+                'user_id' => $employee->id,
+                'year_month' => $yearMonth,
+                'status' => 'approved',
+            ]);
+        }
+
+        $response = $this->actingAs($admin)->get(
+            '/api/exports/attendance.xlsx?year_month[]=2026-06&year_month[]=2026-07&user_id[]='.$employee->id
+        );
+
+        $response->assertSuccessful();
+        $response->assertHeader('Content-Type', 'application/zip');
+        $this->assertStringContainsString('attendance_2026-06_2026-07.zip', $response->headers->get('Content-Disposition'));
+
+        $tmpZip = tempnam(sys_get_temp_dir(), 'zip');
+        file_put_contents($tmpZip, $response->getContent());
+
+        $zip = new \ZipArchive;
+        $zip->open($tmpZip);
+        $this->assertSame(2, $zip->numFiles);
+        $this->assertNotFalse($zip->locateName($employee->id.'_2026-06.xlsx'));
+        $this->assertNotFalse($zip->locateName($employee->id.'_2026-07.xlsx'));
+        $zip->close();
+        unlink($tmpZip);
+    }
+
     public function test_non_admin_cannot_export_attendance_csv(): void
     {
         $employee = User::factory()->create();

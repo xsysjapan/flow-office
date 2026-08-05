@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
+import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -7,6 +9,7 @@ import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { useDownloadAttendanceCsv, useDownloadAttendanceExcel } from '../../hooks/useAttendance'
+import { useUser } from '../../hooks/useUsers'
 import type { AttendanceExportFormat } from '../../api/types'
 
 interface FormatOption {
@@ -54,14 +57,35 @@ const FORMAT_OPTIONS: FormatOption[] = [
   },
 ]
 
+function sortedYearMonths(yearMonths: string[]): string[] {
+  return [...yearMonths].sort()
+}
+
+/** 選択済み社員を氏名で表示するチップ(UserPickerはid単体しか返さないため、表示名を別途引く)。 */
+function SelectedUserBadge({ userId, onRemove }: { userId: string; onRemove: () => void }) {
+  const { data: user } = useUser(userId)
+
+  return (
+    <Badge variant="info">
+      <span>{user ? `${user.name}(${user.email})` : userId}</span>
+      <button type="button" onClick={onRemove} aria-label={`${user?.name ?? userId}を対象から外す`}>
+        <X className="size-3" />
+      </button>
+    </Badge>
+  )
+}
+
 /**
  * UC-E001: 勤怠CSV・Excelを出力する。承認済み(approved)・締め済み(closed)どちらの月次勤怠も対象。
- * CSVは出力フォーマットを選択でき(汎用/給与計算ソフト向け)、Excelは対象社員が複数の場合ZIPで
+ * 対象月・対象社員はいずれも複数選択でき(未指定の場合は全社員が対象)、CSVは出力フォーマットを
+ * 選択できる(汎用/給与計算ソフト向け)。Excelは対象(月×社員)の組み合わせが複数の場合ZIPで
  * まとめて返る(バックエンド側の仕様。フロントはContent-Type/Content-Dispositionで判定するのみ)。
  */
 export function AttendanceExportPage() {
-  const [yearMonth, setYearMonth] = useState('')
-  const [userId, setUserId] = useState<string | undefined>(undefined)
+  const [yearMonths, setYearMonths] = useState<string[]>([])
+  const [pendingYearMonth, setPendingYearMonth] = useState<string | undefined>(undefined)
+  const [userIds, setUserIds] = useState<string[]>([])
+  const [pendingUserId, setPendingUserId] = useState<string | undefined>(undefined)
   const [format, setFormat] = useState<AttendanceExportFormat>('generic')
 
   const downloadCsv = useDownloadAttendanceCsv()
@@ -69,25 +93,76 @@ export function AttendanceExportPage() {
 
   const selectedFormat = FORMAT_OPTIONS.find((option) => option.value === format) ?? FORMAT_OPTIONS[0]
 
+  const addYearMonth = () => {
+    if (!pendingYearMonth || yearMonths.includes(pendingYearMonth)) return
+    setYearMonths(sortedYearMonths([...yearMonths, pendingYearMonth]))
+    setPendingYearMonth(undefined)
+  }
+
+  const addUser = (id: string | undefined) => {
+    if (!id || userIds.includes(id)) return
+    setUserIds([...userIds, id])
+    setPendingUserId(undefined)
+  }
+
   return (
     <Card title="勤怠CSV出力">
       <p className="mb-4 text-sm text-muted-foreground">
         承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
+        対象月・対象社員はいずれも複数指定できます。
       </p>
 
       {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
       {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象月" htmlFor="attendance-export-year-month" required>
-          <YearMonthPicker
-            id="attendance-export-year-month"
-            value={yearMonth || undefined}
-            onChange={(value) => setYearMonth(value ?? '')}
-          />
+        <FormField label="対象月(複数可)" htmlFor="attendance-export-year-month" required>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <YearMonthPicker
+                id="attendance-export-year-month"
+                value={pendingYearMonth}
+                onChange={setPendingYearMonth}
+              />
+            </div>
+            <Button type="button" variant="secondary" onClick={addYearMonth} disabled={!pendingYearMonth}>
+              追加
+            </Button>
+          </div>
+          {yearMonths.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {yearMonths.map((yearMonth) => (
+                <Badge key={yearMonth} variant="info">
+                  <span>{yearMonth}</span>
+                  <button
+                    type="button"
+                    onClick={() => setYearMonths(yearMonths.filter((value) => value !== yearMonth))}
+                    aria-label={`${yearMonth}を対象から外す`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
         </FormField>
-        <FormField label="対象社員(任意)" htmlFor="attendance-export-user">
-          <UserPicker id="attendance-export-user" value={userId} onChange={setUserId} />
+        <FormField label="対象社員(任意・複数可)" htmlFor="attendance-export-user">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <UserPicker id="attendance-export-user" value={pendingUserId} onChange={addUser} />
+            </div>
+          </div>
+          {userIds.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {userIds.map((userId) => (
+                <SelectedUserBadge
+                  key={userId}
+                  userId={userId}
+                  onRemove={() => setUserIds(userIds.filter((id) => id !== userId))}
+                />
+              ))}
+            </div>
+          )}
         </FormField>
         <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format">
           <NativeSelect
@@ -126,9 +201,9 @@ export function AttendanceExportPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           isLoading={downloadCsv.isPending}
-          disabled={!yearMonth}
+          disabled={yearMonths.length === 0}
           onClick={() => {
-            downloadCsv.mutate({ year_month: yearMonth, user_id: userId, format })
+            downloadCsv.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined, format })
           }}
         >
           CSVダウンロード
@@ -136,16 +211,15 @@ export function AttendanceExportPage() {
         <Button
           variant="secondary"
           isLoading={downloadExcel.isPending}
-          disabled={!yearMonth}
+          disabled={yearMonths.length === 0}
           onClick={() => {
-            downloadExcel.mutate({ year_month: yearMonth, user_id: userId })
+            downloadExcel.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined })
           }}
         >
           Excelダウンロード
         </Button>
         <p className="text-xs text-muted-foreground">
-          対象社員を指定した場合、または指定なしで対象月の承認済み社員が1名の場合は.xlsxが、
-          指定なしで対象が複数名の場合は全員分をまとめたZIPがダウンロードされます。
+          対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
         </p>
       </div>
     </Card>

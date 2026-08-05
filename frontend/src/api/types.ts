@@ -585,8 +585,10 @@ export type AttendanceExportFormat = 'generic' | 'generic_tsv' | 'generic_sjis' 
 
 /** UC-E001: 勤怠CSV出力の絞り込み条件。締め後(UC-A011)の月次勤怠のみが対象。 */
 export interface AttendanceExportFilters {
-  year_month: string
-  user_id?: string
+  /** 複数月をまとめて出力できる(1件以上必須)。 */
+  year_month: string[]
+  /** 未指定(空配列)の場合は全社員が対象。 */
+  user_id?: string[]
   format?: AttendanceExportFormat
 }
 

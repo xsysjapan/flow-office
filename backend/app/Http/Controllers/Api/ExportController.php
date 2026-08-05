@@ -43,7 +43,7 @@ class ExportController extends Controller
         operationId: 'exports.attendance',
         summary: '勤怠CSVを出力する',
         tags: ['CSV出力'],
-        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'format', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['generic', 'generic_tsv', 'generic_sjis', 'moneyforward', 'freee']))],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'format', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['generic', 'generic_tsv', 'generic_sjis', 'moneyforward', 'freee']))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function attendance(Request $request, EventStore $eventStore): StreamedResponse
@@ -52,6 +52,7 @@ class ExportController extends Controller
         $formatKey = $data['format'] ?? 'generic';
         $format = $this->resolveAttendanceCsvFormat($formatKey);
         $months = $this->resolveAttendanceMonths($data);
+        $label = $this->yearMonthLabel($data['year_month']);
 
         $eventStore->append(
             aggregateType: 'export',
@@ -65,15 +66,15 @@ class ExportController extends Controller
         );
 
         $filename = $formatKey === 'generic'
-            ? 'attendance_'.$data['year_month'].'.csv'
-            : 'attendance_'.$data['year_month'].'_'.$formatKey.'.'.$format->fileExtension();
+            ? 'attendance_'.$label.'.csv'
+            : 'attendance_'.$label.'_'.$formatKey.'.'.$format->fileExtension();
 
-        return response()->streamDownload(function () use ($months, $data, $format) {
+        return response()->streamDownload(function () use ($months, $format) {
             $handle = fopen('php://temp', 'w+');
             fputcsv($handle, $format->header(), $format->delimiter());
 
             foreach ($months as $month) {
-                fputcsv($handle, $format->row($month, $data['year_month']), $format->delimiter());
+                fputcsv($handle, $format->row($month, $month->year_month), $format->delimiter());
             }
 
             rewind($handle);
@@ -98,18 +99,19 @@ class ExportController extends Controller
         operationId: 'exports.attendanceExcel',
         summary: '勤怠実績Excelを出力する',
         tags: ['CSV出力'],
-        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'string')), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
+        parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function attendanceExcel(Request $request, EventStore $eventStore, AttendanceExcelBuilder $builder): Response
     {
         $data = $this->validateAttendanceExportRequest($request);
         $months = $this->resolveAttendanceMonths($data);
+        $label = $this->yearMonthLabel($data['year_month']);
 
         if ($months->count() <= 1) {
             $spreadsheet = $months->isEmpty()
-                ? $builder->buildEmpty($data['year_month'])
-                : $builder->buildForMonth($months->first(), $data['year_month']);
+                ? $builder->buildEmpty($label)
+                : $builder->buildForMonth($months->first(), $months->first()->year_month);
 
             $writer = new Xlsx($spreadsheet);
             ob_start();
@@ -129,11 +131,11 @@ class ExportController extends Controller
 
             return response($contents, 200, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition' => 'attachment; filename="attendance_'.$data['year_month'].'.xlsx"',
+                'Content-Disposition' => 'attachment; filename="attendance_'.$label.'.xlsx"',
             ]);
         }
 
-        $response = $this->buildAttendanceExcelZip($months, $data['year_month'], $builder);
+        $response = $this->buildAttendanceExcelZip($months, $label, $builder);
 
         $eventStore->append(
             aggregateType: 'export',
@@ -152,7 +154,7 @@ class ExportController extends Controller
     /**
      * @param  Collection<int, AttendanceMonth>  $months
      */
-    private function buildAttendanceExcelZip(Collection $months, string $yearMonth, AttendanceExcelBuilder $builder): Response
+    private function buildAttendanceExcelZip(Collection $months, string $label, AttendanceExcelBuilder $builder): Response
     {
         $tmpDir = storage_path('app/tmp');
         if (! is_dir($tmpDir)) {
@@ -160,7 +162,7 @@ class ExportController extends Controller
         }
 
         $xlsxPaths = [];
-        $zipPath = $tmpDir.'/attendance_'.$yearMonth.'_'.Str::uuid().'.zip';
+        $zipPath = $tmpDir.'/attendance_'.$label.'_'.Str::uuid().'.zip';
 
         try {
             $zip = new ZipArchive;
@@ -170,8 +172,8 @@ class ExportController extends Controller
             }
 
             foreach ($months as $month) {
-                $spreadsheet = $builder->buildForMonth($month, $yearMonth);
-                $xlsxPath = $tmpDir.'/'.$month->user_id.'_'.$yearMonth.'_'.Str::uuid().'.xlsx';
+                $spreadsheet = $builder->buildForMonth($month, $month->year_month);
+                $xlsxPath = $tmpDir.'/'.$month->user_id.'_'.$month->year_month.'_'.Str::uuid().'.xlsx';
 
                 // save()が失敗した場合でも部分的に書き出されたファイルをfinallyで削除できるよう、
                 // save()の前にパスを登録しておく。
@@ -179,7 +181,7 @@ class ExportController extends Controller
                 $writer = new Xlsx($spreadsheet);
                 $writer->save($xlsxPath);
 
-                $zip->addFile($xlsxPath, $month->user_id.'_'.$yearMonth.'.xlsx');
+                $zip->addFile($xlsxPath, $month->user_id.'_'.$month->year_month.'.xlsx');
             }
 
             $zip->close();
@@ -188,7 +190,7 @@ class ExportController extends Controller
 
             return response($contents, 200, [
                 'Content-Type' => 'application/zip',
-                'Content-Disposition' => 'attachment; filename="attendance_'.$yearMonth.'.zip"',
+                'Content-Disposition' => 'attachment; filename="attendance_'.$label.'.zip"',
             ]);
         } finally {
             foreach ($xlsxPaths as $path) {
@@ -266,16 +268,34 @@ class ExportController extends Controller
     }
 
     /**
-     * @return array{year_month: string, user_id?: array<int, string>, format?: string}
+     * @return array{year_month: array<int, string>, user_id?: array<int, string>, format?: string}
      */
     private function validateAttendanceExportRequest(Request $request): array
     {
+        // year_monthは複数月をまとめて出力できるよう配列を基本とするが、
+        // 単一の`year_month=2026-06`形式(旧仕様・後方互換)も引き続き受け付けるため、
+        // 文字列で来た場合は配列に正規化してから検証する。
+        if (is_string($request->query('year_month'))) {
+            $request->merge(['year_month' => [$request->query('year_month')]]);
+        }
+
         return $request->validate([
-            'year_month' => ['required', 'date_format:Y-m'],
+            'year_month' => ['required', 'array', 'min:1'],
+            'year_month.*' => ['string', 'date_format:Y-m'],
             'user_id' => ['nullable', 'array'],
             'user_id.*' => ['string', 'exists:users,id'],
             'format' => ['nullable', 'string', 'in:generic,generic_tsv,generic_sjis,moneyforward,freee'],
         ]);
+    }
+
+    /**
+     * @param  array<int, string>  $yearMonths
+     */
+    private function yearMonthLabel(array $yearMonths): string
+    {
+        $sorted = collect($yearMonths)->unique()->sort()->values();
+
+        return $sorted->count() === 1 ? $sorted->first() : $sorted->first().'_'.$sorted->last();
     }
 
     private function resolveAttendanceCsvFormat(string $formatKey): AttendanceCsvFormat
@@ -294,16 +314,17 @@ class ExportController extends Controller
      * attendance()・attendanceExcel()共通の対象月抽出ロジック。承認済み(UC-A009)・
      * 締め済み(UC-A011)の月次勤怠のみを対象とする(docs/14-usecases-export.md)。
      *
-     * @param  array{year_month: string, user_id?: array<int, string>}  $data
+     * @param  array{year_month: array<int, string>, user_id?: array<int, string>}  $data
      * @return Collection<int, AttendanceMonth>
      */
     private function resolveAttendanceMonths(array $data): Collection
     {
         return AttendanceMonth::query()
             ->with('user')
-            ->where('year_month', $data['year_month'])
+            ->whereIn('year_month', $data['year_month'])
             ->whereIn('status', [AttendanceMonthStatus::APPROVED, AttendanceMonthStatus::CLOSED])
             ->when($data['user_id'] ?? null, fn ($query, $userIds) => $query->whereIn('user_id', $userIds))
+            ->orderBy('year_month')
             ->orderBy('user_id')
             ->get();
     }
