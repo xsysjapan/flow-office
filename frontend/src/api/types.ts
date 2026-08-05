@@ -170,6 +170,7 @@ export type WorkflowRequestSubjectType =
   | 'paid_leave_request'
   | 'special_leave_request'
   | 'shift_swap_request'
+  | 'compensatory_leave_request'
   | null
 
 /** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
@@ -185,6 +186,15 @@ export interface ExpenseClaimSubjectSummary {
 }
 
 export interface PaidLeaveRequestSubjectSummary {
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+}
+
+export interface CompensatoryLeaveRequestSubjectSummary {
   target_date: string | null
   leave_type: PaidLeaveType
   leave_type_label: string
@@ -215,6 +225,7 @@ export type WorkflowRequestSubjectSummary =
   | PaidLeaveRequestSubjectSummary
   | SpecialLeaveRequestSubjectSummary
   | ShiftSwapRequestSubjectSummary
+  | CompensatoryLeaveRequestSubjectSummary
 
 /** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
 export interface WorkflowRequestAttendanceMonthSubject {
@@ -278,6 +289,23 @@ export interface WorkflowRequestPaidLeaveRequestSubject {
   cancelled_at: string | null
 }
 
+export interface WorkflowRequestCompensatoryLeaveRequestSubject {
+  type: 'compensatory_leave_request'
+  id: string
+  user_id: string
+  status: PaidLeaveRequestStatus
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
 export interface WorkflowRequestSpecialLeaveRequestSubject {
   type: 'special_leave_request'
   id: string
@@ -318,6 +346,7 @@ export type WorkflowRequestSubject =
   | WorkflowRequestPaidLeaveRequestSubject
   | WorkflowRequestSpecialLeaveRequestSubject
   | WorkflowRequestShiftSwapRequestSubject
+  | WorkflowRequestCompensatoryLeaveRequestSubject
 
 export interface WorkflowRequest {
   id: string

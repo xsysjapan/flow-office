@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type {
   WorkflowRequest,
   WorkflowRequestAttendanceMonthSubject,
+  WorkflowRequestCompensatoryLeaveRequestSubject,
   WorkflowRequestExpenseClaimSubject,
   WorkflowRequestPaidLeaveRequestSubject,
   WorkflowRequestShiftSwapRequestSubject,
@@ -45,6 +46,9 @@ function isActionable(request: WorkflowRequest): boolean {
   }
   if (request.subject_type === 'shift_swap_request') {
     return request.subject?.type === 'shift_swap_request' && request.subject.status === 'submitted'
+  }
+  if (request.subject_type === 'compensatory_leave_request') {
+    return request.subject?.type === 'compensatory_leave_request' && request.subject.status === 'submitted'
   }
   return request.status === 'submitted'
 }
@@ -249,6 +253,29 @@ function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaid
   )
 }
 
+function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestCompensatoryLeaveRequestSubject }) {
+  const { label, tone } = paidLeaveRequestStatusLabel(subject.status)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Badge tone={tone}>{label}</Badge>
+      </div>
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+        <dt className="font-medium text-muted-foreground">対象日</dt>
+        <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">種別</dt>
+        <dd className="text-foreground">{subject.leave_type_label}</dd>
+        <dt className="font-medium text-muted-foreground">日数/時間</dt>
+        <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
+        <dt className="font-medium text-muted-foreground">理由</dt>
+        <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+      </dl>
+    </div>
+  )
+}
+
 function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestSpecialLeaveRequestSubject }) {
   const { label, tone } = paidLeaveRequestStatusLabel(subject.status)
 
@@ -359,6 +386,10 @@ export function ApprovalDetailPanel({
 
       {request.subject_type === 'shift_swap_request' && request.subject?.type === 'shift_swap_request' && (
         <ShiftSwapRequestSubjectView subject={request.subject} />
+      )}
+
+      {request.subject_type === 'compensatory_leave_request' && request.subject?.type === 'compensatory_leave_request' && (
+        <CompensatoryLeaveRequestSubjectView subject={request.subject} />
       )}
 
       {!request.subject_type && <WorkflowRequestSubjectView request={request} />}
