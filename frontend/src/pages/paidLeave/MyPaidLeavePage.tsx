@@ -4,6 +4,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -13,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { PaidLeaveType } from '../../api/types'
 import { useAppSettings } from '../../contexts/useAppSettings'
+import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useCancelPaidLeaveRequest,
   useCreatePaidLeaveRequest,
@@ -20,6 +22,7 @@ import {
   useMyPaidLeaveRequests,
 } from '../../hooks/usePaidLeave'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
+import { addDays } from '../../utils/weekDates'
 
 const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
   { value: 'full', label: '全休' },
@@ -28,67 +31,155 @@ const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
   { value: 'hourly', label: '時間休' },
 ]
 
+type TargetDateMode = 'dates' | 'range'
+
+interface TargetDateRowData {
+  date: string
+}
+
+/** 期間指定(from〜to)を暦日1日ずつの"YYYY-MM-DD"配列に列挙する(両端含む)。 */
+function enumerateRange(range: DateRangeValue | undefined): string[] {
+  if (!range?.from) return []
+  const to = range.to ?? range.from
+  const dates: string[] = []
+  let cursor = range.from
+  while (cursor <= to) {
+    dates.push(cursor)
+    cursor = addDays(cursor, 1)
+  }
+  return dates
+}
+
 function PaidLeaveRequestForm() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.paid_leave_requires_approval
 
-  const [targetDate, setTargetDate] = useState('')
+  const [targetMode, setTargetMode] = useState<TargetDateMode>('dates')
+  const dateRows = useEditableRows<TargetDateRowData>([{ date: '' }])
+  const [range, setRange] = useState<DateRangeValue | undefined>(undefined)
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
   const [hours, setHours] = useState('')
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const createRequest = useCreatePaidLeaveRequest()
 
+  const targetDates =
+    targetMode === 'range' ? enumerateRange(range) : dateRows.rows.map((row) => row.date).filter((date) => date)
+  const isMultiDay = targetDates.length > 1
+  const effectiveLeaveType: PaidLeaveType = isMultiDay ? 'full' : leaveType
+
   const canSubmit =
-    targetDate && (!approvalRequired || approverUserId) && (leaveType !== 'hourly' || Number(hours) > 0)
+    targetDates.length > 0 &&
+    (!approvalRequired || approverUserId) &&
+    (isMultiDay || effectiveLeaveType !== 'hourly' || Number(hours) > 0)
 
-  const handleSubmit = () => {
+  const resetForm = () => {
+    setTargetMode('dates')
+    dateRows.reset([{ date: '' }])
+    setRange(undefined)
+    setHours('')
+    setApproverUserId(undefined)
+    setReason('')
+  }
+
+  const handleSubmit = async () => {
     if (approvalRequired && !approverUserId) return
+    if (targetDates.length === 0) return
 
-    createRequest.mutate(
-      {
-        target_date: targetDate,
-        leave_type: leaveType,
-        hours: leaveType === 'hourly' ? Number(hours) : undefined,
-        approver_user_id: approverUserId || undefined,
-        reason: reason || undefined,
-      },
-      {
-        onSuccess: () => {
-          setTargetDate('')
-          setHours('')
-          setApproverUserId(undefined)
-          setReason('')
-        },
-      },
-    )
+    setSuccessMessage(null)
+
+    let successCount = 0
+    for (const targetDate of targetDates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await createRequest.mutateAsync({
+          target_date: targetDate,
+          leave_type: effectiveLeaveType,
+          hours: effectiveLeaveType === 'hourly' ? Number(hours) : undefined,
+          approver_user_id: approverUserId || undefined,
+          reason: reason || undefined,
+        })
+        successCount++
+      } catch {
+        break
+      }
+    }
+
+    if (successCount === targetDates.length) {
+      resetForm()
+      setSuccessMessage(`${successCount}日分の有給申請を送信しました。`)
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       {createRequest.error && <ErrorMessage error={createRequest.error} />}
+      {successMessage && <p className="text-sm text-success">{successMessage}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象日" htmlFor="paid-leave-target-date" required>
-          <DatePicker id="paid-leave-target-date" value={targetDate || undefined} onChange={(date) => setTargetDate(date ?? '')} />
-        </FormField>
-
-        <FormField label="取得単位" htmlFor="paid-leave-type" required>
+        <FormField label="対象日の指定方法" htmlFor="paid-leave-target-mode">
           <NativeSelect
-            id="paid-leave-type"
-            value={leaveType}
-            onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
+            id="paid-leave-target-mode"
+            value={targetMode}
+            onChange={(e) => setTargetMode(e.target.value as TargetDateMode)}
           >
-            {LEAVE_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <option value="dates">日付を指定</option>
+            <option value="range">期間を指定</option>
           </NativeSelect>
         </FormField>
 
-        {leaveType === 'hourly' && (
+        {targetMode === 'dates' ? (
+          <FormField label="対象日" htmlFor="paid-leave-target-date" required>
+            <div className="flex flex-col gap-2">
+              {dateRows.rows.map((row, index) => (
+                <div key={row.rowId} className="flex items-center gap-2">
+                  <DatePicker
+                    id={index === 0 ? 'paid-leave-target-date' : undefined}
+                    aria-label={index === 0 ? undefined : `対象日${index + 1}`}
+                    value={row.date || undefined}
+                    onChange={(date) => dateRows.updateRow(row.rowId, { date: date ?? '' })}
+                  />
+                  {dateRows.rows.length > 1 && (
+                    <Button variant="danger" onClick={() => dateRows.removeRow(row.rowId)}>
+                      削除
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button variant="secondary" className="self-start" onClick={() => dateRows.addRow({ date: '' })}>
+                日を追加
+              </Button>
+            </div>
+          </FormField>
+        ) : (
+          <FormField label="対象日(期間)" htmlFor="paid-leave-target-range" required>
+            <DateRangePicker id="paid-leave-target-range" value={range} onChange={setRange} />
+          </FormField>
+        )}
+
+        {isMultiDay ? (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            複数日をまとめて申請する場合、取得単位は全休固定になります。
+          </p>
+        ) : (
+          <FormField label="取得単位" htmlFor="paid-leave-type" required>
+            <NativeSelect
+              id="paid-leave-type"
+              value={leaveType}
+              onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
+            >
+              {LEAVE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        )}
+
+        {!isMultiDay && leaveType === 'hourly' && (
           <FormField label="取得時間" htmlFor="paid-leave-hours" required>
             <Input
               id="paid-leave-hours"

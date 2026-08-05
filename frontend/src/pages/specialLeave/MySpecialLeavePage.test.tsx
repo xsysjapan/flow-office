@@ -82,6 +82,49 @@ function renderPage(
   )
 }
 
+/** 日本語ロケールのreact-day-pickerの日付ボタンのaria-labelを組み立てる(pickerInteractions.tsのdayButtonLabelと同様)。 */
+function dayButtonLabel(date: Date): string {
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日${date.toLocaleDateString('ja-JP', {
+    weekday: 'long',
+  })}`
+}
+
+async function navigateToMonth(user: ReturnType<typeof userEvent.setup>, targetYear: number, targetMonthIndex: number): Promise<void> {
+  const grid = screen.getByRole('grid')
+  const label = grid.getAttribute('aria-label')
+  if (!label) throw new Error('カレンダーのaria-labelから年月を読み取れませんでした。')
+
+  const match = label.match(/(\d{4})年(\d{1,2})月/)
+  if (!match) throw new Error(`カレンダーの年月を読み取れませんでした: ${label}`)
+  const currentYear = Number(match[1])
+  const currentMonthIndex = Number(match[2]) - 1
+  const diff = (targetYear - currentYear) * 12 + (targetMonthIndex - currentMonthIndex)
+  if (diff === 0) return
+
+  const button = screen.getByRole('button', { name: diff < 0 ? '前の月へ' : '次の月へ' })
+  for (let i = 0; i < Math.abs(diff); i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await user.click(button)
+  }
+}
+
+/** `DateRangePicker`のトリガーボタンをクリックし、指定した"YYYY-MM-DD"〜"YYYY-MM-DD"の範囲を選ぶ。 */
+async function pickDateRange(
+  user: ReturnType<typeof userEvent.setup>,
+  triggerName: string,
+  fromIso: string,
+  toIso: string,
+): Promise<void> {
+  await user.click(screen.getByRole('button', { name: triggerName }))
+  const from = new Date(`${fromIso}T00:00:00`)
+  const to = new Date(`${toIso}T00:00:00`)
+  await navigateToMonth(user, from.getFullYear(), from.getMonth())
+  await user.click(await screen.findByRole('button', { name: dayButtonLabel(from) }))
+  await navigateToMonth(user, to.getFullYear(), to.getMonth())
+  await user.click(await screen.findByRole('button', { name: dayButtonLabel(to) }))
+  await user.click(await screen.findByRole('button', { name: '適用' }))
+}
+
 describe('MySpecialLeavePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -169,6 +212,58 @@ describe('MySpecialLeavePage', () => {
         reason: undefined,
       }),
     )
+  })
+
+  it('creates one request per day when submitting a date range', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+    vi.spyOn(specialLeaveApi, 'createSpecialLeaveRequest').mockResolvedValue(submittedRequest)
+
+    renderPage()
+    await screen.findByText('特別休暇申請はまだありません。')
+
+    const user = userEvent.setup()
+    await user.selectOptions(screen.getByLabelText('特別休暇の種類'), '誕生日休暇')
+    await user.selectOptions(screen.getByLabelText('対象日の指定方法'), '期間を指定')
+    await pickDateRange(user, '対象日(期間)', '2026-08-10', '2026-08-12')
+    await user.click(screen.getByLabelText('承認者'))
+    await user.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await user.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    await user.click(screen.getByRole('button', { name: '申請する' }))
+
+    await waitFor(() => expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenCalledTimes(3))
+    expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenNthCalledWith(1, {
+      special_leave_type_id: birthdayType.id,
+      target_date: '2026-08-10',
+      leave_type: 'full',
+      hours: undefined,
+      approver_user_id: approver.id,
+      reason: undefined,
+    })
+    expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenNthCalledWith(3, {
+      special_leave_type_id: birthdayType.id,
+      target_date: '2026-08-12',
+      leave_type: 'full',
+      hours: undefined,
+      approver_user_id: approver.id,
+      reason: undefined,
+    })
+    expect(await screen.findByText('3日分の特別休暇申請を送信しました。')).toBeInTheDocument()
+  })
+
+  it('hides the leave-type select once the target date range spans multiple days', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+    await screen.findByText('特別休暇申請はまだありません。')
+
+    expect(screen.getByLabelText('取得単位')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.selectOptions(screen.getByLabelText('対象日の指定方法'), '期間を指定')
+    await pickDateRange(user, '対象日(期間)', '2026-08-10', '2026-08-12')
+
+    expect(screen.queryByLabelText('取得単位')).not.toBeInTheDocument()
+    expect(screen.getByText('複数日をまとめて申請する場合、取得単位は全休固定になります。')).toBeInTheDocument()
   })
 
   it('shows submitted requests and cancels them', async () => {
