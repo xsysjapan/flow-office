@@ -33,6 +33,7 @@ use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
 use App\Domain\Attendance\Commands\PublishWorkCalendar;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
+use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
@@ -71,6 +72,7 @@ use App\Domain\Attendance\Handlers\GeneratePatternShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
 use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
+use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
@@ -352,6 +354,7 @@ return [
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,
         CancelSubmittedAttendanceMonth::class => CancelSubmittedAttendanceMonthHandler::class,
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
+        RecalculateAttendanceMonthSnapshot::class => RecalculateAttendanceMonthSnapshotHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
         ExcludeAttendanceSubmissionReminder::class => ExcludeAttendanceSubmissionReminderHandler::class,

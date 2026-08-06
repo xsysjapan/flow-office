@@ -3,12 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as paidLeaveApi from '../../api/paidLeave'
+import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as usersApi from '../../api/users'
-import type { PaidLeaveGrant, PaidLeaveRequest, Paginated, User } from '../../api/types'
+import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, Paginated, User } from '../../api/types'
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
 import { pickDate } from '../../test-support/pickerInteractions'
-import { MyPaidLeavePage } from './MyPaidLeavePage'
+import { MyCompensatoryLeavePage } from './MyCompensatoryLeavePage'
 
 const approver: User = {
   id: 'approver-1',
@@ -26,7 +26,7 @@ const approverSearchResult: Paginated<User> = {
   links: { next: null, prev: null },
 }
 
-const submittedRequest: PaidLeaveRequest = {
+const submittedRequest: CompensatoryLeaveRequest = {
   id: 'request-1',
   user_id: 'user-1',
   status: 'submitted',
@@ -34,6 +34,7 @@ const submittedRequest: PaidLeaveRequest = {
   target_date: '2026-08-10',
   hours: null,
   requested_days: 1,
+  requested_minutes: null,
   reason: null,
   submitted_at: '2026-08-01T00:00:00+09:00',
   approved_at: null,
@@ -41,22 +42,22 @@ const submittedRequest: PaidLeaveRequest = {
   cancelled_at: null,
 }
 
-function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true) {
+function renderPage(requests: CompensatoryLeaveRequest[] = [], compensatoryLeaveRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
-  vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(requests)
+  vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(requests)
 
   return render(
     <QueryClientProvider client={queryClient}>
       <AppSettingsContext.Provider
         value={{
           systemSettings: {
-            paid_leave_requires_approval: paidLeaveRequiresApproval,
+            paid_leave_requires_approval: true,
             special_leave_requires_approval: true,
             shift_swap_requires_approval: true,
             attendance_requires_approval: true,
             expense_claim_requires_approval: true,
-            compensatory_leave_requires_approval: true,
+            compensatory_leave_requires_approval: compensatoryLeaveRequiresApproval,
             default_timezone: 'Asia/Tokyo',
             default_work_style_id: null,
             default_work_style: null,
@@ -67,73 +68,84 @@ function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval
         }}
       >
         <MemoryRouter>
-          <MyPaidLeavePage />
+          <MyCompensatoryLeavePage />
         </MemoryRouter>
       </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
 }
 
-describe('MyPaidLeavePage', () => {
+describe('MyCompensatoryLeavePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
   it('shows an empty state when there are no grants', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
 
     renderPage()
 
-    expect(await screen.findByText('有給の付与はまだありません。')).toBeInTheDocument()
+    expect(await screen.findByText('代休の付与はまだありません。')).toBeInTheDocument()
   })
 
-  it('shows the total remaining days and each grant', async () => {
-    const grants: PaidLeaveGrant[] = [
+  it('shows the total remaining days, days column, and minutes column (hyphen when null)', async () => {
+    const grants: CompensatoryLeaveGrant[] = [
       {
         id: 'grant-1',
         user_id: 'user-1',
-        granted_on: '2025-04-01',
-        expires_on: '2027-03-31',
-        granted_days: 10,
-        used_days: 3,
-        remaining_days: 7,
-        grant_reason: '法定付与',
+        attendance_day_id: 'day-1',
+        work_date: '2026-07-05',
+        status: 'confirmed',
+        granted_days: 1,
+        granted_minutes: null,
+        used_days: 0,
+        used_minutes: null,
+        remaining_days: 1,
+        remaining_minutes: null,
+        confirmed_at: '2026-07-06T00:00:00+09:00',
+        expires_on: '2026-12-31',
       },
       {
         id: 'grant-2',
         user_id: 'user-1',
-        granted_on: '2026-04-01',
-        expires_on: '2028-03-31',
-        granted_days: 11,
+        attendance_day_id: 'day-2',
+        work_date: '2026-07-20',
+        status: 'confirmed',
+        granted_days: 0.25,
+        granted_minutes: 120,
         used_days: 0,
-        remaining_days: 11,
-        grant_reason: null,
+        used_minutes: 0,
+        remaining_days: 0.25,
+        remaining_minutes: 120,
+        confirmed_at: '2026-07-21T00:00:00+09:00',
+        expires_on: '2026-12-31',
       },
     ]
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue(grants)
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue(grants)
 
     renderPage()
 
-    expect(await screen.findByText('18')).toBeInTheDocument()
-    expect(screen.getByText('2025-04-01')).toBeInTheDocument()
-    expect(screen.getByText('法定付与')).toBeInTheDocument()
-    expect(screen.getByText('2026-04-01')).toBeInTheDocument()
+    expect(await screen.findByText('1.25')).toBeInTheDocument()
+    expect(screen.getByText('2026-07-05')).toBeInTheDocument()
+    expect(screen.getByText('2026-07-20')).toBeInTheDocument()
+    expect(screen.getByText('120')).toBeInTheDocument()
+    expect(screen.getByText('-')).toBeInTheDocument()
   })
 
   it('shows an empty state when there are no requests', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
 
     renderPage()
 
-    expect(await screen.findByText('有給申請はまだありません。')).toBeInTheDocument()
+    expect(await screen.findByText('代休申請はまだありません。')).toBeInTheDocument()
   })
 
   it('submits a full-day leave request with the entered values', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
 
     renderPage()
-    await screen.findByText('有給申請はまだありません。')
+    await screen.findByText('代休申請はまだありません。')
 
     await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.click(screen.getByLabelText('承認者'))
@@ -142,7 +154,7 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
-      expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledWith({
+      expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenCalledWith({
         target_date: '2026-08-10',
         leave_type: 'full',
         hours: undefined,
@@ -152,27 +164,12 @@ describe('MyPaidLeavePage', () => {
     )
   })
 
-  it('requires an hours value before submitting an hourly leave request', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-
-    renderPage()
-    await screen.findByText('有給申請はまだありません。')
-
-    await pickDate(userEvent.setup(), '対象日', '2026-08-10')
-    await userEvent.selectOptions(screen.getByLabelText('取得単位'), '時間休')
-    await userEvent.click(screen.getByLabelText('承認者'))
-    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
-    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
-
-    expect(screen.getByRole('button', { name: '申請する' })).toBeDisabled()
-  })
-
   it('allows submitting without an approver when approval is not required', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(submittedRequest)
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
 
     renderPage([], false)
-    await screen.findByText('有給申請はまだありません。')
+    await screen.findByText('代休申請はまだありません。')
 
     expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
 
@@ -180,7 +177,7 @@ describe('MyPaidLeavePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))
 
     await waitFor(() =>
-      expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledWith({
+      expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenCalledWith({
         target_date: '2026-08-10',
         leave_type: 'full',
         hours: undefined,
@@ -191,8 +188,11 @@ describe('MyPaidLeavePage', () => {
   })
 
   it('shows submitted requests and cancels them', async () => {
-    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
-    vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...submittedRequest, status: 'cancelled' })
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'cancelCompensatoryLeaveRequest').mockResolvedValue({
+      ...submittedRequest,
+      status: 'cancelled',
+    })
 
     renderPage([submittedRequest])
 
@@ -201,6 +201,6 @@ describe('MyPaidLeavePage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '取消' }))
 
-    await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
+    await waitFor(() => expect(compensatoryLeaveApi.cancelCompensatoryLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
   })
 })

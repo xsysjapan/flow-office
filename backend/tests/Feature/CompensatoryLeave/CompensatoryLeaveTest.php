@@ -9,6 +9,7 @@ use App\Models\EmployeeShiftAssignment;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkCalendar;
+use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -346,5 +347,93 @@ class CompensatoryLeaveTest extends TestCase
         ]);
         $requestResponse->assertCreated();
         $requestResponse->assertJsonPath('status', 'approved');
+
+        $requestId = $requestResponse->json('id');
+        $this->assertSame(0, WorkflowRequest::query()->where('subject_id', $requestId)->count());
+    }
+
+    /**
+     * PaidLeaveと同様、代休の消化申請もDraftWorkflowRequest(subjectType:
+     * 'compensatory_leave_request')経由でworkflow_requestと連携する。
+     */
+    public function test_storing_a_request_creates_a_workflow_request_pointing_at_it(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+
+        $workflowRequest = WorkflowRequest::query()->where('subject_type', 'compensatory_leave_request')->firstOrFail();
+        $this->assertSame($requestId, $workflowRequest->subject_id);
+    }
+
+    /**
+     * バグ修正の直接確認: GET /api/workflow-requests/{id} で代休申請のsubjectが
+     * 正しく返ること(WorkflowRequest::subjectModel()/WorkflowRequestResource::
+     * buildSubjectSummary()/WorkflowRequestController::show()の3箇所に
+     * compensatory_leave_requestのcaseが必要)。
+     */
+    public function test_workflow_request_show_returns_the_compensatory_leave_request_subject(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+
+        $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
+
+        $response = $this->actingAs($approver)->getJson("/api/workflow-requests/{$workflowRequest->id}");
+        $response->assertOk();
+        $response->assertJsonPath('subject.type', 'compensatory_leave_request');
+        $response->assertJsonPath('subject.id', $requestId);
+        $response->assertJsonPath('subject.target_date', '2026-09-10');
+        $response->assertJsonPath('subject.leave_type', 'full');
+        $response->assertJsonPath('subject.leave_type_label', '全休');
+        $response->assertJsonPath('subject.requested_days', 1);
+        $response->assertJsonPath('subject.reason', '代休消化');
+
+        $response->assertJsonPath('subject_summary.target_date', '2026-09-10');
+        $response->assertJsonPath('subject_summary.leave_type_label', '全休');
+        $response->assertJsonPath('subject_summary.requested_days', 1);
+    }
+
+    public function test_cancelling_a_request_also_cancels_the_workflow_request(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
+
+        $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
+        $this->assertSame('cancelled', $workflowRequest->status);
     }
 }

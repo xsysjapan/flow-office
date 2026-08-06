@@ -36,6 +36,7 @@ export function SystemSettingsPage() {
   const [shiftSwapRequiresApproval, setShiftSwapRequiresApproval] = useState(true)
   const [attendanceRequiresApproval, setAttendanceRequiresApproval] = useState(true)
   const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
+  const [compensatoryLeaveRequiresApproval, setCompensatoryLeaveRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function SystemSettingsPage() {
     setShiftSwapRequiresApproval(data.shift_swap_requires_approval)
     setAttendanceRequiresApproval(data.attendance_requires_approval)
     setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
+    setCompensatoryLeaveRequiresApproval(data.compensatory_leave_requires_approval)
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -86,6 +88,7 @@ export function SystemSettingsPage() {
         shift_swap_requires_approval: shiftSwapRequiresApproval,
         attendance_requires_approval: attendanceRequiresApproval,
         expense_claim_requires_approval: expenseClaimRequiresApproval,
+        compensatory_leave_requires_approval: compensatoryLeaveRequiresApproval,
       },
       {
         onSuccess: () => {
@@ -218,6 +221,17 @@ export function SystemSettingsPage() {
           }}
         />
         経費精算の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={compensatoryLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setCompensatoryLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        代休の消化申請に承認を必須にする
       </label>
 
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>

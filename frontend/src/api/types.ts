@@ -99,6 +99,8 @@ export interface SystemSettings {
   /** 月次勤怠の提出・経費精算の申請に承認者による承認を必須にするか。 */
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
+  /** 代休の消化申請に承認者による承認を必須にするか。falseの場合、申請すると同時に確定・消化される。 */
+  compensatory_leave_requires_approval: boolean
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */
@@ -119,6 +121,7 @@ export interface PublicSystemSettings {
   shift_swap_requires_approval: boolean
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
+  compensatory_leave_requires_approval: boolean
   default_timezone: string
   default_work_style_id: string | null
   default_work_style: Pick<WorkStyle, 'id' | 'code' | 'name'> | null
@@ -170,6 +173,7 @@ export type WorkflowRequestSubjectType =
   | 'paid_leave_request'
   | 'special_leave_request'
   | 'shift_swap_request'
+  | 'compensatory_leave_request'
   | null
 
 /** 一覧(GET /workflow-requests/mine, /to-approve)に含まれる、対象ドメインの要約表示。 */
@@ -185,6 +189,15 @@ export interface ExpenseClaimSubjectSummary {
 }
 
 export interface PaidLeaveRequestSubjectSummary {
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+}
+
+export interface CompensatoryLeaveRequestSubjectSummary {
   target_date: string | null
   leave_type: PaidLeaveType
   leave_type_label: string
@@ -215,6 +228,7 @@ export type WorkflowRequestSubjectSummary =
   | PaidLeaveRequestSubjectSummary
   | SpecialLeaveRequestSubjectSummary
   | ShiftSwapRequestSubjectSummary
+  | CompensatoryLeaveRequestSubjectSummary
 
 /** GET /workflow-requests/{id}のみに含まれる、対象ドメインの実データ詳細。 */
 export interface WorkflowRequestAttendanceMonthSubject {
@@ -278,6 +292,23 @@ export interface WorkflowRequestPaidLeaveRequestSubject {
   cancelled_at: string | null
 }
 
+export interface WorkflowRequestCompensatoryLeaveRequestSubject {
+  type: 'compensatory_leave_request'
+  id: string
+  user_id: string
+  status: PaidLeaveRequestStatus
+  target_date: string | null
+  leave_type: PaidLeaveType
+  leave_type_label: string
+  hours: number | null
+  requested_days: number
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
+}
+
 export interface WorkflowRequestSpecialLeaveRequestSubject {
   type: 'special_leave_request'
   id: string
@@ -318,6 +349,7 @@ export type WorkflowRequestSubject =
   | WorkflowRequestPaidLeaveRequestSubject
   | WorkflowRequestSpecialLeaveRequestSubject
   | WorkflowRequestShiftSwapRequestSubject
+  | WorkflowRequestCompensatoryLeaveRequestSubject
 
 export interface WorkflowRequest {
   id: string
@@ -631,6 +663,46 @@ export interface PaidLeaveGrant {
 export interface PaidLeaveGrantRuleStep {
   continuous_service_months: number
   grant_days: number
+}
+
+/**
+ * 代休の残数(付与)。休日出勤の勤怠実績から自動導出されるため付与のCRUDは無く、
+ * `granted_minutes`/`remaining_minutes`が入る時間単位のGrantも存在する
+ * (backend/app/Http/Resources/CompensatoryLeaveGrantResource.php参照)。
+ */
+export interface CompensatoryLeaveGrant {
+  id: string
+  user_id: string
+  attendance_day_id: string
+  work_date: string
+  status: 'draft' | 'confirmed' | 'cancelled'
+  granted_days: number
+  granted_minutes: number | null
+  used_days: number
+  used_minutes: number | null
+  remaining_days: number
+  remaining_minutes: number | null
+  confirmed_at: string | null
+  expires_on: string | null
+}
+
+/** 代休の消化申請。ステータス・取得単位は有給申請と同じ概念のため型を再利用する。 */
+export interface CompensatoryLeaveRequest {
+  id: string
+  user_id: string
+  user?: User
+  approver?: User
+  status: PaidLeaveRequestStatus
+  leave_type: PaidLeaveType
+  target_date: string
+  hours: number | null
+  requested_days: number
+  requested_minutes: number | null
+  reason: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  returned_at: string | null
+  cancelled_at: string | null
 }
 
 export type PaidLeaveType = 'full' | 'am_half' | 'pm_half' | 'hourly'
