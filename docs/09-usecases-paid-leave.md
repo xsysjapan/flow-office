@@ -198,8 +198,10 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
   一度警告した事実を記録し、以降の実行では対象から除外する(一度きりの警告。期限が過ぎても
   再警告はしない)。
 - 期間指定の複数日申請・1回の承認でのまとめ承認(`request_group_id`)は特別休暇
-  (`special_leave_requests`)にも同じ仕組みで実装済み。代休(後述)はフロントエンドの
-  申請画面自体が未実装のため対象外(バックエンドAPIのみ)。
+  (`special_leave_requests`)にも同じ仕組みで実装済み。代休(後述)の申請画面も有給・
+  特別休暇と同じ日付指定/期間指定の複数日申請UIを持つが、`compensatory_leave_requests`
+  には`request_group_id`が無く、複数日分は日ごとに独立した消化申請として送信され、
+  承認も日ごとに個別に行う(1回の承認でまとめて承認する対象外)。
 - 既知の制約: `attendance_daily_calculations`(日次集計)は現時点で `work_type` を区別せず
   `actual_start_at`/`actual_end_at` のみから計算する。全休日は労働時間が0分として集計される
   (欠勤ではなく有給消化であることは `attendance_days.work_type` で判別できるが、給与計算上の

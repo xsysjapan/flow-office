@@ -647,7 +647,7 @@ describe('AttendanceDayPage', () => {
       expect(await screen.findByRole('menuitem', { name: 'この日を振替休日にする' })).toBeInTheDocument()
     })
 
-    it('links to the paid-leave and special-leave request pages with the current date', async () => {
+    it('links to the paid-leave, special-leave, and compensatory-leave request pages with the current date', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([recordedDay])
 
@@ -661,6 +661,10 @@ describe('AttendanceDayPage', () => {
       expect(screen.getByRole('menuitem', { name: '特別休暇を申請する' })).toHaveAttribute(
         'href',
         `/special-leave?date=${date}`,
+      )
+      expect(screen.getByRole('menuitem', { name: '代休を申請する' })).toHaveAttribute(
+        'href',
+        `/compensatory-leave?date=${date}`,
       )
     })
 

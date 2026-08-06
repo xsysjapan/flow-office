@@ -1073,6 +1073,9 @@ export function AttendanceDayPage() {
                 <DropdownMenuItem asChild>
                   <Link to={`/special-leave?date=${date}`}>特別休暇を申請する</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={`/compensatory-leave?date=${date}`}>代休を申請する</Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
