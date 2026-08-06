@@ -737,11 +737,15 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - snapshot_json
 - created_at / updated_at
 
-`attendance_daily_calculations`とは異なり、`attendance_months`は対応するProjector・
-`projections:rebuild`での再生成経路を持たない。`SubmitAttendanceMonthHandler`/
-`ApproveAttendanceMonthHandler`/`ReturnAttendanceMonthHandler`/`CloseAttendanceMonthHandler`
-が`stored_events`への追記と同一トランザクションで直接更新する「正データ」であり、
-「Projection(再生成可能)」には分類しない。
+`attendance_month`はspatie/laravel-event-sourcingへ移行済みで、`AttendanceMonthAggregate`
+(`SubmitAttendanceMonthHandler`/`ApproveAttendanceMonthHandler`/`ReturnAttendanceMonthHandler`/
+`CloseAttendanceMonthHandler`/`RecalculateAttendanceMonthSnapshotHandler`が操作)が
+`stored_events`へ記録したイベントを`AttendanceMonthProjector`が反映して`attendance_months`を
+更新する(`projections:rebuild AttendanceMonthProjector`で再生成できる)。
+`snapshot_json`は提出時(`attendance_month.submitted`)の集計スナップショットで、対象月の日次
+実績が確定した後(提出時にロック済み)に集計ロジックを追加・修正した場合は
+`attendance:recalculate-month-snapshots`コマンドで再計算できる(日次実績自体は変わらないため
+安全に再計算できる。`attendance_month.snapshot_recalculated`イベント)。
 
 ## 作業報告書からの月次勤怠作成(docs/26-usecases-monthly-import.md)
 
@@ -880,6 +884,6 @@ docs/20-implementation-notes.md と同様の注記)。
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `attendance_months`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。`attendance_months`はProjectorを持たず、CommandHandlerが直接書き込む。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |

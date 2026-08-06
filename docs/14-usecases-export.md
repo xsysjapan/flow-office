@@ -58,6 +58,12 @@ AttendanceCsvFormat`実装群、`ExportController::resolveAttendanceCsvFormat()`
 また、法定休日の労働は所定内/所定外に分解しない設計(法定休日に「所定」の概念が無いため)
 のため、「所定時間(法定休日)」「深夜所定時間(法定休日)」「所定外時間(法定休日)」は常に0になる。
 
+`moneyforward`形式の項目追加前に提出済み/承認済み/締め済みとなった月次勤怠は、
+`snapshot_json`に新項目の集計値を持たない(出力時は0扱いになる)。
+`attendance:recalculate-month-snapshots`コマンドで、対象月の日次実績(提出時にロックされ
+変更されない)から現在の集計ロジックで再計算し、`snapshot_json`を更新できる(差戻し中
+(returned)・未提出は対象外。1回限りの手動実行を想定)。
+
 ## UC-E002: 経費CSVを出力する
 
 1. 経理担当者が対象期間を選択する
