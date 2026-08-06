@@ -29,7 +29,29 @@ services:
       - BACKEND_PUBLIC_APP_URL
       - MCP_PUBLIC_APP_URL
     depends_on:
-      - mock-oidc
+      mock-oidc:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  # backend用のMySQL(本番同等のDBエンジンでの動作確認用)。dockerで起動する場合は
+  # .devcontainer/start.shが初回のbackend/.env作成時にDB_CONNECTION=mysqlへ切り替え、
+  # このサービスに接続する。docker経由でない通常起動(ホスト直接実行等)では
+  # backend/.env.exampleの既定通りDB_CONNECTION=sqliteのままなので本サービスは使わない。
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: flow_office
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   mock-oidc:
     build:
@@ -40,3 +62,6 @@ services:
       # ログイン画面のユーザー選択肢をbackendのDBから取得する(mock-oidc/server.js参照)。
       # 未設定/取得失敗時は静的な一覧にフォールバックする。
       MOCK_USERS_API_URL: http://app:8000/api/dev/mock-users
+
+volumes:
+  mysql-data:

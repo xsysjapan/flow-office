@@ -14,6 +14,7 @@ use App\Http\Resources\WorkflowRequestHistoryEntryResource;
 use App\Http\Resources\WorkflowRequestResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
+use App\Models\CompensatoryLeaveRequest;
 use App\Models\EntityShare;
 use App\Models\ExpenseClaim;
 use App\Models\PaidLeaveRequest;
@@ -126,6 +127,7 @@ class WorkflowRequestController extends Controller
             'expense_claim' => $this->buildExpenseClaimSubject($workflowRequest->subject_id),
             'paid_leave_request' => $this->buildPaidLeaveRequestSubject($workflowRequest->subject_id),
             'special_leave_request' => $this->buildSpecialLeaveRequestSubject($workflowRequest->subject_id),
+            'compensatory_leave_request' => $this->buildCompensatoryLeaveRequestSubject($workflowRequest->subject_id),
             default => null,
         };
 
@@ -319,6 +321,35 @@ class WorkflowRequestController extends Controller
             ->get()
             ->map(fn ($row) => $row->target_date->toDateString())
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildCompensatoryLeaveRequestSubject(?string $subjectId): ?array
+    {
+        $request = CompensatoryLeaveRequest::query()->with(['user', 'approver'])->find($subjectId);
+
+        if ($request === null) {
+            return null;
+        }
+
+        return [
+            'type' => 'compensatory_leave_request',
+            'id' => $request->id,
+            'user_id' => $request->user_id,
+            'status' => $request->status,
+            'target_date' => $request->target_date?->toDateString(),
+            'leave_type' => $request->leave_type,
+            'leave_type_label' => WorkflowRequestResource::leaveTypeLabel($request->leave_type),
+            'hours' => $request->hours !== null ? (float) $request->hours : null,
+            'requested_days' => (float) $request->requested_days,
+            'reason' => $request->reason,
+            'submitted_at' => $request->submitted_at?->toIso8601String(),
+            'approved_at' => $request->approved_at?->toIso8601String(),
+            'returned_at' => $request->returned_at?->toIso8601String(),
+            'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+        ];
     }
 
     #[OA\Post(

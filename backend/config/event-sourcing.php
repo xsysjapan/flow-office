@@ -15,6 +15,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSnapshotRecalculated;
 use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
@@ -256,6 +257,7 @@ return [
         'attendance_month.locked' => AttendanceMonthLocked::class,
         'attendance_month.shared' => AttendanceMonthShared::class,
         'attendance_month.unlocked' => AttendanceMonthUnlocked::class,
+        'attendance_month.snapshot_recalculated' => AttendanceMonthSnapshotRecalculated::class,
 
         'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 

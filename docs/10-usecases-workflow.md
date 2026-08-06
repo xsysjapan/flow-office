@@ -75,3 +75,10 @@
   承認時に対象日・振替先日の `employee_shift_assignments` を丸ごと入れ替える。
   `system_settings.shift_swap_requires_approval` が false の場合は承認ワークフローを経由せず
   即時確定する(`special_leave_requires_approval` と同じ考え方)。
+- 有給休暇・特別休暇・振替休日申請と同様、代休申請 (`App\Domain\CompensatoryLeave`) も承認と
+  バックオフィス処理を別ステータス系列で管理する専用申請ドメインとして実装し、
+  `subject_type: 'compensatory_leave_request'` で `workflow_requests` と連携する。代休の付与
+  (Grant)自体は休日出勤の勤怠実績から自動導出されるが、確定済みGrantの消化申請
+  (`compensatory_leave_requests`)は有給・特別休暇と同じく `DraftWorkflowRequest` に subject を
+  渡して作成し、以降の提出・承認・差戻し・取消も汎用申請と同じCommand/Handlerで行う。詳細は
+  [9章 代休](./09-usecases-paid-leave.md#代休appdomaincompensatoryleave)を参照。

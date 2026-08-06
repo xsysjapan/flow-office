@@ -4,9 +4,11 @@ FROM mcr.microsoft.com/devcontainers/php:1-8.4-bookworm
 RUN rm -f /etc/apt/sources.list.d/yarn.sources /etc/apt/sources.list.d/yarn.list
 
 # Laravel development essentials.
+# gd: phpoffice/phpspreadsheet (勤怠Excel出力) が要求する拡張。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends sqlite3 libsqlite3-dev libicu-dev libzip-dev \
-    && docker-php-ext-install intl zip pdo_mysql pdo_sqlite \
+    && apt-get install -y --no-install-recommends sqlite3 libsqlite3-dev libicu-dev libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-freetype \
+    && docker-php-ext-install intl zip pdo_mysql pdo_sqlite gd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
