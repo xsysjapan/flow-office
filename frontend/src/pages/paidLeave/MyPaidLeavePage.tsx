@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { X } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -14,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { PaidLeaveType } from '../../api/types'
 import { useAppSettings } from '../../contexts/useAppSettings'
-import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useCancelPaidLeaveRequest,
   useCreatePaidLeaveRequest,
@@ -33,9 +33,7 @@ const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
 
 type TargetDateMode = 'dates' | 'range'
 
-interface TargetDateRowData {
-  date: string
-}
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 /** 期間指定(from〜to)を暦日1日ずつの"YYYY-MM-DD"配列に列挙する(両端含む)。 */
 function enumerateRange(range: DateRangeValue | undefined): string[] {
@@ -54,8 +52,12 @@ function PaidLeaveRequestForm() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.paid_leave_requires_approval
 
+  const [searchParams] = useSearchParams()
+  const dateParam = searchParams.get('date')
+  const initialDate = dateParam && ISO_DATE_PATTERN.test(dateParam) ? dateParam : undefined
+
   const [targetMode, setTargetMode] = useState<TargetDateMode>('dates')
-  const dateRows = useEditableRows<TargetDateRowData>([{ date: '' }])
+  const [selectedDates, setSelectedDates] = useState<string[]>(() => (initialDate ? [initialDate] : []))
   const [range, setRange] = useState<DateRangeValue | undefined>(undefined)
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
   const [hours, setHours] = useState('')
@@ -65,8 +67,7 @@ function PaidLeaveRequestForm() {
 
   const createRequest = useCreatePaidLeaveRequest()
 
-  const targetDates =
-    targetMode === 'range' ? enumerateRange(range) : dateRows.rows.map((row) => row.date).filter((date) => date)
+  const targetDates = targetMode === 'range' ? enumerateRange(range) : selectedDates
   const isMultiDay = targetDates.length > 1
   const effectiveLeaveType: PaidLeaveType = isMultiDay ? 'full' : leaveType
 
@@ -75,9 +76,17 @@ function PaidLeaveRequestForm() {
     (!approvalRequired || approverUserId) &&
     (isMultiDay || effectiveLeaveType !== 'hourly' || Number(hours) > 0)
 
+  /** 日付を選ぶと即座に対象日一覧へ加える(重複は無視し、日付順に並べる)。 */
+  const addDate = (value: string | undefined) => {
+    if (!value) return
+    setSelectedDates((prev) => (prev.includes(value) ? prev : [...prev, value].sort()))
+  }
+
+  const removeDate = (value: string) => setSelectedDates((prev) => prev.filter((d) => d !== value))
+
   const resetForm = () => {
     setTargetMode('dates')
-    dateRows.reset([{ date: '' }])
+    setSelectedDates([])
     setRange(undefined)
     setHours('')
     setApproverUserId(undefined)
@@ -133,24 +142,27 @@ function PaidLeaveRequestForm() {
         {targetMode === 'dates' ? (
           <FormField label="対象日" htmlFor="paid-leave-target-date" required>
             <div className="flex flex-col gap-2">
-              {dateRows.rows.map((row, index) => (
-                <div key={row.rowId} className="flex items-center gap-2">
-                  <DatePicker
-                    id={index === 0 ? 'paid-leave-target-date' : undefined}
-                    aria-label={index === 0 ? undefined : `対象日${index + 1}`}
-                    value={row.date || undefined}
-                    onChange={(date) => dateRows.updateRow(row.rowId, { date: date ?? '' })}
-                  />
-                  {dateRows.rows.length > 1 && (
-                    <Button variant="danger" onClick={() => dateRows.removeRow(row.rowId)}>
-                      削除
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <Button variant="secondary" className="self-start" onClick={() => dateRows.addRow({ date: '' })}>
-                日を追加
-              </Button>
+              <DatePicker id="paid-leave-target-date" value={undefined} onChange={addDate} />
+              {selectedDates.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5">
+                  {selectedDates.map((selectedDate) => (
+                    <li
+                      key={selectedDate}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/30 py-1 pr-1 pl-2 text-sm text-foreground"
+                    >
+                      {selectedDate}
+                      <button
+                        type="button"
+                        aria-label={`${selectedDate}を削除`}
+                        className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={() => removeDate(selectedDate)}
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </FormField>
         ) : (

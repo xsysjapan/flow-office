@@ -1027,25 +1027,6 @@ export function AttendanceDayPage() {
           <span className="flex items-center gap-1.5">
             {!!day?.calculation?.absence_minutes && <Badge tone="warning">欠勤あり</Badge>}
             {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="icon" aria-label="この日の操作">
-                  <MoreVertical aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setIsShiftSwapOpen(true)}>
-                  {isHoliday ? '振替休日を申請する' : 'この日を振替休日にする'}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/paid-leave">有給休暇を申請する</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/special-leave">特別休暇を申請する</Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </span>
         }
         navigation={
@@ -1075,6 +1056,25 @@ export function AttendanceDayPage() {
                 <ChevronRight aria-hidden="true" />
               </Link>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" aria-label="この日の操作">
+                  <MoreVertical aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setIsShiftSwapOpen(true)}>
+                  {isHoliday ? '振替休日を申請する' : 'この日を振替休日にする'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={`/paid-leave?date=${date}`}>有給休暇を申請する</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={`/special-leave?date=${date}`}>特別休暇を申請する</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       >

@@ -49,6 +49,7 @@ function renderPage(
   requests: SpecialLeaveRequest[] = [],
   types: SpecialLeaveType[] = [birthdayType],
   specialLeaveRequiresApproval = true,
+  initialPath = '/special-leave',
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
@@ -74,7 +75,7 @@ function renderPage(
           isLoading: false,
         }}
       >
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialPath]}>
           <MySpecialLeavePage />
         </MemoryRouter>
       </AppSettingsContext.Provider>
@@ -264,6 +265,35 @@ describe('MySpecialLeavePage', () => {
 
     expect(screen.queryByLabelText('取得単位')).not.toBeInTheDocument()
     expect(screen.getByText('複数日をまとめて申請する場合、取得単位は全休固定になります。')).toBeInTheDocument()
+  })
+
+  it('prefills the target date from the ?date= URL query param', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage([], [birthdayType], true, '/special-leave?date=2026-08-20')
+    await screen.findByText('特別休暇申請はまだありません。')
+
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
+  })
+
+  it('adds a date as a chip and clears the picker when a date is selected', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+    await screen.findByText('特別休暇申請はまだありません。')
+
+    const user = userEvent.setup()
+    await pickDate(user, '対象日', '2026-08-10')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '対象日' })).toHaveTextContent('日付を選択')
+
+    await pickDate(user, '対象日', '2026-08-12')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '2026-08-10を削除' }))
+    expect(screen.queryByText('2026-08-10')).not.toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
   })
 
   it('shows submitted requests and cancels them', async () => {

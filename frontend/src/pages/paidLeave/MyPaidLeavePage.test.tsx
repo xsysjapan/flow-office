@@ -41,7 +41,7 @@ const submittedRequest: PaidLeaveRequest = {
   cancelled_at: null,
 }
 
-function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true) {
+function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true, initialPath = '/paid-leave') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue(requests)
@@ -65,7 +65,7 @@ function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval
           isLoading: false,
         }}
       >
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialPath]}>
           <MyPaidLeavePage />
         </MemoryRouter>
       </AppSettingsContext.Provider>
@@ -286,6 +286,35 @@ describe('MyPaidLeavePage', () => {
 
     expect(screen.queryByLabelText('取得単位')).not.toBeInTheDocument()
     expect(screen.getByText('複数日をまとめて申請する場合、取得単位は全休固定になります。')).toBeInTheDocument()
+  })
+
+  it('prefills the target date from the ?date= URL query param', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/paid-leave?date=2026-08-20')
+    await screen.findByText('有給申請はまだありません。')
+
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
+  })
+
+  it('adds a date as a chip and clears the picker when a date is selected', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+    await screen.findByText('有給申請はまだありません。')
+
+    const user = userEvent.setup()
+    await pickDate(user, '対象日', '2026-08-10')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '対象日' })).toHaveTextContent('日付を選択')
+
+    await pickDate(user, '対象日', '2026-08-12')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '2026-08-10を削除' }))
+    expect(screen.queryByText('2026-08-10')).not.toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
   })
 
   it('shows submitted requests and cancels them', async () => {

@@ -646,6 +646,23 @@ describe('AttendanceDayPage', () => {
       expect(await screen.findByRole('menuitem', { name: 'この日を振替休日にする' })).toBeInTheDocument()
     })
 
+    it('links to the paid-leave and special-leave request pages with the current date', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+
+      expect(await screen.findByRole('menuitem', { name: '有給休暇を申請する' })).toHaveAttribute(
+        'href',
+        `/paid-leave?date=${date}`,
+      )
+      expect(screen.getByRole('menuitem', { name: '特別休暇を申請する' })).toHaveAttribute(
+        'href',
+        `/special-leave?date=${date}`,
+      )
+    })
+
     it('shows the menu item on a legal-holiday day', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       renderPage([holidayDay])
