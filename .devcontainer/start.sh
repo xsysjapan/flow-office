@@ -12,6 +12,10 @@ if [ ! -f .env ]; then
   sed -i 's/^MICROSOFT_CLIENT_ID=$/MICROSOFT_CLIENT_ID=mock-client-id/' .env
   sed -i 's/^MICROSOFT_CLIENT_SECRET=$/MICROSOFT_CLIENT_SECRET=mock-client-secret/' .env
   sed -i 's/^MICROSOFT_TENANT_ID=.*/MICROSOFT_TENANT_ID=mock/' .env
+  # このスクリプトはdocker-compose(dbサービス=MySQL)経由でのみ実行されるため、
+  # ここで作られる.envは常にMySQLへ向ける(dockerを経由しない通常起動では
+  # .env.exampleの既定どおりsqliteのままになる)。
+  sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
 fi
 
 if [ ! -d vendor ] || [ -z "$(ls -A vendor)" ]; then
@@ -22,7 +26,7 @@ if ! grep -q '^APP_KEY=base64' .env; then
   php artisan key:generate
 fi
 
-if [ ! -f database/database.sqlite ]; then
+if grep -q '^DB_CONNECTION=sqlite' .env && [ ! -f database/database.sqlite ]; then
   touch database/database.sqlite
 fi
 
