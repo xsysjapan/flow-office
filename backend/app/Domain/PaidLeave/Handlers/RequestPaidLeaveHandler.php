@@ -99,6 +99,7 @@ class RequestPaidLeaveHandler implements CommandHandler
                 requestedDays: $requestedDays,
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
+                requestGroupId: $command->requestGroupId,
             );
 
         // workflow_requestが指定されている場合、PaidLeaveRequestSharedイベントを発行して

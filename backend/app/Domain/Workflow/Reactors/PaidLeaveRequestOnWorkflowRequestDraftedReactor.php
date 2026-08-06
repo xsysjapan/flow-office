@@ -44,6 +44,7 @@ class PaidLeaveRequestOnWorkflowRequestDraftedReactor extends Reactor
             reason: $formData['reason'] ?? null,
             workflowRequestId: $event->aggregateRootUuid(),
             requestId: $workflowRequest->subject_id,
+            requestGroupId: $formData['request_group_id'] ?? null,
         ));
     }
 }

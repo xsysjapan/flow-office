@@ -26,6 +26,7 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         float $requestedDays,
         string $approverUserId,
         ?string $reason,
+        ?string $requestGroupId = null,
     ): self {
         $this->recordThat(new PaidLeaveRequested(
             userId: $userId,
@@ -35,6 +36,7 @@ class PaidLeaveRequestAggregate extends AggregateRoot
             requestedDays: $requestedDays,
             approverUserId: $approverUserId,
             reason: $reason,
+            requestGroupId: $requestGroupId,
         ));
 
         return $this;

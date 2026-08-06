@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Leave\Support\LeaveUsageQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -257,6 +258,8 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(PaidLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, PaidLeaveRequest::class),
         ];
     }
 
@@ -288,7 +291,34 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(SpecialLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear(
+                $request->user_id,
+                SpecialLeaveRequest::class,
+                $request->special_leave_type_id,
+            ),
         ];
+    }
+
+    /**
+     * 同じ`request_group_id`を持つ全行の対象日一覧(期間指定の複数日申請であることを
+     * 承認者に示すため)。単日申請(request_group_idがnull)の場合はnullを返す。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>  $requestModelClass
+     * @return list<string>|null
+     */
+    private function requestGroupDates(string $requestModelClass, ?string $requestGroupId): ?array
+    {
+        if ($requestGroupId === null) {
+            return null;
+        }
+
+        return $requestModelClass::query()
+            ->where('request_group_id', $requestGroupId)
+            ->orderBy('target_date')
+            ->get()
+            ->map(fn ($row) => $row->target_date->toDateString())
+            ->all();
     }
 
     #[OA\Post(

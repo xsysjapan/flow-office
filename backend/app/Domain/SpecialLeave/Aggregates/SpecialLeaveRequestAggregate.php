@@ -25,6 +25,7 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
         float $requestedDays,
         string $approverUserId,
         ?string $reason,
+        ?string $requestGroupId = null,
     ): self {
         $this->recordThat(new SpecialLeaveRequested(
             userId: $userId,
@@ -35,6 +36,7 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
             requestedDays: $requestedDays,
             approverUserId: $approverUserId,
             reason: $reason,
+            requestGroupId: $requestGroupId,
         ));
 
         return $this;

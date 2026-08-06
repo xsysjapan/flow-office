@@ -106,6 +106,10 @@ function SpecialLeaveRequestForm() {
 
     setSuccessMessage(null)
 
+    // 複数日をまとめて申請する場合、承認者が1回の操作でまとめて承認できるよう
+    // 同じrequest_group_idを全日分に渡す(単日申請では付与しない)。
+    const requestGroupId = isMultiDay ? crypto.randomUUID() : undefined
+
     let successCount = 0
     for (const targetDate of targetDates) {
       try {
@@ -117,6 +121,7 @@ function SpecialLeaveRequestForm() {
           hours: effectiveLeaveType === 'hourly' ? Number(hours) : undefined,
           approver_user_id: approverUserId || undefined,
           reason: reason || undefined,
+          request_group_id: requestGroupId,
         })
         successCount++
       } catch {

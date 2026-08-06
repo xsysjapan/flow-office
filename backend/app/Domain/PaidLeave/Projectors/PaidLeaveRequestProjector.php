@@ -28,6 +28,7 @@ class PaidLeaveRequestProjector extends Projector
                 'hours' => $event->hours,
                 'requested_days' => $event->requestedDays,
                 'reason' => $event->reason,
+                'request_group_id' => $event->requestGroupId,
                 'submitted_at' => $event->createdAt(),
             ],
         );

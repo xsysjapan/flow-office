@@ -793,6 +793,9 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 ## paid_leave_requests (有給申請の正)
 
 - id
+- request_group_id (nullable。期間指定でまとめて申請した複数日分(1日1行)を束ねるID。
+  単日申請ではnull。承認者がこのうち1件を承認すると、同じIDを持つ他の提出中の行も
+  まとめて承認される)
 - user_id
 - approver_user_id
 - status (`submitted` / `approved` / `returned` / `cancelled`)

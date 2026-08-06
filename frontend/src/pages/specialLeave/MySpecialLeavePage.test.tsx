@@ -239,6 +239,7 @@ describe('MySpecialLeavePage', () => {
       hours: undefined,
       approver_user_id: approver.id,
       reason: undefined,
+      request_group_id: expect.any(String),
     })
     expect(specialLeaveApi.createSpecialLeaveRequest).toHaveBeenNthCalledWith(3, {
       special_leave_type_id: birthdayType.id,
@@ -247,7 +248,15 @@ describe('MySpecialLeavePage', () => {
       hours: undefined,
       approver_user_id: approver.id,
       reason: undefined,
+      request_group_id: expect.any(String),
     })
+
+    // 3日分すべて同じrequest_group_idで束ねられていることを確認する
+    // (承認者が1回の操作でまとめて承認できるようにするため)。
+    const calls = vi.mocked(specialLeaveApi.createSpecialLeaveRequest).mock.calls
+    const groupIds = calls.map(([input]) => input.request_group_id)
+    expect(new Set(groupIds).size).toBe(1)
+
     expect(await screen.findByText('3日分の特別休暇申請を送信しました。')).toBeInTheDocument()
   })
 

@@ -254,6 +254,7 @@ describe('MyPaidLeavePage', () => {
       hours: undefined,
       approver_user_id: approver.id,
       reason: undefined,
+      request_group_id: expect.any(String),
     })
     expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenNthCalledWith(2, {
       target_date: '2026-08-11',
@@ -261,6 +262,7 @@ describe('MyPaidLeavePage', () => {
       hours: undefined,
       approver_user_id: approver.id,
       reason: undefined,
+      request_group_id: expect.any(String),
     })
     expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenNthCalledWith(3, {
       target_date: '2026-08-12',
@@ -268,7 +270,15 @@ describe('MyPaidLeavePage', () => {
       hours: undefined,
       approver_user_id: approver.id,
       reason: undefined,
+      request_group_id: expect.any(String),
     })
+
+    // 3日分すべて同じrequest_group_idで束ねられていることを確認する
+    // (承認者が1回の操作でまとめて承認できるようにするため)。
+    const calls = vi.mocked(paidLeaveApi.createPaidLeaveRequest).mock.calls
+    const groupIds = calls.map(([input]) => input.request_group_id)
+    expect(new Set(groupIds).size).toBe(1)
+
     expect(await screen.findByText('3日分の有給申請を送信しました。')).toBeInTheDocument()
   })
 
