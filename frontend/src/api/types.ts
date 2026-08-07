@@ -311,6 +311,10 @@ export interface WorkflowRequestCompensatoryLeaveRequestSubject {
   approved_at: string | null
   returned_at: string | null
   cancelled_at: string | null
+  /** 期間指定でまとめて申請した複数日分の対象日一覧(単日申請の場合はnull)。 */
+  request_group_dates: string[] | null
+  /** 直近1年間(申請中・承認済みの合計)の代休取得日数。承認時の目安として表示する。 */
+  used_days_last_year: number
 }
 
 export interface WorkflowRequestSpecialLeaveRequestSubject {

@@ -349,6 +349,8 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(CompensatoryLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, CompensatoryLeaveRequest::class),
         ];
     }
 

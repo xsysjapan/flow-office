@@ -319,6 +319,98 @@ class PaidLeaveRequestTest extends TestCase
         $response->assertJsonPath('status', 'cancelled');
     }
 
+    public function test_cancelling_an_approved_full_day_request_restores_the_grant_and_clears_the_attendance_day(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        $grant = PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        $this->assertEquals(9.0, (float) $grant->refresh()->remaining_days);
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertSame('paid_leave_full', $day->work_type);
+
+        $response = $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel");
+        $response->assertOk();
+        $response->assertJsonPath('status', 'cancelled');
+
+        $this->assertEquals(10.0, (float) $grant->refresh()->remaining_days);
+        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
+
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame('not_started', $day->status);
+    }
+
+    /**
+     * 半休は実際の出退勤(打刻)が既にあるため、取消時にステータスは打刻由来のまま維持する
+     * (全休のようにclocked_out扱いへ強制していないため巻き戻し不要)。
+     */
+    public function test_cancelling_an_approved_half_day_request_keeps_the_actual_punch_derived_status(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        $grant = PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'am_half',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $day->update(['actual_start_at' => '2026-08-10 13:00:00', 'actual_end_at' => '2026-08-10 18:00:00', 'status' => 'clocked_out']);
+
+        $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel")->assertOk();
+
+        $this->assertEquals(10.0, (float) $grant->refresh()->remaining_days);
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame('clocked_out', $day->status);
+    }
+
+    public function test_cannot_cancel_an_approved_request_once_the_month_is_submitted(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        $monthApprover = User::factory()->create();
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-08/submit', [
+            'approver_user_id' => $monthApprover->id,
+        ])->assertSuccessful();
+
+        $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel")->assertStatus(422);
+
+        $this->assertSame('approved', PaidLeaveRequest::query()->findOrFail($requestId)->status);
+    }
+
     public function test_my_requests_and_requests_to_approve_list_the_correct_requests(): void
     {
         $employee = User::factory()->create();

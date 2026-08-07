@@ -2,6 +2,7 @@
 
 namespace App\Domain\PaidLeave\Projectors;
 
+use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Models\PaidLeaveUsage;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -29,5 +30,17 @@ class PaidLeaveUsageProjector extends Projector
                 'usage_type' => $event->usageType,
             ],
         );
+    }
+
+    /**
+     * 承認済みの有給申請が取り消された際、対応するusage行を削除する
+     * (paid_leave_usagesは「現時点で有効な消化」の一覧であり、履歴はstored_eventsに残る)。
+     */
+    public function onPaidLeaveUsageReversed(PaidLeaveUsageReversed $event): void
+    {
+        PaidLeaveUsage::query()
+            ->where('paid_leave_grant_id', $event->aggregateRootUuid())
+            ->where('paid_leave_request_id', $event->paidLeaveRequestId)
+            ->delete();
     }
 }

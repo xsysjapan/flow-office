@@ -24,6 +24,7 @@ class CompensatoryLeaveRequestAggregate extends AggregateRoot
         ?int $requestedMinutes,
         string $approverUserId,
         ?string $reason,
+        ?string $requestGroupId = null,
     ): self {
         $this->recordThat(new CompensatoryLeaveRequested(
             userId: $userId,
@@ -34,6 +35,7 @@ class CompensatoryLeaveRequestAggregate extends AggregateRoot
             requestedMinutes: $requestedMinutes,
             approverUserId: $approverUserId,
             reason: $reason,
+            requestGroupId: $requestGroupId,
         ));
 
         return $this;

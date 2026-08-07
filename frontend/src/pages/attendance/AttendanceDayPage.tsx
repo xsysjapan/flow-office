@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -6,6 +7,10 @@ import { AttendanceCalculationSummary } from '../../components/AttendanceCalcula
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import {
+  CancelApprovedLeaveDialog,
+  type ApprovedLeaveTarget,
+} from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { Duration } from '../../components/Duration/Duration'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -33,6 +38,7 @@ import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType, WorkLocationType } from '../../api/types'
 import type { AttendanceDayPunchLogAction } from '../../api/attendance'
 import { useAppSettings } from '../../contexts/useAppSettings'
+import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
@@ -47,7 +53,9 @@ import {
   useUpdateAttendanceDay,
   useWeek,
 } from '../../hooks/useAttendance'
+import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
 import { useCreateShiftSwapRequest } from '../../hooks/useShiftSwap'
+import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
@@ -998,13 +1006,18 @@ function ShiftSwapRequestDialog({
 export function AttendanceDayPage() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
   const [isShiftSwapOpen, setIsShiftSwapOpen] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
   const { data: weekDays, isLoading, error } = useWeek(monday)
   const monthLocked = useMonthLocked(date ?? '')
+  const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
+  const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
+  const { data: compensatoryLeaveRequests } = useMyCompensatoryLeaveRequests()
 
   if (!date) return null
   if (isLoading) return <LoadingState />
@@ -1018,6 +1031,10 @@ export function AttendanceDayPage() {
   const absenceDays = day?.calculation && day.calculation.prescribed_work_minutes > 0 && (day.calculation.absence_minutes ?? 0) >= day.calculation.prescribed_work_minutes
     ? 1
     : 0
+  const approvedPaidLeave = paidLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
+  const approvedSpecialLeave = specialLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
+  const approvedCompensatoryLeave = compensatoryLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
+  const hasApprovedLeaveToCancel = !!approvedPaidLeave || !!approvedSpecialLeave || !!approvedCompensatoryLeave
 
   return (
     <div className="flex flex-col gap-6">
@@ -1076,6 +1093,30 @@ export function AttendanceDayPage() {
                 <DropdownMenuItem asChild>
                   <Link to={`/compensatory-leave?date=${date}`}>代休を申請する</Link>
                 </DropdownMenuItem>
+                {hasApprovedLeaveToCancel && <DropdownMenuSeparator />}
+                {approvedPaidLeave && (
+                  <DropdownMenuItem
+                    onSelect={() => setCancelTarget({ kind: 'paid', id: approvedPaidLeave.id, label: '有給休暇' })}
+                  >
+                    有給休暇の承認を取り消す
+                  </DropdownMenuItem>
+                )}
+                {approvedSpecialLeave && (
+                  <DropdownMenuItem
+                    onSelect={() => setCancelTarget({ kind: 'special', id: approvedSpecialLeave.id, label: '特別休暇' })}
+                  >
+                    特別休暇の承認を取り消す
+                  </DropdownMenuItem>
+                )}
+                {approvedCompensatoryLeave && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      setCancelTarget({ kind: 'compensatory', id: approvedCompensatoryLeave.id, label: '代休' })
+                    }
+                  >
+                    代休の承認を取り消す
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1088,6 +1129,15 @@ export function AttendanceDayPage() {
           targetIsHoliday={isHoliday}
           open={isShiftSwapOpen}
           onOpenChange={setIsShiftSwapOpen}
+        />
+
+        <CancelApprovedLeaveDialog
+          target={cancelTarget}
+          onOpenChange={(open) => !open && setCancelTarget(null)}
+          onCancelled={() => {
+            setCancelTarget(null)
+            void queryClient.invalidateQueries({ queryKey: ['attendance'] })
+          }}
         />
 
         {day && !isEditing && (

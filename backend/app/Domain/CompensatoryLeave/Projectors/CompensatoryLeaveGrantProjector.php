@@ -6,6 +6,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveGrantStatus;
@@ -74,7 +75,6 @@ class CompensatoryLeaveGrantProjector extends Projector
     public function onCompensatoryLeaveUsed(CompensatoryLeaveUsed $event): void
     {
         $grantId = $event->aggregateRootUuid();
-        $grant = CompensatoryLeaveGrant::query()->findOrFail($grantId);
 
         CompensatoryLeaveUsage::query()->updateOrCreate(
             ['stored_event_id' => $event->storedEventId()],
@@ -90,8 +90,41 @@ class CompensatoryLeaveGrantProjector extends Projector
             ],
         );
 
-        $usedDays = $this->totalUsed($grantId, 'usedDays');
-        $usedMinutes = $grant->granted_minutes !== null ? (int) $this->totalUsed($grantId, 'usedMinutes') : null;
+        $this->recalculate($grantId);
+    }
+
+    /**
+     * 承認済みの代休消化申請が取り消された際、対応するusage行を削除し、used_days/
+     * used_minutes/remaining_days/remaining_minutesを再計算する(compensatory_leave_usages
+     * は「現時点で有効な消化」の一覧であり、履歴はstored_eventsに残る。PaidLeaveUsageProjector
+     * ::onPaidLeaveUsageReversedと同じ考え方)。
+     */
+    public function onCompensatoryLeaveUsageReversed(CompensatoryLeaveUsageReversed $event): void
+    {
+        $grantId = $event->aggregateRootUuid();
+
+        CompensatoryLeaveUsage::query()
+            ->where('compensatory_leave_grant_id', $grantId)
+            ->where('compensatory_leave_request_id', $event->compensatoryLeaveRequestId)
+            ->delete();
+
+        $this->recalculate($grantId);
+    }
+
+    /**
+     * used_days/used_minutesは、この集約に記録された全compensatory_leave.usedイベントの
+     * usedDays/usedMinutes合計からcompensatory_leave.usage_reversedイベントの合計を差し引いた
+     * 値を都度再計算する(PaidLeaveGrantProjector::recalculateと同じ考え方。Projectorの
+     * 再適用・複数回実行に対して冪等にするため)。
+     */
+    private function recalculate(string $grantId): void
+    {
+        $grant = CompensatoryLeaveGrant::query()->findOrFail($grantId);
+
+        $usedDays = $this->totalUsed($grantId, 'usedDays') - $this->totalReversed($grantId, 'usedDays');
+        $usedMinutes = $grant->granted_minutes !== null
+            ? (int) ($this->totalUsed($grantId, 'usedMinutes') - $this->totalReversed($grantId, 'usedMinutes'))
+            : null;
 
         $grant->update([
             'used_days' => $usedDays,
@@ -106,6 +139,15 @@ class CompensatoryLeaveGrantProjector extends Projector
         return (float) EloquentStoredEvent::query()
             ->where('aggregate_uuid', $grantId)
             ->where('event_class', 'compensatory_leave.used')
+            ->get()
+            ->sum(fn (EloquentStoredEvent $event) => (float) ($event->event_properties[$property] ?? 0));
+    }
+
+    private function totalReversed(string $grantId, string $property): float
+    {
+        return (float) EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $grantId)
+            ->where('event_class', 'compensatory_leave.usage_reversed')
             ->get()
             ->sum(fn (EloquentStoredEvent $event) => (float) ($event->event_properties[$property] ?? 0));
     }

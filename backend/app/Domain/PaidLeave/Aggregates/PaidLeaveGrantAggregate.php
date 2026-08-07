@@ -3,6 +3,7 @@
 namespace App\Domain\PaidLeave\Aggregates;
 
 use App\Domain\PaidLeave\Events\PaidLeaveGranted;
+use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -43,6 +44,33 @@ class PaidLeaveGrantAggregate extends AggregateRoot
         string $usageType,
     ): self {
         $this->recordThat(new PaidLeaveUsed(
+            userId: $userId,
+            paidLeaveRequestId: $paidLeaveRequestId,
+            attendanceDayId: $attendanceDayId,
+            usedOn: $usedOn,
+            usedDays: $usedDays,
+            usedMinutes: $usedMinutes,
+            usageType: $usageType,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 承認済みの有給申請が取り消された際、この付与への消化を取り消す(残数を戻す)。
+     * `use()`で消化した内容をそのまま`PaidLeaveUsageReversed`として記録し、
+     * Projectorが差分から`used_days`/`remaining_days`を再計算する。
+     */
+    public function reverseUsage(
+        string $userId,
+        string $paidLeaveRequestId,
+        string $attendanceDayId,
+        string $usedOn,
+        float $usedDays,
+        ?int $usedMinutes,
+        string $usageType,
+    ): self {
+        $this->recordThat(new PaidLeaveUsageReversed(
             userId: $userId,
             paidLeaveRequestId: $paidLeaveRequestId,
             attendanceDayId: $attendanceDayId,

@@ -2,6 +2,7 @@
 
 namespace App\Domain\SpecialLeave\Projectors;
 
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsageReversed;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use App\Models\SpecialLeaveUsage;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -28,5 +29,17 @@ class SpecialLeaveUsageProjector extends Projector
                 'usage_type' => $event->usageType,
             ],
         );
+    }
+
+    /**
+     * 承認済みの特別休暇申請が取り消された際、対応するusage行を削除する
+     * (special_leave_usagesは「現時点で有効な消化」の一覧であり、履歴はstored_eventsに残る)。
+     */
+    public function onSpecialLeaveUsageReversed(SpecialLeaveUsageReversed $event): void
+    {
+        SpecialLeaveUsage::query()
+            ->where('special_leave_grant_id', $event->aggregateRootUuid())
+            ->where('special_leave_request_id', $event->specialLeaveRequestId)
+            ->delete();
     }
 }

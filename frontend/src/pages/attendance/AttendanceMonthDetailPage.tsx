@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -7,6 +8,10 @@ import { AttendanceCalculationSummary } from '../../components/AttendanceCalcula
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
+import {
+  CancelApprovedLeaveDialog,
+  type ApprovedLeaveTarget,
+} from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -21,6 +26,9 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
+import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
+import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
+import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
@@ -137,7 +145,12 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()
+  const queryClient = useQueryClient()
+  const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
+  const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
+  const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
+  const { data: compensatoryLeaveRequests } = useMyCompensatoryLeaveRequests()
 
   if (!yearMonth) return null
 
@@ -155,6 +168,9 @@ export function AttendanceMonthDetailPage() {
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
+
+  const approvedRequestFor = (requests: { target_date: string; status: string; id: string }[] | undefined, date: string) =>
+    requests?.find((r) => r.target_date === date && r.status === 'approved')?.id
 
   return (
     <div className="flex flex-col gap-6">
@@ -213,11 +229,24 @@ export function AttendanceMonthDetailPage() {
                 date={date}
                 day={daysByDate.get(date)}
                 warnings={dayWarnings(date, daysByDate.get(date), today)}
+                approvedPaidLeaveRequestId={approvedRequestFor(paidLeaveRequests, date)}
+                approvedSpecialLeaveRequestId={approvedRequestFor(specialLeaveRequests, date)}
+                approvedCompensatoryLeaveRequestId={approvedRequestFor(compensatoryLeaveRequests, date)}
+                onRequestCancelApprovedLeave={setCancelTarget}
               />
             ))}
           </ul>
         </Card>
       )}
+
+      <CancelApprovedLeaveDialog
+        target={cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        onCancelled={() => {
+          setCancelTarget(null)
+          void queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        }}
+      />
     </div>
   )
 }

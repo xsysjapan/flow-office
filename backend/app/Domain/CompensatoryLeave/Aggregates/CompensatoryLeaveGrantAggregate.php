@@ -6,6 +6,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
@@ -65,6 +66,34 @@ class CompensatoryLeaveGrantAggregate extends AggregateRoot
         string $usageType,
     ): self {
         $this->recordThat(new CompensatoryLeaveUsed(
+            userId: $userId,
+            compensatoryLeaveRequestId: $compensatoryLeaveRequestId,
+            attendanceDayId: $attendanceDayId,
+            usedOn: $usedOn,
+            usedDays: $usedDays,
+            usedMinutes: $usedMinutes,
+            usageType: $usageType,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 承認済みの代休消化申請が取り消された際、この付与への消化を取り消す(残数を戻す)。
+     * `use()`で消化した内容をそのまま`CompensatoryLeaveUsageReversed`として記録し、
+     * Projectorが差分から`used_days`/`used_minutes`/`remaining_days`/`remaining_minutes`を
+     * 再計算する(PaidLeaveGrantAggregate::reverseUsageと同じ考え方)。
+     */
+    public function reverseUsage(
+        string $userId,
+        string $compensatoryLeaveRequestId,
+        string $attendanceDayId,
+        string $usedOn,
+        float $usedDays,
+        ?int $usedMinutes,
+        string $usageType,
+    ): self {
+        $this->recordThat(new CompensatoryLeaveUsageReversed(
             userId: $userId,
             compensatoryLeaveRequestId: $compensatoryLeaveRequestId,
             attendanceDayId: $attendanceDayId,

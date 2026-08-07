@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * ステータス系列として持つ(承認時にattendance_days/compensatory_leave_grantsへの
  * 反映が必要なため)。主キーはUUID(HasUuids)。
  */
-#[Fillable(['id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'requested_minutes', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'request_group_id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'requested_minutes', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
 class CompensatoryLeaveRequest extends Model
 {
     use HasUuids;

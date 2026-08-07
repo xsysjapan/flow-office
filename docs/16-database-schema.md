@@ -828,7 +828,10 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - created_at / updated_at
 
 1件の `paid_leave_requests` の承認が、有効期限が近い複数の `paid_leave_grants` にまたがって
-消化される場合、grantごとに1行作成される。
+消化される場合、grantごとに1行作成される。承認済み申請が取り消された場合、該当行は
+削除される(「現時点で有効な消化」の一覧であり、取消の事実自体は`stored_events`の
+`paid_leave.usage_reversed`イベントとして残る)。`special_leave_usages`・
+`compensatory_leave_usages`も同じ構造・同じ取消時の挙動を持つ。
 
 ## attachments
 

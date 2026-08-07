@@ -278,6 +278,8 @@ function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowReq
         <Badge tone={tone}>{label}</Badge>
       </div>
 
+      <RequestGroupNotice dates={subject.request_group_dates} />
+
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">対象日</dt>
         <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
@@ -287,6 +289,8 @@ function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowReq
         <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
+        <dd className="text-foreground">{subject.used_days_last_year}日</dd>
       </dl>
     </div>
   )

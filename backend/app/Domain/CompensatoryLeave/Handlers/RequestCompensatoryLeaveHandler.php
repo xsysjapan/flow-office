@@ -74,6 +74,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
                 requestedMinutes: $requestedMinutes,
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
+                requestGroupId: $command->requestGroupId,
             );
 
         // workflow_requestが指定されている場合、CompensatoryLeaveRequestSharedイベントを発行して

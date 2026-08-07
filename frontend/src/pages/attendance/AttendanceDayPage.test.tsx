@@ -4,15 +4,21 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
+import * as paidLeaveApi from '../../api/paidLeave'
 import * as shiftSwapApi from '../../api/shiftSwap'
+import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
 import type {
   AttendanceDay,
   AttendanceMonth,
   AttendanceMonthlyCalculationTotals,
   AttendancePunch,
+  CompensatoryLeaveRequest,
+  PaidLeaveRequest,
   Paginated,
   ShiftSwapRequest,
+  SpecialLeaveRequest,
   User,
 } from '../../api/types'
 import { AppSettingsContext } from '../../contexts/AppSettingsContext'
@@ -724,6 +730,104 @@ describe('AttendanceDayPage', () => {
           reason: undefined,
         }),
       )
+    })
+  })
+
+  describe('承認済み休暇の取消', () => {
+    const approvedPaidLeaveRequest: PaidLeaveRequest = {
+      id: 'paid-leave-request-1',
+      user_id: 'user-1',
+      status: 'approved',
+      leave_type: 'full',
+      target_date: date,
+      hours: null,
+      requested_days: 1,
+      reason: null,
+      submitted_at: '2026-07-01T00:00:00+09:00',
+      approved_at: '2026-07-02T00:00:00+09:00',
+      returned_at: null,
+      cancelled_at: null,
+    }
+
+    const approvedSpecialLeaveRequest: SpecialLeaveRequest = {
+      id: 'special-leave-request-1',
+      user_id: 'user-1',
+      special_leave_type_id: 1,
+      special_leave_type_name: '慶弔休暇',
+      status: 'approved',
+      leave_type: 'full',
+      target_date: date,
+      hours: null,
+      requested_days: 1,
+      reason: null,
+      submitted_at: '2026-07-01T00:00:00+09:00',
+      approved_at: '2026-07-02T00:00:00+09:00',
+      returned_at: null,
+      cancelled_at: null,
+    }
+
+    const approvedCompensatoryLeaveRequest: CompensatoryLeaveRequest = {
+      id: 'compensatory-leave-request-1',
+      user_id: 'user-1',
+      status: 'approved',
+      leave_type: 'full',
+      target_date: date,
+      hours: null,
+      requested_days: 1,
+      requested_minutes: null,
+      reason: null,
+      submitted_at: '2026-07-01T00:00:00+09:00',
+      approved_at: '2026-07-02T00:00:00+09:00',
+      returned_at: null,
+      cancelled_at: null,
+    }
+
+    it('does not show a cancel item when there is no approved leave on this day', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+
+      expect(screen.queryByRole('menuitem', { name: '有給休暇の承認を取り消す' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: '特別休暇の承認を取り消す' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: '代休の承認を取り消す' })).not.toBeInTheDocument()
+    })
+
+    it('cancels an approved paid leave request from the kebab menu', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      await userEvent.click(await screen.findByRole('menuitem', { name: '有給休暇の承認を取り消す' }))
+
+      expect(await screen.findByText('有給休暇の承認を取り消しますか?')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: '取り消す' }))
+
+      await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(approvedPaidLeaveRequest.id))
+      await waitFor(() => expect(screen.queryByText('有給休暇の承認を取り消しますか?')).not.toBeInTheDocument())
+    })
+
+    it('shows cancel items for approved special-leave and compensatory-leave requests on the same day', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([approvedSpecialLeaveRequest])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([approvedCompensatoryLeaveRequest])
+      renderPage([recordedDay])
+
+      await screen.findByText('日次勤怠')
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+
+      expect(await screen.findByRole('menuitem', { name: '特別休暇の承認を取り消す' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: '代休の承認を取り消す' })).toBeInTheDocument()
     })
   })
 })

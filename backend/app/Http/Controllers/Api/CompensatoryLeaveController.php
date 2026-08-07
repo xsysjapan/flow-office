@@ -78,6 +78,9 @@ class CompensatoryLeaveController extends Controller
             'hours' => ['nullable', 'numeric', 'min:0.5'],
             'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
+            // 期間指定でまとめて申請した複数日分(1日1リクエスト)を束ねるID。frontend側が
+            // 同一の申請操作内で生成した同じ値を全日分に渡す(単日申請では省略)。
+            'request_group_id' => ['nullable', 'string', 'uuid'],
         ]);
 
         if ($requiresApproval) {
@@ -96,6 +99,7 @@ class CompensatoryLeaveController extends Controller
                     'leave_type' => $data['leave_type'],
                     'hours' => $data['hours'] ?? null,
                     'reason' => $data['reason'] ?? null,
+                    'request_group_id' => $data['request_group_id'] ?? null,
                 ],
                 approverUserId: $data['approver_user_id'],
                 subjectType: WorkflowRequestNotificationContent::COMPENSATORY_LEAVE_REQUEST,
@@ -123,6 +127,7 @@ class CompensatoryLeaveController extends Controller
                 reason: $data['reason'] ?? null,
                 workflowRequestId: null,
                 requestId: $requestId,
+                requestGroupId: $data['request_group_id'] ?? null,
             ));
 
             return $commandBus->dispatch(new ApproveCompensatoryLeaveRequestCommand(

@@ -54,6 +54,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
@@ -92,6 +93,7 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
+use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
@@ -105,6 +107,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsageReversed;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use App\Domain\User\Events\UserCreatedFromSsoLogin;
 use App\Domain\User\Events\UserHireDateSet;
@@ -323,6 +326,7 @@ return [
         'paid_leave.request_cancelled' => PaidLeaveRequestCancelled::class,
         'paid_leave.request_shared' => PaidLeaveRequestShared::class,
         'paid_leave.used' => PaidLeaveUsed::class,
+        'paid_leave.usage_reversed' => PaidLeaveUsageReversed::class,
         'paid_leave.warning_raised' => PaidLeaveWarningRaised::class,
 
         'special_leave.granted' => SpecialLeaveGranted::class,
@@ -332,12 +336,14 @@ return [
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+        'special_leave.usage_reversed' => SpecialLeaveUsageReversed::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
         'compensatory_leave.grant_removed' => CompensatoryLeaveGrantRemoved::class,
         'compensatory_leave.grant_confirmed' => CompensatoryLeaveGrantConfirmed::class,
         'compensatory_leave.grant_cancelled' => CompensatoryLeaveGrantCancelled::class,
         'compensatory_leave.used' => CompensatoryLeaveUsed::class,
+        'compensatory_leave.usage_reversed' => CompensatoryLeaveUsageReversed::class,
         'compensatory_leave.requested' => CompensatoryLeaveRequested::class,
         'compensatory_leave.request_shared' => CompensatoryLeaveRequestShared::class,
         'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,

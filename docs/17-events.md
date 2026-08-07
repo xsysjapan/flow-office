@@ -149,6 +149,7 @@
 - `paid_leave.request_returned`
 - `paid_leave.request_cancelled`
 - `paid_leave.used`
+- `paid_leave.usage_reversed`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`
 
