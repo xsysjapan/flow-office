@@ -221,7 +221,7 @@ class SpecialLeaveController extends Controller
         operationId: 'specialLeave.requests.store',
         summary: '特別休暇を申請する',
         tags: ['特別休暇'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
@@ -238,6 +238,9 @@ class SpecialLeaveController extends Controller
             'hours' => ['nullable', 'numeric', 'min:0.5'],
             'approver_user_id' => [$requiresApproval ? 'required' : 'nullable', 'string', 'exists:users,id'],
             'reason' => ['nullable', 'string'],
+            // 期間指定でまとめて申請した複数日分(1日1リクエスト)を束ねるID。frontend側が
+            // 同一の申請操作内で生成した同じ値を全日分に渡す(単日申請では省略)。
+            'request_group_id' => ['nullable', 'string', 'uuid'],
         ]);
 
         if ($requiresApproval) {
@@ -259,6 +262,7 @@ class SpecialLeaveController extends Controller
                     'leave_type' => $data['leave_type'],
                     'hours' => $data['hours'] ?? null,
                     'reason' => $data['reason'] ?? null,
+                    'request_group_id' => $data['request_group_id'] ?? null,
                 ],
                 approverUserId: $data['approver_user_id'],
                 subjectType: WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST,
@@ -292,6 +296,7 @@ class SpecialLeaveController extends Controller
                 reason: $data['reason'] ?? null,
                 workflowRequestId: null,
                 requestId: $requestId,
+                requestGroupId: $data['request_group_id'] ?? null,
             ));
 
             return $commandBus->dispatch(new ApproveSpecialLeaveRequestCommand(

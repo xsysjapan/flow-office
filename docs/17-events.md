@@ -145,12 +145,49 @@
 - `paid_leave.rule_created`
 - `paid_leave.granted`
 - `paid_leave.requested`
+- `paid_leave.usage_designated` (paid_leave_request集約が記録。申請時点(承認前)で
+  `paid_leave_usages`に確定前(grant_id未設定・is_confirmed=false)の行を作る。
+  docs/16-database-schema.md paid_leave_usages参照)
 - `paid_leave.request_approved`
 - `paid_leave.request_returned`
 - `paid_leave.request_cancelled`
 - `paid_leave.used`
+- `paid_leave.usage_reversed`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`
+
+## SpecialLeave
+
+`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
+paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。
+
+- `special_leave.granted`
+- `special_leave.requested`
+- `special_leave.usage_designated`
+- `special_leave.request_approved`
+- `special_leave.request_returned`
+- `special_leave.request_cancelled`
+- `special_leave.used`
+- `special_leave.usage_reversed`
+
+## CompensatoryLeave
+
+`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
+paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。休日出勤の
+勤怠実績から自動導出される付与(grant)に関するイベントが別途ある。
+
+- `compensatory_leave.grant_synced`
+- `compensatory_leave.grant_removed`
+- `compensatory_leave.grant_confirmed`
+- `compensatory_leave.grant_cancelled`
+- `compensatory_leave.requested`
+- `compensatory_leave.request_shared`
+- `compensatory_leave.usage_designated`
+- `compensatory_leave.request_approved`
+- `compensatory_leave.request_returned`
+- `compensatory_leave.request_cancelled`
+- `compensatory_leave.used`
+- `compensatory_leave.usage_reversed`
 
 ## Attachment / Notification / Export (横断)
 

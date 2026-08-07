@@ -5,6 +5,7 @@ namespace Tests\Feature\CompensatoryLeave;
 use App\Models\AttendanceDay;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
+use App\Models\CompensatoryLeaveUsage;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -264,6 +265,65 @@ class CompensatoryLeaveTest extends TestCase
         $this->assertSame('compensatory_leave_full', $day->work_type);
     }
 
+    /**
+     * 残数不足でも申請(=対象日の勤怠への反映)自体は成立させる方針
+     * (勤怠を先に作る/編集するという通常の業務フローに合わせ、承認を待たない。
+     * PaidLeaveRequestTestの同名テストと同じ考え方)。残数消費は承認時のみ発生するため、
+     * この時点ではgrantのremaining_daysは変化しない。
+     */
+    public function test_leave_request_succeeds_and_reflects_on_attendance_even_when_remaining_balance_is_insufficient(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $grant = $this->confirmedGrant($employee);
+        $grant->update(['granted_days' => 0.5, 'remaining_days' => 0.5]);
+
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $response = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'submitted');
+
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
+        $this->assertNotNull($day);
+        $this->assertSame('compensatory_leave_full', $day->work_type);
+    }
+
+    /**
+     * 承認不要設定の場合、残数不足でも即時承認(消化計画で消化できる分だけ記録)まで成立する
+     * (残数不足で申請・承認自体をブロックしない方針。PaidLeaveRequestTestの同名テストと
+     * 同じ考え方)。
+     */
+    public function test_when_approval_is_not_required_insufficient_balance_still_auto_approves_with_partial_consumption(): void
+    {
+        SystemSetting::current()->update(['compensatory_leave_requires_approval' => false]);
+
+        $employee = User::factory()->create();
+        $grant = $this->confirmedGrant($employee);
+        $grant->update(['granted_days' => 0.5, 'remaining_days' => 0.5]);
+
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $response = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'approved');
+        $this->assertSame(1, CompensatoryLeaveRequest::query()->count());
+        $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
+    }
+
     public function test_leave_type_is_restricted_by_the_configured_unit(): void
     {
         $employee = User::factory()->create();
@@ -415,6 +475,99 @@ class CompensatoryLeaveTest extends TestCase
         $response->assertJsonPath('subject_summary.requested_days', 1);
     }
 
+    public function test_cancelling_an_approved_full_day_request_restores_the_grant_and_clears_the_attendance_day(): void
+    {
+        $employee = User::factory()->create();
+        $grant = $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
+
+        $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
+        $this->assertSame('compensatory_leave_full', $day->work_type);
+
+        $response = $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel");
+        $response->assertOk();
+        $response->assertJsonPath('status', 'cancelled');
+
+        $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame('not_started', $day->status);
+    }
+
+    /**
+     * 半休は実際の出退勤(打刻)が既にあるため、取消時にステータスは打刻由来のまま維持する
+     * (全休のようにclocked_out扱いへ強制していないため巻き戻し不要。PaidLeaveRequestTestの
+     * 同名テストと同じ考え方)。
+     */
+    public function test_cancelling_an_approved_half_day_request_keeps_the_actual_punch_derived_status(): void
+    {
+        $employee = User::factory()->create();
+        $grant = $this->confirmedGrant($employee, '2026-08-08', 'half_day');
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'am_half',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
+        $day->update(['actual_start_at' => '2026-09-10 13:00:00', 'actual_end_at' => '2026-09-10 18:00:00', 'status' => 'clocked_out']);
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
+
+        $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame('clocked_out', $day->status);
+    }
+
+    public function test_cannot_cancel_an_approved_request_once_the_month_is_submitted(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
+
+        $monthApprover = User::factory()->create();
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-09/submit', [
+            'approver_user_id' => $monthApprover->id,
+        ])->assertSuccessful();
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertStatus(422);
+
+        $this->assertSame('approved', CompensatoryLeaveRequest::query()->findOrFail($requestId)->status);
+    }
+
     public function test_cancelling_a_request_also_cancels_the_workflow_request(): void
     {
         $employee = User::factory()->create();
@@ -431,9 +584,57 @@ class CompensatoryLeaveTest extends TestCase
             'reason' => '代休消化',
         ])->assertCreated()->json('id');
 
+        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
+        // 未確定のcompensatory_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが
+        // 必要。PaidLeaveRequestTestの同名テストと同じ考え方)。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
+        $this->assertSame('compensatory_leave_full', $day->work_type);
+        $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+
         $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
 
         $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
         $this->assertSame('cancelled', $workflowRequest->status);
+
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+    }
+
+    /**
+     * 申請時点(承認前)でcompensatory_leave_usagesに未確定(grant_id未設定・is_confirmed=false)の
+     * 行が作られること、承認時にその同じ行が確定済み(grant_id設定・is_confirmed=true)へ
+     * 更新されることを検証する(CompensatoryLeaveGrantProjector参照)。勤怠側はこの行だけで
+     * 「休暇が設定されているか」「確定済みか」を判定でき、compensatory_leave_requestsを
+     * 見に行く必要が無い。
+     */
+    public function test_a_usage_row_is_designated_at_request_time_and_confirmed_at_approval(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+
+        $usage = CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->firstOrFail();
+        $this->assertFalse($usage->is_confirmed);
+        $this->assertNull($usage->compensatory_leave_grant_id);
+        $this->assertEquals(1.0, (float) $usage->used_days);
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
+
+        $usage->refresh();
+        $this->assertTrue($usage->is_confirmed);
+        $this->assertNotNull($usage->compensatory_leave_grant_id);
+        // 同じ行が更新されただけで、新規行は増えていないこと(1申請1grantで完結する場合)。
+        $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
     }
 }

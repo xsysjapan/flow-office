@@ -2,17 +2,23 @@
 
 namespace App\Domain\SpecialLeave\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
+use App\Domain\SpecialLeave\SpecialLeaveWorkType;
+use App\Models\AttendanceDay;
+use App\Models\AttendanceDaySource;
+use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
-use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
@@ -21,15 +27,24 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * 特別休暇を申請する。有給休暇(RequestPaidLeaveHandler)と同じ考え方だが、
- * 残高・消化は特別休暇種別(special_leave_type_id)ごとにスコープする。
- * 有給とはビジネスロジックを分けて実装し、法定の要件を持つ有給側のルールには一切影響しない。
+ * 特別休暇を申請する。有給休暇(RequestPaidLeaveHandler)と同じ考え方に揃え、勤怠(実績)を
+ * 先に作る/編集するという通常の業務フローに合わせ、申請した時点で対象日の勤怠
+ * (attendance_days.work_type)へ即座に反映する(承認を待たない。承認は
+ * ApproveSpecialLeaveRequestHandlerとして別途行われる「事後の確認・記録」に位置づけが変わり、
+ * 実際の消化(special_leave_grantの残数減算)のみを承認時に行う)。残数が不足していても
+ * 申請(=勤怠への反映)自体は成立させる。残数・消化は特別休暇種別(special_leave_type_id)
+ * ごとにスコープする。有給とはビジネスロジックを分けて実装し、法定の要件を持つ有給側の
+ * ルールには一切影響しない。
  *
  * @implements CommandHandler<RequestSpecialLeave>
  */
 class RequestSpecialLeaveHandler implements CommandHandler
 {
-    public function __construct(private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver) {}
+    public function __construct(
+        private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
+        private readonly AttendanceCalculator $calculator,
+        private readonly AttendanceEditGuard $guard,
+    ) {}
 
     public function handle(Command $command): SpecialLeaveRequest
     {
@@ -71,21 +86,19 @@ class RequestSpecialLeaveHandler implements CommandHandler
 
         $requestedDays = $this->resolveRequestedDays($command, $workStyle);
 
-        // requires_grant=falseの種別(忌引・代休等、会社の制度上あらかじめ残数を付与しない
-        // 種別)は残数チェックをスキップする。
-        if ($specialLeaveType->requires_grant) {
-            $remainingDays = (float) SpecialLeaveGrant::query()
-                ->availableOn($command->targetDate)
-                ->where('user_id', $command->userId)
-                ->where('special_leave_type_id', $command->specialLeaveTypeId)
-                ->sum('remaining_days');
+        // 対象日の勤怠が編集可能(月次未確定)であることを、勤怠反映の前に確認する
+        // (ここで弾かれれば申請自体を作らない。修正が必要な場合は修正申請ワークフローを使う)。
+        $existingDay = AttendanceDay::query()
+            ->where('user_id', $command->userId)
+            ->whereDate('work_date', $command->targetDate)
+            ->first();
+        $this->guard->assertMutable($existingDay, $command->userId, $command->targetDate);
 
-            if ($remainingDays < $requestedDays) {
-                throw new DomainRuleException('特別休暇の残数が不足しています。');
-            }
-        }
+        // 承認を待たず、申請した時点で対象日の勤怠へ即座に反映する(このファイル冒頭のコメント参照)。
+        $day = $this->reflectOnAttendanceDay($command, $existingDay);
 
         $requestId = $command->requestId ?? (string) Str::uuid();
+        $usedMinutes = $command->hours !== null ? (int) round($command->hours * 60) : null;
 
         $aggregate = SpecialLeaveRequestAggregate::retrieve($requestId)
             ->request(
@@ -97,6 +110,20 @@ class RequestSpecialLeaveHandler implements CommandHandler
                 requestedDays: $requestedDays,
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
+                requestGroupId: $command->requestGroupId,
+            )
+            // special_leave_usagesへgrant未確定の行を作る(承認時にどのgrantから消化するかが
+            // 決まった時点で確定済みへ更新される。SpecialLeaveUsageProjector参照)。勤怠側は
+            // この行の存在だけで休暇設定の有無を判定でき、special_leave_requestsを見に行く
+            // 必要が無くなる(ルートCLAUDE.md「操作経路と業務ロジックを分離する」と同じ考え方で、
+            // ドメインをまたいだ参照を避ける)。
+            ->designateUsage(
+                userId: $command->userId,
+                attendanceDayId: $day->id,
+                usedOn: $command->targetDate,
+                usedDays: $requestedDays,
+                usedMinutes: $usedMinutes,
+                usageType: $command->leaveType,
             );
 
         // workflow_requestが指定されている場合、SpecialLeaveRequestSharedイベントを発行して
@@ -110,7 +137,44 @@ class RequestSpecialLeaveHandler implements CommandHandler
         // 通知はSubmitWorkflowRequestHandlerが一括して送るため、ここでは送らない
         // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)
 
+        $calculation = $this->calculator->calculate(
+            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+        );
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
+
         return SpecialLeaveRequest::query()->findOrFail($requestId);
+    }
+
+    /**
+     * 対象日の勤怠(attendance_days)へ特別休暇区分を反映する。
+     */
+    private function reflectOnAttendanceDay(RequestSpecialLeave $command, ?AttendanceDay $existingDay): AttendanceDay
+    {
+        $day = $existingDay;
+
+        if ($day === null) {
+            $shiftAssignment = EmployeeShiftAssignment::query()
+                ->where('user_id', $command->userId)
+                ->whereDate('work_date', $command->targetDate)
+                ->first();
+
+            $day = AttendanceDay::query()->create([
+                'user_id' => $command->userId,
+                'work_date' => $command->targetDate,
+                'shift_assignment_id' => $shiftAssignment?->id,
+                'status' => AttendanceDayStatus::NOT_STARTED,
+                'source' => AttendanceDaySource::MANUAL,
+            ]);
+        }
+
+        $day->work_type = SpecialLeaveWorkType::toAttendanceWorkType($command->leaveType);
+        if ($command->leaveType === PaidLeaveType::FULL) {
+            // 全休は出退勤操作が発生しないため、締め忘れとして警告されないよう完了扱いにする。
+            $day->status = AttendanceDayStatus::CLOCKED_OUT;
+        }
+        $day->save();
+
+        return $day;
     }
 
     /**

@@ -42,7 +42,11 @@ const submittedRequest: CompensatoryLeaveRequest = {
   cancelled_at: null,
 }
 
-function renderPage(requests: CompensatoryLeaveRequest[] = [], compensatoryLeaveRequiresApproval = true) {
+function renderPage(
+  requests: CompensatoryLeaveRequest[] = [],
+  compensatoryLeaveRequiresApproval = true,
+  initialPath = '/compensatory-leave',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
   vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue(requests)
@@ -67,12 +71,55 @@ function renderPage(requests: CompensatoryLeaveRequest[] = [], compensatoryLeave
           isLoading: false,
         }}
       >
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialPath]}>
           <MyCompensatoryLeavePage />
         </MemoryRouter>
       </AppSettingsContext.Provider>
     </QueryClientProvider>,
   )
+}
+
+/** 日本語ロケールのreact-day-pickerの日付ボタンのaria-labelを組み立てる(pickerInteractions.tsのdayButtonLabelと同様)。 */
+function dayButtonLabel(date: Date): string {
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日${date.toLocaleDateString('ja-JP', {
+    weekday: 'long',
+  })}`
+}
+
+async function navigateToMonth(user: ReturnType<typeof userEvent.setup>, targetYear: number, targetMonthIndex: number): Promise<void> {
+  const grid = screen.getByRole('grid')
+  const label = grid.getAttribute('aria-label')
+  if (!label) throw new Error('カレンダーのaria-labelから年月を読み取れませんでした。')
+
+  const match = label.match(/(\d{4})年(\d{1,2})月/)
+  if (!match) throw new Error(`カレンダーの年月を読み取れませんでした: ${label}`)
+  const currentYear = Number(match[1])
+  const currentMonthIndex = Number(match[2]) - 1
+  const diff = (targetYear - currentYear) * 12 + (targetMonthIndex - currentMonthIndex)
+  if (diff === 0) return
+
+  const button = screen.getByRole('button', { name: diff < 0 ? '前の月へ' : '次の月へ' })
+  for (let i = 0; i < Math.abs(diff); i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await user.click(button)
+  }
+}
+
+/** `DateRangePicker`のトリガーボタンをクリックし、指定した"YYYY-MM-DD"〜"YYYY-MM-DD"の範囲を選ぶ。 */
+async function pickDateRange(
+  user: ReturnType<typeof userEvent.setup>,
+  triggerName: string,
+  fromIso: string,
+  toIso: string,
+): Promise<void> {
+  await user.click(screen.getByRole('button', { name: triggerName }))
+  const from = new Date(`${fromIso}T00:00:00`)
+  const to = new Date(`${toIso}T00:00:00`)
+  await navigateToMonth(user, from.getFullYear(), from.getMonth())
+  await user.click(await screen.findByRole('button', { name: dayButtonLabel(from) }))
+  await navigateToMonth(user, to.getFullYear(), to.getMonth())
+  await user.click(await screen.findByRole('button', { name: dayButtonLabel(to) }))
+  await user.click(await screen.findByRole('button', { name: '適用' }))
 }
 
 describe('MyCompensatoryLeavePage', () => {
@@ -185,6 +232,93 @@ describe('MyCompensatoryLeavePage', () => {
         reason: undefined,
       }),
     )
+  })
+
+  it('creates one request per day when submitting a date range', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+    vi.spyOn(compensatoryLeaveApi, 'createCompensatoryLeaveRequest').mockResolvedValue(submittedRequest)
+
+    renderPage()
+    await screen.findByText('代休申請はまだありません。')
+
+    const user = userEvent.setup()
+    await user.selectOptions(screen.getByLabelText('対象日の指定方法'), '期間を指定')
+    await pickDateRange(user, '対象日(期間)', '2026-08-10', '2026-08-12')
+    await user.click(screen.getByLabelText('承認者'))
+    await user.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await user.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    await user.click(screen.getByRole('button', { name: '申請する' }))
+
+    await waitFor(() => expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenCalledTimes(3))
+    expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenNthCalledWith(1, {
+      target_date: '2026-08-10',
+      leave_type: 'full',
+      hours: undefined,
+      approver_user_id: approver.id,
+      reason: undefined,
+      request_group_id: expect.any(String),
+    })
+    expect(compensatoryLeaveApi.createCompensatoryLeaveRequest).toHaveBeenNthCalledWith(3, {
+      target_date: '2026-08-12',
+      leave_type: 'full',
+      hours: undefined,
+      approver_user_id: approver.id,
+      reason: undefined,
+      request_group_id: expect.any(String),
+    })
+
+    // 3日分すべて同じrequest_group_idで束ねられていることを確認する
+    // (承認者が1回の操作でまとめて承認できるようにするため)。
+    const calls = vi.mocked(compensatoryLeaveApi.createCompensatoryLeaveRequest).mock.calls
+    const groupIds = calls.map(([input]) => input.request_group_id)
+    expect(new Set(groupIds).size).toBe(1)
+
+    expect(await screen.findByText('3日分の代休申請を送信しました。')).toBeInTheDocument()
+  })
+
+  it('hides the leave-type select once the target date range spans multiple days', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+    await screen.findByText('代休申請はまだありません。')
+
+    expect(screen.getByLabelText('取得単位')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.selectOptions(screen.getByLabelText('対象日の指定方法'), '期間を指定')
+    await pickDateRange(user, '対象日(期間)', '2026-08-10', '2026-08-12')
+
+    expect(screen.queryByLabelText('取得単位')).not.toBeInTheDocument()
+    expect(screen.getByText('複数日をまとめて申請する場合、取得単位は全休固定になります。')).toBeInTheDocument()
+  })
+
+  it('prefills the target date from the ?date= URL query param', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+
+    renderPage([], true, '/compensatory-leave?date=2026-08-20')
+    await screen.findByText('代休申請はまだありません。')
+
+    expect(screen.getByText('2026-08-20')).toBeInTheDocument()
+  })
+
+  it('adds a date as a chip and clears the picker when a date is selected', async () => {
+    vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveGrants').mockResolvedValue([])
+
+    renderPage()
+    await screen.findByText('代休申請はまだありません。')
+
+    const user = userEvent.setup()
+    await pickDate(user, '対象日', '2026-08-10')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '対象日' })).toHaveTextContent('日付を選択')
+
+    await pickDate(user, '対象日', '2026-08-12')
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '2026-08-10を削除' }))
+    expect(screen.queryByText('2026-08-10')).not.toBeInTheDocument()
+    expect(screen.getByText('2026-08-12')).toBeInTheDocument()
   })
 
   it('shows submitted requests and cancels them', async () => {
