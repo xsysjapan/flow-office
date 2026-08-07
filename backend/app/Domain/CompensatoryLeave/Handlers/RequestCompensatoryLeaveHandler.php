@@ -81,6 +81,9 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
             ->first();
         $this->guard->assertMutable($existingDay, $command->userId, $command->targetDate);
 
+        // 承認を待たず、申請した時点で対象日の勤怠へ即座に反映する(このファイル冒頭のコメント参照)。
+        $day = $this->reflectOnAttendanceDay($command, $existingDay);
+
         $requestId = $command->requestId ?? (string) Str::uuid();
 
         $aggregate = CompensatoryLeaveRequestAggregate::retrieve($requestId)
@@ -94,6 +97,19 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
                 approverUserId: $command->approverUserId,
                 reason: $command->reason,
                 requestGroupId: $command->requestGroupId,
+            )
+            // compensatory_leave_usagesへgrant未確定の行を作る(承認時にどのgrantから消化するかが
+            // 決まった時点で確定済みへ更新される。CompensatoryLeaveGrantProjector参照)。勤怠側は
+            // この行の存在だけで休暇設定の有無を判定でき、compensatory_leave_requestsを見に行く
+            // 必要が無くなる(ルートCLAUDE.md「操作経路と業務ロジックを分離する」と同じ考え方で、
+            // ドメインをまたいだ参照を避ける)。
+            ->designateUsage(
+                userId: $command->userId,
+                attendanceDayId: $day->id,
+                usedOn: $command->targetDate,
+                usedDays: $requestedDays,
+                usedMinutes: $requestedMinutes,
+                usageType: $command->leaveType,
             );
 
         // workflow_requestが指定されている場合、CompensatoryLeaveRequestSharedイベントを発行して
@@ -103,11 +119,6 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
         }
 
         $aggregate->persist();
-
-        $request = CompensatoryLeaveRequest::query()->findOrFail($requestId);
-
-        // 承認を待たず、申請した時点で対象日の勤怠へ即座に反映する(このファイル冒頭のコメント参照)。
-        $day = $this->reflectOnAttendanceDay($request, $existingDay);
 
         $calculation = $this->calculator->calculate(
             $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
@@ -120,29 +131,31 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
     /**
      * 対象日の勤怠(attendance_days)へ代休区分を反映する(旧ApproveCompensatoryLeaveRequestHandlerの
      * reflectOnAttendanceDayを申請時点へ移したもの)。ガード済みの`$existingDay`をそのまま
-     * 使い回すことで、直前の`assertMutable`呼び出しと二重に問い合わせない。
+     * 使い回すことで、直前の`assertMutable`呼び出しと二重に問い合わせない。集約の永続化前に
+     * `$day->id`を確定させる必要があるため、コマンドの値からそのまま反映する
+     * (RequestPaidLeaveHandler::reflectOnAttendanceDayと同じ考え方)。
      */
-    private function reflectOnAttendanceDay(CompensatoryLeaveRequest $request, ?AttendanceDay $existingDay): AttendanceDay
+    private function reflectOnAttendanceDay(RequestCompensatoryLeave $command, ?AttendanceDay $existingDay): AttendanceDay
     {
         $day = $existingDay;
 
         if ($day === null) {
             $shiftAssignment = EmployeeShiftAssignment::query()
-                ->where('user_id', $request->user_id)
-                ->whereDate('work_date', $request->target_date)
+                ->where('user_id', $command->userId)
+                ->whereDate('work_date', $command->targetDate)
                 ->first();
 
             $day = AttendanceDay::query()->create([
-                'user_id' => $request->user_id,
-                'work_date' => $request->target_date,
+                'user_id' => $command->userId,
+                'work_date' => $command->targetDate,
                 'shift_assignment_id' => $shiftAssignment?->id,
                 'status' => AttendanceDayStatus::NOT_STARTED,
                 'source' => AttendanceDaySource::MANUAL,
             ]);
         }
 
-        $day->work_type = CompensatoryLeaveWorkType::toAttendanceWorkType($request->leave_type);
-        if ($request->leave_type === PaidLeaveType::FULL) {
+        $day->work_type = CompensatoryLeaveWorkType::toAttendanceWorkType($command->leaveType);
+        if ($command->leaveType === PaidLeaveType::FULL) {
             // 全休は出退勤操作が発生しないため、締め忘れとして警告されないよう完了扱いにする。
             $day->status = AttendanceDayStatus::CLOCKED_OUT;
         }

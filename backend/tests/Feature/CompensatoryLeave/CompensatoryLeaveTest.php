@@ -584,9 +584,57 @@ class CompensatoryLeaveTest extends TestCase
             'reason' => '代休消化',
         ])->assertCreated()->json('id');
 
+        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
+        // 未確定のcompensatory_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが
+        // 必要。PaidLeaveRequestTestの同名テストと同じ考え方)。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
+        $this->assertSame('compensatory_leave_full', $day->work_type);
+        $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+
         $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
 
         $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
         $this->assertSame('cancelled', $workflowRequest->status);
+
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+    }
+
+    /**
+     * 申請時点(承認前)でcompensatory_leave_usagesに未確定(grant_id未設定・is_confirmed=false)の
+     * 行が作られること、承認時にその同じ行が確定済み(grant_id設定・is_confirmed=true)へ
+     * 更新されることを検証する(CompensatoryLeaveGrantProjector参照)。勤怠側はこの行だけで
+     * 「休暇が設定されているか」「確定済みか」を判定でき、compensatory_leave_requestsを
+     * 見に行く必要が無い。
+     */
+    public function test_a_usage_row_is_designated_at_request_time_and_confirmed_at_approval(): void
+    {
+        $employee = User::factory()->create();
+        $this->confirmedGrant($employee);
+
+        $approver = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+        $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
+
+        $requestId = $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertCreated()->json('id');
+
+        $usage = CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->firstOrFail();
+        $this->assertFalse($usage->is_confirmed);
+        $this->assertNull($usage->compensatory_leave_grant_id);
+        $this->assertEquals(1.0, (float) $usage->used_days);
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
+
+        $usage->refresh();
+        $this->assertTrue($usage->is_confirmed);
+        $this->assertNotNull($usage->compensatory_leave_grant_id);
+        // 同じ行が更新されただけで、新規行は増えていないこと(1申請1grantで完結する場合)。
+        $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
     }
 }

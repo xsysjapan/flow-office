@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 優先的に消し込むため、1件の特別休暇申請の承認が複数のspecial_leave_grantにまたがる
  * 場合、grantごとに1行作成される。
  */
-#[Fillable(['stored_event_id', 'user_id', 'attendance_day_id', 'special_leave_grant_id', 'special_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type'])]
+#[Fillable(['stored_event_id', 'user_id', 'attendance_day_id', 'special_leave_grant_id', 'special_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed'])]
 class SpecialLeaveUsage extends Model
 {
     protected function casts(): array
@@ -19,6 +19,7 @@ class SpecialLeaveUsage extends Model
         return [
             'used_on' => 'date',
             'used_days' => 'decimal:1',
+            'is_confirmed' => 'boolean',
         ];
     }
 

@@ -819,19 +819,29 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - id
 - user_id
 - attendance_day_id
-- paid_leave_grant_id
+- paid_leave_grant_id (nullable)
 - paid_leave_request_id
 - used_on
 - used_days
 - used_minutes
 - usage_type
+- is_confirmed (承認によりgrant消化が確定済みかどうか。下記参照)
 - created_at / updated_at
 
-1件の `paid_leave_requests` の承認が、有効期限が近い複数の `paid_leave_grants` にまたがって
-消化される場合、grantごとに1行作成される。承認済み申請が取り消された場合、該当行は
-削除される(「現時点で有効な消化」の一覧であり、取消の事実自体は`stored_events`の
-`paid_leave.usage_reversed`イベントとして残る)。`special_leave_usages`・
-`compensatory_leave_usages`も同じ構造・同じ取消時の挙動を持つ。
+行のライフサイクル: 申請時点(承認前)で`paid_leave.usage_designated`イベントにより
+`paid_leave_grant_id=null`・`is_confirmed=false`の行が1件作られる(勤怠側はこの行の
+存在だけで「休暇が設定されているか」を判定でき、`paid_leave_requests`を参照しに行く
+必要が無い。ドメインをまたいだ参照を避けるための設計)。承認時、最初の`paid_leave.used`
+イベントがこの行を確定させる(`paid_leave_grant_id`を設定し`is_confirmed=true`にする)。
+1件の`paid_leave_requests`の承認が、有効期限が近い複数の`paid_leave_grants`にまたがって
+消化される場合、2件目以降のgrantは新規の確定済み行として追加される。
+
+承認済み(is_confirmed=true)の行は、取消時に削除される(「現時点で有効な消化」の一覧であり、
+取消の事実自体は`stored_events`の`paid_leave.usage_reversed`イベントとして残る)。未承認
+(is_confirmed=false)のまま取消された場合は、`paid_leave.request_cancelled`イベントの
+Projectorが直接この行を削除する(grant消化がまだ発生していないため`usage_reversed`は
+発行されない)。`special_leave_usages`・`compensatory_leave_usages`も同じ構造・同じ
+ライフサイクル・同じ取消時の挙動を持つ。
 
 ## attachments
 

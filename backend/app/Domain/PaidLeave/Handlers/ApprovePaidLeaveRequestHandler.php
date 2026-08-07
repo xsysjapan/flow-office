@@ -24,6 +24,11 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * (マイナスになっても)承認自体は成立させる(RequestPaidLeaveHandler冒頭のコメント参照。
  * 残数は承認済み分のみで計測する方針のため、ここで消化できなかった分は単に記録しない)。
  *
+ * paid_leave.usedイベントは、申請時点でPaidLeaveUsageProjectorが作成した未確定
+ * (grant_id未設定・is_confirmed=false)のpaid_leave_usages行を、最初の1件はその場で
+ * 確定済み(grant_id設定・is_confirmed=true)へ更新し、複数grantにまたがる場合は2件目以降を
+ * 新規の確定済み行として追加する(同Projector参照)。
+ *
  * 承認1件で「paid_leave_request集約の承認」と「1件以上のpaid_leave_grant集約の消化」に
  * またがるため、`AggregateRoot::persistInTransaction()`で1トランザクションにまとめて記録する
  * (DeviceAdminSessionOpenerに次ぐ2例目の複数集約トランザクション。

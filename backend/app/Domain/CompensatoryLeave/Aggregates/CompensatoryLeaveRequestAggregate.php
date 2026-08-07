@@ -7,6 +7,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageDesignated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -36,6 +37,34 @@ class CompensatoryLeaveRequestAggregate extends AggregateRoot
             approverUserId: $approverUserId,
             reason: $reason,
             requestGroupId: $requestGroupId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 申請時点(承認前)で対象日の勤怠を代休として設定したことを記録する
+     * (CompensatoryLeaveGrantProjectorがcompensatory_leave_usagesへgrant_id未確定・
+     * is_confirmed=falseの行を作る)。承認時にどのcompensatory_leave_grantから消化するかが
+     * 決まった時点で、この行が確定済みへ更新される(compensatory_leave.used。
+     * ApproveCompensatoryLeaveRequestHandler参照。PaidLeaveRequestAggregate::designateUsageと
+     * 同じ考え方)。
+     */
+    public function designateUsage(
+        string $userId,
+        string $attendanceDayId,
+        string $usedOn,
+        float $usedDays,
+        ?int $usedMinutes,
+        string $usageType,
+    ): self {
+        $this->recordThat(new CompensatoryLeaveUsageDesignated(
+            userId: $userId,
+            attendanceDayId: $attendanceDayId,
+            usedOn: $usedOn,
+            usedDays: $usedDays,
+            usedMinutes: $usedMinutes,
+            usageType: $usageType,
         ));
 
         return $this;

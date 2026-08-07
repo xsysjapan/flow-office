@@ -328,9 +328,56 @@ class PaidLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
+        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
+        // 未確定のpaid_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが必要)。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertSame('paid_leave_full', $day->work_type);
+        $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
+
         $response = $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel");
         $response->assertOk();
         $response->assertJsonPath('status', 'cancelled');
+
+        $day->refresh();
+        $this->assertNull($day->work_type);
+        $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
+    }
+
+    /**
+     * 申請時点(承認前)でpaid_leave_usagesに未確定(grant_id未設定・is_confirmed=false)の
+     * 行が作られること、承認時にその同じ行が確定済み(grant_id設定・is_confirmed=true)へ
+     * 更新されることを検証する(PaidLeaveUsageProjector参照)。勤怠側はこの行だけで
+     * 「休暇が設定されているか」「確定済みか」を判定でき、paid_leave_requestsを見に行く
+     * 必要が無い。
+     */
+    public function test_a_usage_row_is_designated_at_request_time_and_confirmed_at_approval(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
+            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+
+        $usage = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->firstOrFail();
+        $this->assertFalse($usage->is_confirmed);
+        $this->assertNull($usage->paid_leave_grant_id);
+        $this->assertEquals(1.0, (float) $usage->used_days);
+
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+
+        $usage->refresh();
+        $this->assertTrue($usage->is_confirmed);
+        $this->assertNotNull($usage->paid_leave_grant_id);
+        // 同じ行が更新されただけで、新規行は増えていないこと(1申請1grantで完結する場合)。
+        $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
     }
 
     public function test_cancelling_an_approved_full_day_request_restores_the_grant_and_clears_the_attendance_day(): void
