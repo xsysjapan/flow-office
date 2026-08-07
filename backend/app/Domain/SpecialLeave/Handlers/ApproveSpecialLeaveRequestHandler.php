@@ -4,27 +4,25 @@ namespace App\Domain\SpecialLeave\Handlers;
 
 use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Services\AttendanceCalculator;
-use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveGrantAggregate;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
-use App\Domain\SpecialLeave\SpecialLeaveWorkType;
 use App\Models\AttendanceDay;
-use App\Models\AttendanceDaySource;
-use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
-use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * 特別休暇を承認する。承認時に (1) 失効日が近い付与分(無期限は最後)から消化し、
- * (2) 対象日の勤怠(attendance_days.work_type)に特別休暇区分を反映する。
+ * 特別休暇を承認する。対象日の勤怠(attendance_days.work_type)への反映は
+ * 申請時点(RequestSpecialLeaveHandler)で既に行われているため、承認時に行うのは
+ * 失効日が近い付与分(無期限は最後)からの消化(grant消費の確定)と、それに伴う日次集計
+ * (special_leave_minutes/special_leave_days)の再計算のみ。残数が不足していても
+ * (マイナスになっても)承認自体は成立させる(RequestSpecialLeaveHandler冒頭のコメント参照。
+ * 残数は承認済み分のみで計測する方針のため、ここで消化できなかった分は単に記録しない)。
  * ApprovePaidLeaveRequestHandlerと同じ考え方だが、有給側のコードには一切依存しない
  * 独立した実装とする(有給は法定の要件を持つため)。複数集約トランザクション
  * (persistInTransaction)による消費計画の先確定も同様(ApprovePaidLeaveRequestHandler参照)。
@@ -33,10 +31,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  */
 class ApproveSpecialLeaveRequestHandler implements CommandHandler
 {
-    public function __construct(
-        private readonly AttendanceCalculator $calculator,
-        private readonly AttendanceEditGuard $guard,
-    ) {}
+    public function __construct(private readonly AttendanceCalculator $calculator) {}
 
     public function handle(Command $command): SpecialLeaveRequest
     {
@@ -54,7 +49,12 @@ class ApproveSpecialLeaveRequestHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 
-        $day = $this->reflectOnAttendanceDay($request);
+        // 申請時点(RequestSpecialLeaveHandler)で対象日の勤怠は必ず作成済みのため、
+        // ここでは参照するのみ(存在しない場合は不整合として例外にする)。
+        $day = AttendanceDay::query()
+            ->where('user_id', $request->user_id)
+            ->whereDate('work_date', $request->target_date)
+            ->firstOrFail();
 
         $plan = $this->planConsumption($request);
 
@@ -78,52 +78,21 @@ class ApproveSpecialLeaveRequestHandler implements CommandHandler
 
         AggregateRoot::persistInTransaction(...$aggregates);
 
-        $request = SpecialLeaveRequest::query()->findOrFail($request->id);
-
-        $calculation = $this->calculator->calculate($day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
-
-        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
-
-        return $request;
-    }
-
-    private function reflectOnAttendanceDay(SpecialLeaveRequest $request): AttendanceDay
-    {
-        $day = AttendanceDay::query()
-            ->where('user_id', $request->user_id)
-            ->whereDate('work_date', $request->target_date)
-            ->first();
-
-        $this->guard->assertMutable($day, $request->user_id, $request->target_date->toDateString());
-
-        if ($day === null) {
-            $shiftAssignment = EmployeeShiftAssignment::query()
-                ->where('user_id', $request->user_id)
-                ->whereDate('work_date', $request->target_date)
-                ->first();
-
-            $day = AttendanceDay::query()->create([
-                'user_id' => $request->user_id,
-                'work_date' => $request->target_date,
-                'shift_assignment_id' => $shiftAssignment?->id,
-                'status' => AttendanceDayStatus::NOT_STARTED,
-                'source' => AttendanceDaySource::MANUAL,
-            ]);
+        if ($plan !== []) {
+            $calculation = $this->calculator->calculate(
+                $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+            );
+            AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
         }
 
-        $day->work_type = SpecialLeaveWorkType::toAttendanceWorkType($request->leave_type);
-        if ($request->leave_type === PaidLeaveType::FULL) {
-            // 全休は出退勤操作が発生しないため、締め忘れとして警告されないよう完了扱いにする。
-            $day->status = AttendanceDayStatus::CLOCKED_OUT;
-        }
-        $day->save();
-
-        return $day;
+        return SpecialLeaveRequest::query()->findOrFail($request->id);
     }
 
     /**
-     * 消化計画を確定する。この時点ではまだイベントを記録しない
-     * (残数不足の場合に一部だけ記録されてしまう不整合を避けるため)。
+     * 消化計画を確定する。残数不足でも承認自体はブロックせず、消化できる分だけを
+     * 記録する(残数が0のgrantへ紐付けることはできないため、不足分は単に記録しない)。
+     * requires_grant=falseの種別(忌引・代休等)はそもそもgrantが存在しないため、
+     * 消化計画は自然に空になる。
      *
      * @return array<int, array{grant: SpecialLeaveGrant, amount: float}>
      */
@@ -151,14 +120,6 @@ class ApproveSpecialLeaveRequestHandler implements CommandHandler
             $plan[] = ['grant' => $grant, 'amount' => $consume];
             $remainingToConsume -= $consume;
         }
-
-        if ($remainingToConsume > 0 && $request->specialLeaveType->requires_grant) {
-            throw new DomainRuleException('特別休暇の残数が不足しているため承認できません。');
-        }
-
-        // requires_grant=falseの種別(忌引・代休等)は、残数(付与)が無くても承認できる。
-        // 消化計画も付与が無い/足りない分については記録しない(存在しないSpecialLeaveGrantを
-        // 消費させることはできないため)。
 
         return $plan;
     }

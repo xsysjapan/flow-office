@@ -30,6 +30,18 @@ function SectionHeading({ children }: { children: string }) {
   return <h3 className="text-sm font-semibold text-foreground">{children}</h3>
 }
 
+/**
+ * 残数(*_grants.remaining_days)は承認済み分のみを消化するため、申請中(未承認)の
+ * 積み上がりを承認者・本人双方が見落とさないよう内訳を併記する。
+ */
+function LeaveUsageBreakdownNote({ pendingDays, approvedDays }: { pendingDays: number; approvedDays: number }) {
+  return (
+    <span className="text-xs text-muted-foreground">
+      (うち申請中 {pendingDays}日 / 承認済み {approvedDays}日)
+    </span>
+  )
+}
+
 /** その申請(subject_type)が現時点で承認・差戻しできる状態かどうか。 */
 function isActionable(request: WorkflowRequest): boolean {
   if (request.subject_type === 'attendance_month') {
@@ -263,7 +275,10 @@ function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaid
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
         <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
-        <dd className="text-foreground">{subject.used_days_last_year}日</dd>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )
@@ -290,7 +305,10 @@ function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowReq
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
         <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
-        <dd className="text-foreground">{subject.used_days_last_year}日</dd>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )
@@ -319,7 +337,10 @@ function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestS
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
         <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
-        <dd className="text-foreground">{subject.used_days_last_year}日</dd>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )

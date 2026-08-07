@@ -262,6 +262,7 @@ class WorkflowRequestController extends Controller
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
             'request_group_dates' => $this->requestGroupDates(PaidLeaveRequest::class, $request->request_group_id),
             'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, PaidLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, PaidLeaveRequest::class),
         ];
     }
 
@@ -299,6 +300,25 @@ class WorkflowRequestController extends Controller
                 SpecialLeaveRequest::class,
                 $request->special_leave_type_id,
             ),
+            ...$this->leaveUsageBreakdownFields($request->user_id, SpecialLeaveRequest::class, $request->special_leave_type_id),
+        ];
+    }
+
+    /**
+     * 「申請中(submitted)」「承認済み(approved)」の直近1年内訳をAPIレスポンス用のキー名で返す
+     * (残数は承認済み分のみで消化されるため、申請中の積み上がりを別枠で可視化するために使う。
+     * LeaveUsageQuery::usageBreakdownWithinPastYear参照)。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>|class-string<CompensatoryLeaveRequest>  $requestModelClass
+     * @return array{pending_days_last_year: float, approved_days_last_year: float}
+     */
+    private function leaveUsageBreakdownFields(string $userId, string $requestModelClass, ?int $specialLeaveTypeId = null): array
+    {
+        $breakdown = LeaveUsageQuery::usageBreakdownWithinPastYear($userId, $requestModelClass, $specialLeaveTypeId);
+
+        return [
+            'pending_days_last_year' => $breakdown['pending_days'],
+            'approved_days_last_year' => $breakdown['approved_days'],
         ];
     }
 
@@ -351,6 +371,7 @@ class WorkflowRequestController extends Controller
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
             'request_group_dates' => $this->requestGroupDates(CompensatoryLeaveRequest::class, $request->request_group_id),
             'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, CompensatoryLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, CompensatoryLeaveRequest::class),
         ];
     }
 

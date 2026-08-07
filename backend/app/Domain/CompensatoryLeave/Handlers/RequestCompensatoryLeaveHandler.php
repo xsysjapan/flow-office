@@ -2,14 +2,19 @@
 
 namespace App\Domain\CompensatoryLeave\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\CompensatoryLeave\Aggregates\CompensatoryLeaveRequestAggregate;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
+use App\Domain\CompensatoryLeave\Support\CompensatoryLeaveWorkType;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Models\CompensatoryLeaveGrant;
-use App\Models\CompensatoryLeaveGrantStatus;
+use App\Models\AttendanceDay;
+use App\Models\AttendanceDaySource;
+use App\Models\AttendanceDayStatus;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
 use App\Models\EmployeeShiftAssignment;
@@ -23,14 +28,22 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * 代休を消化申請する(RequestSpecialLeaveHandlerと同じ考え方)。付与(Grant)は勤怠実績から
- * 自動導出されるため、ここでは既存の確定済みGrantの残数チェックのみを行う。
+ * 代休を消化申請する。勤怠(実績)を先に作る/編集するという通常の業務フローに合わせ、
+ * 申請した時点で対象日の勤怠(attendance_days.work_type)へ即座に反映する
+ * (承認を待たない。承認は「事後の確認・記録」に位置づけが変わり、実際の消化
+ * (grantの残数減算)のみを承認時に行う。ApproveCompensatoryLeaveRequestHandler参照)。
+ * 残数が不足していても申請(=勤怠への反映)自体は成立させる(RequestPaidLeaveHandlerと
+ * 同じ考え方)。
  *
  * @implements CommandHandler<RequestCompensatoryLeave>
  */
 class RequestCompensatoryLeaveHandler implements CommandHandler
 {
-    public function __construct(private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver) {}
+    public function __construct(
+        private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
+        private readonly AttendanceCalculator $calculator,
+        private readonly AttendanceEditGuard $guard,
+    ) {}
 
     public function handle(Command $command): CompensatoryLeaveRequest
     {
@@ -60,7 +73,13 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         [$requestedDays, $requestedMinutes] = $this->resolveRequestedAmount($command);
 
-        $this->assertSufficientRemaining($command->userId, $command->leaveType, $requestedDays, $requestedMinutes, $command->targetDate);
+        // 対象日の勤怠が編集可能(月次未確定)であることを、勤怠反映の前に確認する
+        // (ここで弾かれれば申請自体を作らない。修正が必要な場合は修正申請ワークフローを使う)。
+        $existingDay = AttendanceDay::query()
+            ->where('user_id', $command->userId)
+            ->whereDate('work_date', $command->targetDate)
+            ->first();
+        $this->guard->assertMutable($existingDay, $command->userId, $command->targetDate);
 
         $requestId = $command->requestId ?? (string) Str::uuid();
 
@@ -85,7 +104,51 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         $aggregate->persist();
 
+        $request = CompensatoryLeaveRequest::query()->findOrFail($requestId);
+
+        // 承認を待たず、申請した時点で対象日の勤怠へ即座に反映する(このファイル冒頭のコメント参照)。
+        $day = $this->reflectOnAttendanceDay($request, $existingDay);
+
+        $calculation = $this->calculator->calculate(
+            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+        );
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
+
         return CompensatoryLeaveRequest::query()->findOrFail($requestId);
+    }
+
+    /**
+     * 対象日の勤怠(attendance_days)へ代休区分を反映する(旧ApproveCompensatoryLeaveRequestHandlerの
+     * reflectOnAttendanceDayを申請時点へ移したもの)。ガード済みの`$existingDay`をそのまま
+     * 使い回すことで、直前の`assertMutable`呼び出しと二重に問い合わせない。
+     */
+    private function reflectOnAttendanceDay(CompensatoryLeaveRequest $request, ?AttendanceDay $existingDay): AttendanceDay
+    {
+        $day = $existingDay;
+
+        if ($day === null) {
+            $shiftAssignment = EmployeeShiftAssignment::query()
+                ->where('user_id', $request->user_id)
+                ->whereDate('work_date', $request->target_date)
+                ->first();
+
+            $day = AttendanceDay::query()->create([
+                'user_id' => $request->user_id,
+                'work_date' => $request->target_date,
+                'shift_assignment_id' => $shiftAssignment?->id,
+                'status' => AttendanceDayStatus::NOT_STARTED,
+                'source' => AttendanceDaySource::MANUAL,
+            ]);
+        }
+
+        $day->work_type = CompensatoryLeaveWorkType::toAttendanceWorkType($request->leave_type);
+        if ($request->leave_type === PaidLeaveType::FULL) {
+            // 全休は出退勤操作が発生しないため、締め忘れとして警告されないよう完了扱いにする。
+            $day->status = AttendanceDayStatus::CLOCKED_OUT;
+        }
+        $day->save();
+
+        return $day;
     }
 
     private function assertLeaveTypeAllowed(string $unit, string $leaveType): void
@@ -158,34 +221,5 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
         }
 
         throw new DomainRuleException('不正な取得単位です。');
-    }
-
-    private function assertSufficientRemaining(
-        string $userId,
-        string $leaveType,
-        float $requestedDays,
-        ?int $requestedMinutes,
-        string $targetDate,
-    ): void {
-        $query = CompensatoryLeaveGrant::query()
-            ->availableOn($targetDate)
-            ->where('user_id', $userId)
-            ->where('status', CompensatoryLeaveGrantStatus::CONFIRMED);
-
-        if ($leaveType === PaidLeaveType::HOURLY) {
-            $remainingMinutes = (int) (clone $query)->where('remaining_minutes', '>', 0)->sum('remaining_minutes');
-
-            if ($remainingMinutes < $requestedMinutes) {
-                throw new DomainRuleException('代休の残り時間が不足しています。');
-            }
-
-            return;
-        }
-
-        $remainingDays = (float) (clone $query)->where('remaining_days', '>', 0)->sum('remaining_days');
-
-        if ($remainingDays < $requestedDays) {
-            throw new DomainRuleException('代休の残数が不足しています。');
-        }
     }
 }

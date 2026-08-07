@@ -294,6 +294,10 @@ export interface WorkflowRequestPaidLeaveRequestSubject {
   request_group_dates: string[] | null
   /** 直近1年間(申請中・承認済みの合計)の有給取得日数。承認時の目安として表示する。 */
   used_days_last_year: number
+  /** 直近1年間の申請中(未承認)日数。残数は承認済み分のみ消化されるため別枠で可視化する。 */
+  pending_days_last_year: number
+  /** 直近1年間の承認済み日数。 */
+  approved_days_last_year: number
 }
 
 export interface WorkflowRequestCompensatoryLeaveRequestSubject {
@@ -315,6 +319,10 @@ export interface WorkflowRequestCompensatoryLeaveRequestSubject {
   request_group_dates: string[] | null
   /** 直近1年間(申請中・承認済みの合計)の代休取得日数。承認時の目安として表示する。 */
   used_days_last_year: number
+  /** 直近1年間の申請中(未承認)日数。残数は承認済み分のみ消化されるため別枠で可視化する。 */
+  pending_days_last_year: number
+  /** 直近1年間の承認済み日数。 */
+  approved_days_last_year: number
 }
 
 export interface WorkflowRequestSpecialLeaveRequestSubject {
@@ -338,6 +346,10 @@ export interface WorkflowRequestSpecialLeaveRequestSubject {
   request_group_dates: string[] | null
   /** 直近1年間(申請中・承認済みの合計)の同じ特別休暇種別の取得日数。承認時の目安として表示する。 */
   used_days_last_year: number
+  /** 直近1年間の申請中(未承認)日数。残数は承認済み分のみ消化されるため別枠で可視化する。 */
+  pending_days_last_year: number
+  /** 直近1年間の承認済み日数。 */
+  approved_days_last_year: number
 }
 
 export interface WorkflowRequestShiftSwapRequestSubject {

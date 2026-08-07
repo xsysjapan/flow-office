@@ -163,25 +163,39 @@ class SpecialLeaveRequestTest extends TestCase
         $this->assertEquals(0.0, (float) $day->calculation->special_leave_days);
     }
 
-    public function test_request_is_rejected_when_the_special_leave_type_balance_is_insufficient(): void
+    /**
+     * 残数不足でも申請(=対象日の勤怠への反映)自体は成立させる方針
+     * (勤怠を先に作る/編集するという通常の業務フローに合わせ、承認を待たない)。
+     * 残数消費は承認時のみ発生するため、この時点ではgrantのremaining_daysは変化しない。
+     */
+    public function test_leave_request_succeeds_and_reflects_on_attendance_even_when_remaining_balance_is_insufficient(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $grant = SpecialLeaveGrant::query()->create([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
             'special_leave_type_id' => $type->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
-        ])->assertStatus(422);
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'submitted');
+
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertNotNull($day);
+        $this->assertSame('special_leave_full', $day->work_type);
     }
 
     public function test_request_consumes_across_multiple_grants_preferring_the_one_expiring_soonest_and_using_the_non_expiring_one_last(): void
@@ -277,6 +291,11 @@ class SpecialLeaveRequestTest extends TestCase
         ])->assertStatus(422);
     }
 
+    /**
+     * grantの消化は特別休暇種別(special_leave_type_id)ごとにスコープされる。リフレッシュ休暇に
+     * 残高が無くても申請・承認自体は成立し(残数不足でもブロックしない方針)、消化計画は
+     * リフレッシュ休暇の残高(0件)からのみ組み立てられ、誕生日休暇のgrantには一切触れない。
+     */
     public function test_balances_are_scoped_per_special_leave_type(): void
     {
         $employee = User::factory()->create();
@@ -285,19 +304,25 @@ class SpecialLeaveRequestTest extends TestCase
         $refresh = $this->createType('リフレッシュ休暇');
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $birthdayGrant = SpecialLeaveGrant::query()->create([
             'user_id' => $employee->id, 'special_leave_type_id' => $birthday->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
         ]);
         // リフレッシュ休暇の残高は無い(0件)。
 
-        $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
             'special_leave_type_id' => $refresh->id,
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
-        ])->assertStatus(422);
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")->assertOk();
+
+        // リフレッシュ休暇の残高が無いため消化計画は空。誕生日休暇のgrantは変化しない。
+        $this->assertEquals(3.0, (float) $birthdayGrant->refresh()->remaining_days);
+        $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
     }
 
     /**
@@ -448,9 +473,11 @@ class SpecialLeaveRequestTest extends TestCase
     }
 
     /**
-     * 承認不要設定でも残数不足なら422を返し、SpecialLeaveRequest行が孤立して残らないこと。
+     * 承認不要設定の場合、残数不足でも即時承認(消化計画で消化できる分だけ記録)まで成立する
+     * (残数不足で申請・承認自体をブロックしない方針。RequestSpecialLeave→
+     * ApproveSpecialLeaveRequestの2段発行はそのまま1トランザクションで包まれる)。
      */
-    public function test_when_approval_is_not_required_insufficient_balance_returns_422_without_an_orphan_request(): void
+    public function test_when_approval_is_not_required_insufficient_balance_still_auto_approves_with_partial_consumption(): void
     {
         SystemSetting::current()->update(['special_leave_requires_approval' => false]);
 
@@ -470,9 +497,10 @@ class SpecialLeaveRequestTest extends TestCase
             'leave_type' => 'full',
         ]);
 
-        $response->assertStatus(422);
-        $this->assertSame(0, SpecialLeaveRequest::query()->count());
-        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'approved');
+        $this->assertSame(1, SpecialLeaveRequest::query()->count());
+        $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
     }
 
     public function test_employee_can_cancel_their_own_submitted_request(): void

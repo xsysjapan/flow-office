@@ -205,22 +205,36 @@ class PaidLeaveRequestTest extends TestCase
         ])->assertStatus(422);
     }
 
-    public function test_leave_request_is_rejected_when_remaining_balance_is_insufficient(): void
+    /**
+     * 残数不足でも申請(=対象日の勤怠への反映)自体は成立させる方針
+     * (勤怠を先に作る/編集するという通常の業務フローに合わせ、承認を待たない)。
+     * 残数消費は承認時のみ発生するため、この時点ではgrantのremaining_daysは変化しない。
+     */
+    public function test_leave_request_succeeds_and_reflects_on_attendance_even_when_remaining_balance_is_insufficient(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        PaidLeaveGrant::query()->create([
+        $grant = PaidLeaveGrant::query()->create([
             'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
             'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
         ]);
 
-        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+        $response = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
             'approver_user_id' => $approver->id,
-        ])->assertStatus(422);
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'submitted');
+
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
+        $this->assertNotNull($day);
+        $this->assertSame('paid_leave_full', $day->work_type);
     }
 
     public function test_approval_consumes_across_multiple_grants_when_the_nearest_expiring_one_is_insufficient(): void
@@ -549,10 +563,11 @@ class PaidLeaveRequestTest extends TestCase
     }
 
     /**
-     * 承認不要設定でも残数不足なら422を返し、PaidLeaveRequest行が孤立して残らないこと
-     * (RequestPaidLeave→ApprovePaidLeaveRequestの2段発行を1トランザクションで包んでいるため)。
+     * 承認不要設定の場合、残数不足でも即時承認(消化計画で消化できる分だけ記録)まで成立する
+     * (残数不足で申請・承認自体をブロックしない方針。RequestPaidLeave→
+     * ApprovePaidLeaveRequestの2段発行はそのまま1トランザクションで包まれる)。
      */
-    public function test_when_approval_is_not_required_insufficient_balance_returns_422_without_an_orphan_request(): void
+    public function test_when_approval_is_not_required_insufficient_balance_still_auto_approves_with_partial_consumption(): void
     {
         SystemSetting::current()->update(['paid_leave_requires_approval' => false]);
 
@@ -569,9 +584,10 @@ class PaidLeaveRequestTest extends TestCase
             'leave_type' => 'full',
         ]);
 
-        $response->assertStatus(422);
-        $this->assertSame(0, PaidLeaveRequest::query()->count());
-        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
+        $response->assertCreated();
+        $response->assertJsonPath('status', 'approved');
+        $this->assertSame(1, PaidLeaveRequest::query()->count());
+        $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
     }
 
     public function test_cancelling_a_request_also_cancels_the_workflow_request(): void

@@ -35,10 +35,24 @@ import {
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
-import type { AttendanceDay, AttendanceDayDefaults, AttendancePunch, PunchType, WorkLocationType } from '../../api/types'
+import type {
+  AttendanceDay,
+  AttendanceDayDefaults,
+  AttendancePunch,
+  CompensatoryLeaveRequest,
+  PaidLeaveRequest,
+  PaidLeaveType,
+  PunchType,
+  SpecialLeaveRequest,
+  WorkLocationType,
+} from '../../api/types'
 import type { AttendanceDayPunchLogAction } from '../../api/attendance'
 import { useAppSettings } from '../../contexts/useAppSettings'
-import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
+import {
+  useCancelCompensatoryLeaveRequest,
+  useCreateCompensatoryLeaveRequest,
+  useMyCompensatoryLeaveRequests,
+} from '../../hooks/useCompensatoryLeave'
 import { useEditableRows } from '../../hooks/useEditableRows'
 import {
   useAdjustAttendanceDailyCalculation,
@@ -53,9 +67,14 @@ import {
   useUpdateAttendanceDay,
   useWeek,
 } from '../../hooks/useAttendance'
-import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
+import { useCancelPaidLeaveRequest, useCreatePaidLeaveRequest, useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
 import { useCreateShiftSwapRequest } from '../../hooks/useShiftSwap'
-import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
+import {
+  useCancelSpecialLeaveRequest,
+  useCreateSpecialLeaveRequest,
+  useMySpecialLeaveRequests,
+  useSpecialLeaveTypes,
+} from '../../hooks/useSpecialLeave'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
 import {
@@ -521,7 +540,245 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
   )
 }
 
-function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }) {
+type LeaveKind = 'none' | 'paid' | 'special' | 'compensatory'
+
+const LEAVE_KIND_LABELS: Record<LeaveKind, string> = {
+  none: '休暇なし',
+  paid: '有給休暇',
+  special: '特別休暇',
+  compensatory: '代休',
+}
+
+const LEAVE_UNIT_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
+  { value: 'full', label: '全休' },
+  { value: 'am_half', label: '午前半休' },
+  { value: 'pm_half', label: '午後半休' },
+  { value: 'hourly', label: '時間休' },
+]
+
+const LEAVE_WORK_TYPE_PREFIXES: Array<{ kind: LeaveKind; prefix: string }> = [
+  { kind: 'paid', prefix: 'paid_leave_' },
+  { kind: 'special', prefix: 'special_leave_' },
+  { kind: 'compensatory', prefix: 'compensatory_leave_' },
+]
+
+/**
+ * attendance_days.work_typeのセンチネル値(例: `paid_leave_full`)から休暇の種類と
+ * 取得単位を判定する(backend側の PaidLeaveType::toAttendanceWorkType 等と対応)。
+ */
+function detectLeaveDesignation(workType: string | null | undefined): { kind: LeaveKind; unit: PaidLeaveType | null } {
+  for (const { kind, prefix } of LEAVE_WORK_TYPE_PREFIXES) {
+    if (workType?.startsWith(prefix)) {
+      return { kind, unit: workType.slice(prefix.length) as PaidLeaveType }
+    }
+  }
+  return { kind: 'none', unit: null }
+}
+
+function findLeaveRequestForDate<T extends { target_date: string; status: string }>(
+  requests: T[] | undefined,
+  date: string,
+): T | undefined {
+  return requests?.find((r) => r.target_date === date && (r.status === 'submitted' || r.status === 'approved'))
+}
+
+interface LeaveDesignationLists {
+  paidLeaveRequests: PaidLeaveRequest[] | undefined
+  specialLeaveRequests: SpecialLeaveRequest[] | undefined
+  compensatoryLeaveRequests: CompensatoryLeaveRequest[] | undefined
+}
+
+/**
+ * 日次勤怠編集画面での「休暇」欄の状態と保存処理をまとめたフック。
+ *
+ * 実績本体(EditAttendanceDay/CreateAttendanceDay)の保存とは別に、休暇の種類が
+ * 選択されている場合はRequest{Paid,Special,Compensatory}Leaveを、休暇なしへ変更した
+ * 場合(元々休暇が設定されていた日に限る)はCancel{...}LeaveRequestを呼ぶ
+ * (勤怠編集の一部として休暇の申請・取消を行うという設計方針。root CLAUDE.md
+ * 「休暇の考え方」参照)。
+ */
+function useLeaveDesignationController(date: string, initialWorkType: string | null | undefined, lists: LeaveDesignationLists) {
+  const initial = detectLeaveDesignation(initialWorkType)
+  const existingPaid = findLeaveRequestForDate(lists.paidLeaveRequests, date)
+  const existingSpecial = findLeaveRequestForDate(lists.specialLeaveRequests, date)
+  const existingCompensatory = findLeaveRequestForDate(lists.compensatoryLeaveRequests, date)
+  const existingHours = existingPaid?.hours ?? existingSpecial?.hours ?? existingCompensatory?.hours ?? null
+
+  const [kind, setKind] = useState<LeaveKind>(initial.kind)
+  const [unit, setUnit] = useState<PaidLeaveType>(initial.unit ?? 'full')
+  const [hours, setHours] = useState(existingHours !== null ? String(existingHours) : '')
+  const [specialLeaveTypeId, setSpecialLeaveTypeId] = useState<number | undefined>(existingSpecial?.special_leave_type_id)
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(
+    existingPaid?.approver?.id ?? existingSpecial?.approver?.id ?? existingCompensatory?.approver?.id,
+  )
+  const [leaveReason, setLeaveReason] = useState('')
+
+  const createPaidLeave = useCreatePaidLeaveRequest()
+  const cancelPaidLeave = useCancelPaidLeaveRequest()
+  const createSpecialLeave = useCreateSpecialLeaveRequest()
+  const cancelSpecialLeave = useCancelSpecialLeaveRequest()
+  const createCompensatoryLeave = useCreateCompensatoryLeaveRequest()
+  const cancelCompensatoryLeave = useCancelCompensatoryLeaveRequest()
+
+  const isPending =
+    createPaidLeave.isPending ||
+    cancelPaidLeave.isPending ||
+    createSpecialLeave.isPending ||
+    cancelSpecialLeave.isPending ||
+    createCompensatoryLeave.isPending ||
+    cancelCompensatoryLeave.isPending
+
+  const hasChanged =
+    kind !== initial.kind ||
+    (kind !== 'none' &&
+      (unit !== (initial.unit ?? 'full') ||
+        (kind === 'special' && specialLeaveTypeId !== existingSpecial?.special_leave_type_id) ||
+        (unit === 'hourly' && Number(hours) !== existingHours)))
+
+  /** 休暇なしへ変更する場合、元の休暇種別に対応するCancel{...}LeaveRequestを呼ぶ。 */
+  async function cancelExisting() {
+    if (initial.kind === 'paid' && existingPaid) await cancelPaidLeave.mutateAsync(existingPaid.id)
+    if (initial.kind === 'special' && existingSpecial) await cancelSpecialLeave.mutateAsync(existingSpecial.id)
+    if (initial.kind === 'compensatory' && existingCompensatory) await cancelCompensatoryLeave.mutateAsync(existingCompensatory.id)
+  }
+
+  /** 変更があれば取消・申請を行う。変更が無ければ何もしない(既存の申請に触れない)。 */
+  async function apply() {
+    if (!hasChanged) return
+
+    if (initial.kind !== 'none') {
+      await cancelExisting()
+    }
+
+    if (kind === 'none') return
+
+    const common = {
+      target_date: date,
+      leave_type: unit,
+      hours: unit === 'hourly' ? Number(hours) : undefined,
+      approver_user_id: approverUserId || undefined,
+      reason: leaveReason || undefined,
+    }
+
+    if (kind === 'paid') await createPaidLeave.mutateAsync(common)
+    if (kind === 'special') {
+      if (!specialLeaveTypeId) throw new Error('特別休暇の種別を選択してください。')
+      await createSpecialLeave.mutateAsync({ ...common, special_leave_type_id: specialLeaveTypeId })
+    }
+    if (kind === 'compensatory') await createCompensatoryLeave.mutateAsync(common)
+  }
+
+  return {
+    kind,
+    setKind,
+    unit,
+    setUnit,
+    hours,
+    setHours,
+    specialLeaveTypeId,
+    setSpecialLeaveTypeId,
+    approverUserId,
+    setApproverUserId,
+    leaveReason,
+    setLeaveReason,
+    apply,
+    isPending,
+  }
+}
+
+function LeaveDesignationFields({ controller }: { controller: ReturnType<typeof useLeaveDesignationController> }) {
+  const { systemSettings } = useAppSettings()
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes()
+  const {
+    kind,
+    setKind,
+    unit,
+    setUnit,
+    hours,
+    setHours,
+    specialLeaveTypeId,
+    setSpecialLeaveTypeId,
+    approverUserId,
+    setApproverUserId,
+    leaveReason,
+    setLeaveReason,
+  } = controller
+
+  const approvalRequired =
+    kind === 'paid'
+      ? systemSettings.paid_leave_requires_approval
+      : kind === 'special'
+        ? systemSettings.special_leave_requires_approval
+        : kind === 'compensatory'
+          ? systemSettings.compensatory_leave_requires_approval
+          : false
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        休暇
+        <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as LeaveKind)}>
+          {(Object.keys(LEAVE_KIND_LABELS) as LeaveKind[]).map((value) => (
+            <option key={value} value={value}>
+              {LEAVE_KIND_LABELS[value]}
+            </option>
+          ))}
+        </NativeSelect>
+      </label>
+
+      {kind !== 'none' && (
+        <>
+          {kind === 'special' && (
+            <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              特別休暇の種別
+              <NativeSelect
+                value={specialLeaveTypeId ?? ''}
+                onChange={(e) => setSpecialLeaveTypeId(e.target.value ? Number(e.target.value) : undefined)}
+              >
+                <option value="">選択してください</option>
+                {specialLeaveTypes?.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </label>
+          )}
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            取得単位
+            <NativeSelect value={unit} onChange={(e) => setUnit(e.target.value as PaidLeaveType)}>
+              {LEAVE_UNIT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </label>
+
+          {unit === 'hourly' && (
+            <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              取得時間
+              <Input type="number" min={0} step={0.5} value={hours} onChange={(e) => setHours(e.target.value)} />
+            </label>
+          )}
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            {approvalRequired ? '承認者' : '承認者(任意)'}
+            <UserPicker id="day-leave-approver" value={approverUserId} onChange={setApproverUserId} />
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            休暇の理由
+            <Input value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} />
+          </label>
+        </>
+      )}
+    </div>
+  )
+}
+
+function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: () => void; leaveLists: LeaveDesignationLists }) {
   const [actualStartAt, setActualStartAt] = useState(toDatetimeLocal(day.actual_start_at))
   const [actualEndAt, setActualEndAt] = useState(toDatetimeLocal(day.actual_end_at))
   const [offset, setOffset] = useState(
@@ -548,8 +805,11 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
   )
   const updateDay = useUpdateAttendanceDay()
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
+  const leaveController = useLeaveDesignationController(day.work_date, day.work_type, leaveLists)
+  const [leaveError, setLeaveError] = useState<Error | null>(null)
 
   const handleSave = () => {
+    setLeaveError(null)
     updateDay.mutate(
       {
         id: day.id,
@@ -557,20 +817,30 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
           actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
           actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
           breaks: buildBreaksPayload(rows, offset),
-          work_type: workType || null,
+          work_type: leaveController.kind === 'none' ? workType || null : null,
           work_location_type: workLocationType || null,
           note: note || null,
           leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
           reason,
         },
       },
-      { onSuccess: () => onDone() },
+      {
+        onSuccess: async () => {
+          try {
+            await leaveController.apply()
+            onDone()
+          } catch (error) {
+            setLeaveError(error as Error)
+          }
+        },
+      },
     )
   }
 
   return (
     <div className="flex flex-col gap-3">
       {updateDay.error && <ErrorMessage error={updateDay.error} />}
+      {leaveError && <ErrorMessage error={leaveError} />}
 
       <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
@@ -584,10 +854,15 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
         現地時刻オフセット(海外出張時などに変更)
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
       </label>
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-        作業内容
-        <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-      </label>
+
+      <LeaveDesignationFields controller={leaveController} />
+
+      {leaveController.kind === 'none' && (
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          作業内容
+          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         勤務形態区分
         <NativeSelect
@@ -627,7 +902,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
         <Button variant="secondary" onClick={onDone}>
           キャンセル
         </Button>
-        <Button isLoading={updateDay.isPending} disabled={!reason} onClick={handleSave}>
+        <Button isLoading={updateDay.isPending || leaveController.isPending} disabled={!reason} onClick={handleSave}>
           保存する
         </Button>
       </div>
@@ -636,7 +911,7 @@ function DayEditForm({ day, onDone }: { day: AttendanceDay; onDone: () => void }
 }
 
 /** UC-A016: 出勤日を新規作成する。打刻の有無にかかわらず、月が締められるまではいつでも作成できる。 */
-function DayCreateForm({ date }: { date: string }) {
+function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDesignationLists }) {
   const { user } = useAuth()
   const [actualStartAt, setActualStartAt] = useState('')
   const [actualEndAt, setActualEndAt] = useState('')
@@ -685,27 +960,42 @@ function DayCreateForm({ date }: { date: string }) {
   }, [date, defaults, resetRows])
 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
+  const leaveController = useLeaveDesignationController(date, null, leaveLists)
+  const [leaveError, setLeaveError] = useState<Error | null>(null)
 
   const handleCreate = () => {
     if (!user) return
-    createDay.mutate({
-      user_id: user.id,
-      work_date: date,
-      actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
-      actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
-      breaks: buildBreaksPayload(rows, offset),
-      work_type: workType || null,
-      work_location_type: workLocationType || null,
-      note: note || null,
-      leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
-      reason,
-    })
+    setLeaveError(null)
+    createDay.mutate(
+      {
+        user_id: user.id,
+        work_date: date,
+        actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
+        actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
+        breaks: buildBreaksPayload(rows, offset),
+        work_type: leaveController.kind === 'none' ? workType || null : null,
+        work_location_type: workLocationType || null,
+        note: note || null,
+        leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
+        reason,
+      },
+      {
+        onSuccess: async () => {
+          try {
+            await leaveController.apply()
+          } catch (error) {
+            setLeaveError(error as Error)
+          }
+        },
+      },
+    )
   }
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">この日の勤怠記録はまだありません。実績を入力して作成できます。</p>
       {createDay.error && <ErrorMessage error={createDay.error} />}
+      {leaveError && <ErrorMessage error={leaveError} />}
       {createDay.isSuccess && <p className="text-sm text-success">実績を作成しました。</p>}
       {defaults && DAY_DEFAULTS_SOURCE_LABEL[defaults.source] && (
         <p className="text-sm text-info">{DAY_DEFAULTS_SOURCE_LABEL[defaults.source]}</p>
@@ -723,10 +1013,15 @@ function DayCreateForm({ date }: { date: string }) {
         現地時刻オフセット(海外出張時などに変更)
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
       </label>
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-        作業内容
-        <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-      </label>
+
+      <LeaveDesignationFields controller={leaveController} />
+
+      {leaveController.kind === 'none' && (
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          作業内容
+          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         勤務形態区分
         <NativeSelect
@@ -762,7 +1057,12 @@ function DayCreateForm({ date }: { date: string }) {
         <Input value={reason} onChange={(e) => setReason(e.target.value)} />
       </label>
 
-      <Button className="self-start" isLoading={createDay.isPending} disabled={!reason} onClick={handleCreate}>
+      <Button
+        className="self-start"
+        isLoading={createDay.isPending || leaveController.isPending}
+        disabled={!reason}
+        onClick={handleCreate}
+      >
         作成する
       </Button>
     </div>
@@ -1035,6 +1335,7 @@ export function AttendanceDayPage() {
   const approvedSpecialLeave = specialLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
   const approvedCompensatoryLeave = compensatoryLeaveRequests?.find((r) => r.target_date === date && r.status === 'approved')
   const hasApprovedLeaveToCancel = !!approvedPaidLeave || !!approvedSpecialLeave || !!approvedCompensatoryLeave
+  const leaveLists: LeaveDesignationLists = { paidLeaveRequests, specialLeaveRequests, compensatoryLeaveRequests }
 
   return (
     <div className="flex flex-col gap-6">
@@ -1264,7 +1565,7 @@ export function AttendanceDayPage() {
           </div>
         )}
 
-        {day && isEditing && <DayEditForm day={day} onDone={() => setIsEditing(false)} />}
+        {day && isEditing && <DayEditForm day={day} onDone={() => setIsEditing(false)} leaveLists={leaveLists} />}
 
         {!day && locked && (
           <div className="flex flex-col gap-2">
@@ -1272,7 +1573,7 @@ export function AttendanceDayPage() {
           </div>
         )}
 
-        {!day && !locked && <DayCreateForm date={date} />}
+        {!day && !locked && <DayCreateForm date={date} leaveLists={leaveLists} />}
       </Card>
 
       <PunchLogCard date={date} locked={locked} />

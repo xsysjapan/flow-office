@@ -153,6 +153,8 @@ const paidLeaveRequest: WorkflowRequest = {
     cancelled_at: null,
     request_group_dates: null,
     used_days_last_year: 4,
+    pending_days_last_year: 4,
+    approved_days_last_year: 0,
   },
 }
 
@@ -176,6 +178,8 @@ const groupedPaidLeaveRequest: WorkflowRequest = {
     cancelled_at: null,
     request_group_dates: ['2026-08-10', '2026-08-11', '2026-08-12'],
     used_days_last_year: 4,
+    pending_days_last_year: 4,
+    approved_days_last_year: 0,
   },
 }
 

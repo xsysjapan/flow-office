@@ -830,4 +830,104 @@ describe('AttendanceDayPage', () => {
       expect(screen.getByRole('menuitem', { name: '代休の承認を取り消す' })).toBeInTheDocument()
     })
   })
+
+  describe('勤怠編集画面での休暇設定', () => {
+    const approver: User = {
+      id: 'approver-1',
+      name: '承認者花子',
+      email: 'hanako@example.com',
+      department: null,
+      job_title: null,
+      employment_status: 'active',
+      last_login_at: null,
+    }
+    const approverSearchResult: Paginated<User> = {
+      data: [approver],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    }
+
+    it('applies for paid leave as part of saving the day edit, without a free-text work_type', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue(recordedDay)
+      const createdPaidLeaveRequest: PaidLeaveRequest = {
+        id: 'paid-leave-request-2',
+        user_id: 'user-1',
+        status: 'submitted',
+        leave_type: 'full',
+        target_date: date,
+        hours: null,
+        requested_days: 1,
+        reason: '私用のため',
+        submitted_at: `${date}T00:00:00+09:00`,
+        approved_at: null,
+        returned_at: null,
+        cancelled_at: null,
+      }
+      vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(createdPaidLeaveRequest)
+      vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+      await userEvent.selectOptions(screen.getByLabelText('休暇'), '有給休暇')
+      await userEvent.click(screen.getByLabelText('承認者'))
+      await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+      await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+      await userEvent.type(screen.getByLabelText('休暇の理由'), '私用のため')
+      await userEvent.type(screen.getByLabelText('修正理由(必須)'), '休暇を設定')
+      await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+      await waitFor(() =>
+        expect(attendanceApi.updateAttendanceDay).toHaveBeenCalledWith('day-1', expect.objectContaining({ work_type: null })),
+      )
+      await waitFor(() =>
+        expect(paidLeaveApi.createPaidLeaveRequest).toHaveBeenCalledWith({
+          target_date: date,
+          leave_type: 'full',
+          hours: undefined,
+          approver_user_id: approver.id,
+          reason: '私用のため',
+        }),
+      )
+    })
+
+    it('cancels an approved paid leave by switching the day back to no leave designation', async () => {
+      const approvedPaidLeaveRequest: PaidLeaveRequest = {
+        id: 'paid-leave-request-3',
+        user_id: 'user-1',
+        status: 'approved',
+        leave_type: 'full',
+        target_date: date,
+        hours: null,
+        requested_days: 1,
+        reason: null,
+        submitted_at: '2026-07-01T00:00:00+09:00',
+        approved_at: '2026-07-02T00:00:00+09:00',
+        returned_at: null,
+        cancelled_at: null,
+      }
+      const paidLeaveDay: AttendanceDay = { ...recordedDay, work_type: 'paid_leave_full' }
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, work_type: null })
+      vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
+      const createPaidLeaveRequestSpy = vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest')
+      renderPage([paidLeaveDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+      expect(screen.getByLabelText('休暇')).toHaveValue('paid')
+
+      await userEvent.selectOptions(screen.getByLabelText('休暇'), '休暇なし')
+      await userEvent.type(screen.getByLabelText('修正理由(必須)'), '出勤できることになったので取消')
+      await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+      await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(approvedPaidLeaveRequest.id))
+      expect(createPaidLeaveRequestSpy).not.toHaveBeenCalled()
+    })
+  })
 })
