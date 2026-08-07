@@ -29,7 +29,7 @@
 判定は以下の通り。
 
 1. `users.hire_date`(入社日)が設定済みの社員を対象にする。MS365には入社日に相当する
-   属性がないため同期対象外で、管理者(admin/hr_staff)が個別に設定する
+   属性がないため同期対象外で、`user_profile.update` Permissionを持つ担当者が個別に設定する
    (`PUT /api/users/{user}/hire-date`)。
 2. 付与ルール(`paid_leave_grant_rules`)ごとに、`work_style_id` が指定されている場合は
    当日その勤務形態が割り当てられている社員のみに絞り込む。
@@ -54,7 +54,7 @@
 1. 社員が有給申請を作成する
 2. 対象日を選択する
 3. 全休、午前半休、午後半休、時間休を選択する
-4. 承認者を任意の社員から選択する
+4. `approval.execute` Permissionを持つ任意の社員から承認者を選択する
 5. 有給残数を確認する
 6. 勤務予定日であることを確認する
 7. 申請する
@@ -154,8 +154,8 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
 実行者(承認者等)のIDのみが含まれ申請者本人の`user_id`を含まないため、payloadの内容ではなく
 対象社員が実際に持つgrant/requestのidで絞り込む必要がある点に注意する。
 
-自分の履歴は誰でも閲覧できる。他の社員の履歴を閲覧できるのは管理者・人事担当者のみ
-(`GET /paid-leave/grants/user/{userId}` 等、他の管理者向けエンドポイントと同じロール制限)。
+自分の履歴は誰でも閲覧できる。他の社員の履歴は`paid_leave.read` Permissionを持ち、対象Userを
+含むScopeが有効な場合だけ閲覧できる(`GET /paid-leave/grants/user/{userId}`等)。
 
 ## 実装上のポイント
 
@@ -174,7 +174,8 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
   `attendance_days` / `paid_leave_grants` / `paid_leave_usages` へ副作用を及ぼす必要があり、
   汎用申請の承認(バックオフィスタスク自動生成のみ)とは異なる業務ルールを持つため。
 - UC-P002の継続勤務期間・出勤率判定には `users.hire_date`(入社日)を使う。MS365には
-  対応する属性がないため同期対象外で、管理者(admin/hr_staff)が個別に設定する必要がある
+  対応する属性がないため同期対象外で、`user_profile.update` Permissionを持つ担当者が個別に
+  設定する必要がある
   (未設定の社員は自動付与の対象外になる)。
 - UC-P005/UC-P006の警告は同一の `paid_leave.warning_raised` イベントを共有し、
   `warning_type` (`expiry` / `five_day_obligation`) で区別する。重複通知を防ぐため、

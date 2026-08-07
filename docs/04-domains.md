@@ -3,6 +3,10 @@
 - Auth
 - User
 - Organization
+- AccessControl(Feature、Role、Permission、Scope。利用機能と操作権限を分離して扱う。
+  docs/31-user-group-access-foundation.md)
+- MembershipChange(現在所属とは分離した将来日付の所属変更セット。
+  docs/31-user-group-access-foundation.md)
 - Workflow
 - BackOffice
 - Attendance

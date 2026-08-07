@@ -46,6 +46,7 @@ Teams通知に集中する。
 | 28 | [28-github-actions-deploy.md](./28-github-actions-deploy.md) | GitHub Actionsによる自動デプロイ |
 | 29 | [29-event-sourcing-framework-migration.md](./29-event-sourcing-framework-migration.md) | spatie/laravel-event-sourcingへの移行方針・作業順 |
 | 30 | [30-usecases-expense.md](./30-usecases-expense.md) | 経費精算ユースケース (UC-X001~) |
+| 31 | [31-user-group-access-foundation.md](./31-user-group-access-foundation.md) | ユーザー・グループ・権限・利用機能管理基盤 |
 
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。
@@ -67,3 +68,5 @@ Teams通知に集中する。
 - **打刻と勤怠編集を区別する**: 打刻は追記のみの事実記録、勤怠編集は日次勤怠の作成・修正。
 - **AIは勤怠ルールを決定しない**: Claude等のAIは下書き生成・対話までを担当し、労働時間計算・
   休日判定・締め判定・承認ルールは必ず勤怠管理API側で行う。
+- **FeatureとPermissionを分離する**: Featureは機能の利用可否、Permissionは機能内の操作可否を
+  表す。どちらも初期値はOFFとし、グループ経由を含む明示的な付与だけを加算する。

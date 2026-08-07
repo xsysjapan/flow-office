@@ -444,13 +444,11 @@ FK・Sanctum認証・フロントエンドのユーザーID表示すべてに波
   (docs/03-architecture.md 3.4)、イベントの`createdAt()`(アプリ/イベント側の既定タイムゾーン
   基準)をそのまま使うと設定と食い違う可能性があるため、`RecordLocalLoginHandler`/
   `RecordSsoLoginHandler`側で計算した値をイベントに明示的に渡している。
-- **SSOログインは既存ユーザーの有無で3分岐する**(`RecordSsoLoginHandler`):
-  (1) `entra_user_id`で既存ユーザーが見つかる → `recordLogin()`のみ、
-  (2) `entra_user_id`では見つからないが`email`で見つかる → `linkSsoAccount()` +
-  `recordLogin()`を1回の`persist()`にまとめる(2イベント/1トランザクション)、
-  (3) どちらでも見つからない → `createFromSsoLogin()` + `recordLogin()`。
-- **`UserProjector`のロール付与は`sync()`を使う**(`attach()`ではない): 同一イベントの
-  再適用(リプレイ)でpivotテーブルに重複行ができないようにするため。
+- **SSOログインは`ExternalIdentity`で既存ユーザーを解決する**(`RecordSsoLoginHandler`):
+  provider、Tenant ID、Object IDの組で検索し、メールアドレス一致による自動リンクは行わない。
+  初回ログインを許可する設定ならUserとExternalIdentityを作成して既定グループへ所属させる。
+- **RoleとFeatureは新しいアクセス制御Projectionへ反映する**: 固定ロールのpivotへ直接同期せず、
+  Membership、RoleAssignment、GroupFeatureAssignmentのイベントから再生成可能にする。
 - `CompleteOnboardingSsoLinkHandler`で`SystemSetting::completeOnboarding()`の判定を
   ユーザー集約の永続化より前に実行する順序へ修正した(副次的な不整合修正。
   `completeOnboarding()`が失敗してもユーザー行だけ作られてしまう競合状態が

@@ -38,10 +38,12 @@ trueならフロントエンドはログイン画面の代わりにオンボー�
    発行する。
    - `onboarding_started_at`が未設定、または既に`onboarding_completed_at`が設定済みなら
      422で拒否する。
-   - 同じ`email`または`entra_user_id`のユーザーが既に存在する場合も422で拒否する
-     (既存アカウントの乗っ取り・意図しない上書きを防ぐ)。
-   - Socialiteが返した`entra_user_id`/`name`/`email`をそのまま使って`users`に管理者
-     ユーザーを作成し、`admin`ロールを付与する。
+   - 同じEntra Tenant ID + Object IDの`ExternalIdentity`が既に存在する場合は422で拒否する。
+     メールアドレスの文字列一致を本人同定には使用しない。
+   - Socialiteが返した表示名・メールで`User`を作成し、Tenant ID・Object IDを
+     `ExternalIdentity(provider=MICROSOFT_ENTRA)`としてリンクする。
+   - システム管理グループと管理用Featureを初期化し、作成したUserをそのグループへ所属させ、
+     システム管理Roleを`GLOBAL`スコープで割り当てる。
    - `system_settings.onboarding_completed_at`を設定する(こちらも原子的UPDATE)。
    - 通常のSSOログイン(UC-001)と同じ交換コード方式でフロントエンドへリダイレクトし、
      そのままログイン済みにする。
@@ -55,13 +57,15 @@ Microsoft 365を設定しない場合、その場でパスワード付きの管�
 2. 同じ`email`のユーザーが既に存在する場合は422で拒否する。
 3. `onboarding_started_at`と`onboarding_completed_at`を同時に原子的コミットし(1リクエストで
    完結するモードのため)、パスワード(`users.password`、`hashed`キャストで自動ハッシュ化)を
-   持つ管理者ユーザーを作成、`admin`ロールを付与する。
+   持つ管理者ユーザーを作成する。SSOモードと同じシステム管理グループ、管理用Feature、
+   `GLOBAL`スコープのシステム管理Roleを初期化・割当する。
 4. その場でSanctumトークンを発行しログイン済みにする。
 5. 以後は`POST /api/auth/local-login`(email + password、ブルートフォース対策として
    1分あたり5回に制限)でログインできる。
 
 関連イベント: `user.onboarded_as_admin`(`auth_method`が`sso`または`local`)
-関連テーブル: `system_settings`, `users`
+関連テーブル: `system_settings`, `users`, `external_identities`, `groups`, `memberships`,
+`group_feature_assignments`, `role_assignments`
 
 **注意**: 未認証で呼び出せるため、`onboarding_completed_at`が未設定の間は誰でも初回
 オンボーディングを実行できてしまう(いわゆる「先に完了させたもの勝ち」)。セットアップ
@@ -84,16 +88,18 @@ DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が
 2. Microsoft Entra ID のログイン画面へ遷移する
 3. 認証成功後、アプリに戻る(`GET /api/auth/microsoft/callback`)
 4. Entra ID のユーザーID、メール、表示名を取得する
-5. 初回ログインならアプリ側ユーザーを作成する(`employee`ロール)
-6. 既存ユーザーなら最終ログイン日時を更新する
+5. Tenant ID + Object IDに一致する`ExternalIdentity`からUserを解決する
+6. 初回ログインを許可する企業設定の場合はUserと`ExternalIdentity`を作成し、既定の利用者
+   グループへ所属させる。既定Roleはグループ経由で付与する
+7. 既存ユーザーなら最終ログイン日時を更新する
 
 コールバックはUC-000のSSOモードのオンボーディングリンク完了とも共通で、`state`
 パラメータで判定する(`AuthController::callback()`)。通常ログインの`RecordSsoLoginHandler`は
-`entra_user_id`一致のみで判定するシンプルなロジックで、オンボーディング固有の特別扱いは
-持たない(UC-000のSSOモードは別のCommand/Handlerが担当するため)。
+通常ログインの`RecordSsoLoginHandler`は`ExternalIdentity`のprovider、Tenant ID、Object IDの
+組でUserを解決する。メールアドレスは不変識別子として使用しない。
 
 関連イベント: `user.logged_in`
-関連テーブル: `users`
+関連テーブル: `users`, `external_identities`, `groups`, `memberships`
 
 初回オンボーディング(UC-000)でSSOを設定しなかった場合は、代わりに`POST /auth/local-login`
 (メールアドレス + パスワード)でログインする。
@@ -102,16 +108,20 @@ DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が
 
 1. 管理者またはバッチが同期を実行する
 2. Microsoft Graph からユーザー一覧を取得する
-3. メール、表示名、部署、役職、在籍状態を更新する
-4. アプリ独自の権限は上書きしない
-5. 同期結果をログに残す
+3. Tenant ID + Object IDで`ExternalIdentity`とUserを照合する
+4. `FieldAuthority`がMicrosoft連携元を示す項目について差分を作成する
+5. 所属変更は`MembershipChangeSet`として登録し、確認後に一括適用する
+6. アプリ独自のFeature、Role、Permissionは上書きしない
+7. 同期結果を`stored_events`へ記録する
 
 関連イベント: `user.synced_from_ms365`
-関連テーブル: `users`
+関連テーブル: `users`, `external_identities`, `field_authorities`, `membership_change_sets`,
+`membership_change_items`
 
-**注意**: アプリ独自の権限(ロール)は Microsoft Graph 側の属性で上書きしない。同期は
-氏名・メール・部署・役職・在籍状態のみを対象とし、権限管理は [UC-M001](./15-usecases-admin.md#uc-m001-権限を設定する)
-で別管理する。タイムゾーン(`timezone`)も同期対象外で、既存ユーザーの値は上書きしない。
+**注意**: 同期可能な項目でも`FieldAuthority`が本システム管理なら上書きしない。部署・雇用区分は
+`users`の文字列列ではなくGroup/Membershipとして扱う。権限管理は
+[UC-M001](./15-usecases-admin.md#uc-m001-ユーザー所属権限を管理する)で別管理する。
+タイムゾーン(`timezone`)も同期対象外で、既存ユーザーの値は上書きしない。
 
 ## UC-003: システム設定(default_timezone等)を管理する
 
@@ -130,9 +140,10 @@ DBの値だけに依存せず`Ms365ConfigResolver::mockEnabled()`が`APP_ENV`が
 
 関連テーブル: `system_settings`
 
-**注意**: `system_settings` はマスタ的なシングルトン設定であり、Command/EventStoreを経由せず
-Eloquentで直接更新する(他のマスタ管理APIと同じ方針)。参照・更新はいずれも管理者ロール限定
-(`role:admin` ミドルウェア)。
+**注意**: `system_settings`はマスタ的なシングルトン設定であり、管理者専用APIからEloquentで
+直接更新する。更新時は同一トランザクションで`system_settings.updated`監査イベントを
+`stored_events`へ追記する。参照・更新は`system_settings.read`/`system_settings.update`
+Permissionで制御し、更新には`GLOBAL`スコープを要求する。
 
 新規ユーザーがどのタイムゾーンで作成されるかは以下の通り(docs/03-architecture.md 3.4):
 
@@ -153,7 +164,8 @@ Eloquentで直接更新する(他のマスタ管理APIと同じ方針)。参照�
    フロントエンドのセッション情報には頼れない)
 3. Microsoft Entra ID のログイン画面へ遷移し、認証成功後アプリに戻る
    (`GET /api/auth/microsoft/callback`。`state`が`link-sso:`で始まる場合の分岐)
-4. 認証結果の`entra_user_id`を対象ユーザーに設定する(`LinkSsoAccount`)
+4. 認証結果のTenant ID・Object IDを`ExternalIdentity(provider=MICROSOFT_ENTRA)`として
+   対象Userへリンクする(`LinkSsoAccount`)
 5. 以後はローカルパスワード・Microsoft SSOのどちらでもログインできる
 
 連携できない場合:
@@ -162,4 +174,4 @@ Eloquentで直接更新する(他のマスタ管理APIと同じ方針)。参照�
 - 認証成功したMicrosoft 365アカウントが既に他のユーザーと連携済み
 
 関連イベント: `user.sso_account_linked`
-関連テーブル: `users`
+関連テーブル: `users`, `external_identities`

@@ -68,7 +68,7 @@ UC-C005のチェックは適用する。
    (`shift_patterns.crosses_midnight`)は`planned_start_at`/`planned_end_at`を
    datetimeで保持することで日付境界のバグを避ける
 3. 割り当てた直後は下書き(`is_published=false`)で、対象社員にはまだ表示されない
-4. 管理者が対象部署(`users.department`)または対象社員・対象月を選び、公開前チェックを
+4. 管理者が対象組織Group/Membershipまたは対象社員・対象月を選び、公開前チェックを
    確認する。法定休日不足(UC-C005のロジックを再利用)・連続勤務日数(`work_styles.
    max_consecutive_work_days`、未設定ならチェックしない)・月間予定時間(週40時間平均の
    法定枠)の3つを警告として表示する。警告があっても後続の操作はブロックしない

@@ -64,6 +64,8 @@
   新しい申請種別を追加する際にコード変更を必要最小限にする
   (スキル [add-workflow-request-type](../.claude/skills/add-workflow-request-type/SKILL.md) 参照)。
 - 承認者は固定ルートではなく、申請ごとに任意の社員を `approver_user_id` として指定する。
+  承認操作は、対象申請の承認タスクに割り当てられ、かつ`approval.execute` Permissionを持つ場合
+  に許可する。承認者候補にはこのPermissionを持つ有効なUserだけを表示する。
 - `requires_backoffice_task` が true の申請種別は、最終承認時に
   [11章 バックオフィス処理](./11-usecases-backoffice.md) の UC-B001 でタスクを自動生成する。
 - 添付ファイルは [12章](./12-usecases-attachment.md) の仕組みを共通利用する。

@@ -43,24 +43,24 @@
   `http://localhost/api/auth/microsoft/callback`(80番ポート)に飛んでしまい、SSOログインが
   失敗する。本ドキュメント作成時に判明したため `.env.example` は修正済みだが、既存の
   `.env` を使い回している場合は要確認。
-- `admin@example.com`(`DatabaseSeeder`が作成する管理者)はMS365由来ではなく
-  `UserFactory`でランダムな`entra_user_id`を持つため、そのままではモックOIDCで
-  ログインできない。`ScenarioSeeder`実行時に `entra_user_id` を
-  `mock-oidc/server.js` の `mock-entra-admin` エントリに合わせて上書きするので、
+- `admin@example.com`(`DatabaseSeeder`が作成する管理者)はMS365由来ではないため、そのままでは
+  モックOIDCでログインできない。`ScenarioSeeder`実行時にMicrosoft EntraのTenant ID・Object IDを
+  持つ`ExternalIdentity`を`mock-oidc/server.js`の`mock-entra-admin`エントリに合わせて作成するので、
   シナリオ実行時は必ず一度 `ScenarioSeeder` を実行してから管理者ログインを試すこと。
 
 ## 3. 登場人物
 
 `ScenarioSeeder` が `mock-oidc/server.js` の追加ユーザー(mock-entra-user-004〜009)と
-同じ `entra_user_id`/emailで事前にユーザーを作成しロール・入社日を設定する。モックOIDCの
+同じTenant ID・Object IDの`ExternalIdentity`を持つユーザーを事前に作成し、グループ所属・
+RoleAssignment・入社日を設定する。モックOIDCの
 ログイン画面で該当ユーザーを選ぶと、初回ログイン処理ではなくこの事前設定済みユーザーとして
 ログインできる。
 
-| 役割 | 氏名 | メール | ロール | 用途 |
+| 役割 | 氏名 | メール | Role | 用途 |
 |---|---|---|---|---|
 | 打刻ユーザー | 高橋 健太 | kenta.takahashi@example.com | employee | 日次打刻で勤怠をつける社員 |
 | 月次入力ユーザー | 伊藤 舞 | mai.ito@example.com | employee | 打刻せず月次でまとめて日次実績を入力する社員 |
-| 承認者 | 渡辺 直樹 | naoki.watanabe@example.com | employee | 勤怠・有給・申請の承認者(都度指定) |
+| 承認者 | 渡辺 直樹 | naoki.watanabe@example.com | employee + approval.execute | 勤怠・有給・申請の承認者(都度指定) |
 | 経理担当者 | 小林 誠 | makoto.kobayashi@example.com | accounting_staff | 交通費等のバックオフィス処理 |
 | 総務担当者 | 中村 恵 | megumi.nakamura@example.com | general_affairs_staff | 名刺申請のバックオフィス処理 |
 | 人事担当者 | 加藤 由美 | yumi.kato@example.com | hr_staff | 入社日設定・有給付与・月次締め |
@@ -320,7 +320,7 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 5. **有給の自動失効警告・年5日取得義務警告バッチ**: `schedule:run` 経由のバッチ
    (`WarnExpiringPaidLeave`/`WarnFiveDayObligation`)を手動実行し、対象者に警告が
    飛ぶことを確認する(常駐workerではなくcron前提であることの確認も兼ねる)。
-6. **権限変更**: 一般社員から `hr_staff`/`admin` へロールを追加/剥奪した際、
+6. **権限変更**: ユーザーまたは所属グループのRoleAssignmentを追加・解除した際、
    即座に権限反映される(古いSanctumトークンのままでも新しい権限で403/200が
    切り替わる)ことを確認する(UC-M001)。
 7. **監査ログ**: 上記シナリオ全体を通した操作が `audit-log` 一覧・CSV出力に
@@ -328,8 +328,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 8. **勤怠CSV出力**: 締めた月の勤怠CSVが打刻ユーザー・月次入力ユーザー両方について
    正しく出力されるか(UC-E001)。
 9. **Entra ID初回ログイン(新入社員のオンボーディング)**: モックOIDCの未使用ユーザーで
-   初回ログインし、`employee`ロールが自動付与されること、その後管理者が入社日・
-   ロールを設定する一連の流れ(UC-001〜UC-M001)。
+   初回ログインし、既定グループ経由のFeature・Roleが有効になること、その後管理者が入社日・
+   所属・RoleAssignmentを設定する一連の流れ(UC-001〜UC-M001)。
 10. **同一申請への複数バックオフィス担当部署の混在**: 交通費と名刺を同時期に多数
     申請し、経理・総務それぞれの未担当一覧が正しくフィルタされているか
     (シナリオ4・5を並行して回すことで自然にカバーできる)。

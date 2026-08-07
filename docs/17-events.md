@@ -8,14 +8,27 @@
 - `user.logged_in`
 - `user.synced_from_ms365`
 - `user.onboarded_as_admin` (初回オンボーディング(UC-000)での管理者作成。payloadの
-  `auth_method`が`sso`(実際のEntra IDログイン結果で作成、entra_user_id設定済み)か
+  `auth_method`が`sso`(実際のEntra IDログイン結果で作成、ExternalIdentityリンク済み)か
   `local`(ローカルパスワードで作成)かを区別する)
-- `user.roles_changed` (UC-M001 権限を設定する)
-- `user.roles_migrated_from_legacy` (Seeder等で直接作成された既存ロール割り当ての移行時点スナップショット)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
   Microsoft 365アカウントを紐づける)
+- `external_identity.linked`
+- `external_identity.unlinked`
+- `user.field_authority_changed`
+- `group.created` / `group.updated` / `group.inactivated`
+- `group_type.created` / `group_type.updated` / `group_type.inactivated`
+- `membership.added` / `membership.removed` / `membership.primary_changed`
+- `membership_change_set.created` / `membership_change_set.scheduled` /
+  `membership_change_set.applied` / `membership_change_set.failed` /
+  `membership_change_set.cancelled`
+- `feature.assigned_to_group` / `feature.removed_from_group`
+- `user.feature_suspended` / `user.feature_suspension_removed`
+- `role.created` / `role.updated` / `role.inactivated`
+- `role.permissions_changed`
+- `role_assignment.created` / `role_assignment.updated` / `role_assignment.removed`
+- `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
 
 ## Workflow (汎用申請)
 
