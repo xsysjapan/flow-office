@@ -38,4 +38,12 @@ class SpecialLeaveUsage extends Model
     {
         return $this->belongsTo(SpecialLeaveGrant::class, 'special_leave_grant_id');
     }
+
+    /**
+     * @return BelongsTo<SpecialLeaveRequest, $this>
+     */
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(SpecialLeaveRequest::class, 'special_leave_request_id');
+    }
 }

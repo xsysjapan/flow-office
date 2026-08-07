@@ -32,6 +32,8 @@ use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
+use App\Models\SpecialLeaveRequestStatus;
+use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
@@ -185,7 +187,7 @@ class AttendanceController extends Controller
         );
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
             ->where('user_id', $targetUserId)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
@@ -606,7 +608,7 @@ class AttendanceController extends Controller
         $userId = $this->resolveViewableUserId($request, $data['user_id'] ?? null, [$yearMonth], '他の社員の月次勤怠を閲覧する権限がありません。');
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
             ->orderBy('work_date')
@@ -630,7 +632,42 @@ class AttendanceController extends Controller
             // 特別休暇の種類ごとの内訳(special_leave_type_id別)。上記totals内のspecial_leave_days/
             // special_leave_minutesはこの内訳の合計と一致する(MonthlyOvertimeCalculator参照)。
             'special_leave_breakdown' => app(MonthlyOvertimeCalculator::class)->calculateSpecialLeaveBreakdown($userId, $yearMonth),
+            // 付与必須の特別休暇で、承認済みにもかかわらず付与残数不足などでgrant消化へ確定
+            // できていないものを警告する。申請中(submitted)はWorkflow側の申請中数で別途扱う。
+            'special_leave_balance_warnings' => $this->specialLeaveBalanceWarnings($userId, $yearMonth),
         ];
+    }
+
+    /**
+     * @return list<array{special_leave_request_id: string, special_leave_type_id: int|null, special_leave_type_name: string|null, used_on: string|null, requested_days: float, used_minutes: int|null, message: string}>
+     */
+    private function specialLeaveBalanceWarnings(string $userId, string $yearMonth): array
+    {
+        return SpecialLeaveUsage::query()
+            ->where('user_id', $userId)
+            ->where('used_on', 'like', "{$yearMonth}%")
+            ->where('is_confirmed', false)
+            ->whereHas('request', fn ($query) => $query
+                ->where('status', SpecialLeaveRequestStatus::APPROVED)
+                ->whereHas('specialLeaveType', fn ($query) => $query->where('requires_grant', true)))
+            ->with('request.specialLeaveType')
+            ->orderBy('used_on')
+            ->get()
+            ->map(fn (SpecialLeaveUsage $usage) => [
+                'special_leave_request_id' => $usage->special_leave_request_id,
+                'special_leave_type_id' => $usage->request?->special_leave_type_id,
+                'special_leave_type_name' => $usage->request?->specialLeaveType?->name,
+                'used_on' => $usage->used_on?->toDateString(),
+                'requested_days' => (float) $usage->used_days,
+                'used_minutes' => $usage->used_minutes,
+                'message' => sprintf(
+                    '%s の%sは付与残数不足のため、承認済みですが特別休暇残数へ消化反映されていません。',
+                    $usage->used_on?->toDateString(),
+                    $usage->request?->specialLeaveType?->name ?? '特別休暇',
+                ),
+            ])
+            ->values()
+            ->all();
     }
 
     #[OA\Post(

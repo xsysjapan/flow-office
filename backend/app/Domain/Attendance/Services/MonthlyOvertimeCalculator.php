@@ -173,29 +173,40 @@ class MonthlyOvertimeCalculator
      * 合計は`AttendanceCalculator`が日次計算する`special_leave_days`/`special_leave_minutes`と
      * 一致する。SpecialLeaveUsage/SpecialLeaveGrant参照)。
      *
-     * @return list<array{special_leave_type_id: string, special_leave_type_name: string, days: float, minutes: int}>
+    * @return list<array{special_leave_type_id: int|null, special_leave_type_name: string|null, days: float, minutes: int}>
      */
     public function calculateSpecialLeaveBreakdown(string $userId, string $yearMonth): array
     {
         $usages = SpecialLeaveUsage::query()
             ->where('user_id', $userId)
             ->where('used_on', 'like', "{$yearMonth}%")
-            ->with('grant.specialLeaveType')
+            ->with(['grant.specialLeaveType', 'request.specialLeaveType'])
             ->get();
 
         return $usages
-            ->groupBy(fn (SpecialLeaveUsage $usage) => $usage->grant->special_leave_type_id)
+            ->filter(fn (SpecialLeaveUsage $usage) => $this->specialLeaveTypeId($usage) !== null)
+            ->groupBy(fn (SpecialLeaveUsage $usage) => $this->specialLeaveTypeId($usage))
             ->map(function ($usagesForType) {
-                $grant = $usagesForType->first()->grant;
+                $firstUsage = $usagesForType->first();
 
                 return [
-                    'special_leave_type_id' => $grant->special_leave_type_id,
-                    'special_leave_type_name' => $grant->specialLeaveType->name,
+                    'special_leave_type_id' => $this->specialLeaveTypeId($firstUsage),
+                    'special_leave_type_name' => $this->specialLeaveTypeName($firstUsage),
                     'days' => (float) $usagesForType->where('usage_type', '!=', PaidLeaveType::HOURLY)->sum('used_days'),
                     'minutes' => (int) $usagesForType->where('usage_type', PaidLeaveType::HOURLY)->sum('used_minutes'),
                 ];
             })
             ->values()
             ->all();
+    }
+
+    private function specialLeaveTypeId(SpecialLeaveUsage $usage): ?int
+    {
+        return $usage->grant?->special_leave_type_id ?? $usage->request?->special_leave_type_id;
+    }
+
+    private function specialLeaveTypeName(SpecialLeaveUsage $usage): ?string
+    {
+        return $usage->grant?->specialLeaveType?->name ?? $usage->request?->specialLeaveType?->name;
     }
 }
