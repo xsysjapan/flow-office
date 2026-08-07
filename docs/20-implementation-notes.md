@@ -17,3 +17,20 @@
 
 これらは全ドメインで共通の設計制約。新機能を追加する際は必ず見直すこと。
 コードレビュー・PRレビューでもこのチェックリストを使う。
+
+## 会社カレンダー・従業員予定拡張時の既存設計との整理(UC-C009〜UC-C013)
+
+会社カレンダー本体/年度の分離・祝日iCalendar同期・従業員予定の一括操作を追加する際は、
+新しいテナント概念や新規テーブルを安易に増やさず、既存資産を拡張する方針を優先する。
+
+- 単一テナント設計(`company_id`列は導入しない。複数拠点は`work_calendars`の複数レコードで
+  表現する)。
+- カレンダー本体と年度の分離は、新規テーブルを作らず既存`work_calendars`を本体として残し、
+  年度依存フィールドを`work_calendar_years`へ移す2階層に再設計する
+  (docs/16-database-schema.md参照)。
+- 祝日属性(外部由来の事実)と会社の勤務区分判断は別の列(`is_public_holiday`/
+  `schedule_state`)として持ち、同じ列に混在させない。
+- 従業員予定の個別上書きと一括操作は同じ`employee_shift_assignments`テーブルを使い、
+  `entry_type`/`source_type`/`bulk_operation_id`で由来を区別する(別テーブルに二重化しない)。
+- 履歴管理は既存`work_calendars`関連の実装(レガシー自前イベントソーシング、
+  `legacy_stored_events`)に揃え、新規spatie方式(`stored_events`)とは混在させない。

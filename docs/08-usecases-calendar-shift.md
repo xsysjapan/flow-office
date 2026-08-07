@@ -187,6 +187,108 @@ datetimeで保持することでUC-C004と同じ方法で扱う。勤務日の�
 社員個別の割当のみとする。データモデル(`employee_rotation_assignments`が社員単位で独立)は
 将来の班単位拡張を妨げない構造にしている。
 
+## UC-C009: 会社カレンダー本体とカレンダー年度を分離して管理する
+
+1. 管理者が会社カレンダー本体(`work_calendars`: 名称・週起算曜日・タイムゾーン・デフォルト
+   フラグ・祝日ソース参照などの継続設定)を作成する。本社・支店で祝日の扱いや週起算曜日が
+   異なる場合は本体を複数作る(単一組織前提のシステムであり、`company_id`のような
+   テナント列は導入しない)
+2. 本体配下にカレンダー年度(`work_calendar_years`: 年度・開始日・終了日・下書き/公開/廃止の
+   状態)を作成する。UC-C001手順1「年度を作成する」はこの本体+年度の2階層で行う
+3. 年度単位で会社カレンダー日(`work_calendar_days`)を登録する。年度は下書きのまま自由に
+   編集でき、公開(UC-C001手順5)で初めて対象勤務形態の従業員に適用される
+4. 既存年度を複製して翌年度を作成できる(曜日区分のみ引き継ぎ、祝日・会社休日は引き継がない)
+5. カレンダー年度を廃止・下書きへの差し戻しができる。ただし対象年度に締め済み月
+   (`attendance_months`承認済み以降)が1件でもある場合はどちらも行えない
+
+`work_styles.calendar_id`は年度ではなく本体を参照するため、年度が切り替わっても勤務形態側の
+再設定は不要になる。デフォルトカレンダー(`work_calendars.is_default`)は組織内に常に高々1件。
+
+- `GET/POST /api/work-calendars`、`POST /api/work-calendars/{id}/set-default`
+- `GET/POST /api/work-calendars/{id}/years`、`POST /api/work-calendar-years/{id}/duplicate`
+- `POST /api/work-calendar-years/{id}/publish`・`/unpublish`・`/archive`
+
+## UC-C010: 会社カレンダー日の祝日属性と勤務区分を分離して扱う
+
+1. 会社カレンダー日(`work_calendar_days`)は、祝日か否かという外部由来の事実
+   (`is_public_holiday`)と、勤務日にするか所定休日にするかという会社の判断
+   (`schedule_state`: `WORK`/`OFF`)を別の列として持つ
+2. 管理者が個別の日の`schedule_state`を編集する(変更理由の入力必須)。祝日出勤を会社の
+   既定にする場合は`is_public_holiday=true`のまま`schedule_state=WORK`にできる
+3. 会社カレンダー日の変更前に、その日を基準に生成済みの従業員予定への影響範囲(対象社員数・
+   件数)をプレビュー表示し、必要ならUC-C013の一括操作へ引き継ぐ
+4. 生成元(標準生成/祝日同期/手動変更)を新しい順に履歴表示できる
+
+廃止済み年度配下の会社カレンダー日は編集できない。
+
+- `PATCH /api/work-calendar-days/{id}`、`GET /api/work-calendar-days/{id}/impact`・`/sources`
+- `POST /api/work-calendar-days/{id}/revert`
+
+## UC-C011: 標準カレンダーを自動生成する(オンボーディング)
+
+1. 初回セットアップ時(会社カレンダー本体が1件も無い状態)、システムが会社カレンダー本体
+   (デフォルト)・当年度のカレンダー年度・全日分の会社カレンダー日(土日=所定休日、平日=
+   勤務日)を自動生成する。祝日ソースが未設定の場合は祝日反映をスキップする
+2. 生成された年度は下書き状態のまま作成する(自動生成が勝手に本番運用へ影響しないため)
+3. 管理者がオンボーディング画面でプレビュー→祝日ソース設定の案内→会社独自の休日追加→公開、
+   の順に進める。「後で設定する」で公開をスキップでき、その場合カレンダー基準の一括生成
+   (UC-C013)は未公開の間実行できない
+4. `POST /api/onboarding/calendar/generate-standard`は冪等で、既にデフォルトカレンダーが
+   存在する場合は何も生成しない。生成に失敗した場合は全体をロールバックする(本体だけが
+   残る部分適用状態を作らない)
+
+- `GET /api/onboarding/calendar-status`、`POST /api/onboarding/calendar/generate-standard`・
+  `/skip`
+
+## UC-C012: 祝日iCalendarソースを同期する
+
+1. 管理者が祝日iCalendarソース(`holiday_calendar_sources`: 名称・ics_url)を登録し、会社
+   カレンダー本体に紐づける(1本体につき1ソースまで)
+2. cronジョブまたは管理者の手動実行で同期する。ics_urlのVEVENTを`ics_uid`単位で
+   `holiday_calendar_events`に差分反映し、紐づく全カレンダー年度の`work_calendar_days`の
+   `is_public_holiday`・`public_holiday_name`を更新する
+3. 対象日の直近の生成元が「手動」の場合は自動上書きせず競合一覧に積み、管理者が日ごとに
+   「祝日区分を優先」か「会社の設定を維持」かを選んで解決する
+4. 取得・パース失敗時は`sync_status=failed`とし、`work_calendar_days`は一切変更しない
+   (部分適用を避ける)。同期実行ごとに、その実行が変更した日だけを同期前の状態へ取り消せる
+5. ソースを無効化すると以後の自動同期は停止するが、既に反映済みの祝日データは保持する
+
+同期は`ics_uid`単位で冪等であり、同一フィードを何度同期しても重複登録しない。
+
+- `POST /api/holiday-calendar-sources`、`POST /api/holiday-calendar-sources/{id}/sync`・
+  `/disable`
+- `GET /api/holiday-calendar-sources/{id}/sync-history`・`/conflicts`、
+  `POST /api/holiday-calendar-sources/{id}/conflicts/resolve`
+- `POST /api/holiday-calendar-sync-runs/{id}/revert`
+
+## UC-C013: 従業員予定を個別に上書き・複数社員分をまとめて変更する
+
+1. 管理者が対象社員・対象日を選び、従業員予定(`employee_shift_assignments`)の
+   `schedule_state`(`WORK`/`OFF`/`LEAVE`)を個別に上書きする(変更理由の入力必須)。
+   対象日に既に勤務実績がある場合は編集できない(UC-C006と同じガード)
+2. 所定休日への休日出勤の予定(`entry_type=HOLIDAY_WORK`)を登録でき、同時に振替休日
+   (`entry_type=SUBSTITUTE_HOLIDAY`)を指定できる
+3. 複数社員・複数日にまたがる変更は、一括操作(`calendar_bulk_operations`)としてプレビュー
+   →競合ポリシー選択→確定適用→(必要なら)取消、の順で行う。既存UC-C003(カレンダー基準の
+   一括生成)・UC-C008(ローテーション一括生成)は、この一括操作の仕組み(それぞれ
+   `operation_type=calendar_apply`/`rotation_generate`)を内部的に経由する形に統合するが、
+   UC-C003・UC-C008自体の本文・手順は変更しない
+4. プレビューは何も保存しない「暫定予定」を返すだけで、確定適用して初めて
+   `employee_shift_assignments`に反映される。競合ポリシーの既定(`skip_edited`)は
+   個別上書き済みの日をスキップし、どのポリシーでも実績あり・締め済みの日は常にスキップする
+5. 確定適用後は`bulk_operation_id`から生成された従業員予定を逆引きできる。取消は
+   `previous_snapshot`の内容へ戻すが、取消時点で実績・締め済みになった対象は取消対象から
+   除外し、除外件数を結果に含める(全体を失敗にはしない)
+6. 対象日について従業員予定が`UNASSIGNED`(未割当)のままの場合、その日は会社カレンダー日の
+   `schedule_state`をそのまま継承した扱いになる(明示的なレコードが無いことと同義ではない)
+7. 従業員本人は公開済み(`is_published=true`)の予定のみ閲覧できる。公開・公開取消は既存
+   UC-C004手順4〜6を一般化した操作として扱う
+
+- `GET/PATCH /api/employee-shift-assignments`、`POST /api/employee-shift-assignments/holiday-work`
+- `POST /api/employee-shift-assignments/publish`・`/unpublish`
+- `POST /api/calendar-bulk-operations/preview`、`POST /api/calendar-bulk-operations`
+- `GET /api/calendar-bulk-operations`・`/{id}`、`POST /api/calendar-bulk-operations/{id}/revert`
+
 ## 注意点
 
 - 法令・就業規則・36協定・変形労働時間制の運用は会社ごとに異なるため、法定休日/所定休日の
@@ -202,3 +304,63 @@ datetimeで保持することでUC-C004と同じ方法で扱う。勤務日の�
 - UC-C005の法定休日要件チェックは、通常勤務のシフト割当(Phase 4)・3交代制のシフトパターン
   割当(Phase 6、UC-C004)のどちらの`employee_shift_assignments`にも共通して適用される
   ([19-implementation-phases.md](./19-implementation-phases.md) 参照)。
+
+### 会社カレンダー・従業員予定のバリデーション・状態遷移・エラー処理
+
+UC-C009〜UC-C013(会社カレンダー本体・年度、会社カレンダー日、祝日同期、従業員予定、
+一括操作)に共通する業務ルール・状態遷移・エラーケースの要点。
+
+**バリデーション**
+
+- 会社カレンダー本体名は組織内で一意。カレンダー年度は同一本体内で年度重複不可、開始日は
+  終了日より前。デフォルトカレンダーは常に高々1件。
+- 会社カレンダー日の`schedule_state`は`WORK`/`OFF`のいずれか必須(未設定を許容しない)。
+  祝日(`is_public_holiday=true`)でも`schedule_state=WORK`にできる(祝日出勤運用の許容)。
+- 従業員予定は、勤務実績がある日・締め済み以降の月は`schedule_state`・`entry_type`・時刻を
+  変更できない(UC-C006と同じ「事後変更で残業時間を消去することを防ぐ」ガード)。
+- `HOLIDAY_WORK`(休日出勤予定)は対象日が会社カレンダー上「所定休日」でなければ登録
+  できない。`SUBSTITUTE_HOLIDAY`(振替休日予定)は対応する休日出勤予定なしに単独登録
+  できない。
+- 会社カレンダー日・従業員予定・一括操作のいずれも、変更理由の入力を必須とする。
+- 一括操作は、`conflict_policy`によらず勤務実績がある日・締め済み以降の日を常に保護
+  (スキップ)する。個別上書き済みの日を上書きするかどうかのみポリシーで変わる。
+
+**状態遷移**
+
+- カレンダー年度: `draft → published → archived`(`archived`からの復帰は無い)。
+  `published → draft`(締め済み月が無い場合のみ、下書きに戻せる)。
+- 会社カレンダー日の`schedule_state`は`WORK`⇔`OFF`を双方向に遷移できるが、`archived`年度
+  配下では遷移不可。
+- 従業員予定の`schedule_state`は`UNASSIGNED → WORK/OFF/LEAVE`(個別上書き・一括操作)、
+  実績・締めが無ければ再編集可、実績・締めが無い場合に限り取消で戻せる。`is_published`は
+  `schedule_state`とは独立した軸(下書き⇔公開済み)。
+- 一括操作(`calendar_bulk_operations.status`)は`applied → reverted`のみを許容する終端型の
+  遷移(プレビューは永続化しないため状態を持たない)。
+- 祝日ソースの`sync_status`は`pending/synced ⇔ failed`、無効化は`sync_status`とは独立した
+  フラグとして扱う(直近の同期結果を保持したまま停止する)。
+- 会社カレンダー日区分と従業員予定の関係は次の優先順位で解決する: (1) 従業員予定が
+  `UNASSIGNED`以外ならその`schedule_state`を使う、(2) `UNASSIGNED`または未作成なら会社
+  カレンダー日の`schedule_state`を使う、(3) 勤務形態に`calendar_id`が無い場合は従業員予定が
+  必須の入力となり、`UNASSIGNED`のままの日は「予定未確定」として警告対象にする。
+
+**主なエラーケース**(`snake_case`のエラーコード)
+
+- `calendar_name_duplicate` / `calendar_year_duplicate` / `calendar_year_invalid_range` /
+  `calendar_year_archived_readonly` / `calendar_year_has_closed_months`: カレンダー本体・
+  年度の重複・範囲・廃止済み書き込み・締め済み月ありでの下書き化/廃止の拒否。
+- `calendar_day_reason_required` / `calendar_day_archived_year`: 会社カレンダー日編集時の
+  理由未入力・廃止済み年度への書き込み。
+- `holiday_source_fetch_failed` / `holiday_source_parse_failed` /
+  `holiday_sync_conflict_unresolved`: 祝日同期の取得・パース失敗、未解決競合が残る状態での
+  警告。
+- `assignment_reason_required` / `assignment_locked_by_actual` /
+  `assignment_locked_by_closing` / `assignment_holiday_work_requires_off_day` /
+  `assignment_substitute_requires_holiday_work`: 従業員予定編集時の理由未入力・実績ロック・
+  締めロック・休日出勤/振替休日の前提条件違反。
+- `bulk_operation_reason_required` / `bulk_operation_empty_target` /
+  `bulk_operation_calendar_not_published` / `bulk_operation_rotation_not_assigned` /
+  `bulk_operation_not_revertible` / `bulk_operation_partial_revert`: 一括操作の理由未入力・
+  対象0件・未公開カレンダー参照・ローテーション未割当・取消不可・部分取消(警告付き成功)。
+- `onboarding_already_completed` / `onboarding_calendar_unpublished_blocks_generation`:
+  標準カレンダー自動生成の冪等応答、未公開カレンダーでの一括生成拒否。
+- 共通: `forbidden`(権限マトリクス違反)、`validation_failed`(汎用バリデーション)。

@@ -136,28 +136,125 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - completed_at
 - created_at / updated_at
 
-## work_calendars
+## work_calendars(カレンダー本体)
+
+年度に依存しない継続設定のみを持つ。年度依存フィールド(`fiscal_year`/`starts_on`/`ends_on`)
+は`work_calendar_years`が持つ(旧: `work_calendars`が直接保持していたが分離した)。本社・
+支店で祝日の扱いや週起算曜日が異なる場合は本体を複数作る(単一組織前提のシステムであり、
+`company_id`のようなテナント列は導入しない)。
 
 - id
 - name
-- fiscal_year
-- starts_on
-- ends_on
 - week_starts_on
-- status
+- timezone(既定`Asia/Tokyo`)
+- is_default(組織の既定カレンダーかどうか。常に高々1件のみtrue)
+- holiday_calendar_source_id(nullable。`holiday_calendar_sources`への参照。未設定なら祝日
+  自動同期を行わない)
+- status(本体としての有効/廃止)
 - created_at / updated_at
+
+`work_styles.calendar_id`は本テーブル(本体)を参照する。年度が切り替わっても勤務形態側の
+再設定は不要。
+
+## work_calendar_years(カレンダー年度)
+
+`work_calendars`1件に対する年度ごとの版。
+
+- id
+- work_calendar_id
+- fiscal_year
+- starts_on / ends_on
+- status(`draft` / `published` / `archived`)
+- generated_from(`manual` / `standard_template`。オンボーディングでの標準カレンダー自動
+  生成、UC-C011参照)
+- published_at / published_by_user_id
+- created_at / updated_at
+
+`work_calendar_id` + `fiscal_year`のunique制約(同一本体で年度重複不可)。
 
 ## work_calendar_days
 
+祝日属性(外部由来の事実)と会社の勤務区分判断(会社の意思決定)を分離して持つ。
+
 - id
-- calendar_id
+- calendar_id(`work_calendar_years.id`への参照)
 - date
-- day_type
-- is_working_day
-- is_legal_holiday
-- is_company_holiday
+- is_public_holiday(祝日か否か。外部祝日ソースまたは手動登録による事実情報。会社の勤務
+  区分とは独立)
+- public_holiday_name(nullable。祝日名)
+- schedule_state(`WORK`=勤務日 / `OFF`=所定休日。会社としての勤務区分判断。祝日=自動的に
+  `OFF`ではなく上書き可能)
+- is_legal_holiday(法定休日の事前設定。UC-C005が参照)
 - note
 - created_at / updated_at
+
+旧`day_type`/`is_working_day`/`is_company_holiday`は`schedule_state`+`is_public_holiday`の
+組み合わせから導出できるため廃止し、日次勤怠計算等の参照箇所は`schedule_state`ベースの
+判定に置き換える(移行は置き換え・回帰確認後に別マイグレーションで旧カラムを削除する
+2段階で行う)。
+
+## work_calendar_day_sources(会社カレンダー日の生成元)
+
+- id
+- work_calendar_day_id
+- source_type(`standard_template` / `holiday_sync` / `manual`)
+- source_ref(生成元の参照情報。例: `holiday_calendar_events.id`)
+- applied_at
+- applied_by_user_id(nullable。自動処理の場合はnull)
+- created_at
+
+1つの会社カレンダー日に複数の生成元履歴が残りうる(標準生成→祝日同期→手動変更、等)。
+最新の1件がその日の生成元として画面に表示される。
+
+## holiday_calendar_sources(祝日iCalendarソース)
+
+- id
+- name
+- ics_url
+- sync_status(`pending` / `synced` / `failed`)
+- last_synced_at
+- last_error
+- created_at / updated_at
+
+1つの会社カレンダー本体には1つの祝日ソースまで紐づけられる
+(`work_calendars.holiday_calendar_source_id`)。
+
+## holiday_calendar_events(祝日iCalendar同期結果)
+
+- id
+- holiday_calendar_source_id
+- date
+- name
+- ics_uid(iCalendarのUID。冪等な再同期のためのキー)
+- synced_at
+- created_at / updated_at
+
+## calendar_bulk_operations(複数従業員予定の一括操作)
+
+- id
+- operation_type(`calendar_apply`=会社カレンダー基準の一括適用〔UC-C003相当〕 /
+  `rotation_generate`=ローテーション一括生成〔UC-C008相当〕 / `bulk_edit`=対象社員・日を
+  任意指定する一括編集)
+- target_scope(対象範囲〔部署・従業員リスト・対象期間〕をJSONで保持)
+- conflict_policy(`skip_edited`=個別上書き済みはスキップ〔既定〕 / `skip_locked`=個別上書き
+  済みは上書きする / `overwrite_all`=個別上書きも含め上書きする。いずれのポリシーでも
+  実績あり・締め済みの日は常にスキップする)
+- status(`applied` / `reverted`。プレビューは永続化しないため状態を持たない)
+- requested_by_user_id
+- applied_at / reverted_at
+- reason(変更理由。必須)
+- created_at / updated_at
+
+## calendar_bulk_operation_targets(一括操作の対象明細)
+
+- id
+- calendar_bulk_operation_id
+- user_id
+- work_date
+- employee_shift_assignment_id(適用後に生成・更新された`employee_shift_assignments.id`)
+- result(`applied` / `skipped_edited` / `skipped_locked` / `failed`)
+- previous_snapshot(上書き前の従業員予定の内容。JSON。取消時にこの内容へ戻す)
+- created_at
 
 ## employment_categories
 
@@ -325,6 +422,19 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
 - is_manually_overridden (UC-C004のシフトパターン個別割当を経由した日はtrue。ローテーション
   からの一括生成(UC-C008)は、既定(`skip_edited`)ではこのフラグがtrueの日を自動上書き
   しない。ローテーション生成自体はfalseのまま書き込む)
+- schedule_state(`UNASSIGNED`=未割当 / `WORK`=勤務 / `OFF`=休み / `LEAVE`=休暇。固定労働制
+  では会社カレンダー日からの例外〔`UNASSIGNED`以外の行〕のみを保持し、シフト制では該当日
+  ごとに主データとして保持する)
+- entry_type(`OVERRIDE`=固定労働制の会社カレンダーからの個別上書き / `SHIFT_ASSIGNMENT`=
+  シフト制の予定割当〔UC-C004〕 / `HOLIDAY_WORK`=休日出勤の予定 / `SUBSTITUTE_HOLIDAY`=
+  振替休日の予定 / `MANUAL_ADJUSTMENT`=UC-C006の所定労働時間個別編集等)
+- source_type(`calendar_generated`=UC-C003相当のカレンダー基準一括生成 /
+  `rotation_generated`=UC-C008相当のローテーション一括生成 / `bulk_operation`=一括操作経由 /
+  `manual`=個別編集)
+- bulk_operation_id(nullable。`calendar_bulk_operations.id`。一括操作由来の行を特定し
+  取消できるようにする)
+- revision(同一`user_id`+`work_date`に対する編集の連番。1始まり。実体の履歴は
+  `legacy_stored_events`が正であり、この列は最新版の連番を素早く参照するための非正規化列)
 - created_at / updated_at
 
 `is_legal_holiday`は「決める方式」(`work_styles.legal_holiday_rule`が`weekly`/
@@ -883,7 +993,13 @@ docs/20-implementation-notes.md と同様の注記)。
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `work_calendars`, `work_calendar_days`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
+| マスタ | `request_types`, `work_calendars`, `work_calendar_years`, `work_calendar_days`, `work_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_shift_assignments`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+
+会社カレンダー・従業員予定関連(`work_calendars`/`work_calendar_years`/`work_calendar_days`/
+`employee_shift_assignments`/`calendar_bulk_operations`等)の状態変更は、既存の
+`work_calendars`関連実装(`WorkCalendarAggregate`)に揃え、レガシー自前イベントソーシング
+(`legacy_stored_events`)で記録する。新規spatie方式(`stored_events`)は使わない
+(docs/29の全ドメイン移行完了後にまとめて寄せる)。

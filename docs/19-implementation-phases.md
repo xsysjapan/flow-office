@@ -41,6 +41,20 @@
 8. 承認
 9. 締め処理
 
+### Phase 4追加: 会社カレンダー・従業員予定の拡張(UC-C009〜UC-C013)
+
+1. `work_calendars`(本体)と`work_calendar_years`(年度)の分離、`work_calendar_days`への
+   `schedule_state`/`is_public_holiday`の追加(既存`day_type`/`is_working_day`/
+   `is_company_holiday`からの移行)
+2. `employee_shift_assignments`への`schedule_state`/`entry_type`/`source_type`/
+   `bulk_operation_id`/`revision`の追加
+3. 祝日iCalendar同期(`holiday_calendar_sources`/`holiday_calendar_events`、cron駆動)
+4. 複数従業員予定の一括操作(`calendar_bulk_operations`/`calendar_bulk_operation_targets`、
+   プレビュー→確定→取消)への既存UC-C003・UC-C008の一括生成ロジックの統合
+5. オンボーディング時の標準カレンダー自動生成
+6. 旧カラム(`day_type`/`is_working_day`/`is_company_holiday`)の削除は、置き換え後の回帰
+   確認が完了してから別マイグレーションで行う
+
 ## Phase 5: 有給
 
 1. 有給付与ルール
