@@ -30,7 +30,7 @@ Projection は画面表示用の派生データであり、再生成可能なも
 
 勤怠では以下を正とする。
 
-- 勤務予定: `employee_shift_assignments`
+- 勤務予定: `employee_calendar_entries`
 - 勤務実績: `attendance_days` / `attendance_breaks`
 - 有給付与: `paid_leave_grants`
 - イベント履歴: `stored_events`

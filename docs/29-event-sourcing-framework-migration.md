@@ -19,8 +19,8 @@ Projector経由で、他は CommandHandler が正データのEloquentモデル�
 
 `attachment, device, device_admin_session, authentication_key, application_integration,
 backoffice_task, workflow_request, notification, user, attendance_day, attendance_punch,
-attendance_month, work_calendar, work_calendar_day, work_style, shift_pattern,
-employee_shift_assignment, rotation_pattern, employee_rotation_assignment,
+attendance_month, company_calendar, company_calendar_day, work_style, shift_pattern,
+employee_calendar_entry, rotation_pattern, employee_rotation_assignment,
 user_work_style_monthly_assignment, legal_holiday_designation, paid_leave_request,
 paid_leave_grant, special_leave_request, special_leave_grant, export`
 
@@ -467,8 +467,8 @@ FK・Sanctum認証・フロントエンドのユーザーID表示すべてに波
 
 - **UUID化した11テーブル**(いずれもフォローアップコマンドが自分自身のidを再度対象にする、
   という既存の判定基準を満たす真の集約): `attendance_days` / `attendance_punches` /
-  `attendance_months` / `work_calendars` / `work_styles` / `shift_patterns` /
-  `employee_shift_assignments` / `rotation_patterns` / `employee_rotation_assignments` /
+  `attendance_months` / `company_calendars` / `work_styles` / `shift_patterns` /
+  `employee_calendar_entries` / `rotation_patterns` / `employee_rotation_assignments` /
   `user_work_style_monthly_assignments` / `legal_holiday_designations`。
   対応する全FK列(他ドメインの`paid_leave_usages.attendance_day_id`・
   `special_leave_usages.attendance_day_id`・`paid_leave_grant_rules.work_style_id`・
@@ -477,12 +477,12 @@ FK・Sanctum認証・フロントエンドのユーザーID表示すべてに波
 - **UUID化しなかったもの**(親から一括置換される子データ、またはProjection):
   `attendance_daily_calculations`(Projection。`attendance_day_id`列自体はUUID化)、
   `attendance_breaks`・`attendance_leave_segments`(`attendance_days`の子データ)、
-  `work_calendar_days`(`work_calendars`の子データ)、`rotation_pattern_items`
+  `company_calendar_days`(`company_calendars`の子データ)、`rotation_pattern_items`
   (`rotation_patterns`の子データ)。いずれもこれらの行自身のidへフォローアップコマンドが
   発行されることはないため、Projectorが親集約のイベントから都度全件再構築する
   (`attendance_breaks`/`attendance_leave_segments`はこれ以前から同じ扱いだった)。
-- **8つの集約**: `AttendanceDay` / `AttendancePunch` / `AttendanceMonth` / `WorkCalendar` /
-  `WorkStyle` / `ShiftPattern` / `EmployeeShiftAssignment` / `RotationPattern` /
+- **8つの集約**: `AttendanceDay` / `AttendancePunch` / `AttendanceMonth` / `CompanyCalendar` /
+  `WorkStyle` / `ShiftPattern` / `EmployeeCalendarEntry` / `RotationPattern` /
   `EmployeeRotationAssignment` / `UserWorkStyleMonthlyAssignment` /
   `LegalHolidayDesignation`(数え方によっては11集約)。それぞれ`app/Domain/Attendance/
   Aggregates/`・`app/Domain/Attendance/Projectors/`に1対1で対応するクラスを新設し、

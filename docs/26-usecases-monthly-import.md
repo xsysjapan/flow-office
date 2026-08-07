@@ -36,7 +36,7 @@ backend/がこの機能のために提供するのは次の2つだけで、専�
   休暇・欠勤)。
 
 そのため作業報告書の値は月次勤怠の**候補**として扱い、既存の打刻(`attendance_punches`)・
-勤務予定(`employee_shift_assignments`)・休暇情報(`paid_leave_requests`等)と必ず照合する。
+勤務予定(`employee_calendar_entries`)・休暇情報(`paid_leave_requests`等)と必ず照合する。
 
 ## UC-R001: 作業報告書から月次勤怠下書きを作成する
 

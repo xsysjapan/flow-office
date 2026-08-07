@@ -6,7 +6,7 @@
 - Workflow
 - BackOffice
 - Attendance
-- WorkCalendar
+- CompanyCalendar
 - Shift
 - PaidLeave
 - Attachment

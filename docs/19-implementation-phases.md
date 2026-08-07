@@ -41,18 +41,32 @@
 8. 承認
 9. 締め処理
 
-### Phase 4追加: 会社カレンダー・従業員予定の拡張(UC-C009〜UC-C013)
+### Phase 4追加: 会社カレンダー・従業員予定の拡張(UC-C009〜UC-C014)
 
-1. `work_calendars`(本体)と`work_calendar_years`(年度)の分離、`work_calendar_days`への
+1. `company_calendars`(本体)と`company_calendar_years`(年度)の分離、`company_calendar_days`への
    `schedule_state`/`is_public_holiday`の追加(既存`day_type`/`is_working_day`/
-   `is_company_holiday`からの移行)
-2. `employee_shift_assignments`への`schedule_state`/`entry_type`/`source_type`/
-   `bulk_operation_id`/`revision`の追加
+   `is_company_holiday`からの移行)。本体に`fiscal_year_start_month`/`fiscal_year_start_day`
+   (既定4/1)を追加し、年度生成時にこの設定から`starts_on`/`ends_on`を計算して確定値として
+   保存する(本体側の設定変更は既存年度の`starts_on`/`ends_on`に遡って影響しない)
+2. `employee_calendar_entries`への`schedule_state`/`entry_type`/`source_type`/
+   `bulk_operation_id`/`revision`の追加。旧`day_type`/`is_working_day`/`is_company_holiday`は
+   `schedule_state`から導出可能なため廃止対象とする(`company_calendar_days`の旧カラムと同様、
+   置き換え・回帰確認後に別マイグレーションで削除する2段階移行)
 3. 祝日iCalendar同期(`holiday_calendar_sources`/`holiday_calendar_events`、cron駆動)
 4. 複数従業員予定の一括操作(`calendar_bulk_operations`/`calendar_bulk_operation_targets`、
-   プレビュー→確定→取消)への既存UC-C003・UC-C008の一括生成ロジックの統合
-5. オンボーディング時の標準カレンダー自動生成
-6. 旧カラム(`day_type`/`is_working_day`/`is_company_holiday`)の削除は、置き換え後の回帰
+   プレビュー→確定→取消)への既存UC-C003・UC-C008の一括生成ロジックの統合。
+   `conflict_policy`は`skip_existing`(既定)/`overwrite`/`fail_on_conflict`の3択、
+   `calendar_bulk_operation_targets.result`は`applied`/`skipped_existing`/`failed`の3値とする
+5. カレンダー年度の定期バッチ生成(UC-C014)。既存のcron前提のスケジューラ(Phase 1・
+   祝日iCalendar同期と同じ仕組み)に日次ジョブを追加し、`company_calendars`ごとに
+   年度の存在確認→無ければ現在年度・次年度を`draft`生成→既存年度が今日から6か月以内に
+   終了し次年度が無ければ次年度を`draft`生成、をべき等に実行する。オンボーディングの
+   標準カレンダー自動生成(UC-C011)は、この定期バッチと同じ生成ロジックをオンデマンドで
+   1回実行する形に統合し、生成ロジックを入口ごとに複製しない
+6. 対象年月の年度が未生成の読み取り要求に対する暫定計算フォールバック
+   (レスポンスに`provisional: true`を含める。`company_calendar_years`/`company_calendar_days`
+   には書き込まない。UC-C014手順5参照)
+7. 旧カラム(`day_type`/`is_working_day`/`is_company_holiday`)の削除は、置き換え後の回帰
    確認が完了してから別マイグレーションで行う
 
 ## Phase 5: 有給
@@ -93,7 +107,7 @@ Phase 4で実装済みのロジックをそのまま利用する(シフトパタ
 2. 社員ごとのローテーション基準割当(`employee_rotation_assignments`)
 3. カレンダープレビュー(`POST /rotation-patterns/{id}/preview`、永続化しない)
 4. ローテーションからの月間シフト自動生成(`GenerateRotationShiftAssignments`)
-5. 個別上書きと生成元の区別(`employee_shift_assignments.is_manually_overridden`)、
+5. 個別上書きと生成元の区別(`employee_calendar_entries.is_manually_overridden`)、
    再生成時の「未編集日のみ再生成(既定)」「個別上書きも含めてすべて再生成」の選択
 6. 実績のある日・締め済みの日は両モードとも自動上書きしない安全ガード
 

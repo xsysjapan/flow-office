@@ -33,19 +33,25 @@
 - `backoffice_task.status_changed`
 - `backoffice_task.completed`
 
-## WorkCalendar / Shift
+## CompanyCalendar / Shift
 
-- `work_calendar.created` (会社カレンダー本体の作成)
-- `work_calendar.default_changed` (デフォルトカレンダーの切り替え。既存デフォルトの自動解除を
+- `company_calendar.created` (会社カレンダー本体の作成)
+- `company_calendar.default_changed` (デフォルトカレンダーの切り替え。既存デフォルトの自動解除を
   含む)
-- `work_calendar_year.created` (カレンダー年度の作成。下書き)
-- `work_calendar_year.duplicated` (既存年度から翌年度への複製)
-- `work_calendar.published` (カレンダー年度の公開。旧: 年度と本体が未分離だった頃の名残の
+- `company_calendar.fiscal_year_settings_changed` (本体の`fiscal_year_start_month`/
+  `fiscal_year_start_day`の変更。既に生成済みの`company_calendar_years`の`starts_on`/
+  `ends_on`には影響せず、以後生成される年度にのみ反映される)
+- `company_calendar_year.created` (カレンダー年度の作成。下書き)
+- `company_calendar_year.batch_generated` (定期バッチ〔UC-C014〕によるカレンダー年度の生成。
+  `company_calendar_year.created`と同時に発生し、バッチ起因であることをUC-C011の即時生成と
+  区別するための印として記録する)
+- `company_calendar_year.duplicated` (既存年度から翌年度への複製)
+- `company_calendar.published` (カレンダー年度の公開。旧: 年度と本体が未分離だった頃の名残の
   イベント名だが互換のため維持する)
-- `work_calendar_year.unpublished` (公開済み年度を下書きに戻す。締め済み月が無い場合のみ)
-- `work_calendar_year.archived` (カレンダー年度の廃止)
-- `work_calendar_day.updated` (会社カレンダー日の`schedule_state`個別編集)
-- `work_calendar_day.reverted` (会社カレンダー日の個別編集の取消)
+- `company_calendar_year.unpublished` (公開済み年度を下書きに戻す。締め済み月が無い場合のみ)
+- `company_calendar_year.archived` (カレンダー年度の廃止)
+- `company_calendar_day.updated` (会社カレンダー日の`schedule_state`個別編集)
+- `company_calendar_day.reverted` (会社カレンダー日の個別編集の取消)
 - `holiday_calendar_source.registered` (祝日iCalendarソースの登録)
 - `holiday_calendar_source.synced` (祝日iCalendar同期の実行。追加/更新/削除件数を含む)
 - `holiday_calendar_source.sync_reverted` (同期実行1回分の取消)
@@ -60,13 +66,13 @@
 - `work_style.updated` (勤務形態の設定内容の変更。初回オンボーディングで作成された
   標準の勤務形態(system_generated=true)も対象。code・is_default・system_generatedは
   このイベントでは変更しない)
-- `employee_shift.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
+- `employee_calendar_entry.assigned` (UC-C003のカレンダー基準一括生成、UC-C004のシフトパターン
   日別割当、UC-C008のローテーションからの一括生成のいずれからも発生する)
-- `employee_shift.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
-- `employee_shift.published` (UC-C004 手順6: 3交代制シフト表を公開する)
-- `employee_shift.unpublished` (UC-C013: 従業員予定の公開を取り消して下書きに戻す。対象日に
+- `employee_calendar_entry.plan_changed` (1か月単位変形労働時間制の所定労働時間の事後編集)
+- `employee_calendar_entry.published` (UC-C004 手順6: 3交代制シフト表を公開する)
+- `employee_calendar_entry.unpublished` (UC-C013: 従業員予定の公開を取り消して下書きに戻す。対象日に
   勤務実績が無い場合のみ)
-- `employee_shift.overridden` (UC-C013: 従業員予定を会社カレンダー・ローテーション等の自動
+- `employee_calendar_entry.overridden` (UC-C013: 従業員予定を会社カレンダー・ローテーション等の自動
   生成結果から個別に上書きする。休日出勤〔`HOLIDAY_WORK`〕・振替休日〔`SUBSTITUTE_HOLIDAY`〕
   の登録も同イベントの`entry_type`で区別する)
 - `shift_pattern.created`

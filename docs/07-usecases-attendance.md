@@ -78,7 +78,7 @@ Handler側で行い、打刻自体は必ず成功させるUC-A012の原則とは
 1. 打刻(`attendance_punches`)があれば、その内容を働き方(`work_styles.rounding_unit_minutes`。
    5/10/15/30分のいずれか)の丸め単位・丸め方向(`work_styles.rounding_mode`。四捨五入/
    勤務時間が短くなる方向/勤務時間が長くなる方向)で丸めて反映する。
-2. 打刻が無く勤務予定(`employee_shift_assignments`)があれば、その予定(休憩を含む)を表示する。
+2. 打刻が無く勤務予定(`employee_calendar_entries`)があれば、その予定(休憩を含む)を表示する。
 3. 勤務予定も無ければ、その月に割り当てられた働き方 → 会社のデフォルト働き方の標準時刻・
    標準休憩(システムの初期設定)を表示する。
 
@@ -106,7 +106,7 @@ Handler側で行い、打刻自体は必ず成功させるUC-A012の原則とは
 1日の中に複数の勤怠区分が混在しうる(例: 9:00〜15:00は勤務、15:00〜18:00は時間単位有給)。
 このため日次勤怠は「1日につき1つの区分」では管理せず、以下の3つを分離して持つ。
 
-1. **勤務予定**(`employee_shift_assignments.planned_start_at`/`planned_end_at`): 本来
+1. **勤務予定**(`employee_calendar_entries.planned_start_at`/`planned_end_at`): 本来
    勤務する予定だった時間。
 2. **勤務実績**(`attendance_days.actual_start_at`/`actual_end_at`): 実際に勤務した時間。
 3. **不就労時間の処理区分**: 勤務予定のうち勤務しなかった時間を、どの制度で処理したか。
@@ -173,7 +173,7 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 `attendance_months`を作成する。
 
 月内の日次勤怠一覧には、出勤日の実績(`attendance_days`)だけでなく、勤務予定上の休日
-(`employee_shift_assignments.is_working_day=false`)も表示し、レビュー対象に含める。休日は
+(`employee_calendar_entries.is_working_day=false`)も表示し、レビュー対象に含める。休日は
 実績が無いため`attendance_days`の行を作らず、勤務予定自体が確定情報として扱われる。
 
 管理者は自分以外の社員の月次勤怠も`user_id`を指定して参照できる(`GET /attendance/months/{yearMonth}`)。
@@ -185,7 +185,7 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 1. 社員が月次勤怠を確認する
 2. エラーがないことを確認する
 3. 対象月内の全日について、実績(`attendance_days`)または勤務予定上の休日
-   (`employee_shift_assignments.is_working_day=false`、シフト未確定の場合は法定休日
+   (`employee_calendar_entries.is_working_day=false`、シフト未確定の場合は法定休日
    「決めない方式」の指定含む)のいずれかで状態が確定していることを検証する。どちらも
    無い日(勤務予定が存在しない、実績も無い日)が1日でもある場合は提出を拒否し
    (`DAY_STATUS_UNCONFIRMED`エラー)、日次編集(UC-A005)またはシフト編集で確定させるよう促す
@@ -419,10 +419,10 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 `attendance_days.day_classification`は、その勤務日が`working_day`(労働日)/
 `prescribed_holiday`(所定休日)/`legal_holiday`(法定休日)のいずれかを表す派生列である。
 `AttendanceCalculator`が日次計算時に`LegalHolidayResolver`による法定休日判定・
-`employee_shift_assignments.is_company_holiday`から算出し、`attendance_day.calculated`
+`employee_calendar_entries.is_company_holiday`から算出し、`attendance_day.calculated`
 イベントのpayloadに含めて`AttendanceDailyCalculationProjector`が保存し直す(他の集計値と同様、
 実績が再編集され日次計算が再実行されるたびに最新化される派生データであり、手で書き換えない)。
-`employee_shift_assignments.day_type`(weekday/legal_holiday/company_holiday/
+`employee_calendar_entries.day_type`(weekday/legal_holiday/company_holiday/
 special_working_day)とは別に、attendance_days向けに3値へ簡略化したものであり、値そのものは
 時間計算(所定労働・残業・深夜・休日労働等)には影響しない表示・参照用の分類情報である。
 
@@ -532,7 +532,7 @@ special_working_day)とは別に、attendance_days向けに3値へ簡略化し�
 
 ## データの正 (再掲)
 
-- 勤務予定: `employee_shift_assignments`
+- 勤務予定: `employee_calendar_entries`
 - 勤務実績: `attendance_days` / `attendance_breaks`
 - 集計結果: `attendance_daily_calculations` (日次) / `attendance_months` (月次スナップショット)
 - 打刻ログ (参考情報、正ではない): `attendance_punches`

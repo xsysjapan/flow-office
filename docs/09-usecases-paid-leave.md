@@ -40,7 +40,7 @@
 4. 継続勤務期間に応じた付与日数は `paid_leave_grant_rule_steps` から、条件を満たす最大の
    `continuous_service_months` の行を採用する。
 5. 出勤率(`min_attendance_rate`)は、直近 `grant_cycle_months` か月間の
-   `employee_shift_assignments`(勤務予定日)を分母、`attendance_days` が退勤済みまたは
+   `employee_calendar_entries`(勤務予定日)を分母、`attendance_days` が退勤済みまたは
    有給消化済み(`work_type` が `paid_leave_` で始まる)の日を分子として計算する
    (有給取得日は出勤したものとして扱う)。期間中に勤務予定日が1件も無い場合は判定不能として
    付与しない。
@@ -66,7 +66,7 @@
 
 - 全休: 1.0日
 - 午前半休・午後半休: 0.5日
-- 時間休: 取得時間 ÷ 対象日の所定労働時間(`employee_shift_assignments.work_style.prescribed_daily_minutes`)
+- 時間休: 取得時間 ÷ 対象日の所定労働時間(`employee_calendar_entries.work_style.prescribed_daily_minutes`)
 
 手順5(有給残数を確認する)・手順6(勤務予定日であることを確認する)は申請時にAPIで検証し、
 不足・対象外の場合は申請自体を拒否する(422)。同一社員・同一対象日への重複申請

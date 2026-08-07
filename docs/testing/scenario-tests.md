@@ -80,8 +80,8 @@
 できるが、**初回は必ず一度、画面から手作業でも実施して管理画面が壊れていないか確認する**。
 
 1. 管理者でログインし、システム設定(タイムゾーン)を確認する(`GET/PUT /system-settings`)。
-2. 年度カレンダーを作成→休日を設定→公開する(UC-C001、`POST /work-calendars` →
-   `PUT /work-calendars/{id}/days` → `POST /work-calendars/{id}/publish`)。
+2. 年度カレンダーを作成→休日を設定→公開する(UC-C001、`POST /company-calendars` →
+   `PUT /company-calendars/{id}/days` → `POST /company-calendars/{id}/publish`)。
 3. 勤務形態を2種類作成する: 「標準勤務(打刻)」「標準勤務(月次入力)」
    (UC-C002、`POST /work-styles`)。この2つは打刻するかどうかで**運用を分けるだけ**で、
    スキーマ上の`attendance_mode`のようなフラグはない(打刻APIを使うか、日次編集APIを
@@ -92,7 +92,7 @@
 7. 申請種別マスタ(交通費精算・名刺申請 等)を確認する(UC-W001、`GET /request-types`)。
    `RequestTypeSeeder` で初期投入済みのため、ここでは中身の確認と、必要なら
    `RequestTypeListPage`/`RequestTypeEditPage` からの追加・修正ができることを確認する。
-8. 社員のシフト(勤務予定)を対象月分まとめて生成する(`POST /employee-shift-assignments/generate`)。
+8. 社員のシフト(勤務予定)を対象月分まとめて生成する(`POST /employee-calendar-entries/generate`)。
 
 **確認ポイント**: カレンダー未公開のまま勤務形態が参照できないか、勤務予定生成が
 カレンダーの休日設定を正しく反映しているか。
@@ -238,7 +238,7 @@
 **実装上の注意(対象社員・カレンダー)**: `ScenarioSeeder`が投入するカレンダーは実行時点の
 実年(例: 実行日が2026-07なら`fiscal_year=2026`)を使い、期間も実行月の前後1か月しか
 カバーしないため、本シナリオ専用に2026-04-01〜2027-03-31を丸ごとカバーする
-`WorkCalendar`を`POST /work-calendars`で新規作成する必要がある。`work_calendars.fiscal_year`
+`CompanyCalendar`を`POST /company-calendars`で新規作成する必要がある。`company_calendars.fiscal_year`
 は`unsignedSmallInteger`(最大65535)のため、既存の`fiscal_year`(実行時点の実年)や
 他シナリオが使う年度レンジ(scenario-00/07: 3000〜8999年度、scenario-09: 9000年台)と
 衝突しない範囲(例: 59000番台)のテスト専用値を使う(`starts_on`/`ends_on`は
@@ -265,7 +265,7 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 別途「境界条件の単発確認」として切り出す(下記手順4)。
 
 1. **12か月連続の勤怠サイクル**: 各月について、(a) `POST
-   /employee-shift-assignments/generate` でその月の勤務予定を生成する、(b) 対象月の
+   /employee-calendar-entries/generate` でその月の勤務予定を生成する、(b) 対象月の
    全営業日ぶん日次実績を入力する(通常勤務を主としつつ、月ごとに残業日・遅刻日・
    法定休日出勤日・有給消化日を最低1件ずつ混ぜる)、(c) 月次提出→承認→締めまで進める、
    を2026年4月から2027年3月まで順に繰り返す。`submitAndApproveMonth`/`closeMonth`

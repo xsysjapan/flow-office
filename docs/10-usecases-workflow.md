@@ -72,7 +72,7 @@
   社員のみ対象。対象日・振替先日のどちらを休日→労働日にし、どちらを労働日→休日にするかは
   問わない(休日である側を基準に、休日区分・法定休日の同一週制約・週40時間の所定労働時間上限を
   申請時に検証する。ただし両方とも休日、または両方とも労働日の組み合わせは拒否する)。
-  承認時に対象日・振替先日の `employee_shift_assignments` を丸ごと入れ替える。
+  承認時に対象日・振替先日の `employee_calendar_entries` を丸ごと入れ替える。
   `system_settings.shift_swap_requires_approval` が false の場合は承認ワークフローを経由せず
   即時確定する(`special_leave_requires_approval` と同じ考え方)。
 - 有給休暇・特別休暇・振替休日申請と同様、代休申請 (`App\Domain\CompensatoryLeave`) も承認と
