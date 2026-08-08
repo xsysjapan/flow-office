@@ -33,6 +33,15 @@ class UserManagementAccessIntegrationTest extends TestCase
         $this->assertDatabaseHas('groups', ['code' => 'SYSTEM_ADMINISTRATORS']);
         $this->assertDatabaseHas('external_identities', ['user_id' => $admin->id, 'external_subject_id' => 'entra-admin']);
         $this->assertSame(3, DB::table('memberships')->where('user_id', $admin->id)->count());
+        $this->assertSame(4, DB::table('group_feature_assignments')
+            ->where('group_id', DB::table('groups')->where('code', 'ALL_USERS')->value('id'))
+            ->count());
+        $this->assertDatabaseHas('role_assignments', [
+            'subject_type' => 'group',
+            'subject_id' => DB::table('groups')->where('code', 'ALL_USERS')->value('id'),
+            'role_id' => Role::query()->where('code', Role::EMPLOYEE)->value('id'),
+            'status' => 'active',
+        ]);
     }
 
     public function test_group_creation_flows_through_aggregate_event_and_projector(): void

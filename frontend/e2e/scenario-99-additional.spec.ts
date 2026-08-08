@@ -6,7 +6,7 @@ import {
   recordAttendancePunch,
   submitApproveAndCloseCurrentMonth,
 } from './support/api'
-import { pickUser } from './support/ui'
+import { pickDate, pickUser, pickYearMonth } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md §5(その他、用意しておくべきシナリオ)に対応する。
@@ -14,7 +14,7 @@ import { pickUser } from './support/ui'
  */
 
 test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
   const title = `E2Eテスト差戻し確認_${Math.floor(Math.random() * 100000)}`
 
   const applicantContext = await browser.newContext()
@@ -47,8 +47,10 @@ test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
     await expect(applicantPage.getByRole('status', { name: '提出済み' })).toBeVisible()
 
     // 承認者が今度は承認する(統合承認画面はモーダルのため、再読み込み後は行を開き直す)。
-    await approverPage.reload()
-    await approverPage.getByRole('row', { name: title }).getByRole('button', { name: title }).click()
+    await approverPage.goto('/approvals')
+    const resubmittedRow = approverPage.getByRole('row', { name: title })
+    await expect(resubmittedRow).toBeVisible()
+    await resubmittedRow.getByRole('button', { name: title }).click({ timeout: 30000 })
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
   } finally {
@@ -75,7 +77,7 @@ test('§5-2: 申請取消(提出後)', async ({ page }) => {
 })
 
 test('§5-6+7: ロール変更が即座に反映され、監査ログに記録される', async ({ page }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   await loginAs(page, SCENARIO_USERS.approver)
   const userId = await page.evaluate(async () => {
@@ -130,7 +132,7 @@ test('§5-6+7: ロール変更が即座に反映され、監査ログに記録�
 })
 
 test('§5-3: 月次締め後は日次実績が編集できない', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
@@ -148,19 +150,12 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
     // 実行しても、既に進んでいるステータスはスキップするため冪等に動く。
     const { workDate } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
 
-    // 締め済みの日を日次勤怠画面(`/attendance/days/{date}`)で編集しようとすると、
-    // 保存時にブロックされる(UC-A011)。日次実績の編集・削除操作は週次画面のインライン
-    // ボタンではなく専用の日次勤怠画面に集約されている(2026-07時点でのUI変更、
-    // scenario-06-attendance-corrections.spec.ts冒頭コメント参照)。
+    // 締め済みの日は日次勤怠画面(`/attendance/days/{date}`)で編集操作自体を表示せず、
+    // 修正申請へ誘導する(UC-A011)。API側の更新拒否はバックエンドテストで確認する。
     await applicantPage.goto(`/attendance/days/${workDate}`)
-    // 「ログを編集」(打刻ログカード)と区別するため完全一致で指定する。
-    await applicantPage.getByRole('button', { name: '編集', exact: true }).click()
-    await applicantPage.getByLabel('修正理由(必須)').fill('締め後編集の拒否確認(E2E)')
-    await applicantPage.getByRole('button', { name: '保存する' }).click()
-
-    await expect(
-      applicantPage.getByRole('alert').filter({ hasText: '締め後の勤怠は修正申請から変更してください。' }),
-    ).toBeVisible()
+    await expect(applicantPage.getByText(/月次勤怠が.+ため、この日は編集できません/).first()).toBeVisible()
+    await expect(applicantPage.getByRole('button', { name: '編集', exact: true })).toHaveCount(0)
+    await expect(applicantPage.getByRole('button', { name: '削除' })).toHaveCount(0)
   } finally {
     await applicantContext.close()
     await approverContext.close()
@@ -169,7 +164,7 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
 })
 
 test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) => {
-  test.setTimeout(30000)
+  test.setTimeout(120000)
 
   // 週送りの操作を1回で済ませるため、月曜起点の週が必ず1つ先になる7日後を対象日にする
   // (今日がどの曜日でも、7日後は常に「次週」の同じ曜日になる)。
@@ -215,7 +210,7 @@ test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) =>
 // `scenario-08-fiscal-year-cycle.spec.ts`の`境界条件の単発確認`を参照。
 
 test('§5-8: 締めた月の勤怠CSV出力', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
@@ -232,7 +227,9 @@ test('§5-8: 締めた月の勤怠CSV出力', async ({ browser }) => {
     const { yearMonth } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
 
     await adminPage.goto('/admin/attendance-export')
-    await adminPage.getByLabel('対象月').fill(yearMonth)
+    await pickYearMonth(adminPage, '対象月', yearMonth)
+    await adminPage.getByRole('button', { name: '追加' }).click()
+    await expect(adminPage.getByText(yearMonth, { exact: true })).toBeVisible()
 
     const [download] = await Promise.all([
       adminPage.waitForEvent('download'),
@@ -251,7 +248,7 @@ test('§5-8: 締めた月の勤怠CSV出力', async ({ browser }) => {
 })
 
 test('§5-9: Entra ID初回ログイン(新入社員オンボーディング)', async ({ page }) => {
-  test.setTimeout(30000)
+  test.setTimeout(120000)
 
   // mock-oidcのユーザーのうちScenarioSeederが意図的に未使用のまま残している3人
   // (docs/testing/scenario-tests.md §3)。ユーザーを未登録状態へ戻すAPIが無いため、
@@ -280,7 +277,7 @@ test('§5-9: Entra ID初回ログイン(新入社員オンボーディング)', 
     await loginAs(adminPage, SCENARIO_USERS.admin)
     await adminPage.goto(`/admin/users/${userId}`)
 
-    await adminPage.getByLabel('入社日(有給の自動付与に使用)').fill('2026-04-01')
+    await pickDate(adminPage, '入社日(有給の自動付与に使用)', '2026-04-01')
     await adminPage.getByRole('button', { name: '入社日を保存する' }).click()
     await expect(adminPage.getByRole('status', { name: '保存しました' })).toBeVisible()
 

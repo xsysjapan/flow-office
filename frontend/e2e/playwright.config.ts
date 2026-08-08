@@ -18,8 +18,13 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   globalSetup: './global-setup.ts',
   fullyParallel: false,
+  timeout: 120000,
   retries: 0,
   reporter: 'list',
+  expect: {
+    // The PHP development server handles the page's post-mutation query refreshes serially.
+    timeout: 30000,
+  },
   use: {
     baseURL: process.env.E2E_FRONTEND_URL ?? 'http://localhost:5173',
     trace: 'retain-on-failure',

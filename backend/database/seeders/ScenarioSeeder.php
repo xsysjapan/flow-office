@@ -57,6 +57,13 @@ class ScenarioSeeder extends Seeder
 
         $users = $this->seedUsers($commandBus);
 
+        // DatabaseSeederの共通グループ構築後にシナリオユーザーを作成するため、
+        // 新規ユーザーを全利用者・バックオフィス等へ反映し、実効アクセスも同期する。
+        $this->call([
+            UserManagementSeeder::class,
+            AccessControlSeeder::class,
+        ]);
+
         $commandBus->dispatch(new GenerateEmployeeShiftAssignments(
             userId: $users['punch']->id,
             workStyleId: $punchWorkStyle->id,
@@ -226,7 +233,7 @@ class ScenarioSeeder extends Seeder
                 'email' => 'naoki.watanabe@example.com',
                 'department' => '開発部',
                 'job_title' => 'マネージャー',
-                'roles' => [Role::EMPLOYEE],
+                'roles' => [Role::EMPLOYEE, Role::BACKOFFICE_STAFF],
                 'hire_date' => '2018-04-01',
             ],
             'accounting_staff' => [

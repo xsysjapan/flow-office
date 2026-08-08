@@ -5,6 +5,7 @@ namespace Tests\Feature\UserManagement;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -45,6 +46,13 @@ class UserSearchAndAccessTest extends TestCase
     {
         $employee = User::factory()->create();
         $other = User::factory()->create(['name' => '検索対象太郎']);
+        DB::table('features')->insert([
+            'code' => 'administration',
+            'name' => '管理',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $response = $this->actingAs($employee)->getJson('/api/users/search?q=検索対象');
 

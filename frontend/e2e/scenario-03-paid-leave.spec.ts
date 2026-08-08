@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import { grantAdditionalPaidLeave } from './support/api'
-import { pickUser } from './support/ui'
+import { pickDate, pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md シナリオ3(勤怠管理中の有給消化)。
@@ -66,21 +66,21 @@ async function submitPaidLeaveRequest(
     const targetDate = randomWorkingDate()
 
     try {
-      await page.locator('#paid-leave-target-date').fill(targetDate, { timeout: 5000 })
-      await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 5000 })
-      await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 5000 })
-      await page.getByRole('button', { name: '申請する' }).click({ timeout: 5000 })
+      await pickDate(page, '対象日', targetDate)
+      await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 30000 })
+      await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 30000 })
+      await page.getByRole('button', { name: '申請する' }).click({ timeout: 30000 })
 
       const duplicateError = page.getByText('この日は既に有給を申請済みです。')
       const submittedRow = page.locator('li', { hasText: targetDate }).getByRole('status', { name: '申請中' })
 
       const result = await Promise.race([
         duplicateError
-          .waitFor({ state: 'visible', timeout: 5000 })
+          .waitFor({ state: 'visible', timeout: 30000 })
           .then(() => 'duplicate' as const)
           .catch(() => null),
         submittedRow
-          .waitFor({ state: 'visible', timeout: 5000 })
+          .waitFor({ state: 'visible', timeout: 30000 })
           .then(() => 'submitted' as const)
           .catch(() => null),
       ])
@@ -96,7 +96,7 @@ async function submitPaidLeaveRequest(
 }
 
 test('終日有給を申請〜承認し、勤怠日に反映される', async ({ browser }) => {
-  test.setTimeout(60000) // 対象日の重複衝突時に複数回リトライすることがあるため長めに取る
+  test.setTimeout(180000) // 対象日の重複衝突時に複数回リトライすることがあるため長めに取る
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
 
@@ -151,7 +151,7 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
 })
 
 test('半休を申請〜承認し、勤怠日に反映される', async ({ browser }) => {
-  test.setTimeout(60000) // 対象日の重複衝突時に複数回リトライすることがあるため長めに取る
+  test.setTimeout(180000) // 対象日の重複衝突時に複数回リトライすることがあるため長めに取る
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
 

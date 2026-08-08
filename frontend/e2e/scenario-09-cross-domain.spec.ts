@@ -16,7 +16,7 @@ import {
   submitApproveAndCloseCurrentMonth,
   submitMonth,
 } from './support/api'
-import { pickUser } from './support/ui'
+import { pickDate, pickUser } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md §5(その他、用意しておくべきシナリオ)項目14〜16に
@@ -156,7 +156,7 @@ test('§5-14: 有給消化と月60時間超残業判定の同一月内共存', a
 })
 
 test('§5-15: 複数の労働時間制度が混在する月の月次締め', async ({ browser }) => {
-  test.setTimeout(120000)
+  test.setTimeout(300000)
   // §5-14(9000年台)と衝突しない専用レンジ。
   const year = 9500 + Math.floor(Math.random() * 400)
   const yearMonth = `${year}-05`
@@ -192,10 +192,10 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
     const regular = employmentCategories.find((c) => c.code === 'regular')
 
     const actors = [
-      { page: fixedPage, name: '小林誠(固定時間制)' },
-      { page: variablePage, name: '中村恵(1か月単位変形労働時間制)' },
-      { page: discretionaryPage, name: '加藤由美(裁量労働制)' },
-      { page: managerPage, name: '高橋健太(管理監督者)' },
+      { page: fixedPage, name: '小林 誠(固定時間制)' },
+      { page: variablePage, name: '中村 恵(1か月単位変形労働時間制)' },
+      { page: discretionaryPage, name: '加藤 由美(裁量労働制)' },
+      { page: managerPage, name: '高橋 健太(管理監督者)' },
     ]
     const userIds = await Promise.all(actors.map((actor) => fetchOwnUserId(actor.page)))
     const [fixedUserId, variableUserId, discretionaryUserId, managerUserId] = userIds
@@ -317,7 +317,7 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
 })
 
 test('§5-16: 月次締め後もバックオフィス処理(交通費精算・名刺申請)は独立して進められる', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
@@ -349,7 +349,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     // 交通費精算は経費精算専用ドメイン(docs/30-usecases-expense.md)に移行済みで、
     // 汎用申請ワークフロー(request_types)の「交通費精算」は既に廃止されている
     // (scenario-04-expense-claim.spec.tsと同じ経費精算ドメインの操作手順に合わせる)。
-    const amount = String(1000 + Math.floor(Math.random() * 8000))
+    // 交通費は3,000円以下だと承認スキップで即時承認されるため、承認フローを通る金額に固定する。
+    const amount = String(4000 + Math.floor(Math.random() * 5000))
     const usageDate = new Date()
     usageDate.setDate(usageDate.getDate() + 1000 + Math.floor(Math.random() * 8000))
     const usageDateStr = usageDate.toISOString().slice(0, 10)
@@ -359,7 +360,7 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await applicantPage.getByRole('button', { name: '交通費' }).click()
 
     await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await applicantPage.getByLabel('1行目の日付').fill(usageDateStr)
+    await pickDate(applicantPage, '1行目の日付', usageDateStr)
     await applicantPage.getByLabel('1行目の金額').fill(amount)
     await applicantPage.getByLabel('1行目の出発地').fill('自宅最寄駅')
     await applicantPage.getByLabel('1行目の到着地').fill('本社最寄駅')
@@ -375,10 +376,11 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     // 個別登録では申請タイトルは既定値「経費精算」のまま(明細のusage_dateは統合承認画面の
     // 一覧行には表示されないため、代わりに申請者名で行を特定する)。
     const expenseApprovalRow = approverPage
-      .getByRole('row', { name: '経費精算' })
+      .getByRole('row')
       .filter({ hasText: SCENARIO_USERS.punchEmployee })
+      .filter({ has: approverPage.getByRole('status', { name: '経費' }) })
     await expect(expenseApprovalRow).toBeVisible()
-    await expenseApprovalRow.getByRole('button', { name: '経費精算' }).click()
+    await expenseApprovalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 

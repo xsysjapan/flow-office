@@ -15,7 +15,7 @@ import { pickUser } from './support/ui'
  * 参照)。本ドキュメントの旧記述(手順3〜6の`processing`)は実装に合わせて修正済み。
  */
 test('名刺申請〜承認〜総務タスク処理(発注〜発送〜完了)', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
   const quantity = String(10 + Math.floor(Math.random() * 90))
   const title = `E2Eテスト名刺申請_${quantity}枚`
 

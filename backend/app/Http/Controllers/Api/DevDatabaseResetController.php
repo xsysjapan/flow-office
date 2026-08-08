@@ -37,6 +37,10 @@ class DevDatabaseResetController extends Controller
             throw new NotFoundHttpException;
         }
 
+        // E2E用の全マイグレーション・全Seederは、開発端末によって30秒を超える。
+        // モック有効時だけ到達可能な開発専用処理なので、リセット完了まで時間制限を設けない。
+        set_time_limit(0);
+
         Artisan::call('migrate:fresh', ['--seed' => true, '--force' => true]);
         Artisan::call('db:seed', ['--class' => 'ScenarioSeeder', '--force' => true]);
 

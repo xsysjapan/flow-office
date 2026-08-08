@@ -24,7 +24,9 @@ class AccessControlSeeder extends Seeder
         foreach ($features as $code => $name) {
             DB::table('features')->updateOrInsert(['code' => $code], ['name' => $name, 'status' => 'active', 'updated_at' => $now, 'created_at' => $now]);
         }
-        foreach (['attendance', 'workflow', 'paid_leave'] as $code) {
+        // 経費申請も通常利用者向け機能であり、現在の画面/APIでは backoffice Feature 配下にある。
+        // バックオフィスタスク自体の利用可否はRole/Permissionで別途制御する。
+        foreach (['attendance', 'workflow', 'paid_leave', 'backoffice'] as $code) {
             DB::table('group_feature_assignments')->updateOrInsert(['group_id' => $groupId, 'feature_id' => DB::table('features')->where('code', $code)->value('id')], ['updated_at' => $now, 'created_at' => $now]);
         }
         DB::table('group_feature_assignments')->updateOrInsert(['group_id' => $adminGroupId, 'feature_id' => DB::table('features')->where('code', 'administration')->value('id')], ['updated_at' => $now, 'created_at' => $now]);
@@ -67,6 +69,26 @@ class AccessControlSeeder extends Seeder
             } foreach ($codes as $code) {
                 DB::table('permission_role')->insertOrIgnore(['role_id' => $role->id, 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
             }
+        }
+
+        // 経理・総務・人事などの兼務Roleを持つ利用者も、全利用者として自分の勤怠を
+        // 閲覧・更新できる。基礎権限は各ユーザーへの重複した直接割当ではなく、
+        // ALL_USERSグループから従業員Roleを継承させる。
+        $employeeRole = Role::query()->where('code', Role::EMPLOYEE)->first();
+        if ($employeeRole) {
+            $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'default-group-role-assignment:ALL_USERS:'.Role::EMPLOYEE)->toString();
+            DB::table('role_assignments')->updateOrInsert(
+                ['id' => $assignmentId],
+                [
+                    'subject_type' => 'group',
+                    'subject_id' => $groupId,
+                    'role_id' => $employeeRole->id,
+                    'scope_type' => 'global',
+                    'status' => 'active',
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ],
+            );
         }
 
         User::query()->with('roles')->each(function (User $user) use ($now): void {

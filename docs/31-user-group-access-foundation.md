@@ -42,6 +42,13 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
 期限到来済み所属変更の定期適用は`user-management:apply-membership-changes`で実行する。
 
+初期状態では`ALL_USERS`へ勤怠・申請・有給・バックオフィスFeatureを付与する。ここでの
+バックオフィスFeatureは一般社員の経費申請画面も含むため、バックオフィスタスクの担当・処理など
+機能内の特権操作はFeatureだけで許可せず、RoleとPermissionで別途制御する。管理Featureは
+`SYSTEM_ADMINISTRATORS`および管理業務を担うグループへ明示的に付与する。
+また、経理・総務・人事等の兼務Roleを持つ利用者にも本人勤怠の基礎操作を保証するため、
+`ALL_USERS`には従業員Roleを割り当てる。兼務Roleはこの基礎Permissionへ加算する。
+
 ## 31.2 設計原則
 
 ### 許可モデル
