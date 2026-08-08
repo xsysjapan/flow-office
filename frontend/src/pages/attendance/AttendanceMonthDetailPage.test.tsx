@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as userWorkStyleAssignmentsApi from '../../api/userWorkStyleMonthlyAssignments'
 import * as usersApi from '../../api/users'
@@ -130,8 +130,12 @@ function renderPage(initialYearMonth = yearMonth, attendanceRequiresApproval = t
 describe('AttendanceMonthDetailPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-15T12:00:00+09:00'))
     vi.spyOn(userWorkStyleAssignmentsApi, 'fetchUserWorkStyleMonthlyAssignments').mockResolvedValue([])
   })
+
+  afterEach(() => vi.useRealTimers())
 
   it('shows the days of the month with links to each day page', async () => {
     vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({

@@ -4,8 +4,13 @@ use App\Domain\EventSourcing\Exceptions\ConcurrencyException;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Middleware\CheckAbilitiesOrFullSession;
 use App\Http\Middleware\CheckForAnyAbilityOrFullSession;
+use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\EnsureEffectiveFeature;
+use App\Http\Middleware\EnsureEffectivePermission;
 use App\Http\Middleware\EnsureFullAccessOrExplicitAbility;
+use App\Http\Middleware\EnsureRouteFeatureAccess;
 use App\Http\Middleware\EnsureUserHasRole;
+use Dotenv\Dotenv;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,7 +21,7 @@ use Illuminate\Http\Request;
 // (configキャッシュの有無に関わらず常に既定値にフォールバックしてしまう)。
 // そのため明示的に先読みする。
 if (file_exists(dirname(__DIR__).'/.env')) {
-    \Dotenv\Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
+    Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
 }
 
 // config('app.api_prefix')が空文字の環境では'prefix/*'が'/*'になり、
@@ -40,6 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) use ($isApiRequest): void {
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
+            'feature' => EnsureEffectiveFeature::class,
+            'permission' => EnsureEffectivePermission::class,
+            'feature.route' => EnsureRouteFeatureAccess::class,
+            'account.active' => EnsureActiveAccount::class,
             // 端末(devices)・認証キー発行トークン等、限定abilityのSanctumトークン用。
             // docs/23-usecases-devices.md UC-D002参照。Sanctum標準のCheckAbilities/
             // CheckForAnyAbilityではなく、解決可能なトークンが無い場合(通常のログイン

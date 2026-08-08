@@ -1,5 +1,28 @@
 <?php
 
+use App\Application\UserManagement\Handlers\ApplyExternalHrImportHandler;
+use App\Application\UserManagement\Handlers\AssignUserRolesHandler;
+use App\Application\UserManagement\Handlers\CreateUserHandler;
+use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
+use App\Domain\AccessControl\Commands\ChangeRolePermissions;
+use App\Domain\AccessControl\Commands\CreateRole;
+use App\Domain\AccessControl\Commands\CreateRoleAssignment;
+use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
+use App\Domain\AccessControl\Commands\RemoveRoleAssignment;
+use App\Domain\AccessControl\Commands\RemoveUserFeatureSuspension;
+use App\Domain\AccessControl\Commands\SuspendUserFeature;
+use App\Domain\AccessControl\Commands\UpdateRole;
+use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
+use App\Domain\AccessControl\Handlers\AssignFeatureToGroupHandler;
+use App\Domain\AccessControl\Handlers\ChangeRolePermissionsHandler;
+use App\Domain\AccessControl\Handlers\CreateRoleAssignmentHandler;
+use App\Domain\AccessControl\Handlers\CreateRoleHandler;
+use App\Domain\AccessControl\Handlers\RemoveFeatureFromGroupHandler;
+use App\Domain\AccessControl\Handlers\RemoveRoleAssignmentHandler;
+use App\Domain\AccessControl\Handlers\RemoveUserFeatureSuspensionHandler;
+use App\Domain\AccessControl\Handlers\SuspendUserFeatureHandler;
+use App\Domain\AccessControl\Handlers\UpdateRoleAssignmentHandler;
+use App\Domain\AccessControl\Handlers\UpdateRoleHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
@@ -206,28 +229,63 @@ use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
-use App\Domain\User\Commands\AssignUserRoles;
-use App\Domain\User\Commands\CompleteOnboardingSsoLink;
-use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
-use App\Domain\User\Commands\LinkSsoAccount;
-use App\Domain\User\Commands\RecordLocalLogin;
-use App\Domain\User\Commands\RecordSsoLogin;
-use App\Domain\User\Commands\SetUserHireDate;
-use App\Domain\User\Commands\SetUserTerminationDate;
-use App\Domain\User\Commands\SetUserUsageStartDate;
-use App\Domain\User\Commands\StartOnboardingSso;
-use App\Domain\User\Commands\SyncUsersFromMs365;
-use App\Domain\User\Handlers\AssignUserRolesHandler;
-use App\Domain\User\Handlers\CompleteOnboardingSsoLinkHandler;
-use App\Domain\User\Handlers\CompleteOnboardingWithLocalPasswordHandler;
-use App\Domain\User\Handlers\LinkSsoAccountHandler;
-use App\Domain\User\Handlers\RecordLocalLoginHandler;
-use App\Domain\User\Handlers\RecordSsoLoginHandler;
-use App\Domain\User\Handlers\SetUserHireDateHandler;
-use App\Domain\User\Handlers\SetUserTerminationDateHandler;
-use App\Domain\User\Handlers\SetUserUsageStartDateHandler;
-use App\Domain\User\Handlers\StartOnboardingSsoHandler;
-use App\Domain\User\Handlers\SyncUsersFromMs365Handler;
+use App\Domain\UserManagement\Commands\AddMembership;
+use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
+use App\Domain\UserManagement\Commands\ApplyMembershipChange;
+use App\Domain\UserManagement\Commands\AssignUserRoles;
+use App\Domain\UserManagement\Commands\CancelMembershipChange;
+use App\Domain\UserManagement\Commands\ChangeFieldAuthority;
+use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
+use App\Domain\UserManagement\Commands\CompleteOnboardingWithLocalPassword;
+use App\Domain\UserManagement\Commands\CreateGroup;
+use App\Domain\UserManagement\Commands\CreateGroupType;
+use App\Domain\UserManagement\Commands\CreateMembershipChangeDraft;
+use App\Domain\UserManagement\Commands\CreateUser;
+use App\Domain\UserManagement\Commands\FailMembershipChange;
+use App\Domain\UserManagement\Commands\LinkExternalIdentity;
+use App\Domain\UserManagement\Commands\LinkSsoAccount;
+use App\Domain\UserManagement\Commands\RecordLocalLogin;
+use App\Domain\UserManagement\Commands\RecordSsoLogin;
+use App\Domain\UserManagement\Commands\RemoveMembership;
+use App\Domain\UserManagement\Commands\ScheduleExistingMembershipChange;
+use App\Domain\UserManagement\Commands\ScheduleMembershipChange;
+use App\Domain\UserManagement\Commands\SetUserHireDate;
+use App\Domain\UserManagement\Commands\SetUserTerminationDate;
+use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
+use App\Domain\UserManagement\Commands\StartOnboardingSso;
+use App\Domain\UserManagement\Commands\SyncUsersFromMs365;
+use App\Domain\UserManagement\Commands\UnlinkExternalIdentity;
+use App\Domain\UserManagement\Commands\UpdateGroup;
+use App\Domain\UserManagement\Commands\UpdateGroupType;
+use App\Domain\UserManagement\Commands\UpdateMembershipChange;
+use App\Domain\UserManagement\Commands\UpdateUserProfile;
+use App\Domain\UserManagement\Handlers\AddMembershipHandler;
+use App\Domain\UserManagement\Handlers\ApplyMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\CancelMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\ChangeFieldAuthorityHandler;
+use App\Domain\UserManagement\Handlers\CompleteOnboardingSsoLinkHandler;
+use App\Domain\UserManagement\Handlers\CompleteOnboardingWithLocalPasswordHandler;
+use App\Domain\UserManagement\Handlers\CreateGroupHandler;
+use App\Domain\UserManagement\Handlers\CreateGroupTypeHandler;
+use App\Domain\UserManagement\Handlers\CreateMembershipChangeDraftHandler;
+use App\Domain\UserManagement\Handlers\FailMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\LinkExternalIdentityHandler;
+use App\Domain\UserManagement\Handlers\LinkSsoAccountHandler;
+use App\Domain\UserManagement\Handlers\RecordLocalLoginHandler;
+use App\Domain\UserManagement\Handlers\RecordSsoLoginHandler;
+use App\Domain\UserManagement\Handlers\RemoveMembershipHandler;
+use App\Domain\UserManagement\Handlers\ScheduleExistingMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\ScheduleMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\SetUserHireDateHandler;
+use App\Domain\UserManagement\Handlers\SetUserTerminationDateHandler;
+use App\Domain\UserManagement\Handlers\SetUserUsageStartDateHandler;
+use App\Domain\UserManagement\Handlers\StartOnboardingSsoHandler;
+use App\Domain\UserManagement\Handlers\SyncUsersFromMs365Handler;
+use App\Domain\UserManagement\Handlers\UnlinkExternalIdentityHandler;
+use App\Domain\UserManagement\Handlers\UpdateGroupHandler;
+use App\Domain\UserManagement\Handlers\UpdateGroupTypeHandler;
+use App\Domain\UserManagement\Handlers\UpdateMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\UpdateUserProfileHandler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -252,6 +310,35 @@ return [
     |
     */
     'command_handlers' => [
+        CreateGroup::class => CreateGroupHandler::class,
+        AddMembership::class => AddMembershipHandler::class,
+        AssignFeatureToGroup::class => AssignFeatureToGroupHandler::class,
+        CreateRoleAssignment::class => CreateRoleAssignmentHandler::class,
+        ScheduleMembershipChange::class => ScheduleMembershipChangeHandler::class,
+        ApplyMembershipChange::class => ApplyMembershipChangeHandler::class,
+        CancelMembershipChange::class => CancelMembershipChangeHandler::class,
+        RemoveMembership::class => RemoveMembershipHandler::class,
+        RemoveFeatureFromGroup::class => RemoveFeatureFromGroupHandler::class,
+        SuspendUserFeature::class => SuspendUserFeatureHandler::class,
+        RemoveUserFeatureSuspension::class => RemoveUserFeatureSuspensionHandler::class,
+        RemoveRoleAssignment::class => RemoveRoleAssignmentHandler::class,
+        LinkExternalIdentity::class => LinkExternalIdentityHandler::class,
+        UnlinkExternalIdentity::class => UnlinkExternalIdentityHandler::class,
+        ChangeFieldAuthority::class => ChangeFieldAuthorityHandler::class,
+        ChangeRolePermissions::class => ChangeRolePermissionsHandler::class,
+        UpdateGroup::class => UpdateGroupHandler::class,
+        CreateGroupType::class => CreateGroupTypeHandler::class,
+        CreateRole::class => CreateRoleHandler::class,
+        FailMembershipChange::class => FailMembershipChangeHandler::class,
+        UpdateUserProfile::class => UpdateUserProfileHandler::class,
+        CreateUser::class => CreateUserHandler::class,
+        UpdateGroupType::class => UpdateGroupTypeHandler::class,
+        UpdateRole::class => UpdateRoleHandler::class,
+        UpdateRoleAssignment::class => UpdateRoleAssignmentHandler::class,
+        CreateMembershipChangeDraft::class => CreateMembershipChangeDraftHandler::class,
+        UpdateMembershipChange::class => UpdateMembershipChangeHandler::class,
+        ApplyExternalHrImport::class => ApplyExternalHrImportHandler::class,
+        ScheduleExistingMembershipChange::class => ScheduleExistingMembershipChangeHandler::class,
         UploadAttachment::class => UploadAttachmentHandler::class,
 
         RegisterDevice::class => RegisterDeviceHandler::class,

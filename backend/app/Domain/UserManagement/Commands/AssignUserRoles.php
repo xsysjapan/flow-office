@@ -1,0 +1,20 @@
+<?php
+
+namespace App\Domain\UserManagement\Commands;
+
+use App\Domain\EventSourcing\Contracts\Command;
+
+/**
+ * UC-M001: 権限を設定する。
+ */
+class AssignUserRoles implements Command
+{
+    /**
+     * @param  array<int, string>  $roleCodes
+     */
+    public function __construct(
+        public readonly string $userId,
+        public readonly array $roleCodes,
+        public readonly string $changedByUserId,
+    ) {}
+}

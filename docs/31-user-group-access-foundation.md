@@ -15,6 +15,33 @@
 対象は最大100人程度の企業とする。高機能なIAMや人事ワークフローを再現せず、専門知識が
 なくても運用できる範囲に限定する。
 
+### ドメイン境界
+
+本基盤は単一のAccessControlドメインとして扱わず、主目的に従って次の境界に分ける。
+
+| 境界 | 管理対象 |
+|---|---|
+| `UserManagement` | User、ExternalIdentity、FieldAuthority、GroupType、Group、Membership、MembershipChangeSet、外部HR取込 |
+| `AccessControl` | Feature、GroupFeatureAssignment、UserFeatureSuspension、Role、Permission、RoleAssignment、有効アクセス判定 |
+| `SystemSettings` | システム設定の直接更新に付随する監査イベント |
+
+GroupとMembershipの正本は`UserManagement`が所有する。`AccessControl`はGroupを認可主体または
+Feature付与先としてID参照し、Membershipの読み取り結果を利用するが、Group基本情報や所属状態を
+所有しない。ユーザー作成後の`ALL_USERS`所属と初期RoleAssignmentのように複数境界をまたぐ処理は、
+いずれかのドメイン集約へ混在させずApplication層のCommandHandlerで同一トランザクションに調整する。
+
+実装上の名前空間も`App\Domain\UserManagement`、`App\Domain\AccessControl`、
+`App\Domain\SystemSettings`に分離する。既存イベントのevent aliasと決定的ストリームIDは、監査ログと
+イベント再生の互換性のため、名前空間の移動後も変更しない。
+
+管理APIも境界に合わせ、ユーザー・グループ・所属・外部ID・項目権限・外部HRは
+`/api/admin/user-management/*`、Feature・Role・Permission・割当・利用停止は
+`/api/admin/access-control/*`に分ける。管理画面は運用上の一連の作業を行える統合画面としてよいが、
+フロントエンドのAPIクライアントと状態管理は`userManagement`と`accessControl`に分離する。
+
+初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
+期限到来済み所属変更の定期適用は`user-management:apply-membership-changes`で実行する。
+
 ## 31.2 設計原則
 
 ### 許可モデル
@@ -312,19 +339,35 @@ stored_events（監査ログとして直接検索）
 集約を定義する。集約間の参照はIDに限定し、他集約の現在状態が必要な検証はCommandHandlerが
 読み取りモデルから取得した事実を集約へ渡す。
 
-### UserIdentity集約
+### User集約
 
 - 集約ID: `user_id`
-- 管理対象: Userの状態、ExternalIdentity、FieldAuthority
+- 管理対象: Userの状態、プロフィール、利用開始・在籍状態
 - 不変条件:
   - User IDは変更しない。
-  - 同じprovider・Tenant ID・Subject IDを複数Userへリンクしない。
   - 外部管理項目を通常のユーザー更新Commandから変更しない。
   - 退職・無効化してもUserを物理削除しない。
-- 主なイベント: `external_identity.linked`、`external_identity.unlinked`、
-  `user.field_authority_changed`
+- 主なイベント: `user.created_manually`、`user.profile_updated`、`user.synced_from_ms365`
+
+### ExternalIdentity集約
+
+- 集約ID: 外部IDを管理する`user_id`別の決定的ストリームID
+- 管理対象: UserとMicrosoft Entra ID・外部HR等の外部IDとのリンク
+- 不変条件:
+  - 同じprovider・Tenant ID・Subject IDを複数Userへリンクしない。
+  - 無効なUserへ新規リンクしない。
+- 主なイベント: `external_identity.linked`、`external_identity.unlinked`
 
 外部IDのシステム全体での一意性は、Handlerでの事前検証に加えてDBのunique制約でも保証する。
+
+### FieldAuthority集約
+
+- 集約ID: 項目管理責任カタログ用の決定的ストリームID
+- 管理対象: 項目ごとの`LOCAL | EXTERNAL_HR`と外部provider
+- 不変条件:
+  - 外部管理項目は通常のユーザー更新Commandから変更しない。
+  - 外部管理にする場合は管理providerを追跡可能にする。
+- 主なイベント: `user.field_authority_changed`
 
 ### Group集約
 
@@ -410,7 +453,7 @@ Membership、GroupAccess、Role、RoleAssignment、UserFeatureSuspensionから�
 
 - 各集約はspatie/laravel-event-sourcingのaggregate versionで楽観ロックする。
 - spatieのイベントストアは集約クラスを含めずUUIDでストリームを識別するため、同じ業務IDを使う
-  別集約（例: UserIdentityとUserMembership、GroupとGroupAccess）はUUID v5で集約種別を含む
+  別集約（例: UserとExternalIdentityとUserMembership、GroupとGroupAccess）はUUID v5で集約種別を含む
   専用ストリームIDを決定的に生成する。業務上のUser ID・Group IDはイベントpayloadに保持する。
 - MembershipChangeSet適用時だけは、同一Userへの複数予約の競合を防ぐためUser行または専用の
   membership lock行を`SELECT ... FOR UPDATE`でロックする。

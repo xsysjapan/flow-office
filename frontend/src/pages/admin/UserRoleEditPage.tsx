@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -11,6 +11,8 @@ import { AttendanceSubmissionReminderExclusionPanel } from '../../components/Att
 import { AuthenticationKeysPanel } from '../../components/AuthenticationKeysPanel/AuthenticationKeysPanel'
 import { Checkbox } from '../../components/ui/checkbox'
 import { NativeSelect } from '../../components/ui/native-select'
+import { Input } from '../../components/ui/input'
+import type { UserProfileInput } from '../../api/users'
 import { useRoles } from '../../hooks/useRoles'
 import {
   useAssignUserWorkStyleForMonth,
@@ -22,6 +24,7 @@ import {
   useUpdateUserRoles,
   useUpdateUserTerminationDate,
   useUpdateUserUsageStartDate,
+  useUpdateUser,
   useUser,
 } from '../../hooks/useUsers'
 import { useWorkStyles } from '../../hooks/useWorkStyles'
@@ -47,6 +50,7 @@ export function UserRoleEditPage() {
   const updateHireDate = useUpdateUserHireDate()
   const updateTerminationDate = useUpdateUserTerminationDate()
   const updateUsageStartDate = useUpdateUserUsageStartDate()
+  const updateUser = useUpdateUser()
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth()
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment()
 
@@ -55,6 +59,7 @@ export function UserRoleEditPage() {
   const [terminationDate, setTerminationDate] = useState('')
   const [usageStartDate, setUsageStartDate] = useState('')
   const [isInitialized, setIsInitialized] = useState(false)
+  const [profile,setProfile]=useState({name:'',email:'',employee_number:'',department:'',job_title:'',employment_status:'active',account_status:'active'})
 
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const currentAssignment = workStyleHistory?.find((assignment) => assignment.year_month === currentYearMonth)
@@ -69,6 +74,7 @@ export function UserRoleEditPage() {
       setHireDate(user.hire_date ?? '')
       setTerminationDate(user.termination_date ?? '')
       setUsageStartDate(user.usage_start_date ?? '')
+      setProfile({name:user.name,email:user.email??'',employee_number:user.employee_number??'',department:user.department??'',job_title:user.job_title??'',employment_status:user.employment_status,account_status:user.account_status??'active'})
       setIsInitialized(true)
     }
   }, [user, isInitialized])
@@ -107,10 +113,26 @@ export function UserRoleEditPage() {
     setSelectedCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]))
   }
 
+  const isExternalHrField=(field:string)=>user.field_authorities?.some(authority=>authority.field_key===(field==='name'?'display_name':field)&&authority.authority_type==='EXTERNAL_HR')??false
+
   return (
     <Card title={`${user.name}の権限設定`}>
       {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
+      {updateUser.error && <ErrorMessage error={updateUser.error} />}
       {updateRoles.isSuccess && <Badge tone="success">保存しました</Badge>}
+
+      <div className="mb-6 rounded border p-3">
+        <h2 className="mb-3 font-medium">基本情報</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormField label={`氏名${isExternalHrField('name')?'（外部HR管理）':''}`} htmlFor="user-profile-name"><Input id="user-profile-name" disabled={isExternalHrField('name')} value={profile.name} onChange={e=>setProfile({...profile,name:e.target.value})}/></FormField>
+          <FormField label={`メール${isExternalHrField('email')?'（外部HR管理）':''}`} htmlFor="user-profile-email"><Input id="user-profile-email" type="email" disabled={isExternalHrField('email')} value={profile.email} onChange={e=>setProfile({...profile,email:e.target.value})}/></FormField>
+          <FormField label={`社員番号${isExternalHrField('employee_number')?'（外部HR管理）':''}`} htmlFor="user-profile-number"><Input id="user-profile-number" disabled={isExternalHrField('employee_number')} value={profile.employee_number} onChange={e=>setProfile({...profile,employee_number:e.target.value})}/></FormField>
+          <FormField label={`部署${isExternalHrField('department')?'（外部HR管理）':''}`} htmlFor="user-profile-department"><Input id="user-profile-department" disabled={isExternalHrField('department')} value={profile.department} onChange={e=>setProfile({...profile,department:e.target.value})}/></FormField>
+          <FormField label={`役職${isExternalHrField('job_title')?'（外部HR管理）':''}`} htmlFor="user-profile-job"><Input id="user-profile-job" disabled={isExternalHrField('job_title')} value={profile.job_title} onChange={e=>setProfile({...profile,job_title:e.target.value})}/></FormField>
+          <FormField label={`アカウント状態${isExternalHrField('account_status')?'（外部HR管理）':''}`} htmlFor="user-profile-status"><NativeSelect id="user-profile-status" disabled={isExternalHrField('account_status')} value={profile.account_status} onChange={e=>setProfile({...profile,account_status:e.target.value})}>{['pending','active','suspended','leave','retired','disabled'].map(status=><option key={status}>{status}</option>)}</NativeSelect></FormField>
+        </div>
+        <Button variant="secondary" isLoading={updateUser.isPending} disabled={!profile.name||!profile.email} onClick={()=>{const input=Object.fromEntries(Object.entries({...profile,employee_number:profile.employee_number||null,department:profile.department||null,job_title:profile.job_title||null}).filter(([key])=>!isExternalHrField(key))) as Partial<UserProfileInput>;updateUser.mutate({id:userId,input})}}>基本情報を保存する</Button>
+      </div>
 
       <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">メールアドレス</dt>
@@ -120,6 +142,8 @@ export function UserRoleEditPage() {
         <dt className="font-medium text-muted-foreground">役職</dt>
         <dd className="text-foreground">{user.job_title ?? '-'}</dd>
       </dl>
+      <div className="mb-6 grid gap-4 md:grid-cols-2"><div className="rounded border p-3"><h2 className="mb-2 font-medium">外部ID・管理元</h2>{user.external_identities?.map(identity=><div key={identity.id} className="text-sm">{identity.provider}: {identity.external_subject_id} / 最終同期 {identity.last_synced_at?new Date(identity.last_synced_at).toLocaleString():'-'}</div>)}<div className="mt-2 flex flex-wrap gap-1">{user.field_authorities?.map(authority=><Badge key={authority.field_key} tone={authority.authority_type==='EXTERNAL_HR'?'info':'neutral'}>{authority.field_key}: {authority.authority_type}</Badge>)}</div></div><div className="rounded border p-3"><h2 className="mb-2 font-medium">所属・予約</h2>{user.memberships?.map(m=><div key={m.id} className="text-sm">{m.group.name}{m.is_primary?'（主所属）':''}</div>)}{user.membership_change_sets?.map(set=><div key={set.id} className="text-sm text-muted-foreground">{new Date(set.effective_at).toLocaleString()}: {set.status}</div>)}</div><div className="rounded border p-3"><h2 className="mb-2 font-medium">有効Feature・Permission</h2><div className="flex flex-wrap gap-1">{user.effective_features?.map(value=><Badge key={value} tone="info">{value}</Badge>)}{user.effective_permissions?.map(value=><Badge key={value} tone="neutral">{value}</Badge>)}</div></div><div className="rounded border p-3"><h2 className="mb-2 font-medium">RoleAssignment・個別停止</h2>{user.role_assignments?.map(value=><div key={value.id} className="text-sm">{value.role?.name}: {value.scope_type} / {value.status}</div>)}{user.feature_suspensions?.map(value=><div key={value.id} className="text-sm text-destructive">{value.feature?.name}: {value.reason}</div>)}</div></div>
+      <div className="mb-6"><Link className="text-sm text-primary hover:underline" to={`/admin/audit-log?user_id=${userId}`}>このユーザーの変更履歴を監査ログで確認</Link></div>
 
       <ul className="mb-4 divide-y divide-border">
         {roles?.map((role) => (

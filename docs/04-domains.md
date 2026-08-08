@@ -1,11 +1,10 @@
 # 4. 主要ドメイン
 
 - Auth
-- User
-- Organization
-- AccessControl(Feature、Role、Permission、Scope。利用機能と操作権限を分離して扱う。
+- UserManagement(User、ExternalIdentity、FieldAuthority、GroupType、Group、Membership、
+  MembershipChangeSet、外部HR取込。人物・利用主体と所属グループを管理する。
   docs/31-user-group-access-foundation.md)
-- MembershipChange(現在所属とは分離した将来日付の所属変更セット。
+- AccessControl(Feature、Role、Permission、Scope。利用機能と操作権限を分離して扱う。
   docs/31-user-group-access-foundation.md)
 - Workflow
 - BackOffice

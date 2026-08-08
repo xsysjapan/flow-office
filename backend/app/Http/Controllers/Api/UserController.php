@@ -2,17 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\User\Commands\AssignUserRoles;
-use App\Domain\User\Commands\SetUserHireDate;
-use App\Domain\User\Commands\SetUserTerminationDate;
-use App\Domain\User\Commands\SetUserUsageStartDate;
+use App\Domain\UserManagement\Commands\AssignUserRoles;
+use App\Domain\UserManagement\Commands\CreateUser;
+use App\Domain\UserManagement\Commands\SetUserHireDate;
+use App\Domain\UserManagement\Commands\SetUserTerminationDate;
+use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
+use App\Domain\UserManagement\Commands\UpdateUserProfile;
+use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSearchResource;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
 /**
@@ -21,6 +28,45 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'ユーザー', description: 'ユーザー・権限管理')]
 class UserController extends Controller
 {
+    public function store(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $attributes = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'employee_number' => ['nullable', 'string', 'max:100', 'unique:users,employee_number'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'employment_status' => ['sometimes', 'string', 'max:100'],
+            'account_status' => ['sometimes', 'in:pending,active,suspended,leave,retired,disabled'],
+        ]);
+        app(FieldAuthorityService::class)->assertLocallyEditable(array_keys($attributes));
+        $id = (string) Str::uuid();
+        $user = $commandBus->dispatch(new CreateUser($id, [
+            ...$attributes,
+            'employment_status' => $attributes['employment_status'] ?? 'active',
+            'account_status' => $attributes['account_status'] ?? 'active',
+        ], $request->user()->id));
+
+        return (new UserResource($user->load(['roles', 'externalIdentities', 'memberships.group.type'])))
+            ->response()->setStatusCode(201);
+    }
+
+    public function update(Request $request, User $user, CommandBus $commandBus): UserResource
+    {
+        $changes = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255', 'unique:users,email,'.$user->id],
+            'employee_number' => ['sometimes', 'nullable', 'string', 'max:100', 'unique:users,employee_number,'.$user->id],
+            'department' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'job_title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'employment_status' => ['sometimes', 'string', 'max:100'],
+            'account_status' => ['sometimes', 'in:pending,active,suspended,leave,retired,disabled'],
+        ]);
+        $commandBus->dispatch(new UpdateUserProfile($user->id, $changes, $request->user()->id));
+
+        return new UserResource($user->refresh()->load(['roles', 'externalIdentities', 'memberships.group.type']));
+    }
+
     #[OA\Get(
         path: '/users',
         operationId: 'users.index',
@@ -35,19 +81,43 @@ class UserController extends Controller
             new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, EffectiveAccessResolver $resolver): AnonymousResourceCollection
     {
         $validated = $request->validate([
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'group_id' => ['sometimes', 'uuid'],
+            'group_type_id' => ['sometimes', 'integer'],
+            'external_unlinked' => ['sometimes', 'boolean'],
+            'external_hr' => ['sometimes', 'boolean'],
+            'account_status' => ['sometimes', 'string'],
         ]);
 
-        $users = User::query()
-            ->with('roles')
+        $query = User::query()
+            ->with(['roles', 'externalIdentities', 'memberships.group.type'])
             ->when($request->string('q')->toString(), fn ($query, $q) => $query->where(function ($sub) use ($q) {
-                $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%");
+                $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%")->orWhere('employee_number', 'like', "%{$q}%");
             }))
-            ->orderBy('name')
-            ->paginate($validated['per_page'] ?? 50);
+            ->when($validated['group_id'] ?? null, fn ($query, $groupId) => $query->whereHas('memberships', fn ($q) => $q->where('group_id', $groupId)))
+            ->when($validated['group_type_id'] ?? null, fn ($query, $typeId) => $query->whereHas('memberships.group', fn ($q) => $q->where('group_type_id', $typeId)))
+            ->when(($validated['external_unlinked'] ?? false), fn ($query) => $query->whereDoesntHave('externalIdentities', fn ($q) => $q->where('provider', 'MICROSOFT_ENTRA')->where('status', 'active')))
+            ->when(($validated['external_hr'] ?? false), fn ($query) => $query->whereHas('externalIdentities', fn ($q) => $q->where('provider', 'EXTERNAL_HR')->where('status', 'active')))
+            ->when($validated['account_status'] ?? null, fn ($query, $status) => $query->where('account_status', $status));
+
+        if (! $resolver->hasGlobalPermission($request->user(), 'user.manage')) {
+            $permittedGroupIds = $resolver->permittedGroupIds($request->user(), 'user.manage');
+            $query->where(function ($scope) use ($request, $permittedGroupIds) {
+                $scope->whereKey($request->user()->id);
+                if ($permittedGroupIds->isNotEmpty()) {
+                    $scope->orWhereHas('memberships', fn ($membership) => $membership->whereIn('group_id', $permittedGroupIds));
+                }
+            });
+        }
+
+        $users = $query->orderBy('name')->paginate($validated['per_page'] ?? 50);
+
+        $users->getCollection()->each(function (User $user) use ($resolver): void {
+            $user->setAttribute('effective_features', $resolver->features($user)->all());
+        });
 
         return UserResource::collection($users);
     }
@@ -100,9 +170,15 @@ class UserController extends Controller
             new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
-    public function show(User $user): UserResource
+    public function show(User $user, EffectiveAccessResolver $resolver): UserResource
     {
-        return new UserResource($user->load('roles'));
+        $user->load(['roles', 'externalIdentities', 'memberships.group.type', 'roleAssignments.role.permissions', 'featureSuspensions.feature']);
+        $user->setAttribute('effective_features', $resolver->features($user)->all());
+        $user->setAttribute('effective_permissions', $resolver->permissions($user)->all());
+        $user->setAttribute('membership_change_sets', DB::table('membership_change_sets')->where('user_id', $user->id)->orderByDesc('effective_at')->get());
+        $user->setAttribute('field_authorities', DB::table('field_authorities')->orderBy('field_key')->get());
+
+        return new UserResource($user);
     }
 
     #[OA\Put(
@@ -170,6 +246,7 @@ class UserController extends Controller
     )]
     public function updateHireDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
+        app(FieldAuthorityService::class)->assertLocallyEditable(['hire_date']);
         $data = $request->validate(['hire_date' => ['required', 'date']]);
 
         $commandBus->dispatch(new SetUserHireDate(
@@ -192,6 +269,7 @@ class UserController extends Controller
     )]
     public function updateTerminationDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
+        app(FieldAuthorityService::class)->assertLocallyEditable(['termination_date']);
         $data = $request->validate(['termination_date' => ['nullable', 'date']]);
 
         $commandBus->dispatch(new SetUserTerminationDate(
@@ -227,6 +305,7 @@ class UserController extends Controller
     )]
     public function updateUsageStartDate(Request $request, User $user, CommandBus $commandBus): UserResource
     {
+        app(FieldAuthorityService::class)->assertLocallyEditable(['usage_start_date']);
         $data = $request->validate(['usage_start_date' => ['required', 'date']]);
 
         $commandBus->dispatch(new SetUserUsageStartDate(

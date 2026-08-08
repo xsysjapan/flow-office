@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\User\Commands\CompleteOnboardingWithLocalPassword;
-use App\Domain\User\Commands\StartOnboardingSso;
-use App\Domain\User\Ms365ConfigResolver;
+use App\Domain\UserManagement\Commands\CompleteOnboardingWithLocalPassword;
+use App\Domain\UserManagement\Commands\StartOnboardingSso;
+use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\SystemSetting;

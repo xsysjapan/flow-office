@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
-import { adminNavGroups } from '../../components/AdminLayout/adminNavGroups'
-import { hasAnyRole } from '../../utils/roles'
+import { adminNavGroups, canAccessAdminItem } from '../../components/AdminLayout/adminNavGroups'
 
 /** 管理メニューのトップ画面。管理系の各機能をカード形式でまとめて一覧表示する。 */
 export function AdminDashboardPage() {
   const { user } = useAuth()
-  const visibleGroups = adminNavGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
+  const visibleGroups = adminNavGroups.map(group=>({...group,items:group.items.filter(item=>canAccessAdminItem(user,item,group.roles))})).filter(group=>group.items.length>0)
 
   return (
     <div className="flex flex-col gap-8">

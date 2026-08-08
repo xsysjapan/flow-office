@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { adminNavGroups } from '../components/AdminLayout/adminNavGroups'
+import { adminNavGroups, canAccessAdminItem, type AdminNavItem } from '../components/AdminLayout/adminNavGroups'
 import { hasAnyRole, type RoleCode } from '../utils/roles'
 import { useAuth } from './useAuth'
 
@@ -27,11 +27,17 @@ function requiredRolesFor(pathname: string): RoleCode[] {
   return longestMatch.roles ?? ALL_ADMIN_ROLES
 }
 
+function matchedItem(pathname: string): { item: AdminNavItem; roles?: RoleCode[] } | undefined {
+  return adminNavGroups.flatMap(group=>group.items.filter(item=>pathname===item.to||pathname.startsWith(`${item.to}/`)).map(item=>({item,roles:group.roles}))).sort((a,b)=>b.item.to.length-a.item.to.length)[0]
+}
+
 export function RequireAdminRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const location = useLocation()
 
-  if (!hasAnyRole(user?.roles, requiredRolesFor(location.pathname))) {
+  const match=matchedItem(location.pathname)
+  const allowed=match?canAccessAdminItem(user,match.item,match.roles):hasAnyRole(user?.roles,requiredRolesFor(location.pathname))
+  if (!allowed) {
     return <Navigate to="/" replace />
   }
 

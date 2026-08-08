@@ -37,6 +37,8 @@ class DatabaseSeeder extends Seeder
         $admin->roles()->syncWithoutDetaching([$adminRole->id]);
 
         $this->call([
+            UserManagementSeeder::class,
+            AccessControlSeeder::class,
             DefaultWorkStyleSeeder::class,
         ]);
     }

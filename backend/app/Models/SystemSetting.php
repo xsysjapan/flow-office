@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Crypt;
     'shift_swap_requires_approval',
     'compensatory_leave_enabled', 'compensatory_leave_requires_approval', 'compensatory_leave_unit',
     'compensatory_leave_half_day_threshold_minutes', 'compensatory_leave_valid_days',
+    'prohibit_self_privileged_role_assignment',
 ])]
 class SystemSetting extends Model
 {
@@ -41,6 +42,7 @@ class SystemSetting extends Model
             'shift_swap_requires_approval' => 'boolean',
             'compensatory_leave_enabled' => 'boolean',
             'compensatory_leave_requires_approval' => 'boolean',
+            'prohibit_self_privileged_role_assignment' => 'boolean',
             // クライアントシークレットは平文でDBに保持しない (Laravelのencrypted castで暗号化する)。
             'm365_client_secret' => 'encrypted',
             'onboarding_started_at' => 'datetime',
@@ -82,6 +84,7 @@ class SystemSetting extends Model
             'compensatory_leave_enabled' => false,
             'compensatory_leave_requires_approval' => true,
             'compensatory_leave_unit' => 'daily',
+            'prohibit_self_privileged_role_assignment' => false,
         ]);
 
         // system_settingsは内部的なシングルトン設定であり、REST的な「作成された

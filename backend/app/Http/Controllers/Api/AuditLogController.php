@@ -139,6 +139,7 @@ class AuditLogController extends Controller
         if (isset($data['user_id'])) {
             $userId = $data['user_id'];
             $query->where(function (Builder $sub) use ($userId) {
+                $sub->where('aggregate_uuid', $userId);
                 foreach (self::ACTOR_KEYS as $key) {
                     $sub->orWhere('event_properties', 'like', '%"'.Str::camel($key).'":"'.$userId.'"%');
                 }

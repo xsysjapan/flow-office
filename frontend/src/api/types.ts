@@ -2,6 +2,9 @@ export interface User {
   id: string
   name: string
   email: string
+  employee_number?: string | null
+  account_status?: string
+  source_type?: string
   department: string | null
   job_title: string | null
   employment_status: string
@@ -16,6 +19,31 @@ export interface User {
   last_login_at: string | null
   /** Microsoft 365(Entra ID)アカウントと連携済みかどうか(docs/06-usecases-auth.md UC-004)。 */
   sso_linked?: boolean
+  external_identities?: ExternalIdentity[]
+  memberships?: Membership[]
+  effective_features?: string[]
+  effective_permissions?: string[]
+  role_assignments?: Array<{id:string;scope_type:string;status:string;role?:{name:string}}>
+  feature_suspensions?: Array<{id:number;reason:string;feature?:{name:string}}>
+  membership_change_sets?: Array<{id:string;effective_at:string;status:string}>
+  field_authorities?: Array<{field_key:string;authority_type:string;provider:string|null}>
+}
+
+export interface ExternalIdentity {
+  id: number
+  provider: string
+  external_tenant_id: string | null
+  external_subject_id: string
+  email: string | null
+  status: string
+  last_synced_at: string | null
+}
+
+export interface Membership {
+  id: number
+  membership_kind: string
+  is_primary: boolean
+  group: { id: string; code: string; name: string; group_type: string; group_type_id: number }
 }
 
 /**
@@ -99,6 +127,8 @@ export interface SystemSettings {
   /** 月次勤怠の提出・経費精算の申請に承認者による承認を必須にするか。 */
   attendance_requires_approval: boolean
   expense_claim_requires_approval: boolean
+  /** 自分自身への管理系Role付与をサーバー側で拒否する。 */
+  prohibit_self_privileged_role_assignment: boolean
 }
 
 /** システム設定の更新入力。クライアントシークレットのみ書き込み専用で別項目を持つ。 */

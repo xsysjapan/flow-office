@@ -2,12 +2,11 @@ import { ArrowLeft } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { cn } from '../../lib/utils'
-import { hasAnyRole } from '../../utils/roles'
-import { adminNavGroups } from './adminNavGroups'
+import { adminNavGroups, canAccessAdminItem } from './adminNavGroups'
 
 export function AdminLayout() {
   const { user } = useAuth()
-  const visibleGroups = adminNavGroups.filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
+  const visibleGroups = adminNavGroups.map(group=>({...group,items:group.items.filter(item=>canAccessAdminItem(user,item,group.roles))})).filter(group=>group.items.length>0)
 
   return (
     <div className="flex flex-col gap-6 sm:flex-row">

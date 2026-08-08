@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccessControlController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceImportPreviewController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\DeviceIdentityController;
 use App\Http\Controllers\Api\DevicePunchController;
+use App\Http\Controllers\Api\EffectiveAccessController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
 use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
@@ -37,6 +39,7 @@ use App\Http\Controllers\Api\ShiftSwapRequestController;
 use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
 use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
@@ -79,18 +82,62 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
+    Route::get('/access/me', EffectiveAccessController::class);
+    Route::middleware(['feature:administration', 'permission:user.manage'])->prefix('admin/user-management')->group(function () {
+        Route::get('/group-types', [UserManagementController::class, 'groupTypes']);
+        Route::get('/groups', [UserManagementController::class, 'groups']);
+        Route::get('/membership-change-sets', [UserManagementController::class, 'changeSets']);
+        Route::get('/external-identities', [UserManagementController::class, 'externalIdentities']);
+        Route::get('/field-authorities', [UserManagementController::class, 'fieldAuthorities']);
+        Route::post('/external-hr/import-preview', [UserManagementController::class, 'externalHrImportPreview']);
+        Route::post('/external-hr/import', [UserManagementController::class, 'applyExternalHrImport']);
+        Route::post('/groups', [UserManagementController::class, 'storeGroup']);
+        Route::post('/group-types', [UserManagementController::class, 'storeGroupType']);
+        Route::patch('/group-types/{groupType}', [UserManagementController::class, 'updateGroupType']);
+        Route::patch('/groups/{group}', [UserManagementController::class, 'updateGroup']);
+        Route::post('/memberships', [UserManagementController::class, 'storeMembership']);
+        Route::delete('/users/{user}/groups/{group}', [UserManagementController::class, 'destroyMembership']);
+        Route::post('/users/{user}/external-identities', [UserManagementController::class, 'linkExternalIdentity']);
+        Route::delete('/external-identities/{identity}', [UserManagementController::class, 'unlinkExternalIdentity']);
+        Route::put('/field-authorities/{fieldKey}', [UserManagementController::class, 'updateFieldAuthority']);
+        Route::post('/membership-change-sets', [UserManagementController::class, 'scheduleChange']);
+        Route::post('/membership-change-sets/drafts', [UserManagementController::class, 'draftChange']);
+        Route::patch('/membership-change-sets/{changeSet}', [UserManagementController::class, 'updateChange']);
+        Route::post('/membership-change-sets/{changeSet}/apply', [UserManagementController::class, 'applyChange']);
+        Route::post('/membership-change-sets/{changeSet}/schedule', [UserManagementController::class, 'scheduleExistingChange']);
+        Route::post('/membership-change-sets/{changeSet}/cancel', [UserManagementController::class, 'cancelChange']);
+    });
+    Route::middleware(['feature:administration', 'permission:user.manage'])->prefix('admin/access-control')->group(function () {
+        Route::get('/features', [AccessControlController::class, 'features']);
+        Route::get('/permissions', [AccessControlController::class, 'permissions']);
+        Route::get('/roles', [AccessControlController::class, 'roles']);
+        Route::get('/role-assignments', [AccessControlController::class, 'roleAssignments']);
+        Route::get('/feature-suspensions', [AccessControlController::class, 'suspensions']);
+        Route::post('/roles', [AccessControlController::class, 'storeRole']);
+        Route::patch('/roles/{role}', [AccessControlController::class, 'updateRole']);
+        Route::post('/groups/{group}/features', [AccessControlController::class, 'assignFeature']);
+        Route::delete('/groups/{group}/features/{feature}', [AccessControlController::class, 'removeFeature']);
+        Route::post('/feature-suspensions', [AccessControlController::class, 'suspendFeature']);
+        Route::delete('/feature-suspensions/{suspension}', [AccessControlController::class, 'removeSuspension']);
+        Route::post('/role-assignments', [AccessControlController::class, 'storeRoleAssignment']);
+        Route::delete('/role-assignments/{assignment}', [AccessControlController::class, 'destroyRoleAssignment']);
+        Route::patch('/role-assignments/{assignment}', [AccessControlController::class, 'updateRoleAssignment']);
+        Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions']);
+    });
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
     // 入社日・退社日・雇用区分・ロールを含む一覧・詳細はrole:admin,hr_staff限定。
     // 承認者選択(UserPicker)等、一般社員も使う軽量な検索は下のUserController::search
     // (/users/search)を使う。
-    Route::get('/users', [UserController::class, 'index'])->middleware('role:admin,hr_staff');
+    Route::get('/users', [UserController::class, 'index'])->middleware(['role:admin,hr_staff', 'permission:user.manage,any']);
+    Route::post('/users', [UserController::class, 'store'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
     Route::get('/users/search', [UserController::class, 'search']);
-    Route::get('/users/{user}', [UserController::class, 'show'])->middleware('role:admin,hr_staff');
-    Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware('role:admin,hr_staff');
-    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('role:admin,hr_staff');
-    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('role:admin,hr_staff');
-    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware('role:admin,hr_staff');
+    Route::get('/users/{user}', [UserController::class, 'show'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::patch('/users/{user}', [UserController::class, 'update'])->middleware(['feature:administration', 'permission:user.manage']);
+    Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
     Route::get('/roles', [RoleController::class, 'index']);
 
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---
@@ -98,12 +145,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- 汎用申請 (docs/10-usecases-workflow.md UC-W002〜UC-W005) ---
     Route::get('/workflow-requests/mine', [WorkflowRequestController::class, 'indexMine']);
-    Route::get('/workflow-requests/to-approve', [WorkflowRequestController::class, 'indexToApprove']);
+    Route::get('/workflow-requests/to-approve', [WorkflowRequestController::class, 'indexToApprove'])->middleware('permission:approval.execute');
     Route::get('/workflow-requests/{workflowRequest}', [WorkflowRequestController::class, 'show']);
     Route::post('/workflow-requests', [WorkflowRequestController::class, 'store']);
     Route::post('/workflow-requests/{workflowRequest}/submit', [WorkflowRequestController::class, 'submit']);
-    Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve']);
-    Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return']);
+    Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve'])->middleware('permission:approval.execute');
+    Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/cancel', [WorkflowRequestController::class, 'cancel']);
     Route::get('/workflow-requests/{workflowRequest}/history', [WorkflowRequestController::class, 'history']);
 
@@ -126,7 +173,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/expense-entry-presets/{expenseEntryPreset}/apply', [ExpenseEntryPresetController::class, 'apply']);
 
     Route::get('/expense-claims/mine', [ExpenseClaimController::class, 'indexMine']);
-    Route::get('/expense-claims/to-approve', [ExpenseClaimController::class, 'indexToApprove']);
+    Route::get('/expense-claims/to-approve', [ExpenseClaimController::class, 'indexToApprove'])->middleware('permission:approval.execute');
     Route::get('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'show']);
     Route::post('/expense-claims', [ExpenseClaimController::class, 'store']);
     Route::patch('/expense-claims/{expenseClaim}/title', [ExpenseClaimController::class, 'updateTitle']);
@@ -135,8 +182,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/expense-claims/{expenseClaim}/items/{item}', [ExpenseClaimController::class, 'updateItem']);
     Route::delete('/expense-claims/{expenseClaim}/items/{item}', [ExpenseClaimController::class, 'removeItem']);
     Route::post('/expense-claims/{expenseClaim}/submit', [ExpenseClaimController::class, 'submit']);
-    Route::post('/expense-claims/{expenseClaim}/approve', [ExpenseClaimController::class, 'approve']);
-    Route::post('/expense-claims/{expenseClaim}/return', [ExpenseClaimController::class, 'return']);
+    Route::post('/expense-claims/{expenseClaim}/approve', [ExpenseClaimController::class, 'approve'])->middleware('permission:approval.execute');
+    Route::post('/expense-claims/{expenseClaim}/return', [ExpenseClaimController::class, 'return'])->middleware('permission:approval.execute');
     Route::post('/expense-claims/{expenseClaim}/cancel', [ExpenseClaimController::class, 'cancel']);
     Route::delete('/expense-claims/{expenseClaim}', [ExpenseClaimController::class, 'destroy']);
     Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
@@ -202,49 +249,49 @@ Route::middleware('auth:sanctum')->group(function () {
     // トークンからも呼べるようにするためのオプトイン。ability`*`を持つ通常の人間向けトークンは
     // 影響を受けない(Sanctumのability`*`は全ability判定を満たすため)。
     Route::prefix('attendance')->group(function () {
-        Route::get('/today', [AttendanceController::class, 'today'])->middleware('ability:attendance:self:read');
-        Route::post('/clock-in', [AttendanceController::class, 'clockIn'])->middleware('ability:attendance:self:clock');
-        Route::post('/break/start', [AttendanceController::class, 'startBreak'])->middleware('ability:attendance:self:clock');
-        Route::post('/break/end', [AttendanceController::class, 'endBreak'])->middleware('ability:attendance:self:clock');
-        Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->middleware('ability:attendance:self:clock');
-        Route::get('/week', [AttendanceController::class, 'week'])->middleware('ability:attendance:self:read');
-        Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware('ability:attendance:self:read');
-        Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware('ability:attendance:self:update');
-        Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware('ability:attendance:self:read');
-        Route::post('/days/generate-pattern', [AttendanceController::class, 'generateAttendancePattern'])->middleware('ability:attendance:self:update');
-        Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware('ability:attendance:self:read');
-        Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware('ability:attendance:self:update');
-        Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation']);
-        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay']);
-        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store']);
-        Route::get('/months/mine', [AttendanceController::class, 'myMonths'])->middleware('ability:attendance:self:read');
-        Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove']);
+        Route::get('/today', [AttendanceController::class, 'today'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::post('/clock-in', [AttendanceController::class, 'clockIn'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
+        Route::post('/break/start', [AttendanceController::class, 'startBreak'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
+        Route::post('/break/end', [AttendanceController::class, 'endBreak'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
+        Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
+        Route::get('/week', [AttendanceController::class, 'week'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
+        Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::post('/days/generate-pattern', [AttendanceController::class, 'generateAttendancePattern'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
+        Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
+        Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation'])->middleware('permission:attendance.update');
+        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay'])->middleware('permission:attendance.update');
+        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store'])->middleware('permission:attendance.update');
+        Route::get('/months/mine', [AttendanceController::class, 'myMonths'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove'])->middleware('permission:approval.execute');
         Route::get('/months/user/{userId}', [AttendanceController::class, 'monthsForUser'])
-            ->middleware('role:admin');
-        Route::get('/months/{yearMonth}', [AttendanceController::class, 'month'])->middleware('ability:attendance:self:read');
-        Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware('ability:attendance:self:submit');
+            ->middleware(['role:admin', 'permission:attendance.read']);
+        Route::get('/months/{yearMonth}', [AttendanceController::class, 'month'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware(['ability:attendance:self:submit', 'permission:attendance.update,self']);
     });
 
     // --- 作業報告書インポートの差異検出 (docs/26-usecases-monthly-import.md UC-R001) ---
     // ステートレス(何も保存しない)。下書き・インポートセッション自体の保持はmcp/自身のDBで
     // 行う(CLAUDE.mdの設計原則9)。
     Route::post('/attendance/import-preview', [AttendanceImportPreviewController::class, 'check'])
-        ->middleware('ability:report:self:import');
+        ->middleware(['ability:report:self:import', 'permission:attendance.read,self']);
 
     // --- 打刻ログ (docs/07-usecases-attendance.md UC-A012〜UC-A014) ---
     Route::prefix('attendance-punches')->group(function () {
-        Route::get('/', [AttendancePunchController::class, 'index'])->middleware('ability:attendance:self:read');
-        Route::post('/', [AttendancePunchController::class, 'store'])->middleware('ability:attendance:self:clock');
-        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update']);
-        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy']);
+        Route::get('/', [AttendancePunchController::class, 'index'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::post('/', [AttendancePunchController::class, 'store'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
+        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update'])->middleware('permission:attendance.update');
+        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy'])->middleware('permission:attendance.update');
     });
 
     Route::prefix('attendance-months')->group(function () {
-        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth']);
-        Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth']);
-        Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth']);
+        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth'])->middleware('permission:attendance.read');
+        Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth'])->middleware('permission:approval.execute');
+        Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])
-            ->middleware('role:admin,hr_staff');
+            ->middleware(['role:admin,hr_staff', 'permission:attendance.update']);
     });
 
     // フロントエンド起動時のブートストラップ設定(デフォルトタイムゾーン・デフォルト働き方・
@@ -258,11 +305,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
     Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests'])->middleware('ability:leave:self:read');
-    Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove']);
+    Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory'])->middleware('ability:leave:self:read');
     Route::post('/paid-leave/requests', [PaidLeaveController::class, 'storeRequest'])->middleware('ability:leave:self:create');
-    Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest']);
-    Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest']);
+    Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
+    Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/cancel', [PaidLeaveController::class, 'cancelRequest']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/paid-leave/grant-rules', [PaidLeaveController::class, 'storeRule']);
@@ -277,11 +324,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/special-leave/grant-rules', [SpecialLeaveController::class, 'indexRules']);
     Route::get('/special-leave/grants/mine', [SpecialLeaveController::class, 'myGrants']);
     Route::get('/special-leave/requests/mine', [SpecialLeaveController::class, 'myRequests']);
-    Route::get('/special-leave/requests/to-approve', [SpecialLeaveController::class, 'requestsToApprove']);
+    Route::get('/special-leave/requests/to-approve', [SpecialLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::get('/special-leave/history/mine', [SpecialLeaveController::class, 'myHistory']);
     Route::post('/special-leave/requests', [SpecialLeaveController::class, 'storeRequest']);
-    Route::post('/special-leave/requests/{specialLeaveRequest}/approve', [SpecialLeaveController::class, 'approveRequest']);
-    Route::post('/special-leave/requests/{specialLeaveRequest}/return', [SpecialLeaveController::class, 'returnRequest']);
+    Route::post('/special-leave/requests/{specialLeaveRequest}/approve', [SpecialLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
+    Route::post('/special-leave/requests/{specialLeaveRequest}/return', [SpecialLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/special-leave/requests/{specialLeaveRequest}/cancel', [SpecialLeaveController::class, 'cancelRequest']);
     Route::middleware('role:admin,hr_staff')->group(function () {
         Route::post('/special-leave/types', [SpecialLeaveController::class, 'storeType']);
@@ -296,22 +343,22 @@ Route::middleware('auth:sanctum')->group(function () {
     //     ビジネスロジックはApp\Domain\CompensatoryLeaveとして完全に独立させる) ---
     Route::get('/compensatory-leave/grants/mine', [CompensatoryLeaveController::class, 'myGrants']);
     Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
-    Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove']);
+    Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
-    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/approve', [CompensatoryLeaveController::class, 'approveRequest']);
-    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/return', [CompensatoryLeaveController::class, 'returnRequest']);
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/approve', [CompensatoryLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
+    Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/return', [CompensatoryLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/cancel', [CompensatoryLeaveController::class, 'cancelRequest']);
     Route::post('/compensatory-leave/grants/{grant}/request-cancellation', [CompensatoryLeaveController::class, 'requestGrantCancellation']);
-    Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation']);
+    Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation'])->middleware('permission:approval.execute');
 
     // --- 振替休日申請(固定勤務の休日を別日の労働日と入れ替える。ビジネスロジックは
     //     App\Domain\ShiftSwapとして独立させる) ---
     Route::get('/shift-swap/requests/mine', [ShiftSwapRequestController::class, 'myRequests']);
-    Route::get('/shift-swap/requests/to-approve', [ShiftSwapRequestController::class, 'requestsToApprove']);
+    Route::get('/shift-swap/requests/to-approve', [ShiftSwapRequestController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/shift-swap/requests', [ShiftSwapRequestController::class, 'storeRequest']);
     Route::get('/shift-swap/requests/{shiftSwapRequest}', [ShiftSwapRequestController::class, 'show']);
-    Route::post('/shift-swap/requests/{shiftSwapRequest}/approve', [ShiftSwapRequestController::class, 'approveRequest']);
-    Route::post('/shift-swap/requests/{shiftSwapRequest}/return', [ShiftSwapRequestController::class, 'returnRequest']);
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/approve', [ShiftSwapRequestController::class, 'approveRequest'])->middleware('permission:approval.execute');
+    Route::post('/shift-swap/requests/{shiftSwapRequest}/return', [ShiftSwapRequestController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/shift-swap/requests/{shiftSwapRequest}/cancel', [ShiftSwapRequestController::class, 'cancelRequest']);
 
     // --- 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005) ---
@@ -349,7 +396,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- 管理者専用エンドポイント (role:admin単独のもののみ。role:admin,hr_staffのものは
     //     元の場所のまま。docs/15-usecases-admin.md UC-M001〜UC-M003, docs/23-usecases-devices.md,
     //     docs/06-usecases-auth.md UC-003) ---
-    Route::prefix('admin')->middleware('role:admin')->group(function () {
+    Route::prefix('admin')->middleware(['role:admin', 'feature:administration'])->group(function () {
         // 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002)
         Route::post('/request-types', [RequestTypeController::class, 'store']);
         Route::put('/request-types/{requestType}', [RequestTypeController::class, 'update']);
@@ -369,8 +416,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // システム設定 (docs/06-usecases-auth.md UC-003)。認証済みなら誰でも参照できる
         // 安全なサブセットは /system-settings (PublicSystemSettingController) 側にある。
-        Route::get('/system-settings', [SystemSettingController::class, 'show']);
-        Route::put('/system-settings', [SystemSettingController::class, 'update']);
+        Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');
+        Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('permission:system_settings.update');
 
         // 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005)
         Route::get('/devices', [DeviceController::class, 'index']);

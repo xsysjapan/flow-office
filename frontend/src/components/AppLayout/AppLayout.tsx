@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
   CalendarClock,
   CheckCircle2,
@@ -21,6 +21,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../u
 interface NavItem {
   to: string
   label: string
+  feature?: string | string[]
 }
 
 interface NavGroup {
@@ -41,22 +42,22 @@ function navGroups(
     label: '勤怠・申請',
     icon: CalendarClock,
     items: [
-      { to: '/', label: '今日の勤怠' },
-      { to: '/attendance/week', label: '週次勤怠' },
-      { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠' },
-      { to: '/paid-leave', label: '有給' },
-      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇' }] : []),
-      { to: '/expenses', label: '経費精算' },
-      { to: '/expenses/presets', label: '入力プリセット' },
-      { to: '/requests', label: 'その他申請' },
+      { to: '/', label: '今日の勤怠', feature: 'attendance' },
+      { to: '/attendance/week', label: '週次勤怠', feature: 'attendance' },
+      { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠', feature: 'attendance' },
+      { to: '/paid-leave', label: '有給', feature: 'paid_leave' },
+      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇', feature: 'paid_leave' }] : []),
+      { to: '/expenses', label: '経費精算', feature: 'backoffice' },
+      { to: '/expenses/presets', label: '入力プリセット', feature: 'backoffice' },
+      { to: '/requests', label: 'その他申請', feature: 'workflow' },
     ],
   },
   {
     label: '承認',
     icon: CheckCircle2,
     items: [
-      { to: '/approvals', label: '承認待ち' },
-      ...(canSeeBackOfficeTasks ? [{ to: '/backoffice-tasks', label: 'タスク一覧' }] : []),
+      { to: '/approvals', label: '承認待ち', feature: ['attendance','paid_leave','workflow','backoffice'] },
+      ...(canSeeBackOfficeTasks ? [{ to: '/backoffice-tasks', label: 'タスク一覧', feature: 'backoffice' }] : []),
     ],
   },
   {
@@ -202,8 +203,9 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
 
 export function AppLayout() {
   const { user, logout } = useAuth()
+  const { pathname } = useLocation()
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
-  const { data: specialLeaveTypes } = useSpecialLeaveTypes()
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes(user?.effective_features===undefined||user.effective_features.includes('paid_leave'))
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
   const canSeeBackOfficeTasks = hasAnyRole(user?.roles, [
     ROLE.BACKOFFICE_STAFF,
@@ -212,9 +214,28 @@ export function AppLayout() {
     ROLE.HR_STAFF,
     ROLE.ADMIN,
   ])
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canSeeBackOfficeTasks).filter(
-    (group) => !group.roles || hasAnyRole(user?.roles, group.roles),
-  )
+  const hasItemFeature=(item:NavItem)=>!item.feature||user?.effective_features===undefined||(Array.isArray(item.feature)?item.feature.some(feature=>user.effective_features?.includes(feature)):user.effective_features?.includes(item.feature))
+  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canSeeBackOfficeTasks)
+    .filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
+    .map(group=>({...group,items:group.items.filter(hasItemFeature)}))
+    .filter(group=>group.items.length>0)
+
+  if (user?.effective_features !== undefined) {
+    const required = pathname === '/' || pathname.startsWith('/attendance')
+      ? ['attendance']
+      : pathname.startsWith('/paid-leave') || pathname.startsWith('/special-leave')
+        ? ['paid_leave']
+        : pathname.startsWith('/expenses') || pathname.startsWith('/backoffice-tasks')
+          ? ['backoffice']
+          : pathname.startsWith('/requests')
+            ? ['workflow']
+            : pathname.startsWith('/approvals')
+              ? ['attendance','paid_leave','workflow','backoffice']
+              : []
+    if (required.length > 0 && !required.some(feature=>user.effective_features?.includes(feature))) {
+      return <Navigate to="/account" replace />
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
