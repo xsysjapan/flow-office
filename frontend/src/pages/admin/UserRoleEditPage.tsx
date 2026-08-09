@@ -162,6 +162,16 @@ export function UserRoleEditPage() {
     );
   };
 
+  const handleRoleDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setSelectedCodes(user.roles ?? []);
+      updateRoles.reset();
+    } else {
+      setSelectedCodes(user.roles ?? []);
+    }
+    setRoleDialogOpen(open);
+  };
+
   const isExternalHrField = (field: string) =>
     user.field_authorities?.some(
       (authority) =>
@@ -171,7 +181,6 @@ export function UserRoleEditPage() {
 
   return (
     <Card title={`${user.name}のユーザー管理`}>
-      {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
       {updateUser.error && <ErrorMessage error={updateUser.error} />}
       {updateRoles.isSuccess && <Badge tone="success">保存しました</Badge>}
 
@@ -389,7 +398,7 @@ export function UserRoleEditPage() {
             <span className="text-sm text-muted-foreground">付与なし</span>
           )}
         </div>
-        <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+        <Dialog open={roleDialogOpen} onOpenChange={handleRoleDialogOpenChange}>
           <DialogTrigger asChild>
             <Button variant="secondary">ロールを変更</Button>
           </DialogTrigger>
@@ -400,6 +409,7 @@ export function UserRoleEditPage() {
                 グループ経由ではなく、このユーザーへ直接付与するロールを選択します。
               </DialogDescription>
             </DialogHeader>
+            {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
             <ul className="divide-y divide-border">
               {roles?.map((role) => (
                 <li key={role.code} className="py-2">

@@ -71,7 +71,17 @@ export function UserListPage() {
   );
 
   return (
-    <Card title="ユーザー一覧">
+    <Card
+      title="ユーザー一覧"
+      actions={
+        <Link
+          className="text-sm font-medium text-primary hover:underline"
+          to="/admin/users/operations"
+        >
+          外部ID・HR連携
+        </Link>
+      }
+    >
       <div className="mb-4">
         <Button
           variant="secondary"

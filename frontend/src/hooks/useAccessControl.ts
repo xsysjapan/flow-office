@@ -13,24 +13,35 @@ const useAccessMutation = <T>(mutationFn: (input: T) => Promise<unknown>) => {
 };
 export const useEffectiveAccess = () =>
   useQuery({ queryKey: ["access", "me"], queryFn: api.fetchEffectiveAccess });
-export const useFeatures = () =>
-  useQuery({ queryKey: ["access", "features"], queryFn: api.fetchFeatures });
-export const usePermissions = () =>
+export const useFeatures = (enabled = true) =>
+  useQuery({
+    queryKey: ["access", "features"],
+    queryFn: api.fetchFeatures,
+    enabled,
+  });
+export const usePermissions = (enabled = true) =>
   useQuery({
     queryKey: ["access", "permissions"],
     queryFn: api.fetchPermissions,
+    enabled,
   });
-export const useAccessRoles = () =>
-  useQuery({ queryKey: ["access", "roles"], queryFn: api.fetchAccessRoles });
-export const useRoleAssignments = () =>
+export const useAccessRoles = (enabled = true) =>
+  useQuery({
+    queryKey: ["access", "roles"],
+    queryFn: api.fetchAccessRoles,
+    enabled,
+  });
+export const useRoleAssignments = (enabled = true) =>
   useQuery({
     queryKey: ["access", "role-assignments"],
     queryFn: api.fetchRoleAssignments,
+    enabled,
   });
-export const useFeatureSuspensions = () =>
+export const useFeatureSuspensions = (enabled = true) =>
   useQuery({
     queryKey: ["access", "feature-suspensions"],
     queryFn: api.fetchFeatureSuspensions,
+    enabled,
   });
 export const useCreateRole = () => useAccessMutation(api.createRole);
 export const useCloneRole = () =>

@@ -423,11 +423,14 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
     await session.adminPage
       .getByRole("button", { name: "アクセス設定" })
       .click();
+    await session.adminPage
+      .getByRole("tab", { name: "Role・Permission" })
+      .click();
     const roleCard = session.adminPage
       .getByRole("heading", { name: "Role・Permission" })
       .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
     await roleCard
-      .getByLabel("編集するRole")
+      .getByLabel("編集するRole", { exact: true })
       .selectOption({ label: source.name });
     await roleCard
       .getByPlaceholder("新規Roleコード")

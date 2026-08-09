@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { apiFetch, fetchUserIdByEmail } from "./support/api";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
+import { pickDate } from "./support/ui";
 
 const groupTypeCode = "E2E_TEAM";
 const groupTypeName = "E2Eチーム種別";
@@ -91,6 +92,33 @@ async function ensureAccessScenarioGroup(page: Page): Promise<string> {
   return created.id;
 }
 
+test("モバイル管理メニューとアクセス設定をキーボードで操作できる", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, SCENARIO_USERS.admin);
+  await page.goto("/admin");
+
+  await page.getByRole("button", { name: "管理メニューを開く" }).click();
+  const navigation = page.getByRole("dialog", { name: "管理メニュー" });
+  await expect(
+    navigation.getByRole("link", { name: "GroupType" }),
+  ).toBeVisible();
+  await navigation.getByRole("link", { name: "グループ" }).click();
+
+  await page.getByRole("button", { name: "アクセス設定" }).click();
+  const featureTab = page.getByRole("tab", { name: "Feature" });
+  await featureTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "Role・Permission" }),
+  ).toHaveAttribute("data-state", "active");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "アクセス設定" })).toHaveCount(
+    0,
+  );
+});
+
 test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所属変更を管理できる", async ({
   page,
 }) => {
@@ -138,6 +166,7 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
   await membershipCard.getByRole("button", { name: "所属を追加" }).click();
   await expect(groupRow).toContainText(SCENARIO_USERS.monthlyEmployee);
 
+  await page.goto("/admin/users/operations");
   const identityCard = card(page, "外部ID・項目管理責任");
   await identityCard
     .getByLabel("ユーザー")
@@ -161,7 +190,9 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
   await changeCard
     .getByLabel("ユーザー")
     .selectOption({ label: SCENARIO_USERS.punchEmployee });
-  await changeCard.locator('input[type="datetime-local"]').fill(localTomorrow);
+  await pickDate(page, "所属変更の適用日時(日付)", localTomorrow.slice(0, 10), {
+    root: changeCard,
+  });
   await changeCard.getByLabel("グループ").selectOption({ label: groupName });
   await changeCard.getByPlaceholder("メモ").fill("E2E下書き確認");
   await changeCard.getByRole("button", { name: "明細に追加" }).click();
@@ -173,6 +204,7 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
     .filter({ hasText: "draft" });
   await expect(draftRow).toBeVisible();
   await draftRow.getByRole("button", { name: "取消" }).click();
+  await page.getByRole("button", { name: "取り消す" }).click();
   await expect(
     changeCard
       .getByRole("row")
@@ -205,13 +237,14 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await adminPage.getByRole("button", { name: "アクセス設定" }).click();
     const featureCard = card(adminPage, "Feature設定");
     await featureCard
-      .getByLabel("グループ", { exact: true })
+      .getByLabel("対象グループ")
       .selectOption({ label: groupName });
     await featureCard
       .getByLabel("Feature", { exact: true })
       .selectOption({ label: "管理" });
     await featureCard.getByRole("button", { name: "Featureを割当" }).click();
 
+    await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
     const roleCard = card(adminPage, "Role・Permission");
     await roleCard.getByPlaceholder("新規Roleコード").fill(roleCode);
     await roleCard
@@ -222,7 +255,9 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
       roleCard.getByText(`${roleName} (${roleCode})`, { exact: false }),
     ).toBeVisible();
 
-    await roleCard.locator("select").last().selectOption({ label: roleName });
+    await roleCard
+      .getByLabel("Permissionを編集するRole")
+      .selectOption({ label: roleName });
     await roleCard
       .locator("fieldset")
       .filter({ hasText: "system_settings" })
@@ -230,12 +265,14 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
       .check();
     await roleCard.getByRole("button", { name: "保存", exact: true }).click();
 
-    await roleCard.locator("select").nth(2).selectOption("group");
+    await roleCard.getByLabel("付与先種別").selectOption("group");
     await roleCard
-      .getByLabel("グループ", { exact: true })
+      .getByLabel("付与先グループ")
       .selectOption({ label: groupName });
-    await roleCard.locator("select").nth(4).selectOption({ label: roleName });
-    await roleCard.locator("select").nth(5).selectOption("global");
+    await roleCard
+      .getByLabel("Role", { exact: true })
+      .selectOption({ label: roleName });
+    await roleCard.getByLabel("対象範囲").selectOption("global");
     await roleCard.getByRole("button", { name: "Roleを割当" }).click();
     await expect(
       roleCard.getByText(new RegExp(`${roleName} / group / global`)),
@@ -248,11 +285,14 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
         permissions: expect.arrayContaining(["system_settings.read"]),
       });
 
+    await adminPage.getByRole("tab", { name: "個別停止" }).click();
     const suspensionCard = card(adminPage, "個別Feature停止");
     await suspensionCard
-      .getByLabel("ユーザー")
+      .getByLabel("対象ユーザー")
       .selectOption({ label: SCENARIO_USERS.monthlyEmployee });
-    await suspensionCard.getByLabel("Feature").selectOption({ label: "管理" });
+    await suspensionCard
+      .getByLabel("Feature")
+      .selectOption({ label: "管理" });
     await suspensionCard.getByPlaceholder("停止理由").fill("E2E個別停止");
     await suspensionCard
       .getByRole("button", { name: "停止", exact: true })
@@ -268,6 +308,7 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
       });
 
     await suspension.getByRole("button", { name: "解除" }).click();
+    await adminPage.getByRole("button", { name: "解除する" }).click();
     await expect
       .poll(async () => effectiveAccess(userPage))
       .toMatchObject({
@@ -282,7 +323,7 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
 test("外部HR CSVの差分確認と取込を画面から実行できる", async ({ page }) => {
   test.setTimeout(90000);
   await loginAs(page, SCENARIO_USERS.admin);
-  await page.goto("/admin/access-control");
+  await page.goto("/admin/users/operations");
 
   const identityCard = card(page, "外部ID・項目管理責任");
   for (const field of ["display_name", "email"]) {

@@ -311,14 +311,19 @@ Permissionごとに利用可能なScopeを`PermissionScopeType`で定義する�
 ## 31.9 管理画面
 
 - ユーザー一覧: 「人事・組織」に配置する。氏名、社員番号、メール、Microsoft連携状態、主所属、雇用区分、在籍状態、
-  管理元、Feature概要を表示し、Group・GroupType・未連携・外部HR管理等で検索する。
+  管理元、Feature概要を表示し、Group・GroupType・未連携・外部HR管理等で検索する。外部ID・項目管理責任、
+  将来日付の所属変更、外部HR CSV取込はユーザー一覧から遷移するユーザー連携管理画面に配置する。
 - ユーザー詳細: 基本情報、外部ID、現在所属、予約変更、働き方、有効Feature、
   有効Role/Permission、直接・Group経由の付与元、Scope、有効期間、個別停止、変更履歴を分けて表示する。
   変更頻度の低いユーザー直接Roleの変更はモーダルで行う。
 - グループ管理: 「人事・組織」に配置し、GroupTypeで絞り込みながら基本情報、メンバー、Feature、
   Role、管理スコープ、履歴を確認する。GroupType自体の追加・編集は「システム」の独立画面で行う。
 - アクセス設定: 変更頻度の低いFeature割当・解除、Role・Permission、RoleAssignment、個別Feature停止は、
-  グループ管理画面のモーダルから変更する。グループ一覧ではFeature・Roleの現状だけを表示する。
+  グループ管理画面のモーダルから変更する。モーダル内は「Feature」「Role・Permission」「個別停止」のタブに分け、
+  Feature一覧は選択中のGroupに絞り込む。グループ一覧ではFeature・Roleの現状だけを表示する。
+- 操作安全性: 所属・Feature・Role割当・個別停止の解除、グループ無効化等は確認ダイアログを挟む。
+  モーダル内で失敗した更新のエラーはモーダル内に表示し、入力内容を保持して再試行できるようにする。
+- レスポンシブ対応: 管理メニューはデスクトップではサイドバー、狭い画面ではSheet型メニューとして表示する。
 - Role管理: Permissionを業務カテゴリ別チェックボックスで編集し、Resource/Action/Conditionの
   生入力UIは作らない。標準Roleを選択し、Permission集合を引き継いだ独自Roleを複製できる。
 - RoleAssignment: 付与先、Role、対象範囲、配下を含むか、有効期間を選び、設定結果を自然文で
