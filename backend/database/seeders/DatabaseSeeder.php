@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
@@ -33,13 +33,18 @@ class DatabaseSeeder extends Seeder
             ])->getAttributes(),
         );
 
-        $adminRole = Role::query()->where('code', Role::ADMIN)->firstOrFail();
-        $admin->roles()->syncWithoutDetaching([$adminRole->id]);
-
         $this->call([
             UserManagementSeeder::class,
             AccessControlSeeder::class,
             DefaultWorkStyleSeeder::class,
         ]);
+
+        DB::table('memberships')->updateOrInsert(
+            [
+                'user_id' => $admin->id,
+                'group_id' => DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id'),
+            ],
+            ['membership_kind' => 'member', 'updated_at' => now(), 'created_at' => now()],
+        );
     }
 }

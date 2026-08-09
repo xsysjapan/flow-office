@@ -33,7 +33,6 @@ use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\PublicSystemSettingController;
 use App\Http\Controllers\Api\RequestTypeController;
-use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\ShiftSwapRequestController;
@@ -87,22 +86,22 @@ Route::post('/dev/apply-membership-changes', DevApplyMembershipChangesController
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);
     Route::middleware(['feature:administration.users'])->prefix('admin/user-management')->group(function () {
-        Route::get('/group-types', [UserManagementController::class, 'groupTypes'])->middleware('permission:group.view,any');
+        Route::get('/group-types', [UserManagementController::class, 'groupTypes'])->middleware('permission:group_type.view,any');
         Route::get('/groups', [UserManagementController::class, 'groups'])->middleware('permission:group.view,any');
         Route::get('/membership-change-sets', [UserManagementController::class, 'changeSets'])->middleware('permission:group.change.schedule,any');
-        Route::get('/external-identities', [UserManagementController::class, 'externalIdentities'])->middleware('permission:user.view,any');
-        Route::get('/field-authorities', [UserManagementController::class, 'fieldAuthorities'])->middleware('permission:user.view,any');
-        Route::post('/external-hr/import-preview', [UserManagementController::class, 'externalHrImportPreview'])->middleware('permission:user.update,any');
-        Route::post('/external-hr/import', [UserManagementController::class, 'applyExternalHrImport'])->middleware('permission:user.update,any');
+        Route::get('/external-identities', [UserManagementController::class, 'externalIdentities'])->middleware('permission:external_identity.view,any');
+        Route::get('/field-authorities', [UserManagementController::class, 'fieldAuthorities'])->middleware('permission:field_authority.view,any');
+        Route::post('/external-hr/import-preview', [UserManagementController::class, 'externalHrImportPreview'])->middleware('permission:external_hr.import,any');
+        Route::post('/external-hr/import', [UserManagementController::class, 'applyExternalHrImport'])->middleware('permission:external_hr.import,any');
         Route::post('/groups', [UserManagementController::class, 'storeGroup'])->middleware('permission:group.create,any');
-        Route::post('/group-types', [UserManagementController::class, 'storeGroupType'])->middleware('permission:group.create,any');
-        Route::patch('/group-types/{groupType}', [UserManagementController::class, 'updateGroupType'])->middleware('permission:group.update,any');
+        Route::post('/group-types', [UserManagementController::class, 'storeGroupType'])->middleware('permission:group_type.create,any');
+        Route::patch('/group-types/{groupType}', [UserManagementController::class, 'updateGroupType'])->middleware('permission:group_type.update,any');
         Route::patch('/groups/{group}', [UserManagementController::class, 'updateGroup'])->middleware('permission:group.update');
         Route::post('/memberships', [UserManagementController::class, 'storeMembership'])->middleware('permission:group.membership.update,any');
         Route::delete('/users/{user}/groups/{group}', [UserManagementController::class, 'destroyMembership'])->middleware('permission:group.membership.update');
-        Route::post('/users/{user}/external-identities', [UserManagementController::class, 'linkExternalIdentity'])->middleware('permission:user.update');
-        Route::delete('/external-identities/{identity}', [UserManagementController::class, 'unlinkExternalIdentity'])->middleware('permission:user.update,any');
-        Route::put('/field-authorities/{fieldKey}', [UserManagementController::class, 'updateFieldAuthority'])->middleware('permission:user.update,any');
+        Route::post('/users/{user}/external-identities', [UserManagementController::class, 'linkExternalIdentity'])->middleware('permission:external_identity.manage');
+        Route::delete('/external-identities/{identity}', [UserManagementController::class, 'unlinkExternalIdentity'])->middleware('permission:external_identity.manage,any');
+        Route::put('/field-authorities/{fieldKey}', [UserManagementController::class, 'updateFieldAuthority'])->middleware('permission:field_authority.update,any');
         Route::post('/membership-change-sets', [UserManagementController::class, 'scheduleChange'])->middleware('permission:group.change.schedule,any');
         Route::post('/membership-change-sets/drafts', [UserManagementController::class, 'draftChange'])->middleware('permission:group.change.schedule,any');
         Route::patch('/membership-change-sets/{changeSet}', [UserManagementController::class, 'updateChange'])->middleware('permission:group.change.schedule,any');
@@ -129,20 +128,17 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->middleware('permission:role.update,any');
     });
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
-    // 入社日・退社日・雇用区分・ロールを含む一覧・詳細はrole:admin,hr_staff限定。
+    // 入社日・退社日・雇用区分を含む一覧・詳細も実効Permissionで制御する。
     // 承認者選択(UserPicker)等、一般社員も使う軽量な検索は下のUserController::search
     // (/users/search)を使う。
-    Route::get('/users', [UserController::class, 'index'])->middleware(['role:admin,hr_staff', 'permission:user.view,any']);
-    Route::post('/users', [UserController::class, 'store'])->middleware(['role:admin,hr_staff', 'permission:user.create,any']);
+    Route::get('/users', [UserController::class, 'index'])->middleware('permission:user.view,any');
+    Route::post('/users', [UserController::class, 'store'])->middleware('permission:user.create,any');
     Route::get('/users/search', [UserController::class, 'search']);
-    Route::get('/users/{user}', [UserController::class, 'show'])->middleware(['role:admin,hr_staff', 'permission:user.view']);
+    Route::get('/users/{user}', [UserController::class, 'show'])->middleware('permission:user.view');
     Route::patch('/users/{user}', [UserController::class, 'update'])->middleware(['feature:administration.users', 'permission:user.update']);
-    Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware(['role:admin,hr_staff', 'permission:role.assign']);
-    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
-    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
-    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
-    Route::get('/roles', [RoleController::class, 'index']);
-
+    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('permission:user.update');
+    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('permission:user.update');
+    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware('permission:user.update');
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---
     Route::get('/request-types', [RequestTypeController::class, 'index']);
 
@@ -192,7 +188,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/expense-claims/{expenseClaim}/history', [ExpenseClaimController::class, 'history']);
 
     // --- バックオフィス処理 (docs/11-usecases-backoffice.md UC-B002〜UC-B003) ---
-    Route::middleware('role:backoffice_staff,accounting_staff,general_affairs_staff,hr_staff,admin')->group(function () {
+    Route::middleware(['feature:backoffice.tasks', 'permission:backoffice_task.execute,any'])->group(function () {
         Route::get('/backoffice-tasks/unassigned', [BackOfficeTaskController::class, 'indexUnassigned']);
         Route::get('/backoffice-tasks/mine', [BackOfficeTaskController::class, 'indexMine']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
@@ -202,11 +198,11 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
 
     // --- CSV/Excel出力 (docs/14-usecases-export.md) ---
     Route::get('/exports/attendance', [ExportController::class, 'attendance'])
-        ->middleware('role:admin,hr_staff');
+        ->middleware('permission:attendance.export,any');
     Route::get('/exports/attendance.xlsx', [ExportController::class, 'attendanceExcel'])
-        ->middleware('role:admin,hr_staff');
+        ->middleware('permission:attendance.export,any');
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
-        ->middleware('role:accounting_staff,admin');
+        ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
 
     // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C001〜UC-C003) ---
     Route::get('/work-calendars', [WorkCalendarController::class, 'index']);
@@ -217,7 +213,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/rotation-patterns', [RotationPatternController::class, 'index']);
     Route::get('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'show']);
     Route::get('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'index']);
-    Route::middleware('role:admin,hr_staff')->group(function () {
+    Route::middleware('permission:attendance.manage,any')->group(function () {
         Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
         Route::post('/work-calendars/{workCalendar}/publish', [WorkCalendarController::class, 'publish']);
         Route::put('/work-calendars/{workCalendar}/days', [WorkCalendarController::class, 'putDays']);
@@ -270,7 +266,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/months/mine', [AttendanceController::class, 'myMonths'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove'])->middleware('permission:approval.execute');
         Route::get('/months/user/{userId}', [AttendanceController::class, 'monthsForUser'])
-            ->middleware(['role:admin', 'permission:attendance.read']);
+            ->middleware('permission:attendance.read');
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware(['ability:attendance:self:submit', 'permission:attendance.update,self']);
     });
@@ -294,12 +290,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])
-            ->middleware(['role:admin,hr_staff', 'permission:attendance.update']);
+            ->middleware('permission:attendance.update,any');
     });
 
     // フロントエンド起動時のブートストラップ設定(デフォルトタイムゾーン・デフォルト働き方・
     // 勤怠提出/締め期限日・有給/特別休暇の承認要否)をまとめて返す軽量エンドポイント。
-    // SystemSettingController(/admin/system-settings、role:admin限定、M365設定・通知メール設定等の
+    // SystemSettingController(/admin/system-settings、system_settings Permission限定、M365設定・通知メール設定等の
     // 機微な項目を含む)とは別に、認証済みなら誰でも参照できるエンドポイントとしてここ
     // (/system-settings、PublicSystemSettingController)に分離する。
     Route::get('/system-settings', [PublicSystemSettingController::class, 'show']);
@@ -314,7 +310,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/paid-leave/requests/{paidLeaveRequest}/approve', [PaidLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/return', [PaidLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/paid-leave/requests/{paidLeaveRequest}/cancel', [PaidLeaveController::class, 'cancelRequest']);
-    Route::middleware('role:admin,hr_staff')->group(function () {
+    Route::middleware('permission:leave.manage,any')->group(function () {
         Route::post('/paid-leave/grant-rules', [PaidLeaveController::class, 'storeRule']);
         Route::get('/paid-leave/grants/user/{userId}', [PaidLeaveController::class, 'grantsForUser']);
         Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
@@ -333,7 +329,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/special-leave/requests/{specialLeaveRequest}/approve', [SpecialLeaveController::class, 'approveRequest'])->middleware('permission:approval.execute');
     Route::post('/special-leave/requests/{specialLeaveRequest}/return', [SpecialLeaveController::class, 'returnRequest'])->middleware('permission:approval.execute');
     Route::post('/special-leave/requests/{specialLeaveRequest}/cancel', [SpecialLeaveController::class, 'cancelRequest']);
-    Route::middleware('role:admin,hr_staff')->group(function () {
+    Route::middleware('permission:leave.manage,any')->group(function () {
         Route::post('/special-leave/types', [SpecialLeaveController::class, 'storeType']);
         Route::put('/special-leave/types/{specialLeaveType}', [SpecialLeaveController::class, 'updateType']);
         Route::post('/special-leave/grant-rules', [SpecialLeaveController::class, 'storeRule']);
@@ -371,12 +367,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         ->middleware('ability:recorder:punch,punch:self,device:heartbeat');
     // 端末アプリが一時ペアリングトークン(claim token、device:claim-pairingのみのability)を
     // 業務用の本トークンに交換する。呼び出し元はこの時点でその一時トークンの持ち主自身
-    // (Device)であることが認証済みのため、role:adminではなくabilityで絞る。
+    // (Device)であることが認証済みのため、ユーザーPermissionではなくabilityで絞る。
     Route::post('/devices/pairing/claim', [DeviceController::class, 'claimPairing'])
         ->middleware('ability:device:claim-pairing')
         ->name('devices.pairing.claim');
     // 停止・有効化・失効は「本人(個人端末)または管理者」を許可するためController側で判定する
-    // (abortUnlessDeviceOwnerOrAdmin)。role:adminミドルウェアでは絞り込まない。
+    // (abortUnlessDeviceOwnerOrAdmin)。ユーザー向けPermissionミドルウェアでは絞り込まない。
     Route::post('/devices/{device}/disable', [DeviceController::class, 'disable']);
     Route::post('/devices/{device}/enable', [DeviceController::class, 'enable']);
     Route::post('/devices/{device}/revoke', [DeviceController::class, 'revoke']);
@@ -397,40 +393,38 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/users/me/integrations/{integration}/revoke', [IntegrationController::class, 'revoke']);
 
     // Feature / Permission による動的な付与を許可するシステム管理機能。
-    // legacy role:admin では囲まず、実効アクセスだけを認可境界にする。
+    // 実効Feature・Permissionだけを認可境界にする。
     Route::prefix('admin')->middleware('feature:administration.settings')->group(function () {
-        Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('configured-or-admin:administration.settings');
-        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('configured-or-admin:administration.settings');
-        Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware(['configured-or-admin:administration.settings,system_settings.read', 'permission:system_settings.read']);
-        Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware(['configured-or-admin:administration.settings,system_settings.update', 'permission:system_settings.update']);
+        Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('permission:audit_log.view,any');
+        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('permission:audit_log.export,any');
+        Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');
+        Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('permission:system_settings.update');
     });
 
-    // --- 管理者専用エンドポイント (role:admin単独のもののみ。role:admin,hr_staffのものは
-    //     元の場所のまま。docs/15-usecases-admin.md UC-M001〜UC-M003, docs/23-usecases-devices.md,
-    //     docs/06-usecases-auth.md UC-003) ---
-    Route::prefix('admin')->middleware(['role:admin', 'feature:administration'])->group(function () {
+    // --- システム管理エンドポイント。旧ユーザーロールではなく管理Featureと実効Permissionで制御する。 ---
+    Route::prefix('admin')->middleware('feature:administration')->group(function () {
         // 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002)
-        Route::post('/request-types', [RequestTypeController::class, 'store']);
-        Route::put('/request-types/{requestType}', [RequestTypeController::class, 'update']);
+        Route::post('/request-types', [RequestTypeController::class, 'store'])->middleware('permission:request_type.manage,any');
+        Route::put('/request-types/{requestType}', [RequestTypeController::class, 'update'])->middleware('permission:request_type.manage,any');
 
         // 経費精算 カテゴリマスタ (docs/30-usecases-expense.md)
-        Route::post('/expense-categories', [ExpenseCategoryController::class, 'store']);
-        Route::put('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update']);
-        Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy']);
+        Route::post('/expense-categories', [ExpenseCategoryController::class, 'store'])->middleware('permission:expense_category.manage,any');
+        Route::put('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update'])->middleware('permission:expense_category.manage,any');
+        Route::delete('/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'destroy'])->middleware('permission:expense_category.manage,any');
 
         // 勤怠未提出督促の個別除外
-        Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
-        Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
+        Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index'])->middleware('permission:attendance_reminder_exclusion.manage,any');
+        Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store'])->middleware('permission:attendance_reminder_exclusion.manage,any');
 
         // 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005)
-        Route::get('/devices', [DeviceController::class, 'index']);
-        Route::post('/devices', [DeviceController::class, 'store']);
-        Route::get('/devices/{device}', [DeviceController::class, 'show']);
-        Route::patch('/devices/{device}', [DeviceController::class, 'update']);
-        Route::patch('/devices/{device}/roles', [DeviceController::class, 'updateRoles']);
-        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim']);
-        Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope']);
-        Route::delete('/devices/{device}', [DeviceController::class, 'destroy']);
+        Route::get('/devices', [DeviceController::class, 'index'])->middleware('permission:device.manage,any');
+        Route::post('/devices', [DeviceController::class, 'store'])->middleware('permission:device.manage,any');
+        Route::get('/devices/{device}', [DeviceController::class, 'show'])->middleware('permission:device.manage,any');
+        Route::patch('/devices/{device}', [DeviceController::class, 'update'])->middleware('permission:device.manage,any');
+        Route::patch('/devices/{device}/roles', [DeviceController::class, 'updateRoles'])->middleware('permission:device.manage,any');
+        Route::post('/devices/{device}/pairing', [DeviceController::class, 'issuePairingClaim'])->middleware('permission:device.manage,any');
+        Route::post('/devices/{device}/scopes', [DeviceController::class, 'grantScope'])->middleware('permission:device.manage,any');
+        Route::delete('/devices/{device}', [DeviceController::class, 'destroy'])->middleware('permission:device.manage,any');
     });
 });
 

@@ -69,7 +69,7 @@ class ExpenseClaimFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $accountingStaff = User::factory()->create();
-        $accountingStaff->roles()->attach(Role::query()->firstOrCreate(['code' => Role::ACCOUNTING_STAFF], ['name' => '経理担当者']));
+        $this->assignRole($accountingStaff, Role::query()->firstOrCreate(['code' => Role::ACCOUNTING_STAFF], ['name' => '経理担当者']));
         $category = $this->makeCategory();
 
         $claimId = $this->actingAs($employee)->postJson('/api/expense-claims')->json('id');

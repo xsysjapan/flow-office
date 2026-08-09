@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\UserManagement\Commands\AddMembership;
-use App\Domain\UserManagement\Commands\AssignUserRoles;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Commands\SetUserTerminationDate;
@@ -15,7 +14,6 @@ use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSearchResource;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,7 +57,7 @@ class UserController extends Controller
             $commandBus->dispatch(new AddMembership($id, $groupId, 'member', false, $request->user()->id));
         }
 
-        return (new UserResource($user->load(['roles', 'externalIdentities', 'memberships.group.type'])))
+        return (new UserResource($user->load(['externalIdentities', 'memberships.group.type'])))
             ->response()->setStatusCode(201);
     }
 
@@ -76,7 +74,7 @@ class UserController extends Controller
         ]);
         $commandBus->dispatch(new UpdateUserProfile($user->id, $changes, $request->user()->id));
 
-        return new UserResource($user->refresh()->load(['roles', 'externalIdentities', 'memberships.group.type']));
+        return new UserResource($user->refresh()->load(['externalIdentities', 'memberships.group.type']));
     }
 
     #[OA\Get(
@@ -105,7 +103,7 @@ class UserController extends Controller
         ]);
 
         $query = User::query()
-            ->with(['roles', 'externalIdentities', 'memberships.group.type'])
+            ->with(['externalIdentities', 'memberships.group.type'])
             ->when($request->string('q')->toString(), fn ($query, $q) => $query->where(function ($sub) use ($q) {
                 $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%")->orWhere('employee_number', 'like', "%{$q}%");
             }))
@@ -137,7 +135,7 @@ class UserController extends Controller
     /**
      * 承認者選択(UserPicker)など、一般社員も含め誰でも使える軽量な検索専用エンドポイント。
      * 入社日・退社日・雇用区分・ロールのような管理者向けの機微な項目は返さない
-     * (それらが必要な一覧・詳細は `index`/`show` を使い、role:admin,hr_staff で保護する)。
+     * (それらが必要な一覧・詳細は `index`/`show` を使い、user.view Permissionで保護する)。
      */
     #[OA\Get(
         path: '/users/search',
@@ -184,58 +182,25 @@ class UserController extends Controller
     )]
     public function show(User $user, EffectiveAccessResolver $resolver): UserResource
     {
-        $user->load(['roles', 'externalIdentities', 'memberships.group.type', 'roleAssignments.role.permissions', 'featureSuspensions.feature']);
+        $user->load(['externalIdentities', 'memberships.group.type', 'roleAssignments.role.permissions', 'featureSuspensions.feature']);
         $user->setAttribute('effective_features', $resolver->features($user)->all());
         $user->setAttribute('effective_permissions', $resolver->permissions($user)->all());
         $user->setAttribute('effective_access_explanation', $resolver->explain($user));
-        $user->setAttribute('membership_change_sets', DB::table('membership_change_sets')->where('user_id', $user->id)->orderByDesc('effective_at')->get());
+        $changeSets = DB::table('membership_change_sets')
+            ->where('user_id', $user->id)
+            ->orderByDesc('updated_at')
+            ->limit(20)
+            ->get();
+        $changeItems = DB::table('membership_change_items')
+            ->whereIn('change_set_id', $changeSets->pluck('id'))
+            ->get()
+            ->groupBy('change_set_id');
+        $user->setAttribute('membership_change_sets', $changeSets->map(
+            fn ($set) => (array) $set + ['items' => $changeItems->get($set->id, collect())->values()],
+        ));
         $user->setAttribute('field_authorities', DB::table('field_authorities')->orderBy('field_key')->get());
 
         return new UserResource($user);
-    }
-
-    #[OA\Put(
-        path: '/users/{user}/roles',
-        operationId: 'users.updateRoles',
-        summary: 'ユーザーのロールを更新する',
-        tags: ['ユーザー'],
-        parameters: [
-            new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
-        ],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ['role_codes'],
-                properties: [
-                    new OA\Property(property: 'role_codes', type: 'array', items: new OA\Items(type: 'string')),
-                ],
-            ),
-        ),
-        responses: [
-            new OA\Response(response: 200, description: 'Successful response'),
-            new OA\Response(response: 401, description: 'Unauthenticated'),
-        ],
-    )]
-    public function updateRoles(Request $request, User $user, CommandBus $commandBus): UserResource
-    {
-        $resolver = app(EffectiveAccessResolver::class);
-        $hasGlobalAccess = $resolver->hasGlobalPermission($request->user(), 'role.assign')
-            || (config('access_control.allow_unconfigured_catalog', false)
-                && ! DB::table('permissions')->where('code', 'role.assign')->exists()
-                && $request->user()->hasRole(Role::ADMIN));
-        abort_unless($hasGlobalAccess, 403);
-        $data = $request->validate([
-            'role_codes' => ['required', 'array'],
-            'role_codes.*' => ['string'],
-        ]);
-
-        $commandBus->dispatch(new AssignUserRoles(
-            userId: $user->id,
-            roleCodes: $data['role_codes'],
-            changedByUserId: $request->user()->id,
-        ));
-
-        return new UserResource($user->refresh()->load('roles'));
     }
 
     /**
@@ -274,7 +239,7 @@ class UserController extends Controller
             changedByUserId: $request->user()->id,
         ));
 
-        return new UserResource($user->refresh()->load('roles'));
+        return new UserResource($user->refresh());
     }
 
     #[OA\Put(
@@ -297,7 +262,7 @@ class UserController extends Controller
             changedByUserId: $request->user()->id,
         ));
 
-        return new UserResource($user->refresh()->load('roles'));
+        return new UserResource($user->refresh());
     }
 
     #[OA\Put(
@@ -333,6 +298,6 @@ class UserController extends Controller
             changedByUserId: $request->user()->id,
         ));
 
-        return new UserResource($user->refresh()->load('roles'));
+        return new UserResource($user->refresh());
     }
 }

@@ -9,21 +9,17 @@ use App\Domain\UserManagement\Events\UserLoggedIn;
 use App\Domain\UserManagement\Events\UserMigratedFromLegacy;
 use App\Domain\UserManagement\Events\UserOnboardedAsAdmin;
 use App\Domain\UserManagement\Events\UserProfileUpdated;
-use App\Domain\UserManagement\Events\UserRolesChanged;
-use App\Domain\UserManagement\Events\UserRolesMigratedFromLegacy;
 use App\Domain\UserManagement\Events\UserSsoAccountLinked;
 use App\Domain\UserManagement\Events\UserSyncedFromMs365;
 use App\Domain\UserManagement\Events\UserTerminationDateSet;
 use App\Domain\UserManagement\Events\UserUsageStartDateSet;
-use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * user.*イベントから users を作成・更新する。ロール(role_user)もこのProjectorが担う
- * (Handlerが直接attach/syncすると、usersテーブルと同様にイベントから再現できなくなるため)。
+ * user.*イベントからusersを作成・更新し、新規ユーザーを標準グループへ所属させる。
  */
 class UserProjector extends Projector
 {
@@ -35,10 +31,7 @@ class UserProjector extends Projector
                 'usage_start_date' => $event->createdAt()->toDateString()],
         );
 
-        $employeeRole = Role::query()->where('code', Role::EMPLOYEE)->first();
-        if ($employeeRole !== null) {
-            $user->roles()->syncWithoutDetaching([$employeeRole->id]);
-        }
+        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
     }
 
     public function onUserProfileUpdated(UserProfileUpdated $event): void
@@ -64,10 +57,8 @@ class UserProjector extends Projector
             ],
         );
 
-        $adminRole = Role::query()->where('code', Role::ADMIN)->first();
-        if ($adminRole !== null) {
-            $user->roles()->sync([$adminRole->id]);
-        }
+        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
+        $this->ensureMembership($user->id, 'SYSTEM_ADMINISTRATORS', $event->createdAt());
         if ($event->entraUserId !== null) {
             $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
         }
@@ -91,10 +82,7 @@ class UserProjector extends Projector
             ],
         );
 
-        $employeeRole = Role::query()->where('code', Role::EMPLOYEE)->first();
-        if ($employeeRole !== null) {
-            $user->roles()->sync([$employeeRole->id]);
-        }
+        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
         $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
     }
 
@@ -121,6 +109,7 @@ class UserProjector extends Projector
                 'usage_start_date' => $existing->usage_start_date ?? $event->createdAt()->toDateString(),
             ],
         );
+        $this->ensureMembership($event->aggregateRootUuid(), 'ALL_USERS', $event->createdAt());
         $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $event->email, $event->createdAt());
     }
 
@@ -148,26 +137,22 @@ class UserProjector extends Projector
         ]);
     }
 
-    public function onUserRolesChanged(UserRolesChanged $event): void
+    private function ensureMembership(string $userId, string $groupCode, mixed $occurredAt): void
     {
-        $user = User::query()->find($event->aggregateRootUuid());
-        if ($user === null) {
+        $groupId = DB::table('groups')->where('code', $groupCode)->value('id');
+        if ($groupId === null) {
             return;
         }
-
-        $roleIds = Role::query()->whereIn('code', $event->newRoleCodes)->pluck('id');
-        $user->roles()->sync($roleIds);
-    }
-
-    public function onUserRolesMigratedFromLegacy(UserRolesMigratedFromLegacy $event): void
-    {
-        $user = User::query()->find($event->aggregateRootUuid());
-        if ($user === null) {
-            return;
-        }
-
-        $roleIds = Role::query()->whereIn('code', $event->roleCodes)->pluck('id');
-        $user->roles()->sync($roleIds);
+        DB::table('memberships')->updateOrInsert(
+            ['user_id' => $userId, 'group_id' => $groupId],
+            [
+                'membership_kind' => 'member',
+                'is_primary' => false,
+                'created_by' => $userId,
+                'created_at' => $occurredAt,
+                'updated_at' => $occurredAt,
+            ],
+        );
     }
 
     /** 本番カットオーバー移行時にusers行を初期状態として記録した合成イベントの再生用。 */

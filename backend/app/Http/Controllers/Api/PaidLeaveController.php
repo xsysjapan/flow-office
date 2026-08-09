@@ -368,7 +368,7 @@ class PaidLeaveController extends Controller
 
     /**
      * UC-P007: 管理者・人事担当者が対象社員の有給履歴を確認する。他の管理者向け
-     * エンドポイント(`grantsForUser`等)と同様、ロール制限はルート側(`role:admin,hr_staff`)
+     * エンドポイント(`grantsForUser`等)と同様、認可はルート側のFeature・Permission
      * で行う。
      */
     #[OA\Get(

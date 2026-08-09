@@ -11,7 +11,6 @@ const targetUser: User = {
   department: '総務部',
   job_title: '主任',
   employment_status: 'active',
-  roles: ['employee', 'general_affairs_staff'],
   last_login_at: '2026-07-08T09:00:00+09:00',
 }
 
@@ -92,5 +91,5 @@ export const Default: Story = {
 }
 
 export const NoRoles: Story = {
-  render: withSeeded({ ...targetUser, roles: [] }),
+  render: withSeeded({ ...targetUser }),
 }

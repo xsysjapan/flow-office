@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -37,6 +36,7 @@ class UserManagementSeeder extends Seeder
         foreach ([
             'ALL_USERS' => '全利用者',
             'SYSTEM_ADMINISTRATORS' => 'システム管理者',
+            'HUMAN_RESOURCES_USERS' => '人事管理利用者',
             'BACKOFFICE_USERS' => 'バックオフィス利用者',
         ] as $code => $name) {
             $groupIds[$code] = DB::table('groups')->where('code', $code)->value('id') ?: (string) Str::uuid();
@@ -46,31 +46,11 @@ class UserManagementSeeder extends Seeder
             );
         }
 
-        User::query()->with('roles')->each(function (User $user) use ($groupIds, $now): void {
+        User::query()->each(function (User $user) use ($groupIds, $now): void {
             DB::table('memberships')->updateOrInsert(
                 ['user_id' => $user->id, 'group_id' => $groupIds['ALL_USERS']],
                 ['membership_kind' => 'member', 'updated_at' => $now, 'created_at' => $now],
             );
-
-            if ($user->roles->contains('code', Role::ADMIN)) {
-                DB::table('memberships')->updateOrInsert(
-                    ['user_id' => $user->id, 'group_id' => $groupIds['SYSTEM_ADMINISTRATORS']],
-                    ['membership_kind' => 'member', 'updated_at' => $now, 'created_at' => $now],
-                );
-            }
-
-            if ($user->roles->pluck('code')->intersect([
-                Role::BACKOFFICE_STAFF,
-                Role::ACCOUNTING_STAFF,
-                Role::GENERAL_AFFAIRS_STAFF,
-                Role::HR_STAFF,
-                Role::ADMIN,
-            ])->isNotEmpty()) {
-                DB::table('memberships')->updateOrInsert(
-                    ['user_id' => $user->id, 'group_id' => $groupIds['BACKOFFICE_USERS']],
-                    ['membership_kind' => 'member', 'updated_at' => $now, 'created_at' => $now],
-                );
-            }
 
             if ($user->entra_user_id) {
                 DB::table('external_identities')->updateOrInsert(

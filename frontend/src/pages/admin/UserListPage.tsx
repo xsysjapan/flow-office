@@ -16,9 +16,14 @@ import {
   TableRow,
 } from "../../components/ui/table";
 import { useCreateUser, useUsers } from "../../hooks/useUsers";
+import {
+  ACCOUNT_STATUS_OPTIONS,
+  accountStatusLabel,
+  employmentStatusLabel,
+} from "../../utils/userLabels";
 
 /**
- * UC-M001: ユーザーを検索し、権限編集画面へ遷移する一覧。
+ * UC-M001: ユーザーを検索し、人事・所属情報を確認する一覧。
  */
 export function UserListPage() {
   const [query, setQuery] = useState("");
@@ -65,7 +70,10 @@ export function UserListPage() {
     new Map(
       groupOptions.map((group) => [
         group.group_type_id,
-        { id: group.group_type_id, code: group.group_type },
+        {
+          id: group.group_type_id,
+          name: group.group_type_name ?? group.group_type,
+        },
       ]),
     ).values(),
   );
@@ -76,7 +84,7 @@ export function UserListPage() {
       actions={
         <Link
           className="text-sm font-medium text-primary hover:underline"
-          to="/admin/users/operations"
+          to="/admin/hr-import"
         >
           外部ID・HR連携
         </Link>
@@ -177,23 +185,23 @@ export function UserListPage() {
       />
       <div className="mb-4 flex flex-wrap gap-3">
         <NativeSelect
-          aria-label="GroupTypeで絞り込み"
+          aria-label="グループ種別で絞り込み"
           value={groupTypeId}
           onChange={(e) => setGroupTypeId(e.target.value)}
         >
-          <option value="">全GroupType</option>
+          <option value="">すべてのグループ種別</option>
           {groupTypeOptions.map((type) => (
             <option key={type.id} value={type.id}>
-              {type.code}
+              {type.name}
             </option>
           ))}
         </NativeSelect>
         <NativeSelect
-          aria-label="Groupで絞り込み"
+          aria-label="グループで絞り込み"
           value={groupId}
           onChange={(e) => setGroupId(e.target.value)}
         >
-          <option value="">全Group</option>
+          <option value="">すべてのグループ</option>
           {groupOptions.map((group) => (
             <option key={group.id} value={group.id}>
               {group.name}
@@ -205,15 +213,10 @@ export function UserListPage() {
           onChange={(e) => setAccountStatus(e.target.value)}
         >
           <option value="">全アカウント状態</option>
-          {[
-            "pending",
-            "active",
-            "suspended",
-            "leave",
-            "retired",
-            "disabled",
-          ].map((status) => (
-            <option key={status}>{status}</option>
+          {ACCOUNT_STATUS_OPTIONS.map((status) => (
+            <option key={status.value} value={status.value}>
+              {status.label}
+            </option>
           ))}
         </NativeSelect>
         <label className="flex items-center gap-2">
@@ -251,9 +254,9 @@ export function UserListPage() {
               <TableHead>部署</TableHead>
               <TableHead>役職</TableHead>
               <TableHead>在籍状況</TableHead>
+              <TableHead>アカウント状態</TableHead>
               <TableHead>管理元</TableHead>
-              <TableHead>権限</TableHead>
-              <TableHead>Feature</TableHead>
+              <TableHead>グループ（所属）</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -307,7 +310,18 @@ export function UserListPage() {
                   {user.job_title ?? "-"}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {user.employment_status}
+                  {employmentStatusLabel(user.employment_status)}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    tone={
+                      (user.account_status ?? "active") === "active"
+                        ? "success"
+                        : "neutral"
+                    }
+                  >
+                    {accountStatusLabel(user.account_status ?? "active")}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <Badge
@@ -319,28 +333,20 @@ export function UserListPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {(user.roles ?? []).length === 0 ? (
+                  {(user.memberships ?? []).length === 0 ? (
                     <span className="text-sm text-muted-foreground">
                       未設定
                     </span>
                   ) : (
                     <span className="flex flex-wrap gap-1">
-                      {user.roles?.map((role) => (
-                        <Badge key={role} tone="info">
-                          {role}
+                      {user.memberships?.map((membership) => (
+                        <Badge key={membership.id} tone="neutral">
+                          {membership.group.name}
+                          {membership.is_primary ? "（主所属）" : ""}
                         </Badge>
                       ))}
                     </span>
                   )}
-                </TableCell>
-                <TableCell>
-                  <span className="flex flex-wrap gap-1">
-                    {user.effective_features?.map((feature) => (
-                      <Badge key={feature} tone="info">
-                        {feature}
-                      </Badge>
-                    ))}
-                  </span>
                 </TableCell>
               </TableRow>
             ))}

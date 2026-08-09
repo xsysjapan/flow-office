@@ -4,7 +4,7 @@
 
 - Microsoft SSO
 - ユーザー管理
-- グループ・所属管理
+- グループ管理
 - FeatureとRole/Permissionによるアクセス制御の土台
 - 汎用申請
 - 任意承認者選択

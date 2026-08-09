@@ -24,7 +24,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ExternalIdentity;
 use App\Models\Group;
 use App\Models\GroupType;
-use App\Models\Role;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,10 +57,31 @@ class UserManagementController extends Controller
         if (! $this->hasGlobalAccess($request)) {
             $query->whereIn('user_id', $this->permittedUserIds($request));
         }
-        $sets = $query->orderByDesc('effective_at')->get();
+        if ($request->filled('user_id')) {
+            $this->assertUserAllowed($request, (string) $request->string('user_id'));
+            $query->where('user_id', (string) $request->string('user_id'));
+        }
+        if ($request->filled('group_id')) {
+            $groupId = (string) $request->string('group_id');
+            $this->assertGroupAllowed($request, $groupId);
+            $query->whereExists(fn ($items) => $items
+                ->selectRaw('1')
+                ->from('membership_change_items')
+                ->whereColumn('membership_change_items.change_set_id', 'membership_change_sets.id')
+                ->where(fn ($groups) => $groups
+                    ->where('from_group_id', $groupId)
+                    ->orWhere('to_group_id', $groupId)
+                    ->orWhere('target_group_id', $groupId)));
+        }
+        $limit = min(max($request->integer('limit', 100), 1), 100);
+        $sets = $query->orderByDesc('updated_at')->limit($limit)->get();
         $items = DB::table('membership_change_items')->whereIn('change_set_id', $sets->pluck('id'))->get()->groupBy('change_set_id');
+        $userNames = DB::table('users')->whereIn('id', $sets->pluck('user_id'))->pluck('name', 'id');
 
-        return response()->json($sets->map(fn ($set) => (array) $set + ['items' => $items->get($set->id, collect())->values()]));
+        return response()->json($sets->map(fn ($set) => (array) $set + [
+            'user_name' => $userNames->get($set->user_id),
+            'items' => $items->get($set->id, collect())->values(),
+        ]));
     }
 
     public function externalIdentities(Request $request): JsonResponse
@@ -81,13 +101,14 @@ class UserManagementController extends Controller
 
     public function storeGroup(Request $r, CommandBus $bus): JsonResponse
     {
-        $d = $r->validate(['group_type_id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'code' => ['required', 'string', 'max:100'], 'description' => ['nullable', 'string'], 'parent_group_id' => ['nullable', 'uuid']]);
+        $d = $r->validate(['group_type_id' => ['required', 'integer'], 'name' => ['required', 'string', 'max:255'], 'code' => ['sometimes', 'string', 'max:100'], 'description' => ['nullable', 'string'], 'parent_group_id' => ['nullable', 'uuid']]);
         if (! $this->hasGlobalAccess($r)) {
             abort_unless(isset($d['parent_group_id']), 403, 'スコープ付き管理者は管理対象内の親Groupを指定してください。');
             $this->assertGroupAllowed($r, $d['parent_group_id']);
         }
         $id = (string) Str::uuid();
-        $bus->dispatch(new CreateGroup($id, $d['group_type_id'], $d['name'], $d['code'], $d['description'] ?? null, $d['parent_group_id'] ?? null, $r->user()->id));
+        $code = $d['code'] ?? 'GROUP_'.strtoupper(str_replace('-', '', $id));
+        $bus->dispatch(new CreateGroup($id, $d['group_type_id'], $d['name'], $code, $d['description'] ?? null, $d['parent_group_id'] ?? null, $r->user()->id));
 
         return response()->json(['id' => $id], 201);
     }
@@ -327,10 +348,7 @@ class UserManagementController extends Controller
 
     private function hasGlobalAccess(Request $request): bool
     {
-        return $this->access->hasGlobalPermission($request->user(), $this->permissionCode($request))
-            || (config('access_control.allow_unconfigured_catalog', false)
-                && ! DB::table('permissions')->where('code', $this->permissionCode($request))->exists()
-                && $request->user()->hasRole(Role::ADMIN));
+        return $this->access->hasGlobalPermission($request->user(), $this->permissionCode($request));
     }
 
     private function permissionCode(Request $request): string

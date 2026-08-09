@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Role;
-use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
@@ -22,12 +21,34 @@ class AccessControlSeeder extends Seeder
         'group.disable' => ['name' => 'グループ無効化', 'scopes' => ['global', 'group']],
         'group.membership.update' => ['name' => '所属更新', 'scopes' => ['global', 'group']],
         'group.change.schedule' => ['name' => '所属変更予約', 'scopes' => ['global', 'group']],
+        'group_type.view' => ['name' => 'GroupType閲覧', 'scopes' => ['global']],
+        'group_type.create' => ['name' => 'GroupType作成', 'scopes' => ['global']],
+        'group_type.update' => ['name' => 'GroupType更新', 'scopes' => ['global']],
         'role.view' => ['name' => 'Role閲覧', 'scopes' => ['global', 'group']],
         'role.create' => ['name' => 'Role作成', 'scopes' => ['global']],
         'role.update' => ['name' => 'Role更新', 'scopes' => ['global']],
         'role.assign' => ['name' => 'Role割当', 'scopes' => ['global', 'group']],
         'feature.view' => ['name' => 'Feature閲覧', 'scopes' => ['global', 'group']],
         'feature.assign' => ['name' => 'Feature割当', 'scopes' => ['global', 'group']],
+        'external_identity.view' => ['name' => '外部ID閲覧', 'scopes' => ['global']],
+        'external_identity.manage' => ['name' => '外部ID管理', 'scopes' => ['global']],
+        'field_authority.view' => ['name' => '項目管理元閲覧', 'scopes' => ['global']],
+        'field_authority.update' => ['name' => '項目管理元更新', 'scopes' => ['global']],
+        'authentication_key.view' => ['name' => '認証キー閲覧', 'scopes' => ['global']],
+        'authentication_key.manage' => ['name' => '認証キー管理', 'scopes' => ['global']],
+        'external_hr.import' => ['name' => '外部HR取込', 'scopes' => ['global']],
+        'backoffice_task.execute' => ['name' => 'バックオフィスタスク処理', 'scopes' => ['global']],
+        'attendance.export' => ['name' => '勤怠出力', 'scopes' => ['global', 'group']],
+        'attendance.manage' => ['name' => '勤怠マスタ管理', 'scopes' => ['global']],
+        'leave.manage' => ['name' => '休暇マスタ・残数管理', 'scopes' => ['global']],
+        'expense.export' => ['name' => '経費出力', 'scopes' => ['global']],
+        'expense_preset.manage' => ['name' => '共有経費プリセット管理', 'scopes' => ['global']],
+        'request_type.manage' => ['name' => '申請種別管理', 'scopes' => ['global']],
+        'expense_category.manage' => ['name' => '経費区分管理', 'scopes' => ['global']],
+        'attendance_reminder_exclusion.manage' => ['name' => '勤怠未提出督促除外管理', 'scopes' => ['global']],
+        'device.manage' => ['name' => '共有端末管理', 'scopes' => ['global']],
+        'audit_log.view' => ['name' => '監査ログ閲覧', 'scopes' => ['global']],
+        'audit_log.export' => ['name' => '監査ログ出力', 'scopes' => ['global']],
         'attendance.read' => ['name' => '勤怠閲覧', 'scopes' => ['global', 'group', 'self']],
         'attendance.update' => ['name' => '勤怠更新', 'scopes' => ['global', 'group', 'self']],
         'approval.execute' => ['name' => '承認実行', 'scopes' => ['global', 'approval_task']],
@@ -43,7 +64,9 @@ class AccessControlSeeder extends Seeder
         $now = now();
         $allUsersGroupId = DB::table('groups')->where('code', 'ALL_USERS')->value('id');
         $adminGroupId = DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id');
-        if (! $allUsersGroupId || ! $adminGroupId) {
+        $hrGroupId = DB::table('groups')->where('code', 'HUMAN_RESOURCES_USERS')->value('id');
+        $backofficeGroupId = DB::table('groups')->where('code', 'BACKOFFICE_USERS')->value('id');
+        if (! $allUsersGroupId || ! $adminGroupId || ! $hrGroupId || ! $backofficeGroupId) {
             throw new \RuntimeException('UserManagementSeeder must run before AccessControlSeeder.');
         }
 
@@ -103,10 +126,10 @@ class AccessControlSeeder extends Seeder
 
         $rolePermissions = [
             Role::EMPLOYEE => ['attendance.read', 'attendance.update'],
-            Role::BACKOFFICE_STAFF => ['approval.execute'],
-            Role::ACCOUNTING_STAFF => ['approval.execute'],
-            Role::GENERAL_AFFAIRS_STAFF => ['approval.execute'],
-            Role::HR_STAFF => ['user.view', 'user.create', 'user.update', 'user.disable', 'group.view', 'group.create', 'group.update', 'group.disable', 'group.membership.update', 'group.change.schedule', 'role.view', 'role.assign', 'feature.view', 'feature.assign', 'attendance.read', 'attendance.update', 'approval.execute', 'user.manage'],
+            Role::BACKOFFICE_STAFF => ['approval.execute', 'backoffice_task.execute'],
+            Role::ACCOUNTING_STAFF => ['approval.execute', 'backoffice_task.execute', 'expense.export', 'expense_preset.manage', 'expense_category.manage'],
+            Role::GENERAL_AFFAIRS_STAFF => ['approval.execute', 'backoffice_task.execute'],
+            Role::HR_STAFF => ['user.view', 'user.create', 'user.update', 'user.disable', 'group.view', 'group.create', 'group.update', 'group.disable', 'group.membership.update', 'group.change.schedule', 'group_type.view', 'external_hr.import', 'attendance.read', 'attendance.update', 'attendance.export', 'attendance.manage', 'leave.manage', 'approval.execute', 'backoffice_task.execute', 'user.manage'],
             Role::ADMIN => array_keys(self::PERMISSIONS),
         ];
         foreach ($rolePermissions as $roleCode => $codes) {
@@ -117,6 +140,30 @@ class AccessControlSeeder extends Seeder
             }
         }
 
+        // 標準グループへの所属だけでFeatureとPermissionが有効になるよう、RoleAssignmentも
+        // グループへ割り当てる。旧role_userはアクセス判定に使用しない。
+        foreach ([
+            [$allUsersGroupId, Role::EMPLOYEE, 'self'],
+            [$adminGroupId, Role::ADMIN, 'global'],
+            [$hrGroupId, Role::HR_STAFF, 'global'],
+            [$backofficeGroupId, Role::BACKOFFICE_STAFF, 'global'],
+        ] as [$groupId, $roleCode, $scopeType]) {
+            $roleId = Role::query()->where('code', $roleCode)->value('id');
+            $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, "standard-group-role-assignment:{$groupId}:{$roleCode}")->toString();
+            DB::table('role_assignments')->updateOrInsert(
+                ['id' => $assignmentId],
+                [
+                    'subject_type' => 'group',
+                    'subject_id' => $groupId,
+                    'role_id' => $roleId,
+                    'scope_type' => $scopeType,
+                    'status' => 'active',
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ],
+            );
+        }
+
         // 初期状態は原則OFF。初回設定を行えるようシステム管理者だけに管理Featureを明示付与する。
         foreach (['administration', 'administration.users', 'administration.settings'] as $code) {
             DB::table('group_feature_assignments')->updateOrInsert(
@@ -125,14 +172,12 @@ class AccessControlSeeder extends Seeder
             );
         }
 
-        User::query()->with('roles')->each(function (User $user) use ($now): void {
-            foreach ($user->roles as $role) {
-                $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'legacy-role-assignment:'.$user->id.':'.$role->id)->toString();
-                DB::table('role_assignments')->updateOrInsert(
-                    ['id' => $assignmentId],
-                    ['subject_type' => 'user', 'subject_id' => $user->id, 'role_id' => $role->id, 'scope_type' => 'global', 'status' => 'active', 'updated_at' => $now, 'created_at' => $now],
-                );
-            }
-        });
+        foreach (['administration', 'administration.users'] as $code) {
+            DB::table('group_feature_assignments')->updateOrInsert(
+                ['group_id' => $hrGroupId, 'feature_id' => DB::table('features')->where('code', $code)->value('id')],
+                ['updated_at' => $now, 'created_at' => $now],
+            );
+        }
+
     }
 }

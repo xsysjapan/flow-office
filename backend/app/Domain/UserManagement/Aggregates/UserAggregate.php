@@ -8,8 +8,6 @@ use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserLoggedIn;
 use App\Domain\UserManagement\Events\UserOnboardedAsAdmin;
 use App\Domain\UserManagement\Events\UserProfileUpdated;
-use App\Domain\UserManagement\Events\UserRolesChanged;
-use App\Domain\UserManagement\Events\UserRolesMigratedFromLegacy;
 use App\Domain\UserManagement\Events\UserSsoAccountLinked;
 use App\Domain\UserManagement\Events\UserSyncedFromMs365;
 use App\Domain\UserManagement\Events\UserTerminationDateSet;
@@ -80,31 +78,6 @@ class UserAggregate extends AggregateRoot
     public function recordLogin(bool $wasFirstLogin, string $loggedInAt): self
     {
         $this->recordThat(new UserLoggedIn(wasFirstLogin: $wasFirstLogin, loggedInAt: $loggedInAt));
-
-        return $this;
-    }
-
-    /**
-     * @param  array<int, string>  $previousRoleCodes
-     * @param  array<int, string>  $newRoleCodes
-     */
-    public function changeRoles(array $previousRoleCodes, array $newRoleCodes, string $changedByUserId): self
-    {
-        $this->recordThat(new UserRolesChanged(
-            previousRoleCodes: $previousRoleCodes,
-            newRoleCodes: $newRoleCodes,
-            changedByUserId: $changedByUserId,
-        ));
-
-        return $this;
-    }
-
-    /**
-     * @param  array<int, string>  $roleCodes
-     */
-    public function migrateRolesFromLegacy(array $roleCodes): self
-    {
-        $this->recordThat(new UserRolesMigratedFromLegacy(roleCodes: $roleCodes));
 
         return $this;
     }

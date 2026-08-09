@@ -73,9 +73,7 @@ export function AdminLayout() {
   const visibleGroups = adminNavGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) =>
-        canAccessAdminItem(user, item, group.roles),
-      ),
+      items: group.items.filter((item) => canAccessAdminItem(user, item)),
     }))
     .filter((group) => group.items.length > 0);
 

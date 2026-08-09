@@ -232,10 +232,7 @@ class AccessControlController extends Controller
 
     private function hasGlobalAccess(Request $request): bool
     {
-        return $this->access->hasGlobalPermission($request->user(), $this->permissionCode($request))
-            || (config('access_control.allow_unconfigured_catalog', false)
-                && ! DB::table('permissions')->where('code', $this->permissionCode($request))->exists()
-                && $request->user()->hasRole(Role::ADMIN));
+        return $this->access->hasGlobalPermission($request->user(), $this->permissionCode($request));
     }
 
     private function permissionCode(Request $request): string

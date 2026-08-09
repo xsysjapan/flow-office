@@ -2,7 +2,6 @@
 
 namespace App\Application\UserManagement\Handlers;
 
-use App\Domain\AccessControl\Aggregates\RoleAssignmentAggregate;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -10,10 +9,8 @@ use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Aggregates\UserMembershipAggregate;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Ramsey\Uuid\Uuid;
 
 /** @implements CommandHandler<CreateUser> */
 final class CreateUserHandler implements CommandHandler
@@ -41,17 +38,6 @@ final class CreateUserHandler implements CommandHandler
                 ->persist();
         }
 
-        $employeeRole = Role::query()->where('code', Role::EMPLOYEE)->where('status', 'active')->first();
-        if ($employeeRole !== null) {
-            UserAggregate::retrieve($command->userId)
-                ->changeRoles([], [$employeeRole->code], $command->createdByUserId)
-                ->persist();
-            $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'legacy-role-assignment:'.$command->userId.':'.$employeeRole->id)->toString();
-            RoleAssignmentAggregate::retrieve($assignmentId)
-                ->create('user', $command->userId, $employeeRole->id, 'global', null, false, null, null, $command->createdByUserId)
-                ->persist();
-        }
-
-        return User::query()->with('roles')->findOrFail($command->userId);
+        return User::query()->findOrFail($command->userId);
     }
 }

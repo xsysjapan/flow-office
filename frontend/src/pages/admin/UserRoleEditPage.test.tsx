@@ -3,17 +3,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import * as rolesApi from "../../api/roles";
 import * as userWorkStyleMonthlyAssignmentsApi from "../../api/userWorkStyleMonthlyAssignments";
 import * as usersApi from "../../api/users";
+import * as userManagementApi from "../../api/userManagement";
 import * as workStylesApi from "../../api/workStyles";
+import type { ManagedGroup } from "../../api/userManagement";
 import type {
-  Role,
   User,
   UserWorkStyleMonthlyAssignment,
   WorkStyle,
 } from "../../api/types";
-import { pickDate } from "../../test-support/pickerInteractions";
+import { pickDate, pickDateTime } from "../../test-support/pickerInteractions";
 import { formatDate } from "../../utils/weekDates";
 import { UserRoleEditPage } from "./UserRoleEditPage";
 
@@ -24,18 +24,33 @@ const targetUser: User = {
   department: "総務部",
   job_title: "主任",
   employment_status: "active",
-  roles: ["employee", "general_affairs_staff"],
   last_login_at: null,
 };
 
-const roles: Role[] = [
-  { id: 1, code: "employee", name: "一般社員" },
-  { id: 2, code: "backoffice_staff", name: "バックオフィス担当者" },
-  { id: 3, code: "accounting_staff", name: "経理担当者" },
-  { id: 4, code: "general_affairs_staff", name: "総務担当者" },
-  { id: 5, code: "hr_staff", name: "人事担当者" },
-  { id: 6, code: "admin", name: "システム管理者" },
-];
+const managedGroup: ManagedGroup = {
+  id: "group-1",
+  group_type_id: 1,
+  name: "総務部",
+  code: "GENERAL_AFFAIRS",
+  status: "active",
+  parent_group_id: null,
+  memberships_count: 0,
+  type: {
+    id: 1,
+    code: "ORGANIZATION",
+    name: "組織",
+    display_order: 1,
+    status: "active",
+    is_system: true,
+    membership_limit_type: "unlimited",
+    max_memberships_per_user: null,
+    primary_membership_required: false,
+    max_primary_memberships: 1,
+  },
+  features: [],
+  memberships: [],
+  role_assignments: [],
+};
 
 const defaultWorkStyle: WorkStyle = {
   id: "work-style-1",
@@ -94,7 +109,9 @@ function renderPage(
     defaultOptions: { queries: { retry: false } },
   });
   vi.spyOn(usersApi, "fetchUser").mockResolvedValue(user);
-  vi.spyOn(rolesApi, "fetchRoles").mockResolvedValue(roles);
+  vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
+    managedGroup,
+  ]);
   vi.spyOn(workStylesApi, "fetchWorkStyles").mockResolvedValue(workStyles);
   vi.spyOn(
     userWorkStyleMonthlyAssignmentsApi,
@@ -113,93 +130,242 @@ function renderPage(
 }
 
 describe("UserRoleEditPage", () => {
-  it("checks the roles the user currently has", async () => {
+  it("does not expose system access management controls", async () => {
     renderPage(targetUser);
 
-    expect(
-      screen.queryByRole("checkbox", { name: "一般社員" }),
-    ).not.toBeInTheDocument();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "ロールを変更" }),
-    );
-    expect(
-      await screen.findByRole("checkbox", { name: "一般社員" }),
-    ).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "総務担当者" })).toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "経理担当者" }),
-    ).not.toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "システム管理者" }),
-    ).not.toBeChecked();
+    await screen.findByText("山田太郎のユーザー管理");
+    expect(screen.queryByText("実効アクセスと付与元")).not.toBeInTheDocument();
+    expect(screen.queryByText("直接ロール")).not.toBeInTheDocument();
+    expect(screen.queryByText("外部ID・管理元")).not.toBeInTheDocument();
+    expect(screen.queryByText("認証キー")).not.toBeInTheDocument();
   });
 
-  it("saves the updated role selection", async () => {
-    vi.spyOn(usersApi, "updateUserRoles").mockResolvedValue({
-      ...targetUser,
-      roles: ["employee", "general_affairs_staff", "admin"],
-    });
-
+  it("adds the user to a group", async () => {
+    vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockResolvedValue(
+      undefined,
+    );
     renderPage(targetUser);
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "ロールを変更" }),
+      await screen.findByRole("button", { name: "所属を追加" }),
     );
-    await userEvent.click(
-      await screen.findByRole("checkbox", { name: "システム管理者" }),
+    await userEvent.selectOptions(
+      await screen.findByLabelText("変更先グループ"),
+      "group-1",
     );
-    await userEvent.click(screen.getByRole("button", { name: "保存する" }));
+    await userEvent.click(screen.getByRole("button", { name: "変更を実行" }));
 
     await waitFor(() =>
-      expect(usersApi.updateUserRoles).toHaveBeenCalledWith("user-1", [
-        "employee",
-        "general_affairs_staff",
-        "admin",
-      ]),
+      expect(userManagementApi.applyMembershipChangeNow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          items: [
+            {
+              operation: "add",
+              group_type_id: 1,
+              from_group_id: null,
+              to_group_id: "group-1",
+              target_group_id: "group-1",
+              is_primary: false,
+            },
+          ],
+        }),
+        expect.anything(),
+      ),
     );
-    expect(await screen.findByText("保存しました")).toBeInTheDocument();
   });
 
-  it("unchecking a role removes it before saving", async () => {
-    vi.spyOn(usersApi, "updateUserRoles").mockResolvedValue({
+  it("removes the user from a group at the selected timing", async () => {
+    vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockResolvedValue(
+      undefined,
+    );
+    renderPage({
       ...targetUser,
-      roles: ["general_affairs_staff"],
+      memberships: [
+        {
+          id: 10,
+          membership_kind: "member",
+          is_primary: false,
+          group: {
+            id: "group-1",
+            code: "GENERAL_AFFAIRS",
+            name: "総務部",
+            group_type: "ORGANIZATION",
+            group_type_id: 1,
+          },
+        },
+      ],
     });
 
-    renderPage(targetUser);
-
-    await userEvent.click(
-      await screen.findByRole("button", { name: "ロールを変更" }),
-    );
-    await userEvent.click(
-      await screen.findByRole("checkbox", { name: "一般社員" }),
-    );
-    await userEvent.click(screen.getByRole("button", { name: "保存する" }));
+    await userEvent.click(await screen.findByRole("button", { name: "解除" }));
+    await userEvent.click(screen.getByRole("button", { name: "変更を実行" }));
 
     await waitFor(() =>
-      expect(usersApi.updateUserRoles).toHaveBeenCalledWith("user-1", [
-        "general_affairs_staff",
-      ]),
+      expect(userManagementApi.applyMembershipChangeNow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: "user-1",
+          items: [
+            {
+              operation: "remove",
+              group_type_id: 1,
+              from_group_id: "group-1",
+              to_group_id: null,
+              target_group_id: "group-1",
+              is_primary: false,
+            },
+          ],
+        }),
+        expect.anything(),
+      ),
     );
   });
 
-  it("keeps a role update error visible inside the dialog", async () => {
-    vi.spyOn(usersApi, "updateUserRoles").mockRejectedValue(
-      new Error("ロールを保存できませんでした"),
+  it("switches the primary membership with an understandable row action", async () => {
+    vi.spyOn(userManagementApi, "applyMembershipChangeNow").mockResolvedValue(
+      undefined,
     );
-    renderPage(targetUser);
+    renderPage({
+      ...targetUser,
+      memberships: [
+        {
+          id: 10,
+          membership_kind: "member",
+          is_primary: false,
+          group: {
+            id: "group-1",
+            code: "GENERAL_AFFAIRS",
+            name: "総務部",
+            group_type: "ORGANIZATION",
+            group_type_name: "組織",
+            group_type_id: 1,
+          },
+        },
+        {
+          id: 11,
+          membership_kind: "primary",
+          is_primary: true,
+          group: {
+            id: "group-primary",
+            code: "HEAD_OFFICE",
+            name: "本社",
+            group_type: "ORGANIZATION",
+            group_type_name: "組織",
+            group_type_id: 1,
+          },
+        },
+      ],
+    });
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "ロールを変更" }),
+      await screen.findByRole("button", { name: "主所属にする" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "保存する" }));
+    expect(
+      screen.getByText(/同じグループ種別の中で代表として扱う所属/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "変更を実行" }));
 
-    expect(
-      await screen.findByText("ロールを保存できませんでした"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("dialog", { name: "直接ロールを変更" }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(userManagementApi.applyMembershipChangeNow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              operation: "set_primary",
+              target_group_id: "group-primary",
+              is_primary: false,
+            }),
+            expect.objectContaining({
+              operation: "set_primary",
+              target_group_id: "group-1",
+              is_primary: true,
+            }),
+          ],
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("schedules a membership change from the user detail page", async () => {
+    vi.spyOn(userManagementApi, "scheduleMembershipChange").mockResolvedValue({
+      id: "change-1",
+    });
+    renderPage(targetUser);
+    const user = userEvent.setup();
+    await screen.findByText("山田太郎のユーザー管理");
+
+    await user.click(screen.getByRole("button", { name: "所属を追加" }));
+    await user.selectOptions(
+      await screen.findByLabelText("変更先グループ"),
+      "group-1",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("変更タイミング"),
+      "scheduled",
+    );
+    await pickDateTime(user, "適用日時", "00:00", "2027-01-15T09:30");
+    await user.click(screen.getByRole("button", { name: "変更を予約" }));
+
+    await waitFor(() =>
+      expect(userManagementApi.scheduleMembershipChange).toHaveBeenCalledWith(
+        {
+          user_id: "user-1",
+          effective_at: new Date("2027-01-15T09:30").toISOString(),
+          source_type: "manual",
+          note: "",
+          items: [
+            {
+              operation: "add",
+              group_type_id: 1,
+              from_group_id: null,
+              to_group_id: "group-1",
+              target_group_id: "group-1",
+              is_primary: false,
+            },
+          ],
+        },
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("shows understandable membership history and cancels a reservation", async () => {
+    vi.spyOn(userManagementApi, "cancelMembershipChange").mockResolvedValue(
+      undefined,
+    );
+    renderPage({
+      ...targetUser,
+      membership_change_sets: [
+        {
+          id: "change-1",
+          effective_at: "2027-01-15T00:30:00.000Z",
+          status: "scheduled",
+          items: [
+            {
+              operation: "add",
+              group_type_id: 1,
+              to_group_id: "group-1",
+              target_group_id: "group-1",
+              is_primary: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(await screen.findByText("追加: 総務部")).toBeInTheDocument();
+    expect(screen.getByText("予約済み")).toBeInTheDocument();
+    expect(screen.queryByText("applied")).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "予約を取り消す" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "取り消す" }));
+
+    await waitFor(() =>
+      expect(userManagementApi.cancelMembershipChange).toHaveBeenCalledWith(
+        "change-1",
+        expect.anything(),
+      ),
+    );
   });
 
   it("prefills the hire date when the user already has one", async () => {

@@ -23,7 +23,7 @@ class AuditLogTest extends TestCase
     public function test_admin_can_search_audit_log_by_aggregate_type(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $applicant = User::factory()->create();
 
         $requestType = RequestType::query()->create([

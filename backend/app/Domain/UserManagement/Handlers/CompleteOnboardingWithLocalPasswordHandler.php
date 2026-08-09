@@ -7,9 +7,9 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\CompleteOnboardingWithLocalPassword;
-use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -27,9 +27,8 @@ class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
             throw new DomainRuleException('このメールアドレスは既に登録済みのため、オンボーディングを完了できません。');
         }
 
-        $adminRole = Role::query()->where('code', Role::ADMIN)->first();
-        if ($adminRole === null) {
-            throw new DomainRuleException('管理者ロールが未作成のため、オンボーディングを完了できません。ロールマスタの初期化(シード)を確認してください。');
+        if (! DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->exists()) {
+            throw new DomainRuleException('システム管理者グループが未作成のため、オンボーディングを完了できません。初期化を確認してください。');
         }
 
         // ローカルモードは1リクエストで完結するため、開始(onboarding_started_at)と

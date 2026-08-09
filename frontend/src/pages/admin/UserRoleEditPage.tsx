@@ -1,27 +1,27 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
+import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { DatePicker } from "../../components/DatePicker/DatePicker";
+import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
-import { AuthenticationKeysPanel } from "../../components/AuthenticationKeysPanel/AuthenticationKeysPanel";
-import { Checkbox } from "../../components/ui/checkbox";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Input } from "../../components/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../../components/ui/dialog";
 import type { UserProfileInput } from "../../api/users";
-import { useRoles } from "../../hooks/useRoles";
+import type { ChangeItem } from "../../api/userManagement";
 import {
   useAssignUserWorkStyleForMonth,
   useRemoveUserWorkStyleMonthlyAssignment,
@@ -29,19 +29,31 @@ import {
 } from "../../hooks/useUserWorkStyleMonthlyAssignments";
 import {
   useUpdateUserHireDate,
-  useUpdateUserRoles,
   useUpdateUserTerminationDate,
   useUpdateUserUsageStartDate,
   useUpdateUser,
   useUser,
 } from "../../hooks/useUsers";
 import { useWorkStyles } from "../../hooks/useWorkStyles";
+import {
+  useApplyMembershipChangeNow,
+  useCancelMembershipChange,
+  useManagedGroups,
+  useScheduleMembershipChange,
+} from "../../hooks/useUserManagement";
 import { formatDate } from "../../utils/weekDates";
+import { ACCOUNT_STATUS_OPTIONS } from "../../utils/userLabels";
+import {
+  membershipChangeDescription,
+  membershipChangeStatusLabel,
+} from "../../utils/membershipChangeLabels";
 
 type WorkStyleMode = "default" | "specify";
+type MembershipOperation = "add" | "remove" | "replace" | "set_primary";
+type MembershipTiming = "now" | "scheduled";
 
 /**
- * UC-M001: ユーザーに付与する権限(ロール)を編集する。
+ * UC-M001: ユーザーの人事情報と現在所属を編集する。
  * UC-P002: 有給の自動付与に使う入社日を設定する。
  * 勤怠提出フォロー等の各種フォロー通知の起算日となる利用開始日を設定する。
  * 指示書 13章: 会社のデフォルトを使用するか、別の働き方を指定するかを選択する。
@@ -54,28 +66,33 @@ export function UserRoleEditPage() {
     isLoading: isLoadingUser,
     error: userError,
   } = useUser(userId);
-  const {
-    data: roles,
-    isLoading: isLoadingRoles,
-    error: rolesError,
-  } = useRoles();
   const { data: workStyles } = useWorkStyles();
   const { data: workStyleHistory } = useUserWorkStyleMonthlyAssignments(userId);
+  const { data: groups } = useManagedGroups();
 
-  const updateRoles = useUpdateUserRoles();
   const updateHireDate = useUpdateUserHireDate();
   const updateTerminationDate = useUpdateUserTerminationDate();
   const updateUsageStartDate = useUpdateUserUsageStartDate();
   const updateUser = useUpdateUser();
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth();
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment();
+  const applyMembershipChangeNow = useApplyMembershipChangeNow();
+  const scheduleMembershipChange = useScheduleMembershipChange();
+  const cancelMembershipChange = useCancelMembershipChange();
 
-  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [hireDate, setHireDate] = useState("");
   const [terminationDate, setTerminationDate] = useState("");
   const [usageStartDate, setUsageStartDate] = useState("");
   const [isInitialized, setIsInitialized] = useState(false);
+  const [membershipChangeOpen, setMembershipChangeOpen] = useState(false);
+  const [membershipChange, setMembershipChange] = useState({
+    timing: "now" as MembershipTiming,
+    effective_at: "",
+    operation: "add" as MembershipOperation,
+    from_group_id: "",
+    to_group_id: "",
+    note: "",
+  });
   const [profile, setProfile] = useState({
     name: "",
     email: "",
@@ -97,7 +114,6 @@ export function UserRoleEditPage() {
 
   useEffect(() => {
     if (user && !isInitialized) {
-      setSelectedCodes(user.roles ?? []);
       setHireDate(user.hire_date ?? "");
       setTerminationDate(user.termination_date ?? "");
       setUsageStartDate(user.usage_start_date ?? "");
@@ -124,19 +140,12 @@ export function UserRoleEditPage() {
     }
   }, [currentAssignment]);
 
-  if (isLoadingUser || isLoadingRoles) return <LoadingState />;
+  if (isLoadingUser) return <LoadingState />;
   if (userError)
     return (
       <ErrorMessage
         error={userError}
         fallback="ユーザーの取得に失敗しました。"
-      />
-    );
-  if (rolesError)
-    return (
-      <ErrorMessage
-        error={rolesError}
-        fallback="権限一覧の取得に失敗しました。"
       />
     );
   if (!user) return null;
@@ -156,22 +165,6 @@ export function UserRoleEditPage() {
     });
   };
 
-  const toggleRole = (code: string) => {
-    setSelectedCodes((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
-    );
-  };
-
-  const handleRoleDialogOpenChange = (open: boolean) => {
-    if (open) {
-      setSelectedCodes(user.roles ?? []);
-      updateRoles.reset();
-    } else {
-      setSelectedCodes(user.roles ?? []);
-    }
-    setRoleDialogOpen(open);
-  };
-
   const isExternalHrField = (field: string) =>
     user.field_authorities?.some(
       (authority) =>
@@ -179,10 +172,120 @@ export function UserRoleEditPage() {
         authority.authority_type === "EXTERNAL_HR",
     ) ?? false;
 
+  const openMembershipChange = (
+    operation: MembershipOperation,
+    fromGroupId = "",
+  ) => {
+    setMembershipChange({
+      timing: "now",
+      effective_at: "",
+      operation,
+      from_group_id: fromGroupId,
+      to_group_id: "",
+      note: "",
+    });
+    setMembershipChangeOpen(true);
+  };
+
+  const buildMembershipChangeItems = (): ChangeItem[] => {
+    const fromMembership = user.memberships?.find(
+      (membership) => membership.group.id === membershipChange.from_group_id,
+    );
+    const toGroup = groups?.find(
+      (group) => group.id === membershipChange.to_group_id,
+    );
+
+    if (membershipChange.operation === "add" && toGroup) {
+      return [
+        {
+          operation: "add",
+          group_type_id: toGroup.group_type_id,
+          from_group_id: null,
+          to_group_id: toGroup.id,
+          target_group_id: toGroup.id,
+          is_primary: false,
+        },
+      ];
+    }
+    if (membershipChange.operation === "remove" && fromMembership) {
+      return [
+        {
+          operation: "remove",
+          group_type_id: fromMembership.group.group_type_id,
+          from_group_id: fromMembership.group.id,
+          to_group_id: null,
+          target_group_id: fromMembership.group.id,
+          is_primary: false,
+        },
+      ];
+    }
+    if (membershipChange.operation === "replace" && fromMembership && toGroup) {
+      return [
+        {
+          operation: "replace",
+          group_type_id: fromMembership.group.group_type_id,
+          from_group_id: fromMembership.group.id,
+          to_group_id: toGroup.id,
+          target_group_id: toGroup.id,
+          is_primary: fromMembership.is_primary,
+        },
+      ];
+    }
+    if (membershipChange.operation === "set_primary" && fromMembership) {
+      const sameTypePrimaryItems: ChangeItem[] = (user.memberships ?? [])
+        .filter(
+          (membership) =>
+            membership.is_primary &&
+            membership.group.group_type_id ===
+              fromMembership.group.group_type_id &&
+            membership.group.id !== fromMembership.group.id,
+        )
+        .map((membership) => ({
+          operation: "set_primary",
+          group_type_id: membership.group.group_type_id,
+          from_group_id: membership.group.id,
+          target_group_id: membership.group.id,
+          is_primary: false,
+        }));
+      return [
+        ...sameTypePrimaryItems,
+        {
+          operation: "set_primary",
+          group_type_id: fromMembership.group.group_type_id,
+          from_group_id: fromMembership.group.id,
+          target_group_id: fromMembership.group.id,
+          is_primary: true,
+        },
+      ];
+    }
+    return [];
+  };
+
+  const submitMembershipChange = () => {
+    const items = buildMembershipChangeItems();
+    if (items.length === 0) return;
+    const input = {
+      user_id: userId,
+      effective_at:
+        membershipChange.timing === "scheduled"
+          ? new Date(membershipChange.effective_at).toISOString()
+          : new Date().toISOString(),
+      source_type: "manual",
+      note: membershipChange.note,
+      items,
+    };
+    const mutation =
+      membershipChange.timing === "scheduled"
+        ? scheduleMembershipChange
+        : applyMembershipChangeNow;
+    mutation.mutate(input, {
+      onSuccess: () => setMembershipChangeOpen(false),
+    });
+  };
+
   return (
     <Card title={`${user.name}のユーザー管理`}>
       {updateUser.error && <ErrorMessage error={updateUser.error} />}
-      {updateRoles.isSuccess && <Badge tone="success">保存しました</Badge>}
 
       <div className="mb-6 rounded border p-3">
         <h2 className="mb-3 font-medium">基本情報</h2>
@@ -263,15 +366,10 @@ export function UserRoleEditPage() {
                 setProfile({ ...profile, account_status: e.target.value })
               }
             >
-              {[
-                "pending",
-                "active",
-                "suspended",
-                "leave",
-                "retired",
-                "disabled",
-              ].map((status) => (
-                <option key={status}>{status}</option>
+              {ACCOUNT_STATUS_OPTIONS.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
               ))}
             </NativeSelect>
           </FormField>
@@ -295,148 +393,292 @@ export function UserRoleEditPage() {
           基本情報を保存する
         </Button>
       </div>
-
-      <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-        <dt className="font-medium text-muted-foreground">メールアドレス</dt>
-        <dd className="text-foreground">{user.email}</dd>
-        <dt className="font-medium text-muted-foreground">部署</dt>
-        <dd className="text-foreground">{user.department ?? "-"}</dd>
-        <dt className="font-medium text-muted-foreground">役職</dt>
-        <dd className="text-foreground">{user.job_title ?? "-"}</dd>
-      </dl>
-      <div className="mb-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded border p-3">
-          <h2 className="mb-2 font-medium">外部ID・管理元</h2>
-          {user.external_identities?.map((identity) => (
-            <div key={identity.id} className="text-sm">
-              {identity.provider}: {identity.external_subject_id} / 最終同期{" "}
-              {identity.last_synced_at
-                ? new Date(identity.last_synced_at).toLocaleString()
-                : "-"}
-            </div>
-          ))}
-          <div className="mt-2 flex flex-wrap gap-1">
-            {user.field_authorities?.map((authority) => (
-              <Badge
-                key={authority.field_key}
-                tone={
-                  authority.authority_type === "EXTERNAL_HR"
-                    ? "info"
-                    : "neutral"
-                }
-              >
-                {authority.field_key}: {authority.authority_type}
-              </Badge>
-            ))}
-          </div>
-        </div>
-        <div className="rounded border p-3">
-          <h2 className="mb-2 font-medium">所属・予約</h2>
-          {user.memberships?.map((m) => (
-            <div key={m.id} className="text-sm">
-              {m.group.name}
-              {m.is_primary ? "（主所属）" : ""}
-            </div>
-          ))}
-          {user.membership_change_sets?.map((set) => (
-            <div key={set.id} className="text-sm text-muted-foreground">
-              {new Date(set.effective_at).toLocaleString()}: {set.status}
-            </div>
-          ))}
-        </div>
-        <div className="rounded border p-3 md:col-span-2">
-          <h2 className="mb-2 font-medium">実効アクセスと付与元</h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            <AccessExplanation
-              title="Feature"
-              items={user.effective_access_explanation?.features}
-            />
-            <AccessExplanation
-              title="Role"
-              items={user.effective_access_explanation?.roles}
-            />
-            <AccessExplanation
-              title="Permission"
-              items={user.effective_access_explanation?.permissions}
-            />
-          </div>
-        </div>
-        <div className="rounded border p-3">
-          <h2 className="mb-2 font-medium">RoleAssignment・個別停止</h2>
-          {user.role_assignments?.map((value) => (
-            <div key={value.id} className="text-sm">
-              {value.role?.name}: {value.scope_type} / {value.status}
-            </div>
-          ))}
-          {user.feature_suspensions?.map((value) => (
-            <div key={value.id} className="text-sm text-destructive">
-              {value.feature?.name}: {value.reason}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="mb-6">
-        <Link
-          className="text-sm text-primary hover:underline"
-          to={`/admin/audit-log?user_id=${userId}`}
-        >
-          このユーザーの変更履歴を監査ログで確認
-        </Link>
-      </div>
-
       <div className="mb-6 rounded border p-3">
-        <h2 className="mb-2 font-medium">直接ロール</h2>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {roles
-            ?.filter((role) => selectedCodes.includes(role.code))
-            .map((role) => (
-              <Badge key={role.code} tone="info">
-                {role.name}
-              </Badge>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-medium">グループ所属</h2>
+            <p className="text-sm text-muted-foreground">
+              現在の所属と、予約済みの変更を確認できます。
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => openMembershipChange("add")}
+          >
+            所属を追加
+          </Button>
+        </div>
+
+        <h3 className="mb-2 text-sm font-semibold">現在の所属</h3>
+        {(user.memberships ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">所属はありません。</p>
+        ) : (
+          <div className="space-y-2">
+            {user.memberships?.map((membership) => (
+              <div
+                key={membership.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{membership.group.name}</span>
+                    {membership.is_primary && <Badge tone="info">主所属</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {membership.group.group_type_name ??
+                      membership.group.group_type}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!membership.is_primary && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        openMembershipChange("set_primary", membership.group.id)
+                      }
+                    >
+                      主所属にする
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      openMembershipChange("replace", membership.group.id)
+                    }
+                  >
+                    グループを移動
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      openMembershipChange("remove", membership.group.id)
+                    }
+                  >
+                    解除
+                  </Button>
+                </div>
+              </div>
             ))}
-          {selectedCodes.length === 0 && (
-            <span className="text-sm text-muted-foreground">付与なし</span>
+          </div>
+        )}
+
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="mb-1 text-sm font-semibold">変更履歴</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            直近20件の即時変更と予約を表示します。
+          </p>
+          {cancelMembershipChange.error && (
+            <ErrorMessage error={cancelMembershipChange.error} />
+          )}
+          {user.membership_change_sets?.map((set) => (
+            <div
+              key={set.id}
+              className="flex flex-wrap items-start justify-between gap-3 border-t border-border py-2 text-sm"
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>{new Date(set.effective_at).toLocaleString()}</span>
+                  <Badge tone={set.status === "applied" ? "success" : "info"}>
+                    {membershipChangeStatusLabel(set.status)}
+                  </Badge>
+                </div>
+                <div className="mt-1 text-sm font-medium text-foreground">
+                  {set.items.map((item, index) => (
+                    <div key={`${item.operation}-${index}`}>
+                      {membershipChangeDescription(item, groups)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {["draft", "scheduled"].includes(set.status) && (
+                <ConfirmActionDialog
+                  triggerLabel="予約を取り消す"
+                  triggerVariant="secondary"
+                  title="所属変更予約を取り消す"
+                  description="この所属変更予約を取り消します。"
+                  confirmLabel="取り消す"
+                  isPending={cancelMembershipChange.isPending}
+                  error={cancelMembershipChange.error}
+                  onConfirm={() => cancelMembershipChange.mutateAsync(set.id)}
+                />
+              )}
+            </div>
+          ))}
+          {(user.membership_change_sets ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              変更履歴はありません。
+            </p>
           )}
         </div>
-        <Dialog open={roleDialogOpen} onOpenChange={handleRoleDialogOpenChange}>
-          <DialogTrigger asChild>
-            <Button variant="secondary">ロールを変更</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>直接ロールを変更</DialogTitle>
-              <DialogDescription>
-                グループ経由ではなく、このユーザーへ直接付与するロールを選択します。
-              </DialogDescription>
-            </DialogHeader>
-            {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
-            <ul className="divide-y divide-border">
-              {roles?.map((role) => (
-                <li key={role.code} className="py-2">
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <Checkbox
-                      checked={selectedCodes.includes(role.code)}
-                      onCheckedChange={() => toggleRole(role.code)}
-                    />
-                    {role.name}
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <Button
-              isLoading={updateRoles.isPending}
-              onClick={() =>
-                updateRoles.mutate(
-                  { id: userId, roleCodes: selectedCodes },
-                  { onSuccess: () => setRoleDialogOpen(false) },
-                )
-              }
-            >
-              保存する
-            </Button>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      <Dialog
+        open={membershipChangeOpen}
+        onOpenChange={setMembershipChangeOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {membershipChange.operation === "add"
+                ? "所属を追加"
+                : membershipChange.operation === "remove"
+                  ? "所属を解除"
+                  : membershipChange.operation === "replace"
+                    ? "グループを移動"
+                    : "主所属を変更"}
+            </DialogTitle>
+            <DialogDescription>
+              即時に反映するか、指定日時に反映するかを選択してください。
+            </DialogDescription>
+          </DialogHeader>
+
+          {(scheduleMembershipChange.error ||
+            applyMembershipChangeNow.error) && (
+            <ErrorMessage
+              error={
+                scheduleMembershipChange.error ?? applyMembershipChangeNow.error
+              }
+            />
+          )}
+
+          <div className="grid gap-3">
+            {membershipChange.from_group_id && (
+              <div className="rounded bg-muted p-3 text-sm">
+                対象:{" "}
+                {user.memberships?.find(
+                  (membership) =>
+                    membership.group.id === membershipChange.from_group_id,
+                )?.group.name ?? "-"}
+              </div>
+            )}
+            {["add", "replace"].includes(membershipChange.operation) && (
+              <FormField label="変更先グループ" htmlFor="membership-change-to">
+                <NativeSelect
+                  id="membership-change-to"
+                  value={membershipChange.to_group_id}
+                  onChange={(event) =>
+                    setMembershipChange({
+                      ...membershipChange,
+                      to_group_id: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">グループを選択</option>
+                  {groups
+                    ?.filter((group) => {
+                      if (group.status !== "active") return false;
+                      if (
+                        user.memberships?.some(
+                          (membership) => membership.group.id === group.id,
+                        )
+                      ) {
+                        return false;
+                      }
+                      if (membershipChange.operation !== "replace") return true;
+                      const fromMembership = user.memberships?.find(
+                        (membership) =>
+                          membership.group.id ===
+                          membershipChange.from_group_id,
+                      );
+                      return (
+                        !fromMembership ||
+                        group.group_type_id ===
+                          fromMembership.group.group_type_id
+                      );
+                    })
+                    .map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}（{group.type.name}）
+                      </option>
+                    ))}
+                </NativeSelect>
+              </FormField>
+            )}
+            {membershipChange.operation === "set_primary" && (
+              <p className="rounded bg-muted p-3 text-sm text-muted-foreground">
+                主所属は、同じグループ種別の中で代表として扱う所属です。現在の主所属がある場合は、このグループへ切り替えます。
+              </p>
+            )}
+            <FormField
+              label="変更タイミング"
+              htmlFor="membership-change-timing"
+            >
+              <NativeSelect
+                id="membership-change-timing"
+                value={membershipChange.timing}
+                onChange={(event) =>
+                  setMembershipChange({
+                    ...membershipChange,
+                    timing: event.target.value as MembershipTiming,
+                    effective_at: "",
+                  })
+                }
+              >
+                <option value="now">即時に反映</option>
+                <option value="scheduled">日時を指定して予約</option>
+              </NativeSelect>
+            </FormField>
+            {membershipChange.timing === "scheduled" && (
+              <FormField
+                label="適用日時"
+                htmlFor="membership-change-effective-at"
+              >
+                <DateTimePicker
+                  id="membership-change-effective-at"
+                  value={membershipChange.effective_at}
+                  onChange={(value) =>
+                    setMembershipChange({
+                      ...membershipChange,
+                      effective_at: value ?? "",
+                    })
+                  }
+                />
+              </FormField>
+            )}
+            <FormField label="メモ" htmlFor="membership-change-note">
+              <Input
+                id="membership-change-note"
+                value={membershipChange.note}
+                onChange={(event) =>
+                  setMembershipChange({
+                    ...membershipChange,
+                    note: event.target.value,
+                  })
+                }
+              />
+            </FormField>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setMembershipChangeOpen(false)}
+            >
+              キャンセル
+            </Button>
+            <Button
+              disabled={
+                (["add", "replace"].includes(membershipChange.operation) &&
+                  !membershipChange.to_group_id) ||
+                (membershipChange.timing === "scheduled" &&
+                  !membershipChange.effective_at)
+              }
+              isLoading={
+                scheduleMembershipChange.isPending ||
+                applyMembershipChangeNow.isPending
+              }
+              onClick={submitMembershipChange}
+            >
+              {membershipChange.timing === "scheduled"
+                ? "変更を予約"
+                : "変更を実行"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-6 border-t border-border pt-4">
         {updateHireDate.error && <ErrorMessage error={updateHireDate.error} />}
@@ -627,56 +869,6 @@ export function UserRoleEditPage() {
       <div className="mt-6 border-t border-border pt-4">
         <AttendanceSubmissionReminderExclusionPanel userId={userId} />
       </div>
-
-      <div className="mt-6 border-t border-border pt-4">
-        <AuthenticationKeysPanel userId={userId} />
-      </div>
     </Card>
-  );
-}
-
-function AccessExplanation({
-  title,
-  items,
-}: {
-  title: string;
-  items?: Array<{
-    code: string;
-    name?: string;
-    description?: string | null;
-    sources: Array<{
-      type: string;
-      group_name?: string | null;
-      role_name?: string;
-      scope_type?: string;
-      starts_at?: string | null;
-      ends_at?: string | null;
-    }>;
-  }>;
-}) {
-  return (
-    <section>
-      <h3 className="text-sm font-medium">{title}</h3>
-      {items?.map((item) => (
-        <div className="mt-2 rounded bg-muted p-2 text-xs" key={item.code}>
-          <div className="font-medium">
-            {item.name ?? item.description ?? item.code}
-          </div>
-          <div className="text-muted-foreground">{item.code}</div>
-          {item.sources.map((source, index) => (
-            <div className="mt-1" key={`${item.code}-${index}`}>
-              {source.type === "direct"
-                ? "直接付与"
-                : `グループ経由: ${source.group_name ?? "-"}`}
-              {source.role_name ? ` / ${source.role_name}` : ""}
-              {source.scope_type ? ` / Scope: ${source.scope_type}` : ""}
-              {source.starts_at || source.ends_at
-                ? ` / ${source.starts_at ?? "開始指定なし"} ～ ${source.ends_at ?? "終了指定なし"}`
-                : ""}
-            </div>
-          ))}
-        </div>
-      ))}
-    </section>
   );
 }

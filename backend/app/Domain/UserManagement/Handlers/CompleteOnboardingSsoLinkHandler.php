@@ -7,9 +7,9 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
-use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -36,9 +36,8 @@ class CompleteOnboardingSsoLinkHandler implements CommandHandler
             throw new DomainRuleException('このEntra IDアカウント(またはメールアドレス)は既に登録済みのため、オンボーディングを完了できません。');
         }
 
-        $adminRole = Role::query()->where('code', Role::ADMIN)->first();
-        if ($adminRole === null) {
-            throw new DomainRuleException('管理者ロールが未作成のため、オンボーディングを完了できません。ロールマスタの初期化(シード)を確認してください。');
+        if (! DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->exists()) {
+            throw new DomainRuleException('システム管理者グループが未作成のため、オンボーディングを完了できません。初期化を確認してください。');
         }
 
         // 完了フラグの原子的なコミットを先に確定させ、失敗する場合はユーザー行を

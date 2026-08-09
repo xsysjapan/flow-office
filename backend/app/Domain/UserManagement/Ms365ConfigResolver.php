@@ -25,12 +25,13 @@ class Ms365ConfigResolver
 
         $base = rtrim(config('app.url'), '/');
         $base = rtrim("$base/".config('app.api_prefix', ''), '/');
+        $redirect = config('services.azure.redirect') ?: "{$base}/auth/microsoft/callback";
 
         config([
             'services.azure.client_id' => $settings->m365_client_id,
             'services.azure.client_secret' => $settings->m365_client_secret,
             'services.azure.tenant' => $settings->m365_tenant_id ?: 'common',
-            'services.azure.redirect' => "{$base}/auth/microsoft/callback",
+            'services.azure.redirect' => $redirect,
         ]);
     }
 

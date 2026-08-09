@@ -10,7 +10,6 @@ use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
-use App\Domain\UserManagement\Commands\AssignUserRoles;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Models\EmploymentCategory;
 use App\Models\PaidLeaveGrant;
@@ -21,7 +20,9 @@ use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 /**
  * docs/testing/scenario-tests.md のシナリオを実施するための最小マスタデータを投入する。
@@ -286,11 +287,43 @@ class ScenarioSeeder extends Seeder
                 )
                 ->persist();
 
-            $commandBus->dispatch(new AssignUserRoles(
-                userId: $userId,
-                roleCodes: $definition['roles'],
-                changedByUserId: $userId,
-            ));
+            foreach ($definition['roles'] as $roleCode) {
+                $roleId = Role::query()->where('code', $roleCode)->value('id');
+                $scopeType = match ($roleCode) {
+                    Role::EMPLOYEE => 'self',
+                    Role::BACKOFFICE_STAFF => 'approval_task',
+                    default => 'global',
+                };
+                DB::table('role_assignments')->updateOrInsert(
+                    ['id' => Uuid::uuid5(Uuid::NAMESPACE_URL, "scenario-user-role-assignment:{$userId}:{$roleCode}")->toString()],
+                    [
+                        'subject_type' => 'user',
+                        'subject_id' => $userId,
+                        'role_id' => $roleId,
+                        'scope_type' => $scopeType,
+                        'status' => 'active',
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ],
+                );
+            }
+
+            $standardGroupCodes = [];
+            if (in_array(Role::HR_STAFF, $definition['roles'], true)) {
+                $standardGroupCodes[] = 'HUMAN_RESOURCES_USERS';
+            }
+            if (array_intersect($definition['roles'], [Role::BACKOFFICE_STAFF, Role::ACCOUNTING_STAFF, Role::GENERAL_AFFAIRS_STAFF, Role::HR_STAFF, Role::ADMIN]) !== []) {
+                $standardGroupCodes[] = 'BACKOFFICE_USERS';
+            }
+            if (in_array(Role::ADMIN, $definition['roles'], true)) {
+                $standardGroupCodes[] = 'SYSTEM_ADMINISTRATORS';
+            }
+            foreach ($standardGroupCodes as $groupCode) {
+                DB::table('memberships')->updateOrInsert(
+                    ['user_id' => $userId, 'group_id' => DB::table('groups')->where('code', $groupCode)->value('id')],
+                    ['membership_kind' => 'member', 'updated_at' => now(), 'created_at' => now()],
+                );
+            }
 
             $commandBus->dispatch(new SetUserHireDate(
                 userId: $userId,

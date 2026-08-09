@@ -60,19 +60,6 @@ class User extends Authenticatable
     }
 
     /**
-     * @return BelongsToMany<Role, $this>
-     */
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class);
-    }
-
-    public function hasRole(string $code): bool
-    {
-        return $this->roles->contains('code', $code);
-    }
-
-    /**
      * @return HasMany<AuthenticationKey, $this>
      */
     public function authenticationKeys(): HasMany

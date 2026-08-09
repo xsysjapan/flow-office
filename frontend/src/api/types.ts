@@ -15,7 +15,6 @@ export interface User {
   termination_date?: string | null;
   /** 本システムの利用開始日。勤怠提出フォロー等の各種フォロー通知はこの日付以降のみ送る。未設定ならnull。 */
   usage_start_date?: string | null;
-  roles?: string[];
   last_login_at: string | null;
   /** Microsoft 365(Entra ID)アカウントと連携済みかどうか(docs/06-usecases-auth.md UC-004)。 */
   sso_linked?: boolean;
@@ -39,6 +38,16 @@ export interface User {
     id: string;
     effective_at: string;
     status: string;
+    note?: string | null;
+    failure_reason?: string | null;
+    items: Array<{
+      operation: "add" | "remove" | "replace" | "set_primary";
+      group_type_id: number;
+      from_group_id?: string | null;
+      to_group_id?: string | null;
+      target_group_id?: string | null;
+      is_primary?: boolean;
+    }>;
   }>;
   field_authorities?: Array<{
     field_key: string;
@@ -89,6 +98,7 @@ export interface Membership {
     code: string;
     name: string;
     group_type: string;
+    group_type_name?: string;
     group_type_id: number;
   };
 }
@@ -96,7 +106,7 @@ export interface Membership {
 /**
  * GET /users/search が返す軽量なユーザー情報。承認者選択(UserPicker)等、一般社員も使う
  * 用途向けで、入社日・退社日・雇用区分・ロールのような管理者向けの機微な項目は含まない
- * (それらが必要な場合はrole:admin,hr_staff限定のUserを使う)。
+ * (それらが必要な場合はuser.view Permissionで保護されたUserを使う)。
  */
 export interface UserSearchResult {
   id: string;

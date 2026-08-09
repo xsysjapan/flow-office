@@ -31,7 +31,6 @@ class UserResource extends JsonResource
             'hire_date' => $this->hire_date?->toDateString(),
             'termination_date' => $this->termination_date?->toDateString(),
             'usage_start_date' => $this->usage_start_date?->toDateString(),
-            'roles' => $this->whenLoaded('roles', fn () => $this->roles->pluck('code')),
             'external_identities' => $this->whenLoaded('externalIdentities', fn () => $this->externalIdentities->map(fn ($identity) => [
                 'id' => $identity->id,
                 'provider' => $identity->provider,
@@ -50,6 +49,7 @@ class UserResource extends JsonResource
                     'code' => $membership->group->code,
                     'name' => $membership->group->name,
                     'group_type' => $membership->group->type->code,
+                    'group_type_name' => $membership->group->type->name,
                     'group_type_id' => $membership->group->group_type_id,
                 ],
             ])),

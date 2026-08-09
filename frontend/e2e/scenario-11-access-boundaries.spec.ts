@@ -21,6 +21,7 @@ const emails = {
   punch: "kenta.takahashi@example.com",
   accounting: "makoto.kobayashi@example.com",
   hr: "yumi.kato@example.com",
+  generalAffairs: "megumi.nakamura@example.com",
 };
 
 function flattenFeatures(features: Feature[]): Feature[] {
@@ -169,6 +170,48 @@ async function reloginAs(page: Page, displayName: string) {
   await page.evaluate(() => localStorage.removeItem("flow-office.token"));
   await loginAs(page, displayName);
 }
+
+test("システム管理者グループへの追加だけで管理メニューと全Permissionが有効になる", async ({
+  browser,
+}) => {
+  test.setTimeout(180000);
+  const adminContext = await browser.newContext();
+  const userContext = await browser.newContext();
+  const adminPage = await adminContext.newPage();
+  const userPage = await userContext.newPage();
+  let userId: string | undefined;
+  let adminGroupId: string | undefined;
+
+  try {
+    await loginAs(adminPage, SCENARIO_USERS.admin);
+    userId = await fetchUserIdByEmail(adminPage, emails.generalAffairs);
+    const groups = await apiFetch<Group[]>(adminPage, "/admin/user-management/groups");
+    adminGroupId = groups.find((group) => group.code === "SYSTEM_ADMINISTRATORS")!.id;
+    await addMembership(adminPage, userId, adminGroupId);
+
+    await loginAs(userPage, SCENARIO_USERS.generalAffairsStaff);
+    await expect(userPage.getByRole("link", { name: "管理メニュー" })).toBeVisible();
+
+    const [authenticatedUser, permissions] = await Promise.all([
+      apiFetch<{ effective_features: string[]; effective_permissions: string[] }>(userPage, "/auth/me"),
+      apiFetch<Permission[]>(userPage, "/admin/access-control/permissions"),
+    ]);
+    expect(authenticatedUser.effective_features).toEqual(
+      expect.arrayContaining(["administration", "administration.users", "administration.settings"]),
+    );
+    expect(authenticatedUser.effective_permissions.sort()).toEqual(
+      permissions.map((permission) => permission.code).sort(),
+    );
+  } finally {
+    if (userId && adminGroupId) {
+      await rawRequest(adminPage, `/admin/user-management/users/${userId}/groups/${adminGroupId}`, {
+        method: "DELETE",
+      });
+    }
+    await adminContext.close();
+    await userContext.close();
+  }
+});
 
 test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反映される", async ({
   browser,
@@ -420,9 +463,6 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
     }
 
     await session.adminPage.goto("/admin/access-control");
-    await session.adminPage
-      .getByRole("button", { name: "アクセス設定" })
-      .click();
     await session.adminPage
       .getByRole("tab", { name: "Role・Permission" })
       .click();
@@ -706,11 +746,13 @@ test("外部HR管理項目はローカル更新を拒否し、最終同期と無
     external_identities: Array<{ last_synced_at: string | null }>;
   }>(page, `/users/${importedId}`);
   expect(imported.external_identities[0]?.last_synced_at).toBeTruthy();
-  await page.goto(`/admin/users/${importedId}`);
+  await page.goto("/admin/identity-settings");
   await expect(
-    page.getByText(/EXTERNAL_HR: E2E-HR-BOUNDARY-001/),
+    page.getByText(/EXTERNAL_HR \/ E2E-HR-BOUNDARY-001/),
   ).toBeVisible();
-  await expect(page.getByText(/最終同期/)).not.toContainText("最終同期 -");
+  await expect(
+    page.getByText(/EXTERNAL_HR \/ E2E-HR-BOUNDARY-001/),
+  ).not.toContainText("最終同期 -");
 
   const punchUserId = await fetchUserIdByEmail(page, emails.punch);
   const before = await apiFetch<{ data: unknown[] }>(

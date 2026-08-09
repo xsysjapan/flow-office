@@ -15,7 +15,8 @@ const mockUser: User = {
   job_title: null,
   employment_status: "active",
   last_login_at: null,
-  roles: ["admin"],
+  effective_features: ["administration.users", "administration.settings", "attendance.entry", "attendance.timesheet", "workflow.requests", "paid_leave.requests", "backoffice.expenses"],
+  effective_permissions: adminNavGroups.flatMap((group) => group.items.flatMap((item) => [item.permission, ...(item.permissions ?? [])].filter((permission): permission is string => Boolean(permission)))),
 };
 
 function renderLayout(user: User = mockUser) {
@@ -42,7 +43,7 @@ function renderLayout(user: User = mockUser) {
 }
 
 describe("AdminLayout", () => {
-  it("places users and groups under HR, and GroupType under System", () => {
+  it("separates HR operations from system access management", () => {
     const humanResources = adminNavGroups.find(
       (group) => group.label === "人事・組織",
     );
@@ -51,8 +52,16 @@ describe("AdminLayout", () => {
     expect(humanResources?.items.map((item) => item.label)).toEqual([
       "ユーザー",
       "グループ",
+      "所属変更",
+      "人事データ連携",
     ]);
-    expect(system?.items.map((item) => item.label)).toContain("GroupType");
+    expect(system?.items.map((item) => item.label)).toEqual(
+      expect.arrayContaining([
+        "アクセス管理",
+        "ID・管理元設定",
+        "グループ種別",
+      ]),
+    );
   });
 
   it("shows the routed content and sidebar links for an admin user", () => {
@@ -61,18 +70,33 @@ describe("AdminLayout", () => {
     expect(screen.getByText("管理メニューの中身")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ユーザー" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "グループ" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "GroupType" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "所属変更" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "アクセス管理" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "グループ種別" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "申請種別" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "監査ログ" })).toBeInTheDocument();
   });
 
-  it("hides admin-only sections for an hr_staff user", () => {
-    renderLayout({ ...mockUser, roles: ["hr_staff"] });
+  it("shows only human-resources sections from effective access", () => {
+    renderLayout({ ...mockUser, effective_features: ["administration.users"], effective_permissions: ["user.view", "group.view", "group.change.schedule", "external_hr.import"] });
 
     expect(screen.getByRole("link", { name: "ユーザー" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "グループ" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "GroupType" }),
+      screen.getByRole("link", { name: "人事データ連携" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "アクセス管理" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "ID・管理元設定" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "グループ種別" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "申請種別" }),
@@ -100,7 +124,7 @@ describe("AdminLayout", () => {
 
     const dialog = screen.getByRole("dialog", { name: "管理メニュー" });
     expect(dialog).toHaveTextContent("人事・組織");
-    expect(dialog).toHaveTextContent("GroupType");
+    expect(dialog).toHaveTextContent("グループ種別");
     await user.keyboard("{Escape}");
     expect(
       screen.queryByRole("dialog", { name: "管理メニュー" }),

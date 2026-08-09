@@ -177,6 +177,9 @@
 
 ## 命名規則
 
+`user.roles_changed`と`user.roles_migrated_from_legacy`は、旧ユーザーロール機構で記録済みの
+StoredEventを復元するための履歴互換イベントである。旧機構の廃止後は新規発行しない。
+
 - `<aggregate>.<past_tense_verb>` 形式 (例: `attendance_punch.`)。
 - 集約(aggregate)は `aggregate_type` + `aggregate_id` で一意に識別する
   (例: `attendance_day` + `attendance_days.id`)。

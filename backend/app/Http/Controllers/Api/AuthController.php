@@ -142,7 +142,7 @@ class AuthController extends Controller
             return response()->json(['message' => '無効または期限切れのコードです。'], 422);
         }
 
-        $user = User::query()->with('roles')->findOrFail($userId);
+        $user = User::query()->findOrFail($userId);
         if (! in_array($user->account_status, ['active', 'leave'], true)) {
             return response()->json(['message' => 'このアカウントは現在利用できません。'], 403);
         }
@@ -210,7 +210,7 @@ class AuthController extends Controller
 
     private function withAccess(User $user, EffectiveAccessResolver $access): User
     {
-        $user->load('roles', 'externalIdentities');
+        $user->load('externalIdentities');
         $user->setAttribute('effective_features', $access->features($user)->all());
         $user->setAttribute('effective_permissions', $access->permissions($user)->all());
 

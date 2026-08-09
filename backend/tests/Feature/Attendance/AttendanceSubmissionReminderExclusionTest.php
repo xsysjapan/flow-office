@@ -28,7 +28,7 @@ class AttendanceSubmissionReminderExclusionTest extends TestCase
     private function admin(): User
     {
         $admin = User::factory()->create(['employment_status' => 'active']);
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         return $admin;
     }

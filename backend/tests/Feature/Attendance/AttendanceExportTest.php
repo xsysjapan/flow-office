@@ -23,7 +23,7 @@ class AttendanceExportTest extends TestCase
     public function test_admin_can_export_a_csv_of_approved_or_closed_months(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $closedEmployee = User::factory()->create(['name' => '締め済み社員']);
         AttendanceMonth::query()->create([
@@ -69,7 +69,7 @@ class AttendanceExportTest extends TestCase
     public function test_admin_can_export_a_csv_across_multiple_months_and_employees(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employeeA = User::factory()->create(['name' => '社員A']);
         $employeeB = User::factory()->create(['name' => '社員B']);
@@ -107,7 +107,7 @@ class AttendanceExportTest extends TestCase
     public function test_admin_export_excel_zips_a_single_employee_across_multiple_months(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => '複数月社員']);
         foreach (['2026-06', '2026-07'] as $yearMonth) {
@@ -148,7 +148,7 @@ class AttendanceExportTest extends TestCase
     public function test_admin_can_export_attendance_as_excel_with_detail_sheet_for_a_single_employee(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => '締め済み社員']);
         AttendanceMonth::query()->create([
@@ -211,7 +211,7 @@ class AttendanceExportTest extends TestCase
     public function test_admin_export_excel_returns_zip_of_per_employee_workbooks_for_multiple_employees(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employeeIds = [];
         foreach (['社員A', '社員B'] as $name) {
@@ -268,7 +268,7 @@ class AttendanceExportTest extends TestCase
     public function test_generic_tsv_format_uses_tab_delimiter_japanese_headers_and_colon_time(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => 'TSV社員']);
         AttendanceMonth::query()->create([
@@ -306,7 +306,7 @@ class AttendanceExportTest extends TestCase
     public function test_generic_sjis_format_uses_shift_jis_encoding(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => 'SJIS社員']);
         AttendanceMonth::query()->create([
@@ -340,7 +340,7 @@ class AttendanceExportTest extends TestCase
     public function test_moneyforward_format_columns(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => 'MF社員']);
         AttendanceMonth::query()->create([
@@ -379,7 +379,7 @@ class AttendanceExportTest extends TestCase
     public function test_freee_format_columns(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => 'freee社員']);
         AttendanceMonth::query()->create([
@@ -415,7 +415,7 @@ class AttendanceExportTest extends TestCase
     public function test_unknown_format_returns_validation_error(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)
             ->get('/api/exports/attendance?year_month=2026-06&format=yayoi')

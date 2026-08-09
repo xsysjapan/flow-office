@@ -5,7 +5,6 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
-import { ROLE, type RoleCode } from "../../utils/roles";
 import type { User } from "../../api/types";
 
 export interface AdminNavItem {
@@ -21,15 +20,12 @@ export interface AdminNavGroup {
   label: string;
   icon: LucideIcon;
   items: AdminNavItem[];
-  /** 未指定なら管理メニューにアクセスできる全ユーザーに表示する。 */
-  roles?: RoleCode[];
 }
 
 export const adminNavGroups: AdminNavGroup[] = [
   {
     label: "人事・組織",
     icon: Users,
-    roles: [ROLE.ADMIN, ROLE.HR_STAFF],
     items: [
       {
         to: "/admin/users",
@@ -39,66 +35,80 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "user.view",
       },
       {
-        to: "/admin/access-control",
+        to: "/admin/groups",
         label: "グループ",
-        description: "グループと所属、必要に応じて利用機能・権限を管理する",
+        description: "組織グループと所属メンバーを管理する",
         feature: "administration.users",
-        permissions: [
-          "user.view",
-          "group.view",
-          "group.change.schedule",
-          "feature.view",
-          "role.view",
-        ],
+        permission: "group.view",
+      },
+      {
+        to: "/admin/membership-changes",
+        label: "所属変更",
+        description: "所属変更の予約と適用状況を管理する",
+        feature: "administration.users",
+        permission: "group.change.schedule",
+      },
+      {
+        to: "/admin/hr-import",
+        label: "人事データ連携",
+        description: "外部HR CSVの差分確認と取込を管理する",
+        feature: "administration.users",
+        permission: "external_hr.import",
       },
     ],
   },
   {
     label: "勤怠設定",
     icon: Calendar,
-    roles: [ROLE.ADMIN, ROLE.HR_STAFF],
     items: [
       {
         to: "/admin/work-calendars",
         label: "カレンダー",
         description: "休日・稼働日カレンダーを管理する",
         feature: "attendance.entry",
+        permission: "attendance.manage",
       },
       {
         to: "/admin/work-styles",
         label: "勤務形態",
         description: "勤務形態(所定労働時間・労働時間制)を管理する",
         feature: "attendance.entry",
+        permission: "attendance.manage",
       },
       {
         to: "/admin/shifts",
         label: "シフト",
         description: "シフトパターン・ローテーション・シフト生成を管理する",
         feature: "attendance.entry",
+        permission: "attendance.manage",
       },
       {
         to: "/admin/paid-leave",
         label: "有給ルール",
         description: "有給の付与・消化ルールを管理する",
         feature: "paid_leave.requests",
+        permission: "leave.manage",
       },
       {
         to: "/admin/paid-leave/history",
         label: "有給履歴",
         description: "対象社員の有給履歴を確認する",
         feature: "paid_leave.requests",
+        permission: "leave.manage",
       },
       {
         to: "/admin/special-leave",
         label: "特別休暇設定",
         description: "特別休暇の種類・付与ルールを管理する",
         feature: "paid_leave.requests",
+        permission: "leave.manage",
       },
       {
         to: "/admin/special-leave/history",
         label: "特別休暇履歴",
         description: "対象社員の特別休暇履歴を確認する",
         feature: "paid_leave.requests",
+        permission: "leave.manage",
       },
       {
         to: "/admin/attendance",
@@ -112,59 +122,85 @@ export const adminNavGroups: AdminNavGroup[] = [
         label: "勤怠CSV出力",
         description: "給与計算連携用の勤怠CSVを出力する",
         feature: "attendance.timesheet",
-        permission: "attendance.read",
+        permission: "attendance.export",
       },
     ],
   },
   {
     label: "ワークフロー設定",
     icon: Workflow,
-    roles: [ROLE.ADMIN],
     items: [
       {
         to: "/admin/request-types",
         label: "申請種別",
         description: "申請フォームと承認ルートを管理する",
         feature: "workflow.requests",
+        permission: "request_type.manage",
       },
     ],
   },
   {
     label: "経費精算設定",
     icon: Workflow,
-    roles: [ROLE.ADMIN, ROLE.ACCOUNTING_STAFF],
     items: [
       {
         to: "/admin/expense-categories",
         label: "経費区分",
         description: "経費区分ごとの証憑要件・承認省略ルールを管理する",
         feature: "backoffice.expenses",
+        permission: "expense_category.manage",
       },
     ],
   },
   {
     label: "システム",
     icon: Settings,
-    roles: [ROLE.ADMIN],
     items: [
       {
+        to: "/admin/access-control",
+        label: "アクセス管理",
+        description: "Feature・Role・Permissionと利用停止を管理する",
+        feature: "administration.users",
+        permissions: ["feature.view", "role.view"],
+      },
+      {
+        to: "/admin/identity-settings",
+        label: "ID・管理元設定",
+        description: "外部ID連携とユーザー項目の管理元を設定する",
+        feature: "administration.users",
+        permissions: [
+          "external_identity.view",
+          "external_identity.manage",
+          "field_authority.view",
+          "field_authority.update",
+          "authentication_key.view",
+          "authentication_key.manage",
+        ],
+      },
+      {
         to: "/admin/group-types",
-        label: "GroupType",
+        label: "グループ種別",
         description: "グループの分類と所属制約を管理する",
         feature: "administration.settings",
-        permissions: ["group.view", "group.create", "group.update"],
+        permissions: [
+          "group_type.view",
+          "group_type.create",
+          "group_type.update",
+        ],
       },
       {
         to: "/admin/devices",
         label: "端末管理",
         description: "打刻レコーダー等の共有端末を登録・管理する",
         feature: "administration.settings",
+        permission: "device.manage",
       },
       {
         to: "/admin/audit-log",
         label: "監査ログ",
         description: "重要な操作の履歴を確認する",
         feature: "administration.settings",
+        permission: "audit_log.view",
       },
       {
         to: "/admin/system-settings",
@@ -180,14 +216,13 @@ export const adminNavGroups: AdminNavGroup[] = [
 export function canAccessAdminItem(
   user: User | null | undefined,
   item: AdminNavItem,
-  roles?: RoleCode[],
 ): boolean {
   if (item.feature || item.permission || item.permissions) {
     if (
       user?.effective_features === undefined &&
       user?.effective_permissions === undefined
     ) {
-      return !roles || roles.some((role) => user?.roles?.includes(role));
+      return false;
     }
     return (
       (!item.feature ||
@@ -200,5 +235,5 @@ export function canAccessAdminItem(
         ))
     );
   }
-  return !roles || roles.some((role) => user?.roles?.includes(role));
+  return true;
 }

@@ -2,7 +2,6 @@
 
 namespace App\Application\UserManagement\Handlers;
 
-use App\Domain\AccessControl\Aggregates\RoleAssignmentAggregate;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -13,10 +12,8 @@ use App\Domain\UserManagement\Aggregates\UserMembershipAggregate;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
 use App\Domain\UserManagement\Services\MembershipConstraintValidator;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
-use App\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Ramsey\Uuid\Uuid;
 
 /** @implements CommandHandler<ApplyExternalHrImport> */
 class ApplyExternalHrImportHandler implements CommandHandler
@@ -49,15 +46,10 @@ class ApplyExternalHrImportHandler implements CommandHandler
             } $normalized[] = ['user_id' => $userId, 'external_subject_id' => $subject, 'changes' => $changes, 'group_code' => $row['group_code'] ?? null, 'effective_at' => $row['effective_at'] ?? now()->toISOString(), 'is_new' => $isNew];
         } ExternalHrImportAggregate::retrieve($c->importId)->applyImport($normalized, $c->actorUserId)->persist();
         $allUsers = DB::table('groups')->where('code', 'ALL_USERS')->where('status', 'active')->first();
-        $employeeRole = Role::query()->where('code', Role::EMPLOYEE)->where('status', 'active')->first();
         foreach ($normalized as $row) {
             if ($row['is_new']) {
                 if ($allUsers) {
                     UserMembershipAggregate::retrieve(UserManagementStreamId::for('user-membership', $row['user_id']))->add($row['user_id'], $allUsers->id, 'member', false, $c->actorUserId)->persist();
-                } if ($employeeRole) {
-                    UserAggregate::retrieve($row['user_id'])->changeRoles([], [$employeeRole->code], $c->actorUserId)->persist();
-                    $assignmentId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'legacy-role-assignment:'.$row['user_id'].':'.$employeeRole->id)->toString();
-                    RoleAssignmentAggregate::retrieve($assignmentId)->create('user', $row['user_id'], $employeeRole->id, 'global', null, false, null, null, $c->actorUserId)->persist();
                 }
             } if (! $row['group_code']) {
                 continue;

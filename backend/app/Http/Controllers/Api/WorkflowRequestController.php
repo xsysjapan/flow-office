@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
@@ -407,7 +408,7 @@ class WorkflowRequestController extends Controller
         abort_unless(
             $user->id === $workflowRequest->applicant_user_id
                 || $user->id === $workflowRequest->approver_user_id
-                || $user->hasRole('admin'),
+                || app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'approval.execute'),
             403,
             'この申請の履歴を閲覧する権限がありません。'
         );

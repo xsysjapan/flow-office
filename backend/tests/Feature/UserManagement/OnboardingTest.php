@@ -4,10 +4,12 @@ namespace Tests\Feature\UserManagement;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
-use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
+use Database\Seeders\AccessControlSeeder;
+use Database\Seeders\UserManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -24,7 +26,7 @@ class OnboardingTest extends TestCase
     {
         parent::setUp();
 
-        Role::query()->create(['code' => Role::ADMIN, 'name' => 'システム管理者']);
+        $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
     }
 
     public function test_status_reports_needs_onboarding_and_sso_configured(): void
@@ -79,7 +81,7 @@ class OnboardingTest extends TestCase
         ));
 
         $this->assertSame('entra-admin-1', $user->entra_user_id);
-        $this->assertTrue($user->hasRole(Role::ADMIN));
+        $this->assertTrue(app(EffectiveAccessResolver::class)->hasRole($user, 'admin'));
         $this->assertNotNull(SystemSetting::current()->onboarding_completed_at);
     }
 
@@ -116,7 +118,7 @@ class OnboardingTest extends TestCase
         $response->assertOk()->assertJsonStructure(['token', 'user' => ['id', 'email']]);
 
         $admin = User::query()->where('email', 'admin@example.com')->firstOrFail();
-        $this->assertTrue($admin->hasRole(Role::ADMIN));
+        $this->assertTrue(app(EffectiveAccessResolver::class)->hasRole($admin, 'admin'));
         $this->assertNull($admin->entra_user_id);
         $this->assertNotNull(SystemSetting::current()->onboarding_completed_at);
 

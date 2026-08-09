@@ -11,8 +11,11 @@ import {
 import { useAuth } from "../../auth/useAuth";
 import { useSpecialLeaveTypes } from "../../hooks/useSpecialLeave";
 import { cn } from "../../lib/utils";
-import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from "../../utils/roles";
 import { formatDate } from "../../utils/weekDates";
+import {
+  adminNavGroups,
+  canAccessAdminItem,
+} from "../AdminLayout/adminNavGroups";
 import { Button } from "../Button/Button";
 import { NotificationBell } from "../NotificationBell/NotificationBell";
 import {
@@ -39,8 +42,6 @@ interface NavGroup {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
-  /** 未指定なら全ユーザーに表示。指定時はいずれかのロールを持つユーザーにのみグループごと表示する。 */
-  roles?: RoleCode[];
 }
 
 function navGroups(
@@ -119,8 +120,9 @@ function navGroups(
     {
       label: "管理",
       icon: Settings,
-      roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
-      items: [{ to: "/admin", label: "管理メニュー" }],
+      items: [
+        { to: "/admin", label: "管理メニュー", feature: "administration" },
+      ],
     },
   ];
 }
@@ -241,14 +243,7 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
             <div className="flex flex-col leading-tight">
               <span className="text-sm text-foreground">{user.name}</span>
               <span className="text-xs text-muted-foreground">
-                {[
-                  user.department,
-                  user.roles
-                    ?.map((role) => ROLE_LABEL[role as RoleCode] ?? role)
-                    .join(" / "),
-                ]
-                  .filter(Boolean)
-                  .join(" ・ ")}
+                {user.department}
               </span>
             </div>
             <Button
@@ -278,13 +273,9 @@ export function AppLayout() {
   const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some(
     (type) => type.is_active,
   );
-  const canSeeBackOfficeTasks = hasAnyRole(user?.roles, [
-    ROLE.BACKOFFICE_STAFF,
-    ROLE.ACCOUNTING_STAFF,
-    ROLE.GENERAL_AFFAIRS_STAFF,
-    ROLE.HR_STAFF,
-    ROLE.ADMIN,
-  ]);
+  const canSeeBackOfficeTasks = Boolean(
+    user?.effective_features?.includes("backoffice.tasks"),
+  );
   const hasItemFeature = (item: NavItem) =>
     !item.feature ||
     user?.effective_features === undefined ||
@@ -298,8 +289,18 @@ export function AppLayout() {
     hasSpecialLeaveTypes,
     canSeeBackOfficeTasks,
   )
-    .filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
-    .map((group) => ({ ...group, items: group.items.filter(hasItemFeature) }))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        item.to === "/admin"
+          ? adminNavGroups.some((adminGroup) =>
+              adminGroup.items.some((adminItem) =>
+                canAccessAdminItem(user, adminItem),
+              ),
+            )
+          : hasItemFeature(item),
+      ),
+    }))
     .filter((group) => group.items.length > 0);
 
   if (user?.effective_features !== undefined) {
@@ -360,14 +361,7 @@ export function AppLayout() {
                       {user.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {[
-                        user.department,
-                        user.roles
-                          ?.map((role) => ROLE_LABEL[role as RoleCode] ?? role)
-                          .join(" / "),
-                      ]
-                        .filter(Boolean)
-                        .join(" ・ ")}
+                      {user.department}
                     </span>
                   </div>
                 )}

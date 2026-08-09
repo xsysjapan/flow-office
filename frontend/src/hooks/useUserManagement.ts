@@ -9,6 +9,7 @@ const useUserManagementMutation = <T>(
     mutationFn,
     onSuccess: async () => {
       await q.invalidateQueries({ queryKey: ["user-management"] });
+      await q.invalidateQueries({ queryKey: ["users"] });
       await q.invalidateQueries({ queryKey: ["access"] });
     },
   });
@@ -35,10 +36,13 @@ export const useFieldAuthorities = (enabled = true) =>
     queryFn: api.fetchFieldAuthorities,
     enabled,
   });
-export const useMembershipChangeSets = (enabled = true) =>
+export const useMembershipChangeSets = (
+  enabled = true,
+  filters: Parameters<typeof api.fetchMembershipChangeSets>[0] = {},
+) =>
   useQuery({
-    queryKey: ["user-management", "membership-change-sets"],
-    queryFn: api.fetchMembershipChangeSets,
+    queryKey: ["user-management", "membership-change-sets", filters],
+    queryFn: () => api.fetchMembershipChangeSets(filters),
     enabled,
   });
 export const useCreateGroup = () => useUserManagementMutation(api.createGroup);
@@ -97,6 +101,8 @@ export const useUpdateFieldAuthority = () =>
   );
 export const useScheduleMembershipChange = () =>
   useUserManagementMutation(api.scheduleMembershipChange);
+export const useApplyMembershipChangeNow = () =>
+  useUserManagementMutation(api.applyMembershipChangeNow);
 export const useCreateMembershipChangeDraft = () =>
   useUserManagementMutation(api.createMembershipChangeDraft);
 export const useUpdateMembershipChange = () =>

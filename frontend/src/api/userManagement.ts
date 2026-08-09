@@ -54,6 +54,7 @@ export interface ExternalIdentity {
   external_code: string | null;
   email: string | null;
   status: string;
+  last_synced_at: string | null;
   user: { id: string; name: string; email: string };
 }
 export interface FieldAuthority {
@@ -73,6 +74,7 @@ export interface ChangeItem {
 export interface MembershipChangeSet {
   id: string;
   user_id: string;
+  user_name?: string | null;
   effective_at: string;
   source_type: string;
   status: string;
@@ -102,12 +104,20 @@ export const fetchExternalIdentities = (): Promise<ExternalIdentity[]> =>
   apiFetch("/admin/user-management/external-identities");
 export const fetchFieldAuthorities = (): Promise<FieldAuthority[]> =>
   apiFetch("/admin/user-management/field-authorities");
-export const fetchMembershipChangeSets = (): Promise<MembershipChangeSet[]> =>
-  apiFetch("/admin/user-management/membership-change-sets");
+export const fetchMembershipChangeSets = (
+  filters: {
+    user_id?: string;
+    group_id?: string;
+    limit?: number;
+  } = {},
+): Promise<MembershipChangeSet[]> =>
+  apiFetch("/admin/user-management/membership-change-sets", {
+    query: filters,
+  });
 export const createGroup = (input: {
   group_type_id: number;
   name: string;
-  code: string;
+  code?: string;
   description?: string;
   parent_group_id?: string;
 }): Promise<{ id: string }> =>
@@ -198,6 +208,12 @@ export const scheduleMembershipChange = (input: {
     method: "POST",
     body: input,
   });
+export const applyMembershipChangeNow = async (
+  input: Parameters<typeof scheduleMembershipChange>[0],
+): Promise<void> => {
+  const changeSet = await scheduleMembershipChange(input);
+  await applyMembershipChange(changeSet.id);
+};
 export const createMembershipChangeDraft = (
   input: Parameters<typeof scheduleMembershipChange>[0],
 ): Promise<{ id: string }> =>

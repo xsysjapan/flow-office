@@ -20,9 +20,11 @@ trueならフロントエンドはログイン画面の代わりにオンボー�
 ユーザーID・メール・表示名)だけを使って管理者を作成・リンクする。メールアドレスの
 文字列一致には一切依存しない。
 
-1. Entra IDアプリ登録の資格情報(テナントID・クライアントID・クライアントシークレット・
-   リダイレクトURI、必要ならローカル開発用モックOIDC切替)を入力し、
+1. Entra IDアプリ登録の資格情報(テナントID・クライアントID・クライアントシークレット、
+   必要ならローカル開発用モックOIDC切替)を入力し、
    `POST /api/onboarding/sso`を呼ぶ(`StartOnboardingSso`)。
+   リダイレクトURIは画面や`system_settings`では変更せず、Laravelの
+   `services.azure.redirect`（`MICROSOFT_REDIRECT_URI`、未指定時は`APP_URL`と`API_PREFIX`から生成）を正とする。
    - `system_settings`にEntra ID資格情報を保存し、`onboarding_started_at`を設定する
      (`SystemSetting::claimOnboarding()`による単一UPDATE文での原子的クレーム。
      `onboarding_completed_at`が未設定かつ`onboarding_started_at`が未設定または開始から

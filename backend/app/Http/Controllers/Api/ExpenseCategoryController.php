@@ -12,7 +12,7 @@ use Illuminate\Http\Response;
 use OpenApi\Attributes as OA;
 
 /**
- * UC-X001: 経費区分マスタ管理。書き込みは管理者のみ(routes/api.phpのrole:adminで制御)。
+ * UC-X001: 経費区分マスタ管理。書き込みはexpense_category.manage Permissionで制御する。
  */
 #[OA\Tag(name: '経費区分', description: '経費精算の区分マスタ管理')]
 class ExpenseCategoryController extends Controller

@@ -79,7 +79,7 @@ class AuthenticationKeyTest extends TestCase
     public function test_admin_can_register_a_key_on_behalf_of_an_employee(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
 
         $response = $this->actingAs($admin)->postJson('/api/users/me/authentication-keys', [

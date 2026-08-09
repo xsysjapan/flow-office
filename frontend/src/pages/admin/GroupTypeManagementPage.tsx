@@ -38,7 +38,7 @@ export function GroupTypeManagementPage() {
     return (
       <ErrorMessage
         error={types.error}
-        fallback="GroupType設定の取得に失敗しました。"
+        fallback="グループ種別設定の取得に失敗しました。"
       />
     );
 
@@ -48,19 +48,19 @@ export function GroupTypeManagementPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">GroupType管理</h1>
+        <h1 className="text-lg font-semibold">グループ種別管理</h1>
         <p className="text-sm text-muted-foreground">
           グループの分類と所属数・主所属の制約を管理します。
         </p>
       </div>
       {mutationError && <ErrorMessage error={mutationError} />}
-      <Card title="GroupType管理">
+      <Card title="グループ種別管理">
         <h2 className="mb-3 text-base font-semibold">新規作成</h2>
         <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <FormField label="コード" htmlFor="group-type-create-code">
             <Input
               id="group-type-create-code"
-              placeholder="新規GroupTypeコード"
+              placeholder="新規グループ種別コード"
               value={createForm.code}
               onChange={(event) =>
                 setCreateForm({ ...createForm, code: event.target.value })
@@ -70,7 +70,7 @@ export function GroupTypeManagementPage() {
           <FormField label="名称" htmlFor="group-type-create-name">
             <Input
               id="group-type-create-name"
-              placeholder="GroupType名"
+              placeholder="グループ種別名"
               value={createForm.name}
               onChange={(event) =>
                 setCreateForm({ ...createForm, name: event.target.value })
@@ -172,17 +172,17 @@ export function GroupTypeManagementPage() {
               })
             }
           >
-            GroupType追加
+            グループ種別を追加
           </Button>
         </div>
 
         <h2 className="mb-3 border-t pt-4 text-base font-semibold">
-          登録済みGroupType
+          登録済みグループ種別
         </h2>
         <div className="mb-4 flex flex-wrap gap-2">
           {types.data?.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              GroupTypeはまだ登録されていません。
+              グループ種別はまだ登録されていません。
             </p>
           )}
           {types.data?.map((type) => (
@@ -227,7 +227,7 @@ export function GroupTypeManagementPage() {
                 });
               }}
             >
-              <option value="">編集するGroupType</option>
+              <option value="">編集するグループ種別</option>
               {types.data?.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}

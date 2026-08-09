@@ -90,7 +90,7 @@ class UserTimezoneTest extends TestCase
     public function test_admin_can_view_and_update_the_default_timezone(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)->getJson('/api/admin/system-settings')
             ->assertOk()

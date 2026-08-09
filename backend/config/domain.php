@@ -1,7 +1,6 @@
 <?php
 
 use App\Application\UserManagement\Handlers\ApplyExternalHrImportHandler;
-use App\Application\UserManagement\Handlers\AssignUserRolesHandler;
 use App\Application\UserManagement\Handlers\CreateUserHandler;
 use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
 use App\Domain\AccessControl\Commands\ChangeRolePermissions;
@@ -232,7 +231,6 @@ use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
 use App\Domain\UserManagement\Commands\ApplyMembershipChange;
-use App\Domain\UserManagement\Commands\AssignUserRoles;
 use App\Domain\UserManagement\Commands\CancelMembershipChange;
 use App\Domain\UserManagement\Commands\ChangeFieldAuthority;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
@@ -366,7 +364,6 @@ return [
 
         ConfirmNotification::class => ConfirmNotificationHandler::class,
 
-        AssignUserRoles::class => AssignUserRolesHandler::class,
         SetUserHireDate::class => SetUserHireDateHandler::class,
         SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
         SetUserUsageStartDate::class => SetUserUsageStartDateHandler::class,

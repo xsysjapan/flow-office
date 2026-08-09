@@ -102,71 +102,201 @@ test("モバイル管理メニューとアクセス設定をキーボードで�
   await page.getByRole("button", { name: "管理メニューを開く" }).click();
   const navigation = page.getByRole("dialog", { name: "管理メニュー" });
   await expect(
-    navigation.getByRole("link", { name: "GroupType" }),
+    navigation.getByRole("link", { name: "グループ種別" }),
   ).toBeVisible();
-  await navigation.getByRole("link", { name: "グループ" }).click();
-
-  await page.getByRole("button", { name: "アクセス設定" }).click();
+  await navigation.getByRole("link", { name: "アクセス管理" }).click();
   const featureTab = page.getByRole("tab", { name: "Feature" });
   await featureTab.focus();
   await page.keyboard.press("ArrowRight");
   await expect(
     page.getByRole("tab", { name: "Role・Permission" }),
   ).toHaveAttribute("data-state", "active");
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "アクセス設定" })).toHaveCount(
+  await expect(
+    page.getByRole("heading", { name: "Role・Permission" }),
+  ).toBeVisible();
+});
+
+test("人事担当者には人事機能だけを表示しアクセス管理への直URLも拒否する", async ({
+  page,
+}) => {
+  await loginAs(page, SCENARIO_USERS.hrStaff);
+  await page.goto("/admin");
+
+  const navigation = page.getByRole("complementary");
+  await expect(
+    navigation.getByRole("link", { name: "グループ" }),
+  ).toBeVisible();
+  await expect(
+    navigation.getByRole("link", { name: "人事データ連携" }),
+  ).toBeVisible();
+  await expect(
+    navigation.getByRole("link", { name: "所属変更" }),
+  ).toBeVisible();
+  await expect(
+    navigation.getByRole("link", { name: "アクセス管理" }),
+  ).toHaveCount(0);
+  await expect(
+    navigation.getByRole("link", { name: "ID・管理元設定" }),
+  ).toHaveCount(0);
+
+  await navigation.getByRole("link", { name: "ユーザー" }).click();
+  await expect(
+    page.getByRole("columnheader", { name: "グループ（所属）" }),
+  ).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "権限" })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Feature" })).toHaveCount(
+    0,
+  );
+
+  await navigation.getByRole("link", { name: "グループ" }).click();
+  await expect(
+    page.getByRole("columnheader", { name: "メンバー" }),
+  ).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Feature" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("columnheader", { name: "Role・管理スコープ" }),
+  ).toHaveCount(0);
+
+  await page.goto("/admin/access-control");
+  await expect(page).not.toHaveURL(/\/admin\/access-control/);
+  await expect(page.getByRole("heading", { name: "アクセス管理" })).toHaveCount(
     0,
   );
 });
 
-test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所属変更を管理できる", async ({
+test("人事データ連携を狭い画面でも横崩れせず操作できる", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, SCENARIO_USERS.hrStaff);
+  await page.goto("/admin/hr-import");
+
+  await expect(
+    page.getByRole("heading", { name: "人事データ連携" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("対象ユーザー")).toHaveCount(0);
+  await expect(page.getByLabel("外部HR CSVファイル")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("ユーザー管理を中心にグループ種別・グループ・所属・外部ID・所属変更を管理できる", async ({
   page,
 }) => {
-  test.setTimeout(90000);
+  test.setTimeout(300000);
   await loginAs(page, SCENARIO_USERS.admin);
   await page.goto("/admin/group-types");
   await expect(
-    page.getByRole("heading", { name: "GroupType管理" }).first(),
-  ).toBeVisible({ timeout: 15000 });
+    page.getByRole("heading", { name: "グループ種別管理" }).first(),
+  ).toBeVisible();
 
-  const groupTypeCard = card(page, "GroupType管理");
+  const groupTypeCard = card(page, "グループ種別管理");
   await groupTypeCard
-    .getByPlaceholder("新規GroupTypeコード")
+    .getByPlaceholder("新規グループ種別コード")
     .fill(groupTypeCode);
-  await groupTypeCard.getByPlaceholder("GroupType名").fill(groupTypeName);
-  await groupTypeCard.getByRole("button", { name: "GroupType追加" }).click();
+  await groupTypeCard.getByPlaceholder("グループ種別名").fill(groupTypeName);
+  await groupTypeCard
+    .getByRole("button", { name: "グループ種別を追加" })
+    .click();
   await expect(
     groupTypeCard.getByText(`${groupTypeName} (${groupTypeCode})`, {
       exact: false,
     }),
   ).toBeVisible();
 
-  await page.goto("/admin/access-control");
+  await page.goto("/admin/groups");
   await expect(
     page.getByRole("heading", { name: "グループ管理" }).first(),
-  ).toBeVisible({ timeout: 15000 });
-  const groupCard = card(page, "グループ管理");
-  await groupCard
-    .getByLabel("グループ種別")
+  ).toBeVisible();
+  await page.getByRole("link", { name: "新規グループ" }).click();
+  await page
+    .getByLabel("グループ種別", { exact: true })
     .selectOption({ label: groupTypeName });
-  await groupCard.getByPlaceholder("グループ名").fill(groupName);
-  await groupCard.getByPlaceholder("コード", { exact: true }).fill(groupCode);
-  await groupCard.getByRole("button", { name: "追加", exact: true }).click();
+  await page.getByLabel("名称", { exact: true }).fill(groupName);
+  await page.getByRole("button", { name: "作成する" }).click();
+  const groupCard = card(page, "グループ一覧");
   const groupRow = groupCard.getByRole("row").filter({ hasText: groupName });
-  await expect(groupRow).toContainText(groupCode);
+  await expect(groupRow).not.toContainText(groupCode);
+  await expect(groupRow.getByText("0人", { exact: true })).toBeVisible();
+  await expect(groupRow.getByRole("link", { name: /所属を管理/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    groupRow.getByRole("combobox", { name: `${groupName}の親グループ` }),
+  ).toHaveCount(0);
 
-  const membershipCard = card(page, "所属管理");
-  await membershipCard
-    .getByLabel("ユーザー")
+  await groupRow.getByRole("link", { name: groupName }).click();
+  await expect(
+    page.getByRole("heading", { name: `${groupName}の詳細` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "所属メンバー" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "所属を追加" }).click();
+  await page
+    .getByLabel("対象ユーザー")
     .selectOption({ label: SCENARIO_USERS.monthlyEmployee });
-  await membershipCard
-    .getByLabel("グループ")
-    .first()
-    .selectOption({ label: groupName });
-  await membershipCard.getByRole("button", { name: "所属を追加" }).click();
-  await expect(groupRow).toContainText(SCENARIO_USERS.monthlyEmployee);
+  await page.getByRole("button", { name: "変更を実行" }).click();
+  await expect(
+    page.getByRole("link", { name: SCENARIO_USERS.monthlyEmployee }),
+  ).toBeVisible();
 
-  await page.goto("/admin/users/operations");
+  const monthlyUserId = await fetchUserIdByEmail(page, "mai.ito@example.com");
+  await page.goto(`/admin/users/${monthlyUserId}`);
+  const membershipSection = page
+    .getByRole("heading", { name: "グループ所属" })
+    .locator(
+      'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " rounded ")][1]',
+    );
+  await expect(
+    membershipSection.getByText(groupName, { exact: true }),
+  ).toBeVisible();
+  const membershipEntry = membershipSection
+    .getByText(groupName, { exact: true })
+    .locator(
+      'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " rounded ")][1]',
+    );
+  await membershipEntry.getByRole("button", { name: "解除" }).click();
+  await page.getByRole("button", { name: "変更を実行" }).click();
+  await expect(
+    membershipSection.getByText(groupName, { exact: true }),
+  ).toHaveCount(0);
+  await membershipSection.getByRole("button", { name: "所属を追加" }).click();
+  await page
+    .getByLabel("変更先グループ")
+    .selectOption({ label: `${groupName}（${groupTypeName}）` });
+  await page.getByRole("button", { name: "変更を実行" }).click();
+  await expect(
+    membershipSection.getByText(groupName, { exact: true }),
+  ).toBeVisible();
+
+  const userDetailTomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const userDetailDate = new Date(
+    userDetailTomorrow.getTime() -
+      userDetailTomorrow.getTimezoneOffset() * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  const scheduledMembershipEntry = membershipSection
+    .getByText(groupName, { exact: true })
+    .locator(
+      'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " rounded ")][1]',
+    );
+  await scheduledMembershipEntry.getByRole("button", { name: "解除" }).click();
+  const membershipDialog = page.getByRole("dialog");
+  await membershipDialog.getByLabel("変更タイミング").selectOption("scheduled");
+  await pickDate(page, "適用日時", userDetailDate, {
+    root: membershipDialog,
+  });
+  await membershipDialog.getByRole("button", { name: "変更を予約" }).click();
+  await expect(
+    membershipSection.getByRole("status", { name: "予約済み" }),
+  ).toBeVisible();
+
+  await page.goto("/admin/identity-settings");
   const identityCard = card(page, "外部ID・項目管理責任");
   await identityCard
     .getByLabel("ユーザー")
@@ -180,36 +310,49 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
     ),
   ).toBeVisible();
 
-  const changeCard = card(page, "将来日付の所属変更");
+  await page.goto("/admin/membership-changes");
+  const changeCard = card(page, "所属変更一覧");
+  await changeCard.getByRole("button", { name: "変更予約作成" }).click();
+  const changeDialog = page.getByRole("dialog", { name: "変更予約作成" });
+  await expect(changeDialog).toBeVisible();
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const localTomorrow = new Date(
     tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000,
   )
     .toISOString()
     .slice(0, 16);
-  await changeCard
-    .getByLabel("ユーザー")
+  await changeDialog
+    .getByLabel("対象ユーザー")
     .selectOption({ label: SCENARIO_USERS.punchEmployee });
   await pickDate(page, "所属変更の適用日時(日付)", localTomorrow.slice(0, 10), {
-    root: changeCard,
+    root: changeDialog,
   });
-  await changeCard.getByLabel("グループ").selectOption({ label: groupName });
-  await changeCard.getByPlaceholder("メモ").fill("E2E下書き確認");
-  await changeCard.getByRole("button", { name: "明細に追加" }).click();
-  await expect(changeCard.getByText("変更明細（1件）")).toBeVisible();
-  await changeCard.getByRole("button", { name: "下書き保存" }).click();
+  await changeDialog
+    .getByLabel("変更先グループ")
+    .selectOption({ label: groupName });
+  await changeDialog.getByLabel("メモ").fill("E2E下書き確認");
+  await changeDialog.getByRole("button", { name: "明細に追加" }).click();
+  await expect(changeDialog.getByText("変更明細（1件）")).toBeVisible();
+  await changeDialog.getByRole("button", { name: "下書き保存" }).click();
+  await expect(changeDialog).not.toBeVisible();
   const draftRow = changeCard
     .getByRole("row")
     .filter({ hasText: SCENARIO_USERS.punchEmployee })
-    .filter({ hasText: "draft" });
+    .filter({ hasText: "下書き" });
   await expect(draftRow).toBeVisible();
+  await draftRow.getByRole("button", { name: "変更" }).click();
+  const editDialog = page.getByRole("dialog", { name: "所属変更予約を変更" });
+  await expect(editDialog).toBeVisible();
+  await editDialog.getByLabel("メモ").fill("E2E下書き変更確認");
+  await editDialog.getByRole("button", { name: "変更を保存" }).click();
+  await expect(editDialog).not.toBeVisible();
   await draftRow.getByRole("button", { name: "取消" }).click();
   await page.getByRole("button", { name: "取り消す" }).click();
   await expect(
     changeCard
       .getByRole("row")
       .filter({ hasText: SCENARIO_USERS.punchEmployee })
-      .filter({ hasText: "cancelled" }),
+      .filter({ hasText: "取消済み" }),
   ).toBeVisible();
 
   await page.goto("/admin/audit-log");
@@ -231,10 +374,6 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await loginAs(userPage, SCENARIO_USERS.monthlyEmployee);
     await adminPage.goto("/admin/access-control");
 
-    await expect(
-      adminPage.getByRole("heading", { name: "Role・Permission" }),
-    ).toHaveCount(0);
-    await adminPage.getByRole("button", { name: "アクセス設定" }).click();
     const featureCard = card(adminPage, "Feature設定");
     await featureCard
       .getByLabel("対象グループ")
@@ -242,7 +381,20 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await featureCard
       .getByLabel("Feature", { exact: true })
       .selectOption({ label: "管理" });
-    await featureCard.getByRole("button", { name: "Featureを割当" }).click();
+    const assignFeatureButton = featureCard.getByRole("button", {
+      name: "Featureを割当",
+    });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (response) =>
+          response.url().includes("/access-control/groups/") &&
+          response.url().endsWith("/features") &&
+          response.request().method() === "POST" &&
+          response.ok(),
+      ),
+      assignFeatureButton.click(),
+    ]);
+    await expect(assignFeatureButton).toBeEnabled({ timeout: 90000 });
 
     await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
     const roleCard = card(adminPage, "Role・Permission");
@@ -250,7 +402,17 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await roleCard
       .getByRole("textbox", { name: "Role名", exact: true })
       .fill(roleName);
-    await roleCard.getByRole("button", { name: "Role追加" }).click();
+    const addRoleButton = roleCard.getByRole("button", { name: "Role追加" });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (response) =>
+          response.url().endsWith("/access-control/roles") &&
+          response.request().method() === "POST" &&
+          response.ok(),
+      ),
+      addRoleButton.click(),
+    ]);
+    await expect(addRoleButton).toBeEnabled({ timeout: 90000 });
     await expect(
       roleCard.getByText(`${roleName} (${roleCode})`, { exact: false }),
     ).toBeVisible();
@@ -263,7 +425,20 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
       .filter({ hasText: "system_settings" })
       .getByRole("checkbox", { name: "read" })
       .check();
-    await roleCard.getByRole("button", { name: "保存", exact: true }).click();
+    const savePermissionsButton = roleCard.getByRole("button", {
+      name: "保存",
+      exact: true,
+    });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (response) =>
+          /\/access-control\/roles\/\d+\/permissions$/.test(response.url()) &&
+          response.request().method() === "PUT" &&
+          response.ok(),
+      ),
+      savePermissionsButton.click(),
+    ]);
+    await expect(savePermissionsButton).toBeEnabled({ timeout: 90000 });
 
     await roleCard.getByLabel("付与先種別").selectOption("group");
     await roleCard
@@ -273,7 +448,19 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
       .getByLabel("Role", { exact: true })
       .selectOption({ label: roleName });
     await roleCard.getByLabel("対象範囲").selectOption("global");
-    await roleCard.getByRole("button", { name: "Roleを割当" }).click();
+    const assignRoleButton = roleCard.getByRole("button", {
+      name: "Roleを割当",
+    });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (response) =>
+          response.url().endsWith("/role-assignments") &&
+          response.request().method() === "POST" &&
+          response.ok(),
+      ),
+      assignRoleButton.click(),
+    ]);
+    await expect(assignRoleButton).toBeEnabled({ timeout: 90000 });
     await expect(
       roleCard.getByText(new RegExp(`${roleName} / group / global`)),
     ).toBeVisible();
@@ -290,9 +477,7 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await suspensionCard
       .getByLabel("対象ユーザー")
       .selectOption({ label: SCENARIO_USERS.monthlyEmployee });
-    await suspensionCard
-      .getByLabel("Feature")
-      .selectOption({ label: "管理" });
+    await suspensionCard.getByLabel("Feature").selectOption({ label: "管理" });
     await suspensionCard.getByPlaceholder("停止理由").fill("E2E個別停止");
     await suspensionCard
       .getByRole("button", { name: "停止", exact: true })
@@ -321,9 +506,9 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
 });
 
 test("外部HR CSVの差分確認と取込を画面から実行できる", async ({ page }) => {
-  test.setTimeout(90000);
+  test.setTimeout(180000);
   await loginAs(page, SCENARIO_USERS.admin);
-  await page.goto("/admin/users/operations");
+  await page.goto("/admin/identity-settings");
 
   const identityCard = card(page, "外部ID・項目管理責任");
   for (const field of ["display_name", "email"]) {
@@ -340,6 +525,7 @@ test("外部HR CSVの差分確認と取込を画面から実行できる", async
     ]);
   }
 
+  await page.goto("/admin/hr-import");
   const csvCard = card(page, "外部HR CSV差分取込");
   await csvCard.locator('input[type="file"]').setInputFiles({
     name: "e2e-external-hr.csv",
@@ -355,13 +541,23 @@ test("外部HR CSVの差分確認と取込を画面から実行できる", async
   await expect(
     csvCard.getByRole("row").filter({ hasText: "E2E-HR-NEW-001" }),
   ).toContainText("新規");
-  await csvCard.getByRole("button", { name: "確認した差分を適用" }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/external-hr/import") && response.ok(),
+    ),
+    csvCard.getByRole("button", { name: "確認した差分を適用" }).click(),
+  ]);
+  await page.goto("/admin/identity-settings");
+  const refreshedIdentityCard = card(page, "外部ID・項目管理責任");
   await expect(
-    identityCard.getByText("E2E 外部社員: EXTERNAL_HR / E2E-HR-NEW-001"),
+    refreshedIdentityCard.getByText(
+      "E2E 外部社員: EXTERNAL_HR / E2E-HR-NEW-001",
+    ),
   ).toBeVisible();
 
   for (const field of ["display_name", "email"]) {
-    const fieldRow = identityCard
+    const fieldRow = refreshedIdentityCard
       .locator("div.rounded.border.p-2")
       .filter({ hasText: field });
     await Promise.all([

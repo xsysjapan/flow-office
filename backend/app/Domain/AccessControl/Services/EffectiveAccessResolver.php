@@ -134,6 +134,39 @@ class EffectiveAccessResolver
         return $this->features($user)->contains($feature);
     }
 
+    /** @return Collection<int, string> */
+    public function roles(User $user): Collection
+    {
+        $now = now();
+        $groupIds = DB::table('memberships')
+            ->join('groups', 'memberships.group_id', '=', 'groups.id')
+            ->where('memberships.user_id', $user->id)
+            ->where('groups.status', 'active')
+            ->pluck('groups.id');
+
+        return DB::table('role_assignments')
+            ->join('roles', 'role_assignments.role_id', '=', 'roles.id')
+            ->where('roles.status', 'active')
+            ->where('role_assignments.status', 'active')
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+            ->where(function ($query) use ($user, $groupIds): void {
+                $query->where(fn ($direct) => $direct->where('subject_type', 'user')->where('subject_id', $user->id));
+                if ($groupIds->isNotEmpty()) {
+                    $query->orWhere(fn ($group) => $group->where('subject_type', 'group')->whereIn('subject_id', $groupIds));
+                }
+            })
+            ->pluck('roles.code')
+            ->unique()
+            ->sort()
+            ->values();
+    }
+
+    public function hasRole(User $user, string $role): bool
+    {
+        return $this->roles($user)->contains($role);
+    }
+
     public function hasPermission(User $user, string $permission, ?string $resourceGroupId = null, ?string $resourceUserId = null): bool
     {
         $now = now();

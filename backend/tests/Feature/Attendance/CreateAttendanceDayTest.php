@@ -214,7 +214,7 @@ class CreateAttendanceDayTest extends TestCase
         ])->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)->postJson('/api/attendance/days', [
             'user_id' => $employee->id,

@@ -33,10 +33,10 @@ export default async function globalSetup(): Promise<void> {
   }
   if (
     result.product_initial_access?.all_users_feature_assignments !== 0 ||
-    result.product_initial_access?.all_users_role_assignments !== 0
+    result.product_initial_access?.all_users_role_assignments !== 1
   ) {
     throw new Error(
-      `E2E globalSetup: product access must be initially OFF: ${JSON.stringify(result.product_initial_access)}`,
+      `E2E globalSetup: product features must be OFF and ALL_USERS must have only the basic employee role: ${JSON.stringify(result.product_initial_access)}`,
     )
   }
 }

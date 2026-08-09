@@ -139,7 +139,7 @@ class OnboardingController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => new UserResource($user->load('roles')),
+            'user' => new UserResource($user),
         ]);
     }
 }

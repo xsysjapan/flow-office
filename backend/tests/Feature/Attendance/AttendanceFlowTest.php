@@ -268,7 +268,7 @@ class AttendanceFlowTest extends TestCase
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
         $this->assertStringEndsWith("/attendance/months/{$yearMonth}", $employeeNotifications[0]['detail_url']);
 
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")
             ->assertOk()->assertJsonPath('status', 'closed');
 
@@ -385,7 +385,7 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $today = Carbon::today($employee->timezone);
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in');
@@ -431,7 +431,7 @@ class AttendanceFlowTest extends TestCase
             ->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $weekResponse = $this->actingAs($admin)->getJson("/api/attendance/week?start_date={$today->toDateString()}&user_id={$other->id}");
         $weekResponse->assertSuccessful();
@@ -499,7 +499,7 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $today = Carbon::today($employee->timezone);
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in');

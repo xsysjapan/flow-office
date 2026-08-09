@@ -2,6 +2,7 @@
 
 namespace App\Domain\DeviceAdminSession\Handlers;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSessionBootstrap;
 use App\Domain\DeviceAdminSession\Services\DeviceAdminSessionOpener;
 use App\Domain\EventSourcing\Contracts\Command;
@@ -10,7 +11,6 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\Device;
 use App\Models\DeviceAdminSession;
 use App\Models\DeviceAdminSessionSource;
-use App\Models\Role;
 use App\Models\User;
 
 /**
@@ -22,14 +22,17 @@ use App\Models\User;
  */
 class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
 {
-    public function __construct(private readonly DeviceAdminSessionOpener $opener) {}
+    public function __construct(
+        private readonly DeviceAdminSessionOpener $opener,
+        private readonly EffectiveAccessResolver $access,
+    ) {}
 
     public function handle(Command $command): DeviceAdminSession
     {
         assert($command instanceof StartDeviceAdminSessionBootstrap);
 
         $device = Device::query()->findOrFail($command->deviceId);
-        $device->loadMissing('activatedByUser.roles');
+        $device->loadMissing('activatedByUser');
 
         $adminUser = $this->resolveTargetAdmin($device, $command->targetAdminUserId);
 
@@ -39,7 +42,7 @@ class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
     private function resolveTargetAdmin(Device $device, ?string $targetAdminUserId): User
     {
         $activatedBy = $device->activatedByUser;
-        if ($activatedBy !== null && $activatedBy->hasRole(Role::ADMIN)) {
+        if ($activatedBy !== null && $this->access->hasGlobalPermission($activatedBy, 'device.manage')) {
             return $activatedBy;
         }
 
@@ -48,7 +51,7 @@ class StartDeviceAdminSessionBootstrapHandler implements CommandHandler
         }
 
         $targetAdmin = User::query()->find($targetAdminUserId);
-        if ($targetAdmin === null || ! $targetAdmin->hasRole(Role::ADMIN)) {
+        if ($targetAdmin === null || ! $this->access->hasGlobalPermission($targetAdmin, 'device.manage')) {
             throw new DomainRuleException('指定されたユーザーは管理者ではありません。');
         }
 

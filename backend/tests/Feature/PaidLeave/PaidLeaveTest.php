@@ -17,7 +17,7 @@ class PaidLeaveTest extends TestCase
     public function test_hr_staff_can_grant_paid_leave_and_employee_can_see_remaining_days(): void
     {
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
         $employee = User::factory()->create();
 
         $grantResponse = $this->actingAs($hr)->postJson('/api/paid-leave/grants', [

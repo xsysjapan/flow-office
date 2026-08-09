@@ -50,10 +50,14 @@ import { MyIntegrationsPage } from "./pages/integrations/MyIntegrationsPage";
 import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
 import {
+  AccessControlManagementPage,
+  IdentitySettingsPage,
+  MembershipChangesPage,
   UserManagementAccessPage,
   UserOperationsPage,
 } from "./pages/admin/UserManagementAccessPage";
 import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
+import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 
 function App() {
   return (
@@ -122,9 +126,23 @@ function App() {
         >
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<UserListPage />} />
-          <Route path="users/operations" element={<UserOperationsPage />} />
+          <Route
+            path="users/operations"
+            element={<Navigate to="/admin/hr-import" replace />}
+          />
           <Route path="users/:id" element={<UserRoleEditPage />} />
-          <Route path="access-control" element={<UserManagementAccessPage />} />
+          <Route path="groups" element={<UserManagementAccessPage />} />
+          <Route path="groups/:id" element={<GroupDetailPage />} />
+          <Route
+            path="membership-changes"
+            element={<MembershipChangesPage />}
+          />
+          <Route path="hr-import" element={<UserOperationsPage />} />
+          <Route
+            path="access-control"
+            element={<AccessControlManagementPage />}
+          />
+          <Route path="identity-settings" element={<IdentitySettingsPage />} />
           <Route path="group-types" element={<GroupTypeManagementPage />} />
           <Route path="request-types" element={<RequestTypeListPage />} />
           <Route path="request-types/:id" element={<RequestTypeEditPage />} />
