@@ -47,4 +47,9 @@ class Group extends Model
     {
         return $this->belongsToMany(Feature::class, 'group_feature_assignments');
     }
+
+    public function roleAssignments(): HasMany
+    {
+        return $this->hasMany(RoleAssignment::class, 'subject_id')->where('subject_type', 'group');
+    }
 }

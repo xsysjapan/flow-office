@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\AssignUserRoles;
 use App\Domain\UserManagement\Commands\CreateUser;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
@@ -14,6 +15,7 @@ use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UserSearchResource;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,7 +40,14 @@ class UserController extends Controller
             'job_title' => ['nullable', 'string', 'max:255'],
             'employment_status' => ['sometimes', 'string', 'max:100'],
             'account_status' => ['sometimes', 'in:pending,active,suspended,leave,retired,disabled'],
+            'group_id' => ['nullable', 'uuid', 'exists:groups,id'],
         ]);
+        $groupId = $attributes['group_id'] ?? null;
+        unset($attributes['group_id']);
+        $resolver = app(EffectiveAccessResolver::class);
+        if (! $resolver->hasGlobalPermission($request->user(), 'user.create')) {
+            abort_unless($groupId && $resolver->permittedGroupIds($request->user(), 'user.create')->contains($groupId), 403);
+        }
         app(FieldAuthorityService::class)->assertLocallyEditable(array_keys($attributes));
         $id = (string) Str::uuid();
         $user = $commandBus->dispatch(new CreateUser($id, [
@@ -46,6 +55,9 @@ class UserController extends Controller
             'employment_status' => $attributes['employment_status'] ?? 'active',
             'account_status' => $attributes['account_status'] ?? 'active',
         ], $request->user()->id));
+        if ($groupId) {
+            $commandBus->dispatch(new AddMembership($id, $groupId, 'member', false, $request->user()->id));
+        }
 
         return (new UserResource($user->load(['roles', 'externalIdentities', 'memberships.group.type'])))
             ->response()->setStatusCode(201);
@@ -103,8 +115,8 @@ class UserController extends Controller
             ->when(($validated['external_hr'] ?? false), fn ($query) => $query->whereHas('externalIdentities', fn ($q) => $q->where('provider', 'EXTERNAL_HR')->where('status', 'active')))
             ->when($validated['account_status'] ?? null, fn ($query, $status) => $query->where('account_status', $status));
 
-        if (! $resolver->hasGlobalPermission($request->user(), 'user.manage')) {
-            $permittedGroupIds = $resolver->permittedGroupIds($request->user(), 'user.manage');
+        if (! $resolver->hasGlobalPermission($request->user(), 'user.view')) {
+            $permittedGroupIds = $resolver->permittedGroupIds($request->user(), 'user.view');
             $query->where(function ($scope) use ($request, $permittedGroupIds) {
                 $scope->whereKey($request->user()->id);
                 if ($permittedGroupIds->isNotEmpty()) {
@@ -175,6 +187,7 @@ class UserController extends Controller
         $user->load(['roles', 'externalIdentities', 'memberships.group.type', 'roleAssignments.role.permissions', 'featureSuspensions.feature']);
         $user->setAttribute('effective_features', $resolver->features($user)->all());
         $user->setAttribute('effective_permissions', $resolver->permissions($user)->all());
+        $user->setAttribute('effective_access_explanation', $resolver->explain($user));
         $user->setAttribute('membership_change_sets', DB::table('membership_change_sets')->where('user_id', $user->id)->orderByDesc('effective_at')->get());
         $user->setAttribute('field_authorities', DB::table('field_authorities')->orderBy('field_key')->get());
 
@@ -205,6 +218,12 @@ class UserController extends Controller
     )]
     public function updateRoles(Request $request, User $user, CommandBus $commandBus): UserResource
     {
+        $resolver = app(EffectiveAccessResolver::class);
+        $hasGlobalAccess = $resolver->hasGlobalPermission($request->user(), 'role.assign')
+            || (config('access_control.allow_unconfigured_catalog', false)
+                && ! DB::table('permissions')->where('code', 'role.assign')->exists()
+                && $request->user()->hasRole(Role::ADMIN));
+        abort_unless($hasGlobalAccess, 403);
         $data = $request->validate([
             'role_codes' => ['required', 'array'],
             'role_codes.*' => ['string'],

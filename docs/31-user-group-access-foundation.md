@@ -42,12 +42,11 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
 期限到来済み所属変更の定期適用は`user-management:apply-membership-changes`で実行する。
 
-初期状態では`ALL_USERS`へ勤怠・申請・有給・バックオフィスFeatureを付与する。ここでの
-バックオフィスFeatureは一般社員の経費申請画面も含むため、バックオフィスタスクの担当・処理など
-機能内の特権操作はFeatureだけで許可せず、RoleとPermissionで別途制御する。管理Featureは
-`SYSTEM_ADMINISTRATORS`および管理業務を担うグループへ明示的に付与する。
-また、経理・総務・人事等の兼務Roleを持つ利用者にも本人勤怠の基礎操作を保証するため、
-`ALL_USERS`には従業員Roleを割り当てる。兼務Roleはこの基礎Permissionへ加算する。
+製品初期状態では一般利用者向けFeature・Roleを`ALL_USERS`へ自動付与しない。初回設定を行うため、
+`SYSTEM_ADMINISTRATORS`に限って管理Featureと管理Roleを明示付与する。開発・E2E用の一般利用者向け
+初期割当は`ScenarioAccessSeeder`へ分離し、製品の初期状態と混在させない。新Featureの追加時も
+既存企業へ自動開放しない。シナリオ環境でもバックオフィスタスクは`BACKOFFICE_USERS`だけへ付与し、
+一般利用者向けの経費入力Featureとは分離する。
 
 ## 31.2 設計原則
 
@@ -58,6 +57,16 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 - 明示的Deny、親グループからの権限継承、自由記述の条件式、AWS IAM互換ポリシーは導入しない。
 - Featureが無効なら、Permissionを持っていても画面・URL・API・MCPのすべてで利用不可とする。
 - FeatureとPermissionの判定は必ずサーバー側でも行い、画面表示だけに依存しない。
+- ルートが要求するFeatureまたはPermissionコードが製品カタログに存在しない場合は、設定不備として
+  フェイルクローズする。テスト互換設定を本番環境で有効にしてはならない。
+
+### テナント境界
+
+本製品は`1導入環境（DB）= 1利用企業`の単一テナント方式とする。User、Group、Role等へ
+`tenant_id`を持たせず、一意制約は導入環境全体に適用する。Microsoft EntraのTenant IDは
+認証・外部ID照合のための外部テナント識別子であり、アプリケーション内のデータ分離キーではない。
+将来、1DBで複数企業を扱う場合は認証コンテキスト、全テーブル、EventStore、キャッシュを含む
+独立したマルチテナント基盤として別途設計し、部分的な`tenant_id`追加だけでは対応しない。
 
 ```text
 effective_features(user) =
@@ -123,7 +132,6 @@ Microsoft Entra IDでは`external_subject_id`にObject ID、`external_tenant_id`
 ```text
 FieldAuthority
 - id
-- tenant_id
 - field_key
 - authority_type: LOCAL | EXTERNAL_HR
 - provider (nullable)
@@ -152,7 +160,6 @@ GroupType
 
 Group
 - id
-- tenant_id
 - group_type_id
 - name
 - code
@@ -220,6 +227,8 @@ Feature
 - code
 - name
 - parent_feature_id (nullable)
+- display_order
+- is_selectable
 - status
 
 GroupFeatureAssignment
@@ -246,14 +255,13 @@ Featureはグループにだけ付与し、複数グループの結果を和集�
 
 ## 31.8 Role・Permission・Scope
 
-Permissionは`Resource.Action`（例: `attendance.read`, `attendance.update`,
-`user.manage`）で表し、画面では業務カテゴリ別チェックボックスとして表示する。自由な条件式は
+Permissionは`Resource.Action`（例: `attendance.read`, `user.view`,
+`group.membership.update`）で表し、画面では業務カテゴリ別チェックボックスとして表示する。自由な条件式は
 入力させない。
 
 ```text
 Role
 - id
-- tenant_id (nullable: system role)
 - name
 - description
 - is_system
@@ -265,6 +273,10 @@ Permission
 - resource
 - action
 - description
+
+PermissionScopeType
+- permission_id
+- scope_type: GLOBAL | GROUP | SELF | APPROVAL_TASK
 
 RolePermission
 - role_id
@@ -284,7 +296,10 @@ RoleAssignment
 - assigned_by
 ```
 
-Roleはユーザーまたはグループへ直接付与できる。`GLOBAL`は意図せず選ばれないよう明示選択を必須に
+Roleはユーザーまたはグループへ直接付与できる。Permissionは`user.view`、`user.update`、
+`group.membership.update`、`role.assign`、`feature.assign`等の業務操作単位で製品定義し、
+Permissionごとに利用可能なScopeを`PermissionScopeType`で定義する。RoleAssignmentのScopeと
+一致しないPermissionは実効権限へ含めない。`GLOBAL`は意図せず選ばれないよう明示選択を必須に
 し、`GROUP`では対象グループと配下を含むかを指定する。対象Group未指定を全社扱いにしない。
 システムRoleは削除不可・内部識別子変更不可、企業独自Roleは追加・編集・廃止可能とする。
 
@@ -297,10 +312,10 @@ Roleはユーザーまたはグループへ直接付与できる。`GLOBAL`は�
 - ユーザー一覧: 氏名、社員番号、メール、Microsoft連携状態、主所属、雇用区分、在籍状態、
   管理元、Feature概要を表示し、Group・GroupType・未連携・外部HR管理等で検索する。
 - ユーザー詳細: 基本情報、外部ID、現在所属、予約変更、働き方、有効Feature、
-  有効Role/Permission、個別停止、変更履歴を分けて表示する。
+  有効Role/Permission、直接・Group経由の付与元、Scope、有効期間、個別停止、変更履歴を分けて表示する。
 - グループ管理: GroupType別画面から基本情報、メンバー、Feature、Role、管理スコープ、履歴を確認する。
 - Role管理: Permissionを業務カテゴリ別チェックボックスで編集し、Resource/Action/Conditionの
-  生入力UIは作らない。
+  生入力UIは作らない。標準Roleを選択し、Permission集合を引き継いだ独自Roleを複製できる。
 - RoleAssignment: 付与先、Role、対象範囲、配下を含むか、有効期間を選び、設定結果を自然文で
   プレビューする。
 
@@ -477,6 +492,8 @@ Membership、GroupAccess、Role、RoleAssignment、UserFeatureSuspensionから�
 ## 31.15 受入条件
 
 - Feature未付与または個別停止中のユーザーは、画面・URL・API・MCPから機能を利用できない。
+- MCP内のローカル下書き等、バックエンドAPIを呼ばず完結する操作も、実行前にバックエンドの
+  実効Feature・Permissionを確認する。
 - 複数所属グループから得るFeatureとPermissionが加算される。
 - RoleをUserとGroupの双方へ、明示したScopeと有効期間付きで割り当てられる。
 - GroupTypeごとの所属数・主所属・階層制約が、現在変更と予約変更の双方で検証される。

@@ -16,9 +16,14 @@ class EnsureRouteFeatureAccess
     {
         $path = preg_replace('#^api/#', '', $request->path());
         $feature = $this->featureFor($path);
-        if (! $feature || ! DB::table('features')->where('code', $feature)->exists()) {
+        if (! $feature) {
             return $next($request);
-        } abort_unless($request->user() && $this->resolver->hasFeature($request->user(), $feature), 403);
+        }
+        if (config('access_control.allow_unconfigured_catalog', false) && ! DB::table('features')->where('code', $feature)->exists()) {
+            return $next($request);
+        }
+        abort_unless(DB::table('features')->where('code', $feature)->exists(), 500, "Undefined feature: {$feature}");
+        abort_unless($request->user() && $this->resolver->hasFeature($request->user(), $feature), 403);
 
         return $next($request);
     }
@@ -27,7 +32,16 @@ class EnsureRouteFeatureAccess
     {
         return match (true) {
             $path === 'users/search' => null,
-            str_starts_with($path, 'admin/work-'),str_starts_with($path, 'admin/shifts'),str_starts_with($path, 'admin/attendance') => 'attendance',str_starts_with($path, 'admin/paid-leave'),str_starts_with($path, 'admin/special-leave') => 'paid_leave',str_starts_with($path, 'admin/request-types') => 'workflow',str_starts_with($path, 'admin/expense-categories') => 'backoffice',str_starts_with($path, 'attendance'),str_starts_with($path, 'work-calendars'),str_starts_with($path, 'work-styles'),str_starts_with($path, 'shift-patterns'),str_starts_with($path, 'rotation-patterns'),str_starts_with($path, 'employee-shift'),str_starts_with($path, 'employee-rotation'),str_starts_with($path, 'user-work-style'),str_starts_with($path, 'employment-categories'),str_starts_with($path, 'exports/attendance') => 'attendance',str_starts_with($path, 'paid-leave'),str_starts_with($path, 'special-leave'),str_starts_with($path, 'compensatory-leave') => 'paid_leave',str_starts_with($path, 'workflow-requests'),str_starts_with($path, 'shift-swap') => 'workflow',str_starts_with($path, 'expense-claims'),str_starts_with($path, 'expense-entry-presets'),str_starts_with($path, 'expense-categories'),str_starts_with($path, 'backoffice-tasks'),str_starts_with($path, 'exports/expenses') => 'backoffice',str_starts_with($path, 'admin'),str_starts_with($path, 'users') => 'administration',default => null
+            str_starts_with($path, 'attendance/clock-'), str_starts_with($path, 'attendance/break/') => 'attendance.clock',
+            str_starts_with($path, 'attendance/month'), str_starts_with($path, 'exports/attendance') => 'attendance.timesheet',
+            str_starts_with($path, 'attendance'), str_starts_with($path, 'work-calendars'), str_starts_with($path, 'work-styles'), str_starts_with($path, 'shift-patterns'), str_starts_with($path, 'rotation-patterns'), str_starts_with($path, 'employee-shift'), str_starts_with($path, 'employee-rotation'), str_starts_with($path, 'user-work-style'), str_starts_with($path, 'employment-categories'), str_starts_with($path, 'admin/work-'), str_starts_with($path, 'admin/shifts'), str_starts_with($path, 'admin/attendance') => 'attendance.entry',
+            str_starts_with($path, 'paid-leave'), str_starts_with($path, 'special-leave'), str_starts_with($path, 'compensatory-leave'), str_starts_with($path, 'admin/paid-leave'), str_starts_with($path, 'admin/special-leave') => 'paid_leave.requests',
+            str_starts_with($path, 'workflow-requests'), str_starts_with($path, 'shift-swap'), str_starts_with($path, 'admin/request-types') => 'workflow.requests',
+            str_starts_with($path, 'backoffice-tasks') => 'backoffice.tasks',
+            str_starts_with($path, 'expense-claims'), str_starts_with($path, 'expense-entry-presets'), str_starts_with($path, 'expense-categories'), str_starts_with($path, 'exports/expenses'), str_starts_with($path, 'admin/expense-categories') => 'backoffice.expenses',
+            str_starts_with($path, 'admin/user-management'), str_starts_with($path, 'admin/access-control'), str_starts_with($path, 'users') => 'administration.users',
+            str_starts_with($path, 'admin') => 'administration.settings',
+            default => null,
         };
     }
 }

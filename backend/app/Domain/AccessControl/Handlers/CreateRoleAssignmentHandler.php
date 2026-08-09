@@ -30,6 +30,12 @@ class CreateRoleAssignmentHandler implements CommandHandler
             throw new DomainRuleException('開始日時は終了日時以前にしてください。');
         } if (! DB::table('roles')->where('id', $command->roleId)->where('status', 'active')->exists()) {
             throw new DomainRuleException('有効なRoleを指定してください。');
+        } if (! DB::table('permission_role')
+            ->join('permission_scope_types', 'permission_scope_types.permission_id', '=', 'permission_role.permission_id')
+            ->where('permission_role.role_id', $command->roleId)
+            ->where('permission_scope_types.scope_type', $command->scopeType)
+            ->exists()) {
+            throw new DomainRuleException('このRoleには選択したスコープで有効になるPermissionがありません。');
         } $exists = $command->subjectType === 'user' ? DB::table('users')->where('id', $command->subjectId)->exists() : DB::table('groups')->where('id', $command->subjectId)->where('status', 'active')->exists();
         if (! $exists) {
             throw new DomainRuleException('有効な付与先を指定してください。');

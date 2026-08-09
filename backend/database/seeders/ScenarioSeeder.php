@@ -62,6 +62,7 @@ class ScenarioSeeder extends Seeder
         $this->call([
             UserManagementSeeder::class,
             AccessControlSeeder::class,
+            ScenarioAccessSeeder::class,
         ]);
 
         $commandBus->dispatch(new GenerateEmployeeShiftAssignments(

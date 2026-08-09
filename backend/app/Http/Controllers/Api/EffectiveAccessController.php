@@ -11,6 +11,11 @@ class EffectiveAccessController extends Controller
 {
     public function __invoke(Request $request, EffectiveAccessResolver $resolver): JsonResponse
     {
-        return response()->json(['features' => $resolver->features($request->user()), 'permissions' => $resolver->permissions($request->user())]);
+        return response()->json([
+            'features' => $resolver->features($request->user()),
+            'permissions' => $resolver->permissions($request->user()),
+            'global_permissions' => $resolver->permissions($request->user())->filter(fn (string $permission) => $resolver->hasGlobalPermission($request->user(), $permission))->values(),
+            'explanation' => $resolver->explain($request->user()),
+        ]);
     }
 }

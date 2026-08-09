@@ -55,6 +55,7 @@ class UserResource extends JsonResource
             ])),
             'effective_features' => $this->when($this->resource->getAttribute('effective_features') !== null, $this->resource->getAttribute('effective_features')),
             'effective_permissions' => $this->when($this->resource->getAttribute('effective_permissions') !== null, $this->resource->getAttribute('effective_permissions')),
+            'effective_access_explanation' => $this->when($this->resource->getAttribute('effective_access_explanation') !== null, $this->resource->getAttribute('effective_access_explanation')),
             'role_assignments' => $this->whenLoaded('roleAssignments'),
             'feature_suspensions' => $this->whenLoaded('featureSuspensions'),
             'membership_change_sets' => $this->when($this->resource->getAttribute('membership_change_sets') !== null, $this->resource->getAttribute('membership_change_sets')),

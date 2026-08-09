@@ -90,6 +90,7 @@ class MonthlyAttendanceDraftFlowTest extends TestCase
 
         Http::fake([
             '*/auth/me' => Http::response(['id' => 42, 'email' => 'yuto.nagano@xsys.co.jp', 'timezone' => 'Asia/Tokyo'], 200),
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
             '*/attendance/import-preview' => Http::response([
                 'items' => [
                     ['work_date' => '2026-07-01', 'existing' => null, 'differences' => []],
@@ -140,6 +141,7 @@ class MonthlyAttendanceDraftFlowTest extends TestCase
 
         Http::fake([
             '*/auth/me' => Http::response(['id' => 42, 'email' => 'yuto.nagano@xsys.co.jp', 'timezone' => 'Asia/Tokyo'], 200),
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
             '*/attendance/import-preview' => Http::response([
                 'items' => [
                     [

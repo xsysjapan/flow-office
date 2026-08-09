@@ -33,15 +33,13 @@ class UserManagementAccessIntegrationTest extends TestCase
         $this->assertDatabaseHas('groups', ['code' => 'SYSTEM_ADMINISTRATORS']);
         $this->assertDatabaseHas('external_identities', ['user_id' => $admin->id, 'external_subject_id' => 'entra-admin']);
         $this->assertSame(3, DB::table('memberships')->where('user_id', $admin->id)->count());
-        $this->assertSame(4, DB::table('group_feature_assignments')
+        $this->assertSame(0, DB::table('group_feature_assignments')
             ->where('group_id', DB::table('groups')->where('code', 'ALL_USERS')->value('id'))
             ->count());
-        $this->assertDatabaseHas('role_assignments', [
-            'subject_type' => 'group',
-            'subject_id' => DB::table('groups')->where('code', 'ALL_USERS')->value('id'),
-            'role_id' => Role::query()->where('code', Role::EMPLOYEE)->value('id'),
-            'status' => 'active',
-        ]);
+        $this->assertSame(3, DB::table('group_feature_assignments')
+            ->where('group_id', DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id'))
+            ->count());
+        $this->assertDatabaseMissing('role_assignments', ['subject_type' => 'group', 'subject_id' => DB::table('groups')->where('code', 'ALL_USERS')->value('id')]);
     }
 
     public function test_group_creation_flows_through_aggregate_event_and_projector(): void
@@ -68,15 +66,18 @@ class UserManagementAccessIntegrationTest extends TestCase
         $groupId = (string) Str::uuid();
         DB::table('groups')->insert(['id' => $groupId, 'group_type_id' => $typeId, 'name' => '開発部', 'code' => 'DEV', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('memberships')->insert(['user_id' => $user->id, 'group_id' => $groupId, 'created_at' => now(), 'updated_at' => now()]);
-        $featureId = DB::table('features')->insertGetId(['code' => 'attendance', 'name' => '勤怠', 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('group_feature_assignments')->insert(['group_id' => $groupId, 'feature_id' => $featureId, 'created_at' => now(), 'updated_at' => now()]);
+        $featureId = DB::table('features')->insertGetId(['code' => 'attendance', 'name' => '勤怠', 'is_selectable' => false, 'created_at' => now(), 'updated_at' => now()]);
+        $childFeatureId = DB::table('features')->insertGetId(['code' => 'attendance.clock', 'name' => '打刻', 'parent_feature_id' => $featureId, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('group_feature_assignments')->insert(['group_id' => $groupId, 'feature_id' => $childFeatureId, 'created_at' => now(), 'updated_at' => now()]);
         $permissionId = DB::table('permissions')->insertGetId(['code' => 'attendance.read', 'resource' => 'attendance', 'action' => 'read', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('permission_scope_types')->insert(['permission_id' => $permissionId, 'scope_type' => 'global']);
         $role = Role::query()->create(['code' => 'attendance_reader', 'name' => '勤怠閲覧', 'status' => 'active']);
         DB::table('permission_role')->insert(['permission_id' => $permissionId, 'role_id' => $role->id]);
         DB::table('role_assignments')->insert(['id' => (string) Str::uuid(), 'subject_type' => 'group', 'subject_id' => $groupId, 'role_id' => $role->id, 'scope_type' => 'global', 'created_at' => now(), 'updated_at' => now()]);
 
         $this->actingAs($user)->getJson('/api/access/me')->assertOk()
-            ->assertJsonPath('features.0', 'attendance')->assertJsonPath('permissions.0', 'attendance.read');
+            ->assertJsonPath('features.0', 'attendance')->assertJsonPath('features.1', 'attendance.clock')
+            ->assertJsonPath('permissions.0', 'attendance.read');
 
         DB::table('user_feature_suspensions')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'feature_id' => $featureId, 'reason' => '一時停止', 'created_at' => now(), 'updated_at' => now()]);
         $this->actingAs($user)->getJson('/api/access/me')->assertOk()->assertJsonCount(0, 'features');
@@ -86,6 +87,7 @@ class UserManagementAccessIntegrationTest extends TestCase
     {
         $user = User::factory()->create();
         $permissionId = DB::table('permissions')->insertGetId(['code' => 'user.manage', 'resource' => 'user', 'action' => 'manage', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('permission_scope_types')->insert(['permission_id' => $permissionId, 'scope_type' => 'global']);
         $role = Role::query()->create(['code' => 'user_manager', 'name' => 'ユーザー管理', 'status' => 'active']);
         DB::table('permission_role')->insert(['permission_id' => $permissionId, 'role_id' => $role->id]);
         DB::table('role_assignments')->insert(['id' => (string) Str::uuid(), 'subject_type' => 'user', 'subject_id' => $user->id, 'role_id' => $role->id, 'scope_type' => 'global', 'starts_at' => now()->subMinute(), 'ends_at' => now()->addMinute(), 'created_at' => now(), 'updated_at' => now()]);
@@ -283,6 +285,7 @@ class UserManagementAccessIntegrationTest extends TestCase
         DB::table('groups')->insert([['id' => $parent, 'group_type_id' => $typeId, 'name' => '本社', 'code' => 'HQ_SCOPE', 'parent_group_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()], ['id' => $child, 'group_type_id' => $typeId, 'name' => '支社', 'code' => 'BRANCH_SCOPE', 'parent_group_id' => $parent, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]]);
         DB::table('memberships')->insert(['user_id' => $target->id, 'group_id' => $child, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()]);
         $permissionId = DB::table('permissions')->insertGetId(['code' => 'user.manage', 'resource' => 'user', 'action' => 'manage', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('permission_scope_types')->insert(['permission_id' => $permissionId, 'scope_type' => 'group']);
         $roleId = DB::table('roles')->insertGetId(['code' => 'BRANCH_HR', 'name' => '支社人事', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('permission_role')->insert(['permission_id' => $permissionId, 'role_id' => $roleId]);
         DB::table('role_assignments')->insert(['id' => (string) Str::uuid(), 'subject_type' => 'user', 'subject_id' => $actor->id, 'role_id' => $roleId, 'scope_type' => 'group', 'scope_group_id' => $parent, 'include_descendants' => true, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
@@ -311,8 +314,9 @@ class UserManagementAccessIntegrationTest extends TestCase
         $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
         $this->actingAs($admin)->patchJson("/api/admin/access-control/roles/{$role->id}", ['name' => 'システム管理者', 'description' => '全体管理'])->assertOk();
         $userManageId = DB::table('permissions')->where('code', 'user.manage')->value('id');
-        $this->actingAs($admin)->putJson("/api/admin/access-control/roles/{$role->id}/permissions", ['permission_ids' => [$userManageId]])->assertOk();
-        $this->actingAs($admin)->putJson("/api/admin/access-control/roles/{$role->id}/permissions", ['permission_ids' => []])->assertUnprocessable();
+        $roleUpdateId = DB::table('permissions')->where('code', 'role.update')->value('id');
+        $this->actingAs($admin)->putJson("/api/admin/access-control/roles/{$role->id}/permissions", ['permission_ids' => [$userManageId, $roleUpdateId]])->assertOk();
+        $this->actingAs($admin)->putJson("/api/admin/access-control/roles/{$role->id}/permissions", ['permission_ids' => [$roleUpdateId]])->assertUnprocessable();
     }
 
     public function test_external_hr_import_creates_a_user_with_default_membership_and_role(): void
@@ -327,5 +331,73 @@ class UserManagementAccessIntegrationTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $userId, 'name' => '外部 人事', 'source_type' => 'external_hr']);
         $this->assertDatabaseHas('memberships', ['user_id' => $userId, 'group_id' => DB::table('groups')->where('code', 'ALL_USERS')->value('id')]);
         $this->assertDatabaseHas('role_user', ['user_id' => $userId, 'role_id' => Role::query()->where('code', Role::EMPLOYEE)->value('id')]);
+    }
+
+    public function test_undefined_permission_is_fail_closed_when_catalog_compatibility_is_disabled(): void
+    {
+        config(['access_control.allow_unconfigured_catalog' => false]);
+        $admin = User::factory()->create();
+        $adminRole = Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者', 'status' => 'active']);
+        $admin->roles()->attach($adminRole);
+        $typeId = DB::table('group_types')->insertGetId(['code' => 'SYSTEM', 'name' => 'システム', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $groupId = (string) Str::uuid();
+        DB::table('groups')->insert(['id' => $groupId, 'group_type_id' => $typeId, 'name' => '管理者', 'code' => 'ADMINS', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('memberships')->insert(['user_id' => $admin->id, 'group_id' => $groupId, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()]);
+        $featureId = DB::table('features')->insertGetId(['code' => 'administration', 'name' => '管理', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('group_feature_assignments')->insert(['group_id' => $groupId, 'feature_id' => $featureId, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($admin)->getJson('/api/admin/user-management/group-types')->assertStatus(500);
+    }
+
+    public function test_group_scoped_hr_can_use_management_api_only_inside_assigned_scope(): void
+    {
+        $actor = User::factory()->create();
+        $target = User::factory()->create();
+        $outside = User::factory()->create();
+        $hrRole = Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事', 'status' => 'active']);
+        $actor->roles()->attach($hrRole);
+        $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
+        $typeId = DB::table('group_types')->insertGetId(['code' => 'SCOPE_ORG', 'name' => '組織', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $parent = (string) Str::uuid();
+        $child = (string) Str::uuid();
+        $outsideGroup = (string) Str::uuid();
+        DB::table('groups')->insert([
+            ['id' => $parent, 'group_type_id' => $typeId, 'name' => '東京支社', 'code' => 'TOKYO', 'parent_group_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => $child, 'group_type_id' => $typeId, 'name' => '東京営業', 'code' => 'TOKYO_SALES', 'parent_group_id' => $parent, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => $outsideGroup, 'group_type_id' => $typeId, 'name' => '大阪支社', 'code' => 'OSAKA', 'parent_group_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('memberships')->insert([
+            ['user_id' => $actor->id, 'group_id' => $parent, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $target->id, 'group_id' => $child, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $outside->id, 'group_id' => $outsideGroup, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('role_assignments')->where('subject_type', 'user')->where('subject_id', $actor->id)->delete();
+        DB::table('role_assignments')->insert(['id' => (string) Str::uuid(), 'subject_type' => 'user', 'subject_id' => $actor->id, 'role_id' => $hrRole->id, 'scope_type' => 'group', 'scope_group_id' => $parent, 'include_descendants' => true, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('group_feature_assignments')->insert(['group_id' => $parent, 'feature_id' => DB::table('features')->where('code', 'administration.users')->value('id'), 'created_at' => now(), 'updated_at' => now()]);
+
+        $response = $this->actingAs($actor)->getJson('/api/admin/user-management/groups')->assertOk();
+        $this->assertEqualsCanonicalizing([$parent, $child], collect($response->json())->pluck('id')->all());
+        $this->actingAs($actor)->postJson('/api/admin/user-management/memberships', ['user_id' => $target->id, 'group_id' => $parent, 'membership_kind' => 'member'])->assertCreated();
+        $this->actingAs($actor)->postJson('/api/admin/user-management/memberships', ['user_id' => $outside->id, 'group_id' => $outsideGroup, 'membership_kind' => 'member'])->assertForbidden();
+    }
+
+    public function test_role_can_be_cloned_with_permissions_and_scope_options_are_enforced(): void
+    {
+        $admin = User::factory()->create();
+        $adminRole = Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者', 'status' => 'active']);
+        $admin->roles()->attach($adminRole);
+        $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
+        $source = Role::query()->where('code', Role::HR_STAFF)->firstOrFail();
+
+        $this->actingAs($admin)->getJson('/api/admin/access-control/roles')->assertOk()
+            ->assertJsonPath('0.permissions.0.allowed_scope_types.0', 'global');
+
+        $response = $this->actingAs($admin)->postJson("/api/admin/access-control/roles/{$source->id}/clone", ['code' => 'tokyo_hr', 'name' => '東京人事'])->assertCreated();
+        $cloned = Role::query()->with('permissions')->findOrFail($response->json('id'));
+        $this->assertEqualsCanonicalizing($source->permissions()->pluck('permissions.code')->all(), $cloned->permissions->pluck('code')->all());
+
+        $settingsRole = Role::query()->create(['code' => 'settings_reader', 'name' => '設定閲覧', 'status' => 'active']);
+        DB::table('permission_role')->insert(['role_id' => $settingsRole->id, 'permission_id' => DB::table('permissions')->where('code', 'system_settings.read')->value('id')]);
+        $this->actingAs($admin)->postJson('/api/admin/access-control/role-assignments', ['subject_type' => 'user', 'subject_id' => $admin->id, 'role_id' => $settingsRole->id, 'scope_type' => 'self'])->assertUnprocessable();
     }
 }

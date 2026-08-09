@@ -8,9 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'name', 'parent_feature_id', 'status'])]
+#[Fillable(['code', 'name', 'parent_feature_id', 'display_order', 'is_selectable', 'status'])]
 class Feature extends Model
 {
+    protected function casts(): array
+    {
+        return ['is_selectable' => 'boolean'];
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_feature_id');

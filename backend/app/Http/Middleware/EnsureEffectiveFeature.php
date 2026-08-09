@@ -15,9 +15,10 @@ class EnsureEffectiveFeature
     public function handle(Request $request, Closure $next, string $feature): Response
     {
         $user = $request->user();
-        if (! DB::table('features')->where('code', $feature)->exists()) {
+        if (config('access_control.allow_unconfigured_catalog', false) && ! DB::table('features')->where('code', $feature)->exists()) {
             return $next($request);
         }
+        abort_unless(DB::table('features')->where('code', $feature)->exists(), 500, "Undefined feature: {$feature}");
         abort_unless($user && $this->resolver->hasFeature($user, $feature), 403);
 
         return $next($request);

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useState } from "react";
+import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import {
   CalendarClock,
   CheckCircle2,
@@ -7,29 +7,40 @@ import {
   Menu,
   Settings,
   type LucideIcon,
-} from 'lucide-react'
-import { useAuth } from '../../auth/useAuth'
-import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
-import { cn } from '../../lib/utils'
-import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from '../../utils/roles'
-import { formatDate } from '../../utils/weekDates'
-import { Button } from '../Button/Button'
-import { NotificationBell } from '../NotificationBell/NotificationBell'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet'
+} from "lucide-react";
+import { useAuth } from "../../auth/useAuth";
+import { useSpecialLeaveTypes } from "../../hooks/useSpecialLeave";
+import { cn } from "../../lib/utils";
+import { hasAnyRole, ROLE, ROLE_LABEL, type RoleCode } from "../../utils/roles";
+import { formatDate } from "../../utils/weekDates";
+import { Button } from "../Button/Button";
+import { NotificationBell } from "../NotificationBell/NotificationBell";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "../ui/sheet";
 
 interface NavItem {
-  to: string
-  label: string
-  feature?: string | string[]
+  to: string;
+  label: string;
+  feature?: string | string[];
 }
 
 interface NavGroup {
-  label: string
-  icon: LucideIcon
-  items: NavItem[]
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
   /** 未指定なら全ユーザーに表示。指定時はいずれかのロールを持つユーザーにのみグループごと表示する。 */
-  roles?: RoleCode[]
+  roles?: RoleCode[];
 }
 
 function navGroups(
@@ -38,74 +49,114 @@ function navGroups(
   canSeeBackOfficeTasks: boolean,
 ): NavGroup[] {
   return [
-  {
-    label: '勤怠・申請',
-    icon: CalendarClock,
-    items: [
-      { to: '/', label: '今日の勤怠', feature: 'attendance' },
-      { to: '/attendance/week', label: '週次勤怠', feature: 'attendance' },
-      { to: `/attendance/months/${currentYearMonth}`, label: '月次勤怠', feature: 'attendance' },
-      { to: '/paid-leave', label: '有給', feature: 'paid_leave' },
-      ...(hasSpecialLeaveTypes ? [{ to: '/special-leave', label: '特別休暇', feature: 'paid_leave' }] : []),
-      { to: '/expenses', label: '経費精算', feature: 'backoffice' },
-      { to: '/expenses/presets', label: '入力プリセット', feature: 'backoffice' },
-      { to: '/requests', label: 'その他申請', feature: 'workflow' },
-    ],
-  },
-  {
-    label: '承認',
-    icon: CheckCircle2,
-    items: [
-      { to: '/approvals', label: '承認待ち', feature: ['attendance','paid_leave','workflow','backoffice'] },
-      ...(canSeeBackOfficeTasks ? [{ to: '/backoffice-tasks', label: 'タスク一覧', feature: 'backoffice' }] : []),
-    ],
-  },
-  {
-    label: '設定・連携',
-    icon: Settings,
-    items: [
-      { to: '/account', label: 'アカウント設定' },
-      { to: '/integrations', label: 'API・MCP連携' },
-    ],
-  },
-  {
-    label: '管理',
-    icon: Settings,
-    roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
-    items: [
-      { to: '/admin', label: '管理メニュー' },
-    ],
-  },
-  ]
+    {
+      label: "勤怠・申請",
+      icon: CalendarClock,
+      items: [
+        { to: "/", label: "今日の勤怠", feature: "attendance.entry" },
+        {
+          to: "/attendance/week",
+          label: "週次勤怠",
+          feature: "attendance.entry",
+        },
+        {
+          to: `/attendance/months/${currentYearMonth}`,
+          label: "月次勤怠",
+          feature: "attendance.timesheet",
+        },
+        { to: "/paid-leave", label: "有給", feature: "paid_leave.requests" },
+        ...(hasSpecialLeaveTypes
+          ? [
+              {
+                to: "/special-leave",
+                label: "特別休暇",
+                feature: "paid_leave.requests",
+              },
+            ]
+          : []),
+        { to: "/expenses", label: "経費精算", feature: "backoffice.expenses" },
+        {
+          to: "/expenses/presets",
+          label: "入力プリセット",
+          feature: "backoffice.expenses",
+        },
+        { to: "/requests", label: "その他申請", feature: "workflow.requests" },
+      ],
+    },
+    {
+      label: "承認",
+      icon: CheckCircle2,
+      items: [
+        {
+          to: "/approvals",
+          label: "承認待ち",
+          feature: [
+            "attendance.timesheet",
+            "paid_leave.requests",
+            "workflow.requests",
+            "backoffice.expenses",
+          ],
+        },
+        ...(canSeeBackOfficeTasks
+          ? [
+              {
+                to: "/backoffice-tasks",
+                label: "タスク一覧",
+                feature: "backoffice.tasks",
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: "設定・連携",
+      icon: Settings,
+      items: [
+        { to: "/account", label: "アカウント設定" },
+        { to: "/integrations", label: "API・MCP連携" },
+      ],
+    },
+    {
+      label: "管理",
+      icon: Settings,
+      roles: [ROLE.ADMIN, ROLE.HR_STAFF, ROLE.ACCOUNTING_STAFF],
+      items: [{ to: "/admin", label: "管理メニュー" }],
+    },
+  ];
 }
 
 /** そのナビ項目(またはその配下のページ)を今表示しているか。前方一致するパス同士(有給/有給履歴等)が
  *  同時にアクティブにならないよう、"/"は完全一致、それ以外は自身か"to/"始まりのパスのみ一致させる。 */
 function isItemActive(pathname: string, to: string): boolean {
-  if (to === '/') return pathname === '/'
-  return pathname === to || pathname.startsWith(`${to}/`)
+  if (to === "/") return pathname === "/";
+  return pathname === to || pathname.startsWith(`${to}/`);
 }
 
 const navTriggerClass =
-  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground'
+  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground";
 
 function NavGroupMenu({ group }: { group: NavGroup }) {
-  const { pathname } = useLocation()
-  const active = group.items.some((item) => isItemActive(pathname, item.to))
+  const { pathname } = useLocation();
+  const active = group.items.some((item) => isItemActive(pathname, item.to));
 
   if (group.items.length === 1) {
-    const item = group.items[0]
+    const item = group.items[0];
     return (
-      <NavLink to={item.to} className={cn(navTriggerClass, active && 'font-medium text-foreground')}>
+      <NavLink
+        to={item.to}
+        className={cn(navTriggerClass, active && "font-medium text-foreground")}
+      >
         <group.icon className="size-4 shrink-0" aria-hidden="true" />
         {item.label}
       </NavLink>
-    )
+    );
   }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn(navTriggerClass, active && 'font-medium text-foreground')}>
+      <DropdownMenuTrigger
+        className={cn(navTriggerClass, active && "font-medium text-foreground")}
+      >
         <group.icon className="size-4 shrink-0" aria-hidden="true" />
         {group.label}
         <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
@@ -115,25 +166,31 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
           <DropdownMenuItem key={item.to} asChild>
             {/* Radix の asChild は文字列でないclassName(NavLinkの関数形式)をそのまま
                 文字列連結してしまうため、LinkとisActiveの事前計算(exact一致)で対応する。 */}
-            <Link to={item.to} className={cn('w-full', pathname === item.to && 'font-medium text-primary')}>
+            <Link
+              to={item.to}
+              className={cn(
+                "w-full",
+                pathname === item.to && "font-medium text-primary",
+              )}
+            >
               {item.label}
             </Link>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 interface MobileNavProps {
-  groups: NavGroup[]
-  user: { name: string; department: string | null; roles?: string[] } | null
-  onLogout: () => void
+  groups: NavGroup[];
+  user: { name: string; department: string | null; roles?: string[] } | null;
+  onLogout: () => void;
 }
 
 function MobileNav({ groups, user, onLogout }: MobileNavProps) {
-  const [open, setOpen] = useState(false)
-  const { pathname } = useLocation()
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -150,7 +207,10 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
         <SheetHeader>
           <SheetTitle>メニュー</SheetTitle>
         </SheetHeader>
-        <nav className="flex flex-1 flex-col gap-4 overflow-y-auto" aria-label="メインナビゲーション(モバイル)">
+        <nav
+          className="flex flex-1 flex-col gap-4 overflow-y-auto"
+          aria-label="メインナビゲーション(モバイル)"
+        >
           {groups.map((group) => (
             <div key={group.label} className="flex flex-col gap-1">
               <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -164,8 +224,9 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
                     to={item.to}
                     onClick={() => setOpen(false)}
                     className={cn(
-                      'rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                      isItemActive(pathname, item.to) && 'bg-accent font-medium text-foreground',
+                      "rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                      isItemActive(pathname, item.to) &&
+                        "bg-accent font-medium text-foreground",
                     )}
                   >
                     {item.label}
@@ -180,16 +241,21 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
             <div className="flex flex-col leading-tight">
               <span className="text-sm text-foreground">{user.name}</span>
               <span className="text-xs text-muted-foreground">
-                {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                {[
+                  user.department,
+                  user.roles
+                    ?.map((role) => ROLE_LABEL[role as RoleCode] ?? role)
+                    .join(" / "),
+                ]
                   .filter(Boolean)
-                  .join(' ・ ')}
+                  .join(" ・ ")}
               </span>
             </div>
             <Button
               variant="secondary"
               onClick={() => {
-                setOpen(false)
-                onLogout()
+                setOpen(false);
+                onLogout();
               }}
             >
               ログアウト
@@ -198,42 +264,75 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
         )}
       </SheetContent>
     </Sheet>
-  )
+  );
 }
 
 export function AppLayout() {
-  const { user, logout } = useAuth()
-  const { pathname } = useLocation()
-  const currentYearMonth = formatDate(new Date()).slice(0, 7)
-  const { data: specialLeaveTypes } = useSpecialLeaveTypes(user?.effective_features===undefined||user.effective_features.includes('paid_leave'))
-  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
+  const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+  const currentYearMonth = formatDate(new Date()).slice(0, 7);
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes(
+    user?.effective_features === undefined ||
+      user.effective_features.includes("paid_leave.requests"),
+  );
+  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some(
+    (type) => type.is_active,
+  );
   const canSeeBackOfficeTasks = hasAnyRole(user?.roles, [
     ROLE.BACKOFFICE_STAFF,
     ROLE.ACCOUNTING_STAFF,
     ROLE.GENERAL_AFFAIRS_STAFF,
     ROLE.HR_STAFF,
     ROLE.ADMIN,
-  ])
-  const hasItemFeature=(item:NavItem)=>!item.feature||user?.effective_features===undefined||(Array.isArray(item.feature)?item.feature.some(feature=>user.effective_features?.includes(feature)):user.effective_features?.includes(item.feature))
-  const visibleGroups = navGroups(currentYearMonth, hasSpecialLeaveTypes, canSeeBackOfficeTasks)
+  ]);
+  const hasItemFeature = (item: NavItem) =>
+    !item.feature ||
+    user?.effective_features === undefined ||
+    (Array.isArray(item.feature)
+      ? item.feature.some((feature) =>
+          user.effective_features?.includes(feature),
+        )
+      : user.effective_features?.includes(item.feature));
+  const visibleGroups = navGroups(
+    currentYearMonth,
+    hasSpecialLeaveTypes,
+    canSeeBackOfficeTasks,
+  )
     .filter((group) => !group.roles || hasAnyRole(user?.roles, group.roles))
-    .map(group=>({...group,items:group.items.filter(hasItemFeature)}))
-    .filter(group=>group.items.length>0)
+    .map((group) => ({ ...group, items: group.items.filter(hasItemFeature) }))
+    .filter((group) => group.items.length > 0);
 
   if (user?.effective_features !== undefined) {
-    const required = pathname === '/' || pathname.startsWith('/attendance')
-      ? ['attendance']
-      : pathname.startsWith('/paid-leave') || pathname.startsWith('/special-leave')
-        ? ['paid_leave']
-        : pathname.startsWith('/expenses') || pathname.startsWith('/backoffice-tasks')
-          ? ['backoffice']
-          : pathname.startsWith('/requests')
-            ? ['workflow']
-            : pathname.startsWith('/approvals')
-              ? ['attendance','paid_leave','workflow','backoffice']
-              : []
-    if (required.length > 0 && !required.some(feature=>user.effective_features?.includes(feature))) {
-      return <Navigate to="/account" replace />
+    const required =
+      pathname === "/" ||
+      pathname.startsWith("/attendance/week") ||
+      pathname.startsWith("/attendance/days")
+        ? ["attendance.entry"]
+        : pathname.startsWith("/attendance/months")
+          ? ["attendance.timesheet"]
+          : pathname.startsWith("/paid-leave") ||
+              pathname.startsWith("/special-leave")
+            ? ["paid_leave.requests"]
+            : pathname.startsWith("/expenses") ||
+                pathname.startsWith("/backoffice-tasks")
+              ? pathname.startsWith("/backoffice-tasks")
+                ? ["backoffice.tasks"]
+                : ["backoffice.expenses"]
+              : pathname.startsWith("/requests")
+                ? ["workflow.requests"]
+                : pathname.startsWith("/approvals")
+                  ? [
+                      "attendance.timesheet",
+                      "paid_leave.requests",
+                      "workflow.requests",
+                      "backoffice.expenses",
+                    ]
+                  : [];
+    if (
+      required.length > 0 &&
+      !required.some((feature) => user.effective_features?.includes(feature))
+    ) {
+      return <Navigate to="/account" replace />;
     }
   }
 
@@ -243,19 +342,32 @@ export function AppLayout() {
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 sm:px-6 lg:max-w-6xl lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <MobileNav groups={visibleGroups} user={user} onLogout={() => void logout()} />
-              <span className="text-sm font-semibold text-foreground">flow-office</span>
+              <MobileNav
+                groups={visibleGroups}
+                user={user}
+                onLogout={() => void logout()}
+              />
+              <span className="text-sm font-semibold text-foreground">
+                flow-office
+              </span>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
               <div className="hidden items-center gap-3 sm:flex">
                 {user && (
                   <div className="flex flex-col items-end leading-tight">
-                    <span className="text-sm text-muted-foreground">{user.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {user.name}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      {[user.department, user.roles?.map((role) => ROLE_LABEL[role as RoleCode] ?? role).join(' / ')]
+                      {[
+                        user.department,
+                        user.roles
+                          ?.map((role) => ROLE_LABEL[role as RoleCode] ?? role)
+                          .join(" / "),
+                      ]
                         .filter(Boolean)
-                        .join(' ・ ')}
+                        .join(" ・ ")}
                     </span>
                   </div>
                 )}
@@ -265,7 +377,10 @@ export function AppLayout() {
               </div>
             </div>
           </div>
-          <nav className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="メインナビゲーション">
+          <nav
+            className="hidden flex-wrap items-center gap-1 sm:flex"
+            aria-label="メインナビゲーション"
+          >
             {visibleGroups.map((group) => (
               <NavGroupMenu key={group.label} group={group} />
             ))}
@@ -276,5 +391,5 @@ export function AppLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }

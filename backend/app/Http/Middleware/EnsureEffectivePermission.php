@@ -15,9 +15,10 @@ class EnsureEffectivePermission
     public function handle(Request $request, Closure $next, string $permission, string $scopeMode = 'resource'): Response
     {
         $user = $request->user();
-        if (! DB::table('permissions')->where('code', $permission)->exists()) {
+        if (config('access_control.allow_unconfigured_catalog', false) && ! DB::table('permissions')->where('code', $permission)->exists()) {
             return $next($request);
         }
+        abort_unless(DB::table('permissions')->where('code', $permission)->exists(), 500, "Undefined permission: {$permission}");
         $resourceGroupId = $this->routeId($request->route('group') ?? $request->route('scopeGroup'));
         $resourceUserId = $this->routeId($request->route('user') ?? $request->route('userId'));
         $allowed = $user && match ($scopeMode) {
@@ -26,6 +27,7 @@ class EnsureEffectivePermission
             default => $this->resolver->hasPermission($user, $permission, $resourceGroupId, $resourceUserId),
         };
         abort_unless($allowed, 403);
+        $request->attributes->set('effective_permission_code', $permission);
 
         return $next($request);
     }

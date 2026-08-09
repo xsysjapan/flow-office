@@ -24,6 +24,13 @@ use Illuminate\Support\Facades\DB;
             throw new DomainRuleException('配下を含む指定はGROUPスコープだけで利用できます。');
         } if ($c->scopeGroupId && ! DB::table('groups')->where('id', $c->scopeGroupId)->where('status', 'active')->exists()) {
             throw new DomainRuleException('有効なスコープ対象Groupを指定してください。');
+        } $roleId = DB::table('role_assignments')->where('id', $c->assignmentId)->value('role_id');
+        if (! DB::table('permission_role')
+            ->join('permission_scope_types', 'permission_scope_types.permission_id', '=', 'permission_role.permission_id')
+            ->where('permission_role.role_id', $roleId)
+            ->where('permission_scope_types.scope_type', $c->scopeType)
+            ->exists()) {
+            throw new DomainRuleException('このRoleには選択したスコープで有効になるPermissionがありません。');
         } if ($c->startsAt && $c->endsAt && $c->startsAt > $c->endsAt) {
             throw new DomainRuleException('開始日時は終了日時以前にしてください。');
         } RoleAssignmentAggregate::retrieve($c->assignmentId)->update($c->scopeType, $c->scopeGroupId, $c->includeDescendants, $c->startsAt, $c->endsAt, $c->actorUserId)->persist();

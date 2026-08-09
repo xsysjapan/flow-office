@@ -84,60 +84,61 @@ Route::post('/dev/reset-database', DevDatabaseResetController::class);
 
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);
-    Route::middleware(['feature:administration', 'permission:user.manage'])->prefix('admin/user-management')->group(function () {
-        Route::get('/group-types', [UserManagementController::class, 'groupTypes']);
-        Route::get('/groups', [UserManagementController::class, 'groups']);
-        Route::get('/membership-change-sets', [UserManagementController::class, 'changeSets']);
-        Route::get('/external-identities', [UserManagementController::class, 'externalIdentities']);
-        Route::get('/field-authorities', [UserManagementController::class, 'fieldAuthorities']);
-        Route::post('/external-hr/import-preview', [UserManagementController::class, 'externalHrImportPreview']);
-        Route::post('/external-hr/import', [UserManagementController::class, 'applyExternalHrImport']);
-        Route::post('/groups', [UserManagementController::class, 'storeGroup']);
-        Route::post('/group-types', [UserManagementController::class, 'storeGroupType']);
-        Route::patch('/group-types/{groupType}', [UserManagementController::class, 'updateGroupType']);
-        Route::patch('/groups/{group}', [UserManagementController::class, 'updateGroup']);
-        Route::post('/memberships', [UserManagementController::class, 'storeMembership']);
-        Route::delete('/users/{user}/groups/{group}', [UserManagementController::class, 'destroyMembership']);
-        Route::post('/users/{user}/external-identities', [UserManagementController::class, 'linkExternalIdentity']);
-        Route::delete('/external-identities/{identity}', [UserManagementController::class, 'unlinkExternalIdentity']);
-        Route::put('/field-authorities/{fieldKey}', [UserManagementController::class, 'updateFieldAuthority']);
-        Route::post('/membership-change-sets', [UserManagementController::class, 'scheduleChange']);
-        Route::post('/membership-change-sets/drafts', [UserManagementController::class, 'draftChange']);
-        Route::patch('/membership-change-sets/{changeSet}', [UserManagementController::class, 'updateChange']);
-        Route::post('/membership-change-sets/{changeSet}/apply', [UserManagementController::class, 'applyChange']);
-        Route::post('/membership-change-sets/{changeSet}/schedule', [UserManagementController::class, 'scheduleExistingChange']);
-        Route::post('/membership-change-sets/{changeSet}/cancel', [UserManagementController::class, 'cancelChange']);
+    Route::middleware(['feature:administration.users'])->prefix('admin/user-management')->group(function () {
+        Route::get('/group-types', [UserManagementController::class, 'groupTypes'])->middleware('permission:group.view,any');
+        Route::get('/groups', [UserManagementController::class, 'groups'])->middleware('permission:group.view,any');
+        Route::get('/membership-change-sets', [UserManagementController::class, 'changeSets'])->middleware('permission:group.change.schedule,any');
+        Route::get('/external-identities', [UserManagementController::class, 'externalIdentities'])->middleware('permission:user.view,any');
+        Route::get('/field-authorities', [UserManagementController::class, 'fieldAuthorities'])->middleware('permission:user.view,any');
+        Route::post('/external-hr/import-preview', [UserManagementController::class, 'externalHrImportPreview'])->middleware('permission:user.update,any');
+        Route::post('/external-hr/import', [UserManagementController::class, 'applyExternalHrImport'])->middleware('permission:user.update,any');
+        Route::post('/groups', [UserManagementController::class, 'storeGroup'])->middleware('permission:group.create,any');
+        Route::post('/group-types', [UserManagementController::class, 'storeGroupType'])->middleware('permission:group.create,any');
+        Route::patch('/group-types/{groupType}', [UserManagementController::class, 'updateGroupType'])->middleware('permission:group.update,any');
+        Route::patch('/groups/{group}', [UserManagementController::class, 'updateGroup'])->middleware('permission:group.update');
+        Route::post('/memberships', [UserManagementController::class, 'storeMembership'])->middleware('permission:group.membership.update,any');
+        Route::delete('/users/{user}/groups/{group}', [UserManagementController::class, 'destroyMembership'])->middleware('permission:group.membership.update');
+        Route::post('/users/{user}/external-identities', [UserManagementController::class, 'linkExternalIdentity'])->middleware('permission:user.update');
+        Route::delete('/external-identities/{identity}', [UserManagementController::class, 'unlinkExternalIdentity'])->middleware('permission:user.update,any');
+        Route::put('/field-authorities/{fieldKey}', [UserManagementController::class, 'updateFieldAuthority'])->middleware('permission:user.update,any');
+        Route::post('/membership-change-sets', [UserManagementController::class, 'scheduleChange'])->middleware('permission:group.change.schedule,any');
+        Route::post('/membership-change-sets/drafts', [UserManagementController::class, 'draftChange'])->middleware('permission:group.change.schedule,any');
+        Route::patch('/membership-change-sets/{changeSet}', [UserManagementController::class, 'updateChange'])->middleware('permission:group.change.schedule,any');
+        Route::post('/membership-change-sets/{changeSet}/apply', [UserManagementController::class, 'applyChange'])->middleware('permission:group.change.schedule,any');
+        Route::post('/membership-change-sets/{changeSet}/schedule', [UserManagementController::class, 'scheduleExistingChange'])->middleware('permission:group.change.schedule,any');
+        Route::post('/membership-change-sets/{changeSet}/cancel', [UserManagementController::class, 'cancelChange'])->middleware('permission:group.change.schedule,any');
     });
-    Route::middleware(['feature:administration', 'permission:user.manage'])->prefix('admin/access-control')->group(function () {
-        Route::get('/features', [AccessControlController::class, 'features']);
-        Route::get('/permissions', [AccessControlController::class, 'permissions']);
-        Route::get('/roles', [AccessControlController::class, 'roles']);
-        Route::get('/role-assignments', [AccessControlController::class, 'roleAssignments']);
-        Route::get('/feature-suspensions', [AccessControlController::class, 'suspensions']);
-        Route::post('/roles', [AccessControlController::class, 'storeRole']);
-        Route::patch('/roles/{role}', [AccessControlController::class, 'updateRole']);
-        Route::post('/groups/{group}/features', [AccessControlController::class, 'assignFeature']);
-        Route::delete('/groups/{group}/features/{feature}', [AccessControlController::class, 'removeFeature']);
-        Route::post('/feature-suspensions', [AccessControlController::class, 'suspendFeature']);
-        Route::delete('/feature-suspensions/{suspension}', [AccessControlController::class, 'removeSuspension']);
-        Route::post('/role-assignments', [AccessControlController::class, 'storeRoleAssignment']);
-        Route::delete('/role-assignments/{assignment}', [AccessControlController::class, 'destroyRoleAssignment']);
-        Route::patch('/role-assignments/{assignment}', [AccessControlController::class, 'updateRoleAssignment']);
-        Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions']);
+    Route::middleware(['feature:administration.users'])->prefix('admin/access-control')->group(function () {
+        Route::get('/features', [AccessControlController::class, 'features'])->middleware('permission:feature.view,any');
+        Route::get('/permissions', [AccessControlController::class, 'permissions'])->middleware('permission:role.view,any');
+        Route::get('/roles', [AccessControlController::class, 'roles'])->middleware('permission:role.view,any');
+        Route::get('/role-assignments', [AccessControlController::class, 'roleAssignments'])->middleware('permission:role.view,any');
+        Route::get('/feature-suspensions', [AccessControlController::class, 'suspensions'])->middleware('permission:feature.view,any');
+        Route::post('/roles', [AccessControlController::class, 'storeRole'])->middleware('permission:role.create,any');
+        Route::post('/roles/{role}/clone', [AccessControlController::class, 'cloneRole'])->middleware('permission:role.create,any');
+        Route::patch('/roles/{role}', [AccessControlController::class, 'updateRole'])->middleware('permission:role.update,any');
+        Route::post('/groups/{group}/features', [AccessControlController::class, 'assignFeature'])->middleware('permission:feature.assign');
+        Route::delete('/groups/{group}/features/{feature}', [AccessControlController::class, 'removeFeature'])->middleware('permission:feature.assign');
+        Route::post('/feature-suspensions', [AccessControlController::class, 'suspendFeature'])->middleware('permission:feature.assign,any');
+        Route::delete('/feature-suspensions/{suspension}', [AccessControlController::class, 'removeSuspension'])->middleware('permission:feature.assign,any');
+        Route::post('/role-assignments', [AccessControlController::class, 'storeRoleAssignment'])->middleware('permission:role.assign,any');
+        Route::delete('/role-assignments/{assignment}', [AccessControlController::class, 'destroyRoleAssignment'])->middleware('permission:role.assign,any');
+        Route::patch('/role-assignments/{assignment}', [AccessControlController::class, 'updateRoleAssignment'])->middleware('permission:role.assign,any');
+        Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->middleware('permission:role.update,any');
     });
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
     // 入社日・退社日・雇用区分・ロールを含む一覧・詳細はrole:admin,hr_staff限定。
     // 承認者選択(UserPicker)等、一般社員も使う軽量な検索は下のUserController::search
     // (/users/search)を使う。
-    Route::get('/users', [UserController::class, 'index'])->middleware(['role:admin,hr_staff', 'permission:user.manage,any']);
-    Route::post('/users', [UserController::class, 'store'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::get('/users', [UserController::class, 'index'])->middleware(['role:admin,hr_staff', 'permission:user.view,any']);
+    Route::post('/users', [UserController::class, 'store'])->middleware(['role:admin,hr_staff', 'permission:user.create,any']);
     Route::get('/users/search', [UserController::class, 'search']);
-    Route::get('/users/{user}', [UserController::class, 'show'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
-    Route::patch('/users/{user}', [UserController::class, 'update'])->middleware(['feature:administration', 'permission:user.manage']);
-    Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
-    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
-    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
-    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware(['role:admin,hr_staff', 'permission:user.manage']);
+    Route::get('/users/{user}', [UserController::class, 'show'])->middleware(['role:admin,hr_staff', 'permission:user.view']);
+    Route::patch('/users/{user}', [UserController::class, 'update'])->middleware(['feature:administration.users', 'permission:user.update']);
+    Route::put('/users/{user}/roles', [UserController::class, 'updateRoles'])->middleware(['role:admin,hr_staff', 'permission:role.assign']);
+    Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
+    Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
+    Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware(['role:admin,hr_staff', 'permission:user.update']);
     Route::get('/roles', [RoleController::class, 'index']);
 
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---

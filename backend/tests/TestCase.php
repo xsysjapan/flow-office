@@ -24,6 +24,7 @@ abstract class TestCase extends BaseTestCase
             'services.azure.client_id' => null,
             'services.azure.client_secret' => null,
             'services.azure.tenant' => 'common',
+            'access_control.allow_unconfigured_catalog' => true,
         ]);
     }
 }
