@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { AdminLayout } from './AdminLayout'
+import { adminNavGroups } from './adminNavGroups'
 
 const mockUser: User = {
   id: 'user-1',
@@ -40,11 +41,21 @@ function renderLayout(user: User = mockUser) {
 }
 
 describe('AdminLayout', () => {
+  it('places users and groups under HR, and GroupType under System', () => {
+    const humanResources = adminNavGroups.find((group) => group.label === '人事・組織')
+    const system = adminNavGroups.find((group) => group.label === 'システム')
+
+    expect(humanResources?.items.map((item) => item.label)).toEqual(['ユーザー', 'グループ'])
+    expect(system?.items.map((item) => item.label)).toContain('GroupType')
+  })
+
   it('shows the routed content and sidebar links for an admin user', () => {
     renderLayout()
 
     expect(screen.getByText('管理メニューの中身')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'ユーザー・権限' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ユーザー' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'グループ' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'GroupType' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '申請種別' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '監査ログ' })).toBeInTheDocument()
   })
@@ -52,7 +63,9 @@ describe('AdminLayout', () => {
   it('hides admin-only sections for an hr_staff user', () => {
     renderLayout({ ...mockUser, roles: ['hr_staff'] })
 
-    expect(screen.getByRole('link', { name: 'ユーザー・権限' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ユーザー' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'グループ' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'GroupType' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '申請種別' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '監査ログ' })).not.toBeInTheDocument()
   })

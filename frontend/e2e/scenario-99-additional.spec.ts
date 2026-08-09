@@ -1,11 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
-import {
-  fetchAttendancePunches,
-  recordAttendancePunch,
-  submitApproveAndCloseCurrentMonth,
-} from './support/api'
+import { fetchAttendancePunches, recordAttendancePunch, submitApproveAndCloseCurrentMonth } from './support/api'
 import { pickDate, pickUser, pickYearMonth } from './support/ui'
 
 /**
@@ -97,6 +93,7 @@ test('§5-6+7: ロール変更が即座に反映され、監査ログに記録�
     // このテストを何度も実行しても前提が同じになるよう、まずemployeeのみの状態に戻す
     // (このテストで hr_staff を付与した結果が残っていることがあるため)。
     await adminPage.goto(`/admin/users/${userId}`)
+    await adminPage.getByRole('button', { name: 'ロールを変更' }).click()
     const hrCheckbox = adminPage.getByRole('checkbox', { name: '人事担当者' })
     if (await hrCheckbox.isChecked()) {
       await hrCheckbox.uncheck()
@@ -111,6 +108,7 @@ test('§5-6+7: ロール変更が即座に反映され、監査ログに記録�
 
     // 管理者がhr_staffロールを追加する(ログインし直しではなくロールを都度DBに反映する)。
     await adminPage.goto(`/admin/users/${userId}`)
+    await adminPage.getByRole('button', { name: 'ロールを変更' }).click()
     await hrCheckbox.check()
     await adminPage.getByRole('button', { name: '保存する', exact: true }).click()
     await expect(adminPage.getByRole('status', { name: '保存しました' })).toBeVisible()
@@ -282,6 +280,7 @@ test('§5-9: Entra ID初回ログイン(新入社員オンボーディング)', 
     await adminPage.getByRole('button', { name: '入社日を保存する' }).click()
     await expect(adminPage.getByRole('status', { name: '保存しました' })).toBeVisible()
 
+    await adminPage.getByRole('button', { name: 'ロールを変更' }).click()
     await adminPage.getByRole('checkbox', { name: '人事担当者' }).check()
     await adminPage.getByRole('button', { name: '保存する', exact: true }).click()
     await expect(adminPage.getByRole('status', { name: '保存しました' }).first()).toBeVisible()

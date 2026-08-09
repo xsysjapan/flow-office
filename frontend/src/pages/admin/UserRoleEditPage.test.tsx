@@ -67,16 +67,27 @@ const defaultWorkStyle: WorkStyle = {
   updated_at: null,
 }
 
-const flexWorkStyle: WorkStyle = { ...defaultWorkStyle, id: 'work-style-2', code: 'flex', name: 'フレックスタイム制', is_default: false }
+const flexWorkStyle: WorkStyle = {
+  ...defaultWorkStyle,
+  id: 'work-style-2',
+  code: 'flex',
+  name: 'フレックスタイム制',
+  is_default: false,
+}
 
 function renderPage(
   user: User,
   {
     workStyles = [defaultWorkStyle, flexWorkStyle],
     workStyleHistory = [],
-  }: { workStyles?: WorkStyle[]; workStyleHistory?: UserWorkStyleMonthlyAssignment[] } = {},
+  }: {
+    workStyles?: WorkStyle[]
+    workStyleHistory?: UserWorkStyleMonthlyAssignment[]
+  } = {},
 ) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   vi.spyOn(usersApi, 'fetchUser').mockResolvedValue(user)
   vi.spyOn(rolesApi, 'fetchRoles').mockResolvedValue(roles)
   vi.spyOn(workStylesApi, 'fetchWorkStyles').mockResolvedValue(workStyles)
@@ -99,6 +110,8 @@ describe('UserRoleEditPage', () => {
   it('checks the roles the user currently has', async () => {
     renderPage(targetUser)
 
+    expect(screen.queryByRole('checkbox', { name: '一般社員' })).not.toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'ロールを変更' }))
     expect(await screen.findByRole('checkbox', { name: '一般社員' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '総務担当者' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '経理担当者' })).not.toBeChecked()
@@ -113,6 +126,7 @@ describe('UserRoleEditPage', () => {
 
     renderPage(targetUser)
 
+    await userEvent.click(await screen.findByRole('button', { name: 'ロールを変更' }))
     await userEvent.click(await screen.findByRole('checkbox', { name: 'システム管理者' }))
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
@@ -123,26 +137,35 @@ describe('UserRoleEditPage', () => {
   })
 
   it('unchecking a role removes it before saving', async () => {
-    vi.spyOn(usersApi, 'updateUserRoles').mockResolvedValue({ ...targetUser, roles: ['general_affairs_staff'] })
+    vi.spyOn(usersApi, 'updateUserRoles').mockResolvedValue({
+      ...targetUser,
+      roles: ['general_affairs_staff'],
+    })
 
     renderPage(targetUser)
 
+    await userEvent.click(await screen.findByRole('button', { name: 'ロールを変更' }))
     await userEvent.click(await screen.findByRole('checkbox', { name: '一般社員' }))
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
-    await waitFor(() =>
-      expect(usersApi.updateUserRoles).toHaveBeenCalledWith('user-1', ['general_affairs_staff']),
-    )
+    await waitFor(() => expect(usersApi.updateUserRoles).toHaveBeenCalledWith('user-1', ['general_affairs_staff']))
   })
 
   it('prefills the hire date when the user already has one', async () => {
     renderPage({ ...targetUser, hire_date: '2024-04-01' })
 
-    expect(await screen.findByRole('button', { name: '入社日(有給の自動付与に使用)' })).toHaveTextContent('2024-04-01')
+    expect(
+      await screen.findByRole('button', {
+        name: '入社日(有給の自動付与に使用)',
+      }),
+    ).toHaveTextContent('2024-04-01')
   })
 
   it('saves the entered hire date', async () => {
-    vi.spyOn(usersApi, 'updateUserHireDate').mockResolvedValue({ ...targetUser, hire_date: '2024-04-01' })
+    vi.spyOn(usersApi, 'updateUserHireDate').mockResolvedValue({
+      ...targetUser,
+      hire_date: '2024-04-01',
+    })
 
     renderPage(targetUser)
     await screen.findByLabelText('入社日(有給の自動付与に使用)')
@@ -150,13 +173,14 @@ describe('UserRoleEditPage', () => {
     await pickDate(userEvent.setup(), '入社日(有給の自動付与に使用)', '2024-04-01')
     await userEvent.click(screen.getByRole('button', { name: '入社日を保存する' }))
 
-    await waitFor(() =>
-      expect(usersApi.updateUserHireDate).toHaveBeenCalledWith('user-1', '2024-04-01'),
-    )
+    await waitFor(() => expect(usersApi.updateUserHireDate).toHaveBeenCalledWith('user-1', '2024-04-01'))
   })
 
   it('prefills and saves the termination date', async () => {
-    vi.spyOn(usersApi, 'updateUserTerminationDate').mockResolvedValue({ ...targetUser, termination_date: '2026-03-31' })
+    vi.spyOn(usersApi, 'updateUserTerminationDate').mockResolvedValue({
+      ...targetUser,
+      termination_date: '2026-03-31',
+    })
     renderPage({ ...targetUser, termination_date: '2026-03-31' })
 
     await userEvent.click(await screen.findByRole('button', { name: '退社日(未設定なら在籍中)' }))
@@ -170,12 +194,17 @@ describe('UserRoleEditPage', () => {
     renderPage({ ...targetUser, usage_start_date: '2026-07-01' })
 
     expect(
-      await screen.findByRole('button', { name: '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)' }),
+      await screen.findByRole('button', {
+        name: '利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)',
+      }),
     ).toHaveTextContent('2026-07-01')
   })
 
   it('saves the entered usage start date', async () => {
-    vi.spyOn(usersApi, 'updateUserUsageStartDate').mockResolvedValue({ ...targetUser, usage_start_date: '2026-07-01' })
+    vi.spyOn(usersApi, 'updateUserUsageStartDate').mockResolvedValue({
+      ...targetUser,
+      usage_start_date: '2026-07-01',
+    })
 
     renderPage(targetUser)
     await screen.findByLabelText('利用開始日(勤怠提出フォロー等の各種フォロー通知の起算日)')
@@ -200,7 +229,11 @@ describe('UserRoleEditPage', () => {
       user_id: 'user-1',
       year_month: formatDate(new Date()).slice(0, 7),
       work_style_id: 'work-style-2',
-      work_style: { id: 'work-style-2', code: 'flex', name: 'フレックスタイム制' },
+      work_style: {
+        id: 'work-style-2',
+        code: 'flex',
+        name: 'フレックスタイム制',
+      },
       assigned_by_user_id: 'admin-1',
     })
     renderPage(targetUser)
@@ -228,7 +261,11 @@ describe('UserRoleEditPage', () => {
           user_id: 'user-1',
           year_month: currentYearMonth,
           work_style_id: 'work-style-2',
-          work_style: { id: 'work-style-2', code: 'flex', name: 'フレックスタイム制' },
+          work_style: {
+            id: 'work-style-2',
+            code: 'flex',
+            name: 'フレックスタイム制',
+          },
           assigned_by_user_id: 'admin-1',
         },
       ],
@@ -239,6 +276,10 @@ describe('UserRoleEditPage', () => {
     await userEvent.click(screen.getByRole('radio', { name: /会社のデフォルトを使用/ }))
     await userEvent.click(screen.getByRole('button', { name: '働き方を保存する' }))
 
-    await waitFor(() => expect(userWorkStyleMonthlyAssignmentsApi.removeUserWorkStyleMonthlyAssignment).toHaveBeenCalledWith('assignment-42'))
+    await waitFor(() =>
+      expect(userWorkStyleMonthlyAssignmentsApi.removeUserWorkStyleMonthlyAssignment).toHaveBeenCalledWith(
+        'assignment-42',
+      ),
+    )
   })
 })

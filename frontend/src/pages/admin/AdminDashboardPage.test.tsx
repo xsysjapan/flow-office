@@ -39,7 +39,9 @@ describe('AdminDashboardPage', () => {
   it('shows a card for each admin function visible to an admin user', () => {
     renderPage()
 
-    expect(screen.getByRole('link', { name: /ユーザー・権限/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^ユーザー/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^グループ/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^GroupType/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /申請種別/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /監査ログ/ })).toBeInTheDocument()
   })
@@ -47,7 +49,9 @@ describe('AdminDashboardPage', () => {
   it('hides admin-only cards for an hr_staff user', () => {
     renderPage({ ...mockUser, roles: ['hr_staff'] })
 
-    expect(screen.getByRole('link', { name: /ユーザー・権限/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^ユーザー/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^グループ/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^GroupType/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /申請種別/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /監査ログ/ })).not.toBeInTheDocument()
   })

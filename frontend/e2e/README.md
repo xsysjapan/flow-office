@@ -131,7 +131,8 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - その他(§5-16): 月次勤怠を締めた後も、同月内に発生した交通費精算・名刺申請の
   バックオフィスタスクが通常どおり完了まで進められることを確認(承認とバックオフィス
   処理が独立したステータス系列であることの回帰確認)
-- ユーザー・グループ・アクセス管理基盤: 管理画面からGroupType・Group・Membership・
+- ユーザー・グループ・アクセス管理基盤: システムのGroupType画面、人事・組織のユーザー・
+  グループ画面、グループ画面のアクセス設定モーダルからGroupType・Group・Membership・
   ExternalIdentity・所属変更下書きを操作でき、Group経由のFeature・Role・Permissionと
   個別Feature停止が有効アクセスへ即時反映されること、外部HR CSVの差分確認・取込、
   `stored_events`を直接検索する監査画面へのイベント反映を確認

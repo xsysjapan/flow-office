@@ -19,6 +19,7 @@ test('管理者が各種マスタ管理画面にアクセスできる', async ({
     '/admin/request-types',
     '/admin/users',
     '/admin/access-control',
+    '/admin/group-types',
     '/admin/system-settings',
   ]) {
     await page.goto(path)
@@ -47,7 +48,9 @@ test('カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await pickDate(page, '終了日', `${fiscalYear + 1}-03-31`, { exact: true })
   await page.getByRole('button', { name: '作成する' }).click()
 
-  const calendarRow = page.locator('li', { has: page.getByRole('link', { name: calendarName }) })
+  const calendarRow = page.locator('li', {
+    has: page.getByRole('link', { name: calendarName }),
+  })
   await expect(calendarRow).toBeVisible()
   await expect(calendarRow.getByRole('status', { name: '未公開' })).toBeVisible()
 
@@ -84,7 +87,10 @@ test('カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await page.getByLabel('勤務形態', { exact: true }).selectOption({ label: 'E2Eテスト用勤務形態' })
   await pickDate(page, '開始日', `${fiscalYear}-04-01`, { exact: true })
   await pickDate(page, '終了日', `${fiscalYear}-04-01`, { exact: true })
-  const generateButton = page.getByRole('button', { name: '生成する', exact: true })
+  const generateButton = page.getByRole('button', {
+    name: '生成する',
+    exact: true,
+  })
   await generateButton.click()
   await expect(generateButton).toBeEnabled()
   await expect(page.getByRole('heading', { name: 'シフト一覧' }).locator('..')).toContainText(`${fiscalYear}-04-01`)

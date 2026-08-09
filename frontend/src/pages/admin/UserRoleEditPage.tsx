@@ -12,6 +12,14 @@ import { AuthenticationKeysPanel } from "../../components/AuthenticationKeysPane
 import { Checkbox } from "../../components/ui/checkbox";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Input } from "../../components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../components/ui/dialog";
 import type { UserProfileInput } from "../../api/users";
 import { useRoles } from "../../hooks/useRoles";
 import {
@@ -63,6 +71,7 @@ export function UserRoleEditPage() {
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment();
 
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [hireDate, setHireDate] = useState("");
   const [terminationDate, setTerminationDate] = useState("");
   const [usageStartDate, setUsageStartDate] = useState("");
@@ -161,7 +170,7 @@ export function UserRoleEditPage() {
     ) ?? false;
 
   return (
-    <Card title={`${user.name}の権限設定`}>
+    <Card title={`${user.name}のユーザー管理`}>
       {updateRoles.error && <ErrorMessage error={updateRoles.error} />}
       {updateUser.error && <ErrorMessage error={updateUser.error} />}
       {updateRoles.isSuccess && <Badge tone="success">保存しました</Badge>}
@@ -366,29 +375,57 @@ export function UserRoleEditPage() {
         </Link>
       </div>
 
-      <ul className="mb-4 divide-y divide-border">
-        {roles?.map((role) => (
-          <li key={role.code} className="py-2">
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                checked={selectedCodes.includes(role.code)}
-                onCheckedChange={() => toggleRole(role.code)}
-              />
-              {role.name}
-            </label>
-          </li>
-        ))}
-      </ul>
-
-      <div className="flex gap-3">
-        <Button
-          isLoading={updateRoles.isPending}
-          onClick={() =>
-            updateRoles.mutate({ id: userId, roleCodes: selectedCodes })
-          }
-        >
-          保存する
-        </Button>
+      <div className="mb-6 rounded border p-3">
+        <h2 className="mb-2 font-medium">直接ロール</h2>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {roles
+            ?.filter((role) => selectedCodes.includes(role.code))
+            .map((role) => (
+              <Badge key={role.code} tone="info">
+                {role.name}
+              </Badge>
+            ))}
+          {selectedCodes.length === 0 && (
+            <span className="text-sm text-muted-foreground">付与なし</span>
+          )}
+        </div>
+        <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="secondary">ロールを変更</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>直接ロールを変更</DialogTitle>
+              <DialogDescription>
+                グループ経由ではなく、このユーザーへ直接付与するロールを選択します。
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="divide-y divide-border">
+              {roles?.map((role) => (
+                <li key={role.code} className="py-2">
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <Checkbox
+                      checked={selectedCodes.includes(role.code)}
+                      onCheckedChange={() => toggleRole(role.code)}
+                    />
+                    {role.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <Button
+              isLoading={updateRoles.isPending}
+              onClick={() =>
+                updateRoles.mutate(
+                  { id: userId, roleCodes: selectedCodes },
+                  { onSuccess: () => setRoleDialogOpen(false) },
+                )
+              }
+            >
+              保存する
+            </Button>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="mt-6 border-t border-border pt-4">

@@ -374,9 +374,11 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     `ordered`→`shipped`→`completed`)完了まで進められることを確認する。月次締めが
     誤って他ドメインの処理をブロックしないか(CLAUDE.md「バックオフィス処理は承認とは
     別ステータス系列」の回帰確認)。
-17. **ユーザー・グループ・アクセス管理基盤**: 管理者がGroupType、Group、Membership、
+17. **ユーザー・グループ・アクセス管理基盤**: 管理者が「システム」のGroupType画面と
+    「人事・組織」のユーザー・グループ画面を利用してGroupType、Group、Membership、
     ExternalIdentity、所属変更下書き、外部HR CSV取込を管理できることを確認する。さらに、
-    Groupへ付与したFeatureとRole/Permissionが所属ユーザーの有効アクセスへ即時反映され、
+    アクセス設定モーダルからGroupへ付与したFeatureとRole/Permissionが所属ユーザーの
+    有効アクセスへ即時反映され、
     個別Feature停止で一時的に除外されること、操作イベントを`stored_events`から直接検索する
     監査画面で確認できることを検証する。
 

@@ -32,17 +32,23 @@ async function effectiveAccess(
 }
 
 async function ensureAccessScenarioGroup(page: Page): Promise<string> {
-  const groups = await apiFetch<Array<{ id: string; code: string; memberships: Array<{ user_id: string }> }>>(
-    page,
-    "/admin/user-management/groups",
-  );
+  const groups = await apiFetch<
+    Array<{ id: string; code: string; memberships: Array<{ user_id: string }> }>
+  >(page, "/admin/user-management/groups");
   const existing = groups.find((group) => group.code === groupCode);
   const userId = await fetchUserIdByEmail(page, "mai.ito@example.com");
   if (existing) {
-    if (!existing.memberships.some((membership) => membership.user_id === userId)) {
+    if (
+      !existing.memberships.some((membership) => membership.user_id === userId)
+    ) {
       await apiFetch(page, "/admin/user-management/memberships", {
         method: "POST",
-        body: { user_id: userId, group_id: existing.id, membership_kind: "member", is_primary: false },
+        body: {
+          user_id: userId,
+          group_id: existing.id,
+          membership_kind: "member",
+          is_primary: false,
+        },
       });
     }
     return existing.id;
@@ -61,17 +67,26 @@ async function ensureAccessScenarioGroup(page: Page): Promise<string> {
     page,
     "/admin/user-management/group-types",
   );
-  const created = await apiFetch<{ id: string }>(page, "/admin/user-management/groups", {
-    method: "POST",
-    body: {
-      group_type_id: types.find((type) => type.code === groupTypeCode)!.id,
-      name: groupName,
-      code: groupCode,
+  const created = await apiFetch<{ id: string }>(
+    page,
+    "/admin/user-management/groups",
+    {
+      method: "POST",
+      body: {
+        group_type_id: types.find((type) => type.code === groupTypeCode)!.id,
+        name: groupName,
+        code: groupCode,
+      },
     },
-  });
+  );
   await apiFetch(page, "/admin/user-management/memberships", {
     method: "POST",
-    body: { user_id: userId, group_id: created.id, membership_kind: "member", is_primary: false },
+    body: {
+      user_id: userId,
+      group_id: created.id,
+      membership_kind: "member",
+      is_primary: false,
+    },
   });
   return created.id;
 }
@@ -81,21 +96,28 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
 }) => {
   test.setTimeout(90000);
   await loginAs(page, SCENARIO_USERS.admin);
-  await page.goto("/admin/access-control");
+  await page.goto("/admin/group-types");
   await expect(
-    page.getByRole("heading", { name: "ユーザー・グループ・アクセス管理" }),
+    page.getByRole("heading", { name: "GroupType管理" }).first(),
   ).toBeVisible({ timeout: 15000 });
 
-  const groupCard = card(page, "グループ管理");
-  await groupCard.getByPlaceholder("新規GroupTypeコード").fill(groupTypeCode);
-  await groupCard.getByPlaceholder("GroupType名").fill(groupTypeName);
-  await groupCard.getByRole("button", { name: "GroupType追加" }).click();
+  const groupTypeCard = card(page, "GroupType管理");
+  await groupTypeCard
+    .getByPlaceholder("新規GroupTypeコード")
+    .fill(groupTypeCode);
+  await groupTypeCard.getByPlaceholder("GroupType名").fill(groupTypeName);
+  await groupTypeCard.getByRole("button", { name: "GroupType追加" }).click();
   await expect(
-    groupCard.getByText(`${groupTypeName} (${groupTypeCode})`, {
+    groupTypeCard.getByText(`${groupTypeName} (${groupTypeCode})`, {
       exact: false,
     }),
   ).toBeVisible();
 
+  await page.goto("/admin/access-control");
+  await expect(
+    page.getByRole("heading", { name: "グループ管理" }).first(),
+  ).toBeVisible({ timeout: 15000 });
+  const groupCard = card(page, "グループ管理");
   await groupCard
     .getByLabel("グループ種別")
     .selectOption({ label: groupTypeName });
@@ -105,7 +127,7 @@ test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所�
   const groupRow = groupCard.getByRole("row").filter({ hasText: groupName });
   await expect(groupRow).toContainText(groupCode);
 
-  const membershipCard = card(page, "所属・Feature割当");
+  const membershipCard = card(page, "所属管理");
   await membershipCard
     .getByLabel("ユーザー")
     .selectOption({ label: SCENARIO_USERS.monthlyEmployee });
@@ -177,13 +199,18 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await loginAs(userPage, SCENARIO_USERS.monthlyEmployee);
     await adminPage.goto("/admin/access-control");
 
-    const membershipCard = card(adminPage, "所属・Feature割当");
-    await membershipCard
-      .getByLabel("グループ")
-      .nth(1)
+    await expect(
+      adminPage.getByRole("heading", { name: "Role・Permission" }),
+    ).toHaveCount(0);
+    await adminPage.getByRole("button", { name: "アクセス設定" }).click();
+    const featureCard = card(adminPage, "Feature設定");
+    await featureCard
+      .getByLabel("グループ", { exact: true })
       .selectOption({ label: groupName });
-    await membershipCard.getByLabel("Feature").selectOption({ label: "管理" });
-    await membershipCard.getByRole("button", { name: "Featureを割当" }).click();
+    await featureCard
+      .getByLabel("Feature", { exact: true })
+      .selectOption({ label: "管理" });
+    await featureCard.getByRole("button", { name: "Featureを割当" }).click();
 
     const roleCard = card(adminPage, "Role・Permission");
     await roleCard.getByPlaceholder("新規Roleコード").fill(roleCode);

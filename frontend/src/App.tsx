@@ -50,6 +50,7 @@ import { MyIntegrationsPage } from './pages/integrations/MyIntegrationsPage'
 import { NotificationsPage } from './pages/notifications/NotificationsPage'
 import { AccountSettingsPage } from './pages/account/AccountSettingsPage'
 import { UserManagementAccessPage } from './pages/admin/UserManagementAccessPage'
+import { GroupTypeManagementPage } from './pages/admin/GroupTypeManagementPage'
 
 function App() {
   return (
@@ -102,6 +103,7 @@ function App() {
           <Route path="users" element={<UserListPage />} />
           <Route path="users/:id" element={<UserRoleEditPage />} />
           <Route path="access-control" element={<UserManagementAccessPage />} />
+          <Route path="group-types" element={<GroupTypeManagementPage />} />
           <Route path="request-types" element={<RequestTypeListPage />} />
           <Route path="request-types/:id" element={<RequestTypeEditPage />} />
           <Route path="expense-categories" element={<ExpenseCategoryListPage />} />

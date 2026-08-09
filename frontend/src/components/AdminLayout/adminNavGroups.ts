@@ -33,16 +33,15 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       {
         to: "/admin/users",
-        label: "ユーザー・権限",
-        description: "社員のアカウントと権限ロールを管理する",
+        label: "ユーザー",
+        description: "社員・協力会社社員のアカウントと基本情報を管理する",
         feature: "administration.users",
         permission: "user.view",
       },
       {
         to: "/admin/access-control",
-        label: "ユーザー・グループ・アクセス管理",
-        description:
-          "ユーザーと所属を中心に、利用機能、Role、Permissionを管理する",
+        label: "グループ",
+        description: "グループと所属、必要に応じて利用機能・権限を管理する",
         feature: "administration.users",
         permissions: [
           "user.view",
@@ -148,6 +147,13 @@ export const adminNavGroups: AdminNavGroup[] = [
     icon: Settings,
     roles: [ROLE.ADMIN],
     items: [
+      {
+        to: "/admin/group-types",
+        label: "GroupType",
+        description: "グループの分類と所属制約を管理する",
+        feature: "administration.settings",
+        permissions: ["group.view", "group.create", "group.update"],
+      },
       {
         to: "/admin/devices",
         label: "端末管理",

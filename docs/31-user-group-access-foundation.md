@@ -36,7 +36,8 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 
 管理APIも境界に合わせ、ユーザー・グループ・所属・外部ID・項目権限・外部HRは
 `/api/admin/user-management/*`、Feature・Role・Permission・割当・利用停止は
-`/api/admin/access-control/*`に分ける。管理画面は運用上の一連の作業を行える統合画面としてよいが、
+`/api/admin/access-control/*`に分ける。管理画面ではユーザーとグループを「人事・組織」、変更頻度の低い
+GroupTypeを「システム」に配置する。グループ画面内のFeature・Role関連設定はモーダルに集約するが、
 フロントエンドのAPIクライアントと状態管理は`userManagement`と`accessControl`に分離する。
 
 初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
@@ -309,11 +310,15 @@ Permissionごとに利用可能なScopeを`PermissionScopeType`で定義する�
 
 ## 31.9 管理画面
 
-- ユーザー一覧: 氏名、社員番号、メール、Microsoft連携状態、主所属、雇用区分、在籍状態、
+- ユーザー一覧: 「人事・組織」に配置する。氏名、社員番号、メール、Microsoft連携状態、主所属、雇用区分、在籍状態、
   管理元、Feature概要を表示し、Group・GroupType・未連携・外部HR管理等で検索する。
 - ユーザー詳細: 基本情報、外部ID、現在所属、予約変更、働き方、有効Feature、
   有効Role/Permission、直接・Group経由の付与元、Scope、有効期間、個別停止、変更履歴を分けて表示する。
-- グループ管理: GroupType別画面から基本情報、メンバー、Feature、Role、管理スコープ、履歴を確認する。
+  変更頻度の低いユーザー直接Roleの変更はモーダルで行う。
+- グループ管理: 「人事・組織」に配置し、GroupTypeで絞り込みながら基本情報、メンバー、Feature、
+  Role、管理スコープ、履歴を確認する。GroupType自体の追加・編集は「システム」の独立画面で行う。
+- アクセス設定: 変更頻度の低いFeature割当・解除、Role・Permission、RoleAssignment、個別Feature停止は、
+  グループ管理画面のモーダルから変更する。グループ一覧ではFeature・Roleの現状だけを表示する。
 - Role管理: Permissionを業務カテゴリ別チェックボックスで編集し、Resource/Action/Conditionの
   生入力UIは作らない。標準Roleを選択し、Permission集合を引き継いだ独自Roleを複製できる。
 - RoleAssignment: 付与先、Role、対象範囲、配下を含むか、有効期間を選び、設定結果を自然文で

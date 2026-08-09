@@ -7,6 +7,14 @@ import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,8 +40,6 @@ export function UserManagementAccessPage() {
     changeSets = userManagement.useMembershipChangeSets(),
     users = useUsers(undefined, 100);
   const createGroup = userManagement.useCreateGroup(),
-    createGroupType = userManagement.useCreateGroupType(),
-    updateGroupType = userManagement.useUpdateGroupType(),
     createRole = access.useCreateRole(),
     cloneRole = access.useCloneRole(),
     updateRole = access.useUpdateRole(),
@@ -64,26 +70,6 @@ export function UserManagementAccessPage() {
     name: "",
     code: "",
     parent_group_id: "",
-  });
-  const [typeForm, setTypeForm] = useState({
-    code: "",
-    name: "",
-    display_order: "0",
-    membership_limit_type: "unlimited" as "unlimited" | "limited",
-    max_memberships_per_user: "",
-    primary_membership_required: false,
-    max_primary_memberships: "",
-  });
-  const [typeEditForm, setTypeEditForm] = useState({
-    id: "",
-    name: "",
-    display_order: "0",
-    status: "active",
-    membership_limit_type: "unlimited" as "unlimited" | "limited",
-    max_memberships_per_user: "",
-    primary_membership_required: false,
-    max_primary_memberships: "",
-    is_system: false,
   });
   const [newRole, setNewRole] = useState({
     code: "",
@@ -161,8 +147,6 @@ export function UserManagementAccessPage() {
   ];
   const mutationError = [
     createGroup,
-    createGroupType,
-    updateGroupType,
     createRole,
     cloneRole,
     updateRole,
@@ -256,274 +240,21 @@ export function UserManagementAccessPage() {
     return (
       <ErrorMessage
         error={error}
-        fallback="ユーザー・グループ・アクセス管理設定の取得に失敗しました。"
+        fallback="グループ管理設定の取得に失敗しました。"
       />
     );
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">ユーザー・グループ・アクセス管理</h1>
+        <h1 className="text-2xl font-bold">グループ管理</h1>
         <p className="text-sm text-muted-foreground">
-          ユーザー管理を中心に、所属グループと副次的な利用機能・権限を一元管理します。
+          グループと所属を管理します。利用機能・権限はアクセス設定から変更できます。
         </p>
       </div>
       {mutationError && <ErrorMessage error={mutationError} />}
       <Card title="グループ管理">
-        <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-4">
-          <Input
-            placeholder="新規GroupTypeコード"
-            value={typeForm.code}
-            onChange={(e) => setTypeForm({ ...typeForm, code: e.target.value })}
-          />
-          <Input
-            placeholder="GroupType名"
-            value={typeForm.name}
-            onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
-          />
-          <Input
-            aria-label="新規GroupType表示順"
-            type="number"
-            min="0"
-            placeholder="表示順"
-            value={typeForm.display_order}
-            onChange={(e) =>
-              setTypeForm({ ...typeForm, display_order: e.target.value })
-            }
-          />
-          <NativeSelect
-            value={typeForm.membership_limit_type}
-            onChange={(e) =>
-              setTypeForm({
-                ...typeForm,
-                membership_limit_type: e.target.value as
-                  "unlimited" | "limited",
-              })
-            }
-          >
-            <option value="unlimited">複数可</option>
-            <option value="limited">上限あり</option>
-          </NativeSelect>
-          <Input
-            type="number"
-            placeholder="所属上限"
-            value={typeForm.max_memberships_per_user}
-            onChange={(e) =>
-              setTypeForm({
-                ...typeForm,
-                max_memberships_per_user: e.target.value,
-              })
-            }
-          />
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={typeForm.primary_membership_required}
-              onChange={(e) =>
-                setTypeForm({
-                  ...typeForm,
-                  primary_membership_required: e.target.checked,
-                })
-              }
-            />
-            主所属必須
-          </label>
-          <Input
-            type="number"
-            placeholder="主所属上限"
-            value={typeForm.max_primary_memberships}
-            onChange={(e) =>
-              setTypeForm({
-                ...typeForm,
-                max_primary_memberships: e.target.value,
-              })
-            }
-          />
-          <Button
-            disabled={!typeForm.code || !typeForm.name}
-            isLoading={createGroupType.isPending}
-            onClick={() =>
-              createGroupType.mutate({
-                code: typeForm.code,
-                name: typeForm.name,
-                display_order: Number(typeForm.display_order) || 0,
-                membership_limit_type: typeForm.membership_limit_type,
-                max_memberships_per_user: typeForm.max_memberships_per_user
-                  ? Number(typeForm.max_memberships_per_user)
-                  : null,
-                primary_membership_required:
-                  typeForm.primary_membership_required,
-                max_primary_memberships: typeForm.max_primary_memberships
-                  ? Number(typeForm.max_primary_memberships)
-                  : null,
-              })
-            }
-          >
-            GroupType追加
-          </Button>
-        </div>
-        <div className="mb-4 flex flex-wrap gap-2">
-          {types.data?.map((t) => (
-            <span
-              key={t.id}
-              className="inline-flex items-center gap-2 rounded border p-2 text-sm"
-            >
-              {t.name} ({t.code}) / 表示順 {t.display_order} / 上限{" "}
-              {t.max_memberships_per_user ?? "なし"} / 主所属{" "}
-              {t.primary_membership_required ? "必須" : "任意"}
-            </span>
-          ))}
-        </div>
-        <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-4">
-          <NativeSelect
-            aria-label="編集するGroupType"
-            value={typeEditForm.id}
-            onChange={(e) => {
-              const t = types.data?.find(
-                (item) => item.id === Number(e.target.value),
-              );
-              if (t)
-                setTypeEditForm({
-                  id: String(t.id),
-                  name: t.name,
-                  display_order: String(t.display_order),
-                  status: t.status,
-                  membership_limit_type: t.membership_limit_type,
-                  max_memberships_per_user:
-                    t.max_memberships_per_user === null
-                      ? ""
-                      : String(t.max_memberships_per_user),
-                  primary_membership_required: t.primary_membership_required,
-                  max_primary_memberships:
-                    t.max_primary_memberships === null
-                      ? ""
-                      : String(t.max_primary_memberships),
-                  is_system: t.is_system,
-                });
-            }}
-          >
-            <option value="">編集するGroupType</option>
-            {types.data?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </NativeSelect>
-          <Input
-            aria-label="GroupType名を編集"
-            placeholder="名称"
-            value={typeEditForm.name}
-            onChange={(e) =>
-              setTypeEditForm({ ...typeEditForm, name: e.target.value })
-            }
-          />
-          <Input
-            aria-label="GroupType表示順を編集"
-            type="number"
-            min="0"
-            placeholder="表示順"
-            value={typeEditForm.display_order}
-            onChange={(e) =>
-              setTypeEditForm({
-                ...typeEditForm,
-                display_order: e.target.value,
-              })
-            }
-          />
-          <NativeSelect
-            aria-label="GroupType状態"
-            disabled={typeEditForm.is_system}
-            value={typeEditForm.status}
-            onChange={(e) =>
-              setTypeEditForm({ ...typeEditForm, status: e.target.value })
-            }
-          >
-            <option value="active">有効</option>
-            <option value="inactive">廃止</option>
-          </NativeSelect>
-          <NativeSelect
-            aria-label="所属数制約"
-            disabled={typeEditForm.is_system}
-            value={typeEditForm.membership_limit_type}
-            onChange={(e) =>
-              setTypeEditForm({
-                ...typeEditForm,
-                membership_limit_type: e.target.value as
-                  "unlimited" | "limited",
-              })
-            }
-          >
-            <option value="unlimited">複数可</option>
-            <option value="limited">上限あり</option>
-          </NativeSelect>
-          <Input
-            aria-label="所属上限を編集"
-            disabled={typeEditForm.is_system}
-            type="number"
-            placeholder="所属上限"
-            value={typeEditForm.max_memberships_per_user}
-            onChange={(e) =>
-              setTypeEditForm({
-                ...typeEditForm,
-                max_memberships_per_user: e.target.value,
-              })
-            }
-          />
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              disabled={typeEditForm.is_system}
-              checked={typeEditForm.primary_membership_required}
-              onChange={(e) =>
-                setTypeEditForm({
-                  ...typeEditForm,
-                  primary_membership_required: e.target.checked,
-                })
-              }
-            />
-            主所属必須
-          </label>
-          <Input
-            aria-label="主所属上限を編集"
-            disabled={typeEditForm.is_system}
-            type="number"
-            placeholder="主所属上限"
-            value={typeEditForm.max_primary_memberships}
-            onChange={(e) =>
-              setTypeEditForm({
-                ...typeEditForm,
-                max_primary_memberships: e.target.value,
-              })
-            }
-          />
-          <Button
-            disabled={!typeEditForm.id || !typeEditForm.name}
-            isLoading={updateGroupType.isPending}
-            onClick={() =>
-              updateGroupType.mutate({
-                id: Number(typeEditForm.id),
-                input: {
-                  name: typeEditForm.name,
-                  display_order: Number(typeEditForm.display_order) || 0,
-                  status: typeEditForm.status,
-                  membership_limit_type: typeEditForm.membership_limit_type,
-                  max_memberships_per_user:
-                    typeEditForm.max_memberships_per_user
-                      ? Number(typeEditForm.max_memberships_per_user)
-                      : null,
-                  primary_membership_required:
-                    typeEditForm.primary_membership_required,
-                  max_primary_memberships: typeEditForm.max_primary_memberships
-                    ? Number(typeEditForm.max_primary_memberships)
-                    : null,
-                },
-              })
-            }
-          >
-            変更を保存
-          </Button>
-        </div>
-        <div className="mb-4 grid gap-2 md:grid-cols-4">
+        <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           <NativeSelect
             aria-label="グループ種別"
             value={groupForm.group_type_id}
@@ -681,23 +412,8 @@ export function UserManagementAccessPage() {
                 <TableCell>
                   <span className="flex flex-wrap gap-1">
                     {g.features.map((f) => (
-                      <span
-                        key={f.id}
-                        className="inline-flex items-center gap-1"
-                      >
+                      <span key={f.id}>
                         <Badge tone="info">{f.name}</Badge>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() =>
-                            removeFeature.mutate({
-                              groupId: g.id,
-                              featureId: f.id,
-                            })
-                          }
-                        >
-                          ×
-                        </Button>
                       </span>
                     ))}
                   </span>
@@ -746,8 +462,8 @@ export function UserManagementAccessPage() {
         </Table>
       </Card>
 
-      <Card title="所属・Feature割当">
-        <div className="grid gap-2 md:grid-cols-4">
+      <Card title="所属管理">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           <UserSelect
             value={membership.user_id}
             onChange={(v) => setMembership({ ...membership, user_id: v })}
@@ -783,547 +499,616 @@ export function UserManagementAccessPage() {
             所属を追加
           </Button>
         </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <GroupSelect
-            value={featureForm.groupId}
-            onChange={(v) => setFeatureForm({ ...featureForm, groupId: v })}
-            groups={groups.data}
-          />
-          <FeatureSelect
-            value={featureForm.featureId}
-            onChange={(v) => setFeatureForm({ ...featureForm, featureId: v })}
-            features={features.data}
-          />
-          <Button
-            disabled={!featureForm.groupId || !featureForm.featureId}
-            isLoading={assignFeature.isPending}
-            onClick={async () => {
-              const selected = flattenFeatures(features.data).find(
-                (feature) => feature.id === Number(featureForm.featureId),
-              );
-              const assigned = new Set(
-                groups.data
-                  ?.find((group) => group.id === featureForm.groupId)
-                  ?.features.map((feature) => feature.id) ?? [],
-              );
-              const featureIds = [
-                selected?.id,
-                ...(selected?.children?.map((child) => child.id) ?? []),
-              ].filter(
-                (id): id is number => id !== undefined && !assigned.has(id),
-              );
-              for (const featureId of featureIds)
-                await assignFeature.mutateAsync({
-                  groupId: featureForm.groupId,
-                  featureId,
-                });
-            }}
-          >
-            Featureを割当
-          </Button>
-        </div>
       </Card>
 
-      <Card title="Role・Permission">
-        <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-5">
-          <Input
-            placeholder="新規Roleコード"
-            value={newRole.code}
-            onChange={(e) => setNewRole({ ...newRole, code: e.target.value })}
-          />
-          <Input
-            placeholder="Role名"
-            value={newRole.name}
-            onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-          />
-          <Input
-            placeholder="Role説明（任意）"
-            value={newRole.description}
-            onChange={(e) =>
-              setNewRole({ ...newRole, description: e.target.value })
-            }
-          />
-          <Button
-            disabled={!newRole.code || !newRole.name}
-            isLoading={createRole.isPending}
-            onClick={() =>
-              createRole.mutate({
-                code: newRole.code,
-                name: newRole.name,
-                description: newRole.description || undefined,
-              })
-            }
-          >
-            Role追加
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!roleEditForm.id || !newRole.code || !newRole.name}
-            isLoading={cloneRole.isPending}
-            onClick={() =>
-              cloneRole.mutate({
-                id: Number(roleEditForm.id),
-                input: {
-                  code: newRole.code,
-                  name: newRole.name,
-                  description: newRole.description || undefined,
-                },
-              })
-            }
-          >
-            選択Roleを複製
-          </Button>
-        </div>
-        <div className="mb-4 flex flex-wrap gap-2">
-          {roles.data?.map((role) => (
-            <span
-              key={role.id}
-              className="inline-flex items-center gap-2 rounded border p-2 text-sm"
-            >
-              {role.name} ({role.code}) / {role.status}
-            </span>
-          ))}
-        </div>
-        <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-4">
-          <NativeSelect
-            aria-label="編集するRole"
-            value={roleEditForm.id}
-            onChange={(e) => {
-              const role = roles.data?.find(
-                (item) => item.id === Number(e.target.value),
-              );
-              if (role)
-                setRoleEditForm({
-                  id: String(role.id),
-                  name: role.name,
-                  description: role.description ?? "",
-                  status: role.status,
-                  is_system: role.is_system,
-                });
-            }}
-          >
-            <option value="">編集するRole</option>
-            {roles.data?.map((role) => (
-              <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </NativeSelect>
-          <Input
-            aria-label="Role名を編集"
-            placeholder="Role名"
-            value={roleEditForm.name}
-            onChange={(e) =>
-              setRoleEditForm({ ...roleEditForm, name: e.target.value })
-            }
-          />
-          <Input
-            aria-label="Role説明を編集"
-            placeholder="説明"
-            value={roleEditForm.description}
-            onChange={(e) =>
-              setRoleEditForm({ ...roleEditForm, description: e.target.value })
-            }
-          />
-          <NativeSelect
-            aria-label="Role状態"
-            disabled={roleEditForm.is_system}
-            value={roleEditForm.status}
-            onChange={(e) =>
-              setRoleEditForm({ ...roleEditForm, status: e.target.value })
-            }
-          >
-            <option value="active">有効</option>
-            <option value="inactive">廃止</option>
-          </NativeSelect>
-          <Button
-            disabled={!roleEditForm.id || !roleEditForm.name}
-            isLoading={updateRole.isPending}
-            onClick={() =>
-              updateRole.mutate({
-                id: Number(roleEditForm.id),
-                input: {
-                  name: roleEditForm.name,
-                  description: roleEditForm.description || null,
-                  status: roleEditForm.status,
-                },
-              })
-            }
-          >
-            Role変更を保存
-          </Button>
-        </div>
-        <div className="grid gap-2 md:grid-cols-4">
-          <NativeSelect
-            disabled={Boolean(editingAssignmentId)}
-            value={roleForm.subject_type}
-            onChange={(e) =>
-              setRoleForm({
-                ...roleForm,
-                subject_type: e.target.value as "user" | "group",
-                subject_id: "",
-              })
-            }
-          >
-            <option value="user">ユーザー</option>
-            <option value="group">グループ</option>
-          </NativeSelect>
-          {roleForm.subject_type === "user" ? (
-            <UserSelect
-              value={roleForm.subject_id}
-              onChange={(v) => setRoleForm({ ...roleForm, subject_id: v })}
-              users={users.data?.data}
-              disabled={Boolean(editingAssignmentId)}
-            />
-          ) : (
-            <GroupSelect
-              value={roleForm.subject_id}
-              onChange={(v) => setRoleForm({ ...roleForm, subject_id: v })}
-              groups={groups.data}
-              disabled={Boolean(editingAssignmentId)}
-            />
-          )}
-          <NativeSelect
-            disabled={Boolean(editingAssignmentId)}
-            value={roleForm.role_id}
-            onChange={(e) =>
-              setRoleForm({
-                ...roleForm,
-                role_id: e.target.value,
-                scope_type: "",
-                scope_group_id: "",
-              })
-            }
-          >
-            <option value="">Role</option>
-            {roles.data?.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </NativeSelect>
-          <NativeSelect
-            value={roleForm.scope_type}
-            onChange={(e) =>
-              setRoleForm({
-                ...roleForm,
-                scope_type: e.target.value as typeof roleForm.scope_type,
-                scope_group_id: "",
-              })
-            }
-          >
-            <option value="">対象範囲を明示選択</option>
-            {allowedRoleScopes.map((scope) => (
-              <option key={scope} value={scope}>
-                {scope === "global"
-                  ? "全社"
-                  : scope === "group"
-                    ? "グループ"
-                    : scope === "self"
-                      ? "本人"
-                      : "担当承認タスク"}
-              </option>
-            ))}
-          </NativeSelect>
-          {roleForm.scope_type === "group" && (
-            <GroupSelect
-              value={roleForm.scope_group_id}
-              onChange={(v) => setRoleForm({ ...roleForm, scope_group_id: v })}
-              groups={groups.data}
-            />
-          )}
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              disabled={roleForm.scope_type !== "group"}
-              checked={roleForm.include_descendants}
-              onChange={(e) =>
-                setRoleForm({
-                  ...roleForm,
-                  include_descendants: e.target.checked,
-                })
-              }
-            />
-            配下を含む
-          </label>
-          <Input
-            aria-label="Role有効開始日時"
-            type="datetime-local"
-            value={roleForm.starts_at}
-            onChange={(e) =>
-              setRoleForm({ ...roleForm, starts_at: e.target.value })
-            }
-          />
-          <Input
-            aria-label="Role有効終了日時"
-            type="datetime-local"
-            value={roleForm.ends_at}
-            onChange={(e) =>
-              setRoleForm({ ...roleForm, ends_at: e.target.value })
-            }
-          />
-          <div className="rounded bg-muted p-2 text-sm">
-            {roleForm.scope_type
-              ? `${roleForm.subject_type === "user" ? "選択ユーザー" : "選択グループ"}に、${roles.data?.find((r) => r.id === Number(roleForm.role_id))?.name ?? "Role"}を${roleForm.scope_type === "global" ? "全社" : roleForm.scope_type === "group" ? "選択グループ" + (roleForm.include_descendants ? "と配下" : "のみ") : roleForm.scope_type === "self" ? "本人" : "担当承認タスク"}の範囲で付与します。`
-              : "対象範囲を選択してください。"}
-          </div>
-          <Button
-            disabled={
-              !roleForm.subject_id ||
-              !roleForm.role_id ||
-              !roleForm.scope_type ||
-              (roleForm.scope_type === "group" && !roleForm.scope_group_id)
-            }
-            isLoading={
-              editingAssignmentId
-                ? updateAssignment.isPending
-                : createAssignment.isPending
-            }
-            onClick={() => {
-              const scope = {
-                scope_type: roleForm.scope_type as Exclude<
-                  typeof roleForm.scope_type,
-                  ""
-                >,
-                scope_group_id:
-                  roleForm.scope_type === "group"
-                    ? roleForm.scope_group_id
-                    : null,
-                include_descendants: roleForm.include_descendants,
-                starts_at: roleForm.starts_at
-                  ? new Date(roleForm.starts_at).toISOString()
-                  : null,
-                ends_at: roleForm.ends_at
-                  ? new Date(roleForm.ends_at).toISOString()
-                  : null,
-              };
-              if (editingAssignmentId)
-                updateAssignment.mutate(
-                  { id: editingAssignmentId, input: scope },
-                  { onSuccess: () => setEditingAssignmentId("") },
-                );
-              else
-                createAssignment.mutate({
-                  subject_type: roleForm.subject_type,
-                  subject_id: roleForm.subject_id,
-                  role_id: Number(roleForm.role_id),
-                  ...scope,
-                });
-            }}
-          >
-            {editingAssignmentId ? "Role割当を更新" : "Roleを割当"}
-          </Button>
-          {editingAssignmentId && (
-            <Button
-              variant="secondary"
-              onClick={() => setEditingAssignmentId("")}
-            >
-              編集を取消
-            </Button>
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {assignments.data
-            ?.filter((a) => a.status === "active")
-            .map((a) => (
-              <span
-                className="inline-flex items-center gap-2 rounded border p-2 text-sm"
-                key={a.id}
-              >
-                {a.role?.name} / {a.subject_type} / {a.scope_type}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditingAssignmentId(a.id);
-                    setRoleForm({
-                      subject_type: a.subject_type,
-                      subject_id: a.subject_id,
-                      role_id: String(a.role_id),
-                      scope_type: a.scope_type,
-                      scope_group_id: a.scope_group_id ?? "",
-                      include_descendants: a.include_descendants,
-                      starts_at: toDateTimeLocal(a.starts_at),
-                      ends_at: toDateTimeLocal(a.ends_at),
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant="secondary">アクセス設定</Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-[min(96vw,80rem)]">
+          <DialogHeader>
+            <DialogTitle>アクセス設定</DialogTitle>
+            <DialogDescription>
+              グループの利用Feature、Role・Permission、個別Feature停止を管理します。
+            </DialogDescription>
+          </DialogHeader>
+          <Card title="Feature設定">
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <GroupSelect
+                value={featureForm.groupId}
+                onChange={(v) => setFeatureForm({ ...featureForm, groupId: v })}
+                groups={groups.data}
+              />
+              <FeatureSelect
+                value={featureForm.featureId}
+                onChange={(v) =>
+                  setFeatureForm({ ...featureForm, featureId: v })
+                }
+                features={features.data}
+              />
+              <Button
+                disabled={!featureForm.groupId || !featureForm.featureId}
+                isLoading={assignFeature.isPending}
+                onClick={async () => {
+                  const selected = flattenFeatures(features.data).find(
+                    (feature) => feature.id === Number(featureForm.featureId),
+                  );
+                  const assigned = new Set(
+                    groups.data
+                      ?.find((group) => group.id === featureForm.groupId)
+                      ?.features.map((feature) => feature.id) ?? [],
+                  );
+                  const featureIds = [
+                    selected?.id,
+                    ...(selected?.children?.map((child) => child.id) ?? []),
+                  ].filter(
+                    (id): id is number => id !== undefined && !assigned.has(id),
+                  );
+                  for (const featureId of featureIds)
+                    await assignFeature.mutateAsync({
+                      groupId: featureForm.groupId,
+                      featureId,
                     });
+                }}
+              >
+                Featureを割当
+              </Button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {groups.data
+                ?.filter((group) => group.features.length > 0)
+                .map((group) => (
+                  <div className="rounded border p-3" key={group.id}>
+                    <p className="mb-2 text-sm font-medium">{group.name}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {group.features.map((feature) => (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          key={feature.id}
+                        >
+                          <Badge tone="info">{feature.name}</Badge>
+                          <Button
+                            aria-label={`${group.name}から${feature.name}を解除`}
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              removeFeature.mutate({
+                                groupId: group.id,
+                                featureId: feature.id,
+                              })
+                            }
+                          >
+                            解除
+                          </Button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </Card>
+
+          <Card title="Role・Permission">
+            <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-2 xl:grid-cols-5">
+              <Input
+                placeholder="新規Roleコード"
+                value={newRole.code}
+                onChange={(e) =>
+                  setNewRole({ ...newRole, code: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Role名"
+                value={newRole.name}
+                onChange={(e) =>
+                  setNewRole({ ...newRole, name: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Role説明（任意）"
+                value={newRole.description}
+                onChange={(e) =>
+                  setNewRole({ ...newRole, description: e.target.value })
+                }
+              />
+              <Button
+                disabled={!newRole.code || !newRole.name}
+                isLoading={createRole.isPending}
+                onClick={() =>
+                  createRole.mutate({
+                    code: newRole.code,
+                    name: newRole.name,
+                    description: newRole.description || undefined,
+                  })
+                }
+              >
+                Role追加
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!roleEditForm.id || !newRole.code || !newRole.name}
+                isLoading={cloneRole.isPending}
+                onClick={() =>
+                  cloneRole.mutate({
+                    id: Number(roleEditForm.id),
+                    input: {
+                      code: newRole.code,
+                      name: newRole.name,
+                      description: newRole.description || undefined,
+                    },
+                  })
+                }
+              >
+                選択Roleを複製
+              </Button>
+            </div>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {roles.data?.map((role) => (
+                <span
+                  key={role.id}
+                  className="inline-flex items-center gap-2 rounded border p-2 text-sm"
+                >
+                  {role.name} ({role.code}) / {role.status}
+                </span>
+              ))}
+            </div>
+            <div className="mb-4 grid gap-2 rounded border p-3 md:grid-cols-2 xl:grid-cols-4">
+              <NativeSelect
+                aria-label="編集するRole"
+                value={roleEditForm.id}
+                onChange={(e) => {
+                  const role = roles.data?.find(
+                    (item) => item.id === Number(e.target.value),
+                  );
+                  if (role)
+                    setRoleEditForm({
+                      id: String(role.id),
+                      name: role.name,
+                      description: role.description ?? "",
+                      status: role.status,
+                      is_system: role.is_system,
+                    });
+                }}
+              >
+                <option value="">編集するRole</option>
+                {roles.data?.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </NativeSelect>
+              <Input
+                aria-label="Role名を編集"
+                placeholder="Role名"
+                value={roleEditForm.name}
+                onChange={(e) =>
+                  setRoleEditForm({ ...roleEditForm, name: e.target.value })
+                }
+              />
+              <Input
+                aria-label="Role説明を編集"
+                placeholder="説明"
+                value={roleEditForm.description}
+                onChange={(e) =>
+                  setRoleEditForm({
+                    ...roleEditForm,
+                    description: e.target.value,
+                  })
+                }
+              />
+              <NativeSelect
+                aria-label="Role状態"
+                disabled={roleEditForm.is_system}
+                value={roleEditForm.status}
+                onChange={(e) =>
+                  setRoleEditForm({ ...roleEditForm, status: e.target.value })
+                }
+              >
+                <option value="active">有効</option>
+                <option value="inactive">廃止</option>
+              </NativeSelect>
+              <Button
+                disabled={!roleEditForm.id || !roleEditForm.name}
+                isLoading={updateRole.isPending}
+                onClick={() =>
+                  updateRole.mutate({
+                    id: Number(roleEditForm.id),
+                    input: {
+                      name: roleEditForm.name,
+                      description: roleEditForm.description || null,
+                      status: roleEditForm.status,
+                    },
+                  })
+                }
+              >
+                Role変更を保存
+              </Button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <NativeSelect
+                disabled={Boolean(editingAssignmentId)}
+                value={roleForm.subject_type}
+                onChange={(e) =>
+                  setRoleForm({
+                    ...roleForm,
+                    subject_type: e.target.value as "user" | "group",
+                    subject_id: "",
+                  })
+                }
+              >
+                <option value="user">ユーザー</option>
+                <option value="group">グループ</option>
+              </NativeSelect>
+              {roleForm.subject_type === "user" ? (
+                <UserSelect
+                  value={roleForm.subject_id}
+                  onChange={(v) => setRoleForm({ ...roleForm, subject_id: v })}
+                  users={users.data?.data}
+                  disabled={Boolean(editingAssignmentId)}
+                />
+              ) : (
+                <GroupSelect
+                  value={roleForm.subject_id}
+                  onChange={(v) => setRoleForm({ ...roleForm, subject_id: v })}
+                  groups={groups.data}
+                  disabled={Boolean(editingAssignmentId)}
+                />
+              )}
+              <NativeSelect
+                disabled={Boolean(editingAssignmentId)}
+                value={roleForm.role_id}
+                onChange={(e) =>
+                  setRoleForm({
+                    ...roleForm,
+                    role_id: e.target.value,
+                    scope_type: "",
+                    scope_group_id: "",
+                  })
+                }
+              >
+                <option value="">Role</option>
+                {roles.data?.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </NativeSelect>
+              <NativeSelect
+                value={roleForm.scope_type}
+                onChange={(e) =>
+                  setRoleForm({
+                    ...roleForm,
+                    scope_type: e.target.value as typeof roleForm.scope_type,
+                    scope_group_id: "",
+                  })
+                }
+              >
+                <option value="">対象範囲を明示選択</option>
+                {allowedRoleScopes.map((scope) => (
+                  <option key={scope} value={scope}>
+                    {scope === "global"
+                      ? "全社"
+                      : scope === "group"
+                        ? "グループ"
+                        : scope === "self"
+                          ? "本人"
+                          : "担当承認タスク"}
+                  </option>
+                ))}
+              </NativeSelect>
+              {roleForm.scope_type === "group" && (
+                <GroupSelect
+                  value={roleForm.scope_group_id}
+                  onChange={(v) =>
+                    setRoleForm({ ...roleForm, scope_group_id: v })
+                  }
+                  groups={groups.data}
+                />
+              )}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  disabled={roleForm.scope_type !== "group"}
+                  checked={roleForm.include_descendants}
+                  onChange={(e) =>
+                    setRoleForm({
+                      ...roleForm,
+                      include_descendants: e.target.checked,
+                    })
+                  }
+                />
+                配下を含む
+              </label>
+              <Input
+                aria-label="Role有効開始日時"
+                type="datetime-local"
+                value={roleForm.starts_at}
+                onChange={(e) =>
+                  setRoleForm({ ...roleForm, starts_at: e.target.value })
+                }
+              />
+              <Input
+                aria-label="Role有効終了日時"
+                type="datetime-local"
+                value={roleForm.ends_at}
+                onChange={(e) =>
+                  setRoleForm({ ...roleForm, ends_at: e.target.value })
+                }
+              />
+              <div className="rounded bg-muted p-2 text-sm">
+                {roleForm.scope_type
+                  ? `${roleForm.subject_type === "user" ? "選択ユーザー" : "選択グループ"}に、${roles.data?.find((r) => r.id === Number(roleForm.role_id))?.name ?? "Role"}を${roleForm.scope_type === "global" ? "全社" : roleForm.scope_type === "group" ? "選択グループ" + (roleForm.include_descendants ? "と配下" : "のみ") : roleForm.scope_type === "self" ? "本人" : "担当承認タスク"}の範囲で付与します。`
+                  : "対象範囲を選択してください。"}
+              </div>
+              <Button
+                disabled={
+                  !roleForm.subject_id ||
+                  !roleForm.role_id ||
+                  !roleForm.scope_type ||
+                  (roleForm.scope_type === "group" && !roleForm.scope_group_id)
+                }
+                isLoading={
+                  editingAssignmentId
+                    ? updateAssignment.isPending
+                    : createAssignment.isPending
+                }
+                onClick={() => {
+                  const scope = {
+                    scope_type: roleForm.scope_type as Exclude<
+                      typeof roleForm.scope_type,
+                      ""
+                    >,
+                    scope_group_id:
+                      roleForm.scope_type === "group"
+                        ? roleForm.scope_group_id
+                        : null,
+                    include_descendants: roleForm.include_descendants,
+                    starts_at: roleForm.starts_at
+                      ? new Date(roleForm.starts_at).toISOString()
+                      : null,
+                    ends_at: roleForm.ends_at
+                      ? new Date(roleForm.ends_at).toISOString()
+                      : null,
+                  };
+                  if (editingAssignmentId)
+                    updateAssignment.mutate(
+                      { id: editingAssignmentId, input: scope },
+                      { onSuccess: () => setEditingAssignmentId("") },
+                    );
+                  else
+                    createAssignment.mutate({
+                      subject_type: roleForm.subject_type,
+                      subject_id: roleForm.subject_id,
+                      role_id: Number(roleForm.role_id),
+                      ...scope,
+                    });
+                }}
+              >
+                {editingAssignmentId ? "Role割当を更新" : "Roleを割当"}
+              </Button>
+              {editingAssignmentId && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditingAssignmentId("")}
+                >
+                  編集を取消
+                </Button>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {assignments.data
+                ?.filter((a) => a.status === "active")
+                .map((a) => (
+                  <span
+                    className="inline-flex items-center gap-2 rounded border p-2 text-sm"
+                    key={a.id}
+                  >
+                    {a.role?.name} / {a.subject_type} / {a.scope_type}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingAssignmentId(a.id);
+                        setRoleForm({
+                          subject_type: a.subject_type,
+                          subject_id: a.subject_id,
+                          role_id: String(a.role_id),
+                          scope_type: a.scope_type,
+                          scope_group_id: a.scope_group_id ?? "",
+                          include_descendants: a.include_descendants,
+                          starts_at: toDateTimeLocal(a.starts_at),
+                          ends_at: toDateTimeLocal(a.ends_at),
+                        });
+                      }}
+                    >
+                      編集
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        updateAssignment.mutate({
+                          id: a.id,
+                          input: { ends_at: new Date().toISOString() },
+                        })
+                      }
+                    >
+                      今すぐ終了
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => removeAssignment.mutate(a.id)}
+                    >
+                      解除
+                    </Button>
+                  </span>
+                ))}
+            </div>
+            <div className="mt-5 border-t pt-4">
+              <div className="mb-2 flex gap-2">
+                <NativeSelect
+                  value={selectedRole}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedRole(id);
+                    setSelectedPermissions(
+                      roles.data
+                        ?.find((r) => r.id === Number(id))
+                        ?.permissions.map((p) => p.id) ?? [],
+                    );
                   }}
                 >
-                  編集
-                </Button>
+                  <option value="">Permissionを編集するRole</option>
+                  {roles.data?.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </NativeSelect>
                 <Button
-                  size="sm"
-                  variant="secondary"
+                  disabled={!selectedRole}
                   onClick={() =>
-                    updateAssignment.mutate({
-                      id: a.id,
-                      input: { ends_at: new Date().toISOString() },
+                    updateRolePermissions.mutate({
+                      roleId: Number(selectedRole),
+                      permissionIds: selectedPermissions,
                     })
                   }
                 >
-                  今すぐ終了
+                  保存
                 </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => removeAssignment.mutate(a.id)}
-                >
-                  解除
-                </Button>
-              </span>
-            ))}
-        </div>
-        <div className="mt-5 border-t pt-4">
-          <div className="mb-2 flex gap-2">
-            <NativeSelect
-              value={selectedRole}
-              onChange={(e) => {
-                const id = e.target.value;
-                setSelectedRole(id);
-                setSelectedPermissions(
-                  roles.data
-                    ?.find((r) => r.id === Number(id))
-                    ?.permissions.map((p) => p.id) ?? [],
-                );
-              }}
-            >
-              <option value="">Permissionを編集するRole</option>
-              {roles.data?.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </NativeSelect>
-            <Button
-              disabled={!selectedRole}
-              onClick={() =>
-                updateRolePermissions.mutate({
-                  roleId: Number(selectedRole),
-                  permissionIds: selectedPermissions,
-                })
-              }
-            >
-              保存
-            </Button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {permissionGroups.map(([resource, items]) => (
-              <fieldset className="rounded border p-3" key={resource}>
-                <legend className="px-1 text-sm font-medium">{resource}</legend>
-                {items?.map((p) => (
-                  <label className="flex gap-2 text-sm" key={p.id}>
-                    <input
-                      type="checkbox"
-                      checked={selectedPermissions.includes(p.id)}
-                      onChange={(e) =>
-                        setSelectedPermissions(
-                          e.target.checked
-                            ? [...selectedPermissions, p.id]
-                            : selectedPermissions.filter((id) => id !== p.id),
-                        )
-                      }
-                    />
-                    <span>
-                      {p.action}
-                      {p.description && (
-                        <span className="block text-xs text-muted-foreground">
-                          {p.description}
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {permissionGroups.map(([resource, items]) => (
+                  <fieldset className="rounded border p-3" key={resource}>
+                    <legend className="px-1 text-sm font-medium">
+                      {resource}
+                    </legend>
+                    {items?.map((p) => (
+                      <label className="flex gap-2 text-sm" key={p.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.includes(p.id)}
+                          onChange={(e) =>
+                            setSelectedPermissions(
+                              e.target.checked
+                                ? [...selectedPermissions, p.id]
+                                : selectedPermissions.filter(
+                                    (id) => id !== p.id,
+                                  ),
+                            )
+                          }
+                        />
+                        <span>
+                          {p.action}
+                          {p.description && (
+                            <span className="block text-xs text-muted-foreground">
+                              {p.description}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </label>
+                      </label>
+                    ))}
+                  </fieldset>
                 ))}
-              </fieldset>
-            ))}
-          </div>
-        </div>
-      </Card>
+              </div>
+            </div>
+          </Card>
 
-      <Card title="個別Feature停止">
-        <div className="grid gap-2 md:grid-cols-6">
-          <UserSelect
-            value={suspensionForm.user_id}
-            onChange={(v) =>
-              setSuspensionForm({ ...suspensionForm, user_id: v })
-            }
-            users={users.data?.data}
-          />
-          <FeatureSelect
-            value={suspensionForm.feature_id}
-            onChange={(v) =>
-              setSuspensionForm({ ...suspensionForm, feature_id: v })
-            }
-            features={features.data}
-          />
-          <Input
-            placeholder="停止理由"
-            value={suspensionForm.reason}
-            onChange={(e) =>
-              setSuspensionForm({ ...suspensionForm, reason: e.target.value })
-            }
-          />
-          <Input
-            aria-label="停止開始日時"
-            type="datetime-local"
-            value={suspensionForm.starts_at}
-            onChange={(e) =>
-              setSuspensionForm({
-                ...suspensionForm,
-                starts_at: e.target.value,
-              })
-            }
-          />
-          <Input
-            aria-label="停止終了日時"
-            type="datetime-local"
-            value={suspensionForm.ends_at}
-            onChange={(e) =>
-              setSuspensionForm({ ...suspensionForm, ends_at: e.target.value })
-            }
-          />
-          <Button
-            disabled={
-              !suspensionForm.user_id ||
-              !suspensionForm.feature_id ||
-              !suspensionForm.reason
-            }
-            onClick={() =>
-              suspendFeature.mutate({
-                user_id: suspensionForm.user_id,
-                feature_id: Number(suspensionForm.feature_id),
-                reason: suspensionForm.reason,
-                starts_at: suspensionForm.starts_at
-                  ? new Date(suspensionForm.starts_at).toISOString()
-                  : null,
-                ends_at: suspensionForm.ends_at
-                  ? new Date(suspensionForm.ends_at).toISOString()
-                  : null,
-              })
-            }
-          >
-            停止
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {suspensions.data?.map((s) => (
-            <span
-              className="inline-flex items-center gap-2 rounded border p-2 text-sm"
-              key={s.id}
-            >
-              {s.user.name}: {s.feature.name} ({s.reason})
+          <Card title="個別Feature停止">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+              <UserSelect
+                value={suspensionForm.user_id}
+                onChange={(v) =>
+                  setSuspensionForm({ ...suspensionForm, user_id: v })
+                }
+                users={users.data?.data}
+              />
+              <FeatureSelect
+                value={suspensionForm.feature_id}
+                onChange={(v) =>
+                  setSuspensionForm({ ...suspensionForm, feature_id: v })
+                }
+                features={features.data}
+              />
+              <Input
+                placeholder="停止理由"
+                value={suspensionForm.reason}
+                onChange={(e) =>
+                  setSuspensionForm({
+                    ...suspensionForm,
+                    reason: e.target.value,
+                  })
+                }
+              />
+              <Input
+                aria-label="停止開始日時"
+                type="datetime-local"
+                value={suspensionForm.starts_at}
+                onChange={(e) =>
+                  setSuspensionForm({
+                    ...suspensionForm,
+                    starts_at: e.target.value,
+                  })
+                }
+              />
+              <Input
+                aria-label="停止終了日時"
+                type="datetime-local"
+                value={suspensionForm.ends_at}
+                onChange={(e) =>
+                  setSuspensionForm({
+                    ...suspensionForm,
+                    ends_at: e.target.value,
+                  })
+                }
+              />
               <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => removeSuspension.mutate(s.id)}
+                disabled={
+                  !suspensionForm.user_id ||
+                  !suspensionForm.feature_id ||
+                  !suspensionForm.reason
+                }
+                onClick={() =>
+                  suspendFeature.mutate({
+                    user_id: suspensionForm.user_id,
+                    feature_id: Number(suspensionForm.feature_id),
+                    reason: suspensionForm.reason,
+                    starts_at: suspensionForm.starts_at
+                      ? new Date(suspensionForm.starts_at).toISOString()
+                      : null,
+                    ends_at: suspensionForm.ends_at
+                      ? new Date(suspensionForm.ends_at).toISOString()
+                      : null,
+                  })
+                }
               >
-                解除
+                停止
               </Button>
-            </span>
-          ))}
-        </div>
-      </Card>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suspensions.data?.map((s) => (
+                <span
+                  className="inline-flex items-center gap-2 rounded border p-2 text-sm"
+                  key={s.id}
+                >
+                  {s.user.name}: {s.feature.name} ({s.reason})
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => removeSuspension.mutate(s.id)}
+                  >
+                    解除
+                  </Button>
+                </span>
+              ))}
+            </div>
+          </Card>
+        </DialogContent>
+      </Dialog>
 
       <Card title="外部ID・項目管理責任">
-        <div className="grid gap-2 md:grid-cols-7">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
           <UserSelect
             value={identityForm.user_id}
             onChange={(v) => setIdentityForm({ ...identityForm, user_id: v })}
@@ -1441,7 +1226,7 @@ export function UserManagementAccessPage() {
       </Card>
 
       <Card title="将来日付の所属変更">
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
           <UserSelect
             value={changeForm.user_id}
             onChange={(v) => setChangeForm({ ...changeForm, user_id: v })}

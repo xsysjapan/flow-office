@@ -4,7 +4,12 @@ import { loginAs, SCENARIO_USERS } from "./support/auth";
 
 type Feature = { id: number; code: string; children?: Feature[] };
 type Permission = { id: number; code: string };
-type Role = { id: number; code: string; name: string; permissions: Permission[] };
+type Role = {
+  id: number;
+  code: string;
+  name: string;
+  permissions: Permission[];
+};
 type Group = {
   id: string;
   code: string;
@@ -143,7 +148,9 @@ async function assignFeatures(page: Page, groupId: string, codes: string[]) {
   for (const code of codes) {
     await apiFetch(page, `/admin/access-control/groups/${groupId}/features`, {
       method: "POST",
-      body: { feature_id: features.find((feature) => feature.code === code)!.id },
+      body: {
+        feature_id: features.find((feature) => feature.code === code)!.id,
+      },
     });
   }
 }
@@ -171,7 +178,11 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
   try {
     const userId = await fetchUserIdByEmail(session.adminPage, emails.monthly);
     const typeId = await createGroupType(session.adminPage, "E2E_DENIAL");
-    const groupId = await createGroup(session.adminPage, typeId, "E2E_DENIAL_GROUP");
+    const groupId = await createGroup(
+      session.adminPage,
+      typeId,
+      "E2E_DENIAL_GROUP",
+    );
     await addMembership(session.adminPage, userId, groupId);
     await assignFeatures(session.adminPage, groupId, [
       "administration",
@@ -180,17 +191,21 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
     const role = await createRole(session.adminPage, "e2e_denial_reader", [
       "system_settings.read",
     ]);
-    await apiFetch(session.adminPage, "/admin/access-control/role-assignments", {
-      method: "POST",
-      body: {
-        subject_type: "group",
-        subject_id: groupId,
-        role_id: role.id,
-        scope_type: "global",
-        scope_group_id: null,
-        include_descendants: false,
+    await apiFetch(
+      session.adminPage,
+      "/admin/access-control/role-assignments",
+      {
+        method: "POST",
+        body: {
+          subject_type: "group",
+          subject_id: groupId,
+          role_id: role.id,
+          scope_type: "global",
+          scope_group_id: null,
+          include_descendants: false,
+        },
       },
-    });
+    );
 
     await reloginAs(session.userPage, SCENARIO_USERS.monthlyEmployee);
     await session.userPage.goto("/admin/system-settings");
@@ -202,16 +217,25 @@ test("個別Feature停止はメニュー・直URL・APIの全境界へ即時反�
     ).toBeVisible();
 
     const features = flattenFeatures(
-      await apiFetch<Feature[]>(session.adminPage, "/admin/access-control/features"),
+      await apiFetch<Feature[]>(
+        session.adminPage,
+        "/admin/access-control/features",
+      ),
     );
-    await apiFetch(session.adminPage, "/admin/access-control/feature-suspensions", {
-      method: "POST",
-      body: {
-        user_id: userId,
-        feature_id: features.find((feature) => feature.code === "administration")!.id,
-        reason: "E2E boundary suspension",
+    await apiFetch(
+      session.adminPage,
+      "/admin/access-control/feature-suspensions",
+      {
+        method: "POST",
+        body: {
+          user_id: userId,
+          feature_id: features.find(
+            (feature) => feature.code === "administration",
+          )!.id,
+          reason: "E2E boundary suspension",
+        },
       },
-    });
+    );
 
     await reloginAs(session.userPage, SCENARIO_USERS.monthlyEmployee);
     await expect(
@@ -236,7 +260,11 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
   try {
     const userId = await fetchUserIdByEmail(session.adminPage, emails.monthly);
     const typeId = await createGroupType(session.adminPage, "E2E_SCOPE");
-    const parentId = await createGroup(session.adminPage, typeId, "E2E_SCOPE_PARENT");
+    const parentId = await createGroup(
+      session.adminPage,
+      typeId,
+      "E2E_SCOPE_PARENT",
+    );
     await createGroup(session.adminPage, typeId, "E2E_SCOPE_CHILD", parentId);
     const source = await createRole(session.adminPage, "e2e_timed_role", [
       "user.view",
@@ -260,8 +288,12 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
       },
     );
     expect(
-      (await apiFetch<{ permissions: string[] }>(session.userPage, "/access/me"))
-        .permissions,
+      (
+        await apiFetch<{ permissions: string[] }>(
+          session.userPage,
+          "/access/me",
+        )
+      ).permissions,
     ).not.toContain("user.view");
 
     await apiFetch(
@@ -341,7 +373,8 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
     >(session.adminPage, "/admin/access-control/role-assignments");
     for (const assignment of inheritedGlobalAssignments.filter(
       (candidate) =>
-        ((candidate.subject_type === "user" && candidate.subject_id === actorId) ||
+        ((candidate.subject_type === "user" &&
+          candidate.subject_id === actorId) ||
           (candidate.subject_type === "group" &&
             actorGroupIds.includes(candidate.subject_id))) &&
         candidate.scope_type === "global" &&
@@ -352,48 +385,66 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
       await apiFetch(
         session.adminPage,
         `/admin/access-control/role-assignments/${assignment.id}`,
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+        },
       );
     }
-    await apiFetch(session.adminPage, "/admin/access-control/role-assignments", {
-      method: "POST",
-      body: {
-        subject_type: "user",
-        subject_id: actorId,
-        role_id: source.id,
-        scope_type: "group",
-        scope_group_id: parentId,
-        include_descendants: true,
+    await apiFetch(
+      session.adminPage,
+      "/admin/access-control/role-assignments",
+      {
+        method: "POST",
+        body: {
+          subject_type: "user",
+          subject_id: actorId,
+          role_id: source.id,
+          scope_type: "group",
+          scope_group_id: parentId,
+          include_descendants: true,
+        },
       },
-    });
+    );
     const scopedContext = await browser.newContext();
     try {
       const scopedPage = await scopedContext.newPage();
       await loginAs(scopedPage, SCENARIO_USERS.hrStaff);
-      expect((await rawRequest(scopedPage, `/users/${descendantUserId}`)).status).toBe(
-        200,
-      );
-      expect((await rawRequest(scopedPage, `/users/${outsideUserId}`)).status).toBe(
-        403,
-      );
+      expect(
+        (await rawRequest(scopedPage, `/users/${descendantUserId}`)).status,
+      ).toBe(200);
+      expect(
+        (await rawRequest(scopedPage, `/users/${outsideUserId}`)).status,
+      ).toBe(403);
     } finally {
       await scopedContext.close();
     }
 
     await session.adminPage.goto("/admin/access-control");
+    await session.adminPage
+      .getByRole("button", { name: "アクセス設定" })
+      .click();
     const roleCard = session.adminPage
       .getByRole("heading", { name: "Role・Permission" })
       .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
-    await roleCard.getByLabel("編集するRole").selectOption({ label: source.name });
-    await roleCard.getByPlaceholder("新規Roleコード").fill("e2e_timed_role_clone");
+    await roleCard
+      .getByLabel("編集するRole")
+      .selectOption({ label: source.name });
+    await roleCard
+      .getByPlaceholder("新規Roleコード")
+      .fill("e2e_timed_role_clone");
     await roleCard.getByPlaceholder("Role名").first().fill("E2E Role Clone");
     await roleCard.getByRole("button", { name: "選択Roleを複製" }).click();
-    await expect(roleCard.getByText("E2E Role Clone (e2e_timed_role_clone)")).toBeVisible();
-    const roles = await apiFetch<Role[]>(session.adminPage, "/admin/access-control/roles");
+    await expect(
+      roleCard.getByText("E2E Role Clone (e2e_timed_role_clone)"),
+    ).toBeVisible();
+    const roles = await apiFetch<Role[]>(
+      session.adminPage,
+      "/admin/access-control/roles",
+    );
     expect(
-      roles.find((role) => role.code === "e2e_timed_role_clone")?.permissions.map(
-        (permission) => permission.code,
-      ),
+      roles
+        .find((role) => role.code === "e2e_timed_role_clone")
+        ?.permissions.map((permission) => permission.code),
     ).toContain("user.view");
   } finally {
     await session.adminContext.close();
@@ -438,14 +489,24 @@ test("複数所属変更を原子的に適用し、競合時は全件を失敗�
   expect(
     groups
       .filter((group) => [firstId, secondId].includes(group.id))
-      .every((group) => group.memberships.some((member) => member.user_id === userId)),
+      .every((group) =>
+        group.memberships.some((member) => member.user_id === userId),
+      ),
   ).toBe(true);
 
   const limitedTypeId = await createGroupType(page, "E2E_ATOMIC_FAIL", {
     maxMemberships: 1,
   });
-  const occupiedId = await createGroup(page, limitedTypeId, "E2E_ATOMIC_OCCUPIED");
-  const rejectedId = await createGroup(page, limitedTypeId, "E2E_ATOMIC_REJECTED");
+  const occupiedId = await createGroup(
+    page,
+    limitedTypeId,
+    "E2E_ATOMIC_OCCUPIED",
+  );
+  const rejectedId = await createGroup(
+    page,
+    limitedTypeId,
+    "E2E_ATOMIC_REJECTED",
+  );
   const failed = await apiFetch<{ id: string }>(
     page,
     "/admin/user-management/membership-change-sets",
@@ -470,7 +531,9 @@ test("複数所属変更を原子的に適用し、競合時は全件を失敗�
   await addMembership(page, userId, occupiedId);
   const batch = await page.request.post(
     "http://localhost:8000/api/dev/apply-membership-changes",
-    { headers: { Accept: "application/json" } },
+    {
+      headers: { Accept: "application/json" },
+    },
   );
   expect(batch.ok()).toBe(true);
   const changeSets = await apiFetch<
@@ -519,29 +582,42 @@ test("複数GroupのFeature・Permissionを合成し、付与元と主要監査�
       [groupA, roleA.id],
       [groupB, roleB.id],
     ] as const) {
-      await apiFetch(session.adminPage, "/admin/access-control/role-assignments", {
-        method: "POST",
-        body: {
-          subject_type: "group",
-          subject_id: groupId,
-          role_id: roleId,
-          scope_type: "global",
-          scope_group_id: null,
-          include_descendants: false,
+      await apiFetch(
+        session.adminPage,
+        "/admin/access-control/role-assignments",
+        {
+          method: "POST",
+          body: {
+            subject_type: "group",
+            subject_id: groupId,
+            role_id: roleId,
+            scope_type: "global",
+            scope_group_id: null,
+            include_descendants: false,
+          },
         },
-      });
+      );
     }
     const features = flattenFeatures(
-      await apiFetch<Feature[]>(session.adminPage, "/admin/access-control/features"),
+      await apiFetch<Feature[]>(
+        session.adminPage,
+        "/admin/access-control/features",
+      ),
     );
-    await apiFetch(session.adminPage, "/admin/access-control/feature-suspensions", {
-      method: "POST",
-      body: {
-        user_id: userId,
-        feature_id: features.find((feature) => feature.code === "workflow.requests")!.id,
-        reason: "E2E audit suspension",
+    await apiFetch(
+      session.adminPage,
+      "/admin/access-control/feature-suspensions",
+      {
+        method: "POST",
+        body: {
+          user_id: userId,
+          feature_id: features.find(
+            (feature) => feature.code === "workflow.requests",
+          )!.id,
+          reason: "E2E audit suspension",
+        },
       },
-    });
+    );
     const access = await apiFetch<{
       features: string[];
       permissions: string[];
@@ -555,7 +631,11 @@ test("複数GroupのFeature・Permissionを合成し、付与元と主要監査�
     expect(
       access.explanation.permissions.find((item) => item.code === "user.view")
         ?.sources,
-    ).toEqual(expect.arrayContaining([expect.objectContaining({ type: "group", group_id: groupA })]));
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "group", group_id: groupA }),
+      ]),
+    );
 
     for (const eventType of [
       "role.created",
@@ -565,7 +645,9 @@ test("複数GroupのFeature・Permissionを合成し、付与元と主要監査�
       "user.feature_suspended",
     ]) {
       await session.adminPage.goto(`/admin/audit-log?event_type=${eventType}`);
-      await expect(session.adminPage.getByText(eventType).first()).toBeVisible();
+      await expect(
+        session.adminPage.getByText(eventType).first(),
+      ).toBeVisible();
     }
   } finally {
     await session.adminContext.close();
@@ -579,10 +661,14 @@ test("外部HR管理項目はローカル更新を拒否し、最終同期と無
   test.setTimeout(180000);
   await loginAs(page, SCENARIO_USERS.admin);
   for (const fieldKey of ["display_name", "email"]) {
-    await apiFetch(page, `/admin/user-management/field-authorities/${fieldKey}`, {
-      method: "PUT",
-      body: { authority_type: "EXTERNAL_HR", provider: "EXTERNAL_HR" },
-    });
+    await apiFetch(
+      page,
+      `/admin/user-management/field-authorities/${fieldKey}`,
+      {
+        method: "PUT",
+        body: { authority_type: "EXTERNAL_HR", provider: "EXTERNAL_HR" },
+      },
+    );
   }
   await apiFetch(page, "/admin/user-management/external-hr/import", {
     method: "POST",
@@ -601,7 +687,10 @@ test("外部HR管理項目はローカル更新を拒否し、最終同期と無
       ],
     },
   });
-  const importedId = await fetchUserIdByEmail(page, "e2e-hr-boundary@example.com");
+  const importedId = await fetchUserIdByEmail(
+    page,
+    "e2e-hr-boundary@example.com",
+  );
   expect(
     (
       await rawRequest(page, `/users/${importedId}`, {
@@ -615,7 +704,9 @@ test("外部HR管理項目はローカル更新を拒否し、最終同期と無
   }>(page, `/users/${importedId}`);
   expect(imported.external_identities[0]?.last_synced_at).toBeTruthy();
   await page.goto(`/admin/users/${importedId}`);
-  await expect(page.getByText(/EXTERNAL_HR: E2E-HR-BOUNDARY-001/)).toBeVisible();
+  await expect(
+    page.getByText(/EXTERNAL_HR: E2E-HR-BOUNDARY-001/),
+  ).toBeVisible();
   await expect(page.getByText(/最終同期/)).not.toContainText("最終同期 -");
 
   const punchUserId = await fetchUserIdByEmail(page, emails.punch);
