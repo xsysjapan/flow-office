@@ -24,4 +24,19 @@ export default async function globalSetup(): Promise<void> {
         'backend (php artisan serve) が起動していること、.envで MICROSOFT_MOCK_ENABLED=true になっていることを確認してください。',
     )
   }
+
+  const result = (await response.json()) as {
+    product_initial_access?: {
+      all_users_feature_assignments: number
+      all_users_role_assignments: number
+    }
+  }
+  if (
+    result.product_initial_access?.all_users_feature_assignments !== 0 ||
+    result.product_initial_access?.all_users_role_assignments !== 0
+  ) {
+    throw new Error(
+      `E2E globalSetup: product access must be initially OFF: ${JSON.stringify(result.product_initial_access)}`,
+    )
+  }
 }

@@ -135,6 +135,10 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   ExternalIdentity・所属変更下書きを操作でき、Group経由のFeature・Role・Permissionと
   個別Feature停止が有効アクセスへ即時反映されること、外部HR CSVの差分確認・取込、
   `stored_events`を直接検索する監査画面へのイベント反映を確認
+- アクセス境界・ライフサイクル: 製品初期OFF、個別停止時のメニュー・直URL・API拒否、
+  User直接Role・Group Scope・配下・有効期間・Role複製、複数所属のFeature/Permission合成と
+  付与元説明、所属変更の複数一括適用・競合時ロールバック・失敗理由、主要アクセス管理イベントの
+  監査検索、外部HR管理項目の編集拒否・最終同期、無効化後のユーザー詳細・過去勤怠参照を確認
 
 §5-3の実装にあたり、`GET /attendance/months/to-approve`が「自分が承認者かつ
 `submitted`」のみを対象にしており、UC-A011が想定する「管理部(admin・hr_staff)が

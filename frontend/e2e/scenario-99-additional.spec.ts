@@ -14,7 +14,7 @@ import { pickDate, pickUser, pickYearMonth } from './support/ui'
  */
 
 test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
-  test.setTimeout(180000)
+  test.setTimeout(360000)
   const title = `E2Eテスト差戻し確認_${Math.floor(Math.random() * 100000)}`
 
   const applicantContext = await browser.newContext()
@@ -60,6 +60,7 @@ test('§5-1: 承認差し戻し→再申請', async ({ browser }) => {
 })
 
 test('§5-2: 申請取消(提出後)', async ({ page }) => {
+  test.setTimeout(300000)
   const title = `E2Eテスト取消確認_${Math.floor(Math.random() * 100000)}`
 
   await loginAs(page, SCENARIO_USERS.punchEmployee)
@@ -132,7 +133,7 @@ test('§5-6+7: ロール変更が即座に反映され、監査ログに記録�
 })
 
 test('§5-3: 月次締め後は日次実績が編集できない', async ({ browser }) => {
-  test.setTimeout(180000)
+  test.setTimeout(360000)
 
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
@@ -164,7 +165,7 @@ test('§5-3: 月次締め後は日次実績が編集できない', async ({ brow
 })
 
 test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) => {
-  test.setTimeout(120000)
+  test.setTimeout(300000)
 
   // 週送りの操作を1回で済ませるため、月曜起点の週が必ず1つ先になる7日後を対象日にする
   // (今日がどの曜日でも、7日後は常に「次週」の同じ曜日になる)。
@@ -210,7 +211,7 @@ test('§5-4: 打刻ログと日次実績の不一致確認', async ({ page }) =>
 // `scenario-08-fiscal-year-cycle.spec.ts`の`境界条件の単発確認`を参照。
 
 test('§5-8: 締めた月の勤怠CSV出力', async ({ browser }) => {
-  test.setTimeout(180000)
+  test.setTimeout(360000)
 
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()

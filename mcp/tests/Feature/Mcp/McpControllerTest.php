@@ -150,6 +150,17 @@ class McpControllerTest extends TestCase
             '*/access/me' => Http::response(['features' => [], 'permissions' => ['attendance.update']], 200),
         ]);
 
+        $listResponse = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/list',
+        ]);
+        $listResponse->assertOk();
+        $this->assertNotContains(
+            'create_monthly_attendance_draft',
+            collect($listResponse->json('result.tools'))->pluck('name')->all(),
+        );
+
         $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
             'id' => 1,

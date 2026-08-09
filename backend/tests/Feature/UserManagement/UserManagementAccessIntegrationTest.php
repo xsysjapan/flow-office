@@ -400,4 +400,62 @@ class UserManagementAccessIntegrationTest extends TestCase
         DB::table('permission_role')->insert(['role_id' => $settingsRole->id, 'permission_id' => DB::table('permissions')->where('code', 'system_settings.read')->value('id')]);
         $this->actingAs($admin)->postJson('/api/admin/access-control/role-assignments', ['subject_type' => 'user', 'subject_id' => $admin->id, 'role_id' => $settingsRole->id, 'scope_type' => 'self'])->assertUnprocessable();
     }
+
+    public function test_iso_role_assignment_period_is_normalized_and_effective_immediately(): void
+    {
+        $admin = User::factory()->create();
+        $adminRole = Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者', 'status' => 'active']);
+        $admin->roles()->attach($adminRole);
+        $user = User::factory()->create();
+        $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
+
+        $role = Role::query()->create(['code' => 'timed_reader', 'name' => '期間付き閲覧', 'status' => 'active']);
+        $permissionId = DB::table('permissions')->where('code', 'user.view')->value('id');
+        DB::table('permission_role')->insert(['role_id' => $role->id, 'permission_id' => $permissionId]);
+        $response = $this->actingAs($admin)->postJson('/api/admin/access-control/role-assignments', [
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'role_id' => $role->id,
+            'scope_type' => 'global',
+            'starts_at' => now()->subMinute()->toISOString(),
+            'ends_at' => now()->addHour()->toISOString(),
+        ])->assertCreated();
+
+        $assignment = DB::table('role_assignments')->where('id', $response->json('id'))->first();
+        $this->assertStringNotContainsString('T', $assignment->starts_at);
+        $this->assertStringNotContainsString('T', $assignment->ends_at);
+        $this->assertTrue(app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'user.view'));
+    }
+
+    public function test_group_granted_system_settings_access_is_not_blocked_by_legacy_admin_role(): void
+    {
+        $admin = User::factory()->create();
+        $adminRole = Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者', 'status' => 'active']);
+        $admin->roles()->attach($adminRole);
+        $user = User::factory()->create();
+        $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
+
+        $groupId = (string) Str::uuid();
+        DB::table('groups')->insert([
+            'id' => $groupId,
+            'group_type_id' => DB::table('group_types')->where('code', 'CUSTOM')->value('id'),
+            'name' => '設定閲覧者',
+            'code' => 'SETTINGS_READERS',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('memberships')->insert(['user_id' => $user->id, 'group_id' => $groupId, 'membership_kind' => 'member', 'created_at' => now(), 'updated_at' => now()]);
+        foreach (['administration', 'administration.settings'] as $featureCode) {
+            DB::table('group_feature_assignments')->insert(['group_id' => $groupId, 'feature_id' => DB::table('features')->where('code', $featureCode)->value('id'), 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $reader = Role::query()->create(['code' => 'settings_reader_route', 'name' => '設定閲覧', 'status' => 'active']);
+        DB::table('permission_role')->insert(['role_id' => $reader->id, 'permission_id' => DB::table('permissions')->where('code', 'system_settings.read')->value('id')]);
+        DB::table('role_assignments')->insert(['id' => (string) Str::uuid(), 'subject_type' => 'group', 'subject_id' => $groupId, 'role_id' => $reader->id, 'scope_type' => 'global', 'include_descendants' => false, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($user)->getJson('/api/admin/system-settings')->assertOk();
+
+        DB::table('user_feature_suspensions')->insert(['id' => (string) Str::uuid(), 'user_id' => $user->id, 'feature_id' => DB::table('features')->where('code', 'administration')->value('id'), 'reason' => '停止', 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($user)->getJson('/api/admin/system-settings')->assertForbidden();
+    }
 }

@@ -511,3 +511,19 @@ Membership、GroupAccess、Role、RoleAssignment、UserFeatureSuspensionから�
 - 対象Group未指定を暗黙に全社扱いすること
 - Featureへの勤務・給与・経費等の業務設定値の混在
 - 本格的な人事異動・採用・評価・給与ワークフロー
+
+## 31.17 E2E検証
+
+製品初期状態の`ALL_USERS`にFeature・RoleAssignmentが存在しないことは、E2EのDBリセット時に
+`ScenarioAccessSeeder`適用前の状態を検査する。シナリオ用アクセスを投入した後は、Playwrightで
+次を検証する。
+
+- 個別Feature停止時の管理メニュー非表示、直URLリダイレクト、API 403。MCPはツール一覧からの
+  非表示と直接呼出し拒否をMCP結合テストで検証する。
+- Userへの直接Role付与、Group付与、Group Scopeの配下指定、有効開始・終了日時、Role複製と
+  Permission継承、実効アクセスの付与元説明。
+- 複数MembershipChangeItemの一括適用と、適用直前の競合発生時に一件も反映せず、ChangeSetへ
+  失敗理由を記録すること。
+- 複数Group由来のFeature・Permissionの合成、およびRole・Permission・Feature・個別停止の
+  `stored_events`を直接検索する監査画面への反映。
+- 外部HR管理項目のローカル編集拒否、最終同期日時、無効化後のユーザー詳細と過去勤怠の参照。

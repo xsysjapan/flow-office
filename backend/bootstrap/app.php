@@ -5,6 +5,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Middleware\CheckAbilitiesOrFullSession;
 use App\Http\Middleware\CheckForAnyAbilityOrFullSession;
 use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\EnsureConfiguredAccessOrAdmin;
 use App\Http\Middleware\EnsureEffectiveFeature;
 use App\Http\Middleware\EnsureEffectivePermission;
 use App\Http\Middleware\EnsureFullAccessOrExplicitAbility;
@@ -47,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureUserHasRole::class,
             'feature' => EnsureEffectiveFeature::class,
             'permission' => EnsureEffectivePermission::class,
+            'configured-or-admin' => EnsureConfiguredAccessOrAdmin::class,
             'feature.route' => EnsureRouteFeatureAccess::class,
             'account.active' => EnsureActiveAccount::class,
             // 端末(devices)・認証キー発行トークン等、限定abilityのSanctumトークン用。

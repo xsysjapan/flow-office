@@ -40,5 +40,6 @@ class Ms365MockGateTest extends TestCase
 
         $this->getJson('/api/dev/mock-users')->assertNotFound();
         $this->postJson('/api/dev/reset-database')->assertNotFound();
+        $this->postJson('/api/dev/apply-membership-changes')->assertNotFound();
     }
 }

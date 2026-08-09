@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.E2E_API_BASE_URL ?? 'http://localhost:8000/api'
  * `page`にログイン済みのSanctumトークンでAPIを直接叩く共通ヘルパー。画面がまだ無い/
  * 繰り返し実行のための前提データ調整用(このファイルの他関数と同じ用途)。
  */
-async function apiFetch<T>(page: Page, path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+export async function apiFetch<T>(page: Page, path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   return page.evaluate(
     async ({ apiBase, path, method, body }) => {
       const token = localStorage.getItem('flow-office.token')

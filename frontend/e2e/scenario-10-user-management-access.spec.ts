@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { apiFetch, fetchUserIdByEmail } from "./support/api";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
 
 const groupTypeCode = "E2E_TEAM";
@@ -28,6 +29,51 @@ async function effectiveAccess(
       throw new Error(`effective access request failed: ${response.status}`);
     return response.json();
   });
+}
+
+async function ensureAccessScenarioGroup(page: Page): Promise<string> {
+  const groups = await apiFetch<Array<{ id: string; code: string; memberships: Array<{ user_id: string }> }>>(
+    page,
+    "/admin/user-management/groups",
+  );
+  const existing = groups.find((group) => group.code === groupCode);
+  const userId = await fetchUserIdByEmail(page, "mai.ito@example.com");
+  if (existing) {
+    if (!existing.memberships.some((membership) => membership.user_id === userId)) {
+      await apiFetch(page, "/admin/user-management/memberships", {
+        method: "POST",
+        body: { user_id: userId, group_id: existing.id, membership_kind: "member", is_primary: false },
+      });
+    }
+    return existing.id;
+  }
+
+  await apiFetch(page, "/admin/user-management/group-types", {
+    method: "POST",
+    body: {
+      code: groupTypeCode,
+      name: groupTypeName,
+      membership_limit_type: "unlimited",
+      primary_membership_required: false,
+    },
+  });
+  const types = await apiFetch<Array<{ id: number; code: string }>>(
+    page,
+    "/admin/user-management/group-types",
+  );
+  const created = await apiFetch<{ id: string }>(page, "/admin/user-management/groups", {
+    method: "POST",
+    body: {
+      group_type_id: types.find((type) => type.code === groupTypeCode)!.id,
+      name: groupName,
+      code: groupCode,
+    },
+  });
+  await apiFetch(page, "/admin/user-management/memberships", {
+    method: "POST",
+    body: { user_id: userId, group_id: created.id, membership_kind: "member", is_primary: false },
+  });
+  return created.id;
 }
 
 test("ユーザー管理を中心にGroupType・Group・所属・外部ID・所属変更を管理できる", async ({
@@ -126,6 +172,7 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
   try {
     const adminPage = await adminContext.newPage();
     await loginAs(adminPage, SCENARIO_USERS.admin);
+    await ensureAccessScenarioGroup(adminPage);
     const userPage = await userContext.newPage();
     await loginAs(userPage, SCENARIO_USERS.monthlyEmployee);
     await adminPage.goto("/admin/access-control");

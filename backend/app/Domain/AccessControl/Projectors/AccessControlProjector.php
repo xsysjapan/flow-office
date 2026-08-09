@@ -12,6 +12,7 @@ use App\Domain\AccessControl\Events\RolePermissionsChanged;
 use App\Domain\AccessControl\Events\RoleUpdated;
 use App\Domain\AccessControl\Events\UserFeatureSuspended;
 use App\Domain\AccessControl\Events\UserFeatureSuspensionRemoved;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -34,7 +35,7 @@ class AccessControlProjector extends Projector
     {
         DB::table('user_feature_suspensions')->updateOrInsert(
             ['id' => $event->suspensionId],
-            ['user_id' => $event->userId, 'feature_id' => $event->featureId, 'reason' => $event->reason, 'starts_at' => $event->startsAt, 'ends_at' => $event->endsAt, 'created_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['user_id' => $event->userId, 'feature_id' => $event->featureId, 'reason' => $event->reason, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'created_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 
@@ -68,17 +69,22 @@ class AccessControlProjector extends Projector
     {
         DB::table('role_assignments')->updateOrInsert(
             ['id' => $event->aggregateRootUuid()],
-            ['subject_type' => $event->subjectType, 'subject_id' => $event->subjectId, 'role_id' => $event->roleId, 'scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $event->startsAt, 'ends_at' => $event->endsAt, 'status' => 'active', 'assigned_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['subject_type' => $event->subjectType, 'subject_id' => $event->subjectId, 'role_id' => $event->roleId, 'scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'status' => 'active', 'assigned_by' => $event->actorUserId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 
     public function onRoleAssignmentUpdated(RoleAssignmentUpdated $event): void
     {
-        DB::table('role_assignments')->where('id', $event->aggregateRootUuid())->update(['scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $event->startsAt, 'ends_at' => $event->endsAt, 'updated_at' => $event->createdAt()]);
+        DB::table('role_assignments')->where('id', $event->aggregateRootUuid())->update(['scope_type' => $event->scopeType, 'scope_group_id' => $event->scopeGroupId, 'include_descendants' => $event->includeDescendants, 'starts_at' => $this->databaseDate($event->startsAt), 'ends_at' => $this->databaseDate($event->endsAt), 'updated_at' => $event->createdAt()]);
     }
 
     public function onRoleAssignmentRemoved(RoleAssignmentRemoved $event): void
     {
         DB::table('role_assignments')->where('id', $event->aggregateRootUuid())->update(['status' => 'removed', 'updated_at' => $event->createdAt()]);
+    }
+
+    private function databaseDate(?string $value): ?string
+    {
+        return $value === null ? null : CarbonImmutable::parse($value)->utc()->format('Y-m-d H:i:s');
     }
 }

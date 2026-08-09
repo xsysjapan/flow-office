@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
 use App\Http\Controllers\Api\CompensatoryLeaveController;
+use App\Http\Controllers\Api\DevApplyMembershipChangesController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
@@ -81,6 +82,7 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // エンドポイント。認証不要(テスト実行の最初期、ログイン前に呼ばれるため)。
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
+Route::post('/dev/apply-membership-changes', DevApplyMembershipChangesController::class);
 
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);
@@ -394,6 +396,15 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/users/me/integrations/{integration}/reissue', [IntegrationController::class, 'reissue']);
     Route::post('/users/me/integrations/{integration}/revoke', [IntegrationController::class, 'revoke']);
 
+    // Feature / Permission による動的な付与を許可するシステム管理機能。
+    // legacy role:admin では囲まず、実効アクセスだけを認可境界にする。
+    Route::prefix('admin')->middleware('feature:administration.settings')->group(function () {
+        Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('configured-or-admin:administration.settings');
+        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('configured-or-admin:administration.settings');
+        Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware(['configured-or-admin:administration.settings,system_settings.read', 'permission:system_settings.read']);
+        Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware(['configured-or-admin:administration.settings,system_settings.update', 'permission:system_settings.update']);
+    });
+
     // --- 管理者専用エンドポイント (role:admin単独のもののみ。role:admin,hr_staffのものは
     //     元の場所のまま。docs/15-usecases-admin.md UC-M001〜UC-M003, docs/23-usecases-devices.md,
     //     docs/06-usecases-auth.md UC-003) ---
@@ -410,15 +421,6 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         // 勤怠未提出督促の個別除外
         Route::get('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'index']);
         Route::post('/attendance-submission-reminder-exclusions', [AttendanceSubmissionReminderExclusionController::class, 'store']);
-
-        // 監査ログ (docs/15-usecases-admin.md UC-M003)
-        Route::get('/audit-log', [AuditLogController::class, 'index']);
-        Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv']);
-
-        // システム設定 (docs/06-usecases-auth.md UC-003)。認証済みなら誰でも参照できる
-        // 安全なサブセットは /system-settings (PublicSystemSettingController) 側にある。
-        Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');
-        Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('permission:system_settings.update');
 
         // 端末管理 (docs/23-usecases-devices.md UC-D001〜UC-D005)
         Route::get('/devices', [DeviceController::class, 'index']);
