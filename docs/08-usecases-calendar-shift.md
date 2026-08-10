@@ -146,7 +146,7 @@ UC-C005のチェックは適用する。
 では、`LegalHolidayResolver`が以下の優先順位で対象週の法定休日を解決する。
 
 1. 本ユースケースによる指定(`legal_holiday_designations`)があればそれを使う
-2. 指定が無ければ、その週の勤務予定(`employee_calendar_entries.is_working_day=false`)の
+2. 指定が無ければ、その週の勤務予定(`employee_calendar_entries.schedule_state`が`OFF`)の
    うち、最も遅い日を自動的に法定休日とみなす
 3. 週内に休みの予定が1日も無い場合は法定休日を解決できない(UC-C005で警告表示)
 

@@ -173,8 +173,9 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 `attendance_months`を作成する。
 
 月内の日次勤怠一覧には、出勤日の実績(`attendance_days`)だけでなく、勤務予定上の休日
-(`employee_calendar_entries.is_working_day=false`)も表示し、レビュー対象に含める。休日は
-実績が無いため`attendance_days`の行を作らず、勤務予定自体が確定情報として扱われる。
+(`employee_calendar_entries.schedule_state`が`OFF`または`LEAVE`)も表示し、レビュー対象に
+含める。休日は実績が無いため`attendance_days`の行を作らず、勤務予定自体が確定情報として
+扱われる。
 
 管理者は自分以外の社員の月次勤怠も`user_id`を指定して参照できる(`GET /attendance/months/{yearMonth}`)。
 対象社員の月次一覧(月選択画面用)は`GET /attendance/months/user/{userId}`で取得する
@@ -185,9 +186,10 @@ UC-A005の日次編集・UC-A012〜UC-A016の打刻ログ操作で管理者に�
 1. 社員が月次勤怠を確認する
 2. エラーがないことを確認する
 3. 対象月内の全日について、実績(`attendance_days`)または勤務予定上の休日
-   (`employee_calendar_entries.is_working_day=false`、シフト未確定の場合は法定休日
-   「決めない方式」の指定含む)のいずれかで状態が確定していることを検証する。どちらも
-   無い日(勤務予定が存在しない、実績も無い日)が1日でもある場合は提出を拒否し
+   (`employee_calendar_entries.schedule_state`が`OFF`または`LEAVE`、シフト未確定の場合は
+   法定休日「決めない方式」の指定含む)のいずれかで状態が確定していることを検証する。
+   `schedule_state=UNASSIGNED`(未割当)の日は確定済み扱いにしない。どちらも無い日
+   (勤務予定が存在しない、実績も無い日)が1日でもある場合は提出を拒否し
    (`DAY_STATUS_UNCONFIRMED`エラー)、日次編集(UC-A005)またはシフト編集で確定させるよう促す
 4. 対象月内に出勤中・休憩中のまま退勤していない日(`attendance_days.status`が`working`/
    `on_break`)が1日でもある場合は提出を拒否し、退勤してから提出するよう促す(打刻漏れ・
@@ -419,12 +421,13 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 `attendance_days.day_classification`は、その勤務日が`working_day`(労働日)/
 `prescribed_holiday`(所定休日)/`legal_holiday`(法定休日)のいずれかを表す派生列である。
 `AttendanceCalculator`が日次計算時に`LegalHolidayResolver`による法定休日判定・
-`employee_calendar_entries.is_company_holiday`から算出し、`attendance_day.calculated`
-イベントのpayloadに含めて`AttendanceDailyCalculationProjector`が保存し直す(他の集計値と同様、
-実績が再編集され日次計算が再実行されるたびに最新化される派生データであり、手で書き換えない)。
-`employee_calendar_entries.day_type`(weekday/legal_holiday/company_holiday/
-special_working_day)とは別に、attendance_days向けに3値へ簡略化したものであり、値そのものは
-時間計算(所定労働・残業・深夜・休日労働等)には影響しない表示・参照用の分類情報である。
+`employee_calendar_entries.schedule_state`(`OFF`/`LEAVE`なら休日側)から算出し、
+`attendance_day.calculated`イベントのpayloadに含めて`AttendanceDailyCalculationProjector`が
+保存し直す(他の集計値と同様、実績が再編集され日次計算が再実行されるたびに最新化される
+派生データであり、手で書き換えない)。`employee_calendar_entries.schedule_state`+
+`is_legal_holiday`とは別に、attendance_days向けに3値(労働日/所定休日/法定休日)へ簡略化した
+ものであり、値そのものは時間計算(所定労働・残業・深夜・休日労働等)には影響しない表示・
+参照用の分類情報である。
 
 ## 週40時間判定(日8時間判定との二重計上排除、参考情報)
 

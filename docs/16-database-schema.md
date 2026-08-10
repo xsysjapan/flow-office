@@ -199,7 +199,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - public_holiday_name(nullable。祝日名)
 - schedule_state(`WORK`=勤務日 / `OFF`=所定休日。会社としての勤務区分判断。祝日=自動的に
   `OFF`ではなく上書き可能)
-- is_legal_holiday(法定休日の事前設定。UC-C005が参照)
+- is_legal_holiday(法定休日の事前設定。UC-C001手順3で登録。固定労働制はこの値をそのまま
+  法定休日として使う。シフト制の法定休日判定は別途`employee_calendar_entries.is_legal_holiday`
+  を使う(UC-C005参照)ため、本カラムはシフト制には使わない)
 - note
 - created_at / updated_at
 
@@ -438,9 +440,13 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
 - is_published (3交代制シフトパターン割当(UC-C004)の下書き/公開フラグ。カレンダー基準の
   一括生成(UC-C003)からの行は常にtrue。シフトパターン日別割当は公開されるまでfalse)
 - is_manually_overridden (UC-C004のシフトパターン個別割当を経由した日はtrue。ローテーション
-  からの一括生成(UC-C008)は、既定(`skip_existing`)では対象日に既に行が存在する時点で
-  スキップするため、このフラグの値に関わらず既存行は自動上書きされない。ローテーション
-  生成自体はfalseのまま書き込む)
+  からの一括生成(UC-C008)は、既定(UC-C008手順6「未編集日のみ再生成する」)では
+  `is_manually_overridden=true`の日だけを保護し、それ以外の既存行(前回のローテーション
+  生成結果)は新しい生成結果で上書きする。`calendar_bulk_operations`経由で実行する場合も
+  `operation_type=rotation_generate`はこのUC-C008固有の判定(行の有無ではなく
+  `is_manually_overridden`の値を見る)を使い、`calendar_apply`/`bulk_edit`の
+  `skip_existing`(行の有無で判定)とは競合判定基準が異なる。ローテーション生成自体は
+  `is_manually_overridden=false`のまま書き込む)
 - schedule_state(`UNASSIGNED`=未割当 / `WORK`=勤務 / `OFF`=休み / `LEAVE`=休暇。固定労働制
   では会社カレンダー日からの例外〔`UNASSIGNED`以外の行〕のみを保持し、シフト制では該当日
   ごとに主データとして保持する)
@@ -547,8 +553,8 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
   出勤日新規作成(UC-A016)で手動選択もできる)
 - day_classification (`working_day`=労働日 / `prescribed_holiday`=所定休日 /
   `legal_holiday`=法定休日。nullable。`AttendanceCalculator`が日次計算のたびに判定・
-  保存し直す派生値で、`employee_calendar_entries.day_type`の3値簡略版。時間計算自体には
-  影響しない。docs/07-usecases-attendance.md「日次勤怠の区分」参照)
+  保存し直す派生値で、`employee_calendar_entries.schedule_state`+`is_legal_holiday`の3値
+  簡略版。時間計算自体には影響しない。docs/07-usecases-attendance.md「日次勤怠の区分」参照)
 - note
 - locked_at
 - created_at / updated_at
