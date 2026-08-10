@@ -46,7 +46,12 @@ FeatureとPermissionのサーバー側ガードが揃うまでは、管理画面
 8. 承認
 9. 締め処理
 
-### Phase 4追加: 会社カレンダー・従業員予定の拡張(UC-C009〜UC-C014)
+### Phase 4追加: 会社カレンダー・従業員予定の拡張(UC-C009〜UC-C014)【実装済み】
+
+backendでの実装は完了(`php artisan test` 666/666成功)。未実装事項は
+docs/20-implementation-notes.md「会社カレンダー・従業員予定機能で残っている既知の制約・
+未実装事項」を参照(旧カラムの削除・祝日同期の取消・差分確認画面・ICSのRRULE等)。
+フロントエンドの画面はPhase 5で対応する。
 
 1. `company_calendars`(本体)と`company_calendar_years`(年度)の分離、`company_calendar_days`への
    `schedule_state`/`is_public_holiday`の追加(既存`day_type`/`is_working_day`/
