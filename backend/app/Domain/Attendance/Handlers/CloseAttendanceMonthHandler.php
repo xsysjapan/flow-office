@@ -35,10 +35,13 @@ class CloseAttendanceMonthHandler implements CommandHandler
         }
 
         $now = Carbon::now();
+        $periodStart = Carbon::createFromFormat('Y-m-d', "{$month->year_month}-01")->startOfMonth();
+        $periodEnd = $periodStart->copy()->addMonth();
 
         AttendanceDay::query()
             ->where('user_id', $month->user_id)
-            ->where('work_date', 'like', "{$month->year_month}%")
+            ->where('work_date', '>=', $periodStart->toDateString())
+            ->where('work_date', '<', $periodEnd->toDateString())
             ->update(['locked_at' => $now]);
 
         AttendanceMonthAggregate::retrieve($month->id)->close($command->closedByUserId)->persist();
