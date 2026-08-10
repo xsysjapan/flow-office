@@ -6,6 +6,7 @@ use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
+use App\Models\CompanyCalendarDay;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -29,8 +30,18 @@ class GenerateEmployeeCalendarEntriesHandler implements CommandHandler
     {
         assert($command instanceof GenerateEmployeeCalendarEntries);
 
-        $workStyle = WorkStyle::query()->with('calendar.days')->findOrFail($command->workStyleId);
-        $calendarDaysByDate = $workStyle->calendar?->days->keyBy(fn ($day) => $day->date->toDateString()) ?? collect();
+        $workStyle = WorkStyle::query()->findOrFail($command->workStyleId);
+
+        // 会社カレンダー日はcompany_calendar_years配下にあるため、本体(company_calendar_id)
+        // ではなく対象期間が属する年度を経由して取得する(複数年度をまたぐ期間も対応する)。
+        $calendarDaysByDate = $workStyle->company_calendar_id === null
+            ? collect()
+            : CompanyCalendarDay::query()
+                ->whereHas('year', fn ($query) => $query->where('company_calendar_id', $workStyle->company_calendar_id))
+                ->whereDate('date', '>=', $command->from)
+                ->whereDate('date', '<=', $command->to)
+                ->get()
+                ->keyBy(fn ($day) => $day->date->toDateString());
 
         $period = Carbon::parse($command->from)->toPeriod(Carbon::parse($command->to));
         $assignments = collect();

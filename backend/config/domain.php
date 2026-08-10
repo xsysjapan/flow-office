@@ -26,6 +26,7 @@ use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
+use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
@@ -36,6 +37,7 @@ use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
+use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
 use App\Domain\Attendance\Commands\CreateRotationPattern;
 use App\Domain\Attendance\Commands\CreateShiftPattern;
@@ -51,7 +53,7 @@ use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
 use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
-use App\Domain\Attendance\Commands\PublishCompanyCalendar;
+use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
@@ -60,6 +62,7 @@ use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
 use App\Domain\Attendance\Commands\UpdateWorkStyle;
@@ -67,6 +70,7 @@ use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
@@ -77,6 +81,7 @@ use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
+use App\Domain\Attendance\Handlers\CreateCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\CreateDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\CreateRotationPatternHandler;
 use App\Domain\Attendance\Handlers\CreateShiftPatternHandler;
@@ -92,7 +97,7 @@ use App\Domain\Attendance\Handlers\GenerateEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternAttendanceDaysHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationCalendarEntriesHandler;
-use App\Domain\Attendance\Handlers\PublishCompanyCalendarHandler;
+use App\Domain\Attendance\Handlers\PublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
@@ -101,6 +106,7 @@ use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\UnpublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkStyleHandler;
@@ -411,7 +417,10 @@ return [
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 
         CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
-        PublishCompanyCalendar::class => PublishCompanyCalendarHandler::class,
+        CreateCompanyCalendarYear::class => CreateCompanyCalendarYearHandler::class,
+        PublishCompanyCalendarYear::class => PublishCompanyCalendarYearHandler::class,
+        UnpublishCompanyCalendarYear::class => UnpublishCompanyCalendarYearHandler::class,
+        ArchiveCompanyCalendarYear::class => ArchiveCompanyCalendarYearHandler::class,
         UpdateCompanyCalendarDays::class => UpdateCompanyCalendarDaysHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
         CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,

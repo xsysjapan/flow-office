@@ -102,7 +102,7 @@ class FlexSettlementSummaryCalculator
     {
         if ($workStyle->company_calendar_id !== null) {
             return CompanyCalendarDay::query()
-                ->where('calendar_id', $workStyle->company_calendar_id)
+                ->whereHas('year', fn ($query) => $query->where('company_calendar_id', $workStyle->company_calendar_id))
                 ->whereDate('date', '>=', $periodStart->toDateString())
                 ->whereDate('date', '<=', $periodEnd->toDateString())
                 ->where('is_working_day', true)

@@ -31,11 +31,10 @@ class LegalHolidayUndeterminedTest extends TestCase
 
     private function makeCalendar(): CompanyCalendar
     {
-        return CompanyCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
     private function makeUndeterminedWorkStyle(CompanyCalendar $calendar): WorkStyle

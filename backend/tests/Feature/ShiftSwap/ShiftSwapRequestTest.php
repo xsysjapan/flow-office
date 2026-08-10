@@ -27,11 +27,8 @@ class ShiftSwapRequestTest extends TestCase
         string $workTimeSystem = WorkStyle::WORK_TIME_SYSTEM_FIXED,
         string $legalHolidayRule = WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
     ): WorkStyle {
-        $calendar = CompanyCalendar::query()->create([
-            'name' => '2026年度-'.Str::random(6), 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度-'.Str::random(6), 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
 
         return WorkStyle::query()->create([
             'code' => 'fixed-'.Str::random(8), 'name' => '固定勤務', 'work_time_system' => $workTimeSystem,

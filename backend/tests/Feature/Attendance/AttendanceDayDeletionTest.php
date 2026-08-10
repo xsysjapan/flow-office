@@ -209,11 +209,8 @@ class AttendanceDayDeletionTest extends TestCase
         $approver = User::factory()->create();
         $targetDate = '2026-08-10';
 
-        $calendar = CompanyCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,

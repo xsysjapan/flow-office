@@ -4,10 +4,10 @@ namespace App\Domain\Attendance\Commands;
 
 use App\Domain\EventSourcing\Contracts\Command;
 
-class PublishCompanyCalendar implements Command
+class PublishCompanyCalendarYear implements Command
 {
     public function __construct(
-        public readonly string $companyCalendarId,
+        public readonly string $companyCalendarYearId,
         public readonly string $publishedByUserId,
     ) {}
 }

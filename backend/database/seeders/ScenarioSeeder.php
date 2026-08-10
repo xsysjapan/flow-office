@@ -3,9 +3,10 @@
 namespace Database\Seeders;
 
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
+use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
-use App\Domain\Attendance\Commands\PublishCompanyCalendar;
+use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
@@ -105,15 +106,28 @@ class ScenarioSeeder extends Seeder
 
     private function seedCalendar(CommandBus $commandBus, string $adminId, Carbon $month, Carbon $from, Carbon $to): CompanyCalendar
     {
-        $calendar = CompanyCalendar::query()->where('fiscal_year', $month->year)->first();
+        $calendarName = "{$month->year}年度 シナリオテスト用カレンダー";
+        $calendar = CompanyCalendar::query()->where('name', $calendarName)->first();
 
         if ($calendar === null) {
             $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
-                name: "{$month->year}年度 シナリオテスト用カレンダー",
+                name: $calendarName,
+                weekStartsOn: 1,
+                fiscalYearStartMonth: 4,
+                fiscalYearStartDay: 1,
+                createdByUserId: $adminId,
+            ));
+        }
+
+        $year = $calendar->years()->where('fiscal_year', $month->year)->first();
+
+        if ($year === null) {
+            $year = $commandBus->dispatch(new CreateCompanyCalendarYear(
+                companyCalendarId: $calendar->id,
                 fiscalYear: $month->year,
                 startsOn: $from->toDateString(),
                 endsOn: $to->toDateString(),
-                weekStartsOn: 1,
+                generatedFrom: 'manual',
                 createdByUserId: $adminId,
             ));
         }
@@ -135,14 +149,14 @@ class ScenarioSeeder extends Seeder
         }
 
         $commandBus->dispatch(new UpdateCompanyCalendarDays(
-            companyCalendarId: $calendar->id,
+            companyCalendarYearId: $year->id,
             days: $days,
             updatedByUserId: $adminId,
         ));
 
-        if ($calendar->status !== 'published') {
-            $commandBus->dispatch(new PublishCompanyCalendar(
-                companyCalendarId: $calendar->id,
+        if ($year->status !== 'published') {
+            $commandBus->dispatch(new PublishCompanyCalendarYear(
+                companyCalendarYearId: $year->id,
                 publishedByUserId: $adminId,
             ));
         }

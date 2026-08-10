@@ -35,7 +35,10 @@ use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\Attendance\Events\AttendanceSubmissionReminderExcluded;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
-use App\Domain\Attendance\Events\CompanyCalendarPublished;
+use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
+use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
+use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
+use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryAssigned;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPlanChanged;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPublished;
@@ -330,8 +333,11 @@ return [
         'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 
         'company_calendar.created' => CompanyCalendarCreated::class,
-        'company_calendar.days_updated' => CompanyCalendarDaysUpdated::class,
-        'company_calendar.published' => CompanyCalendarPublished::class,
+        'company_calendar_year.created' => CompanyCalendarYearCreated::class,
+        'company_calendar_year.days_updated' => CompanyCalendarDaysUpdated::class,
+        'company_calendar_year.published' => CompanyCalendarYearPublished::class,
+        'company_calendar_year.unpublished' => CompanyCalendarYearUnpublished::class,
+        'company_calendar_year.archived' => CompanyCalendarYearArchived::class,
 
         'work_style.created' => WorkStyleCreated::class,
         'work_style.default_changed' => WorkStyleDefaultChanged::class,

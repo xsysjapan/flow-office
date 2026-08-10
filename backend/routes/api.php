@@ -204,8 +204,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
         ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
 
-    // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C001〜UC-C003) ---
+    // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C009〜UC-C013) ---
     Route::get('/company-calendars', [CompanyCalendarController::class, 'index']);
+    Route::get('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'years']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-calendar-entries', [EmployeeCalendarEntryController::class, 'index'])->middleware('ability:schedule:self:read');
@@ -215,8 +216,11 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'index']);
     Route::middleware('permission:attendance.manage,any')->group(function () {
         Route::post('/company-calendars', [CompanyCalendarController::class, 'store']);
-        Route::post('/company-calendars/{companyCalendar}/publish', [CompanyCalendarController::class, 'publish']);
-        Route::put('/company-calendars/{companyCalendar}/days', [CompanyCalendarController::class, 'putDays']);
+        Route::post('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'storeYear']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/publish', [CompanyCalendarController::class, 'publish']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/unpublish', [CompanyCalendarController::class, 'unpublish']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/archive', [CompanyCalendarController::class, 'archive']);
+        Route::put('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'putDays']);
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);

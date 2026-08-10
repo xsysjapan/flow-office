@@ -79,11 +79,8 @@ class WorkStyleDefaultTest extends TestCase
     public function test_switching_the_default_unsets_the_previous_one_and_syncs_system_settings(): void
     {
         $admin = $this->makeAdmin();
-        $calendar = CompanyCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
 
         $original = $this->actingAs($admin)->postJson('/api/work-styles/default', [])->json();
 

@@ -52,11 +52,8 @@ class AttendancePunchTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = CompanyCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
@@ -393,11 +390,8 @@ class AttendancePunchTest extends TestCase
 
     private function createWorkStyleWithRounding(int $roundingUnitMinutes, string $roundingMode): WorkStyle
     {
-        $calendar = CompanyCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard-'.$roundingMode, 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,

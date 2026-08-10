@@ -10,7 +10,7 @@ use App\Models\CompanyCalendar;
 use Illuminate\Support\Str;
 
 /**
- * UC-C001 手順1: 年度カレンダーを作成する。
+ * UC-C009 手順1: 会社カレンダー本体を作成する。
  *
  * @implements CommandHandler<CreateCompanyCalendar>
  */
@@ -25,10 +25,9 @@ class CreateCompanyCalendarHandler implements CommandHandler
         CompanyCalendarAggregate::retrieve($id)
             ->create(
                 name: $command->name,
-                fiscalYear: $command->fiscalYear,
-                startsOn: $command->startsOn,
-                endsOn: $command->endsOn,
                 weekStartsOn: $command->weekStartsOn,
+                fiscalYearStartMonth: $command->fiscalYearStartMonth,
+                fiscalYearStartDay: $command->fiscalYearStartDay,
                 createdByUserId: $command->createdByUserId,
             )
             ->persist();

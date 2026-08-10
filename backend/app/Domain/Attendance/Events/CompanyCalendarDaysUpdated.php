@@ -5,19 +5,17 @@ namespace App\Domain\Attendance\Events;
 use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
- * company_calendar.days_updated (UC-C001 手順2〜4: 会社休日・祝日・法定/所定休日を一括登録する)。
+ * company_calendar.days_updated (UC-C010: 会社カレンダー日を一括登録・更新する)。
  *
- * `company_calendar_days`はcompany_calendarの子データであり独立した集約を持たない
- * (docs/29-event-sourcing-framework-migration.md「CompanyCalendar」参照。attendance_breaksと
- * 同じ考え方)。1回のPUTリクエストで送られた日別設定をまとめて1イベントとして
- * company_calendar集約に記録する(1日ごとに別集約・別イベントにしていた旧実装から統合。
- * company_calendar_day単体のidを参照する後続コマンドは存在しないため、1件のイベントに
- * まとめても後続操作に支障はない)。
+ * `company_calendar_days`は`company_calendar_years`(年度)の子データであり独立した集約を
+ * 持たない(attendance_breaksと同じ考え方)。集約ID(aggregateRootUuid)は
+ * `company_calendar_years.id`。1回のPUTリクエストで送られた日別設定をまとめて1イベントとして
+ * company_calendar_year集約に記録する。
  */
 class CompanyCalendarDaysUpdated extends ShouldBeStored
 {
     /**
-     * @param  list<array{date: string, day_type: string, is_working_day: bool, is_legal_holiday: bool, is_company_holiday: bool, note: ?string}>  $days
+     * @param  list<array{date: string, day_type: string, is_working_day: bool, is_legal_holiday: bool, is_company_holiday: bool, is_public_holiday?: bool, public_holiday_name?: ?string, schedule_state?: string, note: ?string}>  $days
      */
     public function __construct(
         public readonly array $days,

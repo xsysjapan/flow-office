@@ -19,6 +19,9 @@ class CompanyCalendarDayResource extends JsonResource
             'is_working_day' => $this->is_working_day,
             'is_legal_holiday' => $this->is_legal_holiday,
             'is_company_holiday' => $this->is_company_holiday,
+            'is_public_holiday' => $this->is_public_holiday,
+            'public_holiday_name' => $this->public_holiday_name,
+            'schedule_state' => $this->schedule_state,
             'note' => $this->note,
         ];
     }

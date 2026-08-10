@@ -8,10 +8,9 @@ class CreateCompanyCalendar implements Command
 {
     public function __construct(
         public readonly string $name,
-        public readonly int $fiscalYear,
-        public readonly string $startsOn,
-        public readonly string $endsOn,
         public readonly int $weekStartsOn,
+        public readonly int $fiscalYearStartMonth,
+        public readonly int $fiscalYearStartDay,
         public readonly string $createdByUserId,
     ) {}
 }

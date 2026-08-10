@@ -15,11 +15,10 @@ class CompanyCalendarResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'fiscal_year' => $this->fiscal_year,
-            'starts_on' => $this->starts_on?->toDateString(),
-            'ends_on' => $this->ends_on?->toDateString(),
             'week_starts_on' => $this->week_starts_on,
-            'status' => $this->status,
+            'fiscal_year_start_month' => $this->fiscal_year_start_month,
+            'fiscal_year_start_day' => $this->fiscal_year_start_day,
+            'holiday_calendar_source_id' => $this->holiday_calendar_source_id,
         ];
     }
 }

@@ -942,19 +942,35 @@ export interface WorkCalendarDay {
   is_working_day: boolean;
   is_legal_holiday: boolean;
   is_company_holiday: boolean;
+  is_public_holiday: boolean;
+  public_holiday_name: string | null;
+  schedule_state: "WORK" | "OFF";
   note: string | null;
 }
 
-export type WorkCalendarStatus = "draft" | "published";
-
+// 会社カレンダー本体(docs/08-usecases-calendar-shift.md UC-C009)。年度依存フィールドは
+// WorkCalendarYear側にある(旧: 本体が直接保持していたが分離した)。
 export interface WorkCalendar {
   id: string;
   name: string;
+  week_starts_on: number;
+  fiscal_year_start_month: number;
+  fiscal_year_start_day: number;
+  holiday_calendar_source_id: string | null;
+}
+
+export type WorkCalendarYearStatus = "draft" | "published" | "archived";
+
+export interface WorkCalendarYear {
+  id: string;
+  company_calendar_id: string;
   fiscal_year: number;
   starts_on: string;
   ends_on: string;
-  week_starts_on: number;
-  status: WorkCalendarStatus;
+  status: WorkCalendarYearStatus;
+  generated_from: "manual" | "standard_template";
+  published_at: string | null;
+  published_by_user_id: string | null;
 }
 
 export interface WorkStyle {
