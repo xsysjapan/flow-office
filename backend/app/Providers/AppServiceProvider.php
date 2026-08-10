@@ -10,6 +10,7 @@ use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\LocalAzureProvider;
 use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceMonth;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseItem;
 use App\Models\WorkflowRequest;
@@ -54,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::morphMap([
             'workflow_request' => WorkflowRequest::class,
             'attendance_day' => AttendanceDay::class,
+            'attendance_month' => AttendanceMonth::class,
             'expense_claim' => ExpenseClaim::class,
             'expense_item' => ExpenseItem::class,
         ]);

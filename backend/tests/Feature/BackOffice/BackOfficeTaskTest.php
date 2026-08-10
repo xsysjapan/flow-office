@@ -54,7 +54,7 @@ class BackOfficeTaskTest extends TestCase
      * 月次勤怠確認タスク(attendance_month_confirmation)は人事部(hr_staff)に割り当てるため、
      * hr_staffロールもバックオフィスタスクAPIにアクセスできる必要がある。
      */
-    public function test_hr_staff_can_access_backoffice_tasks(): void
+    public function test_hr_staff_can_access_and_complete_attendance_month_task(): void
     {
         $hrStaff = User::factory()->create();
         $this->assignRole($hrStaff, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
@@ -72,5 +72,11 @@ class BackOfficeTaskTest extends TestCase
         $this->actingAs($hrStaff)->postJson("/api/backoffice-tasks/{$task->id}/assign", [
             'assigned_user_id' => $hrStaff->id,
         ])->assertOk()->assertJsonPath('status', 'in_review');
+
+        $this->actingAs($hrStaff)->postJson("/api/backoffice-tasks/{$task->id}/status", [
+            'status' => 'completed',
+        ])->assertOk()->assertJsonPath('status', 'completed');
+
+        $this->assertDatabaseHas('backoffice_tasks', ['id' => $task->id, 'status' => 'completed']);
     }
 }
