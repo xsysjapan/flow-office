@@ -51,6 +51,7 @@ return new class extends Migration
 
         DB::table('role_assignments')
             ->where('subject_type', 'user')
+            ->orderBy('id')
             ->each(function (object $assignment): void {
                 DB::table('role_user')->updateOrInsert([
                     'user_id' => $assignment->subject_id,

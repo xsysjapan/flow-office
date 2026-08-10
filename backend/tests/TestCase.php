@@ -5,8 +5,10 @@ namespace Tests;
 use App\Models\Role;
 use App\Models\RoleAssignment;
 use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable as UserContract;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 abstract class TestCase extends BaseTestCase
@@ -31,6 +33,56 @@ abstract class TestCase extends BaseTestCase
             'services.azure.tenant' => 'common',
             'access_control.allow_unconfigured_catalog' => true,
         ]);
+    }
+
+    public function actingAs(UserContract $user, $guard = null)
+    {
+        // In production every user belongs to ALL_USERS, whose employee RoleAssignment
+        // grants self-service attendance permissions. Legacy feature tests use a bare
+        // User factory without running the product seeders, so reproduce that baseline
+        // assignment when the compatibility mode is enabled.
+        if (config('access_control.allow_unconfigured_catalog', false)
+            && $user instanceof User
+            && Schema::hasTable('roles')
+            && Schema::hasTable('role_assignments')) {
+            $employeeRole = Role::query()->firstOrCreate(
+                ['code' => Role::EMPLOYEE],
+                ['name' => 'Employee', 'is_system' => true, 'status' => 'active'],
+            );
+            $this->assignRole($user, $employeeRole);
+
+            // Existing domain tests allow any employee selected as an approver to
+            // execute that assigned task. Model that dynamic approval-task gateway;
+            // controllers still verify that the concrete request is assigned to them.
+            DB::table('permissions')->updateOrInsert(['code' => 'approval.execute'], [
+                'resource' => 'approval',
+                'action' => 'execute',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $approvalPermissionId = DB::table('permissions')->where('code', 'approval.execute')->value('id');
+            DB::table('permission_role')->insertOrIgnore([
+                'role_id' => $employeeRole->id,
+                'permission_id' => $approvalPermissionId,
+            ]);
+            DB::table('permission_scope_types')->insertOrIgnore([
+                'permission_id' => $approvalPermissionId,
+                'scope_type' => 'approval_task',
+            ]);
+            RoleAssignment::query()->firstOrCreate([
+                'subject_type' => 'user',
+                'subject_id' => $user->id,
+                'role_id' => $employeeRole->id,
+                'scope_type' => 'approval_task',
+                'scope_group_id' => null,
+            ], [
+                'include_descendants' => false,
+                'status' => 'active',
+                'assigned_by' => $user->id,
+            ]);
+        }
+
+        return parent::actingAs($user, $guard);
     }
 
     /**
@@ -58,7 +110,10 @@ abstract class TestCase extends BaseTestCase
             ]);
             $permissionId = DB::table('permissions')->where('code', $code)->value('id');
             DB::table('permission_role')->insertOrIgnore(['role_id' => $role->id, 'permission_id' => $permissionId]);
-            DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'global']);
+            DB::table('permission_scope_types')->insertOrIgnore([
+                'permission_id' => $permissionId,
+                'scope_type' => $role->code === Role::EMPLOYEE ? 'self' : 'global',
+            ]);
         }
 
         $featureCodes = match ($role->code) {

@@ -260,13 +260,13 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/days/generate-pattern', [AttendanceController::class, 'generateAttendancePattern'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
         Route::get('/days/{attendanceDay}', [AttendanceController::class, 'showDay'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::put('/days/{attendanceDay}', [AttendanceController::class, 'updateDay'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
-        Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation'])->middleware('permission:attendance.update');
-        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay'])->middleware('permission:attendance.update');
-        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store'])->middleware('permission:attendance.update');
+        Route::put('/days/{attendanceDay}/calculation', [AttendanceController::class, 'adjustCalculation'])->middleware('permission:attendance.update,any');
+        Route::delete('/days/{attendanceDay}', [AttendanceController::class, 'destroyDay'])->middleware('permission:attendance.update,any');
+        Route::post('/legal-holiday-designations', [LegalHolidayDesignationController::class, 'store'])->middleware('permission:attendance.update,self');
         Route::get('/months/mine', [AttendanceController::class, 'myMonths'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::get('/months/to-approve', [AttendanceController::class, 'monthsToApprove'])->middleware('permission:approval.execute');
         Route::get('/months/user/{userId}', [AttendanceController::class, 'monthsForUser'])
-            ->middleware('permission:attendance.read');
+            ->middleware('permission:attendance.read,global');
         Route::get('/months/{yearMonth}', [AttendanceController::class, 'month'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::post('/months/{yearMonth}/submit', [AttendanceController::class, 'submitMonth'])->middleware(['ability:attendance:self:submit', 'permission:attendance.update,self']);
     });
@@ -281,12 +281,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::prefix('attendance-punches')->group(function () {
         Route::get('/', [AttendancePunchController::class, 'index'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::post('/', [AttendancePunchController::class, 'store'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
-        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update'])->middleware('permission:attendance.update');
-        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy'])->middleware('permission:attendance.update');
+        Route::put('/{attendancePunch}', [AttendancePunchController::class, 'update'])->middleware('permission:attendance.update,any');
+        Route::delete('/{attendancePunch}', [AttendancePunchController::class, 'destroy'])->middleware('permission:attendance.update,any');
     });
 
     Route::prefix('attendance-months')->group(function () {
-        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth'])->middleware('permission:attendance.read');
+        Route::get('/{attendanceMonth}', [AttendanceController::class, 'showMonth'])->middleware('permission:attendance.read,any');
         Route::post('/{attendanceMonth}/approve', [AttendanceController::class, 'approveMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])

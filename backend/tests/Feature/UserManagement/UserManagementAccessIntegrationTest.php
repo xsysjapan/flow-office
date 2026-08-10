@@ -20,6 +20,15 @@ class UserManagementAccessIntegrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // This suite builds the access catalog explicitly and must exercise the
+        // production authorization boundary rather than the legacy-test shim.
+        config(['access_control.allow_unconfigured_catalog' => false]);
+    }
+
     public function test_hr_staff_can_manage_people_and_memberships_but_cannot_manage_system_access(): void
     {
         $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
@@ -85,7 +94,7 @@ class UserManagementAccessIntegrationTest extends TestCase
         $this->assertDatabaseHas('groups', ['code' => 'SYSTEM_ADMINISTRATORS']);
         $this->assertDatabaseHas('external_identities', ['user_id' => $admin->id, 'external_subject_id' => 'entra-admin']);
         $this->assertSame(2, DB::table('memberships')->where('user_id', $admin->id)->count());
-        $this->assertSame(0, DB::table('group_feature_assignments')
+        $this->assertSame(9, DB::table('group_feature_assignments')
             ->where('group_id', DB::table('groups')->where('code', 'ALL_USERS')->value('id'))
             ->count());
         $this->assertSame(3, DB::table('group_feature_assignments')

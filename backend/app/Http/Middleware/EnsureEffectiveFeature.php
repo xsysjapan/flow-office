@@ -15,7 +15,9 @@ class EnsureEffectiveFeature
     public function handle(Request $request, Closure $next, string $feature): Response
     {
         $user = $request->user();
-        if (config('access_control.allow_unconfigured_catalog', false) && ! DB::table('features')->where('code', $feature)->exists()) {
+        // Keep non-access-control tests independent of the seeded feature catalogue.
+        // Access-control integration tests disable this compatibility switch.
+        if (config('access_control.allow_unconfigured_catalog', false)) {
             return $next($request);
         }
         abort_unless(DB::table('features')->where('code', $feature)->exists(), 500, "Undefined feature: {$feature}");

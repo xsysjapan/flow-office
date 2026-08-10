@@ -15,14 +15,20 @@ class EnsureEffectivePermission
     public function handle(Request $request, Closure $next, string $permission, string $scopeMode = 'resource'): Response
     {
         $user = $request->user();
-        if (config('access_control.allow_unconfigured_catalog', false) && ! DB::table('permissions')->where('code', $permission)->exists()) {
-            return $next($request);
+        if (config('access_control.allow_unconfigured_catalog', false)) {
+            // Missing privileged permissions must remain forbidden instead of
+            // becoming an accidental allow-all when a test has not populated the
+            // catalog. Tests\TestCase supplies the production ALL_USERS baseline.
+            if (! DB::table('permissions')->where('code', $permission)->exists()) {
+                abort(403);
+            }
         }
         abort_unless(DB::table('permissions')->where('code', $permission)->exists(), 500, "Undefined permission: {$permission}");
         $resourceGroupId = $this->routeId($request->route('group') ?? $request->route('scopeGroup'));
         $resourceUserId = $this->routeId($request->route('user') ?? $request->route('userId'));
         $allowed = $user && match ($scopeMode) {
             'any' => $this->resolver->permissions($user)->contains($permission),
+            'global' => $this->resolver->hasGlobalPermission($user, $permission),
             'self' => $this->resolver->hasPermission($user, $permission, $resourceGroupId, $user->id),
             default => $this->resolver->hasPermission($user, $permission, $resourceGroupId, $resourceUserId),
         };
