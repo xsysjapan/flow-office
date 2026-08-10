@@ -8,8 +8,12 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BackOfficeTaskResource;
 use App\Models\BackOfficeTask;
+use App\Models\BackOfficeTaskStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -25,13 +29,14 @@ class BackOfficeTaskController extends Controller
         tags: ['バックオフィス処理'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function indexUnassigned(): AnonymousResourceCollection
+    public function indexUnassigned(Request $request): AnonymousResourceCollection
     {
-        $tasks = BackOfficeTask::query()
+        $data = $this->validateListRequest($request);
+        $tasks = $this->applyListSearch(BackOfficeTask::query(), $data['search'] ?? null)
             ->with('assignee')
             ->whereNull('assigned_user_id')
             ->latest()
-            ->paginate(20);
+            ->paginate($data['per_page'] ?? 20);
 
         return BackOfficeTaskResource::collection($tasks);
     }
@@ -45,11 +50,12 @@ class BackOfficeTaskController extends Controller
     )]
     public function indexMine(Request $request): AnonymousResourceCollection
     {
-        $tasks = BackOfficeTask::query()
+        $data = $this->validateListRequest($request);
+        $tasks = $this->applyListSearch(BackOfficeTask::query(), $data['search'] ?? null)
             ->with('assignee')
             ->where('assigned_user_id', $request->user()->id)
             ->latest()
-            ->paginate(20);
+            ->paginate($data['per_page'] ?? 20);
 
         return BackOfficeTaskResource::collection($tasks);
     }
@@ -113,5 +119,80 @@ class BackOfficeTaskController extends Controller
         ));
 
         return new BackOfficeTaskResource($backOfficeTask->refresh()->load('assignee'));
+    }
+
+    #[OA\Post(
+        path: '/backoffice-tasks/bulk-complete',
+        operationId: 'backofficeTasks.bulkComplete',
+        summary: '自分の担当タスクを一括で完了する',
+        tags: ['バックオフィス処理'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['task_ids'], properties: [new OA\Property(property: 'task_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function bulkComplete(Request $request, CommandBus $commandBus): AnonymousResourceCollection
+    {
+        $data = $request->validate([
+            'task_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'task_ids.*' => ['required', 'string', 'distinct', 'exists:backoffice_tasks,id'],
+        ]);
+
+        $taskIds = $data['task_ids'];
+
+        DB::transaction(function () use ($request, $commandBus, $taskIds): void {
+            $tasks = BackOfficeTask::query()
+                ->whereIn('id', $taskIds)
+                ->where('assigned_user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->get();
+
+            if ($tasks->count() !== count($taskIds)) {
+                throw ValidationException::withMessages([
+                    'task_ids' => ['自分に割り当てられていないタスクは一括完了できません。'],
+                ]);
+            }
+
+            foreach ($tasks as $task) {
+                if ($task->status === BackOfficeTaskStatus::COMPLETED) {
+                    continue;
+                }
+
+                $commandBus->dispatch(new ChangeBackOfficeTaskStatus(
+                    backOfficeTaskId: $task->id,
+                    newStatus: BackOfficeTaskStatus::COMPLETED,
+                    changedByUserId: $request->user()->id,
+                    comment: '一覧から一括完了',
+                ));
+            }
+        });
+
+        return BackOfficeTaskResource::collection(
+            BackOfficeTask::query()->with('assignee')->whereIn('id', $taskIds)->get()
+        );
+    }
+
+    /** @return array{search?: string, per_page?: int} */
+    private function validateListRequest(Request $request): array
+    {
+        return $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+    }
+
+    private function applyListSearch(Builder $query, ?string $search): Builder
+    {
+        if ($search === null || trim($search) === '') {
+            return $query;
+        }
+
+        $keyword = '%'.trim($search).'%';
+
+        return $query->where(function (Builder $query) use ($keyword): void {
+            $query->where('title', 'like', $keyword)
+                ->orWhere('task_type', 'like', $keyword)
+                ->orWhere('assigned_department', 'like', $keyword)
+                ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $keyword));
+        });
     }
 }

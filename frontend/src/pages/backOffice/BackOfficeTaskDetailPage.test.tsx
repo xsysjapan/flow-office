@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import * as attendanceApi from '../../api/attendance'
+import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import type { AttendanceMonth, BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
@@ -153,6 +154,26 @@ describe('BackOfficeTaskDetailPage', () => {
       await userEvent.click(await screen.findByRole('button', { name: '締める' }))
 
       await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith('attendance-month-1'))
+    })
+
+    it('downloads CSV and Excel for the attendance month from the task detail', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
+      const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
+
+      renderPage(attendanceMonthTask)
+
+      await userEvent.click(await screen.findByRole('button', { name: 'CSV出力' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Excel出力' }))
+
+      await waitFor(() =>
+        expect(csvSpy).toHaveBeenCalledWith({
+          year_month: ['2026-07'],
+          user_id: ['user-1'],
+          format: 'generic',
+        }),
+      )
+      expect(excelSpy).toHaveBeenCalledWith({ year_month: ['2026-07'], user_id: ['user-1'] })
     })
 
     it('keeps the attendance month visible but hides the 締める button when already closed', async () => {

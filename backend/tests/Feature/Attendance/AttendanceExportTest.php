@@ -145,7 +145,7 @@ class AttendanceExportTest extends TestCase
         $this->actingAs($employee)->get('/api/exports/attendance?year_month=2026-06')->assertForbidden();
     }
 
-    public function test_admin_can_export_attendance_as_excel_with_detail_sheet_for_a_single_employee(): void
+    public function test_admin_can_export_attendance_as_single_sheet_management_report_for_a_single_employee(): void
     {
         $admin = User::factory()->create();
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
@@ -194,9 +194,16 @@ class AttendanceExportTest extends TestCase
         file_put_contents($tmpFile, $response->getContent());
 
         $spreadsheet = IOFactory::load($tmpFile);
-        $this->assertSame(['月次サマリ', '日別明細'], $spreadsheet->getSheetNames());
-        $this->assertSame('社員名', $spreadsheet->getSheet(0)->getCell('B1')->getValue());
-        $this->assertSame('締め済み社員', $spreadsheet->getSheet(0)->getCell('B2')->getValue());
+        $sheet = $spreadsheet->getSheet(0);
+        $this->assertSame(['勤怠管理表'], $spreadsheet->getSheetNames());
+        $this->assertSame('2026年6月度 勤怠管理表', $sheet->getCell('A2')->getValue());
+        $this->assertSame('社員番号', $sheet->getCell('G1')->getValue());
+        $this->assertSame('氏名', $sheet->getCell('G4')->getValue());
+        $this->assertSame('締め済み社員', $sheet->getCell('I4')->getValue());
+        $this->assertSame('日', $sheet->getCell('A12')->getValue());
+        $this->assertSame('09:00', $sheet->getCell('C27')->getValue());
+        $this->assertSame('000000', $sheet->getStyle('A2')->getFont()->getColor()->getRGB());
+        $this->assertSame('000000', $sheet->getStyle('A12')->getFont()->getColor()->getRGB());
 
         unlink($tmpFile);
 
@@ -246,7 +253,7 @@ class AttendanceExportTest extends TestCase
             file_put_contents($tmpXlsx, $xlsxContents);
 
             $spreadsheet = IOFactory::load($tmpXlsx);
-            $this->assertSame(['月次サマリ', '日別明細'], $spreadsheet->getSheetNames());
+            $this->assertSame(['勤怠管理表'], $spreadsheet->getSheetNames());
 
             unlink($tmpXlsx);
         }

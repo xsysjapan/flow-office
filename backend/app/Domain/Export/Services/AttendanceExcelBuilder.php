@@ -2,201 +2,249 @@
 
 namespace App\Domain\Export\Services;
 
+use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
-use App\Models\DayClassification;
-use Illuminate\Support\Collection;
+use App\Models\EmployeeShiftAssignment;
+use App\Models\PaidLeaveGrant;
+use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-/**
- * UC-E001: 勤怠実績Excel出力(docs/14-usecases-export.md)。
- * ExportController::attendance()と同じデータソース(AttendanceMonth.snapshot_json /
- * AttendanceDay + AttendanceDailyCalculation)、同じ対象月抽出ロジック・権限チェックを流用し、
- * 見た目を整えた.xlsxファイルとして組み立てる。
- *
- * 対象社員1名分のワークブックは常に「月次サマリ」(1行)+「日別明細」の2シート構成
- * (buildForMonth())。対象社員が複数の場合、ExportController側でbuildForMonth()を
- * 社員ごとに呼び出し、ZIPにまとめて返す。
- */
+/** 添付見本に合わせた、社員1名・1か月・1シートの勤怠管理表を生成する。 */
 class AttendanceExcelBuilder
 {
-    private const HEADER_FILL_COLOR = '1F2937';
+    private const FONT_COLOR = '000000';
 
-    private const HEADER_FONT_COLOR = 'FFFFFF';
+    private const HEADER_FILL_COLOR = 'D9D9D9';
 
-    private const ZEBRA_FILL_COLOR = 'F3F4F6';
+    private const SUBHEADER_FILL_COLOR = 'EEEEEE';
 
-    private const BORDER_COLOR = 'D1D5DB';
+    private const BORDER_COLOR = '000000';
 
-    /** Excelの経過時間表示(24時間を超えても「◯時間◯分」で表示する)。 */
-    private const TIME_FORMAT = '[h]"時間"mm"分"';
+    private const TIME_FORMAT = '[h]:mm';
 
     private const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
-    private const DAY_CLASSIFICATION_LABELS = [
-        DayClassification::WORKING_DAY => '平日',
-        DayClassification::PRESCRIBED_HOLIDAY => '所定休日',
-        DayClassification::LEGAL_HOLIDAY => '法定休日',
-    ];
+    public function __construct(private readonly WorkStyleFallbackResolver $workStyleResolver) {}
 
-    /**
-     * 対象社員1名分のワークブックを組み立てる。「月次サマリ」(対象社員1行)+
-     * 「日別明細」(対象月のAttendanceDay+AttendanceDailyCalculationを日付順に1日1行)の
-     * 2シート構成。対象社員が複数いる場合はExportController側で社員ごとにこのメソッドを
-     * 呼び出し、ZIPにまとめる。
-     */
     public function buildForMonth(AttendanceMonth $month, string $yearMonth): Spreadsheet
     {
+        $month->loadMissing('user');
         $spreadsheet = new Spreadsheet;
         $spreadsheet->getProperties()
-            ->setTitle('勤怠実績 '.$yearMonth.' '.($month->user?->name ?? $month->user_id))
+            ->setTitle('勤怠管理表 '.$yearMonth.' '.($month->user?->name ?? $month->user_id))
             ->setCreator('flow-office');
 
-        $summarySheet = $spreadsheet->getActiveSheet();
-        $summarySheet->setTitle('月次サマリ');
-        $this->buildSummarySheet($summarySheet, collect([$month]), $yearMonth);
-
-        $detailSheet = $spreadsheet->createSheet();
-        $detailSheet->setTitle('日別明細');
-        $this->buildDetailSheet($detailSheet, $month, $yearMonth);
-
-        $spreadsheet->setActiveSheetIndex(0);
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('勤怠管理表');
+        $this->buildReportSheet($sheet, $month, $yearMonth);
 
         return $spreadsheet;
     }
 
-    /**
-     * 対象月次が0件の場合(該当社員なし)に、空の「月次サマリ」シートのみのワークブックを
-     * 返す。
-     */
     public function buildEmpty(string $yearMonth): Spreadsheet
     {
         $spreadsheet = new Spreadsheet;
-        $spreadsheet->getProperties()
-            ->setTitle('勤怠実績 '.$yearMonth)
-            ->setCreator('flow-office');
-
-        $summarySheet = $spreadsheet->getActiveSheet();
-        $summarySheet->setTitle('月次サマリ');
-        $this->buildSummarySheet($summarySheet, collect(), $yearMonth);
+        $spreadsheet->getProperties()->setTitle('勤怠管理表 '.$yearMonth)->setCreator('flow-office');
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('勤怠管理表');
+        $this->configurePage($sheet);
+        $sheet->mergeCells('A2:K3');
+        $sheet->setCellValue('A2', $this->yearMonthTitle($yearMonth).' 勤怠管理表');
+        $sheet->getStyle('A1:K3')->getFont()->getColor()->setRGB(self::FONT_COLOR);
 
         return $spreadsheet;
     }
 
-    /**
-     * @param  Collection<int, AttendanceMonth>  $months
-     */
-    private function buildSummarySheet(Worksheet $sheet, Collection $months, string $yearMonth): void
+    private function buildReportSheet(Worksheet $sheet, AttendanceMonth $month, string $yearMonth): void
     {
-        $headers = [
-            '社員ID', '社員名', '対象月', '所定労働時間', '実労働時間',
-            '法定内残業', '法定外残業', '深夜労働時間', '法定休日労働', '所定休日労働',
-        ];
-        $timeColumns = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
-
-        $sheet->fromArray($headers, null, 'A1');
-        $this->styleHeaderRow($sheet, 'A1:J1');
-
-        $row = 2;
-        foreach ($months as $month) {
-            $snapshot = $month->snapshot_json ?? [];
-
-            $sheet->setCellValue("A{$row}", $month->user_id);
-            $sheet->setCellValue("B{$row}", $month->user?->name);
-            $sheet->setCellValue("C{$row}", $yearMonth);
-            $sheet->setCellValue("D{$row}", $this->minutesToExcelTime($snapshot['prescribed_work_minutes'] ?? 0));
-            $sheet->setCellValue("E{$row}", $this->minutesToExcelTime($snapshot['work_minutes'] ?? 0));
-            $sheet->setCellValue("F{$row}", $this->minutesToExcelTime($snapshot['statutory_within_overtime_minutes'] ?? 0));
-            $sheet->setCellValue("G{$row}", $this->minutesToExcelTime($snapshot['statutory_excess_overtime_minutes'] ?? 0));
-            $sheet->setCellValue("H{$row}", $this->minutesToExcelTime($snapshot['late_night_work_minutes'] ?? 0));
-            $sheet->setCellValue("I{$row}", $this->minutesToExcelTime($snapshot['legal_holiday_work_minutes'] ?? 0));
-            $sheet->setCellValue("J{$row}", $this->minutesToExcelTime($snapshot['prescribed_holiday_work_minutes'] ?? 0));
-            $row++;
-        }
-
-        $lastRow = max($row - 1, 2);
-        $sheet->getStyle('D2:J'.$lastRow)->getNumberFormat()->setFormatCode(self::TIME_FORMAT);
-        foreach ($timeColumns as $column) {
-            $sheet->getStyle("{$column}2:{$column}{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-        }
-
-        $this->applyZebraStripes($sheet, 2, $lastRow, 'A', 'J');
-        $this->applyBorders($sheet, 'A1:J'.$lastRow);
-        $this->autoSizeColumns($sheet, 'A', 'J');
-
-        $sheet->setAutoFilter('A1:J1');
-        $sheet->freezePane('A2');
-    }
-
-    private function buildDetailSheet(Worksheet $sheet, AttendanceMonth $month, string $yearMonth): void
-    {
-        $headers = ['日付', '曜日', '区分', '出勤時刻', '退勤時刻', '実働時間', '法定内残業', '法定外残業', '深夜時間', '休日労働', '備考'];
-        $sheet->fromArray($headers, null, 'A1');
-        $this->styleHeaderRow($sheet, 'A1:K1');
-
+        $this->configurePage($sheet);
         $days = AttendanceDay::query()
             ->where('user_id', $month->user_id)
-            ->whereBetween('work_date', [$yearMonth.'-01', date('Y-m-t', strtotime($yearMonth.'-01'))])
-            ->with('calculation')
+            ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
+            ->with(['calculation', 'breaks', 'shiftAssignment'])
             ->orderBy('work_date')
+            ->get()
+            ->keyBy(fn (AttendanceDay $day) => $day->work_date->day);
+
+        $snapshot = $month->snapshot_json ?? [];
+        $workStyle = $this->workStyleResolver->resolveForUser($month->user_id, Carbon::parse($yearMonth.'-01'));
+        $shifts = EmployeeShiftAssignment::query()
+            ->where('user_id', $month->user_id)
+            ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
+            ->where('is_published', true)
             ->get();
 
-        $row = 2;
-        foreach ($days as $day) {
-            $calculation = $day->calculation;
-            $workDate = $day->work_date;
+        $lateCount = $days->filter(fn (AttendanceDay $day) => $this->isLate($day))->count();
+        $earlyCount = $days->filter(fn (AttendanceDay $day) => $this->isEarly($day))->count();
+        $requiredDays = $shifts->isNotEmpty()
+            ? $shifts->where('is_working_day', true)->count()
+            : $days->filter(fn (AttendanceDay $day) => ($day->calculation?->prescribed_work_minutes ?? 0) > 0)->count();
+        $actualDays = $days->filter(fn (AttendanceDay $day) => ($day->calculation?->work_minutes ?? 0) > 0)->count();
+        $paidLeaveDays = (float) ($snapshot['paid_leave_days'] ?? 0);
+        $latestPaidLeaveGrant = PaidLeaveGrant::query()
+            ->where('user_id', $month->user_id)
+            ->whereDate('granted_on', '<=', Carbon::parse($yearMonth.'-01')->endOfMonth())
+            ->latest('granted_on')
+            ->first();
 
-            $sheet->setCellValue("A{$row}", $workDate->toDateString());
-            $sheet->setCellValue("B{$row}", self::WEEKDAY_LABELS[$workDate->dayOfWeek]);
-            $sheet->setCellValue("C{$row}", self::DAY_CLASSIFICATION_LABELS[$day->day_classification] ?? ($day->work_type ?? ''));
-            $sheet->setCellValue("D{$row}", $day->actual_start_at?->format('H:i') ?? '');
-            $sheet->setCellValue("E{$row}", $day->actual_end_at?->format('H:i') ?? '');
-            $sheet->setCellValue("F{$row}", $this->minutesToExcelTime($calculation?->work_minutes ?? 0));
-            $sheet->setCellValue("G{$row}", $this->minutesToExcelTime($calculation?->statutory_within_overtime_minutes ?? 0));
-            $sheet->setCellValue("H{$row}", $this->minutesToExcelTime($calculation?->statutory_excess_overtime_minutes ?? 0));
-            $sheet->setCellValue("I{$row}", $this->minutesToExcelTime($calculation?->late_night_work_minutes ?? 0));
-            $sheet->setCellValue("J{$row}", $this->minutesToExcelTime(($calculation?->legal_holiday_work_minutes ?? 0) + ($calculation?->prescribed_holiday_work_minutes ?? 0)));
-            $sheet->setCellValue("K{$row}", $day->note ?? '');
-            $row++;
-        }
-
-        $lastRow = max($row - 1, 2);
-        $sheet->getStyle('F2:J'.$lastRow)->getNumberFormat()->setFormatCode(self::TIME_FORMAT);
-        foreach (['D', 'E', 'F', 'G', 'H', 'I', 'J'] as $column) {
-            $sheet->getStyle("{$column}2:{$column}{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-        }
-
-        $this->applyZebraStripes($sheet, 2, $lastRow, 'A', 'K');
-        $this->applyBorders($sheet, 'A1:K'.$lastRow);
-        $this->autoSizeColumns($sheet, 'A', 'K');
-
-        $sheet->setAutoFilter('A1:K1');
-        $sheet->freezePane('A2');
-    }
-
-    private function styleHeaderRow(Worksheet $sheet, string $range): void
-    {
-        $sheet->getStyle($range)->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => self::HEADER_FONT_COLOR]],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::HEADER_FILL_COLOR]],
+        $sheet->mergeCells('A2:F3');
+        $sheet->setCellValue('A2', $this->yearMonthTitle($yearMonth).' 勤怠管理表');
+        $sheet->getStyle('A2:F3')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => self::FONT_COLOR]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
-        $sheet->getRowDimension(1)->setRowHeight(22);
-    }
 
-    private function applyZebraStripes(Worksheet $sheet, int $firstRow, int $lastRow, string $firstColumn, string $lastColumn): void
-    {
-        for ($row = $firstRow; $row <= $lastRow; $row++) {
-            if ($row % 2 === 1) {
-                $sheet->getStyle("{$firstColumn}{$row}:{$lastColumn}{$row}")->applyFromArray([
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::ZEBRA_FILL_COLOR]],
-                ]);
+        $employeeRows = [
+            1 => ['社員番号', $month->user?->employee_number ?: $month->user_id],
+            2 => ['勤務形態', $workStyle?->name ?? '未設定'],
+            3 => ['所属部署', $month->user?->department ?? '未設定'],
+            4 => ['氏名', $month->user?->name ?? ''],
+        ];
+        foreach ($employeeRows as $row => [$label, $value]) {
+            $sheet->mergeCells("G{$row}:H{$row}");
+            $sheet->mergeCells("I{$row}:K{$row}");
+            $sheet->setCellValue("G{$row}", $label);
+            $sheet->setCellValue("I{$row}", $value);
+            $this->styleLabel($sheet, "G{$row}:H{$row}");
+            $this->applyBorders($sheet, "G{$row}:K{$row}");
+        }
+
+        $this->writeSummaryRow($sheet, 6, 7, [
+            ['必要出勤日数', $requiredDays],
+            ['実出勤日数', $actualDays],
+            ['欠勤日数', (int) ($snapshot['absence_days'] ?? 0)],
+            ['遅刻回数', $lateCount],
+            ['早退回数', $earlyCount],
+            ['有給取得数', $paidLeaveDays],
+            ['休日出勤日数', (int) (($snapshot['work_days_prescribed_holiday'] ?? 0) + ($snapshot['work_days_legal_holiday'] ?? 0))],
+        ]);
+
+        $overtimeMinutes = (int) ($snapshot['statutory_excess_overtime_minutes'] ?? 0);
+        $this->writeSummaryRow($sheet, 9, 10, [
+            ['時間外労働時間合計', $this->minutesToExcelTime($overtimeMinutes), true],
+            ['休日労働時間合計', $this->minutesToExcelTime((int) (($snapshot['legal_holiday_work_minutes'] ?? 0) + ($snapshot['prescribed_holiday_work_minutes'] ?? 0))), true],
+            ['月45時間超確認', $overtimeMinutes > 2700 ? '有' : '無'],
+            ['有給休暇基準日', $latestPaidLeaveGrant?->granted_on?->format('Y年m月d日') ?? '-'],
+            ['年5日取得確認', $paidLeaveDays >= 5 ? '済' : '未'],
+        ]);
+
+        $headerRow = 12;
+        $headers = ['日', '曜日', '始業時間', '終業時間', '所定内', '時間外', '休憩', '遅刻', '早退', '欠勤', '備考'];
+        $sheet->fromArray($headers, null, "A{$headerRow}");
+        $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => self::FONT_COLOR]],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::HEADER_FILL_COLOR]],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+        ]);
+
+        $daysInMonth = Carbon::parse($yearMonth.'-01')->daysInMonth;
+        for ($dayNumber = 1; $dayNumber <= $daysInMonth; $dayNumber++) {
+            $row = $headerRow + $dayNumber;
+            /** @var AttendanceDay|null $day */
+            $day = $days->get($dayNumber);
+            $date = Carbon::parse(sprintf('%s-%02d', $yearMonth, $dayNumber));
+            $calculation = $day?->calculation;
+            $breakMinutes = $day?->breaks->sum(function ($break): int {
+                if ($break->break_start_at === null || $break->break_end_at === null) {
+                    return 0;
+                }
+
+                return (int) $break->break_start_at->diffInMinutes($break->break_end_at);
+            }) ?? 0;
+            $overtime = ($calculation?->statutory_within_overtime_minutes ?? 0)
+                + ($calculation?->statutory_excess_overtime_minutes ?? 0);
+
+            $sheet->fromArray([
+                $dayNumber,
+                self::WEEKDAY_LABELS[$date->dayOfWeek],
+                $day?->actual_start_at?->format('H:i') ?? '',
+                $day?->actual_end_at?->format('H:i') ?? '',
+                $calculation ? $this->minutesToExcelTime((int) $calculation->prescribed_work_minutes) : '',
+                $calculation ? $this->minutesToExcelTime((int) $overtime) : '',
+                $day ? $this->minutesToExcelTime($breakMinutes) : '',
+                $day && $this->isLate($day) ? '○' : '',
+                $day && $this->isEarly($day) ? '○' : '',
+                $calculation && $calculation->absence_minutes > 0 ? '○' : '',
+                $this->dayNote($day),
+            ], null, "A{$row}");
+
+            if ($date->isWeekend()) {
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::SUBHEADER_FILL_COLOR);
             }
         }
+
+        $totalRow = $headerRow + $daysInMonth + 1;
+        $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
+        $sheet->setCellValue("A{$totalRow}", '労働時間合計');
+        $sheet->setCellValue("E{$totalRow}", $this->minutesToExcelTime((int) ($snapshot['prescribed_work_minutes'] ?? 0)));
+        $sheet->setCellValue("F{$totalRow}", $this->minutesToExcelTime($overtimeMinutes));
+        $sheet->getStyle("A{$totalRow}:K{$totalRow}")->getFont()->setBold(true);
+
+        $sheet->getStyle("E13:G{$totalRow}")->getNumberFormat()->setFormatCode(self::TIME_FORMAT);
+        $sheet->getStyle('A1:K'.$totalRow)->getFont()->getColor()->setRGB(self::FONT_COLOR);
+        $sheet->getStyle("A{$headerRow}:K{$totalRow}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("A{$headerRow}:J{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $this->applyBorders($sheet, "A{$headerRow}:K{$totalRow}");
+        $sheet->freezePane('A13');
+        $sheet->getPageSetup()->setPrintArea('A1:K'.$totalRow);
+    }
+
+    /** @param array<int, array{0: string, 1: mixed, 2?: bool}> $items */
+    private function writeSummaryRow(Worksheet $sheet, int $labelRow, int $valueRow, array $items): void
+    {
+        $itemCount = count($items);
+        $columns = $itemCount === 7
+            ? [['A', 'B'], ['C', 'D'], ['E', 'F'], ['G', 'G'], ['H', 'H'], ['I', 'I'], ['J', 'K']]
+            : [['A', 'B'], ['C', 'D'], ['E', 'F'], ['G', 'H'], ['I', 'K']];
+
+        foreach ($items as $index => $item) {
+            [$label, $value] = $item;
+            $isTime = $item[2] ?? false;
+            [$start, $end] = $columns[$index];
+            $sheet->mergeCells("{$start}{$labelRow}:{$end}{$labelRow}");
+            $sheet->mergeCells("{$start}{$valueRow}:{$end}{$valueRow}");
+            $sheet->setCellValue("{$start}{$labelRow}", $label);
+            $sheet->setCellValue("{$start}{$valueRow}", $value);
+            $this->styleLabel($sheet, "{$start}{$labelRow}:{$end}{$labelRow}");
+            $sheet->getStyle("{$start}{$valueRow}:{$end}{$valueRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            if ($isTime) {
+                $sheet->getStyle("{$start}{$valueRow}")->getNumberFormat()->setFormatCode(self::TIME_FORMAT);
+            }
+            $this->applyBorders($sheet, "{$start}{$labelRow}:{$end}{$valueRow}");
+        }
+    }
+
+    private function styleLabel(Worksheet $sheet, string $range): void
+    {
+        $sheet->getStyle($range)->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => self::FONT_COLOR]],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::HEADER_FILL_COLOR]],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+        ]);
+    }
+
+    private function configurePage(Worksheet $sheet): void
+    {
+        foreach (['A' => 4, 'B' => 5, 'C' => 10, 'D' => 10, 'E' => 10, 'F' => 10, 'G' => 9, 'H' => 6, 'I' => 6, 'J' => 6, 'K' => 30] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+        $sheet->getDefaultRowDimension()->setRowHeight(18);
+        $sheet->getParent()?->getDefaultStyle()->getFont()->setName('Yu Gothic')->setSize(9)->getColor()->setRGB(self::FONT_COLOR);
+        $sheet->getPageSetup()
+            ->setOrientation(PageSetup::ORIENTATION_PORTRAIT)
+            ->setPaperSize(PageSetup::PAPERSIZE_A4)
+            ->setFitToWidth(1)
+            ->setFitToHeight(1);
+        $sheet->getPageSetup()->setFitToPage(true);
+        $sheet->getPageMargins()->setTop(0.35)->setBottom(0.35)->setLeft(0.3)->setRight(0.3);
+        $sheet->setShowGridlines(false);
     }
 
     private function applyBorders(Worksheet $sheet, string $range): void
@@ -208,11 +256,40 @@ class AttendanceExcelBuilder
         ]);
     }
 
-    private function autoSizeColumns(Worksheet $sheet, string $firstColumn, string $lastColumn): void
+    private function isLate(AttendanceDay $day): bool
     {
-        foreach (range($firstColumn, $lastColumn) as $column) {
-            $sheet->getColumnDimension($column)->setAutoSize(true);
+        return $day->actual_start_at !== null
+            && $day->shiftAssignment?->planned_start_at !== null
+            && $day->actual_start_at->greaterThan($day->shiftAssignment->planned_start_at);
+    }
+
+    private function isEarly(AttendanceDay $day): bool
+    {
+        return $day->actual_end_at !== null
+            && $day->shiftAssignment?->planned_end_at !== null
+            && $day->actual_end_at->lessThan($day->shiftAssignment->planned_end_at);
+    }
+
+    private function dayNote(?AttendanceDay $day): string
+    {
+        if ($day === null) {
+            return '';
         }
+
+        $leave = match (true) {
+            (float) ($day->calculation?->paid_leave_days ?? 0) > 0 => '有給休暇',
+            (float) ($day->calculation?->special_leave_days ?? 0) > 0 => '特別休暇',
+            default => null,
+        };
+
+        return collect([$leave, $day->note])->filter()->implode(' / ');
+    }
+
+    private function yearMonthTitle(string $yearMonth): string
+    {
+        [$year, $month] = explode('-', $yearMonth);
+
+        return sprintf('%d年%d月度', (int) $year, (int) $month);
     }
 
     private function minutesToExcelTime(int $minutes): float

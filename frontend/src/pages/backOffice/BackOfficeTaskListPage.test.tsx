@@ -8,8 +8,12 @@ import * as usersApi from '../../api/users'
 import type { BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskListPage } from './BackOfficeTaskListPage'
 
-function paginate<T>(data: T[]): Paginated<T> {
-  return { data, meta: { current_page: 1, last_page: 1, total: data.length }, links: { next: null, prev: null } }
+function paginate<T>(data: T[], meta?: Partial<Paginated<T>['meta']>): Paginated<T> {
+  return {
+    data,
+    meta: { current_page: 1, last_page: 1, total: data.length, ...meta },
+    links: { next: null, prev: null },
+  }
 }
 
 function renderPage() {
@@ -145,5 +149,80 @@ describe('BackOfficeTaskListPage', () => {
     await waitFor(() => expect(assignSpy).toHaveBeenCalledTimes(2))
     expect(assignSpy).toHaveBeenCalledWith('backoffice-task-1', 'assignee-1')
     expect(assignSpy).toHaveBeenCalledWith('backoffice-task-3', 'assignee-1')
+  })
+
+  it('searches both task lists and pages them independently', async () => {
+    const task: BackOfficeTask = {
+      id: 'search-task',
+      source_type: 'workflow_request',
+      source_id: '10',
+      task_type: 'business_card',
+      title: '検索対象',
+      status: 'not_started',
+      assigned_department: '総務部',
+      due_on: null,
+      completed_at: null,
+      created_at: '2026-08-01T00:00:00+09:00',
+    }
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks')
+      .mockResolvedValueOnce(paginate([task], { last_page: 2, total: 21 }))
+      .mockResolvedValueOnce(paginate([task], { last_page: 2, total: 21 }))
+      .mockResolvedValue(paginate([task], { current_page: 2, last_page: 2, total: 21 }))
+    const mineSpy = vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage()
+
+    await screen.findByText('検索対象')
+    await userEvent.type(screen.getByRole('textbox', { name: 'タスクを検索' }), '月次勤怠')
+    await userEvent.click(screen.getByRole('button', { name: '検索' }))
+
+    await waitFor(() =>
+      expect(mineSpy).toHaveBeenCalledWith({ search: '月次勤怠', page: 1 }),
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '次のページ' }))
+    await waitFor(() =>
+      expect(backOfficeTasksApi.fetchUnassignedTasks).toHaveBeenCalledWith({ search: '月次勤怠', page: 2 }),
+    )
+  })
+
+  it('selects the current page and bulk-completes my tasks', async () => {
+    const myTasks: BackOfficeTask[] = [
+      {
+        id: 'my-task-1',
+        source_type: 'attendance_month',
+        source_id: 'month-1',
+        task_type: 'attendance_month_confirmation',
+        title: '月次勤怠確認1',
+        status: 'processing',
+        assigned_department: '人事部',
+        due_on: null,
+        completed_at: null,
+        created_at: '2026-08-01T00:00:00+09:00',
+      },
+      {
+        id: 'my-task-2',
+        source_type: 'attendance_month',
+        source_id: 'month-2',
+        task_type: 'attendance_month_confirmation',
+        title: '月次勤怠確認2',
+        status: 'in_review',
+        assigned_department: '人事部',
+        due_on: null,
+        completed_at: null,
+        created_at: '2026-08-02T00:00:00+09:00',
+      },
+    ]
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate([]))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate(myTasks))
+    const completeSpy = vi.spyOn(backOfficeTasksApi, 'bulkCompleteBackOfficeTasks').mockResolvedValue(myTasks)
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'このページのタスクをすべて選択' }))
+    expect(screen.getByText('2件を選択中')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '選択したタスクを完了' }))
+
+    await waitFor(() => expect(completeSpy).toHaveBeenCalledWith(['my-task-1', 'my-task-2']))
   })
 })
