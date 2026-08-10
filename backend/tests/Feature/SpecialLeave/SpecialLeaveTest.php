@@ -19,7 +19,7 @@ class SpecialLeaveTest extends TestCase
     private function actingAsHr(): User
     {
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
 
         return $hr;
     }

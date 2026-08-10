@@ -53,7 +53,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
         $periodEnd = Carbon::parse($periodStart)->endOfMonth()->toDateString();
 
         $aggregate = AttendanceMonthAggregate::retrieve($monthId)
-            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd);
+            ->submit($command->userId, $command->yearMonth, $command->approverUserId, $snapshot, $periodStart, $periodEnd, $command->workflowRequestId);
 
         // attendance_requires_approval=falseの場合、承認ワークフロー無しで提出と同時に
         // 承認不要のまま即時確定する(ExpenseClaimのapproval_skip_thresholdによる

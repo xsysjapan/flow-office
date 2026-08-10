@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\User\Commands\SyncUsersFromMs365;
+use App\Domain\UserManagement\Commands\SyncUsersFromMs365;
 use Illuminate\Console\Command;
 
 /**

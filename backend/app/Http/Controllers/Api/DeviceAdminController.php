@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\AuthenticationKey\Commands\IssueAuthenticationKey;
 use App\Domain\DeviceAdminSession\Commands\EndDeviceAdminSession;
 use App\Domain\DeviceAdminSession\Commands\StartDeviceAdminSession;
@@ -13,7 +14,6 @@ use App\Http\Resources\UserResource;
 use App\Models\AuthenticationKeyType;
 use App\Models\Device;
 use App\Models\DeviceAdminSession;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,17 +38,20 @@ class DeviceAdminController extends Controller
     public function bootstrapEligibility(Request $request): JsonResponse
     {
         $device = $this->currentDevice($request);
-        $device->loadMissing('activatedByUser.roles');
+        $device->loadMissing('activatedByUser');
 
         $activatedBy = $device->activatedByUser;
-        if ($activatedBy !== null && $activatedBy->hasRole(Role::ADMIN)) {
+        $access = app(EffectiveAccessResolver::class);
+        if ($activatedBy !== null && $access->hasGlobalPermission($activatedBy, 'device.manage')) {
             return response()->json([
                 'mode' => 'self',
                 'admin_user' => new UserResource($activatedBy),
             ]);
         }
 
-        $adminUsers = User::query()->whereHas('roles', fn ($q) => $q->where('code', Role::ADMIN))->orderBy('name')->get();
+        $adminUsers = User::query()->orderBy('name')->get()
+            ->filter(fn (User $user) => $access->hasGlobalPermission($user, 'device.manage'))
+            ->values();
 
         return response()->json([
             'mode' => 'select',

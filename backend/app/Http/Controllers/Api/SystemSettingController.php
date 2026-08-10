@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\SystemSettings\Aggregates\SystemSettingsAuditAggregate;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SystemSettingResource;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
+use Ramsey\Uuid\Uuid;
 
 /**
  * UC-003: システム設定を管理する。新規作成するユーザーのデフォルトタイムゾーンなどを保持する
@@ -60,6 +63,7 @@ class SystemSettingController extends Controller
             'compensatory_leave_unit' => ['string', Rule::in(['daily', 'half_day', 'hourly'])],
             'compensatory_leave_half_day_threshold_minutes' => ['nullable', 'integer', 'min:1'],
             'compensatory_leave_valid_days' => ['nullable', 'integer', 'min:1'],
+            'prohibit_self_privileged_role_assignment' => ['boolean'],
         ]);
 
         // クライアントシークレットは画面に平文を出さないため、未入力(送信されない、または空)の場合は
@@ -69,8 +73,26 @@ class SystemSettingController extends Controller
             unset($data['m365_client_secret']);
         }
 
-        $setting = SystemSetting::current();
-        $setting->update($data);
+        $setting = DB::transaction(function () use ($data, $request): SystemSetting {
+            $setting = SystemSetting::current();
+            $before = $setting->only(array_keys($data));
+            $setting->update($data);
+            $after = $setting->fresh()->only(array_keys($data));
+
+            // 秘密値は監査イベントに保存せず、変更の有無だけを残す。
+            foreach (['m365_client_secret'] as $secret) {
+                if (array_key_exists($secret, $before)) {
+                    $before[$secret] = '[REDACTED]';
+                }
+                if (array_key_exists($secret, $after)) {
+                    $after[$secret] = '[REDACTED]';
+                }
+            }
+            $aggregateId = Uuid::uuid5(Uuid::NAMESPACE_URL, 'system-settings')->toString();
+            SystemSettingsAuditAggregate::retrieve($aggregateId)->recordUpdate($before, $after, $request->user()->id)->persist();
+
+            return $setting->fresh();
+        });
 
         return new SystemSettingResource($setting->load('defaultWorkStyle'));
     }

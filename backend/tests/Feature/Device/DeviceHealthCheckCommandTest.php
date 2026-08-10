@@ -45,7 +45,7 @@ class DeviceHealthCheckCommandTest extends TestCase
     public function test_it_queues_a_notification_when_devices_are_stale(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         Device::factory()->create([
             'name' => '疎通が途絶えた端末',

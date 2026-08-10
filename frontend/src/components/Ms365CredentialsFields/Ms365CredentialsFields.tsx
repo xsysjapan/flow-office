@@ -1,24 +1,23 @@
-import { API_BASE_URL } from '../../api/client'
-import { FormField } from '../FormField/FormField'
-import { Checkbox } from '../ui/checkbox'
-import { Input } from '../ui/input'
+import { FormField } from "../FormField/FormField";
+import { Checkbox } from "../ui/checkbox";
+import { Input } from "../ui/input";
 
 export interface Ms365CredentialsFieldsValue {
-  tenantId: string
-  clientId: string
-  clientSecret: string
-  mockEnabled: boolean
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
+  mockEnabled: boolean;
 }
 
 export interface Ms365CredentialsFieldsProps {
   /** フォーム要素のid衝突を避けるための接頭辞(1画面に複数配置しないため通常は固定でよい)。 */
-  idPrefix: string
-  value: Ms365CredentialsFieldsValue
-  onChange: (value: Ms365CredentialsFieldsValue) => void
+  idPrefix: string;
+  value: Ms365CredentialsFieldsValue;
+  onChange: (value: Ms365CredentialsFieldsValue) => void;
   /** 必須項目として表示するか(初回オンボーディングではtrue、設定変更画面ではfalse)。 */
-  required?: boolean
+  required?: boolean;
   /** クライアントシークレットが既に設定済みかどうか(placeholderの表示に使う)。 */
-  clientSecretConfigured?: boolean
+  clientSecretConfigured?: boolean;
 }
 
 /**
@@ -35,7 +34,11 @@ export function Ms365CredentialsFields({
 }: Ms365CredentialsFieldsProps) {
   return (
     <>
-      <FormField label="テナントID" htmlFor={`${idPrefix}-tenant-id`} required={required}>
+      <FormField
+        label="テナントID"
+        htmlFor={`${idPrefix}-tenant-id`}
+        required={required}
+      >
         <Input
           id={`${idPrefix}-tenant-id`}
           value={value.tenantId}
@@ -43,7 +46,11 @@ export function Ms365CredentialsFields({
         />
       </FormField>
 
-      <FormField label="クライアントID" htmlFor={`${idPrefix}-client-id`} required={required}>
+      <FormField
+        label="クライアントID"
+        htmlFor={`${idPrefix}-client-id`}
+        required={required}
+      >
         <Input
           id={`${idPrefix}-client-id`}
           value={value.clientId}
@@ -51,28 +58,30 @@ export function Ms365CredentialsFields({
         />
       </FormField>
 
-      <FormField label="クライアントシークレット" htmlFor={`${idPrefix}-client-secret`} required={required}>
+      <FormField
+        label="クライアントシークレット"
+        htmlFor={`${idPrefix}-client-secret`}
+        required={required}
+      >
         <Input
           id={`${idPrefix}-client-secret`}
           type="password"
-          placeholder={clientSecretConfigured ? '設定済み(変更する場合のみ入力)' : undefined}
+          placeholder={
+            clientSecretConfigured
+              ? "設定済み(変更する場合のみ入力)"
+              : undefined
+          }
           value={value.clientSecret}
           onChange={(e) => onChange({ ...value, clientSecret: e.target.value })}
-        />
-      </FormField>
-
-      <FormField label="リダイレクトURI" htmlFor={`${idPrefix}-redirect-uri`}>
-        <Input
-          id={`${idPrefix}-redirect-uri`}
-          value={`${API_BASE_URL.replace(/\/$/, '')}/auth/microsoft/callback`}
-          readOnly
         />
       </FormField>
 
       <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           checked={value.mockEnabled}
-          onCheckedChange={(checked) => onChange({ ...value, mockEnabled: checked === true })}
+          onCheckedChange={(checked) =>
+            onChange({ ...value, mockEnabled: checked === true })
+          }
         />
         ローカル開発用モックOIDC(mock-oidc)を使う
       </label>
@@ -81,5 +90,5 @@ export function Ms365CredentialsFields({
         (DB初期化)も到達可能になる。
       </p>
     </>
-  )
+  );
 }

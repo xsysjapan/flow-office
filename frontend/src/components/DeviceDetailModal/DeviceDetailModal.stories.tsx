@@ -24,7 +24,6 @@ const baseDevice: Device = {
   disabled_at: null,
   revoked_at: null,
   deleted_at: null,
-  roles: ['attendance_reader'],
   scopes: [],
   created_at: '2026-07-01T00:00:00+09:00',
 }

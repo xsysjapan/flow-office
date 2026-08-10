@@ -24,7 +24,7 @@ class ExpensesExportTest extends TestCase
     public function test_export_includes_only_expense_claim_backoffice_tasks(): void
     {
         $staff = User::factory()->create();
-        $staff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
+        $this->assignRole($staff, Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
         $applicant = User::factory()->create(['name' => '申請者太郎']);
 
         $category = ExpenseCategory::query()->create([

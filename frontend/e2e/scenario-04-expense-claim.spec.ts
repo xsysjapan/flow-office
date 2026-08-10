@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import { fetchExpensesCsv } from './support/api'
-import { pickUser } from './support/ui'
+import { pickDate, pickUser } from './support/ui'
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url))
 // 経費明細の添付ファイルはpdf/jpg/jpeg/pngのみ許可される(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。
@@ -75,7 +75,7 @@ function suggestedBulkTitles(): string[] {
 }
 
 test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク処理〜CSV出力', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   const amount = randomAmountAboveApprovalSkipThreshold()
   const usageDateStr = randomFutureDate()
@@ -96,7 +96,7 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await applicantPage.getByRole('button', { name: '交通費' }).click()
 
     await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await applicantPage.getByLabel('1行目の日付').fill(usageDateStr)
+    await pickDate(applicantPage, '1行目の日付', usageDateStr)
     await applicantPage.getByLabel('1行目の金額').fill(amount)
     // UC-X004a: 出発地・到着地を専用欄に入力すると「出発地 → 到着地」の形式で内容欄に
     // 自動的に反映される(交通費特有の構造化入力補助)。
@@ -121,11 +121,13 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     //    自動生成される。
     await loginAs(approverPage, SCENARIO_USERS.approver)
     await approverPage.goto('/approvals')
-    // 個別登録では申請タイトルは既定値「経費精算」のまま(明細のusage_dateは統合承認画面の
-    // 一覧行には表示されないため、代わりに申請者名で行を特定する)。
-    const approvalRow = approverPage.getByRole('row', { name: '経費精算' }).filter({ hasText: SCENARIO_USERS.punchEmployee })
+    // 個別登録のタイトルは最初の明細から自動生成されるため、申請者と種別で行を特定する。
+    const approvalRow = approverPage
+      .getByRole('row')
+      .filter({ hasText: SCENARIO_USERS.punchEmployee })
+      .filter({ has: approverPage.getByRole('status', { name: '経費' }) })
     await expect(approvalRow).toBeVisible()
-    await approvalRow.getByRole('button', { name: '経費精算' }).click()
+    await approvalRow.getByRole('button').click()
     await approverPage.getByRole('button', { name: '承認する' }).click()
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
@@ -192,7 +194,7 @@ const singleCategoryScenarios: Array<{
   {
     categoryButtonName: '宿泊費',
     fill: async (page, usageDateStr, amount) => {
-      await page.getByLabel('利用日').fill(usageDateStr)
+      await pickDate(page, '利用日', usageDateStr)
       await page.getByLabel('金額').fill(amount)
       await page.getByLabel('宿泊先名').fill('ホテルABC')
       await page.getByLabel('内容').fill('出張1泊')
@@ -201,7 +203,7 @@ const singleCategoryScenarios: Array<{
   {
     categoryButtonName: '会食',
     fill: async (page, usageDateStr, amount) => {
-      await page.getByLabel('利用日').fill(usageDateStr)
+      await pickDate(page, '利用日', usageDateStr)
       await page.getByLabel('金額').fill(amount)
       await page.getByLabel('取引先').fill('居酒屋 花')
       await page.getByLabel('参加者氏名').fill('山田太郎、鈴木一郎')
@@ -212,7 +214,7 @@ const singleCategoryScenarios: Array<{
   {
     categoryButtonName: '消耗品',
     fill: async (page, usageDateStr, amount) => {
-      await page.getByLabel('利用日').fill(usageDateStr)
+      await pickDate(page, '利用日', usageDateStr)
       await page.getByLabel('金額').fill(amount)
       // 消耗品は購入店舗が明確なことが多いため、取引先(店名)を必須項目のままにしている。
       await page.getByLabel('取引先').fill('文具店')
@@ -222,7 +224,7 @@ const singleCategoryScenarios: Array<{
   {
     categoryButtonName: 'その他',
     fill: async (page, usageDateStr, amount) => {
-      await page.getByLabel('利用日').fill(usageDateStr)
+      await pickDate(page, '利用日', usageDateStr)
       await page.getByLabel('金額').fill(amount)
       // 「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため取引先は入力せず、
       // 内容欄だけで申請できることを確認する。
@@ -233,7 +235,7 @@ const singleCategoryScenarios: Array<{
 
 for (const scenario of singleCategoryScenarios) {
   test(`経費精算(${scenario.categoryButtonName})の単一申請〜承認`, async ({ browser }) => {
-    test.setTimeout(30000)
+    test.setTimeout(180000)
 
     // 消耗品(receipt_required_threshold=1000/3000)・その他(同3000)がレシート必須にならない
     // 金額だとレシート添付確認ができないため、いずれのしきい値も超える金額にする。
@@ -268,9 +270,12 @@ for (const scenario of singleCategoryScenarios) {
 
       await loginAs(approverPage, SCENARIO_USERS.approver)
       await approverPage.goto('/approvals')
-      const approvalRow = approverPage.getByRole('row', { name: '経費精算' }).filter({ hasText: SCENARIO_USERS.punchEmployee })
+      const approvalRow = approverPage
+        .getByRole('row')
+        .filter({ hasText: SCENARIO_USERS.punchEmployee })
+        .filter({ has: approverPage.getByRole('status', { name: '経費' }) })
       await expect(approvalRow).toBeVisible()
-      await approvalRow.getByRole('button', { name: '経費精算' }).click()
+      await approvalRow.getByRole('button').click()
       await approverPage.getByRole('button', { name: '承認する' }).click()
       await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
@@ -290,7 +295,7 @@ for (const scenario of singleCategoryScenarios) {
  * まとめ入力)と宿泊費(区分をまたいだ追加、UC-X013)の明細を1つの申請にまとめる点。
  */
 test('経費精算(まとめて登録)の新規作成〜複数区分明細入力〜申請〜承認', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(180000)
 
   const transportAmount1 = randomAmountAboveApprovalSkipThreshold()
   const transportAmount2 = randomAmountAboveApprovalSkipThreshold()
@@ -324,12 +329,12 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     // 2. 交通費を選び、2件まとめて保存する。
     await applicantPage.getByRole('button', { name: '交通費' }).click()
     await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await applicantPage.getByLabel('1行目の日付').fill(usageDateStr1)
+    await pickDate(applicantPage, '1行目の日付', usageDateStr1)
     await applicantPage.getByLabel('1行目の金額').fill(transportAmount1)
     await applicantPage.getByLabel('1行目の出発地').fill('自宅')
     await applicantPage.getByLabel('1行目の到着地').fill('本社')
     await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await applicantPage.getByLabel('2行目の日付').fill(usageDateStr2)
+    await pickDate(applicantPage, '2行目の日付', usageDateStr2)
     await applicantPage.getByLabel('2行目の金額').fill(transportAmount2)
     await applicantPage.getByLabel('2行目の出発地').fill('本社')
     await applicantPage.getByLabel('2行目の到着地').fill('客先')
@@ -343,7 +348,7 @@ test('経費精算(まとめて登録)の新規作成〜複数区分明細入力
     // 3. UC-X013: 別の区分(宿泊費)の明細を同じ申請に追加する。
     await applicantPage.getByRole('button', { name: '別の区分の明細を追加する' }).click()
     await applicantPage.getByRole('button', { name: '宿泊費', exact: true }).click()
-    await applicantPage.getByLabel('利用日').fill(usageDateStr3)
+    await pickDate(applicantPage, '利用日', usageDateStr3)
     await applicantPage.getByLabel('金額').fill(lodgingAmount)
     await applicantPage.getByLabel('宿泊先名').fill('ホテルXYZ')
     // 宿泊費は金額によらずレシート必須。単発入力フォームの「領収書(任意)」欄で

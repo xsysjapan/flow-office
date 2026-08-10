@@ -16,7 +16,7 @@ export interface AttendanceSubmissionReminderExclusionPanelProps {
 
 /**
  * 勤怠未提出督促(WarnUnsubmittedAttendanceHandler)の対象から、特定の年月を個別に
- * 除外する管理機能(role:admin限定)。usage_start_date/hire_dateによる除外条件では
+ * 除外する管理機能。usage_start_date/hire_dateによる除外条件では
  * 対応できない誤送信ケース(例: 実際には利用開始日より前の月を誤って対象にしてしまった)
  * 向けの例外的対応。
  */

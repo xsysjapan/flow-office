@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
@@ -31,7 +32,6 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
 use App\Models\EmployeeShiftAssignment;
-use App\Models\Role;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
@@ -238,7 +238,8 @@ class AttendanceController extends Controller
             return;
         }
 
-        $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
+        $isAdmin = $this->currentTokenHasFullAccess($request)
+            && app(EffectiveAccessResolver::class)->hasGlobalPermission($request->user(), 'attendance.read');
         $isApprover = app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth($request->user()->id, $ownerId, $yearMonths);
 
         abort_if(! $isAdmin && ! $isApprover, 403, $message);
@@ -720,7 +721,7 @@ class AttendanceController extends Controller
      * idで単一の月次勤怠を取得する軽量エンドポイント。バックオフィスタスク(source_id =
      * attendance_months.id)からリンクする際に、対象の社員・対象年月・ステータスだけを
      * 素早く参照するために使う。本人・承認者・管理者に加え、締め処理(close、
-     * role:admin,hr_staff)を行う人事部担当者もバックオフィスタスクから参照する必要が
+     * attendance.read Permissionを持つ人事部担当者もバックオフィスタスクから参照する必要が
      * あるため、hr_staffも許可する。
      */
     #[OA\Get(
@@ -734,8 +735,7 @@ class AttendanceController extends Controller
     public function showMonth(Request $request, AttendanceMonth $attendanceMonth): AttendanceMonthResource
     {
         if ($attendanceMonth->user_id !== $request->user()->id
-            && ! $request->user()->hasRole(Role::ADMIN)
-            && ! $request->user()->hasRole(Role::HR_STAFF)
+            && ! app(EffectiveAccessResolver::class)->hasPermission($request->user(), 'attendance.read', resourceUserId: $attendanceMonth->user_id)
             && ! app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth($request->user()->id, $attendanceMonth->user_id, [$attendanceMonth->year_month])
         ) {
             abort(403, '他の社員の月次勤怠を閲覧する権限がありません。');
@@ -844,7 +844,7 @@ class AttendanceController extends Controller
 
     /**
      * 管理者が対象社員を選んで月次勤怠一覧を確認する(月次・週次・日次の勤怠参照)。
-     * ルート側で`role:admin`ミドルウェアにより制限する。
+     * ルート側で`attendance.update` Permissionにより制限する。
      */
     #[OA\Get(
         path: '/attendance/months/user/{userId}',
@@ -887,7 +887,7 @@ class AttendanceController extends Controller
     public function monthsToApprove(Request $request): AnonymousResourceCollection
     {
         $user = $request->user();
-        $canClose = $user->hasRole(Role::ADMIN) || $user->hasRole(Role::HR_STAFF);
+        $canClose = app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'attendance.update');
 
         $data = $request->validate([
             'status' => ['nullable', Rule::in([AttendanceMonthStatus::SUBMITTED, AttendanceMonthStatus::APPROVED])],

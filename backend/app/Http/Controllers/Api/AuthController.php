@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\User\Commands\CompleteOnboardingSsoLink;
-use App\Domain\User\Commands\LinkSsoAccount;
-use App\Domain\User\Commands\RecordLocalLogin;
-use App\Domain\User\Ms365ConfigResolver;
-use App\Domain\User\SsoAuthenticator;
+use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
+use App\Domain\UserManagement\Commands\LinkSsoAccount;
+use App\Domain\UserManagement\Commands\RecordLocalLogin;
+use App\Domain\UserManagement\Ms365ConfigResolver;
+use App\Domain\UserManagement\SsoAuthenticator;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -130,7 +131,7 @@ class AuthController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['code'], properties: [new OA\Property(property: 'code', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function token(Request $request): JsonResponse
+    public function token(Request $request, EffectiveAccessResolver $access): JsonResponse
     {
         $data = $request->validate(['code' => ['required', 'string']]);
 
@@ -141,12 +142,15 @@ class AuthController extends Controller
             return response()->json(['message' => '無効または期限切れのコードです。'], 422);
         }
 
-        $user = User::query()->with('roles')->findOrFail($userId);
+        $user = User::query()->findOrFail($userId);
+        if (! in_array($user->account_status, ['active', 'leave'], true)) {
+            return response()->json(['message' => 'このアカウントは現在利用できません。'], 403);
+        }
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json([
             'token' => $token,
-            'user' => new UserResource($user),
+            'user' => new UserResource($this->withAccess($user, $access)),
         ]);
     }
 
@@ -167,7 +171,7 @@ class AuthController extends Controller
         ),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function localLogin(Request $request, CommandBus $commandBus): JsonResponse
+    public function localLogin(Request $request, CommandBus $commandBus, EffectiveAccessResolver $access): JsonResponse
     {
         $data = $request->validate([
             'email' => ['required', 'email'],
@@ -179,13 +183,16 @@ class AuthController extends Controller
         if ($user === null || $user->password === null || ! Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'メールアドレスまたはパスワードが正しくありません。'], 422);
         }
+        if (! in_array($user->account_status, ['active', 'leave'], true)) {
+            return response()->json(['message' => 'このアカウントは現在利用できません。'], 403);
+        }
 
         $user = $commandBus->dispatch(new RecordLocalLogin(userId: $user->id));
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json([
             'token' => $token,
-            'user' => new UserResource($user->load('roles')),
+            'user' => new UserResource($this->withAccess($user, $access)),
         ]);
     }
 
@@ -196,9 +203,18 @@ class AuthController extends Controller
         tags: ['認証'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function me(Request $request): UserResource
+    public function me(Request $request, EffectiveAccessResolver $access): UserResource
     {
-        return new UserResource($request->user()->load('roles'));
+        return new UserResource($this->withAccess($request->user(), $access));
+    }
+
+    private function withAccess(User $user, EffectiveAccessResolver $access): User
+    {
+        $user->load('externalIdentities');
+        $user->setAttribute('effective_features', $access->features($user)->all());
+        $user->setAttribute('effective_permissions', $access->permissions($user)->all());
+
+        return $user;
     }
 
     #[OA\Post(

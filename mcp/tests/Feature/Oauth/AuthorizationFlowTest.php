@@ -93,6 +93,7 @@ class AuthorizationFlowTest extends TestCase
 
         Http::fake([
             '*/auth/me' => Http::response(['id' => 1, 'email' => 'yuto.nagano@xsys.co.jp'], 200),
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
         ]);
 
         $mcpResponse = $this->withHeader('Authorization', "Bearer {$accessToken}")

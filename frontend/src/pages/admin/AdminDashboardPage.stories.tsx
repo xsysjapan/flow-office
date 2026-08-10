@@ -4,6 +4,7 @@ import { fn } from 'storybook/test'
 import type { User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { AdminDashboardPage } from './AdminDashboardPage'
+import { adminNavGroups } from '../../components/AdminLayout/adminNavGroups'
 
 const mockUser: User = {
   id: 'user-1',
@@ -13,7 +14,8 @@ const mockUser: User = {
   job_title: '人事担当',
   employment_status: 'active',
   last_login_at: null,
-  roles: ['admin'],
+  effective_features: ['administration.users', 'administration.settings', 'attendance.entry', 'attendance.timesheet', 'workflow.requests', 'paid_leave.requests', 'backoffice.expenses'],
+  effective_permissions: adminNavGroups.flatMap((group) => group.items.flatMap((item) => [item.permission, ...(item.permissions ?? [])].filter((permission): permission is string => Boolean(permission)))),
 }
 
 const mockAuthValue: AuthContextValue = {
@@ -27,7 +29,7 @@ const mockAuthValue: AuthContextValue = {
 
 const hrAuthValue: AuthContextValue = {
   ...mockAuthValue,
-  user: { ...mockUser, roles: ['hr_staff'] },
+  user: { ...mockUser, effective_features: ['administration.users'], effective_permissions: ['user.view', 'group.view'] },
 }
 
 const meta = {

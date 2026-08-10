@@ -1,0 +1,127 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as api from "../api/userManagement";
+
+const useUserManagementMutation = <T>(
+  mutationFn: (input: T) => Promise<unknown>,
+) => {
+  const q = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await q.invalidateQueries({ queryKey: ["user-management"] });
+      await q.invalidateQueries({ queryKey: ["users"] });
+      await q.invalidateQueries({ queryKey: ["access"] });
+    },
+  });
+};
+export const useGroupTypes = () =>
+  useQuery({
+    queryKey: ["user-management", "group-types"],
+    queryFn: api.fetchGroupTypes,
+  });
+export const useManagedGroups = () =>
+  useQuery({
+    queryKey: ["user-management", "groups"],
+    queryFn: api.fetchManagedGroups,
+  });
+export const useExternalIdentities = (enabled = true) =>
+  useQuery({
+    queryKey: ["user-management", "external-identities"],
+    queryFn: api.fetchExternalIdentities,
+    enabled,
+  });
+export const useFieldAuthorities = (enabled = true) =>
+  useQuery({
+    queryKey: ["user-management", "field-authorities"],
+    queryFn: api.fetchFieldAuthorities,
+    enabled,
+  });
+export const useMembershipChangeSets = (
+  enabled = true,
+  filters: Parameters<typeof api.fetchMembershipChangeSets>[0] = {},
+) =>
+  useQuery({
+    queryKey: ["user-management", "membership-change-sets", filters],
+    queryFn: () => api.fetchMembershipChangeSets(filters),
+    enabled,
+  });
+export const useCreateGroup = () => useUserManagementMutation(api.createGroup);
+export const useCreateGroupType = () =>
+  useUserManagementMutation(api.createGroupType);
+export const useUpdateGroupType = () =>
+  useUserManagementMutation(
+    ({
+      id,
+      input,
+    }: {
+      id: number;
+      input: Parameters<typeof api.updateGroupType>[1];
+    }) => api.updateGroupType(id, input),
+  );
+export const useUpdateGroup = () =>
+  useUserManagementMutation(
+    ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Parameters<typeof api.updateGroup>[1];
+    }) => api.updateGroup(id, input),
+  );
+export const useAddMembership = () =>
+  useUserManagementMutation(api.addMembership);
+export const useRemoveMembership = () =>
+  useUserManagementMutation(
+    ({ userId, groupId }: { userId: string; groupId: string }) =>
+      api.removeMembership(userId, groupId),
+  );
+export const useLinkExternalIdentity = () =>
+  useUserManagementMutation(
+    ({
+      userId,
+      input,
+    }: {
+      userId: string;
+      input: Parameters<typeof api.linkExternalIdentity>[1];
+    }) => api.linkExternalIdentity(userId, input),
+  );
+export const useUnlinkExternalIdentity = () =>
+  useUserManagementMutation(api.unlinkExternalIdentity);
+export const useUpdateFieldAuthority = () =>
+  useUserManagementMutation(
+    ({
+      fieldKey,
+      authorityType,
+      provider,
+    }: {
+      fieldKey: string;
+      authorityType: api.FieldAuthority["authority_type"];
+      provider?: string | null;
+    }) => api.updateFieldAuthority(fieldKey, authorityType, provider),
+  );
+export const useScheduleMembershipChange = () =>
+  useUserManagementMutation(api.scheduleMembershipChange);
+export const useApplyMembershipChangeNow = () =>
+  useUserManagementMutation(api.applyMembershipChangeNow);
+export const useCreateMembershipChangeDraft = () =>
+  useUserManagementMutation(api.createMembershipChangeDraft);
+export const useUpdateMembershipChange = () =>
+  useUserManagementMutation(
+    ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: Parameters<typeof api.updateMembershipChange>[1];
+    }) => api.updateMembershipChange(id, input),
+  );
+export const useApplyMembershipChange = () =>
+  useUserManagementMutation(api.applyMembershipChange);
+export const useScheduleExistingMembershipChange = () =>
+  useUserManagementMutation(api.scheduleExistingMembershipChange);
+export const useCancelMembershipChange = () =>
+  useUserManagementMutation(api.cancelMembershipChange);
+export const usePreviewExternalHrCsv = () =>
+  useMutation({ mutationFn: api.previewExternalHrCsv });
+export const useApplyExternalHrImport = () =>
+  useUserManagementMutation(api.applyExternalHrImport);

@@ -39,7 +39,7 @@ class RequestTypeMasterConfigTest extends TestCase
             'eligible_role_codes' => [Role::ADMIN],
         ]);
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $approver = User::factory()->create();
 
         $this->actingAs($admin)->postJson('/api/workflow-requests', [

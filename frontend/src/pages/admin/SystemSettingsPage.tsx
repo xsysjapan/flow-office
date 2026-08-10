@@ -36,6 +36,7 @@ export function SystemSettingsPage() {
   const [shiftSwapRequiresApproval, setShiftSwapRequiresApproval] = useState(true)
   const [attendanceRequiresApproval, setAttendanceRequiresApproval] = useState(true)
   const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
+  const [prohibitSelfPrivilegedRoleAssignment, setProhibitSelfPrivilegedRoleAssignment] = useState(false)
   const [compensatoryLeaveRequiresApproval, setCompensatoryLeaveRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
 
@@ -59,6 +60,7 @@ export function SystemSettingsPage() {
     setShiftSwapRequiresApproval(data.shift_swap_requires_approval)
     setAttendanceRequiresApproval(data.attendance_requires_approval)
     setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
+    setProhibitSelfPrivilegedRoleAssignment(data.prohibit_self_privileged_role_assignment)
     setCompensatoryLeaveRequiresApproval(data.compensatory_leave_requires_approval)
   }, [data])
 
@@ -88,6 +90,7 @@ export function SystemSettingsPage() {
         shift_swap_requires_approval: shiftSwapRequiresApproval,
         attendance_requires_approval: attendanceRequiresApproval,
         expense_claim_requires_approval: expenseClaimRequiresApproval,
+        prohibit_self_privileged_role_assignment: prohibitSelfPrivilegedRoleAssignment,
         compensatory_leave_requires_approval: compensatoryLeaveRequiresApproval,
       },
       {
@@ -232,6 +235,18 @@ export function SystemSettingsPage() {
           }}
         />
         代休の消化申請に承認を必須にする
+      </label>
+
+      <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">特権操作</h3>
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={prohibitSelfPrivilegedRoleAssignment}
+          onCheckedChange={(checked) => {
+            setProhibitSelfPrivilegedRoleAssignment(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        自分自身への特権Role付与を禁止する
       </label>
 
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">Microsoft 365連携設定</h3>

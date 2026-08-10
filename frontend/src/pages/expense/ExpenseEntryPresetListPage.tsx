@@ -1,39 +1,58 @@
-import { Link } from 'react-router-dom'
-import { useAuth } from '../../auth/useAuth'
-import { Badge } from '../../components/Badge/Badge'
-import { Button } from '../../components/Button/Button'
-import { Card } from '../../components/Card/Card'
-import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
-import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
-import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import type { ExpenseEntryPreset, ExpenseEntryPresetVisibility } from '../../api/types'
-import { useDeleteExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
-import { hasAnyRole, ROLE } from '../../utils/roles'
+import { Link } from "react-router-dom";
+import { useAuth } from "../../auth/useAuth";
+import { Badge } from "../../components/Badge/Badge";
+import { Button } from "../../components/Button/Button";
+import { Card } from "../../components/Card/Card";
+import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
+import { LoadingState } from "../../components/LoadingState/LoadingState";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/table";
+import type {
+  ExpenseEntryPreset,
+  ExpenseEntryPresetVisibility,
+} from "../../api/types";
+import {
+  useDeleteExpenseEntryPreset,
+  useExpenseEntryPresets,
+} from "../../hooks/useExpenseEntryPresets";
 
 const visibilityLabel: Record<ExpenseEntryPresetVisibility, string> = {
-  personal: '個人用',
-  company: '全社共有',
-  system: 'システム標準',
-}
+  personal: "個人用",
+  company: "全社共有",
+  system: "システム標準",
+};
 
 /**
  * 「経費精算機能 設計・実装指示書」9〜10: 入力プリセット一覧。個人用は本人のみ編集でき、
  * 全社共有・システム標準は経理・管理者のみ編集できる(書き込みはAPI側でも検証する)。
  */
 export function ExpenseEntryPresetListPage() {
-  const { user } = useAuth()
-  const { data: presets, isLoading, error } = useExpenseEntryPresets()
-  const deletePreset = useDeleteExpenseEntryPreset()
+  const { user } = useAuth();
+  const { data: presets, isLoading, error } = useExpenseEntryPresets();
+  const deletePreset = useDeleteExpenseEntryPreset();
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+  if (isLoading) return <LoadingState />;
+  if (error)
+    return (
+      <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+    );
 
-  const canManageShared = hasAnyRole(user?.roles, [ROLE.ACCOUNTING_STAFF, ROLE.ADMIN])
+  const canManageShared = Boolean(
+    user?.effective_permissions?.includes("expense_preset.manage"),
+  );
   const canEdit = (preset: ExpenseEntryPreset) =>
-    preset.visibility === 'personal' ? preset.owner_user_id === user?.id : canManageShared
+    preset.visibility === "personal"
+      ? preset.owner_user_id === user?.id
+      : canManageShared;
 
-  const list = presets ?? []
+  const list = presets ?? [];
 
   return (
     <Card
@@ -47,7 +66,9 @@ export function ExpenseEntryPresetListPage() {
       {deletePreset.error && <ErrorMessage error={deletePreset.error} />}
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">プリセットはまだありません。</p>
+        <p className="text-sm text-muted-foreground">
+          プリセットはまだありません。
+        </p>
       ) : (
         <Table>
           <TableHeader>
@@ -72,14 +93,24 @@ export function ExpenseEntryPresetListPage() {
                       {preset.name}
                     </Link>
                   ) : (
-                    <span className="font-medium text-foreground">{preset.name}</span>
+                    <span className="font-medium text-foreground">
+                      {preset.name}
+                    </span>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{visibilityLabel[preset.visibility]}</TableCell>
-                <TableCell className="text-muted-foreground">{preset.definition.length}</TableCell>
-                <TableCell className="text-muted-foreground">{preset.usage_count}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {visibilityLabel[preset.visibility]}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {preset.definition.length}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {preset.usage_count}
+                </TableCell>
                 <TableCell>
-                  <Badge tone={preset.is_active ? 'success' : 'neutral'}>{preset.is_active ? '有効' : '無効'}</Badge>
+                  <Badge tone={preset.is_active ? "success" : "neutral"}>
+                    {preset.is_active ? "有効" : "無効"}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   {canEdit(preset) && (
@@ -91,7 +122,10 @@ export function ExpenseEntryPresetListPage() {
                       }
                       title="このプリセットを削除しますか?"
                       description="削除すると元に戻せません。"
-                      isConfirming={deletePreset.isPending && deletePreset.variables === preset.id}
+                      isConfirming={
+                        deletePreset.isPending &&
+                        deletePreset.variables === preset.id
+                      }
                       onConfirm={() => deletePreset.mutate(preset.id)}
                     />
                   )}
@@ -102,5 +136,5 @@ export function ExpenseEntryPresetListPage() {
         </Table>
       )}
     </Card>
-  )
+  );
 }

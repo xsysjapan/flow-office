@@ -30,7 +30,7 @@ const mockAuthValue: AuthContextValue = {
 
 const adminAuthValue: AuthContextValue = {
   ...mockAuthValue,
-  user: { ...mockUser, roles: ['admin'] },
+  user: { ...mockUser, effective_features: ['attendance.entry', 'administration.users'], effective_permissions: ['user.view'] },
 }
 
 const meta = {

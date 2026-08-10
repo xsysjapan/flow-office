@@ -70,6 +70,9 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   `child_process`経由で直接実行する境界条件テストの2本立て
 - `scenario-09-cross-domain.spec.ts` — 同ドキュメント §5 項目14〜16(複数ユースケースの
   月内組み合わせ)に対応
+- `scenario-10-user-management-access.spec.ts` — UserManagementを正本とするGroupType・Group・
+  Membership・ExternalIdentity・所属変更・外部HR取込と、AccessControl側のFeature・Role・
+  Permission・個別利用停止、有効アクセス、StoredEvent監査ログの統合確認
 
 ## 実装状況
 
@@ -128,6 +131,16 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - その他(§5-16): 月次勤怠を締めた後も、同月内に発生した交通費精算・名刺申請の
   バックオフィスタスクが通常どおり完了まで進められることを確認(承認とバックオフィス
   処理が独立したステータス系列であることの回帰確認)
+- ユーザー・グループ・アクセス管理基盤: システムのGroupType・ID/管理元設定・アクセス管理画面と、
+  人事・組織のユーザー・グループ/所属・人事データ連携画面からGroupType・Group・Membership・
+  ExternalIdentity・所属変更下書きを操作でき、Group経由のFeature・Role・Permissionと
+  個別Feature停止が有効アクセスへ即時反映されること、外部HR CSVの差分確認・取込、
+  `stored_events`を直接検索する監査画面へのイベント反映を確認。人事担当者には人事系メニューだけを
+  表示し、アクセス管理・ID/管理元設定の直URLと管理APIを拒否することも確認
+- アクセス境界・ライフサイクル: 製品初期OFF、個別停止時のメニュー・直URL・API拒否、
+  User直接Role・Group Scope・配下・有効期間・Role複製、複数所属のFeature/Permission合成と
+  付与元説明、所属変更の複数一括適用・競合時ロールバック・失敗理由、主要アクセス管理イベントの
+  監査検索、外部HR管理項目の編集拒否・最終同期、無効化後のユーザー詳細・過去勤怠参照を確認
 
 §5-3の実装にあたり、`GET /attendance/months/to-approve`が「自分が承認者かつ
 `submitted`」のみを対象にしており、UC-A011が想定する「管理部(admin・hr_staff)が

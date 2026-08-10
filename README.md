@@ -12,6 +12,24 @@
 
 VSCode Dev Containers または docker compose でローカル環境を構築できる。
 
+### Go Taskでホスト上に起動する
+
+[Task](https://taskfile.dev/)をインストールし、リポジトリルートで次を実行する。
+
+```powershell
+winget install Task.Task
+task install # 初回のみ: Composer/npm依存関係と.envを準備
+task dev
+```
+
+`task dev`はSQLite DBに対して`migrate:fresh --seed`と`ScenarioSeeder`を実行した後、
+backend (`http://localhost:8000`)、frontend (`http://localhost:5173`)、mock-oidc
+(`http://localhost:9000`)を並列起動する。`migrate:fresh`により既存のローカルDBは消去される。
+DBを維持して3サービスだけを再起動する場合は`task start`を使用する。
+
+個別に実行する場合は`task db:init`、`task backend`、`task frontend`、
+`task mock-oidc`を使用できる。起動中の3サービスは`Ctrl+C`でまとめて停止する。
+
 - VSCode: リポジトリを開き「Reopen in Container」を実行する
   (`.devcontainer/devcontainer.json`)。backend・frontendの依存関係インストールと
   モックOIDCサーバーの起動まで自動で行われる。

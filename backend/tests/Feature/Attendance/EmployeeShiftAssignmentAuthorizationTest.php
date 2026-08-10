@@ -28,7 +28,7 @@ class EmployeeShiftAssignmentAuthorizationTest extends TestCase
     public function test_an_admin_can_view_another_employees_shift_assignments(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $other = User::factory()->create();
 
         $this->actingAs($admin)->getJson(

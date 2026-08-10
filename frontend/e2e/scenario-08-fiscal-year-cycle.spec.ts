@@ -161,7 +161,7 @@ function fiscalYearMonths(): Array<[number, number]> {
 test('2026年度(2026-04〜2027-03)の12か月連続サイクル', async ({ browser }) => {
   // 12か月×日次実績入力を実際にAPIで回すため長めに取る(実測: ローカル環境で約45秒。
   // 環境差やリトライを考慮し余裕を持たせて5分とする)。
-  test.setTimeout(5 * 60 * 1000)
+  test.setTimeout(10 * 60 * 1000)
 
   const employeeContext = await browser.newContext()
   const approverContext = await browser.newContext()

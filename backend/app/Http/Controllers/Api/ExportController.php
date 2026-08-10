@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\EventSourcing\EventStore;
-use App\Domain\Export\Events\ExportCreated;
+use App\Domain\Export\Aggregates\ExportAuditAggregate;
 use App\Domain\Export\Services\AttendanceCsv\AttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\FreeeAttendanceCsvFormat;
 use App\Domain\Export\Services\AttendanceCsv\GenericAttendanceCsvFormat;
@@ -46,7 +45,7 @@ class ExportController extends Controller
         parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true), new OA\Parameter(name: 'format', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['generic', 'generic_tsv', 'generic_sjis', 'moneyforward', 'freee']))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function attendance(Request $request, EventStore $eventStore): StreamedResponse
+    public function attendance(Request $request): StreamedResponse
     {
         $data = $this->validateAttendanceExportRequest($request);
         $formatKey = $data['format'] ?? 'generic';
@@ -54,16 +53,7 @@ class ExportController extends Controller
         $months = $this->resolveAttendanceMonths($data);
         $label = $this->yearMonthLabel($data['year_month']);
 
-        $eventStore->append(
-            aggregateType: 'export',
-            aggregateId: (string) Str::uuid(),
-            event: new ExportCreated(
-                exportType: 'attendance_csv',
-                params: $data,
-                requestedByUserId: $request->user()->id,
-                rowCount: $months->count(),
-            ),
-        );
+        $this->recordExport('attendance_csv', $data, $request->user()->id, $months->count());
 
         $filename = $formatKey === 'generic'
             ? 'attendance_'.$label.'.csv'
@@ -102,7 +92,7 @@ class ExportController extends Controller
         parameters: [new OA\Parameter(name: 'year_month', in: 'query', required: true, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string')), style: 'form', explode: true), new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'array', items: new OA\Items(type: 'string', format: 'uuid')), style: 'form', explode: true)],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function attendanceExcel(Request $request, EventStore $eventStore, AttendanceExcelBuilder $builder): Response
+    public function attendanceExcel(Request $request, AttendanceExcelBuilder $builder): Response
     {
         $data = $this->validateAttendanceExportRequest($request);
         $months = $this->resolveAttendanceMonths($data);
@@ -118,16 +108,7 @@ class ExportController extends Controller
             $writer->save('php://output');
             $contents = ob_get_clean();
 
-            $eventStore->append(
-                aggregateType: 'export',
-                aggregateId: (string) Str::uuid(),
-                event: new ExportCreated(
-                    exportType: 'attendance_xlsx',
-                    params: $data,
-                    requestedByUserId: $request->user()->id,
-                    rowCount: $months->count(),
-                ),
-            );
+            $this->recordExport('attendance_xlsx', $data, $request->user()->id, $months->count());
 
             return response($contents, 200, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -137,16 +118,7 @@ class ExportController extends Controller
 
         $response = $this->buildAttendanceExcelZip($months, $label, $builder);
 
-        $eventStore->append(
-            aggregateType: 'export',
-            aggregateId: (string) Str::uuid(),
-            event: new ExportCreated(
-                exportType: 'attendance_xlsx_zip',
-                params: $data,
-                requestedByUserId: $request->user()->id,
-                rowCount: $months->count(),
-            ),
-        );
+        $this->recordExport('attendance_xlsx_zip', $data, $request->user()->id, $months->count());
 
         return $response;
     }
@@ -212,7 +184,7 @@ class ExportController extends Controller
         parameters: [new OA\Parameter(name: 'from', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function expenses(Request $request, EventStore $eventStore): StreamedResponse
+    public function expenses(Request $request): StreamedResponse
     {
         $data = $request->validate([
             'from' => ['required', 'date'],
@@ -234,16 +206,7 @@ class ExportController extends Controller
             ->filter(fn (BackOfficeTask $task) => $task->source instanceof ExpenseClaim)
             ->values();
 
-        $eventStore->append(
-            aggregateType: 'export',
-            aggregateId: (string) Str::uuid(),
-            event: new ExportCreated(
-                exportType: 'expenses_csv',
-                params: $data,
-                requestedByUserId: $request->user()->id,
-                rowCount: $tasks->count(),
-            ),
-        );
+        $this->recordExport('expenses_csv', $data, $request->user()->id, $tasks->count());
 
         return response()->streamDownload(function () use ($tasks) {
             $handle = fopen('php://output', 'w');
@@ -286,6 +249,14 @@ class ExportController extends Controller
             'user_id.*' => ['string', 'exists:users,id'],
             'format' => ['nullable', 'string', 'in:generic,generic_tsv,generic_sjis,moneyforward,freee'],
         ]);
+    }
+
+    /** @param array<string, mixed> $params */
+    private function recordExport(string $exportType, array $params, string $requestedByUserId, int $rowCount): void
+    {
+        ExportAuditAggregate::retrieve((string) Str::uuid())
+            ->record($exportType, $params, $requestedByUserId, $rowCount)
+            ->persist();
     }
 
     /**

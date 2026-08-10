@@ -345,7 +345,7 @@ class AttendancePunchTest extends TestCase
         ])->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)->postJson('/api/attendance-punches', [
             'user_id' => $other->id,

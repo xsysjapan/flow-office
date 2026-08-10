@@ -12,7 +12,6 @@ const sample: User[] = [
     department: '総務部',
     job_title: '主任',
     employment_status: 'active',
-    roles: ['employee', 'general_affairs_staff'],
     last_login_at: '2026-07-08T09:00:00+09:00',
   },
   {
@@ -22,7 +21,6 @@ const sample: User[] = [
     department: '人事部',
     job_title: null,
     employment_status: 'active',
-    roles: [],
     last_login_at: null,
   },
 ]

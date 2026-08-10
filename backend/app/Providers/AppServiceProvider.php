@@ -3,13 +3,12 @@
 namespace App\Providers;
 
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\Notification\GraphMailNotifier;
 use App\Domain\Notification\Notifier;
-use App\Domain\User\Graph\HttpMicrosoftGraphClient;
-use App\Domain\User\Graph\MicrosoftGraphClient;
-use App\Domain\User\LocalAzureProvider;
-use App\Domain\User\Ms365ConfigResolver;
+use App\Domain\UserManagement\Graph\HttpMicrosoftGraphClient;
+use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
+use App\Domain\UserManagement\LocalAzureProvider;
+use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseItem;
@@ -30,7 +29,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(EventStore::class);
         $this->app->singleton(CommandBus::class);
         $this->app->bind(MicrosoftGraphClient::class, HttpMicrosoftGraphClient::class);
         $this->app->bind(Notifier::class, GraphMailNotifier::class);
@@ -41,12 +39,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ProjectStoredEvent は app/Listeners配下にあり、handle()の型ヒットからLaravelの
-        // イベント自動検出で登録されるため、ここで明示登録すると二重登録になる
-        // (未移行ドメイン向け。移行済みドメインのProjector/ReactorはSpatie側の
-        // auto_discover_projectors_and_reactorsで自動検出される。docs/29参照)。
-        // ここでは自動検出の対象外(vendor配下)のみ登録する。
-        //
         // ローカル開発でモックOIDC(mock-oidc/)を使う場合は、実際のEntra IDドライバの代わりに
         // LocalAzureProviderを "azure" ドライバとして登録する(docs/06-usecases-auth.md UC-001)。
         if (Ms365ConfigResolver::mockEnabled()) {

@@ -6,6 +6,7 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use Carbon\CarbonImmutable;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -22,15 +23,26 @@ class BackOfficeTaskAggregate extends AggregateRoot
         string $title,
         ?string $assignedDepartment,
         ?string $dueOn,
+        ?CarbonImmutable $occurredAt = null,
+        array $metaData = [],
     ): self {
-        $this->recordThat(new BackOfficeTaskCreated(
+        $event = new BackOfficeTaskCreated(
             sourceType: $sourceType,
             sourceId: $sourceId,
             taskType: $taskType,
             title: $title,
             assignedDepartment: $assignedDepartment,
             dueOn: $dueOn,
-        ));
+        );
+        if ($metaData !== []) {
+            $event->setMetaData($metaData);
+        }
+        $this->recordThat($event);
+        if ($occurredAt !== null) {
+            // AggregateRoot::recordThat stamps now(), so historical repair must
+            // restore the business occurrence time after recording the event.
+            $event->setCreatedAt($occurredAt);
+        }
 
         return $this;
     }

@@ -51,7 +51,7 @@ const FISCAL_YEAR_BASE = 7000 + Math.floor(Math.random() * 1000)
 async function setUpEmployeeAndAdmin(
   browser: Browser,
   employeeName: string,
-): Promise<{ employeePage: Page; adminPage: Page; userId: number; close: () => Promise<void> }> {
+): Promise<{ employeePage: Page; adminPage: Page; userId: string; close: () => Promise<void> }> {
   const employeeContext = await browser.newContext()
   const adminContext = await browser.newContext()
   const employeePage = await employeeContext.newPage()
@@ -306,7 +306,7 @@ function formatDateUtc(date: Date): string {
 }
 
 /** 法定休日「決めない方式」シナリオ用: 対象週の指定日(日曜)だけ休みにしたカレンダーを作る。 */
-async function createCalendarWithOneRestDay(page: Page, year: number, restDate: string): Promise<{ id: number }> {
+async function createCalendarWithOneRestDay(page: Page, year: number, restDate: string): Promise<{ id: string }> {
   const apiBase = process.env.E2E_API_BASE_URL ?? 'http://localhost:8000/api'
 
   return page.evaluate(

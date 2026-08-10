@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ExpenseClaim\Commands\AddExpenseItem;
@@ -427,7 +428,7 @@ class ExpenseClaimController extends Controller
         abort_unless(
             $user->id === $expenseClaim->employee_id
                 || $user->id === $expenseClaim->approver_user_id
-                || $user->hasRole('admin'),
+                || app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'approval.execute'),
             Response::HTTP_FORBIDDEN,
             'この経費精算を閲覧する権限がありません。'
         );

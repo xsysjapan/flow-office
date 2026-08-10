@@ -11,6 +11,8 @@ use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -252,6 +254,15 @@ class AttendanceFlowTest extends TestCase
             ->where('subject_id', $monthId)
             ->value('id');
 
+        $lockEvent = EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $monthId)
+            ->where('event_class', 'attendance_month.locked')
+            ->firstOrFail();
+        $this->assertSame($workflowRequestId, $lockEvent->event_properties['workflowRequestId']);
+        $this->assertSame($workflowRequestId, DB::table('attendance_locks')
+            ->where('user_id', $employee->id)
+            ->value('workflow_request_id'));
+
         // 承認依頼の通知には、統合承認一覧の該当明細へのリンクが付く。
         $approverNotifications = $this->actingAs($approver)->getJson('/api/notifications/mine')->json('data');
         $this->assertStringEndsWith("/approvals?requestId={$workflowRequestId}", $approverNotifications[0]['detail_url']);
@@ -268,7 +279,7 @@ class AttendanceFlowTest extends TestCase
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
         $this->assertStringEndsWith("/attendance/months/{$yearMonth}", $employeeNotifications[0]['detail_url']);
 
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")
             ->assertOk()->assertJsonPath('status', 'closed');
 
@@ -385,7 +396,7 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $today = Carbon::today($employee->timezone);
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in');
@@ -431,7 +442,7 @@ class AttendanceFlowTest extends TestCase
             ->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $weekResponse = $this->actingAs($admin)->getJson("/api/attendance/week?start_date={$today->toDateString()}&user_id={$other->id}");
         $weekResponse->assertSuccessful();
@@ -499,7 +510,7 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $today = Carbon::today($employee->timezone);
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in');

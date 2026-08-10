@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\User\Ms365ConfigResolver;
+use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;

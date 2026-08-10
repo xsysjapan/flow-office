@@ -22,23 +22,22 @@
 関連イベント: `device.registered`
 関連テーブル: `devices`, `device_roles`
 
-`devices`は`request_types`/`work_styles`と同じ「管理者が設定する参照データ」に分類し
-(`owner_type=organization_shared`の場合)、Command/EventStoreを経由せずEloquentで直接更新する
-運用でもよいが、紛失・盗難時の追跡可能性を重視し、本ドキュメントでは登録・ペアリング・停止・
-失効の主要な状態遷移だけは`device.*`イベントとして`stored_events`に残す方針とする(UC-M003の
-監査ログ画面でそのまま参照できるようにするため)。
+`devices`は`owner_type`にかかわらずCommand/EventStore経由で更新する。登録・ペアリング・停止・
+失効等の状態遷移を`device.*`イベントとして`stored_events`に残し、UC-M003の監査ログ画面から
+直接参照できるようにする。
 
 ## UC-D002: 共有端末をペアリングする
 
 匿名の「ペアリングコード交換」API(誰でも呼び出せる、`device_id`+コードだけで認可する方式)は
-持たない。管理者の認証済みSanctumトークン(`role:admin`)だけを認可根拠にし、その場で
+持たない。`device.pairing.issue` Permissionと`GLOBAL`スコープを持つ管理者の認証済み
+Sanctumトークンだけを認可根拠にし、その場で
 短命な一時トークン(claim token)を発行してQRコードとして端末アプリへ渡す
 「2段階トークン交換」方式を採用する。非対称鍵(端末が鍵ペアを生成しサーバーへ公開鍵を
 登録する方式)は採用せず、既存のSanctum Bearerトークン基盤(トークンの`expires_at`・
 `tokens()->delete()`)に寄せることで新しい署名検証基盤を増やさない。
 
 1. 管理者がUC-D001で登録した端末に対し、一時ペアリングトークン(claim token)を発行する
-   (`POST /devices/{device}/pairing`。`role:admin`ミドルウェアで保護。管理者本人の
+   (`POST /devices/{device}/pairing`。Feature/Permissionガードで保護。管理者本人の
    トークンをそのまま端末へ渡すのではなく、`device:claim-pairing`abilityのみを持つ
    5分間有効なSanctumトークンを新たに発行する。`IssueDevicePairingClaimHandler`)
 2. 管理者の画面がclaim tokenをQRコード(`<claim_url>?claim_token=<token>`という単純な
@@ -214,10 +213,11 @@ Web管理画面からIDを直接入力させるのではなく、共有Android�
 
 1. 端末が`GET /devices/me/admin-bootstrap`を呼び、登録経路を判定する
    - ペアリング時に一時トークン(claim token)を発行した管理者
-     (`devices.activated_by_user_id`)が現在も管理者ロールを持つ場合 → `mode: "self"`
+     (`devices.activated_by_user_id`)が現在も`authentication_key.manage` Permissionを持つ場合
+     → `mode: "self"`
      (この管理者自身のカードとして登録する)
-   - 上記が無い、またはその管理者が既に管理者ロールを外れている場合 → `mode: "select"`
-     (管理者ロールを持つユーザー一覧を返し、端末側でどの管理者のカードかを選ばせる)
+   - 上記が無い、またはその管理者が既に必要なPermissionを失っている場合 → `mode: "select"`
+     (同Permissionを持つユーザー一覧を返し、端末側でどの管理者のカードかを選ばせる)
 2. 端末でNFCをスキャンし、`POST /devices/me/admin-bootstrap/authentication-keys`で
    (`mode: "select"`の場合は対象管理者を指定して)登録する
 3. 登録と同時にその端末を管理者モードにする(`device_admin_sessions`、
@@ -227,7 +227,7 @@ Web管理画面からIDを直接入力させるのではなく、共有Android�
 
 1. 端末で管理者本人の登録済みNFCカードをかざす
    (`POST /devices/me/admin-sessions` に`raw_key_value`を渡す)
-2. 認証キーを解決し、持ち主が管理者ロールを持つことを確認したうえで、管理者モード
+2. 認証キーを解決し、持ち主が`authentication_key.manage` Permissionを持つことを確認したうえで、管理者モード
    (`device_admin_sessions`、有効期限あり)を開始する(source=`nfc_tap`)
 3. 管理者モード中は、社員一覧(`GET /devices/me/admin/users`)・対象社員の既存の
    認証キー一覧(`GET /devices/me/admin/users/{user}/authentication-keys`)を取得し、

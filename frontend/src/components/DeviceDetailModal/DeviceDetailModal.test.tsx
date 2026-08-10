@@ -27,7 +27,6 @@ const device: Device = {
   disabled_at: null,
   revoked_at: null,
   deleted_at: null,
-  roles: ['attendance_reader'],
   scopes: [],
   created_at: '2026-07-01T00:00:00+09:00',
 }
@@ -160,7 +159,7 @@ describe('DeviceDetailModal', () => {
     const user = userEvent.setup()
     const updateRolesSpy = vi
       .spyOn(devicesApi, 'updateDeviceRoles')
-      .mockResolvedValue({ ...device, roles: ['attendance_reader', 'access_control'] })
+      .mockResolvedValue({ ...device })
     renderModal({ roles: ['attendance_reader'] })
 
     await user.click(screen.getByRole('button', { name: '詳細' }))

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ExpenseEntryPresetResource;
 use App\Models\ExpenseEntryPreset;
@@ -62,7 +63,7 @@ class ExpenseEntryPresetController extends Controller
         $user = $request->user();
 
         if ($data['visibility'] !== ExpenseEntryPreset::VISIBILITY_PERSONAL) {
-            abort_unless($user->hasRole('accounting_staff') || $user->hasRole('admin'), Response::HTTP_FORBIDDEN,
+            abort_unless(app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'expense_preset.manage'), Response::HTTP_FORBIDDEN,
                 '全社共有・システム標準プリセットは経理・管理者のみ登録できます。');
             $data['owner_user_id'] = null;
         } else {
@@ -173,7 +174,7 @@ class ExpenseEntryPresetController extends Controller
         $user = $request->user();
 
         if ($preset->visibility !== ExpenseEntryPreset::VISIBILITY_PERSONAL) {
-            abort_unless($user->hasRole('accounting_staff') || $user->hasRole('admin'), Response::HTTP_FORBIDDEN,
+            abort_unless(app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'expense_preset.manage'), Response::HTTP_FORBIDDEN,
                 '全社共有・システム標準プリセットは経理・管理者のみ編集できます。');
 
             return;

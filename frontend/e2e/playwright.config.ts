@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * docs/testing/scenario-tests.md のシナリオを実行するPlaywright E2Eテストの設定。
@@ -14,21 +14,29 @@ import { defineConfig, devices } from '@playwright/test'
  * 実行: cd frontend && npm run test:e2e
  */
 export default defineConfig({
-  testDir: './',
-  testMatch: '**/*.spec.ts',
-  globalSetup: './global-setup.ts',
+  testDir: "./",
+  testMatch: "**/*.spec.ts",
+  globalSetup: "./global-setup.ts",
   fullyParallel: false,
+  // 全シナリオがglobalSetupで作成した同じDBを順番に更新するため、
+  // ファイル間も直列化して状態競合とPHP開発サーバーの輻輳を防ぐ。
+  workers: 1,
+  timeout: 120000,
   retries: 0,
-  reporter: 'list',
+  reporter: "list",
+  expect: {
+    // The PHP development server handles the page's post-mutation query refreshes serially.
+    timeout: 30000,
+  },
   use: {
-    baseURL: process.env.E2E_FRONTEND_URL ?? 'http://localhost:5173',
-    trace: 'retain-on-failure',
+    baseURL: process.env.E2E_FRONTEND_URL ?? "http://localhost:5173",
+    trace: "retain-on-failure",
   },
   projects: [
     {
-      name: 'chromium',
+      name: "chromium",
       use: {
-        ...devices['Desktop Chrome'],
+        ...devices["Desktop Chrome"],
         // 環境によってはPlaywrightが同梱するChromiumのリビジョンと実際に
         // インストール済みのバイナリが一致しないことがある。その場合は
         // `npx playwright install chromium` するか、E2E_CHROMIUM_EXECUTABLE_PATH で
@@ -39,4 +47,4 @@ export default defineConfig({
       },
     },
   ],
-})
+});

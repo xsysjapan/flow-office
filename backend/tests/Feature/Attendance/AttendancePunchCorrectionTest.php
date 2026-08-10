@@ -181,7 +181,7 @@ class AttendancePunchCorrectionTest extends TestCase
             ->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)->putJson("/api/attendance-punches/{$punchId}", [
             'punch_type' => 'clock_in',

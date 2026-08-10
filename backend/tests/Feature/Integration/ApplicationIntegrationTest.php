@@ -57,7 +57,7 @@ class ApplicationIntegrationTest extends TestCase
     public function test_an_admins_personal_integration_token_cannot_access_other_users_data(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $other = User::factory()->create();
 
         // 管理者本人の個人連携トークンであっても、他人の勤怠を閲覧する権限は自動付与しない

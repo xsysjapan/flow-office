@@ -30,6 +30,7 @@ class AttendanceMonthAggregate extends AggregateRoot
         array $snapshot,
         string $periodStartDate,
         string $periodEndDate,
+        ?string $workflowRequestId = null,
     ): self {
         $this->recordThat(new AttendanceMonthSubmitted(
             userId: $userId,
@@ -40,7 +41,7 @@ class AttendanceMonthAggregate extends AggregateRoot
 
         // 提出した月次勤怠(対象月の日次勤怠一式)を編集不可にし、承認者へ開示する
         // (ルートCLAUDE.md「絶対に外してはいけない設計原則」1・原則11の周辺: 提出時ロック・共有)。
-        $this->lock(userId: $userId, periodStartDate: $periodStartDate, periodEndDate: $periodEndDate, lockedByUserId: $userId);
+        $this->lock(userId: $userId, periodStartDate: $periodStartDate, periodEndDate: $periodEndDate, lockedByUserId: $userId, workflowRequestId: $workflowRequestId);
         $this->share(sharedWithUserId: $approverUserId, sharedByUserId: $userId);
 
         return $this;
@@ -49,13 +50,14 @@ class AttendanceMonthAggregate extends AggregateRoot
     /**
      * 対象月の日次勤怠一式を編集不可にする。通常はsubmit()内から呼ばれる。
      */
-    public function lock(string $userId, string $periodStartDate, string $periodEndDate, string $lockedByUserId): self
+    public function lock(string $userId, string $periodStartDate, string $periodEndDate, string $lockedByUserId, ?string $workflowRequestId = null): self
     {
         $this->recordThat(new AttendanceMonthLocked(
             userId: $userId,
             periodStartDate: $periodStartDate,
             periodEndDate: $periodEndDate,
             lockedByUserId: $lockedByUserId,
+            workflowRequestId: $workflowRequestId,
         ));
 
         return $this;

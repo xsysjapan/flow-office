@@ -1,23 +1,30 @@
-import type { ReactNode } from 'react'
-import { useState } from 'react'
-import { Button, type ButtonVariant } from '../Button/Button'
-import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { Button, type ButtonVariant } from "../Button/Button";
+import { ErrorMessage } from "../ErrorMessage/ErrorMessage";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 export interface ConfirmActionDialogProps {
   /** ダイアログを開くトリガーボタンのラベル。 */
-  triggerLabel: string
-  triggerVariant?: ButtonVariant
-  title: string
-  description: ReactNode
-  confirmLabel: string
-  onConfirm: () => void
-  isPending?: boolean
-  error?: unknown
+  triggerLabel: string;
+  triggerVariant?: ButtonVariant;
+  title: string;
+  description: ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void | Promise<unknown>;
+  isPending?: boolean;
+  error?: unknown;
   /** ダイアログの開閉時に呼ばれる(開いた際に呼び出し側のフォーム状態・ミューテーションをリセットする用途)。 */
-  onOpenChange?: (open: boolean) => void
+  onOpenChange?: (open: boolean) => void;
   /** 説明文と確認/キャンセルボタンの間に表示する追加コンテンツ(理由入力欄など)。 */
-  children?: ReactNode
+  children?: ReactNode;
 }
 
 /**
@@ -27,7 +34,7 @@ export interface ConfirmActionDialogProps {
  */
 export function ConfirmActionDialog({
   triggerLabel,
-  triggerVariant = 'danger',
+  triggerVariant = "danger",
   title,
   description,
   confirmLabel,
@@ -37,16 +44,32 @@ export function ConfirmActionDialog({
   onOpenChange,
   children,
 }: ConfirmActionDialogProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleOpenChange = (open: boolean) => {
-    setIsOpen(open)
-    onOpenChange?.(open)
-  }
+    setIsOpen(open);
+    onOpenChange?.(open);
+  };
+
+  const handleConfirm = async () => {
+    try {
+      const result = onConfirm();
+      if (result instanceof Promise) {
+        await result;
+        handleOpenChange(false);
+      }
+    } catch {
+      // The caller supplies the mutation error through `error`; keep the dialog open for retry.
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <Button size="sm" variant={triggerVariant} onClick={() => handleOpenChange(true)}>
+      <Button
+        size="sm"
+        variant={triggerVariant}
+        onClick={() => handleOpenChange(true)}
+      >
         {triggerLabel}
       </Button>
       <DialogContent>
@@ -54,17 +77,23 @@ export function ConfirmActionDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {error !== undefined && error !== null && <ErrorMessage error={error} />}
+        {error !== undefined && error !== null && (
+          <ErrorMessage error={error} />
+        )}
         {children}
         <DialogFooter>
           <Button variant="secondary" onClick={() => handleOpenChange(false)}>
             キャンセル
           </Button>
-          <Button variant="danger" isLoading={isPending} onClick={onConfirm}>
+          <Button
+            variant="danger"
+            isLoading={isPending}
+            onClick={() => void handleConfirm()}
+          >
             {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

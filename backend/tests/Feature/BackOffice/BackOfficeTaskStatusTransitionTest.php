@@ -21,7 +21,7 @@ class BackOfficeTaskStatusTransitionTest extends TestCase
     private function makeStaff(): User
     {
         $staff = User::factory()->create();
-        $staff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
+        $this->assignRole($staff, Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
 
         return $staff;
     }

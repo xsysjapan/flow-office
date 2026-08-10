@@ -2,6 +2,7 @@
 
 namespace App\Domain\Workflow\Handlers;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -18,6 +19,8 @@ use InvalidArgumentException;
  */
 class DraftWorkflowRequestHandler implements CommandHandler
 {
+    public function __construct(private EffectiveAccessResolver $access) {}
+
     public function handle(Command $command): WorkflowRequest
     {
         assert($command instanceof DraftWorkflowRequest);
@@ -58,8 +61,9 @@ class DraftWorkflowRequestHandler implements CommandHandler
             throw new InvalidArgumentException("申請種別 [{$command->requestTypeCode}] は存在しないか無効です。");
         }
 
-        $applicantRoleCodes = User::query()->findOrFail($command->applicantUserId)
-            ->roles()->pluck('code')->all();
+        $applicantRoleCodes = $this->access
+            ->roles(User::query()->findOrFail($command->applicantUserId))
+            ->all();
 
         if (! $requestType->isEligibleForRoles($applicantRoleCodes)) {
             throw new DomainRuleException("申請種別 [{$requestType->name}] を申請する権限がありません。");

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -20,7 +21,6 @@ use App\Models\DeviceOwnerType;
 use App\Models\DeviceRoleType;
 use App\Models\DeviceScopeType;
 use App\Models\DeviceType;
-use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkLocationType;
 use Illuminate\Http\JsonResponse;
@@ -369,7 +369,7 @@ class DeviceController extends Controller
     private function abortUnlessDeviceOwnerOrAdmin(Request $request, Device $device): void
     {
         $user = $request->user();
-        if ($user instanceof User && $user->hasRole(Role::ADMIN)) {
+        if ($user instanceof User && app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'device.manage')) {
             return;
         }
 

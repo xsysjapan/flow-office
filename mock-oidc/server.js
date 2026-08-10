@@ -43,8 +43,9 @@ const FALLBACK_NEW_USERS = [
   },
 ]
 
-// DB接続やbackendが未起動の場合のフォールバック(MOCK_USERS_API_URL未設定時も含む)。
-// docker-compose未使用でmock-oidcだけ単体起動した場合などに、従来通りログインできるようにする。
+// DB接続やbackendが未起動の場合のフォールバック。
+// docker-compose未使用時はローカルbackendを既定値とし、mock-oidcだけ起動した場合も
+// backendへ接続できなければ従来通り静的ユーザーでログインできるようにする。
 const STATIC_USERS = [
   {
     id: 'mock-entra-admin',
@@ -57,17 +58,14 @@ const STATIC_USERS = [
 
 const authCodes = new Map()
 const accessTokens = new Map()
+const usersById = new Map()
 
 /**
  * backendのdev専用エンドポイント(MockOidcUserController)からDB上のユーザー一覧を取得する。
  * 取得できない場合は STATIC_USERS にフォールバックする。
  */
 async function fetchUsers() {
-  const apiUrl = process.env.MOCK_USERS_API_URL
-
-  if (!apiUrl) {
-    return STATIC_USERS
-  }
+  const apiUrl = process.env.MOCK_USERS_API_URL || 'http://localhost:8000/api/dev/mock-users'
 
   try {
     const response = await fetch(apiUrl, { signal: AbortSignal.timeout(3000) })
@@ -157,14 +155,14 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/oauth2/v2.0/authorize') {
     const params = Object.fromEntries(url.searchParams)
     const users = await fetchUsers()
+    users.forEach((user) => usersById.set(user.id, user))
     return sendHtml(res, 200, renderLoginPage(params, users))
   }
 
   if (req.method === 'POST' && url.pathname === '/oauth2/v2.0/authorize') {
     const body = await readBody(req)
     const params = Object.fromEntries(new URLSearchParams(body))
-    const users = await fetchUsers()
-    const user = users.find((u) => u.id === params.user_id)
+    const user = usersById.get(params.user_id)
 
     if (!user || !params.redirect_uri) {
       return sendHtml(res, 400, '<h1>Bad Request</h1><p>user_id または redirect_uri がありません。</p>')
