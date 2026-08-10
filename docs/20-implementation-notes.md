@@ -35,15 +35,19 @@
 - 履歴管理は既存`company_calendars`関連の実装(レガシー自前イベントソーシング、
   `legacy_stored_events`)に揃え、新規spatie方式(`stored_events`)とは混在させない。
 
-## Phase 2実装時のbackendリネーム対象(`work_calendars`/`employee_shift_assignments`系)
+## 本機能着手時のbackendリネーム対象(`work_calendars`/`employee_shift_assignments`系)
+
+(19-implementation-phases.mdの「Phase 4追加」に対応する着手タイミングを指す。19章の
+「Phase 2: 汎用申請」とは無関係)
 
 本ドキュメント群は、既存backend実装が使っている旧テーブル名・旧クラス名
 (`work_calendars`系・`employee_shift_assignments`系)を、新仕様の名称
 (`company_calendars`系・`employee_calendar_entries`系)に統一して記述している。ただし
 本番環境ではカレンダー機能を未使用のため、今回のdocs更新に合わせてbackendの実装(migrations・
-Aggregate・Event・Projector等)を今すぐ変更することはしない。以下は、Phase 2実装時
-(本機能に着手するタイミング)に通常のマイグレーション・クラスリネームでテーブル名・クラス名を
-新名称へ揃えるべき既存ファイルの一覧(本番未使用のため安全に移管できる)。
+Aggregate・Event・Projector等)を今すぐ変更することはしない。以下は、本機能(会社カレンダー・
+従業員予定、19-implementation-phases.md「Phase 4追加」)の実装に着手するタイミングで、
+通常のマイグレーション・クラスリネームでテーブル名・クラス名を新名称へ揃えるべき既存ファイル
+の一覧(本番未使用のため安全に移管できる)。
 
 - `backend/database/migrations/2026_07_09_151953_create_work_calendars_table.php`
 - `backend/database/migrations/2026_07_09_151954_a1_create_work_calendar_days_table.php`
@@ -69,4 +73,4 @@ Aggregate・Event・Projector等)を今すぐ変更することはしない。�
 
 このリネームと合わせて、本ドキュメントで追加した新要件(本体への`fiscal_year_start_month`/
 `fiscal_year_start_day`追加、カレンダー年度定期バッチ生成〔UC-C014〕、`conflict_policy`の
-3択整理〔`skip_existing`/`overwrite`/`fail_on_conflict`〕)もPhase 2実装時に反映する。
+3択整理〔`skip_existing`/`overwrite`/`fail_on_conflict`〕)も、この着手時に反映する。

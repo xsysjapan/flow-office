@@ -37,17 +37,23 @@ Permissionの集合を`Role`として分離する。Roleはユーザーまたは
   `EMPLOYEE` RoleAssignment)に含め、全社員が公開済み(`is_published=true`)の自分の従業員予定
   だけを閲覧できるようにする。他社員分の閲覧には`GROUP`/`GLOBAL`スコープの
   `employee_calendar_entry.read`が必要。
+- UC-C007(法定休日「決めない方式」の指定)は`legal_holiday_designation.manage`で保護する。
+  `SELF`スコープを`ALL_USERS`の基本Permissionに含め、社員本人が自分の週の指定をできるように
+  する。他社員分の指定(UC-C007手順1「管理者が」)には`GROUP`/`GLOBAL`スコープの
+  `legal_holiday_designation.manage`が必要。`employee_calendar_entry.override`とは別の
+  Permissionとする(対象データが`legal_holiday_designations`であり、`employee_calendar_entries`
+  の`schedule_state`自体を書き換える操作ではないため)。
 - カレンダー年度の定期バッチ生成(UC-C014)はユーザー操作を経由しないシステム内部処理のため、
   Permission判定の対象にしない。一方、UC-C011の「今すぐ生成する」(`POST
   /api/onboarding/calendar/generate-now`)は管理者が画面から押す操作であり、
   `company_calendar.manage`を要求する(バッチと同じ生成ロジックを呼ぶだけであることは
   Permission判定を免除する理由にならない)。
-- 会社カレンダー・従業員予定関連の実行結果は、既存`work_calendars`実装に揃えて
+- 会社カレンダー・従業員予定関連の実行結果は、既存`company_calendars`実装に揃えて
   `legacy_stored_events`に記録される(docs/20-implementation-notes.md参照)。現時点の
   `AuditLogController`は`stored_events`(新spatie方式)のみを検索する簡略化がされているため
   (docs/29-event-sourcing-framework-migration.md「監査ログ・申請履歴の再設計」参照)、
-  本機能の変更は31.11節の監査画面にまだ表示されない。Phase 2実装時、本機能を
-  spatie方式へ移行するか、監査画面側の対応を別途行うまでの既知の制約とする。
+  本機能の変更は31.11節の監査画面にまだ表示されない。本機能(会社カレンダー・従業員予定)の
+  実装に着手する際、spatie方式へ移行するか、監査画面側の対応を別途行うまでの既知の制約とする。
 - 一般社員が自分の予定変更を依頼したい場合は、既存の汎用申請ワークフロー
   (`docs/10-usecases-workflow.md`)経由とし、専用の申請経路は持たない。
 - API・MCP連携経由の操作も、Web画面と同じFeature・Permission判定を共通のCommandHandlerで通す

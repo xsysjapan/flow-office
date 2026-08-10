@@ -272,7 +272,13 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - work_date
 - employee_calendar_entry_id(適用後に生成・更新された`employee_calendar_entries.id`)
 - result(`applied`=適用済み / `skipped_existing`=既存行のためスキップ〔実績あり・締め済み
-  による保護スキップも含む〕 / `failed`=適用失敗)
+  による保護スキップも含む〕 / `failed`=適用失敗。プレビュー時点で検出済みの競合は
+  `skipped_existing`になるため、`failed`はプレビュー後・確定適用までの間に対象データが
+  変化した場合(対象社員の退職・無効化、対象日を含む月の締め完了、対象社員が一括操作の
+  権限スコープ外になった等の競合)にのみ発生する。`failed`が1件でもあっても
+  `calendar_bulk_operations.status`は`applied`のまま(部分適用)とし、失敗件数を結果画面に
+  表示する)
+- error_code(nullable。`result=failed`の場合の理由コード)
 - previous_snapshot(上書き前の従業員予定の内容。JSON。取消時にこの内容へ戻す)
 - created_at
 

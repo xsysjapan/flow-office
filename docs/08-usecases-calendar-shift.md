@@ -85,8 +85,9 @@ UC-C005のチェックは適用する。
 2. 対象社員の勤務形態がシフト制(`work_styles.is_shift_based`)の場合のみ、その勤務形態に
    設定された法定休日の与え方(`work_styles.legal_holiday_rule`)に従って判定する
    - 毎週1日(`weekly`): 対象月に含まれる各週で、法定休日(`employee_calendar_entries.is_legal_holiday`)
-     が少なくとも1日与えられているかを確認する。週の起算曜日はカレンダーマスタ
-     (`company_calendars.week_starts_on`)に従う
+     が少なくとも1日与えられているかを確認する。週の起算曜日は勤務形態に紐づく
+     `company_calendars.week_starts_on`に従う。UC-C002手順5により`company_calendar_id`が
+     未設定の勤務形態(カレンダーに依存しないシフト制)の場合は、月曜起算を既定値として使う
    - 4週4日以上の変形休日制(`four_weeks_four_days`): 勤務形態ごとに設定した起算日
      (`work_styles.four_week_period_start_date`)からの4週間ごとの期間で、法定休日が
      4日以上与えられているかを確認する
@@ -175,7 +176,10 @@ UC-C005のチェックは適用する。
    (`employee_calendar_entries.is_manually_overridden=true`になる)
 6. 再生成時は次のいずれかを選ぶ(指示書 8.8節)
    - 未編集日のみ再生成する(既定・安全側): 個別上書き済みの日は変更しない
-   - 個別上書きも含めてすべて再生成する: 個別上書きも生成結果で上書きする
+   - 個別上書きも含めてすべて再生成する: 個別上書きも生成結果で上書きする。上書き後は
+     `is_manually_overridden=false`に戻す(内容がローテーション生成結果と一致した状態に
+     なるため、個別上書きの印を残さない)。次回以降の「未編集日のみ再生成する」では、この
+     日は(再度個別編集されない限り)通常のローテーション生成対象として扱われる
    - どちらのモードでも、既に勤務実績(打刻・実績入力)がある日、および月次承認済み以降で
      ロックされている日(`AttendanceEditGuard`)は自動上書きしない(スキップする)
 
@@ -257,9 +261,11 @@ datetimeで保持することでUC-C004と同じ方法で扱う。勤務日の�
    計算した現在年度・次年度を`draft`状態で生成する(標準の曜日ルールで会社カレンダー日を
    作成し、祝日ソースが設定されていれば同期する。祝日同期に失敗しても曜日ルールだけで生成は
    成立させ、祝日反映は次回同期に委ねる)
-3. 最新の年度の`ends_on`が今日から6か月以内で、かつ次の年度が存在しなければ、前年度の曜日
-   ルール・法定休日ルール・祝日ソース設定を引き継いで次年度を`draft`状態で生成する(単発の
-   臨時休業・災害対応休日等、その年度限りの個別上書きは引き継がない)
+3. 最新の年度の`ends_on`が今日から6か月以内で、かつ次の年度が存在しなければ、次年度を
+   `draft`状態で生成する。曜日ルール・祝日ソースは`company_calendars`(本体)の設定を都度
+   参照するだけであり、年度ごとに個別化されていないため「前年度から引き継ぐ」設定は無い。
+   前年度の`company_calendar_days`から引き継がない(=新しく生成し直す)のは、単発の臨時休業・
+   災害対応休日等、その年度の`company_calendar_days`にだけ手動で書き込まれた個別上書きである
 4. バッチはべき等であり、同じ状態に対して何度実行しても重複生成しない。バッチの実行(全体・
    本体単位のいずれか)が失敗しても、既存の年度データは変更しない(部分適用を避ける)
 5. システム初回導入時など、直近のバッチ実行(またはUC-C011「今すぐ生成する」)を待たずに
@@ -404,9 +410,11 @@ UC-C009〜UC-C014(会社カレンダー本体・年度、会社カレンダー�
 - `bulk_operation_reason_required` / `bulk_operation_empty_target` /
   `bulk_operation_calendar_not_published` / `bulk_operation_rotation_not_assigned` /
   `bulk_operation_not_revertible` / `bulk_operation_partial_revert` /
-  `bulk_operation_conflict_detected`: 一括操作の理由未入力・対象0件・未公開カレンダー参照・
-  ローテーション未割当・取消不可・部分取消(警告付き成功)・`fail_on_conflict`指定時に
-  対象範囲内に既存行が1件でもあった場合の実行拒否(1件も適用しない)。
+  `bulk_operation_partial_apply` / `bulk_operation_conflict_detected`: 一括操作の理由未入力・
+  対象0件・未公開カレンダー参照・ローテーション未割当・取消不可・部分取消(警告付き成功)・
+  部分適用(`calendar_bulk_operation_targets.result=failed`が1件以上ある警告付き成功、
+  docs/16-database-schema.md参照)・`fail_on_conflict`指定時に対象範囲内に既存行が1件でも
+  あった場合の実行拒否(1件も適用しない)。
 - `onboarding_already_completed` / `onboarding_calendar_unpublished_blocks_generation`:
   標準カレンダー自動生成の冪等応答、未公開カレンダーでの一括生成拒否。
 - 共通: `forbidden`(権限マトリクス違反)、`validation_failed`(汎用バリデーション)。
