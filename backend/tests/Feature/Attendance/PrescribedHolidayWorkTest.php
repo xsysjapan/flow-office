@@ -3,9 +3,9 @@
 namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -29,7 +29,7 @@ class PrescribedHolidayWorkTest extends TestCase
 
     private function makeWorkStyle(): WorkStyle
     {
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -39,13 +39,13 @@ class PrescribedHolidayWorkTest extends TestCase
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
     private function makeCompanyHolidayShift(User $employee, WorkStyle $workStyle, Carbon $date): void
     {
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $date->toDateString(), 'work_style_id' => $workStyle->id,
             'day_type' => 'company_holiday', 'is_working_day' => false,
             'is_legal_holiday' => false, 'is_company_holiday' => true,
@@ -137,7 +137,7 @@ class PrescribedHolidayWorkTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $today = Carbon::today($employee->timezone);
 
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $today->toDateString(), 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true,
             'is_legal_holiday' => false, 'is_company_holiday' => false,
@@ -169,7 +169,7 @@ class PrescribedHolidayWorkTest extends TestCase
         $workStyle = $this->makeWorkStyle();
         $today = Carbon::today($employee->timezone);
 
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $today->toDateString(), 'work_style_id' => $workStyle->id,
             'day_type' => 'legal_holiday', 'is_working_day' => false,
             'is_legal_holiday' => true, 'is_company_holiday' => false,

@@ -35,33 +35,33 @@ use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
+use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
 use App\Domain\Attendance\Commands\CreateRotationPattern;
 use App\Domain\Attendance\Commands\CreateShiftPattern;
-use App\Domain\Attendance\Commands\CreateWorkCalendar;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
-use App\Domain\Attendance\Commands\EditEmployeeShiftAssignment;
+use App\Domain\Attendance\Commands\EditEmployeeCalendarEntry;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\ExcludeAttendanceSubmissionReminder;
-use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
+use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
-use App\Domain\Attendance\Commands\GeneratePatternShiftAssignments;
-use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
-use App\Domain\Attendance\Commands\PublishEmployeeShiftAssignments;
-use App\Domain\Attendance\Commands\PublishWorkCalendar;
+use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
+use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
+use App\Domain\Attendance\Commands\PublishCompanyCalendar;
+use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
+use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
-use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
-use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
 use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
@@ -76,24 +76,24 @@ use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\CreateRotationPatternHandler;
 use App\Domain\Attendance\Handlers\CreateShiftPatternHandler;
-use App\Domain\Attendance\Handlers\CreateWorkCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
-use App\Domain\Attendance\Handlers\EditEmployeeShiftAssignmentHandler;
+use App\Domain\Attendance\Handlers\EditEmployeeCalendarEntryHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
 use App\Domain\Attendance\Handlers\ExcludeAttendanceSubmissionReminderHandler;
-use App\Domain\Attendance\Handlers\GenerateEmployeeShiftAssignmentsHandler;
+use App\Domain\Attendance\Handlers\GenerateEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternAttendanceDaysHandler;
-use App\Domain\Attendance\Handlers\GeneratePatternShiftAssignmentsHandler;
-use App\Domain\Attendance\Handlers\GenerateRotationShiftAssignmentsHandler;
-use App\Domain\Attendance\Handlers\PublishEmployeeShiftAssignmentsHandler;
-use App\Domain\Attendance\Handlers\PublishWorkCalendarHandler;
+use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
+use App\Domain\Attendance\Handlers\GenerateRotationCalendarEntriesHandler;
+use App\Domain\Attendance\Handlers\PublishCompanyCalendarHandler;
+use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
@@ -101,8 +101,8 @@ use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
-use App\Domain\Attendance\Handlers\UpdateWorkCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
 use App\Domain\Attendance\Handlers\WarnUnsubmittedAttendanceHandler;
@@ -407,12 +407,12 @@ return [
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
-        EditEmployeeShiftAssignment::class => EditEmployeeShiftAssignmentHandler::class,
+        EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 
-        CreateWorkCalendar::class => CreateWorkCalendarHandler::class,
-        PublishWorkCalendar::class => PublishWorkCalendarHandler::class,
-        UpdateWorkCalendarDays::class => UpdateWorkCalendarDaysHandler::class,
+        CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
+        PublishCompanyCalendar::class => PublishCompanyCalendarHandler::class,
+        UpdateCompanyCalendarDays::class => UpdateCompanyCalendarDaysHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
         CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,
         SetDefaultWorkStyle::class => SetDefaultWorkStyleHandler::class,
@@ -421,14 +421,14 @@ return [
         RemoveUserWorkStyleMonthlyAssignment::class => RemoveUserWorkStyleMonthlyAssignmentHandler::class,
         CreateShiftPattern::class => CreateShiftPatternHandler::class,
         UpdateShiftPattern::class => UpdateShiftPatternHandler::class,
-        GenerateEmployeeShiftAssignments::class => GenerateEmployeeShiftAssignmentsHandler::class,
+        GenerateEmployeeCalendarEntries::class => GenerateEmployeeCalendarEntriesHandler::class,
         GeneratePatternAttendanceDays::class => GeneratePatternAttendanceDaysHandler::class,
-        GeneratePatternShiftAssignments::class => GeneratePatternShiftAssignmentsHandler::class,
+        GeneratePatternCalendarEntries::class => GeneratePatternCalendarEntriesHandler::class,
         AssignShiftPatternDay::class => AssignShiftPatternDayHandler::class,
-        PublishEmployeeShiftAssignments::class => PublishEmployeeShiftAssignmentsHandler::class,
+        PublishEmployeeCalendarEntries::class => PublishEmployeeCalendarEntriesHandler::class,
         CreateRotationPattern::class => CreateRotationPatternHandler::class,
         AssignEmployeeRotation::class => AssignEmployeeRotationHandler::class,
-        GenerateRotationShiftAssignments::class => GenerateRotationShiftAssignmentsHandler::class,
+        GenerateRotationCalendarEntries::class => GenerateRotationCalendarEntriesHandler::class,
         RecordAttendancePunch::class => RecordAttendancePunchHandler::class,
         CorrectAttendancePunch::class => CorrectAttendancePunchHandler::class,
         DeleteAttendancePunch::class => DeleteAttendancePunchHandler::class,

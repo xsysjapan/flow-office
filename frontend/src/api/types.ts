@@ -981,7 +981,7 @@ export interface WorkStyle {
   /** 退勤時、休憩が1件も記録されていない日に標準休憩(default_break_start_time〜
    *  default_break_end_time)を自動でattendance_breaksへ補完するかどうか。 */
   auto_break_enabled: boolean;
-  calendar_id: string;
+  company_calendar_id: string;
   is_shift_based: boolean;
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
   is_default: boolean;

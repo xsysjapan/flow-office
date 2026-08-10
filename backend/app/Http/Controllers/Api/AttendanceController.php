@@ -31,7 +31,7 @@ use App\Http\Resources\AttendanceMonthResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
@@ -71,7 +71,7 @@ class AttendanceController extends Controller
             ->whereDate('work_date', $today)
             ->first();
 
-        $shift = EmployeeShiftAssignment::query()
+        $shift = EmployeeCalendarEntry::query()
             ->where('user_id', $user->id)
             ->whereDate('work_date', $today)
             ->first();
@@ -204,7 +204,7 @@ class AttendanceController extends Controller
      */
     private function resolveWeekStartsOn(string $userId, Carbon $referenceDate): int
     {
-        $workStyle = EmployeeShiftAssignment::query()
+        $workStyle = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $referenceDate->copy()->subDays(6)->toDateString())
             ->whereDate('work_date', '<=', $referenceDate->copy()->addDays(6)->toDateString())

@@ -4,10 +4,10 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
+use App\Models\CompanyCalendar;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,7 +52,7 @@ class AttendancePunchTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -61,7 +61,7 @@ class AttendancePunchTest extends TestCase
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'rounding_unit_minutes' => 30,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
@@ -393,7 +393,7 @@ class AttendancePunchTest extends TestCase
 
     private function createWorkStyleWithRounding(int $roundingUnitMinutes, string $roundingMode): WorkStyle
     {
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -403,7 +403,7 @@ class AttendancePunchTest extends TestCase
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'rounding_unit_minutes' => $roundingUnitMinutes,
             'rounding_mode' => $roundingMode,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 

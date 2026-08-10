@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
 use App\Models\ShiftPattern;
 use App\Models\User;
@@ -81,11 +81,11 @@ class WorkStyleUsageSummaryTest extends TestCase
         ]);
         $employee = User::factory()->create();
 
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => '2026-08-01', 'work_style_id' => $usedStyle->id,
             'shift_pattern_id' => $patternA->id, 'day_type' => 'a-shift', 'is_working_day' => true,
         ]);
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => '2026-08-02', 'work_style_id' => $usedStyle->id,
             'shift_pattern_id' => $patternB->id, 'day_type' => 'b-shift', 'is_working_day' => true,
         ]);

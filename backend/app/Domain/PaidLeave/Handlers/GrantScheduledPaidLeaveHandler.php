@@ -9,7 +9,7 @@ use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\SystemSetting;
@@ -26,7 +26,7 @@ use Illuminate\Support\Collection;
  * routes/console.php参照)。同じ対象者に同日重複付与しないよう、当日すでに付与済みの場合は
  * スキップする。
  *
- * 出勤率は、直近の付与サイクル期間(grant_cycle_months)における `employee_shift_assignments`
+ * 出勤率は、直近の付与サイクル期間(grant_cycle_months)における `employee_calendar_entries`
  * の勤務予定日を分母、`attendance_days` が退勤済みまたは有給消化済みの日を分子として計算する
  * (有給取得日は出勤したものとして扱う。労働基準法上の8割出勤要件の考え方に基づく)。
  * 期間中の勤務予定日が1件も無い場合は判定不能としてスキップする。
@@ -119,7 +119,7 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
             ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
-            $userIds = EmployeeShiftAssignment::query()
+            $userIds = EmployeeCalendarEntry::query()
                 ->where('work_style_id', $rule->work_style_id)
                 ->whereDate('work_date', $today->toDateString())
                 ->pluck('user_id');
@@ -161,7 +161,7 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
         // whereDate()で明示的に日付部分のみを比較する。DATETIME格納値との文字列比較で
         // 境界日(当日)がずれて除外されるのを避けるため (whereBetween/whereInの生文字列
         // 比較には頼らない)。
-        $scheduledDates = EmployeeShiftAssignment::query()
+        $scheduledDates = EmployeeCalendarEntry::query()
             ->where('user_id', $user->id)
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $periodStart->toDateString())

@@ -4,10 +4,10 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceLeaveSegment;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -22,9 +22,9 @@ class AttendanceLeaveSegmentTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createWorkingDayShift(User $user, string $date, int $prescribedDailyMinutes = 480): EmployeeShiftAssignment
+    private function createWorkingDayShift(User $user, string $date, int $prescribedDailyMinutes = 480): EmployeeCalendarEntry
     {
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -33,10 +33,10 @@ class AttendanceLeaveSegmentTest extends TestCase
             'code' => 'standard-'.$user->id.'-'.$date, 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => $prescribedDailyMinutes, 'prescribed_weekly_minutes' => $prescribedDailyMinutes * 5,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
 
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
@@ -314,7 +314,7 @@ class AttendanceLeaveSegmentTest extends TestCase
         $dateString = '2026-08-10';
         $nextDateString = '2026-08-11';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -323,9 +323,9 @@ class AttendanceLeaveSegmentTest extends TestCase
             'code' => 'night-shift', 'name' => '夜勤', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_start_time' => '21:00', 'default_end_time' => '05:00',
-            'default_break_minutes' => 0, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 0, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $dateString, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$dateString} 21:00:00", 'planned_end_at' => "{$nextDateString} 05:00:00",

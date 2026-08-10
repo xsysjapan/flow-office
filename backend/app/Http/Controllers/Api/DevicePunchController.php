@@ -95,7 +95,7 @@ class DevicePunchController extends Controller
         $workMinutes = null;
         if ($data['punch_type'] === PunchType::CLOCK_OUT && $attendanceDay?->status === AttendanceDayStatus::CLOCKED_OUT) {
             $calculation = $attendanceCalculator->calculate(
-                $attendanceDay->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+                $attendanceDay->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
             );
             $workMinutes = $calculation['work_minutes'];
         }

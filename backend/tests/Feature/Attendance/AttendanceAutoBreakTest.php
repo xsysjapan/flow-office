@@ -3,7 +3,7 @@
 namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,7 +42,7 @@ class AttendanceAutoBreakTest extends TestCase
             'is_shift_based' => false,
         ]);
 
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id,
             'work_date' => $today->toDateString(),
             'work_style_id' => $workStyle->id,

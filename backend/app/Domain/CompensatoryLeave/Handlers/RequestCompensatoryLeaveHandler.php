@@ -17,7 +17,7 @@ use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
@@ -54,13 +54,13 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         $targetDate = Carbon::parse($command->targetDate);
 
-        $shiftAssignment = EmployeeShiftAssignment::query()
+        $calendarEntry = EmployeeCalendarEntry::query()
             ->where('user_id', $command->userId)
             ->whereDate('work_date', $command->targetDate)
             ->first();
 
-        if ($shiftAssignment !== null) {
-            if (! $shiftAssignment->is_working_day) {
+        if ($calendarEntry !== null) {
+            if (! $calendarEntry->is_working_day) {
                 throw new DomainRuleException('勤務予定日ではないため代休を申請できません。');
             }
         } elseif (! $this->scheduledWorkingDayResolver->isWorkingDay($command->userId, $targetDate)) {
@@ -121,7 +121,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
         $aggregate->persist();
 
         $calculation = $this->calculator->calculate(
-            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
         );
         AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
 
@@ -140,7 +140,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
         $day = $existingDay;
 
         if ($day === null) {
-            $shiftAssignment = EmployeeShiftAssignment::query()
+            $calendarEntry = EmployeeCalendarEntry::query()
                 ->where('user_id', $command->userId)
                 ->whereDate('work_date', $command->targetDate)
                 ->first();
@@ -148,7 +148,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
             $day = AttendanceDay::query()->create([
                 'user_id' => $command->userId,
                 'work_date' => $command->targetDate,
-                'shift_assignment_id' => $shiftAssignment?->id,
+                'calendar_entry_id' => $calendarEntry?->id,
                 'status' => AttendanceDayStatus::NOT_STARTED,
                 'source' => AttendanceDaySource::MANUAL,
             ]);

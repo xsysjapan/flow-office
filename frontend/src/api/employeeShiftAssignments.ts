@@ -2,7 +2,7 @@ import { apiFetch } from './client'
 import type { EmployeeShiftAssignment, ShiftScheduleReview } from './types'
 
 export function fetchShiftAssignments(userId: string, from: string, to: string): Promise<EmployeeShiftAssignment[]> {
-  return apiFetch('/employee-shift-assignments', { query: { user_id: userId, from, to } })
+  return apiFetch('/employee-calendar-entries', { query: { user_id: userId, from, to } })
 }
 
 export interface GenerateShiftAssignmentsInput {
@@ -13,7 +13,7 @@ export interface GenerateShiftAssignmentsInput {
 }
 
 export function generateShiftAssignments(input: GenerateShiftAssignmentsInput): Promise<EmployeeShiftAssignment[]> {
-  return apiFetch('/employee-shift-assignments/generate', { method: 'POST', body: input })
+  return apiFetch('/employee-calendar-entries/generate', { method: 'POST', body: input })
 }
 
 /** UC-C004 手順3〜4: 3交代制シフト表で、社員の特定日にシフトパターンを割り当てる。 */
@@ -27,7 +27,7 @@ export interface AssignShiftPatternDayInput {
 }
 
 export function assignShiftPatternDay(input: AssignShiftPatternDayInput): Promise<EmployeeShiftAssignment> {
-  return apiFetch('/employee-shift-assignments/assign-pattern', { method: 'POST', body: input })
+  return apiFetch('/employee-calendar-entries/assign-pattern', { method: 'POST', body: input })
 }
 
 export interface ShiftScheduleTarget {
@@ -38,14 +38,14 @@ export interface ShiftScheduleTarget {
 
 /** UC-C004 手順5: 公開前に法定休日不足・連続勤務・月間予定時間を確認する(読み取り専用、警告のみ)。 */
 export function reviewShiftSchedule(target: ShiftScheduleTarget): Promise<ShiftScheduleReview> {
-  return apiFetch('/employee-shift-assignments/review', {
+  return apiFetch('/employee-calendar-entries/review', {
     query: { department: target.department, user_ids: target.user_ids, year_month: target.year_month },
   })
 }
 
 /** UC-C004 手順6: 3交代制シフト表を公開する。 */
 export function publishShiftSchedule(target: ShiftScheduleTarget): Promise<{ published_count: number }> {
-  return apiFetch('/employee-shift-assignments/publish', { method: 'POST', body: target })
+  return apiFetch('/employee-calendar-entries/publish', { method: 'POST', body: target })
 }
 
 /** 週次・月次一括入力: 曜日ごとの開始/終了時刻・休憩分。ISO曜日(1=月〜7=日)をキーとする。 */
@@ -80,7 +80,7 @@ export interface PatternShiftPreviewDay {
 export function previewPatternShiftAssignments(
   input: PreviewPatternShiftAssignmentsInput,
 ): Promise<{ days: PatternShiftPreviewDay[] }> {
-  return apiFetch('/employee-shift-assignments/preview-pattern', { method: 'POST', body: input })
+  return apiFetch('/employee-calendar-entries/preview-pattern', { method: 'POST', body: input })
 }
 
 export interface GeneratePatternShiftAssignmentsResult {
@@ -93,5 +93,5 @@ export interface GeneratePatternShiftAssignmentsResult {
 export function generatePatternShiftAssignments(
   input: PatternShiftAssignmentsInput,
 ): Promise<GeneratePatternShiftAssignmentsResult> {
-  return apiFetch('/employee-shift-assignments/generate-pattern', { method: 'POST', body: input })
+  return apiFetch('/employee-calendar-entries/generate-pattern', { method: 'POST', body: input })
 }

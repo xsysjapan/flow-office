@@ -8,7 +8,7 @@ use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
- * その勤務日に勤務予定(employee_shift_assignments)の紐づく働き方が無い場合の
+ * その勤務日に勤務予定(employee_calendar_entries)の紐づく働き方が無い場合の
  * フォールバック先を解決する。その月に割り当てられた働き方
  * (user_work_style_monthly_assignments) → システム全体設定のデフォルト働き方
  * (system_settings.default_work_style_id) の順に探す(docs/08-usecases-calendar-shift.md参照)。

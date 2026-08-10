@@ -4,7 +4,8 @@ namespace Tests\Feature\Workflow;
 
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\EntityShare;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseClaim;
@@ -15,7 +16,6 @@ use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -260,11 +260,11 @@ class WorkflowRequestSubjectTest extends TestCase
     /**
      * 有給・特別休暇は「勤務予定日」でなければ申請できないため
      * (tests/Feature/PaidLeave/PaidLeaveRequestTest::createWorkingDayShiftと同じ形)、
-     * 対象日にEmployeeShiftAssignmentを用意する。
+     * 対象日にEmployeeCalendarEntryを用意する。
      */
-    private function createWorkingDayShift(User $user, string $date): EmployeeShiftAssignment
+    private function createWorkingDayShift(User $user, string $date): EmployeeCalendarEntry
     {
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -277,11 +277,11 @@ class WorkflowRequestSubjectTest extends TestCase
                 'name' => '通常勤務', 'work_time_system' => 'fixed',
                 'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
                 'default_start_time' => '09:00', 'default_end_time' => '18:00',
-                'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+                'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
             ],
         );
 
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",

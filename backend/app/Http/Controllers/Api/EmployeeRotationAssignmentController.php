@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
-use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
+use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\EmployeeCalendarEntryResource;
 use App\Http\Resources\EmployeeRotationAssignmentResource;
-use App\Http\Resources\EmployeeShiftAssignmentResource;
 use App\Models\EmployeeRotationAssignment;
 use App\Models\RotationPattern;
 use Illuminate\Http\JsonResponse;
@@ -98,21 +98,21 @@ class EmployeeRotationAssignmentController extends Controller
             'from' => ['required', 'date'],
             'to' => ['required', 'date', 'after_or_equal:from'],
             'overwrite_mode' => ['nullable', Rule::in([
-                GenerateRotationShiftAssignments::OVERWRITE_MODE_SKIP_EDITED,
-                GenerateRotationShiftAssignments::OVERWRITE_MODE_OVERWRITE_ALL,
+                GenerateRotationCalendarEntries::OVERWRITE_MODE_SKIP_EDITED,
+                GenerateRotationCalendarEntries::OVERWRITE_MODE_OVERWRITE_ALL,
             ])],
         ]);
 
-        $result = $commandBus->dispatch(new GenerateRotationShiftAssignments(
+        $result = $commandBus->dispatch(new GenerateRotationCalendarEntries(
             userId: $data['user_id'],
             from: $data['from'],
             to: $data['to'],
-            overwriteMode: $data['overwrite_mode'] ?? GenerateRotationShiftAssignments::OVERWRITE_MODE_SKIP_EDITED,
+            overwriteMode: $data['overwrite_mode'] ?? GenerateRotationCalendarEntries::OVERWRITE_MODE_SKIP_EDITED,
             generatedByUserId: $request->user()->id,
         ));
 
         return response()->json([
-            'generated' => EmployeeShiftAssignmentResource::collection($result['generated']),
+            'generated' => EmployeeCalendarEntryResource::collection($result['generated']),
             'generated_count' => $result['generated']->count(),
             'skipped_dates' => $result['skipped_dates'],
         ]);

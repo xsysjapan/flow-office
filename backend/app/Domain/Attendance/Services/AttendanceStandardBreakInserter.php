@@ -54,7 +54,7 @@ class AttendanceStandardBreakInserter
             return false;
         }
 
-        $workStyle = $day->shiftAssignment?->workStyle
+        $workStyle = $day->calendarEntry?->workStyle
             ?? $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date->copy());
 
         if (! $this->supportsAutoBreak($workStyle)) {

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkStyle;
@@ -74,7 +74,7 @@ class ShiftPatternTest extends TestCase
             'crosses_midnight' => true, 'break_minutes' => 60, 'prescribed_work_minutes' => 420,
         ])->assertCreated()->json();
 
-        $response = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $response = $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => '2026-08-10',
             'shift_pattern_id' => $pattern['id'],
         ])->assertCreated();
@@ -85,10 +85,10 @@ class ShiftPatternTest extends TestCase
         $this->assertSame('2026-08-10T22:00:00+00:00', $response->json('planned_start_at'));
         $this->assertSame('2026-08-11T06:00:00+00:00', $response->json('planned_end_at'));
 
-        $assignment = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->firstOrFail();
+        $assignment = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->firstOrFail();
         $event = EloquentStoredEvent::query()
             ->where('aggregate_uuid', $assignment->id)
-            ->where('event_class', 'employee_shift.assigned')
+            ->where('event_class', 'employee_calendar_entry.assigned')
             ->first();
         $this->assertNotNull($event);
         $this->assertSame($pattern['id'], $event->event_properties['shiftPatternId']);
@@ -107,7 +107,7 @@ class ShiftPatternTest extends TestCase
         ])->assertCreated()->json();
         $this->assertSame('12:00', $pattern['break_start_time']);
 
-        $response = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $response = $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => '2026-08-10',
             'shift_pattern_id' => $pattern['id'],
         ])->assertCreated();
@@ -126,7 +126,7 @@ class ShiftPatternTest extends TestCase
             'code' => 'day_off', 'name' => '公休', 'prescribed_work_minutes' => 0,
         ])->assertCreated()->json();
 
-        $response = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $response = $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => '2026-08-10',
             'shift_pattern_id' => $pattern['id'], 'is_legal_holiday' => true,
         ])->assertCreated();
@@ -149,14 +149,14 @@ class ShiftPatternTest extends TestCase
 
         // 2026-08-03(月)〜2026-08-09(日)まで7連勤(上限5日を超える)。
         foreach ($this->datesInRange('2026-08-03', '2026-08-09') as $date) {
-            $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+            $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
                 'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => $date,
                 'shift_pattern_id' => $dayShift['id'],
             ])->assertCreated();
         }
 
         $review = $this->actingAs($admin)->getJson(
-            '/api/employee-shift-assignments/review?user_ids[]='.$employee->id.'&year_month=2026-08'
+            '/api/employee-calendar-entries/review?user_ids[]='.$employee->id.'&year_month=2026-08'
         )->assertOk()->json();
 
         $this->assertCount(1, $review['consecutive_work_violations']);
@@ -175,15 +175,15 @@ class ShiftPatternTest extends TestCase
             'break_minutes' => 60, 'prescribed_work_minutes' => 480,
         ])->assertCreated()->json();
 
-        $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id, 'work_style_id' => $workStyle->id, 'work_date' => '2026-08-10',
             'shift_pattern_id' => $dayShift['id'],
         ])->assertCreated();
 
-        $assignment = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->firstOrFail();
+        $assignment = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->firstOrFail();
         $this->assertFalse($assignment->is_published);
 
-        $result = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/publish', [
+        $result = $this->actingAs($admin)->postJson('/api/employee-calendar-entries/publish', [
             'user_ids' => [$employee->id], 'year_month' => '2026-08',
         ])->assertOk()->json();
 
@@ -192,12 +192,12 @@ class ShiftPatternTest extends TestCase
 
         $publishedEvent = EloquentStoredEvent::query()
             ->where('aggregate_uuid', $assignment->id)
-            ->where('event_class', 'employee_shift.published')
+            ->where('event_class', 'employee_calendar_entry.published')
             ->first();
         $this->assertNotNull($publishedEvent);
 
         // 再度publishしても、既にpublished済みの行は対象にならない。
-        $result2 = $this->actingAs($admin)->postJson('/api/employee-shift-assignments/publish', [
+        $result2 = $this->actingAs($admin)->postJson('/api/employee-calendar-entries/publish', [
             'user_ids' => [$employee->id], 'year_month' => '2026-08',
         ])->assertOk()->json();
         $this->assertSame(0, $result2['published_count']);

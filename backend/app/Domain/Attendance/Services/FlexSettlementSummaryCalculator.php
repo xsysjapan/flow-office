@@ -3,9 +3,9 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
+use App\Models\CompanyCalendarDay;
 use App\Models\SystemSetting;
 use App\Models\UserWorkStyleMonthlyAssignment;
-use App\Models\WorkCalendarDay;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -100,9 +100,9 @@ class FlexSettlementSummaryCalculator
      */
     private function workingDatesWithinPeriod(WorkStyle $workStyle, Carbon $periodStart, Carbon $periodEnd): array
     {
-        if ($workStyle->calendar_id !== null) {
-            return WorkCalendarDay::query()
-                ->where('calendar_id', $workStyle->calendar_id)
+        if ($workStyle->company_calendar_id !== null) {
+            return CompanyCalendarDay::query()
+                ->where('calendar_id', $workStyle->company_calendar_id)
                 ->whereDate('date', '>=', $periodStart->toDateString())
                 ->whereDate('date', '<=', $periodEnd->toDateString())
                 ->where('is_working_day', true)

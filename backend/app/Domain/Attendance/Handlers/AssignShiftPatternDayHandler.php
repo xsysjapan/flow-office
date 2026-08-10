@@ -2,11 +2,11 @@
 
 namespace App\Domain\Attendance\Handlers;
 
-use App\Domain\Attendance\Aggregates\EmployeeShiftAssignmentAggregate;
+use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\ShiftPattern;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  */
 class AssignShiftPatternDayHandler implements CommandHandler
 {
-    public function handle(Command $command): EmployeeShiftAssignment
+    public function handle(Command $command): EmployeeCalendarEntry
     {
         assert($command instanceof AssignShiftPatternDay);
 
@@ -44,14 +44,14 @@ class AssignShiftPatternDayHandler implements CommandHandler
 
         // 'work_date' はdateキャストのためDB上はdatetime文字列で保存される。
         // 厳密一致検索では既存行を見つけられないため、whereDateで明示的に検索する。
-        $existing = EmployeeShiftAssignment::query()
+        $existing = EmployeeCalendarEntry::query()
             ->where('user_id', $command->userId)
             ->whereDate('work_date', $workDate->toDateString())
             ->first();
 
         $id = $existing?->id ?? (string) Str::uuid();
 
-        EmployeeShiftAssignmentAggregate::retrieve($id)
+        EmployeeCalendarEntryAggregate::retrieve($id)
             ->assign(
                 userId: $command->userId,
                 workDate: $workDate->toDateString(),
@@ -75,6 +75,6 @@ class AssignShiftPatternDayHandler implements CommandHandler
             )
             ->persist();
 
-        return EmployeeShiftAssignment::query()->findOrFail($id);
+        return EmployeeCalendarEntry::query()->findOrFail($id);
     }
 }

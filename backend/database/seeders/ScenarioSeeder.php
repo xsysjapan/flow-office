@@ -2,22 +2,22 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Attendance\Commands\CreateWorkCalendar;
+use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateWorkStyle;
-use App\Domain\Attendance\Commands\GenerateEmployeeShiftAssignments;
-use App\Domain\Attendance\Commands\PublishWorkCalendar;
-use App\Domain\Attendance\Commands\UpdateWorkCalendarDays;
+use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
+use App\Domain\Attendance\Commands\PublishCompanyCalendar;
+use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
+use App\Models\CompanyCalendar;
 use App\Models\EmploymentCategory;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -30,7 +30,7 @@ use Ramsey\Uuid\Uuid;
  *
  * 前提: DatabaseSeeder (roles / request_types / admin@example.com) が実行済みであること。
  * 何度実行しても壊れないよう、既存データの有無を確認してから作成する(CQRS+ESの対象と
- * なるドメイン(WorkCalendar/WorkStyle/User/EmployeeShiftAssignment/PaidLeaveGrant)は
+ * なるドメイン(CompanyCalendar/WorkStyle/User/EmployeeCalendarEntry/PaidLeaveGrant)は
  * 必ずCommand経由でstored_eventsに記録し、マスタ相当のテーブル(EmploymentCategory/
  * PaidLeaveGrantRule)のみfirstOrCreateで直接投入する)。
  *
@@ -67,14 +67,14 @@ class ScenarioSeeder extends Seeder
             ScenarioAccessSeeder::class,
         ]);
 
-        $commandBus->dispatch(new GenerateEmployeeShiftAssignments(
+        $commandBus->dispatch(new GenerateEmployeeCalendarEntries(
             userId: $users['punch']->id,
             workStyleId: $punchWorkStyle->id,
             from: $calendarFrom->toDateString(),
             to: $calendarTo->toDateString(),
             generatedByUserId: $admin->id,
         ));
-        $commandBus->dispatch(new GenerateEmployeeShiftAssignments(
+        $commandBus->dispatch(new GenerateEmployeeCalendarEntries(
             userId: $users['monthly']->id,
             workStyleId: $monthlyWorkStyle->id,
             from: $calendarFrom->toDateString(),
@@ -103,12 +103,12 @@ class ScenarioSeeder extends Seeder
         return $admin->refresh();
     }
 
-    private function seedCalendar(CommandBus $commandBus, string $adminId, Carbon $month, Carbon $from, Carbon $to): WorkCalendar
+    private function seedCalendar(CommandBus $commandBus, string $adminId, Carbon $month, Carbon $from, Carbon $to): CompanyCalendar
     {
-        $calendar = WorkCalendar::query()->where('fiscal_year', $month->year)->first();
+        $calendar = CompanyCalendar::query()->where('fiscal_year', $month->year)->first();
 
         if ($calendar === null) {
-            $calendar = $commandBus->dispatch(new CreateWorkCalendar(
+            $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
                 name: "{$month->year}年度 シナリオテスト用カレンダー",
                 fiscalYear: $month->year,
                 startsOn: $from->toDateString(),
@@ -134,15 +134,15 @@ class ScenarioSeeder extends Seeder
             ];
         }
 
-        $commandBus->dispatch(new UpdateWorkCalendarDays(
-            workCalendarId: $calendar->id,
+        $commandBus->dispatch(new UpdateCompanyCalendarDays(
+            companyCalendarId: $calendar->id,
             days: $days,
             updatedByUserId: $adminId,
         ));
 
         if ($calendar->status !== 'published') {
-            $commandBus->dispatch(new PublishWorkCalendar(
-                workCalendarId: $calendar->id,
+            $commandBus->dispatch(new PublishCompanyCalendar(
+                companyCalendarId: $calendar->id,
                 publishedByUserId: $adminId,
             ));
         }
@@ -150,7 +150,7 @@ class ScenarioSeeder extends Seeder
         return $calendar->refresh();
     }
 
-    private function seedWorkStyle(CommandBus $commandBus, string $adminId, string $code, string $name, WorkCalendar $calendar): WorkStyle
+    private function seedWorkStyle(CommandBus $commandBus, string $adminId, string $code, string $name, CompanyCalendar $calendar): WorkStyle
     {
         $existing = WorkStyle::query()->where('code', $code)->first();
 
@@ -174,7 +174,7 @@ class ScenarioSeeder extends Seeder
                 'default_start_time' => '09:00',
                 'default_end_time' => '18:00',
                 'default_break_minutes' => 60,
-                'calendar_id' => $calendar->id,
+                'company_calendar_id' => $calendar->id,
                 'is_shift_based' => false,
             ],
             createdByUserId: $adminId,

@@ -33,19 +33,19 @@ use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\Attendance\Events\AttendanceSubmissionReminderExcluded;
+use App\Domain\Attendance\Events\CompanyCalendarCreated;
+use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
+use App\Domain\Attendance\Events\CompanyCalendarPublished;
+use App\Domain\Attendance\Events\EmployeeCalendarEntryAssigned;
+use App\Domain\Attendance\Events\EmployeeCalendarEntryPlanChanged;
+use App\Domain\Attendance\Events\EmployeeCalendarEntryPublished;
 use App\Domain\Attendance\Events\EmployeeRotationAssigned;
-use App\Domain\Attendance\Events\EmployeeShiftAssigned;
-use App\Domain\Attendance\Events\EmployeeShiftPlanChanged;
-use App\Domain\Attendance\Events\EmployeeShiftPublished;
 use App\Domain\Attendance\Events\LegalHolidayDesignated;
 use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternUpdated;
 use App\Domain\Attendance\Events\UserWorkStyleAssignedForMonth;
 use App\Domain\Attendance\Events\UserWorkStyleMonthlyAssignmentRemoved;
-use App\Domain\Attendance\Events\WorkCalendarCreated;
-use App\Domain\Attendance\Events\WorkCalendarDaysUpdated;
-use App\Domain\Attendance\Events\WorkCalendarPublished;
 use App\Domain\Attendance\Events\WorkStyleCreated;
 use App\Domain\Attendance\Events\WorkStyleDefaultChanged;
 use App\Domain\Attendance\Events\WorkStyleUpdated;
@@ -329,9 +329,9 @@ return [
 
         'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 
-        'work_calendar.created' => WorkCalendarCreated::class,
-        'work_calendar.days_updated' => WorkCalendarDaysUpdated::class,
-        'work_calendar.published' => WorkCalendarPublished::class,
+        'company_calendar.created' => CompanyCalendarCreated::class,
+        'company_calendar.days_updated' => CompanyCalendarDaysUpdated::class,
+        'company_calendar.published' => CompanyCalendarPublished::class,
 
         'work_style.created' => WorkStyleCreated::class,
         'work_style.default_changed' => WorkStyleDefaultChanged::class,
@@ -340,9 +340,9 @@ return [
         'shift_pattern.created' => ShiftPatternCreated::class,
         'shift_pattern.updated' => ShiftPatternUpdated::class,
 
-        'employee_shift.assigned' => EmployeeShiftAssigned::class,
-        'employee_shift.plan_changed' => EmployeeShiftPlanChanged::class,
-        'employee_shift.published' => EmployeeShiftPublished::class,
+        'employee_calendar_entry.assigned' => EmployeeCalendarEntryAssigned::class,
+        'employee_calendar_entry.plan_changed' => EmployeeCalendarEntryPlanChanged::class,
+        'employee_calendar_entry.published' => EmployeeCalendarEntryPublished::class,
 
         'rotation_pattern.created' => RotationPatternCreated::class,
 

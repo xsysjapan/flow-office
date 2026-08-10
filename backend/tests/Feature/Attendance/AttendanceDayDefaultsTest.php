@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Attendance;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,7 +23,7 @@ class AttendanceDayDefaultsTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -32,7 +32,7 @@ class AttendanceDayDefaultsTest extends TestCase
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'rounding_unit_minutes' => 15,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
@@ -58,7 +58,7 @@ class AttendanceDayDefaultsTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -68,7 +68,7 @@ class AttendanceDayDefaultsTest extends TestCase
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'rounding_unit_minutes' => 15,
             'rounding_mode' => WorkStyle::ROUNDING_MODE_SHORTEN,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
@@ -95,7 +95,7 @@ class AttendanceDayDefaultsTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -105,7 +105,7 @@ class AttendanceDayDefaultsTest extends TestCase
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_break_minutes' => 60, 'rounding_unit_minutes' => 15,
             'rounding_mode' => WorkStyle::ROUNDING_MODE_LENGTHEN,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 
@@ -132,7 +132,7 @@ class AttendanceDayDefaultsTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -140,9 +140,9 @@ class AttendanceDayDefaultsTest extends TestCase
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$workDate} 09:00:00", 'planned_end_at' => "{$workDate} 18:00:00",
@@ -167,7 +167,7 @@ class AttendanceDayDefaultsTest extends TestCase
         $employee = User::factory()->create();
         $workDate = '2026-07-09';
 
-        $calendar = WorkCalendar::query()->create([
+        $calendar = CompanyCalendar::query()->create([
             'name' => '2026年度', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
             'week_starts_on' => 1, 'status' => 'published',
@@ -177,7 +177,7 @@ class AttendanceDayDefaultsTest extends TestCase
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
             'default_break_minutes' => 60, 'default_break_start_time' => '12:00', 'default_break_end_time' => '13:00',
-            'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
 

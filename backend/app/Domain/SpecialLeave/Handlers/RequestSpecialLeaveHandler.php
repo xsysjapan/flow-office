@@ -15,7 +15,7 @@ use App\Domain\SpecialLeave\SpecialLeaveWorkType;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
@@ -55,21 +55,21 @@ class RequestSpecialLeaveHandler implements CommandHandler
             throw new DomainRuleException('無効な特別休暇種別です。');
         }
 
-        $shiftAssignment = EmployeeShiftAssignment::query()
+        $calendarEntry = EmployeeCalendarEntry::query()
             ->with('workStyle')
             ->where('user_id', $command->userId)
             ->whereDate('work_date', $command->targetDate)
             ->first();
 
         $targetDate = Carbon::parse($command->targetDate);
-        $workStyle = $shiftAssignment?->workStyle;
+        $workStyle = $calendarEntry?->workStyle;
 
-        if ($shiftAssignment !== null) {
-            if (! $shiftAssignment->is_working_day) {
+        if ($calendarEntry !== null) {
+            if (! $calendarEntry->is_working_day) {
                 throw new DomainRuleException('勤務予定日ではないため特別休暇を申請できません。');
             }
         } else {
-            // 通常勤務(シフト非対象)は運用上employee_shift_assignmentsが事前展開されないことが
+            // 通常勤務(シフト非対象)は運用上employee_calendar_entriesが事前展開されないことが
             // 多いため、勤務予定が無い日は「未展開」として扱い、その月に割り当てられた働き方
             // (無ければシステムのデフォルト働き方)から所定労働日かどうかを判定する
             // (ScheduledWorkingDayResolver参照)。
@@ -138,7 +138,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
         // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)
 
         $calculation = $this->calculator->calculate(
-            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
         );
         AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
 
@@ -153,7 +153,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
         $day = $existingDay;
 
         if ($day === null) {
-            $shiftAssignment = EmployeeShiftAssignment::query()
+            $calendarEntry = EmployeeCalendarEntry::query()
                 ->where('user_id', $command->userId)
                 ->whereDate('work_date', $command->targetDate)
                 ->first();
@@ -161,7 +161,7 @@ class RequestSpecialLeaveHandler implements CommandHandler
             $day = AttendanceDay::query()->create([
                 'user_id' => $command->userId,
                 'work_date' => $command->targetDate,
-                'shift_assignment_id' => $shiftAssignment?->id,
+                'calendar_entry_id' => $calendarEntry?->id,
                 'status' => AttendanceDayStatus::NOT_STARTED,
                 'source' => AttendanceDaySource::MANUAL,
             ]);

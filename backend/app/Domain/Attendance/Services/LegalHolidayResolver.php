@@ -2,7 +2,7 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\LegalHolidayDesignation;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
  * 法定休日の判定。
  *
  * 「決める方式」(`legal_holiday_rule`が`weekly`/`four_weeks_four_days`)は、勤務予定に
- * 事前設定された`employee_shift_assignments.is_legal_holiday`をそのまま使う。
+ * 事前設定された`employee_calendar_entries.is_legal_holiday`をそのまま使う。
  *
  * 「決めない方式」(`undetermined`)は、どの日が法定休日かを事前に固定せず、週ごとに
  * 以下の優先順位で解決する。
@@ -23,7 +23,7 @@ use Illuminate\Support\Carbon;
  */
 class LegalHolidayResolver
 {
-    public function isLegalHoliday(EmployeeShiftAssignment $shift): bool
+    public function isLegalHoliday(EmployeeCalendarEntry $shift): bool
     {
         $workStyle = $shift->workStyle;
 
@@ -61,7 +61,7 @@ class LegalHolidayResolver
     {
         $weekEnd = $weekStart->copy()->addDays(6);
 
-        $restDay = EmployeeShiftAssignment::query()
+        $restDay = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->where('is_working_day', false)
             ->whereDate('work_date', '>=', $weekStart->toDateString())

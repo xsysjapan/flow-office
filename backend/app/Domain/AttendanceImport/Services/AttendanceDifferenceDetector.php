@@ -5,7 +5,7 @@ namespace App\Domain\AttendanceImport\Services;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Models\AttendanceDay;
 use App\Models\AttendancePunch;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveUsage;
 use App\Models\PunchStatus;
 use App\Models\SpecialLeaveUsage;
@@ -80,8 +80,8 @@ class AttendanceDifferenceDetector
             $differences[] = $this->warning('LEAVE_CONFLICT', '有給休暇または特別休暇の消化と勤務時間が重複しています。');
         }
 
-        $shiftAssignment = EmployeeShiftAssignment::query()->where('user_id', $userId)->whereDate('work_date', $workDate)->first();
-        if ($shiftAssignment?->is_legal_holiday && ($proposed['startTime'] ?? null) !== null) {
+        $calendarEntry = EmployeeCalendarEntry::query()->where('user_id', $userId)->whereDate('work_date', $workDate)->first();
+        if ($calendarEntry?->is_legal_holiday && ($proposed['startTime'] ?? null) !== null) {
             $differences[] = $this->warning('HOLIDAY_WORK_REQUIRES_APPLICATION', '法定休日の勤務のため、休日出勤申請の要否を確認してください。');
         }
 

@@ -29,7 +29,7 @@ const workStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 'calendar-1',
+  company_calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,

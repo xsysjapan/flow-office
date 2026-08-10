@@ -2,7 +2,7 @@ import { apiFetch } from './client'
 import type { WorkCalendar, WorkCalendarDay } from './types'
 
 export function fetchWorkCalendars(): Promise<WorkCalendar[]> {
-  return apiFetch('/work-calendars')
+  return apiFetch('/company-calendars')
 }
 
 export interface CreateWorkCalendarInput {
@@ -14,11 +14,11 @@ export interface CreateWorkCalendarInput {
 }
 
 export function createWorkCalendar(input: CreateWorkCalendarInput): Promise<WorkCalendar> {
-  return apiFetch('/work-calendars', { method: 'POST', body: input })
+  return apiFetch('/company-calendars', { method: 'POST', body: input })
 }
 
 export function publishWorkCalendar(id: string): Promise<WorkCalendar> {
-  return apiFetch(`/work-calendars/${id}/publish`, { method: 'POST' })
+  return apiFetch(`/company-calendars/${id}/publish`, { method: 'POST' })
 }
 
 export interface PutCalendarDayInput {
@@ -31,5 +31,5 @@ export interface PutCalendarDayInput {
 }
 
 export function putWorkCalendarDays(id: string, days: PutCalendarDayInput[]): Promise<WorkCalendarDay[]> {
-  return apiFetch(`/work-calendars/${id}/days`, { method: 'PUT', body: { days } })
+  return apiFetch(`/company-calendars/${id}/days`, { method: 'PUT', body: { days } })
 }
