@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
 use App\Models\Role;
@@ -275,6 +276,15 @@ class AttendanceFlowTest extends TestCase
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")
             ->assertOk()->assertJsonPath('status', 'approved');
 
+        $previousMonthDay = AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => $today->copy()->startOfMonth()->subDay()->toDateString(),
+        ]);
+        $nextMonthDay = AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => $today->copy()->addMonthNoOverflow()->startOfMonth()->toDateString(),
+        ]);
+
         // 承認完了の通知には、当該月の月次勤怠画面へのリンクが付く。
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
         $this->assertStringEndsWith("/attendance/months/{$yearMonth}", $employeeNotifications[0]['detail_url']);
@@ -282,6 +292,10 @@ class AttendanceFlowTest extends TestCase
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")
             ->assertOk()->assertJsonPath('status', 'closed');
+
+        $this->assertNotNull(AttendanceDay::query()->findOrFail($dayId)->locked_at);
+        $this->assertNull($previousMonthDay->refresh()->locked_at);
+        $this->assertNull($nextMonthDay->refresh()->locked_at);
 
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
         $dayResponse->assertJsonPath('is_locked', true);
