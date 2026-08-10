@@ -5,10 +5,10 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\Role;
-use App\Models\StoredEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -200,12 +200,12 @@ class AttendanceExportTest extends TestCase
 
         unlink($tmpFile);
 
-        $this->assertDatabaseHas('legacy_stored_events', [
-            'aggregate_type' => 'export',
-            'event_type' => 'export.created',
-        ]);
-        $event = StoredEvent::query()->where('aggregate_type', 'export')->latest('id')->first();
-        $this->assertSame('attendance_xlsx', $event->payload['export_type']);
+        $this->assertDatabaseHas('stored_events', ['event_class' => 'export.created']);
+        $event = EloquentStoredEvent::query()
+            ->where('event_class', 'export.created')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('attendance_xlsx', $event->event_properties['exportType']);
     }
 
     public function test_admin_export_excel_returns_zip_of_per_employee_workbooks_for_multiple_employees(): void
@@ -254,8 +254,8 @@ class AttendanceExportTest extends TestCase
         $zip->close();
         unlink($tmpZip);
 
-        $event = StoredEvent::query()->where('aggregate_type', 'export')->latest('id')->first();
-        $this->assertSame('attendance_xlsx_zip', $event->payload['export_type']);
+        $event = EloquentStoredEvent::query()->where('event_class', 'export.created')->latest('id')->firstOrFail();
+        $this->assertSame('attendance_xlsx_zip', $event->event_properties['exportType']);
     }
 
     public function test_non_admin_cannot_export_attendance_excel(): void

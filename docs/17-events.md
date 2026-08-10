@@ -179,9 +179,15 @@
 
 `user.roles_changed`と`user.roles_migrated_from_legacy`は、旧ユーザーロール機構で記録済みの
 StoredEventを復元するための履歴互換イベントである。旧機構の廃止後は新規発行しない。
+本番履歴補正では、この2種を同時刻の `membership.added` / `membership.removed` に変換する。
+詳細は[32-stored-event-history-normalization.md](./32-stored-event-history-normalization.md)を参照する。
 
 - `<aggregate>.<past_tense_verb>` 形式 (例: `attendance_punch.`)。
 - 集約(aggregate)は `aggregate_type` + `aggregate_id` で一意に識別する
   (例: `attendance_day` + `attendance_days.id`)。
 - イベントは追記のみ。既存イベントの意味を変える場合は新しいイベント種別を追加し、
   旧イベントは残す(イミュータブル)。
+
+ただし、本番カットオーバー処理が業務事実と異なる合成イベントや逆転した日時を作った場合に限り、
+承認済みの一回限りのデータ補正として、原本DBバックアップと専用バックアップテーブルを作成した上で
+履歴を再構成できる。通常のアプリケーション処理から既存イベントを更新してはならない。

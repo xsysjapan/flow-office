@@ -4,12 +4,12 @@ namespace App\Domain\UserManagement\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SyncUsersFromMs365;
 use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\Graph\MicrosoftGraphUser;
 use App\Domain\UserManagement\Services\FieldAuthorityService;
+use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -24,8 +24,11 @@ class SyncUsersFromMs365Handler implements CommandHandler
 {
     private readonly FieldAuthorityService $fieldAuthorities;
 
-    public function __construct(private readonly MicrosoftGraphClient $graphClient, EventStore $legacyEventStore, ?FieldAuthorityService $fieldAuthorities = null)
-    {
+    public function __construct(
+        private readonly MicrosoftGraphClient $graphClient,
+        private readonly StandardGroupMembershipRecorder $standardMemberships,
+        ?FieldAuthorityService $fieldAuthorities = null,
+    ) {
         $this->fieldAuthorities = $fieldAuthorities ?? app(FieldAuthorityService::class);
     }
 
@@ -60,5 +63,9 @@ class SyncUsersFromMs365Handler implements CommandHandler
                 employmentStatus: $this->fieldAuthorities->isExternalHr('employment_status') && $user ? $user->employment_status : $graphUser->employmentStatus(),
             )
             ->persist();
+
+        if ($user === null) {
+            $this->standardMemberships->add($userId, ['ALL_USERS'], $userId);
+        }
     }
 }

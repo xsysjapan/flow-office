@@ -164,20 +164,25 @@ class AccessControlSeeder extends Seeder
             );
         }
 
-        // 初期状態は原則OFF。初回設定を行えるようシステム管理者だけに管理Featureを明示付与する。
-        foreach (['administration', 'administration.users', 'administration.settings'] as $code) {
-            DB::table('group_feature_assignments')->updateOrInsert(
-                ['group_id' => $adminGroupId, 'feature_id' => DB::table('features')->where('code', $code)->value('id')],
-                ['updated_at' => $now, 'created_at' => $now],
-            );
+        // 移行済み環境の現行設定を初期値とする。子Featureだけを選択している場合も、
+        // 現行DBの割当をそのまま再現し、親Featureを暗黙に追加しない。
+        $initialFeatures = [
+            $allUsersGroupId => [
+                'attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet',
+                'workflow', 'workflow.requests', 'paid_leave', 'paid_leave.requests',
+                'backoffice.expenses',
+            ],
+            $backofficeGroupId => ['backoffice.tasks'],
+            $adminGroupId => ['administration', 'administration.users', 'administration.settings'],
+            $hrGroupId => ['administration', 'administration.users'],
+        ];
+        foreach ($initialFeatures as $groupId => $featureCodes) {
+            foreach ($featureCodes as $code) {
+                DB::table('group_feature_assignments')->updateOrInsert(
+                    ['group_id' => $groupId, 'feature_id' => DB::table('features')->where('code', $code)->value('id')],
+                    ['updated_at' => $now, 'created_at' => $now],
+                );
+            }
         }
-
-        foreach (['administration', 'administration.users'] as $code) {
-            DB::table('group_feature_assignments')->updateOrInsert(
-                ['group_id' => $hrGroupId, 'feature_id' => DB::table('features')->where('code', $code)->value('id')],
-                ['updated_at' => $now, 'created_at' => $now],
-            );
-        }
-
     }
 }

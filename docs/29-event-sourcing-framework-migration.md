@@ -528,19 +528,10 @@ FK・Sanctum認証・フロントエンドのユーザーID表示すべてに波
 
 ## 最終的なデータ移行(全ドメイン移行後)
 
-全ドメインの移行が完了したら、`legacy_stored_events`に残っている過去イベントを新しい
-`stored_events`へバックフィルする。手順(未実施・今後の作業):
+独自EventStoreを利用していた最後の `export.created` はSpatie集約へ移行済みである。
+本番履歴のバックフィルと、旧ユーザーロール・月次勤怠Workflowの履歴再構成は
+`events:normalize-history` で行う。変換規則、dry-run、バックアップ、検証、ロールバックは
+[32-stored-event-history-normalization.md](./32-stored-event-history-normalization.md)を参照する。
 
-1. ドメインごとに `aggregate_type` → 集約ルートのUUID解決方法(既にUUID主キーならそのまま、
-   ①方式の別列運用ならその列の値)を確定させる対応表を作る。
-2. `event_type`(短い文字列)は既に`event_class_map`のキーと1対1になっているため、
-   そのまま`event_class`列にコピーできる。
-3. Artisanコマンド(例: `event-sourcing:backfill-legacy`)を新設し、
-   `legacy_stored_events`を`aggregate_type`+`aggregate_id`+`version`順に読み、
-   新`stored_events`へ`aggregate_uuid`/`aggregate_version`/`event_version`/`event_class`/
-   `event_properties`/`meta_data`/`created_at`を対応付けて挿入する。
-   既存の`occurred_at`は`meta_data.created_at`相当として保持する。
-4. 移行後、両テーブルのイベント件数・集約バージョンの整合性を検証してから
-   `legacy_stored_events`を読み取り専用アーカイブとして残す(削除はしない)。
-
-このバックフィルは全ドメイン移行(上記作業順6まで)が終わってから着手する。
+`legacy_stored_events`テーブルは過去バックアップとのスキーマ互換のため残すが、通常実行時の
+書き込み先・監査ログ検索先には使用しない。

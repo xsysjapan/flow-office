@@ -89,6 +89,7 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimUnlocked;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
+use App\Domain\Export\Events\ExportCreated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -294,6 +295,7 @@ return [
         'membership_change_set.failed' => MembershipChangeSetFailed::class,
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
+        'export.created' => ExportCreated::class,
 
         'attendance_day.created' => AttendanceDayCreated::class,
         'attendance_day.edited' => AttendanceDayEdited::class,

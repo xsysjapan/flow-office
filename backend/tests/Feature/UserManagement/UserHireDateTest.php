@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\UserManagement;
 
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\UserManagement\Commands\SyncUsersFromMs365;
 use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\Graph\MicrosoftGraphUser;
 use App\Domain\UserManagement\Handlers\SyncUsersFromMs365Handler;
+use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Domain\UserManagement\SsoAuthenticator;
 use App\Models\Role;
 use App\Models\User;
@@ -131,7 +131,7 @@ class UserHireDateTest extends TestCase
             new FakeMicrosoftGraphClientForUsageStartDateTest([
                 new MicrosoftGraphUser('entra-usd-2', $user->name, $user->email, $user->department, $user->job_title, true),
             ]),
-            app(EventStore::class),
+            app(StandardGroupMembershipRecorder::class),
         );
 
         $handler->handle(new SyncUsersFromMs365);

@@ -91,7 +91,6 @@ tasks:
     desc: Laravel APIをhttp://localhost:8000で起動する
     dir: backend
     env:
-      DB_CONNECTION: sqlite
       MICROSOFT_MOCK_ENABLED: "true"
       MICROSOFT_CLIENT_ID: mock-client-id
       MICROSOFT_CLIENT_SECRET: mock-client-secret

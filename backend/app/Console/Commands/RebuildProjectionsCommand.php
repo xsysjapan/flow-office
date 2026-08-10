@@ -2,59 +2,38 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\EventSourcing\Contracts\Projector;
-use App\Models\StoredEvent;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
+use Spatie\EventSourcing\Projectionist;
 
-/**
- * Projection Table を stored_events から再生成する。
- * docs/03-architecture.md 3.2節、.claude/skills/add-projection 参照。
- */
-class RebuildProjectionsCommand extends Command
+/** Backward-compatible entry point backed by Spatie's replay command. */
+final class RebuildProjectionsCommand extends Command
 {
-    protected $signature = 'projections:rebuild {projector? : Projectorクラスの短縮名 (例: AttendanceDailyCalculationProjector)}';
+    protected $signature = 'projections:rebuild {projector? : Projector short or fully-qualified class name}';
 
-    protected $description = 'stored_events からProjection Tableを再生成する';
+    protected $description = 'Replay stored_events to Spatie projectors';
 
-    public function handle(): int
+    public function handle(Projectionist $projectionist): int
     {
-        $target = $this->argument('projector');
-        $projectorClasses = collect(config('domain.projectors', []));
+        $requested = $this->argument('projector');
+        $arguments = ['--force' => true];
 
-        if ($target !== null) {
-            $projectorClasses = $projectorClasses->filter(
-                fn (string $class) => Str::afterLast($class, '\\') === $target
+        if ($requested !== null) {
+            $projector = $projectionist->getProjectors()->first(
+                fn ($projector) => get_class($projector) === ltrim($requested, '\\')
+                    || Str::afterLast(get_class($projector), '\\') === $requested,
             );
-
-            if ($projectorClasses->isEmpty()) {
-                $this->error("Projector [{$target}] は config/domain.php に登録されていません。");
+            if ($projector === null) {
+                $this->error("Projector [{$requested}] is not registered.");
 
                 return self::FAILURE;
             }
+            $arguments['projector'] = [get_class($projector)];
         }
 
-        foreach ($projectorClasses as $projectorClass) {
-            /** @var Projector $projector */
-            $projector = app($projectorClass);
-            $this->info("Rebuilding {$projectorClass} ...");
-            $projector->reset();
+        $exitCode = Artisan::call('event-sourcing:replay', $arguments, $this->output);
 
-            $count = 0;
-            StoredEvent::query()
-                ->whereIn('event_type', $projector->eventTypes())
-                ->orderBy('occurred_at')
-                ->orderBy('id')
-                ->chunkById(500, function ($events) use ($projector, &$count) {
-                    foreach ($events as $event) {
-                        $projector->project($event);
-                        $count++;
-                    }
-                });
-
-            $this->info("  -> {$count} 件のイベントを反映しました。");
-        }
-
-        return self::SUCCESS;
+        return $exitCode === 0 ? self::SUCCESS : self::FAILURE;
     }
 }

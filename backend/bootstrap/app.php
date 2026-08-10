@@ -1,6 +1,5 @@
 <?php
 
-use App\Domain\EventSourcing\Exceptions\ConcurrencyException;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Middleware\CheckAbilitiesOrFullSession;
 use App\Http\Middleware\CheckForAnyAbilityOrFullSession;
@@ -75,10 +74,4 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        // 楽観ロック競合(docs/26-usecases-monthly-import.md「楽観ロック」)はHTTP 409で返す。
-        $exceptions->render(function (ConcurrencyException $e, Request $request) use ($isApiRequest) {
-            if ($isApiRequest($request)) {
-                return response()->json(['message' => $e->getMessage(), 'code' => 'ATTENDANCE_VERSION_CONFLICT'], 409);
-            }
-        });
     })->create();

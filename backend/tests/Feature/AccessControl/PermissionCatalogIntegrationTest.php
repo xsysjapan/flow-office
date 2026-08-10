@@ -38,6 +38,25 @@ class PermissionCatalogIntegrationTest extends TestCase
         $this->assertSame([], $routePermissions->diff($catalogPermissions)->values()->all());
     }
 
+    public function test_standard_groups_receive_the_migrated_feature_defaults(): void
+    {
+        $assignments = DB::table('group_feature_assignments as assignment')
+            ->join('groups', 'groups.id', '=', 'assignment.group_id')
+            ->join('features', 'features.id', '=', 'assignment.feature_id')
+            ->whereIn('groups.code', ['ALL_USERS', 'BACKOFFICE_USERS'])
+            ->orderBy('features.display_order')
+            ->get(['groups.code as group_code', 'features.code as feature_code'])
+            ->groupBy('group_code')
+            ->map(fn ($rows) => $rows->pluck('feature_code')->all());
+
+        $this->assertSame([
+            'attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet',
+            'workflow', 'workflow.requests', 'paid_leave', 'paid_leave.requests',
+            'backoffice.expenses',
+        ], $assignments['ALL_USERS']);
+        $this->assertSame(['backoffice.tasks'], $assignments['BACKOFFICE_USERS']);
+    }
+
     public function test_system_administrator_group_grants_and_revokes_all_catalog_permissions(): void
     {
         $user = User::factory()->create();

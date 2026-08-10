@@ -31,7 +31,6 @@ class UserProjector extends Projector
                 'usage_start_date' => $event->createdAt()->toDateString()],
         );
 
-        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
     }
 
     public function onUserProfileUpdated(UserProfileUpdated $event): void
@@ -57,8 +56,6 @@ class UserProjector extends Projector
             ],
         );
 
-        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
-        $this->ensureMembership($user->id, 'SYSTEM_ADMINISTRATORS', $event->createdAt());
         if ($event->entraUserId !== null) {
             $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
         }
@@ -82,7 +79,6 @@ class UserProjector extends Projector
             ],
         );
 
-        $this->ensureMembership($user->id, 'ALL_USERS', $event->createdAt());
         $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
     }
 
@@ -109,7 +105,6 @@ class UserProjector extends Projector
                 'usage_start_date' => $existing->usage_start_date ?? $event->createdAt()->toDateString(),
             ],
         );
-        $this->ensureMembership($event->aggregateRootUuid(), 'ALL_USERS', $event->createdAt());
         $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $event->email, $event->createdAt());
     }
 
@@ -135,24 +130,6 @@ class UserProjector extends Projector
         User::query()->whereKey($event->aggregateRootUuid())->update([
             'last_login_at' => $event->loggedInAt,
         ]);
-    }
-
-    private function ensureMembership(string $userId, string $groupCode, mixed $occurredAt): void
-    {
-        $groupId = DB::table('groups')->where('code', $groupCode)->value('id');
-        if ($groupId === null) {
-            return;
-        }
-        DB::table('memberships')->updateOrInsert(
-            ['user_id' => $userId, 'group_id' => $groupId],
-            [
-                'membership_kind' => 'member',
-                'is_primary' => false,
-                'created_by' => $userId,
-                'created_at' => $occurredAt,
-                'updated_at' => $occurredAt,
-            ],
-        );
     }
 
     /** 本番カットオーバー移行時にusers行を初期状態として記録した合成イベントの再生用。 */

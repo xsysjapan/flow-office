@@ -11,6 +11,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
+use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\EmploymentCategory;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
@@ -308,7 +309,7 @@ class ScenarioSeeder extends Seeder
                 );
             }
 
-            $standardGroupCodes = [];
+            $standardGroupCodes = ['ALL_USERS'];
             if (in_array(Role::HR_STAFF, $definition['roles'], true)) {
                 $standardGroupCodes[] = 'HUMAN_RESOURCES_USERS';
             }
@@ -318,12 +319,7 @@ class ScenarioSeeder extends Seeder
             if (in_array(Role::ADMIN, $definition['roles'], true)) {
                 $standardGroupCodes[] = 'SYSTEM_ADMINISTRATORS';
             }
-            foreach ($standardGroupCodes as $groupCode) {
-                DB::table('memberships')->updateOrInsert(
-                    ['user_id' => $userId, 'group_id' => DB::table('groups')->where('code', $groupCode)->value('id')],
-                    ['membership_kind' => 'member', 'updated_at' => now(), 'created_at' => now()],
-                );
-            }
+            app(StandardGroupMembershipRecorder::class)->add($userId, $standardGroupCodes, $userId);
 
             $commandBus->dispatch(new SetUserHireDate(
                 userId: $userId,

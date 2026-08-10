@@ -7,6 +7,7 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\RecordSsoLogin;
+use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\ExternalIdentity;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -28,6 +29,8 @@ use Illuminate\Support\Str;
  */
 class RecordSsoLoginHandler implements CommandHandler
 {
+    public function __construct(private readonly StandardGroupMembershipRecorder $standardMemberships) {}
+
     public function handle(Command $command): User
     {
         assert($command instanceof RecordSsoLogin);
@@ -68,6 +71,8 @@ class RecordSsoLoginHandler implements CommandHandler
             ->createFromSsoLogin($command->entraUserId, $command->name ?? $command->email, $command->email)
             ->recordLogin(wasFirstLogin: $wasFirstLogin, loggedInAt: $loggedInAt)
             ->persist();
+
+        $this->standardMemberships->add($userId, ['ALL_USERS'], $userId);
 
         return User::query()->findOrFail($userId);
     }

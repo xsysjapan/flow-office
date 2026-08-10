@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\UserManagement;
 
-use App\Domain\EventSourcing\EventStore;
 use App\Domain\UserManagement\Commands\SyncUsersFromMs365;
 use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\Graph\MicrosoftGraphUser;
 use App\Domain\UserManagement\Handlers\SyncUsersFromMs365Handler;
+use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Domain\UserManagement\SsoAuthenticator;
 use App\Models\Role;
 use App\Models\SystemSetting;
@@ -60,7 +60,7 @@ class UserTimezoneTest extends TestCase
             new FakeMicrosoftGraphClientForTimezoneTest([
                 new MicrosoftGraphUser('entra-3', '同期太郎', 'sync@example.com', '開発部', 'エンジニア', true),
             ]),
-            app(EventStore::class),
+            app(StandardGroupMembershipRecorder::class),
         );
 
         $handler->handle(new SyncUsersFromMs365);
@@ -79,7 +79,7 @@ class UserTimezoneTest extends TestCase
             new FakeMicrosoftGraphClientForTimezoneTest([
                 new MicrosoftGraphUser('entra-4', $user->name, $user->email, $user->department, $user->job_title, true),
             ]),
-            app(EventStore::class),
+            app(StandardGroupMembershipRecorder::class),
         );
 
         $handler->handle(new SyncUsersFromMs365);
