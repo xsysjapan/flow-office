@@ -23,31 +23,31 @@ Permissionの集合を`Role`として分離する。Roleはユーザーまたは
 ## 会社カレンダー・従業員予定に関するFeature・Permission
 
 固定の役職名(人事担当者・総務担当者等)を認可根拠にせず、31章のFeature/Permission/RoleAssignment
-モデルに従う。
+モデルに従う。**新しいPermissionコードは追加しない**(既存の`work-styles`/`shift-patterns`/
+`rotation-patterns`と同じ枠組みに揃える。`backend/routes/api.php`の実装を参照)。
 
-- Feature`company_calendar`(会社カレンダー機能)を有効化したグループのユーザーのみ、以下の
-  Permissionを保有できる: `company_calendar.manage`(本体・年度の作成・編集・複製・廃止、
-  会社カレンダー日の個別編集)、`company_calendar.publish`(年度の公開・公開取消)、
-  `holiday_calendar_source.manage`(祝日iCalendarソースの登録・同期・競合解決)。
-- Feature`employee_calendar_entry`を有効化したグループのユーザーのみ、以下のPermissionを
-  保有できる: `employee_calendar_entry.override`(個別上書き・休日出勤/振替休日登録・公開/
-  公開取消)、`employee_calendar_entry.bulk_edit`(複数従業員予定の一括操作のプレビュー・確定・
-  取消)。Scopeは`GROUP`(対象部署・対象グループ配下に限定)または`GLOBAL`のいずれかを明示する。
-- `employee_calendar_entry.read`は`SELF`スコープを`ALL_USERS`の基本Permission(31.1節の
-  `EMPLOYEE` RoleAssignment)に含め、全社員が公開済み(`is_published=true`)の自分の従業員予定
-  だけを閲覧できるようにする。他社員分の閲覧には`GROUP`/`GLOBAL`スコープの
-  `employee_calendar_entry.read`が必要。
-- UC-C007(法定休日「決めない方式」の指定)は`legal_holiday_designation.manage`で保護する。
-  `SELF`スコープを`ALL_USERS`の基本Permissionに含め、社員本人が自分の週の指定をできるように
-  する。他社員分の指定(UC-C007手順1「管理者が」)には`GROUP`/`GLOBAL`スコープの
-  `legal_holiday_designation.manage`が必要。`employee_calendar_entry.override`とは別の
-  Permissionとする(対象データが`legal_holiday_designations`であり、`employee_calendar_entries`
-  の`schedule_state`自体を書き換える操作ではないため)。
+- 会社カレンダー本体・年度・会社カレンダー日の作成・編集・複製・公開・公開取消・廃止、祝日
+  iCalendarソースの登録・同期・競合解決、複数従業員の一括予定変更(プレビュー・確定・取消)、
+  従業員予定の個別上書き・公開/公開取消は、既存の`work-styles`/`shift-patterns`と同じ
+  `permission:attendance.manage,any`(既存Permission、GLOBALスコープのみ)で保護する。新しい
+  Permissionコードは作らない。
+- `employee_calendar_entry.read`(自分の従業員予定閲覧)は、既存の
+  `GET /employee-calendar-entries`ルートが使う`ability:schedule:self:read`
+  (Sanctumトークンアビリティ)をそのまま使う。公開済み(`is_published=true`)の自分の従業員
+  予定だけを返す制御はController側のクエリ条件で行う(既存実装と同じ)。
+- UC-C007(法定休日「決めない方式」の指定)は、既存の法定休日指定APIと同じ
+  `permission:attendance.manage,any`(管理者による他社員分の指定)または本人操作用の既存
+  Sanctumアビリティ(実装時に既存の`legal_holiday_designations`関連エンドポイントの認可方式に
+  合わせる)を使う。専用の新設Permissionは作らない。
 - カレンダー年度の定期バッチ生成(UC-C014)はユーザー操作を経由しないシステム内部処理のため、
-  Permission判定の対象にしない。一方、UC-C011の「今すぐ生成する」(`POST
-  /api/onboarding/calendar/generate-now`)は管理者が画面から押す操作であり、
-  `company_calendar.manage`を要求する(バッチと同じ生成ロジックを呼ぶだけであることは
-  Permission判定を免除する理由にならない)。
+  Permission判定の対象にしない。一方、UC-C011の「今すぐ生成する」は管理者が画面から押す操作
+  であり、`permission:attendance.manage,any`を要求する(バッチと同じ生成ロジックを呼ぶだけ
+  であることはPermission判定を免除する理由にならない)。
+- 一括操作の対象をグループ・部署単位に限定する権限スコープ(指示書13章が想定するGROUP
+  スコープでの制限)は、`attendance.manage`が現状GLOBALスコープのみのPermissionであるため
+  実装しない(既存のWorkStyle/ShiftPattern管理と同じ制約)。将来グループ単位の制限が必要に
+  なった場合は、`attendance.manage`のスコープ定義(`database/seeders/AccessControlSeeder.php`)
+  に`group`を追加してから対応する。
 - 会社カレンダー・従業員予定関連の実行結果は、既存`company_calendars`実装
   (`WorkCalendarAggregate`/`EmployeeShiftAssignmentAggregate`、既にspatie方式へ移行済み)に
   揃えて新`stored_events`に記録される。現時点の`AuditLogController`は`stored_events`を
