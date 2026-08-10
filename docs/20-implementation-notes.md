@@ -32,8 +32,11 @@
   `schedule_state`)として持ち、同じ列に混在させない。
 - 従業員予定の個別上書きと一括操作は同じ`employee_calendar_entries`テーブルを使い、
   `entry_type`/`source_type`/`bulk_operation_id`で由来を区別する(別テーブルに二重化しない)。
-- 履歴管理は既存`company_calendars`関連の実装(レガシー自前イベントソーシング、
-  `legacy_stored_events`)に揃え、新規spatie方式(`stored_events`)とは混在させない。
+- 履歴管理は既存`company_calendars`関連の実装(`WorkCalendarAggregate`/
+  `EmployeeShiftAssignmentAggregate`)に揃える。この実装は**既にspatie方式
+  (`stored_events`)へ移行済み**であり、レガシー自前イベントソーシング(`legacy_stored_events`)
+  は使っていない。新設する`CompanyCalendarYearAggregate`等もspatie方式で実装する
+  (docs/29の「未移行ドメインはレガシーのまま」という一般則の対象外)。
 
 ## 本機能着手時のbackendリネーム対象(`work_calendars`/`employee_shift_assignments`系)
 

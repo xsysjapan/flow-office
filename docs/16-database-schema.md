@@ -1052,6 +1052,10 @@ docs/20-implementation-notes.md と同様の注記)。
 
 会社カレンダー・従業員予定関連(`company_calendars`/`company_calendar_years`/`company_calendar_days`/
 `employee_calendar_entries`/`calendar_bulk_operations`等)の状態変更は、既存の
-`company_calendars`関連実装(`CompanyCalendarAggregate`)に揃え、レガシー自前イベントソーシング
-(`legacy_stored_events`)で記録する。新規spatie方式(`stored_events`)は使わない
-(docs/29の全ドメイン移行完了後にまとめて寄せる)。
+`CompanyCalendarAggregate`(現行の`WorkCalendarAggregate`)・`EmployeeCalendarEntryAggregate`
+(現行の`EmployeeShiftAssignmentAggregate`)が**既にspatie方式(`Spatie\EventSourcing\AggregateRoots\AggregateRoot`
++ `ShouldBeStored`、新`stored_events`テーブル)で実装済み**のため、新設する
+`CompanyCalendarYearAggregate`・`HolidayCalendarSourceAggregate`・`CalendarBulkOperationAggregate`
+等もこれに揃えてspatie方式を使う(`legacy_stored_events`は使わない)。docs/29の移行方針の
+「未移行ドメインはレガシー方式のまま」という原則の例外ではなく、このドメインは既に移行済み
+という位置づけになる。

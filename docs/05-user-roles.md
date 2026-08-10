@@ -48,12 +48,12 @@ Permissionの集合を`Role`として分離する。Roleはユーザーまたは
   /api/onboarding/calendar/generate-now`)は管理者が画面から押す操作であり、
   `company_calendar.manage`を要求する(バッチと同じ生成ロジックを呼ぶだけであることは
   Permission判定を免除する理由にならない)。
-- 会社カレンダー・従業員予定関連の実行結果は、既存`company_calendars`実装に揃えて
-  `legacy_stored_events`に記録される(docs/20-implementation-notes.md参照)。現時点の
-  `AuditLogController`は`stored_events`(新spatie方式)のみを検索する簡略化がされているため
-  (docs/29-event-sourcing-framework-migration.md「監査ログ・申請履歴の再設計」参照)、
-  本機能の変更は31.11節の監査画面にまだ表示されない。本機能(会社カレンダー・従業員予定)の
-  実装に着手する際、spatie方式へ移行するか、監査画面側の対応を別途行うまでの既知の制約とする。
+- 会社カレンダー・従業員予定関連の実行結果は、既存`company_calendars`実装
+  (`WorkCalendarAggregate`/`EmployeeShiftAssignmentAggregate`、既にspatie方式へ移行済み)に
+  揃えて新`stored_events`に記録される。現時点の`AuditLogController`は`stored_events`を
+  検索するため(docs/29-event-sourcing-framework-migration.md「監査ログ・申請履歴の再設計」
+  参照)、本機能の変更も31.11節の監査画面にそのまま表示される(`legacy_stored_events`への
+  記録ではないため、追加対応は不要)。
 - 一般社員が自分の予定変更を依頼したい場合は、既存の汎用申請ワークフロー
   (`docs/10-usecases-workflow.md`)経由とし、専用の申請経路は持たない。
 - API・MCP連携経由の操作も、Web画面と同じFeature・Permission判定を共通のCommandHandlerで通す
