@@ -141,7 +141,7 @@ describe('BackOfficeTaskDetailPage', () => {
       renderPage(attendanceMonthTask)
 
       expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
-      expect(screen.queryByText('締め処理後は修正することはできません。')).not.toBeInTheDocument()
+      expect(screen.queryByText(/締め処理済みのため修正できません/)).not.toBeInTheDocument()
     })
 
     it('closes the month and refetches when 締める is clicked', async () => {
@@ -155,13 +155,25 @@ describe('BackOfficeTaskDetailPage', () => {
       await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith('attendance-month-1'))
     })
 
-    it('hides the 締める button and shows a message when the attendance month is already closed', async () => {
+    it('keeps the attendance month visible but hides the 締める button when already closed', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'closed' })
 
       renderPage(attendanceMonthTask)
 
-      expect(await screen.findByText('締め処理後は修正することはできません。')).toBeInTheDocument()
+      expect(await screen.findByText(/月次勤怠の内容は引き続き確認できます/)).toBeInTheDocument()
+      expect(screen.getByText('月次勤怠')).toBeInTheDocument()
+      expect(screen.getByText('2026-07')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '締める' })).not.toBeInTheDocument()
+    })
+
+    it('places the back-office status change above the attendance month closeout section', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+
+      const { container } = renderPage(attendanceMonthTask)
+
+      await screen.findByText('月次勤怠の締め処理')
+      const content = container.textContent ?? ''
+      expect(content.indexOf('状態を変更する')).toBeLessThan(content.indexOf('月次勤怠の締め処理'))
     })
 
     it('does not show the attendance month section for other task types', async () => {
