@@ -46,8 +46,23 @@ AttendanceCsvFormat`実装群、`ExportController::resolveAttendanceCsvFormat()`
 いずれのフォーマットも「従業員番号」列には`users.id`(UUID)を出力する(`users`テーブルに
 社員番号専用のフィールドが無いため)。取込先ソフト側の社員番号と一致しない場合は、
 事前にマッピングを確認する必要がある(フロントエンドの出力画面にもこの注記を表示する)。
-`moneyforward`形式の出勤日数・欠勤日数・遅刻早退日数は、現状`attendance_months.snapshot_json`
-に日数の集計値を持たないため0固定としている。
+`moneyforward`形式は34項目の勤怠項目を平日/所定休日/法定休日別に出力する
+(`MoneyForwardAttendanceCsvFormat`)。出勤日数・欠勤日数・所定/所定外/法定外/深夜時間の各項目は
+`MonthlyOvertimeCalculator::calculateCategoryTotals()`が算出した実データを使うが、以下は現状の
+勤怠計算エンジンに区分ロジック・集計値が無いため0固定としている(将来対応。
+.claude/skills/attendance-calc-review参照):
+- 遅刻回数・早退回数・遅刻時間・早退時間(`AttendanceCalculator`に遅刻・早退の判定ロジックが無い)
+- 休憩時間の内訳5項目(`attendance_breaks`が休憩の区分を持たない)
+- 代休取得日数・代休取得時間数(今回のスコープでは集計しない)
+
+また、法定休日の労働は所定内/所定外に分解しない設計(法定休日に「所定」の概念が無いため)
+のため、「所定時間(法定休日)」「深夜所定時間(法定休日)」「所定外時間(法定休日)」は常に0になる。
+
+`moneyforward`形式の項目追加前に提出済み/承認済み/締め済みとなった月次勤怠は、
+`snapshot_json`に新項目の集計値を持たない(出力時は0扱いになる)。
+`attendance:recalculate-month-snapshots`コマンドで、対象月の日次実績(提出時にロックされ
+変更されない)から現在の集計ロジックで再計算し、`snapshot_json`を更新できる(差戻し中
+(returned)・未提出は対象外。1回限りの手動実行を想定)。
 
 ## UC-E002: 経費CSVを出力する
 

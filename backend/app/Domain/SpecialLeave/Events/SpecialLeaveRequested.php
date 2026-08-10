@@ -15,5 +15,6 @@ class SpecialLeaveRequested extends ShouldBeStored
         public readonly float $requestedDays,
         public readonly string $approverUserId,
         public readonly ?string $reason,
+        public readonly ?string $requestGroupId = null,
     ) {}
 }

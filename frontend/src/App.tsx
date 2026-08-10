@@ -24,6 +24,7 @@ import { ApprovalsPage } from "./pages/approvals/ApprovalsPage";
 import { AttendanceMonthsPage } from "./pages/attendance/AttendanceMonthsPage";
 import { MyPaidLeavePage } from "./pages/paidLeave/MyPaidLeavePage";
 import { MyPaidLeaveHistoryPage } from "./pages/paidLeave/MyPaidLeaveHistoryPage";
+import { MyCompensatoryLeavePage } from "./pages/compensatoryLeave/MyCompensatoryLeavePage";
 import { MySpecialLeavePage } from "./pages/specialLeave/MySpecialLeavePage";
 import { MySpecialLeaveHistoryPage } from "./pages/specialLeave/MySpecialLeaveHistoryPage";
 import { BackOfficeTaskListPage } from "./pages/backOffice/BackOfficeTaskListPage";
@@ -103,6 +104,7 @@ function App() {
         />
         <Route path="paid-leave" element={<MyPaidLeavePage />} />
         <Route path="paid-leave/history" element={<MyPaidLeaveHistoryPage />} />
+        <Route path="compensatory-leave" element={<MyCompensatoryLeavePage />} />
         <Route path="special-leave" element={<MySpecialLeavePage />} />
         <Route
           path="special-leave/history"

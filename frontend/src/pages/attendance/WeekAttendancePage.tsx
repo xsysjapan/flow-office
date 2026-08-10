@@ -1,14 +1,22 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { Button } from '../../components/Button/Button'
+import {
+  CancelApprovedLeaveDialog,
+  type ApprovedLeaveTarget,
+} from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useWeek } from '../../hooks/useAttendance'
+import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
+import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
+import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
@@ -21,17 +29,25 @@ import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
  */
 export function WeekAttendancePage() {
   const [searchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const startParam = searchParams.get('start')
   const [weekStart, setWeekStart] = useState(() =>
     formatDate(mondayOf(startParam ? new Date(`${startParam}T00:00:00`) : new Date())),
   )
+  const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
   const { data, isLoading, error } = useWeek(weekStart)
+  const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
+  const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
+  const { data: compensatoryLeaveRequests } = useMyCompensatoryLeaveRequests()
 
   const today = formatDate(new Date())
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
   const { totals: weeklyTotals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
+
+  const approvedRequestFor = (requests: { target_date: string; status: string; id: string }[] | undefined, date: string) =>
+    requests?.find((r) => r.target_date === date && r.status === 'approved')?.id
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,11 +103,24 @@ export function WeekAttendancePage() {
                 date={date}
                 day={daysByDate.get(date)}
                 warnings={dayWarnings(date, daysByDate.get(date), today)}
+                approvedPaidLeaveRequestId={approvedRequestFor(paidLeaveRequests, date)}
+                approvedSpecialLeaveRequestId={approvedRequestFor(specialLeaveRequests, date)}
+                approvedCompensatoryLeaveRequestId={approvedRequestFor(compensatoryLeaveRequests, date)}
+                onRequestCancelApprovedLeave={setCancelTarget}
               />
             ))}
           </ul>
         </Card>
       )}
+
+      <CancelApprovedLeaveDialog
+        target={cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        onCancelled={() => {
+          setCancelTarget(null)
+          void queryClient.invalidateQueries({ queryKey: ['attendance'] })
+        }}
+      />
     </div>
   )
 }

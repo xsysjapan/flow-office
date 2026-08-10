@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Leave\Support\LeaveUsageQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -14,6 +15,7 @@ use App\Http\Resources\WorkflowRequestHistoryEntryResource;
 use App\Http\Resources\WorkflowRequestResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
+use App\Models\CompensatoryLeaveRequest;
 use App\Models\EntityShare;
 use App\Models\ExpenseClaim;
 use App\Models\PaidLeaveRequest;
@@ -126,6 +128,7 @@ class WorkflowRequestController extends Controller
             'expense_claim' => $this->buildExpenseClaimSubject($workflowRequest->subject_id),
             'paid_leave_request' => $this->buildPaidLeaveRequestSubject($workflowRequest->subject_id),
             'special_leave_request' => $this->buildSpecialLeaveRequestSubject($workflowRequest->subject_id),
+            'compensatory_leave_request' => $this->buildCompensatoryLeaveRequestSubject($workflowRequest->subject_id),
             default => null,
         };
 
@@ -258,6 +261,9 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(PaidLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, PaidLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, PaidLeaveRequest::class),
         ];
     }
 
@@ -289,6 +295,84 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(SpecialLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear(
+                $request->user_id,
+                SpecialLeaveRequest::class,
+                $request->special_leave_type_id,
+            ),
+            ...$this->leaveUsageBreakdownFields($request->user_id, SpecialLeaveRequest::class, $request->special_leave_type_id),
+        ];
+    }
+
+    /**
+     * 「申請中(submitted)」「承認済み(approved)」の直近1年内訳をAPIレスポンス用のキー名で返す
+     * (残数は承認済み分のみで消化されるため、申請中の積み上がりを別枠で可視化するために使う。
+     * LeaveUsageQuery::usageBreakdownWithinPastYear参照)。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>|class-string<CompensatoryLeaveRequest>  $requestModelClass
+     * @return array{pending_days_last_year: float, approved_days_last_year: float}
+     */
+    private function leaveUsageBreakdownFields(string $userId, string $requestModelClass, ?int $specialLeaveTypeId = null): array
+    {
+        $breakdown = LeaveUsageQuery::usageBreakdownWithinPastYear($userId, $requestModelClass, $specialLeaveTypeId);
+
+        return [
+            'pending_days_last_year' => $breakdown['pending_days'],
+            'approved_days_last_year' => $breakdown['approved_days'],
+        ];
+    }
+
+    /**
+     * 同じ`request_group_id`を持つ全行の対象日一覧(期間指定の複数日申請であることを
+     * 承認者に示すため)。単日申請(request_group_idがnull)の場合はnullを返す。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>  $requestModelClass
+     * @return list<string>|null
+     */
+    private function requestGroupDates(string $requestModelClass, ?string $requestGroupId): ?array
+    {
+        if ($requestGroupId === null) {
+            return null;
+        }
+
+        return $requestModelClass::query()
+            ->where('request_group_id', $requestGroupId)
+            ->orderBy('target_date')
+            ->get()
+            ->map(fn ($row) => $row->target_date->toDateString())
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildCompensatoryLeaveRequestSubject(?string $subjectId): ?array
+    {
+        $request = CompensatoryLeaveRequest::query()->with(['user', 'approver'])->find($subjectId);
+
+        if ($request === null) {
+            return null;
+        }
+
+        return [
+            'type' => 'compensatory_leave_request',
+            'id' => $request->id,
+            'user_id' => $request->user_id,
+            'status' => $request->status,
+            'target_date' => $request->target_date?->toDateString(),
+            'leave_type' => $request->leave_type,
+            'leave_type_label' => WorkflowRequestResource::leaveTypeLabel($request->leave_type),
+            'hours' => $request->hours !== null ? (float) $request->hours : null,
+            'requested_days' => (float) $request->requested_days,
+            'reason' => $request->reason,
+            'submitted_at' => $request->submitted_at?->toIso8601String(),
+            'approved_at' => $request->approved_at?->toIso8601String(),
+            'returned_at' => $request->returned_at?->toIso8601String(),
+            'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(CompensatoryLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, CompensatoryLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, CompensatoryLeaveRequest::class),
         ];
     }
 

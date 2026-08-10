@@ -37,6 +37,7 @@ export function SystemSettingsPage() {
   const [attendanceRequiresApproval, setAttendanceRequiresApproval] = useState(true)
   const [expenseClaimRequiresApproval, setExpenseClaimRequiresApproval] = useState(true)
   const [prohibitSelfPrivilegedRoleAssignment, setProhibitSelfPrivilegedRoleAssignment] = useState(false)
+  const [compensatoryLeaveRequiresApproval, setCompensatoryLeaveRequiresApproval] = useState(true)
   const [savedMessage, setSavedMessage] = useState(false)
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export function SystemSettingsPage() {
     setAttendanceRequiresApproval(data.attendance_requires_approval)
     setExpenseClaimRequiresApproval(data.expense_claim_requires_approval)
     setProhibitSelfPrivilegedRoleAssignment(data.prohibit_self_privileged_role_assignment)
+    setCompensatoryLeaveRequiresApproval(data.compensatory_leave_requires_approval)
   }, [data])
 
   if (isLoading) return <LoadingState />
@@ -89,6 +91,7 @@ export function SystemSettingsPage() {
         attendance_requires_approval: attendanceRequiresApproval,
         expense_claim_requires_approval: expenseClaimRequiresApproval,
         prohibit_self_privileged_role_assignment: prohibitSelfPrivilegedRoleAssignment,
+        compensatory_leave_requires_approval: compensatoryLeaveRequiresApproval,
       },
       {
         onSuccess: () => {
@@ -221,6 +224,17 @@ export function SystemSettingsPage() {
           }}
         />
         経費精算の申請に承認を必須にする
+      </label>
+
+      <label className="mb-4 flex items-center gap-2 text-sm text-foreground">
+        <Checkbox
+          checked={compensatoryLeaveRequiresApproval}
+          onCheckedChange={(checked) => {
+            setCompensatoryLeaveRequiresApproval(checked === true)
+            setSavedMessage(false)
+          }}
+        />
+        代休の消化申請に承認を必須にする
       </label>
 
       <h3 className="mb-3 mt-6 text-sm font-semibold text-foreground">特権操作</h3>

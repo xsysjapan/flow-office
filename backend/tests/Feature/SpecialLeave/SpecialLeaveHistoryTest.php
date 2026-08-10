@@ -71,7 +71,7 @@ class SpecialLeaveHistoryTest extends TestCase
 
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
-            ['special_leave.used', 'special_leave.request_approved', 'special_leave.request_shared', 'special_leave.requested', 'special_leave.granted'],
+            ['special_leave.used', 'special_leave.request_approved', 'special_leave.request_shared', 'special_leave.usage_designated', 'special_leave.requested', 'special_leave.granted'],
             $eventTypes,
         );
     }

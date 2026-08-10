@@ -69,7 +69,14 @@ class PaidLeaveHistoryTest extends TestCase
 
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
-            ['paid_leave.used', 'paid_leave.request_approved', 'paid_leave.request_shared', 'paid_leave.requested', 'paid_leave.granted'],
+            [
+                'paid_leave.used',
+                'paid_leave.request_approved',
+                'paid_leave.request_shared',
+                'paid_leave.usage_designated',
+                'paid_leave.requested',
+                'paid_leave.granted',
+            ],
             $eventTypes,
         );
 

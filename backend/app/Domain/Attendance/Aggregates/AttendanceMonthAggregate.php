@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSnapshotRecalculated;
 use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
@@ -127,6 +128,20 @@ class AttendanceMonthAggregate extends AggregateRoot
     public function close(string $closedByUserId): self
     {
         $this->recordThat(new AttendanceMonthClosed(closedByUserId: $closedByUserId));
+
+        return $this;
+    }
+
+    /**
+     * 提出済み・承認済み・締め済みの月次勤怠について、対象月の日次実績(ロック済みで変更されない)
+     * から集計ロジックを再実行した結果でsnapshot_jsonを更新する
+     * (RecalculateAttendanceMonthSnapshotHandler参照)。
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function recalculateSnapshot(array $snapshot): self
+    {
+        $this->recordThat(new AttendanceMonthSnapshotRecalculated(snapshot: $snapshot));
 
         return $this;
     }

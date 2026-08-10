@@ -66,6 +66,7 @@ function navGroups(
           feature: "attendance.timesheet",
         },
         { to: "/paid-leave", label: "有給", feature: "paid_leave.requests" },
+        { to: "/compensatory-leave", label: "代休", feature: "paid_leave.requests" },
         ...(hasSpecialLeaveTypes
           ? [
               {

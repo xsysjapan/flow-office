@@ -4,14 +4,23 @@ namespace App\Domain\Workflow\Reactors;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
+use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
+use App\Models\PaidLeaveRequest;
+use App\Models\PaidLeaveRequestStatus;
 use App\Models\WorkflowRequest;
+use App\Models\WorkflowRequestStatus;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
  * UC-P004: workflow_request(subject_type=paid_leave_request)の承認を受けて、
  * 実際のPaidLeaveRequest集約へ`ApprovePaidLeaveRequest`を発行する。
+ *
+ * 期間指定でまとめて申請した複数日分(同じ`request_group_id`を持つ行)は、この
+ * うち1件が承認されたタイミングで、まだ提出中の他の行もまとめて承認する
+ * (承認者が期間全体を1回の操作で承認できるようにするため)。差戻しは対象外
+ * (日ごとに個別差戻しする)。
  */
 class PaidLeaveApprovalOnWorkflowRequestApprovedReactor extends Reactor
 {
@@ -29,5 +38,58 @@ class PaidLeaveApprovalOnWorkflowRequestApprovedReactor extends Reactor
             paidLeaveRequestId: $workflowRequest->subject_id,
             approvedByUserId: $event->approvedByUserId,
         ));
+
+        $this->cascadeApproveGroupSiblings($workflowRequest->subject_id, $event->approvedByUserId);
+    }
+
+    /**
+     * 同じ`request_group_id`を持ち、まだ提出中(submitted)の他の申請を承認する。
+     * 1件ずつ再度DBを見ながら処理することで、この承認が
+     * `ApproveWorkflowRequest`→(このReactorの再帰呼び出し)経由でさらに他の兄弟を
+     * 承認済みにしていても、二重承認によるエラーが起きないようにする。
+     */
+    private function cascadeApproveGroupSiblings(?string $paidLeaveRequestId, ?string $approvedByUserId): void
+    {
+        $paidLeaveRequest = PaidLeaveRequest::query()->find($paidLeaveRequestId);
+
+        if ($paidLeaveRequest === null || $paidLeaveRequest->request_group_id === null) {
+            return;
+        }
+
+        while (true) {
+            $sibling = PaidLeaveRequest::query()
+                ->where('request_group_id', $paidLeaveRequest->request_group_id)
+                ->where('id', '!=', $paidLeaveRequest->id)
+                ->where('status', PaidLeaveRequestStatus::SUBMITTED)
+                ->orderBy('target_date')
+                ->first();
+
+            if ($sibling === null) {
+                return;
+            }
+
+            $siblingWorkflowRequest = WorkflowRequest::query()
+                ->where('subject_type', WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST)
+                ->where('subject_id', $sibling->id)
+                ->where('status', WorkflowRequestStatus::SUBMITTED)
+                ->latest()
+                ->first();
+
+            if ($siblingWorkflowRequest === null) {
+                // 対応するworkflow_requestが見つからない場合(通常は起こらない)は、
+                // 承認待ちのまま取り残さないようPaidLeaveRequest集約を直接承認する。
+                $this->commandBus->dispatch(new ApprovePaidLeaveRequest(
+                    paidLeaveRequestId: $sibling->id,
+                    approvedByUserId: $approvedByUserId,
+                ));
+
+                continue;
+            }
+
+            $this->commandBus->dispatch(new ApproveWorkflowRequest(
+                workflowRequestId: $siblingWorkflowRequest->id,
+                approvedByUserId: $approvedByUserId,
+            ));
+        }
     }
 }

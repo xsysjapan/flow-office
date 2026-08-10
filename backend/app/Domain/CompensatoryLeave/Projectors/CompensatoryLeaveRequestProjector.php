@@ -30,6 +30,7 @@ class CompensatoryLeaveRequestProjector extends Projector
                 'requested_days' => $event->requestedDays,
                 'requested_minutes' => $event->requestedMinutes,
                 'reason' => $event->reason,
+                'request_group_id' => $event->requestGroupId,
                 'submitted_at' => $event->createdAt(),
             ],
         );

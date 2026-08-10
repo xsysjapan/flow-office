@@ -348,14 +348,25 @@ class AttendanceExportTest extends TestCase
             'year_month' => '2026-06',
             'status' => 'approved',
             'snapshot_json' => [
-                'work_minutes' => 510,
-                'prescribed_work_minutes' => 480,
-                'statutory_within_overtime_minutes' => 0,
-                'statutory_excess_overtime_minutes' => 30,
-                'late_night_work_minutes' => 60,
-                'late_night_statutory_excess_overtime_minutes' => 30,
+                'work_days_weekday' => 20,
+                'work_days_prescribed_holiday' => 1,
+                'work_days_legal_holiday' => 0,
+                'absence_days' => 1,
+                'weekday_regular_work_minutes' => 9600,
+                'weekday_statutory_within_overtime_minutes' => 0,
+                'weekday_statutory_excess_overtime_minutes' => 30,
+                'weekday_late_night_prescribed_work_minutes' => 0,
+                'weekday_late_night_statutory_within_overtime_minutes' => 0,
+                'weekday_late_night_statutory_excess_overtime_minutes' => 30,
+                'prescribed_holiday_work_minutes' => 480,
+                'prescribed_holiday_late_night_prescribed_work_minutes' => 0,
+                'prescribed_holiday_statutory_within_overtime_minutes' => 0,
+                'prescribed_holiday_statutory_excess_overtime_minutes' => 60,
+                'prescribed_holiday_late_night_statutory_excess_overtime_minutes' => 0,
                 'legal_holiday_work_minutes' => 0,
-                'prescribed_holiday_work_minutes' => 0,
+                'late_night_legal_holiday_work_minutes' => 0,
+                'paid_leave_days' => 1.0,
+                'paid_leave_minutes' => 0,
             ],
         ]);
 
@@ -368,12 +379,31 @@ class AttendanceExportTest extends TestCase
         $lines = explode("\n", trim($csv));
 
         $this->assertSame(
-            'Version,従業員番号,氏名,出勤日数,欠勤日数,遅刻早退日数,所定労働時間,残業時間(法定外・平日),深夜法定外時間(平日),法定外(法定休日),深夜労働時間',
+            'Version,従業員番号,氏名,'
+            .'出勤日数（平日）,出勤日数（所定休日）,出勤日数（法定休日）,欠勤日数（平日）,'
+            .'遅刻回数（平日）,早退回数（平日）,'
+            .'所定時間（平日）,休憩時間（平日）,深夜所定時間（平日）,深夜休憩時間（平日）,'
+            .'所定外時間（平日）,法定外時間（平日）,深夜所定外時間（平日）,深夜法定外時間（平日）,'
+            .'所定外休憩時間（平日）,深夜所定外休憩時間（平日）,法定外休憩時間（平日）,深夜法定外休憩時間（平日）,'
+            .'遅刻時間（平日）,早退時間（平日）,'
+            .'所定時間（所定休日）,深夜所定時間（所定休日）,所定外時間（所定休日）,法定外時間（所定休日）,深夜法定外時間（所定休日）,'
+            .'所定時間（法定休日）,深夜所定時間（法定休日）,所定外時間（法定休日）,法定外時間（法定休日）,深夜法定外時間（法定休日）,'
+            .'有休取得日数,有休取得時間数,代休取得日数,代休取得時間数',
             $lines[0]
         );
-        // 深夜法定外時間(平日)=0.5(late_night_statutory_excess_overtime_minutes由来)と
-        // 深夜労働時間=1(late_night_work_minutes由来)が別の値になっている(二重流用でないこと)を確認する。
-        $this->assertStringContainsString('2,'.$employee->id.',MF社員,0,0,0,8,0.5,0.5,0,1', $lines[1]);
+        $this->assertSame(
+            '3,'.$employee->id.',MF社員,'
+            .'20,1,0,1,'
+            .'0,0,'
+            .'160,0,0,0,'
+            .'0,0.5,0,0.5,'
+            .'0,0,0,0,'
+            .'0,0,'
+            .'8,0,0,1,0,'
+            .'0,0,0,0,0,'
+            .'1,0,0,0',
+            $lines[1]
+        );
     }
 
     public function test_freee_format_columns(): void

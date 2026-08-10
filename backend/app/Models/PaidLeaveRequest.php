@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 主キーはUUID(HasUuids)。理由はPaidLeaveGrantと同じ(この行自体もPaidLeaveRequestProjectorが
  * stored_eventsから作成・更新する)。
  */
-#[Fillable(['id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'request_group_id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
 class PaidLeaveRequest extends Model
 {
     use HasUuids;

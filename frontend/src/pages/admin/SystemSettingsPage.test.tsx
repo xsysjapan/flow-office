@@ -24,6 +24,7 @@ const settings: SystemSettings = {
   attendance_requires_approval: true,
   expense_claim_requires_approval: true,
   prohibit_self_privileged_role_assignment: false,
+  compensatory_leave_requires_approval: true,
 }
 
 function renderPage() {
@@ -74,6 +75,7 @@ describe('SystemSettingsPage', () => {
         attendance_requires_approval: true,
         expense_claim_requires_approval: true,
         prohibit_self_privileged_role_assignment: false,
+        compensatory_leave_requires_approval: true,
       }),
     )
     expect(await screen.findByText('保存しました。')).toBeInTheDocument()

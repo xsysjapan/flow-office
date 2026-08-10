@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\AttendanceMonthClosed;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
+use App\Domain\Attendance\Events\AttendanceMonthSnapshotRecalculated;
 use App\Domain\Attendance\Events\AttendanceMonthSubmissionCancelled;
 use App\Domain\Attendance\Events\AttendanceMonthSubmitted;
 use App\Domain\Attendance\Events\AttendanceMonthUnlocked;
@@ -73,6 +74,17 @@ class AttendanceMonthProjector extends Projector
         AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => AttendanceMonthStatus::CLOSED,
             'closed_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * 集計ロジックの追加・修正を既存の提出済み月次勤怠へ反映するための再計算
+     * (RecalculateAttendanceMonthSnapshotHandler参照)。ステータス・その他の日時は変更しない。
+     */
+    public function onAttendanceMonthSnapshotRecalculated(AttendanceMonthSnapshotRecalculated $event): void
+    {
+        AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
+            'snapshot_json' => $event->snapshot,
         ]);
     }
 

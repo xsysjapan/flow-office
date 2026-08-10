@@ -76,6 +76,14 @@ class WorkflowRequestResource extends JsonResource
                 'requested_days' => (float) $subject->requested_days,
                 'reason' => $subject->reason,
             ],
+            'compensatory_leave_request' => [
+                'target_date' => $subject->target_date?->toDateString(),
+                'leave_type' => $subject->leave_type,
+                'leave_type_label' => $this->leaveTypeLabel($subject->leave_type),
+                'hours' => $subject->hours !== null ? (float) $subject->hours : null,
+                'requested_days' => (float) $subject->requested_days,
+                'reason' => $subject->reason,
+            ],
             default => null,
         };
     }
