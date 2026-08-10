@@ -12,6 +12,6 @@ class UpdateCompanyCalendarDays implements Command
     public function __construct(
         public readonly string $companyCalendarYearId,
         public readonly array $days,
-        public readonly string $updatedByUserId,
+        public readonly ?string $updatedByUserId,
     ) {}
 }

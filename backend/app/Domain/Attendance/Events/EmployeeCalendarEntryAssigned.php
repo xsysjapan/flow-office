@@ -33,5 +33,13 @@ class EmployeeCalendarEntryAssigned extends ShouldBeStored
         public readonly bool $isPublished,
         public readonly bool $isManuallyOverridden,
         public readonly string $assignedByUserId,
+        // UC-C013: 一括操作(calendar_bulk_operations)経由の行を特定するための追加フィールド。
+        // 既存呼び出し元(UC-C003カレンダー基準一括生成・UC-C008ローテーション一括生成)は
+        // これらを渡さないため、既定値(schedule_stateはnull=Projector側でUNASSIGNED相当に
+        // フォールバック)のままで挙動は変わらない。
+        public readonly ?string $scheduleState = null,
+        public readonly ?string $entryType = null,
+        public readonly ?string $sourceType = null,
+        public readonly ?string $bulkOperationId = null,
     ) {}
 }

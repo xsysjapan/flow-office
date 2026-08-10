@@ -32,6 +32,10 @@ class EmployeeCalendarEntryAggregate extends AggregateRoot
         bool $isPublished,
         bool $isManuallyOverridden,
         string $assignedByUserId,
+        ?string $scheduleState = null,
+        ?string $entryType = null,
+        ?string $sourceType = null,
+        ?string $bulkOperationId = null,
     ): self {
         $this->recordThat(new EmployeeCalendarEntryAssigned(
             userId: $userId,
@@ -50,6 +54,10 @@ class EmployeeCalendarEntryAggregate extends AggregateRoot
             isPublished: $isPublished,
             isManuallyOverridden: $isManuallyOverridden,
             assignedByUserId: $assignedByUserId,
+            scheduleState: $scheduleState,
+            entryType: $entryType,
+            sourceType: $sourceType,
+            bulkOperationId: $bulkOperationId,
         ));
 
         return $this;

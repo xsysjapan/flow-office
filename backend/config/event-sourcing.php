@@ -33,9 +33,12 @@ use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\Attendance\Events\AttendanceSubmissionReminderExcluded;
+use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
+use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
+use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
@@ -43,6 +46,10 @@ use App\Domain\Attendance\Events\EmployeeCalendarEntryAssigned;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPlanChanged;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPublished;
 use App\Domain\Attendance\Events\EmployeeRotationAssigned;
+use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
+use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
+use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
+use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
 use App\Domain\Attendance\Events\LegalHolidayDesignated;
 use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternCreated;
@@ -338,6 +345,15 @@ return [
         'company_calendar_year.published' => CompanyCalendarYearPublished::class,
         'company_calendar_year.unpublished' => CompanyCalendarYearUnpublished::class,
         'company_calendar_year.archived' => CompanyCalendarYearArchived::class,
+        'company_calendar_year.batch_generated' => CompanyCalendarYearBatchGenerated::class,
+
+        'holiday_calendar_source.registered' => HolidayCalendarSourceRegistered::class,
+        'holiday_calendar_source.synced' => HolidayCalendarSourceSynced::class,
+        'holiday_calendar_source.sync_failed' => HolidayCalendarSourceSyncFailed::class,
+        'holiday_calendar_source.disabled' => HolidayCalendarSourceDisabled::class,
+
+        'calendar_bulk_operation.applied' => CalendarBulkOperationApplied::class,
+        'calendar_bulk_operation.reverted' => CalendarBulkOperationReverted::class,
 
         'work_style.created' => WorkStyleCreated::class,
         'work_style.default_changed' => WorkStyleDefaultChanged::class,

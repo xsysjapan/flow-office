@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
+use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
@@ -179,6 +180,27 @@ class CompanyCalendarController extends Controller
         ));
 
         return new CompanyCalendarYearResource($year);
+    }
+
+    /**
+     * UC-C009 手順4: 既存年度を複製して翌年度を作成する。
+     */
+    #[OA\Post(
+        path: '/company-calendar-years/{companyCalendarYear}/duplicate',
+        operationId: 'companyCalendarYears.duplicate',
+        summary: '既存年度を複製して翌年度を作成する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function duplicate(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): JsonResponse
+    {
+        $year = $commandBus->dispatch(new DuplicateCompanyCalendarYear(
+            sourceCompanyCalendarYearId: $companyCalendarYear->id,
+            createdByUserId: $request->user()->id,
+        ));
+
+        return (new CompanyCalendarYearResource($year))->response()->setStatusCode(201);
     }
 
     /**

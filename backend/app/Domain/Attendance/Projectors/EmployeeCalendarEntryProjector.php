@@ -21,7 +21,7 @@ class EmployeeCalendarEntryProjector extends Projector
         $assignment = EmployeeCalendarEntry::query()->find($event->aggregateRootUuid())
             ?? new EmployeeCalendarEntry(['id' => $event->aggregateRootUuid()]);
 
-        $assignment->fill([
+        $attributes = [
             'user_id' => $event->userId,
             'work_date' => $event->workDate,
             'work_style_id' => $event->workStyleId,
@@ -37,7 +37,26 @@ class EmployeeCalendarEntryProjector extends Projector
             'planned_break_end_at' => $event->plannedBreakEndAt,
             'is_published' => $event->isPublished,
             'is_manually_overridden' => $event->isManuallyOverridden,
-        ])->save();
+        ];
+
+        // UC-C013: scheduleState等はcalendar_bulk_operations経由の書き込みでのみ渡される。
+        // 既存のUC-C003・UC-C008からの呼び出しはこれらを渡さない(null)ため、その場合は
+        // schedule_state等の列に触れず、DBのデフォルト値(UNASSIGNED/null)のままにする
+        // (既存の挙動を変えない)。
+        if ($event->scheduleState !== null) {
+            $attributes['schedule_state'] = $event->scheduleState;
+        }
+        if ($event->entryType !== null) {
+            $attributes['entry_type'] = $event->entryType;
+        }
+        if ($event->sourceType !== null) {
+            $attributes['source_type'] = $event->sourceType;
+        }
+        if ($event->bulkOperationId !== null) {
+            $attributes['bulk_operation_id'] = $event->bulkOperationId;
+        }
+
+        $assignment->fill($attributes)->save();
     }
 
     public function onEmployeeCalendarEntryPlanChanged(EmployeeCalendarEntryPlanChanged $event): void

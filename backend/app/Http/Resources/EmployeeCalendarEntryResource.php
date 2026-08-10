@@ -29,6 +29,9 @@ class EmployeeCalendarEntryResource extends JsonResource
             'planned_break_end_at' => $this->planned_break_end_at?->toIso8601String(),
             'is_published' => $this->is_published,
             'is_manually_overridden' => $this->is_manually_overridden,
+            // UC-C014手順5: company_calendar_years未生成期間の暫定計算結果であることの印。
+            // 通常のemployee_calendar_entries行はfalse。
+            'provisional' => $this->provisional ?? false,
         ];
     }
 }

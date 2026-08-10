@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * 一括操作の対象明細 (docs/16-database-schema.md calendar_bulk_operation_targets、UC-C013)。
- * 適用ロジック自体は次のタスクで実装する。
  */
 #[Fillable(['id', 'calendar_bulk_operation_id', 'user_id', 'work_date', 'employee_calendar_entry_id', 'result', 'error_code', 'previous_snapshot'])]
 class CalendarBulkOperationTarget extends Model

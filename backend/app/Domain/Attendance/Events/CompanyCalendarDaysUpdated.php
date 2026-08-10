@@ -19,6 +19,6 @@ class CompanyCalendarDaysUpdated extends ShouldBeStored
      */
     public function __construct(
         public readonly array $days,
-        public readonly string $updatedByUserId,
+        public readonly ?string $updatedByUserId,
     ) {}
 }

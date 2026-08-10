@@ -7,6 +7,7 @@ use App\Domain\Attendance\Commands\EditEmployeeCalendarEntry;
 use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
+use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\ShiftScheduleReviewService;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
@@ -37,7 +38,7 @@ class EmployeeCalendarEntryController extends Controller
         parameters: [new OA\Parameter(name: 'user_id', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')), new OA\Parameter(name: 'from', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date')), new OA\Parameter(name: 'to', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, ProvisionalScheduleCalculator $provisionalScheduleCalculator): JsonResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'string', 'exists:users,id'],
@@ -56,7 +57,21 @@ class EmployeeCalendarEntryController extends Controller
             ->orderBy('work_date')
             ->get();
 
-        return EmployeeCalendarEntryResource::collection($assignments);
+        // UC-C014手順5: バッチ生成(または「今すぐ生成する」)を待たずに取得が必要な場合の
+        // 読み取りフォールバック。company_calendar_years/company_calendar_daysには書き込まない。
+        $provisionalAssignments = $provisionalScheduleCalculator->fillGaps(
+            $data['user_id'],
+            $data['from'],
+            $data['to'],
+            $assignments,
+        );
+
+        $merged = $assignments->concat($provisionalAssignments)->sortBy(fn (EmployeeCalendarEntry $e) => $e->work_date)->values();
+
+        return response()->json([
+            'data' => EmployeeCalendarEntryResource::collection($merged),
+            'provisional' => $provisionalAssignments !== [],
+        ]);
     }
 
     /**

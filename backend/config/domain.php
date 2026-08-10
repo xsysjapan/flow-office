@@ -25,6 +25,7 @@ use App\Domain\AccessControl\Handlers\UpdateRoleHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
+use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
@@ -45,10 +46,13 @@ use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
+use App\Domain\Attendance\Commands\DisableHolidayCalendarSource;
+use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EditEmployeeCalendarEntry;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\ExcludeAttendanceSubmissionReminder;
+use App\Domain\Attendance\Commands\GenerateCompanyCalendarYears;
 use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
 use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
@@ -57,11 +61,14 @@ use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
+use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
+use App\Domain\Attendance\Commands\RevertCalendarBulkOperation;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
+use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
@@ -69,6 +76,7 @@ use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
+use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
@@ -89,10 +97,13 @@ use App\Domain\Attendance\Handlers\CreateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
+use App\Domain\Attendance\Handlers\DisableHolidayCalendarSourceHandler;
+use App\Domain\Attendance\Handlers\DuplicateCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\EditAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\EditEmployeeCalendarEntryHandler;
 use App\Domain\Attendance\Handlers\EndBreakHandler;
 use App\Domain\Attendance\Handlers\ExcludeAttendanceSubmissionReminderHandler;
+use App\Domain\Attendance\Handlers\GenerateCompanyCalendarYearsHandler;
 use App\Domain\Attendance\Handlers\GenerateEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternAttendanceDaysHandler;
 use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
@@ -101,11 +112,14 @@ use App\Domain\Attendance\Handlers\PublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\RegisterHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\RevertCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\SyncHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\UnpublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
@@ -422,6 +436,13 @@ return [
         UnpublishCompanyCalendarYear::class => UnpublishCompanyCalendarYearHandler::class,
         ArchiveCompanyCalendarYear::class => ArchiveCompanyCalendarYearHandler::class,
         UpdateCompanyCalendarDays::class => UpdateCompanyCalendarDaysHandler::class,
+        DuplicateCompanyCalendarYear::class => DuplicateCompanyCalendarYearHandler::class,
+        GenerateCompanyCalendarYears::class => GenerateCompanyCalendarYearsHandler::class,
+        RegisterHolidayCalendarSource::class => RegisterHolidayCalendarSourceHandler::class,
+        SyncHolidayCalendarSource::class => SyncHolidayCalendarSourceHandler::class,
+        DisableHolidayCalendarSource::class => DisableHolidayCalendarSourceHandler::class,
+        ApplyCalendarBulkOperation::class => ApplyCalendarBulkOperationHandler::class,
+        RevertCalendarBulkOperation::class => RevertCalendarBulkOperationHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,
         CreateDefaultWorkStyle::class => CreateDefaultWorkStyleHandler::class,
         SetDefaultWorkStyle::class => SetDefaultWorkStyleHandler::class,

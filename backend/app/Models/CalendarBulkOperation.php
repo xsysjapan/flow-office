@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * 複数従業員予定の一括操作 (docs/16-database-schema.md calendar_bulk_operations、UC-C013)。
- * プレビュー→確定適用→取消の適用ロジック自体は次のタスクで実装する。
+ * プレビュー→確定適用→取消のロジックは`App\Domain\Attendance\Services\CalendarBulkOperationPlanner`
+ * と`CalendarBulkOperationAggregate`にまとめる。
  */
 #[Fillable(['id', 'operation_type', 'target_scope', 'conflict_policy', 'status', 'requested_by_user_id', 'applied_at', 'reverted_at', 'reason'])]
 class CalendarBulkOperation extends Model

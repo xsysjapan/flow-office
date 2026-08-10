@@ -38,42 +38,39 @@
   は使っていない。新設する`CompanyCalendarYearAggregate`等もspatie方式で実装する
   (docs/29の「未移行ドメインはレガシーのまま」という一般則の対象外)。
 
-## 本機能着手時のbackendリネーム対象(`work_calendars`/`employee_shift_assignments`系)
+## backendリネーム(完了)
 
-(19-implementation-phases.mdの「Phase 4追加」に対応する着手タイミングを指す。19章の
-「Phase 2: 汎用申請」とは無関係)
+`work_calendars`/`work_calendar_days`/`employee_shift_assignments`系の実装を
+`company_calendars`/`company_calendar_days`/`employee_calendar_entries`系へ実コードで
+リネーム済み(移行用マイグレーション`2026_08_10_010000_rename_work_calendars_to_company_calendars`)。
+本体/年度の2階層分離(`company_calendar_years`新設)、`fiscal_year_start_month`/
+`fiscal_year_start_day`追加、`calendar_bulk_operations`の`conflict_policy`3択
+(`skip_existing`/`overwrite`/`fail_on_conflict`)、祝日iCalendar同期
+(`holiday_calendar_sources`/`holiday_calendar_events`)、UC-C014定期バッチも実装済み。
+`php artisan test`は666/666成功。
 
-本ドキュメント群は、既存backend実装が使っている旧テーブル名・旧クラス名
-(`work_calendars`系・`employee_shift_assignments`系)を、新仕様の名称
-(`company_calendars`系・`employee_calendar_entries`系)に統一して記述している。ただし
-本番環境ではカレンダー機能を未使用のため、今回のdocs更新に合わせてbackendの実装(migrations・
-Aggregate・Event・Projector等)を今すぐ変更することはしない。以下は、本機能(会社カレンダー・
-従業員予定、19-implementation-phases.md「Phase 4追加」)の実装に着手するタイミングで、
-通常のマイグレーション・クラスリネームでテーブル名・クラス名を新名称へ揃えるべき既存ファイル
-の一覧(本番未使用のため安全に移管できる)。
+## 会社カレンダー・従業員予定機能で残っている既知の制約・未実装事項
 
-- `backend/database/migrations/2026_07_09_151953_create_work_calendars_table.php`
-- `backend/database/migrations/2026_07_09_151954_a1_create_work_calendar_days_table.php`
-- `backend/database/migrations/2026_07_09_151954_a3_create_employee_shift_assignments_table.php`
-- `backend/database/migrations/2026_07_12_130001_add_shift_pattern_id_and_is_published_to_employee_shift_assignments_table.php`
-- `backend/database/migrations/2026_07_13_120003_add_is_manually_overridden_to_employee_shift_assignments_table.php`
-- `backend/database/migrations/2026_07_14_160102_add_planned_break_times_to_employee_shift_assignments_table.php`
-- `backend/app/Domain/Attendance/Aggregates/WorkCalendarAggregate.php`
-  (→`CompanyCalendarAggregate`)
-- `backend/app/Domain/Attendance/Aggregates/EmployeeShiftAssignmentAggregate.php`
-  (→`EmployeeCalendarEntryAggregate`)
-- `backend/app/Domain/Attendance/Events/WorkCalendarCreated.php`
-- `backend/app/Domain/Attendance/Events/WorkCalendarPublished.php`
-- `backend/app/Domain/Attendance/Events/WorkCalendarDaysUpdated.php`
-- `backend/app/Domain/Attendance/Events/EmployeeShiftAssigned.php`
-- `backend/app/Domain/Attendance/Projectors/WorkCalendarProjector.php`
-- `backend/app/Domain/Attendance/Projectors/EmployeeShiftAssignmentProjector.php`
-- `backend/app/Domain/Attendance/Services/AttendanceCalculator.php` ほか、`work_calendars`/
-  `employee_shift_assignments`系を参照している既存Controller・Service・Requestなど、リネーム
-  着手時に`grep -rn "work_calendar\|employee_shift_assignment" backend/`で洗い出した参照元一式
-  (Migration名・クラス名・テーブル名・カラム名(`work_styles.calendar_id` →
-  `work_styles.company_calendar_id`含む)・既存テストを合わせて変更する)
-
-このリネームと合わせて、本ドキュメントで追加した新要件(本体への`fiscal_year_start_month`/
-`fiscal_year_start_day`追加、カレンダー年度定期バッチ生成〔UC-C014〕、`conflict_policy`の
-3択整理〔`skip_existing`/`overwrite`/`fail_on_conflict`〕)も、この着手時に反映する。
+- **旧カラムの削除(2段階目)**: `company_calendar_days.day_type`/`is_working_day`/
+  `is_company_holiday`、`employee_calendar_entries.day_type`/`is_working_day`/
+  `is_company_holiday`は、新カラム(`schedule_state`/`is_public_holiday`等)と併存させたまま
+  (Projectorが両方に整合する値を書き込む)。既存参照箇所を`schedule_state`ベースに置き換え、
+  回帰確認が完了してから別マイグレーションで削除する。
+- **祝日同期の取消(UC-C012手順4後半)**: 同期実行1回分の内容は`holiday_calendar_source.synced`
+  イベントのpayload(`event_changes`/`day_changes`/`protected_conflicts`)に記録されるが、
+  「その実行が変更した日だけを同期前の状態へ取り消す」操作自体は未実装。
+- **祝日同期の差分確認画面(UC-C023、`GET /holiday-calendar-sources/{id}/sync-preview`相当)**:
+  同期結果・競合は`stored_events`に記録されているが、専用の読み取りAPI・画面はまだ無い
+  (Phase 5でUIと合わせて実装する)。
+- **ICSのRRULE非対応**: 繰り返しルールを持つVEVENTは展開せず無視し、ログに警告を出すのみ。
+  日本の祝日iCalendarフィードは通常年ごとに単発VEVENTのため実用上の支障は無いが、RRULEを
+  使う祝日ソースには対応できない。
+- **一括操作の取消で「元々行が無かった対象」を復元する際の簡略化**: 取消前に
+  `employee_calendar_entries`の行が存在しなかった対象(新規作成された行)を取消すと、行自体を
+  削除せず`schedule_state=UNASSIGNED`に戻す(`EmployeeCalendarEntryAggregate`に削除の
+  プリミティブが無いため)。
+- **暫定計算(`provisional: true`)フォールバックの簡略化**: 対象社員個別の勤務形態に紐づく
+  会社カレンダーではなく、`company_calendars.is_default`の1件だけを参照して標準曜日ルールを
+  適用する。従業員ごとの`work_styles.company_calendar_id`解決までは行っていない。
+- **一括操作のGROUPスコープ制限は実装しない**(`docs/05-user-roles.md`参照。既存の
+  `attendance.manage`がGLOBALスコープのみのため)。

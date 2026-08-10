@@ -16,6 +16,6 @@ class CompanyCalendarYearCreated extends ShouldBeStored
         public readonly string $startsOn,
         public readonly string $endsOn,
         public readonly string $generatedFrom,
-        public readonly string $createdByUserId,
+        public readonly ?string $createdByUserId,
     ) {}
 }
