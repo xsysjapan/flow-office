@@ -59,8 +59,8 @@ class AttendanceDayResource extends JsonResource
             'special_leave_usages' => $this->whenLoaded(
                 'specialLeaveUsages',
                 fn () => $this->specialLeaveUsages->map(fn ($usage) => [
-                    'special_leave_type_id' => $usage->grant->special_leave_type_id,
-                    'special_leave_type_name' => $usage->grant->specialLeaveType->name,
+                    'special_leave_type_id' => $usage->grant?->special_leave_type_id ?? $usage->request?->special_leave_type_id,
+                    'special_leave_type_name' => $usage->grant?->specialLeaveType?->name ?? $usage->request?->specialLeaveType?->name,
                     'usage_type' => $usage->usage_type,
                     'used_days' => (float) $usage->used_days,
                     'used_minutes' => $usage->used_minutes,

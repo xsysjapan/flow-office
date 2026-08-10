@@ -8,14 +8,27 @@
 - `user.logged_in`
 - `user.synced_from_ms365`
 - `user.onboarded_as_admin` (初回オンボーディング(UC-000)での管理者作成。payloadの
-  `auth_method`が`sso`(実際のEntra IDログイン結果で作成、entra_user_id設定済み)か
+  `auth_method`が`sso`(実際のEntra IDログイン結果で作成、ExternalIdentityリンク済み)か
   `local`(ローカルパスワードで作成)かを区別する)
-- `user.roles_changed` (UC-M001 権限を設定する)
-- `user.roles_migrated_from_legacy` (Seeder等で直接作成された既存ロール割り当ての移行時点スナップショット)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
   Microsoft 365アカウントを紐づける)
+- `external_identity.linked`
+- `external_identity.unlinked`
+- `user.field_authority_changed`
+- `group.created` / `group.updated` / `group.inactivated`
+- `group_type.created` / `group_type.updated` / `group_type.inactivated`
+- `membership.added` / `membership.removed` / `membership.primary_changed`
+- `membership_change_set.created` / `membership_change_set.scheduled` /
+  `membership_change_set.applied` / `membership_change_set.failed` /
+  `membership_change_set.cancelled`
+- `feature.assigned_to_group` / `feature.removed_from_group`
+- `user.feature_suspended` / `user.feature_suspension_removed`
+- `role.created` / `role.updated` / `role.inactivated`
+- `role.permissions_changed`
+- `role_assignment.created` / `role_assignment.updated` / `role_assignment.removed`
+- `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
 
 ## Workflow (汎用申請)
 
@@ -171,12 +184,49 @@
 - `paid_leave.rule_created`
 - `paid_leave.granted`
 - `paid_leave.requested`
+- `paid_leave.usage_designated` (paid_leave_request集約が記録。申請時点(承認前)で
+  `paid_leave_usages`に確定前(grant_id未設定・is_confirmed=false)の行を作る。
+  docs/16-database-schema.md paid_leave_usages参照)
 - `paid_leave.request_approved`
 - `paid_leave.request_returned`
 - `paid_leave.request_cancelled`
 - `paid_leave.used`
+- `paid_leave.usage_reversed`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`
+
+## SpecialLeave
+
+`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
+paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。
+
+- `special_leave.granted`
+- `special_leave.requested`
+- `special_leave.usage_designated`
+- `special_leave.request_approved`
+- `special_leave.request_returned`
+- `special_leave.request_cancelled`
+- `special_leave.used`
+- `special_leave.usage_reversed`
+
+## CompensatoryLeave
+
+`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
+paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。休日出勤の
+勤怠実績から自動導出される付与(grant)に関するイベントが別途ある。
+
+- `compensatory_leave.grant_synced`
+- `compensatory_leave.grant_removed`
+- `compensatory_leave.grant_confirmed`
+- `compensatory_leave.grant_cancelled`
+- `compensatory_leave.requested`
+- `compensatory_leave.request_shared`
+- `compensatory_leave.usage_designated`
+- `compensatory_leave.request_approved`
+- `compensatory_leave.request_returned`
+- `compensatory_leave.request_cancelled`
+- `compensatory_leave.used`
+- `compensatory_leave.usage_reversed`
 
 ## Attachment / Notification / Export (横断)
 
@@ -190,8 +240,17 @@
 
 ## 命名規則
 
+`user.roles_changed`と`user.roles_migrated_from_legacy`は、旧ユーザーロール機構で記録済みの
+StoredEventを復元するための履歴互換イベントである。旧機構の廃止後は新規発行しない。
+本番履歴補正では、この2種を同時刻の `membership.added` / `membership.removed` に変換する。
+詳細は[32-stored-event-history-normalization.md](./32-stored-event-history-normalization.md)を参照する。
+
 - `<aggregate>.<past_tense_verb>` 形式 (例: `attendance_punch.`)。
 - 集約(aggregate)は `aggregate_type` + `aggregate_id` で一意に識別する
   (例: `attendance_day` + `attendance_days.id`)。
 - イベントは追記のみ。既存イベントの意味を変える場合は新しいイベント種別を追加し、
   旧イベントは残す(イミュータブル)。
+
+ただし、本番カットオーバー処理が業務事実と異なる合成イベントや逆転した日時を作った場合に限り、
+承認済みの一回限りのデータ補正として、原本DBバックアップと専用バックアップテーブルを作成した上で
+履歴を再構成できる。通常のアプリケーション処理から既存イベントを更新してはならない。

@@ -66,8 +66,9 @@ Bearerトークン方式(Cookieベースではない)。
 
 ## 絶対に外してはいけない設計原則
 
-1. **EventStoreを正とする**: 状態変更は必ず Command → CommandHandler → `stored_events` の
-   流れで行う。イベントを書かない状態変更を作らない。
+1. **EventStoreを正とする**: 状態変更は原則として Command → CommandHandler → `stored_events` の
+   流れで行う。例外は個別仕様で明示する。`system_settings`は管理者専用APIから直接更新するが、
+   監査用イベントを同一トランザクションで`stored_events`へ記録する。
 2. **Projectionは再生成可能な派生データ**: 画面表示用テーブルはイベントから再生成できる
    前提で設計する。Projectionを直接手で書き換えない。
 3. **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /

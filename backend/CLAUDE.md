@@ -24,16 +24,15 @@ API仕様書(Swagger UI)の生成手順は `docs/02-tech-stack.md` を参照。
 app/
 ├── Domain/<DomainName>/       ドメインごとのCQRS+ES実装。詳細は下記
 │   ├── Commands/              1コマンド1クラス
-│   ├── Events/                1イベント1クラス。eventType()は文字列(例: 'shift_pattern.created')
+│   ├── Events/                1イベント1クラス。短い別名はconfig/event-sourcing.phpへ登録
 │   ├── Handlers/               CommandHandler。検証 → イベント追記 → (必要なら)正データ更新
 │   ├── Projectors/            Projection Table を再生成可能な形で更新する(あるドメインのみ)
 │   └── Services/               ドメインロジック(計算・判定など)
-├── Domain/EventSourcing/       CQRS+ESの共通実装(Command/CommandHandler/Projectorのcontract、
-│                               EventStore、CommandBus)。ここは技術的な土台でありドメインを持たない
+├── Domain/EventSourcing/       CQRS+ESの共通実装(Command/CommandHandler、CommandBus、履歴補正)
 ├── Http/Controllers/Api/       Projection TableまたはEloquentモデルを読み取り、Commandを発行する
 ├── Http/Resources/             API レスポンス整形
 ├── Models/                     Eloquentモデル(正データ用・Projection用の両方をここに置く)
-├── Listeners/                  ProjectStoredEvent(EventStore追記のたびにProjectorへ同期反映)ほか
+├── Listeners/                  Laravelイベントのリスナー
 ├── Jobs/                       DBキュー経由のジョブ(Teams通知など)
 ├── Console/Commands/           cron駆動のバッチ(月次警告・Projection再生成など)
 └── Support/                    横断的なユーティリティ(LocalDateTimeなど)
@@ -48,37 +47,20 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 
 ## CQRS + Event Sourcing の実装ルール
 
-- **`stored_events.event_type` はPHPクラス名ではなく短い文字列**(`shift_pattern.created` の
-  ような形式)。ProjectorやListenerはこの文字列でマッチングし、PHPクラスを復元しない。
-  そのためDomainイベントのクラス名・namespaceを後から変更しても、既存の`stored_events`行の
-  再生(`projections:rebuild`)には影響しない。
-- Projectorは`config/domain.projectors`に登録したものだけが`ProjectStoredEvent`リスナー経由で
-  同期的に呼ばれる(常駐workerを前提にしないため、リクエスト内で同期実行する。
-  `docs/02-tech-stack.md`参照)。**現時点でProjectorが実装されているのは`Attendance`ドメインの
-  `AttendanceDailyCalculationProjector`のみ**で、他のドメイン(PaidLeave/SpecialLeave/Workflow/
-  BackOffice等)はHandlerが正データのEloquentモデルを直接更新している。これらのドメインの
-  正データテーブルは今のところ`projections:rebuild`で再生成できない状態にある。新しいドメインで
-  「画面表示用に再生成可能な派生データ」を作る場合は`.claude/skills/add-projection`に従い
-  Projectorとして実装すること。
+- **`stored_events.event_class` はPHPクラス名ではなく短い文字列**(`shift_pattern.created` の
+  ような形式)。`config/event-sourcing.php`の`event_class_map`でPHPイベントクラスへ対応付ける。
+  `enforce_event_class_map = true`のため、追加イベントの別名登録は必須である。
+- ProjectorとReactorはSpatieの`auto_discover_projectors_and_reactors`で自動検出され、イベント
+  永続化と同じ処理内で呼ばれる。再生にはSpatie標準の`event-sourcing:replay`を使用する。
 - CommandHandlerは検証の上で必ず1つ以上のイベントを`stored_events`に追記する。イベントを
   書かない状態変更は作らない。
 
-### spatie/laravel-event-sourcing への移行(進行中)
+### spatie/laravel-event-sourcing への移行(完了)
 
-自前実装のCQRS+ES基盤を`spatie/laravel-event-sourcing`に置き換える大工事が進行中。
-方針・作業順・現在の移行状況は`docs/29-event-sourcing-framework-migration.md`を参照。
-
-- 移行が完了するまで、イベントストアは2系統が併存する:
-  **`legacy_stored_events`**(旧`App\Domain\EventSourcing\EventStore`が書く。`App\Models\StoredEvent`
-  が参照)と、**`stored_events`**(spatie標準スキーマ。移行済みドメインが書く)。
-  どちらのテーブルを見るかはドメインが移行済みかどうかで異なる。
-- ドメインを移行する際は、そのドメインの集約ルート(Eloquentモデル)を
-  `Spatie\EventSourcing\AggregateRoots\AggregateRoot`のサブクラス経由で操作する形に書き換え、
-  Projectorを`Spatie\EventSourcing\EventHandlers\Projectors\Projector`のサブクラスとして実装する
-  (`config/domain.php`への登録は不要。`auto_discover_projectors_and_reactors`により自動検出される)。
-  新しいイベントクラスは`config/event-sourcing.php`の`event_class_map`に必ず短い文字列を登録する
-  (`enforce_event_class_map = true`のため未登録だと例外になる)。
-- 移行済みドメイン: `Attachment`(パイロット実装)。他は未移行(旧実装のまま)。
+独自`EventStore`、独自Projector contract、`ProjectStoredEvent`は廃止済み。通常のイベント保存と
+監査ログ検索はSpatie標準の`stored_events`だけを使用する。`legacy_stored_events`は過去DBとの
+スキーマ互換のため残すが、アプリケーションから新規書き込みしない。本番履歴の最終補正は
+`docs/32-stored-event-history-normalization.md`を参照する。
 
 ## 効率的なコード参照
 

@@ -7,6 +7,7 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
+use App\Domain\PaidLeave\Events\PaidLeaveUsageDesignated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -26,6 +27,7 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         float $requestedDays,
         string $approverUserId,
         ?string $reason,
+        ?string $requestGroupId = null,
     ): self {
         $this->recordThat(new PaidLeaveRequested(
             userId: $userId,
@@ -35,6 +37,33 @@ class PaidLeaveRequestAggregate extends AggregateRoot
             requestedDays: $requestedDays,
             approverUserId: $approverUserId,
             reason: $reason,
+            requestGroupId: $requestGroupId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 申請時点(承認前)で対象日の勤怠を有給休暇として設定したことを記録する
+     * (PaidLeaveUsageProjectorがpaid_leave_usagesへgrant_id未確定・is_confirmed=falseの
+     * 行を作る)。承認時にどのpaid_leave_grantから消化するかが決まった時点で、この行が
+     * 確定済みへ更新される(paid_leave.used。ApprovePaidLeaveRequestHandler参照)。
+     */
+    public function designateUsage(
+        string $userId,
+        string $attendanceDayId,
+        string $usedOn,
+        float $usedDays,
+        ?int $usedMinutes,
+        string $usageType,
+    ): self {
+        $this->recordThat(new PaidLeaveUsageDesignated(
+            userId: $userId,
+            attendanceDayId: $attendanceDayId,
+            usedOn: $usedOn,
+            usedDays: $usedDays,
+            usedMinutes: $usedMinutes,
+            usageType: $usageType,
         ));
 
         return $this;

@@ -57,9 +57,9 @@ describe('AppLayout', () => {
     expect(screen.getByText('今日の勤怠画面')).toBeInTheDocument()
   })
 
-  it('shows the current user department and role', () => {
-    renderLayout(vi.fn(), { ...mockUser, department: '開発部', roles: ['admin'] })
-    expect(screen.getByText('開発部 ・ 管理者')).toBeInTheDocument()
+  it('shows the current user department without a legacy role label', () => {
+    renderLayout(vi.fn(), { ...mockUser, department: '開発部' })
+    expect(screen.getByText('開発部')).toBeInTheDocument()
   })
 
   it('shows その他申請・経費精算・入力プリセット inside the 勤怠・申請 dropdown menu, without a separate 新規申請 or 新規作成 shortcut', async () => {
@@ -92,11 +92,10 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('button', { name: '承認' })).not.toBeInTheDocument()
   })
 
-  it('shows タスク一覧 under the 承認 group for a back-office-role user', async () => {
-    renderLayout(vi.fn(), { ...mockUser, roles: ['accounting_staff'] })
+  it('shows タスク一覧 when its feature is effective', async () => {
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'backoffice.tasks'] })
 
-    await userEvent.click(screen.getByRole('button', { name: '承認' }))
-    expect(await screen.findByRole('menuitem', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
+    expect(await screen.findByRole('link', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
   it('hides the 特別休暇 menu items when there is no active special leave type', async () => {
@@ -130,20 +129,20 @@ describe('AppLayout', () => {
     expect(logout).toHaveBeenCalledOnce()
   })
 
-  it('hides admin-only navigation links for a user without admin roles', () => {
-    renderLayout(vi.fn(), { ...mockUser, roles: ['employee'] })
+  it('hides admin navigation for a user without effective admin access', () => {
+    renderLayout(vi.fn(), { ...mockUser })
 
     expect(screen.queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
   })
 
-  it('shows 管理メニュー as a direct link for an admin user', async () => {
-    renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
+  it('shows 管理メニュー as a direct link from effective access', async () => {
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'administration.users'], effective_permissions: ['user.view'] })
 
     expect(await screen.findByRole('link', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
   })
 
   it('opens a mobile menu drawer listing every group and its links', async () => {
-    renderLayout(vi.fn(), { ...mockUser, roles: ['admin'] })
+    renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'attendance.timesheet', 'workflow.requests', 'paid_leave.requests', 'backoffice.expenses', 'administration.users', 'backoffice.tasks'], effective_permissions: ['user.view'] })
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
 

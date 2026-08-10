@@ -1,5 +1,15 @@
 <?php
 
+use App\Domain\AccessControl\Events\FeatureAssignedToGroup;
+use App\Domain\AccessControl\Events\FeatureRemovedFromGroup;
+use App\Domain\AccessControl\Events\RoleAssignmentCreated;
+use App\Domain\AccessControl\Events\RoleAssignmentRemoved;
+use App\Domain\AccessControl\Events\RoleAssignmentUpdated;
+use App\Domain\AccessControl\Events\RoleCreated;
+use App\Domain\AccessControl\Events\RolePermissionsChanged;
+use App\Domain\AccessControl\Events\RoleUpdated;
+use App\Domain\AccessControl\Events\UserFeatureSuspended;
+use App\Domain\AccessControl\Events\UserFeatureSuspensionRemoved;
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
@@ -54,6 +64,8 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageDesignated;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use App\Domain\Device\Events\DeviceDeleted;
 use App\Domain\Device\Events\DeviceDisabled;
@@ -80,6 +92,7 @@ use App\Domain\ExpenseClaim\Events\ExpenseClaimUnlocked;
 use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
+use App\Domain\Export\Events\ExportCreated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -92,6 +105,8 @@ use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestReturned;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
+use App\Domain\PaidLeave\Events\PaidLeaveUsageDesignated;
+use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
@@ -105,18 +120,40 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsageDesignated;
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsageReversed;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
-use App\Domain\User\Events\UserCreatedFromSsoLogin;
-use App\Domain\User\Events\UserHireDateSet;
-use App\Domain\User\Events\UserLoggedIn;
-use App\Domain\User\Events\UserMigratedFromLegacy;
-use App\Domain\User\Events\UserOnboardedAsAdmin;
-use App\Domain\User\Events\UserRolesChanged;
-use App\Domain\User\Events\UserRolesMigratedFromLegacy;
-use App\Domain\User\Events\UserSsoAccountLinked;
-use App\Domain\User\Events\UserSyncedFromMs365;
-use App\Domain\User\Events\UserTerminationDateSet;
-use App\Domain\User\Events\UserUsageStartDateSet;
+use App\Domain\SystemSettings\Events\SystemSettingsUpdated;
+use App\Domain\UserManagement\Events\ExternalHrImportApplied;
+use App\Domain\UserManagement\Events\ExternalIdentityLinked;
+use App\Domain\UserManagement\Events\ExternalIdentityUnlinked;
+use App\Domain\UserManagement\Events\GroupCreated;
+use App\Domain\UserManagement\Events\GroupTypeCreated;
+use App\Domain\UserManagement\Events\GroupTypeUpdated;
+use App\Domain\UserManagement\Events\GroupUpdated;
+use App\Domain\UserManagement\Events\MembershipAdded;
+use App\Domain\UserManagement\Events\MembershipChangeSetApplied;
+use App\Domain\UserManagement\Events\MembershipChangeSetCancelled;
+use App\Domain\UserManagement\Events\MembershipChangeSetCreated;
+use App\Domain\UserManagement\Events\MembershipChangeSetFailed;
+use App\Domain\UserManagement\Events\MembershipChangeSetScheduled;
+use App\Domain\UserManagement\Events\MembershipChangeSetUpdated;
+use App\Domain\UserManagement\Events\MembershipPrimaryChanged;
+use App\Domain\UserManagement\Events\MembershipRemoved;
+use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
+use App\Domain\UserManagement\Events\UserCreatedManually;
+use App\Domain\UserManagement\Events\UserFieldAuthorityChanged;
+use App\Domain\UserManagement\Events\UserHireDateSet;
+use App\Domain\UserManagement\Events\UserLoggedIn;
+use App\Domain\UserManagement\Events\UserMigratedFromLegacy;
+use App\Domain\UserManagement\Events\UserOnboardedAsAdmin;
+use App\Domain\UserManagement\Events\UserProfileUpdated;
+use App\Domain\UserManagement\Events\UserRolesChanged;
+use App\Domain\UserManagement\Events\UserRolesMigratedFromLegacy;
+use App\Domain\UserManagement\Events\UserSsoAccountLinked;
+use App\Domain\UserManagement\Events\UserSyncedFromMs365;
+use App\Domain\UserManagement\Events\UserTerminationDateSet;
+use App\Domain\UserManagement\Events\UserUsageStartDateSet;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -233,8 +270,39 @@ return [
      * 短い文字列を登録すること(docs/17-events.md の命名規則。.claude/skills/add-domain-event 参照)。
      */
     'event_class_map' => [
+        'group.created' => GroupCreated::class,
+        'membership.added' => MembershipAdded::class,
+        'feature.assigned_to_group' => FeatureAssignedToGroup::class,
+        'role_assignment.created' => RoleAssignmentCreated::class,
+        'membership_change_set.scheduled' => MembershipChangeSetScheduled::class,
+        'membership_change_set.applied' => MembershipChangeSetApplied::class,
+        'membership_change_set.cancelled' => MembershipChangeSetCancelled::class,
+        'membership.removed' => MembershipRemoved::class,
+        'membership.primary_changed' => MembershipPrimaryChanged::class,
+        'user.profile_updated' => UserProfileUpdated::class,
+        'user.created_manually' => UserCreatedManually::class,
+        'group_type.updated' => GroupTypeUpdated::class,
+        'role.updated' => RoleUpdated::class,
+        'role_assignment.updated' => RoleAssignmentUpdated::class,
+        'membership_change_set.created' => MembershipChangeSetCreated::class,
+        'membership_change_set.updated' => MembershipChangeSetUpdated::class,
+        'external_hr.import_applied' => ExternalHrImportApplied::class,
+        'feature.removed_from_group' => FeatureRemovedFromGroup::class,
+        'user.feature_suspended' => UserFeatureSuspended::class,
+        'user.feature_suspension_removed' => UserFeatureSuspensionRemoved::class,
+        'role_assignment.removed' => RoleAssignmentRemoved::class,
+        'external_identity.linked' => ExternalIdentityLinked::class,
+        'external_identity.unlinked' => ExternalIdentityUnlinked::class,
+        'user.field_authority_changed' => UserFieldAuthorityChanged::class,
+        'role.permissions_changed' => RolePermissionsChanged::class,
+        'system_settings.updated' => SystemSettingsUpdated::class,
+        'group.updated' => GroupUpdated::class,
+        'group_type.created' => GroupTypeCreated::class,
+        'role.created' => RoleCreated::class,
+        'membership_change_set.failed' => MembershipChangeSetFailed::class,
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
+        'export.created' => ExportCreated::class,
 
         'attendance_day.created' => AttendanceDayCreated::class,
         'attendance_day.edited' => AttendanceDayEdited::class,
@@ -322,7 +390,9 @@ return [
         'paid_leave.request_returned' => PaidLeaveRequestReturned::class,
         'paid_leave.request_cancelled' => PaidLeaveRequestCancelled::class,
         'paid_leave.request_shared' => PaidLeaveRequestShared::class,
+        'paid_leave.usage_designated' => PaidLeaveUsageDesignated::class,
         'paid_leave.used' => PaidLeaveUsed::class,
+        'paid_leave.usage_reversed' => PaidLeaveUsageReversed::class,
         'paid_leave.warning_raised' => PaidLeaveWarningRaised::class,
 
         'special_leave.granted' => SpecialLeaveGranted::class,
@@ -331,13 +401,17 @@ return [
         'special_leave.request_returned' => SpecialLeaveRequestReturned::class,
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
+        'special_leave.usage_designated' => SpecialLeaveUsageDesignated::class,
         'special_leave.used' => SpecialLeaveUsed::class,
+        'special_leave.usage_reversed' => SpecialLeaveUsageReversed::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
         'compensatory_leave.grant_removed' => CompensatoryLeaveGrantRemoved::class,
         'compensatory_leave.grant_confirmed' => CompensatoryLeaveGrantConfirmed::class,
         'compensatory_leave.grant_cancelled' => CompensatoryLeaveGrantCancelled::class,
+        'compensatory_leave.usage_designated' => CompensatoryLeaveUsageDesignated::class,
         'compensatory_leave.used' => CompensatoryLeaveUsed::class,
+        'compensatory_leave.usage_reversed' => CompensatoryLeaveUsageReversed::class,
         'compensatory_leave.requested' => CompensatoryLeaveRequested::class,
         'compensatory_leave.request_shared' => CompensatoryLeaveRequestShared::class,
         'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,

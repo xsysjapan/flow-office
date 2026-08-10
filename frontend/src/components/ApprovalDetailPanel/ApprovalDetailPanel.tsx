@@ -30,6 +30,18 @@ function SectionHeading({ children }: { children: string }) {
   return <h3 className="text-sm font-semibold text-foreground">{children}</h3>
 }
 
+/**
+ * 残数(*_grants.remaining_days)は承認済み分のみを消化するため、申請中(未承認)の
+ * 積み上がりを承認者・本人双方が見落とさないよう内訳を併記する。
+ */
+function LeaveUsageBreakdownNote({ pendingDays, approvedDays }: { pendingDays: number; approvedDays: number }) {
+  return (
+    <span className="text-xs text-muted-foreground">
+      (うち申請中 {pendingDays}日 / 承認済み {approvedDays}日)
+    </span>
+  )
+}
+
 /** その申請(subject_type)が現時点で承認・差戻しできる状態かどうか。 */
 function isActionable(request: WorkflowRequest): boolean {
   if (request.subject_type === 'attendance_month') {
@@ -230,6 +242,18 @@ function ExpenseClaimSubjectView({ subject }: { subject: WorkflowRequestExpenseC
   )
 }
 
+/** 期間指定の複数日申請であることを承認者に伝える注記(該当する場合のみ表示)。 */
+function RequestGroupNotice({ dates }: { dates: string[] | null }) {
+  if (!dates || dates.length <= 1) return null
+
+  return (
+    <div className="rounded-md border border-info/40 bg-info/10 p-3 text-sm text-foreground">
+      期間指定で{dates.length}日分({dates[0]} 〜 {dates[dates.length - 1]})まとめて申請されています。
+      このうち1件を承認すると、残りの日もまとめて承認されます。
+    </div>
+  )
+}
+
 function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaidLeaveRequestSubject }) {
   const { label, tone } = paidLeaveRequestStatusLabel(subject.status)
 
@@ -238,6 +262,8 @@ function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaid
       <div className="flex items-center gap-2">
         <Badge tone={tone}>{label}</Badge>
       </div>
+
+      <RequestGroupNotice dates={subject.request_group_dates} />
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">対象日</dt>
@@ -248,6 +274,11 @@ function PaidLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestPaid
         <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )
@@ -262,6 +293,8 @@ function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowReq
         <Badge tone={tone}>{label}</Badge>
       </div>
 
+      <RequestGroupNotice dates={subject.request_group_dates} />
+
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">対象日</dt>
         <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
@@ -271,6 +304,11 @@ function CompensatoryLeaveRequestSubjectView({ subject }: { subject: WorkflowReq
         <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )
@@ -285,6 +323,8 @@ function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestS
         <Badge tone={tone}>{label}</Badge>
       </div>
 
+      <RequestGroupNotice dates={subject.request_group_dates} />
+
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="font-medium text-muted-foreground">対象日</dt>
         <dd className="text-foreground">{subject.target_date ?? '-'}</dd>
@@ -296,6 +336,11 @@ function SpecialLeaveRequestSubjectView({ subject }: { subject: WorkflowRequestS
         <dd className="text-foreground">{leaveRequestedAmountLabel(subject)}</dd>
         <dt className="font-medium text-muted-foreground">理由</dt>
         <dd className="text-foreground">{subject.reason ?? '-'}</dd>
+        <dt className="font-medium text-muted-foreground">直近1年間の取得日数</dt>
+        <dd className="text-foreground">
+          {subject.used_days_last_year}日{' '}
+          <LeaveUsageBreakdownNote pendingDays={subject.pending_days_last_year} approvedDays={subject.approved_days_last_year} />
+        </dd>
       </dl>
     </div>
   )

@@ -50,6 +50,10 @@ export interface CreatePaidLeaveRequestInput {
   /** system_settings.paid_leave_requires_approval が false の場合は省略可(承認不要)。 */
   approver_user_id?: string
   reason?: string
+  /** 複数日をまとめて申請する場合、同一の申請操作内で生成した同じ値を全日分に渡す
+   *  (承認者は対応するworkflow_requestのいずれか1件を承認するだけで、この値を共有する
+   *  他の申請もまとめて承認できるようになる)。単日申請では省略する。 */
+  request_group_id?: string
 }
 
 export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Promise<PaidLeaveRequest> {

@@ -21,5 +21,6 @@ class SubmitAttendanceMonth implements Command
         public readonly string $yearMonth,
         public readonly string $approverUserId,
         public readonly ?string $attendanceMonthId = null,
+        public readonly ?string $workflowRequestId = null,
     ) {}
 }

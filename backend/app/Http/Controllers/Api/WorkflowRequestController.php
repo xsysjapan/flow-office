@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\Leave\Support\LeaveUsageQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -259,6 +261,9 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(PaidLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, PaidLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, PaidLeaveRequest::class),
         ];
     }
 
@@ -290,7 +295,53 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(SpecialLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear(
+                $request->user_id,
+                SpecialLeaveRequest::class,
+                $request->special_leave_type_id,
+            ),
+            ...$this->leaveUsageBreakdownFields($request->user_id, SpecialLeaveRequest::class, $request->special_leave_type_id),
         ];
+    }
+
+    /**
+     * 「申請中(submitted)」「承認済み(approved)」の直近1年内訳をAPIレスポンス用のキー名で返す
+     * (残数は承認済み分のみで消化されるため、申請中の積み上がりを別枠で可視化するために使う。
+     * LeaveUsageQuery::usageBreakdownWithinPastYear参照)。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>|class-string<CompensatoryLeaveRequest>  $requestModelClass
+     * @return array{pending_days_last_year: float, approved_days_last_year: float}
+     */
+    private function leaveUsageBreakdownFields(string $userId, string $requestModelClass, ?int $specialLeaveTypeId = null): array
+    {
+        $breakdown = LeaveUsageQuery::usageBreakdownWithinPastYear($userId, $requestModelClass, $specialLeaveTypeId);
+
+        return [
+            'pending_days_last_year' => $breakdown['pending_days'],
+            'approved_days_last_year' => $breakdown['approved_days'],
+        ];
+    }
+
+    /**
+     * 同じ`request_group_id`を持つ全行の対象日一覧(期間指定の複数日申請であることを
+     * 承認者に示すため)。単日申請(request_group_idがnull)の場合はnullを返す。
+     *
+     * @param  class-string<PaidLeaveRequest>|class-string<SpecialLeaveRequest>  $requestModelClass
+     * @return list<string>|null
+     */
+    private function requestGroupDates(string $requestModelClass, ?string $requestGroupId): ?array
+    {
+        if ($requestGroupId === null) {
+            return null;
+        }
+
+        return $requestModelClass::query()
+            ->where('request_group_id', $requestGroupId)
+            ->orderBy('target_date')
+            ->get()
+            ->map(fn ($row) => $row->target_date->toDateString())
+            ->all();
     }
 
     /**
@@ -319,6 +370,9 @@ class WorkflowRequestController extends Controller
             'approved_at' => $request->approved_at?->toIso8601String(),
             'returned_at' => $request->returned_at?->toIso8601String(),
             'cancelled_at' => $request->cancelled_at?->toIso8601String(),
+            'request_group_dates' => $this->requestGroupDates(CompensatoryLeaveRequest::class, $request->request_group_id),
+            'used_days_last_year' => LeaveUsageQuery::usedDaysWithinPastYear($request->user_id, CompensatoryLeaveRequest::class),
+            ...$this->leaveUsageBreakdownFields($request->user_id, CompensatoryLeaveRequest::class),
         ];
     }
 
@@ -438,7 +492,7 @@ class WorkflowRequestController extends Controller
         abort_unless(
             $user->id === $workflowRequest->applicant_user_id
                 || $user->id === $workflowRequest->approver_user_id
-                || $user->hasRole('admin'),
+                || app(EffectiveAccessResolver::class)->hasGlobalPermission($user, 'approval.execute'),
             403,
             'この申請の履歴を閲覧する権限がありません。'
         );

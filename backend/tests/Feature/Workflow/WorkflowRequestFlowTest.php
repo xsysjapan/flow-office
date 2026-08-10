@@ -287,7 +287,7 @@ class WorkflowRequestFlowTest extends TestCase
     public function test_admin_can_manage_request_types_but_others_cannot(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => 'システム管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => 'システム管理者']));
         $employee = User::factory()->create();
 
         $payload = [

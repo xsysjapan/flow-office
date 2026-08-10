@@ -185,7 +185,7 @@ class AttendanceDayDeletionTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
@@ -260,7 +260,7 @@ class AttendanceDayDeletionTest extends TestCase
             ->assertForbidden();
 
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $this->actingAs($admin)->deleteJson("/api/attendance/days/{$dayId}", ['reason' => '管理者による削除'])
             ->assertOk();
     }

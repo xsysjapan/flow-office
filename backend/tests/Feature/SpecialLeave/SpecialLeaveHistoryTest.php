@@ -45,7 +45,7 @@ class SpecialLeaveHistoryTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
         $this->createWorkingDayShift($employee, '2026-08-10');
         $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
 
@@ -71,7 +71,7 @@ class SpecialLeaveHistoryTest extends TestCase
 
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
-            ['special_leave.used', 'special_leave.request_approved', 'special_leave.request_shared', 'special_leave.requested', 'special_leave.granted'],
+            ['special_leave.used', 'special_leave.request_approved', 'special_leave.request_shared', 'special_leave.usage_designated', 'special_leave.requested', 'special_leave.granted'],
             $eventTypes,
         );
     }
@@ -89,7 +89,7 @@ class SpecialLeaveHistoryTest extends TestCase
         $employee = User::factory()->create();
         $other = User::factory()->create();
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
         $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
 
         $this->actingAs($hr)->postJson('/api/special-leave/grants', [

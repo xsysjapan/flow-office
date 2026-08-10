@@ -17,12 +17,13 @@ function formatDateTime(value: string): string {
  * UC-M003: 管理者がイベントストアの操作履歴を検索・CSV出力する。
  */
 export function AuditLogPage() {
-  const [aggregateType, setAggregateType] = useState('')
-  const [aggregateId, setAggregateId] = useState('')
-  const [eventType, setEventType] = useState('')
-  const [userId, setUserId] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search))
+  const [aggregateType, setAggregateType] = useState(()=>searchParams.get('aggregate_type')??'')
+  const [aggregateId, setAggregateId] = useState(()=>searchParams.get('aggregate_id')??'')
+  const [eventType, setEventType] = useState(()=>searchParams.get('event_type')??'')
+  const [userId, setUserId] = useState(()=>searchParams.get('user_id')??'')
+  const [from, setFrom] = useState(()=>searchParams.get('from')??'')
+  const [to, setTo] = useState(()=>searchParams.get('to')??'')
 
   const filters: AuditLogFilters = {
     aggregate_type: aggregateType || undefined,

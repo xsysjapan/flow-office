@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Role;
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -27,7 +27,8 @@ abstract class Controller
     protected function abortUnlessOwnerOrAdmin(Request $request, string $ownerId, string $message): void
     {
         $isSelf = $ownerId === $request->user()->id;
-        $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
+        $isAdmin = $this->currentTokenHasFullAccess($request)
+            && app(EffectiveAccessResolver::class)->hasFeature($request->user(), 'administration');
 
         abort_if(! $isSelf && ! $isAdmin, 403, $message);
     }

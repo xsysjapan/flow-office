@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { loginAs, SCENARIO_USERS } from './support/auth'
 import { recordAttendancePunch, submitAndApproveMonth } from './support/api'
-import { goToAttendanceWeekContaining } from './support/ui'
+import { goToAttendanceWeekContaining, pickDate, pickTime } from './support/ui'
 
 /**
  * docs/testing/scenario-tests.md §5-11/§5-12(その他、用意しておくべきシナリオ)に対応する。
@@ -48,7 +48,8 @@ function nthOfMonthsAhead(monthsAhead: number, dayOfMonth: number, jitterDays = 
  * 気にしなくてよいようにする。
  */
 function randomFarFutureDate(): string {
-  const year = 1000 + Math.floor(Math.random() * 1000)
+  // DatePickerで到達可能な範囲に保ちつつ、通常のシナリオ年月とは衝突させない。
+  const year = new Date().getFullYear() + 10 + Math.floor(Math.random() * 10)
   const month = 1 + Math.floor(Math.random() * 12)
   const day = 5 + Math.floor(Math.random() * 20)
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -82,8 +83,8 @@ test('§5-11: 打刻ログの訂正・削除', async ({ page }) => {
   await expect(clockInPunchRow).toHaveCount(1)
   await clockInPunchRow.getByRole('button', { name: '訂正' }).click()
 
-  const datetimeInput = clockInPunchRow.getByLabel('訂正後の日時')
-  await datetimeInput.fill(`${targetDate}T09:00`)
+  await pickDate(page, '訂正後の日時(日付)', targetDate, { root: clockInPunchRow })
+  await pickTime(page, '訂正後の日時(時刻)', '09:00', { root: clockInPunchRow })
   await clockInPunchRow.getByLabel('訂正理由').fill('打刻時刻の入力ミス')
   await clockInPunchRow.getByRole('button', { name: '訂正を保存' }).click()
 
@@ -176,21 +177,10 @@ test('§5-12: 日次勤怠の削除(承認前は削除できるが、承認後�
     await protectedRow.click()
     await expect(employeePage).toHaveURL(new RegExp(`/attendance/days/${protectedDate}$`))
 
-    await employeePage.getByRole('button', { name: '削除' }).click()
-    await employeePage.getByLabel('削除理由').fill('承認後の削除テスト(E2E)')
-    await employeePage.getByRole('button', { name: '削除する' }).click()
-    await expect(
-      employeePage.getByRole('alert').filter({ hasText: '承認済みの月次勤怠に含まれる日次勤怠は修正申請から変更してください。' }),
-    ).toBeVisible()
-
-    await employeePage.keyboard.press('Escape')
-    // 「ログを編集」(打刻ログカード)と区別するため完全一致で指定する。
-    await employeePage.getByRole('button', { name: '編集', exact: true }).click()
-    await employeePage.getByLabel('修正理由(必須)').fill('承認後編集の拒否確認(E2E)')
-    await employeePage.getByRole('button', { name: '保存する' }).click()
-    await expect(
-      employeePage.getByRole('alert').filter({ hasText: '承認済みの月次勤怠に含まれる日次勤怠は修正申請から変更してください。' }),
-    ).toBeVisible()
+    await expect(employeePage.getByText('月次勤怠が提出済みのため、この日は編集できません。').first()).toBeVisible()
+    await expect(employeePage.getByRole('button', { name: '削除', exact: true })).toHaveCount(0)
+    // 「ログを編集」(打刻ログカード)と区別し、日次実績の編集操作が表示されないことを確認する。
+    await expect(employeePage.getByRole('button', { name: '編集', exact: true })).toHaveCount(0)
   } finally {
     await employeeContext.close()
     await approverContext.close()

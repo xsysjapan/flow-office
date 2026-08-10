@@ -1,0 +1,123 @@
+version: "3"
+
+tasks:
+  default:
+    desc: DBを初期化してローカル開発サーバーを起動する
+    cmds:
+      - task: dev
+
+  install:
+    desc: backend/frontendの依存関係と.envを準備する
+    deps:
+      - install:backend
+      - install:frontend
+
+  install:backend:
+    internal: true
+    dir: backend
+    cmds:
+      - php -r "file_exists('.env') || copy('.env.example', '.env');"
+      - composer install
+      - php -r "file_exists('database/database.sqlite') || touch('database/database.sqlite');"
+
+  install:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - node -e "const fs=require('fs'); if(!fs.existsSync('.env')) fs.copyFileSync('.env.example','.env')"
+      - npm install
+
+  prepare:
+    internal: true
+    deps:
+      - prepare:backend
+      - prepare:frontend
+
+  prepare:backend:
+    internal: true
+    dir: backend
+    cmds:
+      - php -r "file_exists('.env') || copy('.env.example', '.env');"
+      - php -r "file_exists('database/database.sqlite') || touch('database/database.sqlite');"
+
+  prepare:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - node -e "const fs=require('fs'); if(!fs.existsSync('.env')) fs.copyFileSync('.env.example','.env')"
+
+  db:init:
+    desc: SQLite DBを削除・再作成し、製品初期データとローカルシナリオデータを投入する
+    deps:
+      - prepare:backend
+    dir: backend
+    env:
+      DB_CONNECTION: sqlite
+      MICROSOFT_MOCK_ENABLED: "true"
+      MICROSOFT_CLIENT_ID: mock-client-id
+      MICROSOFT_CLIENT_SECRET: mock-client-secret
+      MICROSOFT_TENANT_ID: mock
+      MICROSOFT_MOCK_PUBLIC_BASE_URL: http://localhost:9000
+      MICROSOFT_MOCK_INTERNAL_BASE_URL: http://localhost:9000
+    preconditions:
+      - sh: "php -r \"exit(file_exists('vendor/autoload.php') ? 0 : 1);\""
+        msg: backendの依存関係がありません。先に `task install` を実行してください。
+    cmds:
+      - php artisan optimize:clear
+      - php artisan migrate:fresh --seed --force
+      - php artisan db:seed --class=ScenarioSeeder --force
+
+  dev:
+    desc: DBを初期化してbackend/frontend/mock-oidcを並列起動する
+    cmds:
+      - task: prepare
+      - task: db:init
+      - task: services
+
+  start:
+    desc: DBを維持したままbackend/frontend/mock-oidcを並列起動する
+    cmds:
+      - task: prepare
+      - task: services
+
+  services:
+    internal: true
+    deps:
+      - backend
+      - frontend
+      - mock-oidc
+
+  backend:
+    desc: Laravel APIをhttp://localhost:8000で起動する
+    dir: backend
+    env:
+      MICROSOFT_MOCK_ENABLED: "true"
+      MICROSOFT_CLIENT_ID: mock-client-id
+      MICROSOFT_CLIENT_SECRET: mock-client-secret
+      MICROSOFT_TENANT_ID: mock
+      MICROSOFT_MOCK_PUBLIC_BASE_URL: http://localhost:9000
+      MICROSOFT_MOCK_INTERNAL_BASE_URL: http://localhost:9000
+    preconditions:
+      - sh: "php -r \"exit(file_exists('vendor/autoload.php') ? 0 : 1);\""
+        msg: backendの依存関係がありません。先に `task install` を実行してください。
+    cmds:
+      - php artisan serve --host=127.0.0.1 --port=8000
+
+  frontend:
+    desc: Vite SPAをhttp://localhost:5173で起動する
+    dir: frontend
+    env:
+      VITE_API_BASE_URL: http://localhost:8000/api
+    preconditions:
+      - sh: "node -e \"process.exit(require('fs').existsSync('node_modules') ? 0 : 1)\""
+        msg: frontendの依存関係がありません。先に `task install` を実行してください。
+    cmds:
+      - npm run dev -- --host 127.0.0.1 --port 5173
+
+  mock-oidc:
+    desc: Microsoft Entra IDモックをhttp://localhost:9000で起動する
+    dir: mock-oidc
+    env:
+      MOCK_USERS_API_URL: http://localhost:8000/api/dev/mock-users
+    cmds:
+      - node server.js

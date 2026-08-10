@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * (承認時に attendance_days / special_leave_grants への反映が必要なため)。主キーはUUID
  * (HasUuids)。理由はPaidLeaveRequestと同じ。
  */
-#[Fillable(['id', 'user_id', 'special_leave_type_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'request_group_id', 'user_id', 'special_leave_type_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
 class SpecialLeaveRequest extends Model
 {
     use HasUuids;

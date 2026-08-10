@@ -16,9 +16,7 @@ use Illuminate\Support\Facades\Validator;
  */
 class McpController extends Controller
 {
-    public function __construct(private readonly ToolRegistry $tools)
-    {
-    }
+    public function __construct(private readonly ToolRegistry $tools) {}
 
     public function handle(Request $request): JsonResponse
     {
@@ -27,7 +25,7 @@ class McpController extends Controller
 
         $result = match ($method) {
             'initialize' => $this->initialize(),
-            'tools/list' => $this->toolsList(),
+            'tools/list' => $this->toolsList($request),
             'tools/call' => $this->toolsCall($request),
             'notifications/initialized', 'ping' => null,
             default => ['__error' => ['code' => -32601, 'message' => "Unknown method: {$method}"]],
@@ -62,14 +60,20 @@ class McpController extends Controller
         ];
     }
 
-    private function toolsList(): array
+    private function toolsList(Request $request): array
     {
+        $client = new BackendApiClient($request->attributes->get('mcp_backend_token'));
+        $access = $client->get('/access/me');
+
         return [
             'tools' => array_map(fn ($tool) => [
                 'name' => $tool->name(),
                 'description' => $tool->description(),
                 'inputSchema' => $tool->inputSchema(),
-            ], $this->tools->all()),
+            ], array_values(array_filter(
+                $this->tools->all(),
+                fn ($tool) => $this->hasEffectiveAccess($tool->requiredScopes(), $access),
+            ))),
         ];
     }
 
@@ -104,8 +108,41 @@ class McpController extends Controller
         }
 
         $client = new BackendApiClient($request->attributes->get('mcp_backend_token'));
+        $access = $client->get('/access/me');
+        if (! $this->hasEffectiveAccess($tool->requiredScopes(), $access)) {
+            return [
+                'content' => [['type' => 'text', 'text' => '現在のFeatureまたはPermissionではこのツールを利用できません。']],
+                'isError' => true,
+            ];
+        }
 
         return $tool->handle($arguments, $client);
+    }
+
+    /** @param string[] $requiredScopes */
+    private function hasEffectiveAccess(array $requiredScopes, array $access): bool
+    {
+        $features = $access['features'] ?? [];
+        $permissions = $access['permissions'] ?? [];
+
+        foreach ($requiredScopes as $scope) {
+            if (! str_starts_with($scope, 'attendance:')) {
+                continue;
+            }
+            $requiredFeature = str_ends_with($scope, ':clock')
+                ? 'attendance.clock'
+                : (str_ends_with($scope, ':read') ? null : 'attendance.timesheet');
+            if (($requiredFeature !== null && ! in_array($requiredFeature, $features, true))
+                || ($requiredFeature === null && ! array_intersect(['attendance.entry', 'attendance.timesheet'], $features))) {
+                return false;
+            }
+            $permission = str_ends_with($scope, ':read') ? 'attendance.read' : 'attendance.update';
+            if (! in_array($permission, $permissions, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

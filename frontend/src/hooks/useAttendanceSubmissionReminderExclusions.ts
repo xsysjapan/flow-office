@@ -7,7 +7,7 @@ import {
 
 const LIST_KEY = (userId: string) => ['attendance-submission-reminder-exclusions', userId]
 
-/** 対象社員の勤怠未提出督促の個別除外一覧(role:admin限定)。userId未確定の間は取得しない。 */
+/** 対象社員の勤怠未提出督促の個別除外一覧。userId未確定の間は取得しない。 */
 export function useAttendanceSubmissionReminderExclusions(userId: string | undefined) {
   return useQuery({
     queryKey: LIST_KEY(userId ?? ''),

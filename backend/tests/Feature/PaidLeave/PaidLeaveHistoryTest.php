@@ -45,7 +45,7 @@ class PaidLeaveHistoryTest extends TestCase
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
         $this->createWorkingDayShift($employee, '2026-08-10');
 
         $this->actingAs($hr)->postJson('/api/paid-leave/grants', [
@@ -69,7 +69,14 @@ class PaidLeaveHistoryTest extends TestCase
 
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
-            ['paid_leave.used', 'paid_leave.request_approved', 'paid_leave.request_shared', 'paid_leave.requested', 'paid_leave.granted'],
+            [
+                'paid_leave.used',
+                'paid_leave.request_approved',
+                'paid_leave.request_shared',
+                'paid_leave.usage_designated',
+                'paid_leave.requested',
+                'paid_leave.granted',
+            ],
             $eventTypes,
         );
 
@@ -91,9 +98,9 @@ class PaidLeaveHistoryTest extends TestCase
     {
         $employee = User::factory()->create();
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
 
         PaidLeaveGrant::query()->create([
             'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
@@ -113,7 +120,7 @@ class PaidLeaveHistoryTest extends TestCase
         $employee = User::factory()->create();
         $other = User::factory()->create();
         $hr = User::factory()->create();
-        $hr->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
 
         $this->actingAs($hr)->postJson('/api/paid-leave/grants', [
             'user_id' => $employee->id,

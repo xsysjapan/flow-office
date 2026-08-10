@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
@@ -11,7 +12,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendancePunchResource;
 use App\Models\AttendancePunch;
 use App\Models\PunchType;
-use App\Models\Role;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -171,7 +171,8 @@ class AttendancePunchController extends Controller
             return $userId;
         }
 
-        $isAdmin = $this->currentTokenHasFullAccess($request) && $request->user()->hasRole(Role::ADMIN);
+        $isAdmin = $this->currentTokenHasFullAccess($request)
+            && app(EffectiveAccessResolver::class)->hasGlobalPermission($request->user(), 'attendance.read');
         $isApprover = app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth($request->user()->id, $userId, $yearMonths);
 
         abort_if(! $isAdmin && ! $isApprover, 403, $message);

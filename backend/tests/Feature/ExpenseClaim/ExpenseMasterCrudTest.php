@@ -19,7 +19,7 @@ class ExpenseMasterCrudTest extends TestCase
     public function test_only_admin_can_write_expense_categories(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
 
         $payload = ['code' => 'transportation', 'name' => '交通費', 'entry_mode' => 'batch'];
@@ -40,7 +40,7 @@ class ExpenseMasterCrudTest extends TestCase
     public function test_expense_category_rejects_invalid_entry_mode(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $this->actingAs($admin)->postJson('/api/admin/expense-categories', [
             'code' => 'meal', 'name' => '会食', 'entry_mode' => 'weekly',
@@ -87,7 +87,7 @@ class ExpenseMasterCrudTest extends TestCase
     {
         $employee = User::factory()->create();
         $accountingStaff = User::factory()->create();
-        $accountingStaff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
+        $this->assignRole($accountingStaff, Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
         $category = ExpenseCategory::query()->create([
             'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);
@@ -113,7 +113,7 @@ class ExpenseMasterCrudTest extends TestCase
         $employee = User::factory()->create();
         $otherEmployee = User::factory()->create();
         $accountingStaff = User::factory()->create();
-        $accountingStaff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
+        $this->assignRole($accountingStaff, Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
         $category = ExpenseCategory::query()->create([
             'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
         ]);

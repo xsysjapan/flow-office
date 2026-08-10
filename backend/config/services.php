@@ -37,14 +37,16 @@ return [
 
     // Microsoft Entra ID SSO (docs/06-usecases-auth.md UC-001, Socialite azure driver)。
     //
-    // client_id/client_secret/tenant/redirectは実運用ではここ(.env)を使わない。実際の値は
+    // client_id/client_secret/tenantは実運用ではここ(.env)を使わない。実際の値は
     // `system_settings`(初回オンボーディング、docs/06-usecases-auth.md)で管理者が設定し、
-    // `App\Domain\User\Ms365ConfigResolver::applyToSocialiteConfig()`がリクエストのたびに
+    // `App\Domain\UserManagement\Ms365ConfigResolver::applyToSocialiteConfig()`がリクエストのたびに
     // このconfigへ反映する。ここでの値はローカル開発・E2Eテストでmock-oidcの資格情報を
     // 初回シード(`SystemSetting::current()`)するためのフォールバックとしてのみ使われる。
     'azure' => [
         'client_id' => env('MICROSOFT_CLIENT_ID'),
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+        // SocialiteのコールバックURIはDBのシステム設定ではなくLaravel設定を正本とする。
+        // 未設定時はMs365ConfigResolverがAPP_URLとAPI_PREFIXから組み立てる。
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
         'tenant' => env('MICROSOFT_TENANT_ID', 'common'),
 

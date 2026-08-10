@@ -20,14 +20,14 @@ export function Calendar({ className, classNames, showOutsideDays = true, compon
         month: 'flex w-fit flex-col gap-3',
         month_caption: 'flex h-8 w-full items-center justify-center px-9',
         caption_label: 'flex h-8 items-center justify-center text-sm font-medium leading-none select-none',
-        nav: 'absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between',
+        nav: 'pointer-events-none absolute inset-x-0 top-0 z-10 flex h-8 items-center justify-between',
         button_previous: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
+          'pointer-events-auto size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
         ),
         button_next: cn(
           buttonVariants({ variant: 'ghost' }),
-          'size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
+          'pointer-events-auto size-8 bg-transparent p-0 text-muted-foreground select-none hover:text-foreground',
         ),
         month_grid: 'table-fixed border-collapse',
         weekdays: 'table-row',

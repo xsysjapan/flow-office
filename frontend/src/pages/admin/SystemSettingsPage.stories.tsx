@@ -20,6 +20,7 @@ const settings: SystemSettings = {
   shift_swap_requires_approval: true,
   attendance_requires_approval: true,
   expense_claim_requires_approval: true,
+  prohibit_self_privileged_role_assignment: false,
   compensatory_leave_requires_approval: true,
 }
 

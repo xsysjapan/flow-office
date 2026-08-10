@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\User\Ms365ConfigResolver;
+use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -37,9 +38,25 @@ class DevDatabaseResetController extends Controller
             throw new NotFoundHttpException;
         }
 
+        // E2E用の全マイグレーション・全Seederは、開発端末によって30秒を超える。
+        // モック有効時だけ到達可能な開発専用処理なので、リセット完了まで時間制限を設けない。
+        set_time_limit(0);
+
         Artisan::call('migrate:fresh', ['--seed' => true, '--force' => true]);
+
+        // ScenarioAccessSeeder を適用する前の製品初期状態を返し、E2E の globalSetup で
+        // 「一般利用者向けの Feature / RoleAssignment は初期 OFF」を検証できるようにする。
+        $allUsersGroupId = DB::table('groups')->where('code', 'ALL_USERS')->value('id');
+        $productInitialAccess = [
+            'all_users_feature_assignments' => $allUsersGroupId === null
+                ? 0
+                : DB::table('group_feature_assignments')->where('group_id', $allUsersGroupId)->count(),
+            'all_users_role_assignments' => $allUsersGroupId === null
+                ? 0
+                : DB::table('role_assignments')->where('subject_type', 'group')->where('subject_id', $allUsersGroupId)->count(),
+        ];
         Artisan::call('db:seed', ['--class' => 'ScenarioSeeder', '--force' => true]);
 
-        return response()->json(['status' => 'ok']);
+        return response()->json(['status' => 'ok', 'product_initial_access' => $productInitialAccess]);
     }
 }

@@ -309,4 +309,48 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $this->assertEquals(1.0, $totals['special_leave_days']);
         $this->assertEquals(180, $totals['special_leave_minutes']);
     }
+
+    /**
+     * 付与必須の特別休暇が付与残数不足のまま承認された場合、月次確認画面では例外にせず
+     * 警告として返す。申請中(submitted)の件数はWorkflow側で別枠集計するため、ここでは
+     * 承認済みだがgrant消化へ確定できていない行だけを対象にする。
+     */
+    public function test_month_endpoint_warns_about_approved_special_leave_without_enough_grant_balance(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $summerType = SpecialLeaveType::query()->create([
+            'name' => '夏季休暇',
+            'is_active' => true,
+            'requires_grant' => true,
+        ]);
+
+        EmployeeShiftAssignment::query()->create([
+            'user_id' => $employee->id, 'work_date' => '2026-08-10', 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => '2026-08-10 09:00:00', 'planned_end_at' => '2026-08-10 18:00:00',
+            'planned_break_minutes' => 60,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $summerType->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '夏季休暇のため',
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")->assertOk();
+
+        $response = $this->actingAs($employee)->getJson('/api/attendance/months/2026-08')->assertOk();
+
+        $this->assertSame($requestId, $response->json('special_leave_balance_warnings.0.special_leave_request_id'));
+        $this->assertSame($summerType->id, $response->json('special_leave_balance_warnings.0.special_leave_type_id'));
+        $this->assertSame('夏季休暇', $response->json('special_leave_balance_warnings.0.special_leave_type_name'));
+        $this->assertSame('2026-08-10', $response->json('special_leave_balance_warnings.0.used_on'));
+        $this->assertStringContainsString('付与残数不足', $response->json('special_leave_balance_warnings.0.message'));
+    }
 }

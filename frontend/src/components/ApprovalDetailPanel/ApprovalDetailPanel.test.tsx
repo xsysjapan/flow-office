@@ -131,6 +131,58 @@ const shiftSwapRequest: WorkflowRequest = {
   },
 }
 
+const paidLeaveRequest: WorkflowRequest = {
+  ...genericRequest,
+  id: 'workflow-request-5',
+  title: '2026-08-10 の有給申請',
+  subject_type: 'paid_leave_request',
+  subject: {
+    type: 'paid_leave_request',
+    id: 'paid-leave-request-1',
+    user_id: 'applicant-1',
+    status: 'submitted',
+    target_date: '2026-08-10',
+    leave_type: 'full',
+    leave_type_label: '全休',
+    hours: null,
+    requested_days: 1,
+    reason: null,
+    submitted_at: '2026-08-01T00:00:00+09:00',
+    approved_at: null,
+    returned_at: null,
+    cancelled_at: null,
+    request_group_dates: null,
+    used_days_last_year: 4,
+    pending_days_last_year: 4,
+    approved_days_last_year: 0,
+  },
+}
+
+const groupedPaidLeaveRequest: WorkflowRequest = {
+  ...paidLeaveRequest,
+  id: 'workflow-request-6',
+  subject: {
+    type: 'paid_leave_request',
+    id: 'paid-leave-request-2',
+    user_id: 'applicant-1',
+    status: 'submitted',
+    target_date: '2026-08-10',
+    leave_type: 'full',
+    leave_type_label: '全休',
+    hours: null,
+    requested_days: 1,
+    reason: null,
+    submitted_at: '2026-08-01T00:00:00+09:00',
+    approved_at: null,
+    returned_at: null,
+    cancelled_at: null,
+    request_group_dates: ['2026-08-10', '2026-08-11', '2026-08-12'],
+    used_days_last_year: 4,
+    pending_days_last_year: 4,
+    approved_days_last_year: 0,
+  },
+}
+
 function renderPanel(request: WorkflowRequest, overrides: Partial<Parameters<typeof ApprovalDetailPanel>[0]> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attachmentsApi, 'fetchAttachments').mockResolvedValue([])
@@ -316,5 +368,25 @@ describe('ApprovalDetailPanel', () => {
 
     expect(screen.getByText('この申請は現在操作できません。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
+  })
+
+  it('shows the applicant’s used days over the past year for a paid leave request', async () => {
+    renderPanel(paidLeaveRequest)
+
+    expect(await screen.findByText('直近1年間の取得日数')).toBeInTheDocument()
+    expect(screen.getByText('4日')).toBeInTheDocument()
+  })
+
+  it('does not show a request-group notice for a single-day paid leave request', async () => {
+    renderPanel(paidLeaveRequest)
+
+    await screen.findByText('直近1年間の取得日数')
+    expect(screen.queryByText(/期間指定で/)).not.toBeInTheDocument()
+  })
+
+  it('shows a request-group notice for a multi-day (period) paid leave request', async () => {
+    renderPanel(groupedPaidLeaveRequest)
+
+    expect(await screen.findByText(/期間指定で3日分\(2026-08-10 〜 2026-08-12\)まとめて申請されています。/)).toBeInTheDocument()
   })
 })

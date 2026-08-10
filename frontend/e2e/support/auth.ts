@@ -22,6 +22,8 @@ export type ScenarioUserKey = keyof typeof SCENARIO_USERS
  * 実際のEntra IDと異なりPKCE等の検証がないため、ボタンクリックのみで完結する。
  */
 export async function loginAs(page: Page, displayName: string): Promise<void> {
+  const frontendOrigin = new URL(process.env.E2E_FRONTEND_URL ?? 'http://localhost:5173').origin
+
   await page.goto('/login')
   await page.getByRole('button', { name: 'Microsoftでログイン' }).click()
 
@@ -33,5 +35,11 @@ export async function loginAs(page: Page, displayName: string): Promise<void> {
     .click()
 
   // モックOIDC → backendコールバック → frontendの /auth/callback を経てトップ画面に戻る。
-  await page.waitForURL((url) => !url.pathname.startsWith('/auth/callback') && !url.pathname.startsWith('/login'))
+  await page.waitForURL(
+    (url) =>
+      url.origin === frontendOrigin &&
+      !url.pathname.startsWith('/auth/callback') &&
+      !url.pathname.startsWith('/login'),
+  )
+  await page.waitForFunction(() => Boolean(localStorage.getItem('flow-office.token')))
 }

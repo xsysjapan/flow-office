@@ -52,6 +52,7 @@ class AttendanceMonthLockOnWorkflowRequestDraftedReactor extends Reactor
             yearMonth: $yearMonth,
             approverUserId: $workflowRequest->approver_user_id,
             attendanceMonthId: $workflowRequest->subject_id,
+            workflowRequestId: $workflowRequest->id,
         ));
     }
 

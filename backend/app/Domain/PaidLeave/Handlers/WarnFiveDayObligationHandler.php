@@ -50,7 +50,13 @@ class WarnFiveDayObligationHandler implements CommandHandler
 
         foreach ($grants as $grant) {
             $today = $asOfToday ?? Carbon::today($grant->user->timezone ?? $defaultTimezone);
-            $obligationDeadline = $grant->granted_on->copy()->addYear();
+            // granted_onはDB上UTCのCarbonになる一方、todayは社員のタイムゾーンで生成される。
+            // 日付同士の比較なので同じタイムゾーンの0時へ揃え、UTCとの9時間差等で
+            // 60日境界が60.375日となって対象外になることを防ぐ。
+            $obligationDeadline = Carbon::parse(
+                $grant->granted_on->toDateString(),
+                $today->getTimezone(),
+            )->addYear()->startOfDay();
             $daysUntilDeadline = $today->diffInDays($obligationDeadline, false);
 
             if ($daysUntilDeadline < 0 || $daysUntilDeadline > self::WARNING_WINDOW_DAYS) {

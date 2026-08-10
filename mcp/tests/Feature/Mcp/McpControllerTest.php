@@ -70,6 +70,7 @@ class McpControllerTest extends TestCase
 
         Http::fake([
             '*/auth/me' => Http::response(['id' => 1, 'email' => 'yuto.nagano@xsys.co.jp', 'name' => '永野ゆうと'], 200),
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
@@ -90,6 +91,7 @@ class McpControllerTest extends TestCase
         $accessToken = $this->obtainAccessToken(['profile:self:read', 'attendance:self:clock']);
 
         Http::fake([
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
             '*/attendance/clock-in' => Http::response(['message' => '既に出勤済みです。'], 409),
         ]);
 
@@ -124,6 +126,9 @@ class McpControllerTest extends TestCase
     public function test_tools_list_returns_all_registered_tools(): void
     {
         $accessToken = $this->obtainAccessToken(['profile:self:read']);
+        Http::fake([
+            '*/access/me' => Http::response(['features' => ['attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet'], 'permissions' => ['attendance.read', 'attendance.update']], 200),
+        ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
             'jsonrpc' => '2.0',
@@ -136,6 +141,35 @@ class McpControllerTest extends TestCase
         $this->assertContains('get_my_profile', $names);
         $this->assertContains('cancel_monthly_attendance_submission', $names);
         $this->assertCount(31, $names);
+    }
+
+    public function test_local_draft_tool_is_denied_when_attendance_feature_is_disabled(): void
+    {
+        $accessToken = $this->obtainAccessToken(['attendance:self:draft']);
+        Http::fake([
+            '*/access/me' => Http::response(['features' => [], 'permissions' => ['attendance.update']], 200),
+        ]);
+
+        $listResponse = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/list',
+        ]);
+        $listResponse->assertOk();
+        $this->assertNotContains(
+            'create_monthly_attendance_draft',
+            collect($listResponse->json('result.tools'))->pluck('name')->all(),
+        );
+
+        $response = $this->withHeader('Authorization', "Bearer {$accessToken}")->postJson('/', [
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/call',
+            'params' => ['name' => 'create_monthly_attendance_draft', 'arguments' => ['target_month' => '2026-08']],
+        ]);
+
+        $response->assertOk()->assertJsonPath('result.isError', true);
+        $this->assertDatabaseCount('monthly_attendance_drafts', 0);
     }
 
     public function test_mcp_endpoint_rejects_requests_without_a_bearer_token(): void

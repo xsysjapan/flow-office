@@ -100,7 +100,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
     public function test_admin_can_assign_and_change_a_users_monthly_work_style_without_touching_past_months(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
         $regular = $this->createWorkStyle('regular', 480);
         $shift = $this->createWorkStyle('shift', 420);
@@ -127,7 +127,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
     public function test_removing_the_current_months_assignment_reverts_to_the_company_default(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
         $shift = $this->createWorkStyle('shift', 420);
         $currentYearMonth = now()->format('Y-m');
@@ -148,7 +148,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
     public function test_removing_a_past_months_assignment_is_rejected(): void
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
         $employee = User::factory()->create();
         $shift = $this->createWorkStyle('shift', 420);
         // subMonth()は月末日(29〜31日)に実行すると繰り上がって当月に戻ってしまうことがあるため、

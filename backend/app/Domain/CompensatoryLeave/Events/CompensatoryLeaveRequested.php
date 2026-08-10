@@ -15,5 +15,6 @@ class CompensatoryLeaveRequested extends ShouldBeStored
         public readonly ?int $requestedMinutes,
         public readonly string $approverUserId,
         public readonly ?string $reason,
+        public readonly ?string $requestGroupId = null,
     ) {}
 }

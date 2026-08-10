@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceMonth, User } from '../../api/types'
 import { AttendanceMonthsPage } from './AttendanceMonthsPage'
@@ -50,9 +50,13 @@ function renderPage() {
 describe('AttendanceMonthsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-15T12:00:00+09:00'))
     currentUser.hire_date = '2026-01-15'
     currentUser.termination_date = undefined
   })
+
+  afterEach(() => vi.useRealTimers())
 
   it('shows all employment months and paginates them even when no month records exist', async () => {
     vi.spyOn(attendanceApi, 'fetchMyMonths').mockResolvedValue([])

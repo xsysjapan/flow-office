@@ -8,6 +8,12 @@
 | Projector | イベントを購読し、Projection Tableを更新する処理。 |
 | Projection | 画面表示用に非正規化された読み取り専用データ。イベントから再生成可能。 |
 | Aggregate | イベントの単位となる集約(例: 1人の1日の勤怠 = attendance_day)。 |
+| Feature | ユーザーが機能自体を利用できるかを表す。グループへ明示的に付与し、Permissionとは分離する。 |
+| Permission | 機能内で実行できる操作を`Resource.Action`で表したもの。Roleにまとめて付与する。 |
+| Role | Permissionの集合。ユーザーまたはグループへScopeと有効期間付きで割り当てる。 |
+| Scope | RoleAssignmentが有効な対象範囲。`GLOBAL`、`GROUP`、`SELF`、`APPROVAL_TASK`を扱う。 |
+| GroupType | 組織・雇用区分・プロジェクト・委員会等、Groupの用途と所属数制約を定義する種別。 |
+| MembershipChangeSet | 将来日付の所属変更を複数明細まとめて検証・一括適用する単位。 |
 | 所定労働時間 | 勤務形態ごとに定められた基準の労働時間。 |
 | 法定休日 | 労働基準法上の休日(週1日または4週4日)。 |
 | 所定休日 | 会社が定める休日(法定休日以外の休み)。 |

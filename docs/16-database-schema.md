@@ -33,16 +33,21 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 
 ## users
 
+ユーザー・外部ID・グループ・所属・Feature・Role/Permissionの新規基盤については、
+[docs/31](./31-user-group-access-foundation.md)のエンティティ定義を正本とする。実装時には以下の
+既存`users`列を直ちに破壊的変更せず、`ExternalIdentity`、`Group`、`Membership`等への移行手順と
+互換期間を別途定義する。社員番号、メールアドレス、Microsoft Object IDを新しい内部主キーには
+使用しない。
+
 - id
-- entra_user_id
 - name
 - email
 - password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
   パスワードログイン用。`hashed`キャストで自動ハッシュ化して保存する。SSOでログインする
   ユーザーはnullのまま)
-- department
-- job_title
-- employment_status
+- job_title (所属とは独立した表示用プロフィール項目。管理元は`field_authorities`で決定する)
+- account_status (`PENDING` / `ACTIVE` / `SUSPENDED` / `LEAVE` / `RETIRED` / `DISABLED`)
+- source_type (`LOCAL` / `MICROSOFT_ENTRA` / `EXTERNAL_HR` / `IMPORT`)
 - timezone (IANAタイムゾーン識別子。例: `Asia/Tokyo`。新規作成時は `system_settings.default_timezone`
   を初期値とする。MS365同期では上書きしない)
 - hire_date (入社日。MS365に対応する属性がないため同期対象外で、管理者が個別に設定する。
@@ -79,8 +84,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - notification_mail_sender_address / notification_mail_sender_name (送信元メールボックス)
 - created_at / updated_at
 
-常に1行のみ存在するシングルトン設定。Command/EventStoreを経由せず、管理者専用APIから
-直接更新する([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezone等を管理する))。
+常に1行のみ存在するシングルトン設定。管理者専用APIから直接更新する
+([UC-003](./06-usecases-auth.md#uc-003-システム設定default_timezone等を管理する))が、同一
+トランザクションで`system_settings.updated`監査イベントを`stored_events`へ追記する。
 初回作成(`m365_*`・`onboarding_started_at`・`onboarding_completed_at`)は
 [UC-000](./06-usecases-auth.md#uc-000-初回オンボーディングを実行する)経由(未認証で呼べる
 `StartOnboardingSso`/`CompleteOnboardingWithLocalPassword`コマンド)で行う。これらのコマンドは
@@ -664,9 +670,9 @@ FIDO等)は`authentication_keys`で、NFCカード専用の列を`users`に持�
 - disabled_at / revoked_at (nullable)
 - created_at / updated_at
 
-`organization_shared`はマスタ(管理者が設定する参照データ、`request_types`と同じ方針で
-Command/EventStoreを経由せずEloquentで直接更新)、`personal`はユーザー本人が登録・削除する
-正データという性質の違いはあるが、テーブル自体は1つに統合する(役割・権限の違いは
+`organization_shared`は管理者が設定する共有端末、`personal`はユーザー本人が登録・削除する
+端末という性質の違いはあるが、どちらもCommand/EventStore経由で更新する。テーブル自体は
+1つに統合する(役割・権限の違いは
 `owner_type`と下記`device_roles`/`device_scopes`で表現し、テーブルを分けない)。
 
 ### device_roles (端末役割。1端末に複数可)
@@ -925,6 +931,9 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 ## paid_leave_requests (有給申請の正)
 
 - id
+- request_group_id (nullable。期間指定でまとめて申請した複数日分(1日1行)を束ねるID。
+  単日申請ではnull。承認者がこのうち1件を承認すると、同じIDを持つ他の提出中の行も
+  まとめて承認される)
 - user_id
 - approver_user_id
 - status (`submitted` / `approved` / `returned` / `cancelled`)
@@ -944,16 +953,29 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - id
 - user_id
 - attendance_day_id
-- paid_leave_grant_id
+- paid_leave_grant_id (nullable)
 - paid_leave_request_id
 - used_on
 - used_days
 - used_minutes
 - usage_type
+- is_confirmed (承認によりgrant消化が確定済みかどうか。下記参照)
 - created_at / updated_at
 
-1件の `paid_leave_requests` の承認が、有効期限が近い複数の `paid_leave_grants` にまたがって
-消化される場合、grantごとに1行作成される。
+行のライフサイクル: 申請時点(承認前)で`paid_leave.usage_designated`イベントにより
+`paid_leave_grant_id=null`・`is_confirmed=false`の行が1件作られる(勤怠側はこの行の
+存在だけで「休暇が設定されているか」を判定でき、`paid_leave_requests`を参照しに行く
+必要が無い。ドメインをまたいだ参照を避けるための設計)。承認時、最初の`paid_leave.used`
+イベントがこの行を確定させる(`paid_leave_grant_id`を設定し`is_confirmed=true`にする)。
+1件の`paid_leave_requests`の承認が、有効期限が近い複数の`paid_leave_grants`にまたがって
+消化される場合、2件目以降のgrantは新規の確定済み行として追加される。
+
+承認済み(is_confirmed=true)の行は、取消時に削除される(「現時点で有効な消化」の一覧であり、
+取消の事実自体は`stored_events`の`paid_leave.usage_reversed`イベントとして残る)。未承認
+(is_confirmed=false)のまま取消された場合は、`paid_leave.request_cancelled`イベントの
+Projectorが直接この行を削除する(grant消化がまだ発生していないため`usage_reversed`は
+発行されない)。`special_leave_usages`・`compensatory_leave_usages`も同じ構造・同じ
+ライフサイクル・同じ取消時の挙動を持つ。
 
 ## attachments
 
@@ -1011,7 +1033,7 @@ docs/20-implementation-notes.md と同様の注記)。
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。 |
+| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |

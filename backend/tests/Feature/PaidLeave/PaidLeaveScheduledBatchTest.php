@@ -256,6 +256,26 @@ class PaidLeaveScheduledBatchTest extends TestCase
         $this->assertNotNull($grant->refresh()->five_day_obligation_warned_at);
     }
 
+    public function test_warn_five_day_obligation_uses_calendar_days_across_user_timezone(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-09 00:00:00', 'Asia/Tokyo'));
+        $employee = User::factory()->create(['timezone' => 'Asia/Tokyo']);
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id,
+            'granted_on' => '2025-10-08',
+            'expires_on' => '2027-10-08',
+            'granted_days' => 10,
+            'used_days' => 0,
+            'remaining_days' => 10,
+        ]);
+
+        try {
+            $this->assertSame(1, app(CommandBus::class)->dispatch(new WarnFiveDayObligation));
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_warn_five_day_obligation_skips_when_five_days_are_already_used(): void
     {
         $today = Carbon::parse('2026-08-10');

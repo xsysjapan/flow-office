@@ -24,7 +24,7 @@ class LegalHolidayUndeterminedTest extends TestCase
     private function makeAdmin(): User
     {
         $admin = User::factory()->create();
-        $admin->roles()->attach(Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
+        $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         return $admin;
     }

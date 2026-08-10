@@ -18,7 +18,7 @@ class BackOfficeTaskTest extends TestCase
     public function test_assign_and_change_status(): void
     {
         $staff = User::factory()->create();
-        $staff->roles()->attach(Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
+        $this->assignRole($staff, Role::query()->create(['code' => Role::ACCOUNTING_STAFF, 'name' => '経理担当者']));
 
         $task = BackOfficeTask::query()->create([
             'source_type' => 'workflow_request',
@@ -57,7 +57,7 @@ class BackOfficeTaskTest extends TestCase
     public function test_hr_staff_can_access_backoffice_tasks(): void
     {
         $hrStaff = User::factory()->create();
-        $hrStaff->roles()->attach(Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
+        $this->assignRole($hrStaff, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
 
         $task = BackOfficeTask::query()->create([
             'source_type' => 'attendance_month',

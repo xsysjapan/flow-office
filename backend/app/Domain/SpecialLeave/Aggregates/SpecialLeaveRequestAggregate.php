@@ -7,6 +7,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
+use App\Domain\SpecialLeave\Events\SpecialLeaveUsageDesignated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -25,6 +26,7 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
         float $requestedDays,
         string $approverUserId,
         ?string $reason,
+        ?string $requestGroupId = null,
     ): self {
         $this->recordThat(new SpecialLeaveRequested(
             userId: $userId,
@@ -35,6 +37,33 @@ class SpecialLeaveRequestAggregate extends AggregateRoot
             requestedDays: $requestedDays,
             approverUserId: $approverUserId,
             reason: $reason,
+            requestGroupId: $requestGroupId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 申請時点(承認前)で対象日の勤怠を特別休暇として設定したことを記録する
+     * (SpecialLeaveUsageProjectorがspecial_leave_usagesへgrant_id未確定・is_confirmed=falseの
+     * 行を作る)。承認時にどのspecial_leave_grantから消化するかが決まった時点で、この行が
+     * 確定済みへ更新される(special_leave.used。ApproveSpecialLeaveRequestHandler参照)。
+     */
+    public function designateUsage(
+        string $userId,
+        string $attendanceDayId,
+        string $usedOn,
+        float $usedDays,
+        ?int $usedMinutes,
+        string $usageType,
+    ): self {
+        $this->recordThat(new SpecialLeaveUsageDesignated(
+            userId: $userId,
+            attendanceDayId: $attendanceDayId,
+            usedOn: $usedOn,
+            usedDays: $usedDays,
+            usedMinutes: $usedMinutes,
+            usageType: $usageType,
         ));
 
         return $this;

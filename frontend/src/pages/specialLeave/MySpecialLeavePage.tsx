@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { X } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -21,6 +23,7 @@ import {
   useSpecialLeaveTypes,
 } from '../../hooks/useSpecialLeave'
 import { paidLeaveRequestStatusLabel, paidLeaveTypeLabel } from '../../utils/statusLabels'
+import { addDays } from '../../utils/weekDates'
 
 const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
   { value: 'full', label: '全休' },
@@ -29,6 +32,23 @@ const LEAVE_TYPE_OPTIONS: Array<{ value: PaidLeaveType; label: string }> = [
   { value: 'hourly', label: '時間休' },
 ]
 
+type TargetDateMode = 'dates' | 'range'
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/** 期間指定(from〜to)を暦日1日ずつの"YYYY-MM-DD"配列に列挙する(両端含む)。 */
+function enumerateRange(range: DateRangeValue | undefined): string[] {
+  if (!range?.from) return []
+  const to = range.to ?? range.from
+  const dates: string[] = []
+  let cursor = range.from
+  while (cursor <= to) {
+    dates.push(cursor)
+    cursor = addDays(cursor, 1)
+  }
+  return dates
+}
+
 function SpecialLeaveRequestForm() {
   const { data: types } = useSpecialLeaveTypes()
   const activeTypes = (types ?? []).filter((type) => type.is_active)
@@ -36,48 +56,89 @@ function SpecialLeaveRequestForm() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.special_leave_requires_approval
 
+  const [searchParams] = useSearchParams()
+  const dateParam = searchParams.get('date')
+  const initialDate = dateParam && ISO_DATE_PATTERN.test(dateParam) ? dateParam : undefined
+
   const [specialLeaveTypeId, setSpecialLeaveTypeId] = useState<number | undefined>(undefined)
-  const [targetDate, setTargetDate] = useState('')
+  const [targetMode, setTargetMode] = useState<TargetDateMode>('dates')
+  const [selectedDates, setSelectedDates] = useState<string[]>(() => (initialDate ? [initialDate] : []))
+  const [range, setRange] = useState<DateRangeValue | undefined>(undefined)
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
   const [hours, setHours] = useState('')
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [reason, setReason] = useState('')
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const createRequest = useCreateSpecialLeaveRequest()
 
-  const canSubmit =
-    specialLeaveTypeId &&
-    targetDate &&
-    (!approvalRequired || approverUserId) &&
-    (leaveType !== 'hourly' || Number(hours) > 0)
+  const targetDates = targetMode === 'range' ? enumerateRange(range) : selectedDates
+  const isMultiDay = targetDates.length > 1
+  const effectiveLeaveType: PaidLeaveType = isMultiDay ? 'full' : leaveType
 
-  const handleSubmit = () => {
+  const canSubmit =
+    Boolean(specialLeaveTypeId) &&
+    targetDates.length > 0 &&
+    (!approvalRequired || approverUserId) &&
+    (isMultiDay || effectiveLeaveType !== 'hourly' || Number(hours) > 0)
+
+  /** 日付を選ぶと即座に対象日一覧へ加える(重複は無視し、日付順に並べる)。 */
+  const addDate = (value: string | undefined) => {
+    if (!value) return
+    setSelectedDates((prev) => (prev.includes(value) ? prev : [...prev, value].sort()))
+  }
+
+  const removeDate = (value: string) => setSelectedDates((prev) => prev.filter((d) => d !== value))
+
+  const resetForm = () => {
+    setTargetMode('dates')
+    setSelectedDates([])
+    setRange(undefined)
+    setHours('')
+    setApproverUserId(undefined)
+    setReason('')
+  }
+
+  const handleSubmit = async () => {
     if (!specialLeaveTypeId) return
     if (approvalRequired && !approverUserId) return
+    if (targetDates.length === 0) return
 
-    createRequest.mutate(
-      {
-        special_leave_type_id: specialLeaveTypeId,
-        target_date: targetDate,
-        leave_type: leaveType,
-        hours: leaveType === 'hourly' ? Number(hours) : undefined,
-        approver_user_id: approverUserId || undefined,
-        reason: reason || undefined,
-      },
-      {
-        onSuccess: () => {
-          setTargetDate('')
-          setHours('')
-          setApproverUserId(undefined)
-          setReason('')
-        },
-      },
-    )
+    setSuccessMessage(null)
+
+    // 複数日をまとめて申請する場合、承認者が1回の操作でまとめて承認できるよう
+    // 同じrequest_group_idを全日分に渡す(単日申請では付与しない)。
+    const requestGroupId = isMultiDay ? crypto.randomUUID() : undefined
+
+    let successCount = 0
+    for (const targetDate of targetDates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await createRequest.mutateAsync({
+          special_leave_type_id: specialLeaveTypeId,
+          target_date: targetDate,
+          leave_type: effectiveLeaveType,
+          hours: effectiveLeaveType === 'hourly' ? Number(hours) : undefined,
+          approver_user_id: approverUserId || undefined,
+          reason: reason || undefined,
+          request_group_id: requestGroupId,
+        })
+        successCount++
+      } catch {
+        break
+      }
+    }
+
+    if (successCount === targetDates.length) {
+      resetForm()
+      setSuccessMessage(`${successCount}日分の特別休暇申請を送信しました。`)
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       {createRequest.error && <ErrorMessage error={createRequest.error} />}
+      {successMessage && <p className="text-sm text-success">{successMessage}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="特別休暇の種類" htmlFor="special-leave-type" required>
@@ -95,25 +156,70 @@ function SpecialLeaveRequestForm() {
           </NativeSelect>
         </FormField>
 
-        <FormField label="対象日" htmlFor="special-leave-target-date" required>
-          <DatePicker id="special-leave-target-date" value={targetDate || undefined} onChange={(date) => setTargetDate(date ?? '')} />
-        </FormField>
-
-        <FormField label="取得単位" htmlFor="special-leave-leave-type" required>
+        <FormField label="対象日の指定方法" htmlFor="special-leave-target-mode">
           <NativeSelect
-            id="special-leave-leave-type"
-            value={leaveType}
-            onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
+            id="special-leave-target-mode"
+            value={targetMode}
+            onChange={(e) => setTargetMode(e.target.value as TargetDateMode)}
           >
-            {LEAVE_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <option value="dates">日付を指定</option>
+            <option value="range">期間を指定</option>
           </NativeSelect>
         </FormField>
 
-        {leaveType === 'hourly' && (
+        {targetMode === 'dates' ? (
+          <FormField label="対象日" htmlFor="special-leave-target-date" required>
+            <div className="flex flex-col gap-2">
+              <DatePicker id="special-leave-target-date" value={undefined} onChange={addDate} />
+              {selectedDates.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5">
+                  {selectedDates.map((selectedDate) => (
+                    <li
+                      key={selectedDate}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/30 py-1 pr-1 pl-2 text-sm text-foreground"
+                    >
+                      {selectedDate}
+                      <button
+                        type="button"
+                        aria-label={`${selectedDate}を削除`}
+                        className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={() => removeDate(selectedDate)}
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </FormField>
+        ) : (
+          <FormField label="対象日(期間)" htmlFor="special-leave-target-range" required>
+            <DateRangePicker id="special-leave-target-range" value={range} onChange={setRange} />
+          </FormField>
+        )}
+
+        {isMultiDay ? (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            複数日をまとめて申請する場合、取得単位は全休固定になります。
+          </p>
+        ) : (
+          <FormField label="取得単位" htmlFor="special-leave-leave-type" required>
+            <NativeSelect
+              id="special-leave-leave-type"
+              value={leaveType}
+              onChange={(e) => setLeaveType(e.target.value as PaidLeaveType)}
+            >
+              {LEAVE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        )}
+
+        {!isMultiDay && leaveType === 'hourly' && (
           <FormField label="取得時間" htmlFor="special-leave-hours" required>
             <Input
               id="special-leave-hours"

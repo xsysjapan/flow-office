@@ -11,6 +11,11 @@
 7. DB Queue
 8. cron 前提のスケジューラ
 
+ユーザー・グループ・Feature・Role/Permission・変更予約・外部HR連携は、既存Phaseに横断的な
+基盤拡張として[docs/31](./31-user-group-access-foundation.md#3114-実装順序)の順序で実装する。
+FeatureとPermissionのサーバー側ガードが揃うまでは、管理画面上の表示制御だけを認可として
+扱わない。
+
 ## Phase 2: 汎用申請
 
 1. 申請種別マスタ
