@@ -60,8 +60,14 @@
   イベントのpayload(`event_changes`/`day_changes`/`protected_conflicts`)に記録されるが、
   「その実行が変更した日だけを同期前の状態へ取り消す」操作自体は未実装。
 - **祝日同期の差分確認画面(UC-C023、`GET /holiday-calendar-sources/{id}/sync-preview`相当)**:
-  同期結果・競合は`stored_events`に記録されているが、専用の読み取りAPI・画面はまだ無い
-  (Phase 5でUIと合わせて実装する)。
+  同期結果・競合は`stored_events`に記録されているが、専用の読み取りAPI・画面はまだ無い。
+- **祝日iCalendarソース一覧の永続化**: backendに`GET /holiday-calendar-sources`が無いため、
+  `HolidayCalendarSourcesPage`は当該画面表示中に作成・同期・無効化した結果をクライアント側の
+  状態としてのみ保持する(再読み込みで一覧が消える)。一覧取得APIを追加してから画面側も
+  永続的な一覧表示に直す。
+- **オンボーディング専用画面(UC-C011の「今すぐ生成する」)は未実装**: APIは実装済み
+  (`POST /onboarding/calendar/generate-now`)だが、専用の案内画面(指示書12.8節「この設定で
+  開始/カレンダーを確認」)はまだ無い。
 - **ICSのRRULE非対応**: 繰り返しルールを持つVEVENTは展開せず無視し、ログに警告を出すのみ。
   日本の祝日iCalendarフィードは通常年ごとに単発VEVENTのため実用上の支障は無いが、RRULEを
   使う祝日ソースには対応できない。
