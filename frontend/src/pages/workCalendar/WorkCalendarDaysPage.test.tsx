@@ -4,29 +4,17 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
-import type { WorkCalendar } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { WorkCalendarDaysPage } from './WorkCalendarDaysPage'
 
-const calendar: WorkCalendar = {
-  id: 'calendar-1',
-  name: '2026年度カレンダー',
-  fiscal_year: 2026,
-  starts_on: '2026-04-01',
-  ends_on: '2027-03-31',
-  week_starts_on: 0,
-  status: 'draft',
-}
-
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/days']}>
+      <MemoryRouter initialEntries={['/admin/work-calendar-years/year-1/days']}>
         <Routes>
-          <Route path="/admin/work-calendars/:id/days" element={<WorkCalendarDaysPage />} />
+          <Route path="/admin/work-calendar-years/:yearId/days" element={<WorkCalendarDaysPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -34,35 +22,33 @@ function renderPage() {
 }
 
 describe('WorkCalendarDaysPage', () => {
-  it('shows the calendar context', async () => {
+  it('shows the day editor', async () => {
     renderPage()
 
-    expect(await screen.findByText('2026年度カレンダー の日別編集')).toBeInTheDocument()
-    expect(screen.getByText('2026')).toBeInTheDocument()
+    expect(await screen.findByText('カレンダー年度の日別編集')).toBeInTheDocument()
   })
 
-  it('adds a row and saves the entered days', async () => {
+  it('adds a row, marks it as a public holiday, and saves', async () => {
     vi.spyOn(workCalendarsApi, 'putWorkCalendarDays').mockResolvedValue([])
     renderPage()
 
-    await screen.findByText('2026年度カレンダー の日別編集')
-    await userEvent.click(screen.getByRole('button', { name: '行を追加' }))
+    await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
 
     await pickDate(userEvent.setup(), '日付', '2026-05-05')
-    await userEvent.type(screen.getByLabelText('区分'), '祝日')
-    await userEvent.click(screen.getByLabelText('稼働日'))
-    await userEvent.click(screen.getByLabelText('法定休日'))
+    await userEvent.selectOptions(screen.getByLabelText('勤務区分'), 'OFF')
+    await userEvent.click(screen.getByLabelText('祝日'))
+    await userEvent.type(screen.getByLabelText('祝日名'), 'こどもの日')
 
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
     await waitFor(() =>
-      expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalledWith('calendar-1', [
+      expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalledWith('year-1', [
         {
           date: '2026-05-05',
-          day_type: '祝日',
-          is_working_day: false,
-          is_legal_holiday: true,
-          is_company_holiday: false,
+          day_type: 'public_holiday',
+          schedule_state: 'OFF',
+          is_public_holiday: true,
+          public_holiday_name: 'こどもの日',
           note: undefined,
         },
       ]),

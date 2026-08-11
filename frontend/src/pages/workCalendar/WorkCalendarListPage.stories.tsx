@@ -8,20 +8,18 @@ const calendars: WorkCalendar[] = [
   {
     id: 'calendar-1',
     name: '2026年度カレンダー',
-    fiscal_year: 2026,
-    starts_on: '2026-04-01',
-    ends_on: '2027-03-31',
     week_starts_on: 0,
-    status: 'published',
+    fiscal_year_start_month: 4,
+    fiscal_year_start_day: 1,
+    holiday_calendar_source_id: null,
   },
   {
     id: 'calendar-2',
-    name: '2027年度カレンダー(準備中)',
-    fiscal_year: 2027,
-    starts_on: '2027-04-01',
-    ends_on: '2028-03-31',
-    week_starts_on: 0,
-    status: 'draft',
+    name: '関西拠点カレンダー',
+    week_starts_on: 1,
+    fiscal_year_start_month: 4,
+    fiscal_year_start_day: 1,
+    holiday_calendar_source_id: 'holiday-source-1',
   },
 ]
 

@@ -3,76 +3,74 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
-import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useEditableRows } from '../../hooks/useEditableRows'
-import { usePutWorkCalendarDays, useWorkCalendars } from '../../hooks/useWorkCalendars'
+import { usePutWorkCalendarDays } from '../../hooks/useWorkCalendars'
+
+type ScheduleState = 'WORK' | 'OFF'
 
 interface DayRowData {
   date: string
-  day_type: string
-  is_working_day: boolean
-  is_legal_holiday: boolean
-  is_company_holiday: boolean
+  schedule_state: ScheduleState
+  is_public_holiday: boolean
+  public_holiday_name: string
   note: string
 }
 
 const emptyRow: DayRowData = {
   date: '',
-  day_type: '',
-  is_working_day: true,
-  is_legal_holiday: false,
-  is_company_holiday: false,
+  schedule_state: 'WORK',
+  is_public_holiday: false,
+  public_holiday_name: '',
   note: '',
 }
 
+/** UC-C010: 祝日属性(祝日か否か)と勤務区分(WORK/OFF)を別の入力として扱う。 */
+function deriveDayType(row: DayRowData): string {
+  if (row.is_public_holiday) return 'public_holiday'
+  return row.schedule_state === 'WORK' ? 'weekday' : 'holiday'
+}
+
 /**
- * UC-C001手順2〜3: 年度カレンダーの日別属性(休日区分)を一括登録・更新する。
- * 日単位の取得APIはないため、入力した内容をまとめて `PUT /work-calendars/:id/days` に送る。
+ * UC-C010: カレンダー年度の日別属性(勤務区分・祝日)を一括登録・更新する。日単位の取得APIは
+ * ないため、入力した内容をまとめて `PUT /company-calendar-years/:yearId/days` に送る。
  */
 export function WorkCalendarDaysPage() {
-  const { id: calendarId } = useParams<{ id: string }>()
-  const { data: calendars, isLoading, error } = useWorkCalendars()
+  const { yearId } = useParams<{ yearId: string }>()
   const putDays = usePutWorkCalendarDays()
 
   const { rows, addRow, updateRow, toData } = useEditableRows<DayRowData>([])
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
-
-  const calendar = calendars?.find((c) => c.id === calendarId)
-  if (!calendar || !calendarId) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
+  if (!yearId) return <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
 
   const handleSave = () => {
     putDays.mutate({
-      id: calendarId,
-      days: toData().map((row) => ({ ...row, note: row.note || undefined })),
+      id: yearId,
+      days: toData().map((row) => ({
+        date: row.date,
+        day_type: deriveDayType(row),
+        schedule_state: row.schedule_state,
+        is_public_holiday: row.is_public_holiday,
+        public_holiday_name: row.is_public_holiday && row.public_holiday_name ? row.public_holiday_name : undefined,
+        note: row.note || undefined,
+      })),
     })
   }
 
   return (
-    <Card title={`${calendar.name} の日別編集`}>
-      <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-        <dt className="font-medium text-muted-foreground">年度</dt>
-        <dd className="text-foreground">{calendar.fiscal_year}</dd>
-        <dt className="font-medium text-muted-foreground">期間</dt>
-        <dd className="text-foreground">
-          {calendar.starts_on}〜{calendar.ends_on}
-        </dd>
-      </dl>
-
+    <Card title="カレンダー年度の日別編集">
       {putDays.error && <ErrorMessage error={putDays.error} />}
 
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>日付</TableHead>
-            <TableHead>区分</TableHead>
-            <TableHead>稼働日</TableHead>
-            <TableHead>法定休日</TableHead>
-            <TableHead>所定休日</TableHead>
+            <TableHead>勤務区分</TableHead>
+            <TableHead>祝日</TableHead>
+            <TableHead>祝日名</TableHead>
             <TableHead>メモ</TableHead>
           </TableRow>
         </TableHeader>
@@ -87,39 +85,32 @@ export function WorkCalendarDaysPage() {
                 />
               </TableCell>
               <TableCell>
-                <Input
-                  aria-label="区分"
-                  value={row.day_type}
-                  onChange={(e) => updateRow(row.rowId, { day_type: e.target.value })}
-                />
+                <NativeSelect
+                  aria-label="勤務区分"
+                  value={row.schedule_state}
+                  onChange={(e) => updateRow(row.rowId, { schedule_state: e.target.value as ScheduleState })}
+                >
+                  <option value="WORK">WORK(勤務日)</option>
+                  <option value="OFF">OFF(休日)</option>
+                </NativeSelect>
               </TableCell>
               <TableCell>
                 <Checkbox
-                  aria-label="稼働日"
-                  checked={row.is_working_day}
-                  onCheckedChange={(checked) => updateRow(row.rowId, { is_working_day: checked === true })}
-                />
-              </TableCell>
-              <TableCell>
-                <Checkbox
-                  aria-label="法定休日"
-                  checked={row.is_legal_holiday}
-                  onCheckedChange={(checked) => updateRow(row.rowId, { is_legal_holiday: checked === true })}
-                />
-              </TableCell>
-              <TableCell>
-                <Checkbox
-                  aria-label="所定休日"
-                  checked={row.is_company_holiday}
-                  onCheckedChange={(checked) => updateRow(row.rowId, { is_company_holiday: checked === true })}
+                  aria-label="祝日"
+                  checked={row.is_public_holiday}
+                  onCheckedChange={(checked) => updateRow(row.rowId, { is_public_holiday: checked === true })}
                 />
               </TableCell>
               <TableCell>
                 <Input
-                  aria-label="メモ"
-                  value={row.note}
-                  onChange={(e) => updateRow(row.rowId, { note: e.target.value })}
+                  aria-label="祝日名"
+                  value={row.public_holiday_name}
+                  disabled={!row.is_public_holiday}
+                  onChange={(e) => updateRow(row.rowId, { public_holiday_name: e.target.value })}
                 />
+              </TableCell>
+              <TableCell>
+                <Input aria-label="メモ" value={row.note} onChange={(e) => updateRow(row.rowId, { note: e.target.value })} />
               </TableCell>
             </TableRow>
           ))}

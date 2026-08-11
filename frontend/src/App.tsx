@@ -34,7 +34,10 @@ import { UserRoleEditPage } from "./pages/admin/UserRoleEditPage";
 import { RequestTypeListPage } from "./pages/workflow/RequestTypeListPage";
 import { RequestTypeEditPage } from "./pages/workflow/RequestTypeEditPage";
 import { WorkCalendarListPage } from "./pages/workCalendar/WorkCalendarListPage";
+import { WorkCalendarYearsPage } from "./pages/workCalendar/WorkCalendarYearsPage";
 import { WorkCalendarDaysPage } from "./pages/workCalendar/WorkCalendarDaysPage";
+import { HolidayCalendarSourcesPage } from "./pages/workCalendar/HolidayCalendarSourcesPage";
+import { CalendarBulkOperationsPage } from "./pages/workCalendar/CalendarBulkOperationsPage";
 import { WorkStylesPage } from "./pages/workCalendar/WorkStylesPage";
 import { ShiftsPage } from "./pages/workCalendar/ShiftsPage";
 import { PaidLeaveAdminPage } from "./pages/paidLeave/PaidLeaveAdminPage";
@@ -158,8 +161,20 @@ function App() {
           />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
           <Route
-            path="work-calendars/:id/days"
+            path="work-calendars/:id/years"
+            element={<WorkCalendarYearsPage />}
+          />
+          <Route
+            path="work-calendar-years/:yearId/days"
             element={<WorkCalendarDaysPage />}
+          />
+          <Route
+            path="holiday-calendar-sources"
+            element={<HolidayCalendarSourcesPage />}
+          />
+          <Route
+            path="calendar-bulk-operations"
+            element={<CalendarBulkOperationsPage />}
           />
           <Route path="work-styles" element={<WorkStylesPage />} />
           <Route path="shifts" element={<ShiftsPage />} />

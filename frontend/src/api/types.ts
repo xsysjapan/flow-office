@@ -1452,3 +1452,67 @@ export interface Paginated<T> {
     prev: string | null;
   };
 }
+
+/** UC-C012: 祝日iCalendarソース(祝日カレンダーの自動同期元)。 */
+export interface HolidayCalendarSource {
+  id: string;
+  name: string;
+  ics_url: string;
+  sync_status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  disabled_at: string | null;
+}
+
+export type CalendarBulkOperationType =
+  | "calendar_apply"
+  | "rotation_generate"
+  | "bulk_edit";
+
+export type CalendarBulkOperationConflictPolicy =
+  | "skip_existing"
+  | "overwrite"
+  | "fail_on_conflict";
+
+export type CalendarBulkOperationStatus =
+  | "applied"
+  | "reverted"
+  | "failed";
+
+/**
+ * UC-C013: 一括操作の対象1件分の適用結果。プレビュー(`conflict`/`guard_blocked`/
+ * `attributes`)と確定後の一覧・詳細(`id`/`employee_calendar_entry_id`/`error_code`)では
+ * レスポンスの形が異なるため、両方をオプショナルとして受ける。
+ */
+export interface CalendarBulkOperationTarget {
+  id?: string;
+  user_id: string;
+  work_date: string;
+  conflict?: boolean;
+  guard_blocked?: boolean;
+  attributes?: Record<string, unknown>;
+  employee_calendar_entry_id?: string | null;
+  error_code?: string | null;
+  result: "applied" | "skipped_existing" | "failed";
+}
+
+/** UC-C013: 複数従業員予定の一括操作(プレビュー→確定適用→取消)の1件。 */
+export interface CalendarBulkOperation {
+  id: string;
+  operation_type: CalendarBulkOperationType;
+  target_scope: Record<string, unknown>;
+  conflict_policy: CalendarBulkOperationConflictPolicy;
+  status: CalendarBulkOperationStatus;
+  requested_by_user_id: string;
+  applied_at: string | null;
+  reverted_at: string | null;
+  reason: string;
+  targets?: CalendarBulkOperationTarget[];
+}
+
+/** UC-C013: プレビューAPIのレスポンス(保存しない)。 */
+export interface CalendarBulkOperationPreview {
+  targets: CalendarBulkOperationTarget[];
+  conflict_count: number;
+  executable: boolean;
+}

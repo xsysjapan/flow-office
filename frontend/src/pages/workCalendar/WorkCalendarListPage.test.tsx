@@ -5,17 +5,15 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar } from '../../api/types'
-import { pickDate } from '../../test-support/pickerInteractions'
 import { WorkCalendarListPage } from './WorkCalendarListPage'
 
-const draftCalendar: WorkCalendar = {
+const calendar: WorkCalendar = {
   id: 'calendar-1',
   name: '2026年度カレンダー',
-  fiscal_year: 2026,
-  starts_on: '2026-04-01',
-  ends_on: '2027-03-31',
   week_starts_on: 0,
-  status: 'draft',
+  fiscal_year_start_month: 4,
+  fiscal_year_start_day: 1,
+  holiday_calendar_source_id: null,
 }
 
 function renderPage() {
@@ -25,7 +23,7 @@ function renderPage() {
       <MemoryRouter initialEntries={['/admin/work-calendars']}>
         <Routes>
           <Route path="/admin/work-calendars" element={<WorkCalendarListPage />} />
-          <Route path="/admin/work-calendars/:id/days" element={<p>カレンダー日別編集ページ</p>} />
+          <Route path="/admin/work-calendars/:id/years" element={<p>カレンダー年度一覧ページ</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -33,63 +31,44 @@ function renderPage() {
 }
 
 describe('WorkCalendarListPage', () => {
-  it('shows the calendar list with a draft badge and publish button', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
+  it('shows the calendar list', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
 
     renderPage()
 
     expect(await screen.findByText('2026年度カレンダー')).toBeInTheDocument()
-    expect(screen.getByText('未公開')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '公開する' })).toBeInTheDocument()
+    expect(screen.getByText(/週開始: 0/)).toBeInTheDocument()
   })
 
   it('creates a calendar with the entered values', async () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
-      ...draftCalendar,
+      ...calendar,
       id: 'calendar-2',
     })
 
     renderPage()
 
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2026年度カレンダー')
-    await userEvent.type(screen.getByLabelText('年度'), '2026')
-    await pickDate(userEvent.setup(), '開始日', '2026-04-01')
-    await pickDate(userEvent.setup(), '終了日', '2027-03-31')
+    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2026年度カレンダー',
-        fiscal_year: 2026,
-        starts_on: '2026-04-01',
-        ends_on: '2027-03-31',
+        name: '2027年度カレンダー',
         week_starts_on: undefined,
+        fiscal_year_start_month: undefined,
+        fiscal_year_start_day: undefined,
       }),
     )
   })
 
-  it('publishes a draft calendar when the publish button is clicked', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
-    vi.spyOn(workCalendarsApi, 'publishWorkCalendar').mockResolvedValue({
-      ...draftCalendar,
-      status: 'published',
-    })
-
-    renderPage()
-
-    await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
-
-    await waitFor(() => expect(workCalendarsApi.publishWorkCalendar).toHaveBeenCalledWith('calendar-1'))
-  })
-
-  it('navigates to the day editor when the calendar name is clicked', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
+  it('navigates to the year list when the calendar name is clicked', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
 
     renderPage()
 
     await userEvent.click(await screen.findByText('2026年度カレンダー'))
 
-    expect(await screen.findByText('カレンダー日別編集ページ')).toBeInTheDocument()
+    expect(await screen.findByText('カレンダー年度一覧ページ')).toBeInTheDocument()
   })
 })

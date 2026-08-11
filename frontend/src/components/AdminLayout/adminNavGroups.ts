@@ -76,6 +76,20 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "attendance.manage",
       },
       {
+        to: "/admin/holiday-calendar-sources",
+        label: "祝日iCalendar同期",
+        description: "祝日iCalendarソースを登録・同期する",
+        feature: "attendance.entry",
+        permission: "attendance.manage",
+      },
+      {
+        to: "/admin/calendar-bulk-operations",
+        label: "一括操作",
+        description: "複数従業員の予定を一括で適用・取消する",
+        feature: "attendance.entry",
+        permission: "attendance.manage",
+      },
+      {
         to: "/admin/shifts",
         label: "シフト",
         description: "シフトパターン・ローテーション・シフト生成を管理する",
