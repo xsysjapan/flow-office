@@ -11,6 +11,8 @@ use App\Models\User;
 use Database\Seeders\AccessControlSeeder;
 use Database\Seeders\UserManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -55,6 +57,18 @@ class OnboardingTest extends TestCase
         $this->getJson('/api/onboarding/status')->assertJsonPath('sso_configured', true);
     }
 
+    public function test_sso_onboarding_uses_mock_oidc_when_selected(): void
+    {
+        $response = $this->startSsoOnboarding(['m365_mock_enabled' => true]);
+
+        $response->assertOk();
+        $this->assertStringStartsWith(
+            'http://localhost:9000/oauth2/v2.0/authorize?',
+            $response->json('redirect_url')
+        );
+        $this->assertTrue(SystemSetting::current()->m365_mock_enabled);
+    }
+
     public function test_sso_onboarding_cannot_start_twice(): void
     {
         $this->startSsoOnboarding()->assertOk();
@@ -83,6 +97,29 @@ class OnboardingTest extends TestCase
         $this->assertSame('entra-admin-1', $user->entra_user_id);
         $this->assertTrue(app(EffectiveAccessResolver::class)->hasRole($user, 'admin'));
         $this->assertNotNull(SystemSetting::current()->onboarding_completed_at);
+    }
+
+    public function test_sso_onboarding_initializes_access_foundation_when_missing(): void
+    {
+        Schema::disableForeignKeyConstraints();
+        foreach (['group_feature_assignments', 'role_assignments', 'permission_role', 'memberships', 'groups', 'group_types', 'features', 'permissions', 'roles'] as $table) {
+            DB::table($table)->delete();
+        }
+        Schema::enableForeignKeyConstraints();
+
+        $this->startSsoOnboarding();
+
+        $user = app(CommandBus::class)->dispatch(new CompleteOnboardingSsoLink(
+            entraUserId: 'entra-admin-without-seed',
+            name: '初期管理者',
+            email: 'initial-admin@example.com',
+        ));
+
+        $administratorGroupId = DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id');
+        $this->assertNotNull($administratorGroupId);
+        $this->assertDatabaseHas('memberships', ['user_id' => $user->id, 'group_id' => $administratorGroupId]);
+        $this->assertDatabaseHas('role_assignments', ['subject_type' => 'group', 'subject_id' => $administratorGroupId]);
+        $this->assertDatabaseHas('group_feature_assignments', ['group_id' => $administratorGroupId]);
     }
 
     public function test_sso_onboarding_link_is_rejected_when_not_started(): void
@@ -172,13 +209,13 @@ class OnboardingTest extends TestCase
         ])->assertStatus(422);
     }
 
-    private function startSsoOnboarding(): TestResponse
+    private function startSsoOnboarding(array $overrides = []): TestResponse
     {
-        return $this->postJson('/api/onboarding/sso', [
+        return $this->postJson('/api/onboarding/sso', array_merge([
             'm365_tenant_id' => 'tenant-1',
             'm365_client_id' => 'client-1',
             'm365_client_secret' => 'secret-1',
-        ]);
+        ], $overrides));
     }
 
     private function completeLocalOnboarding(): TestResponse

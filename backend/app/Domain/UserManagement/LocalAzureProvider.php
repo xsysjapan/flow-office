@@ -17,11 +17,17 @@ class LocalAzureProvider extends AzureProvider
     {
         parent::__construct($request, $clientId, $clientSecret, $redirectUrl, $guzzle);
 
-        $this->graphUrl = rtrim(config('services.azure.mock_internal_base_url'), '/').'/v1.0/me';
+        if (Ms365ConfigResolver::mockEnabled()) {
+            $this->graphUrl = rtrim(config('services.azure.mock_internal_base_url'), '/').'/v1.0/me';
+        }
     }
 
     protected function getAuthUrl($state)
     {
+        if (! Ms365ConfigResolver::mockEnabled()) {
+            return parent::getAuthUrl($state);
+        }
+
         return $this->buildAuthUrlFromBase(
             rtrim(config('services.azure.mock_public_base_url'), '/').'/oauth2/v2.0/authorize',
             $state
@@ -30,6 +36,10 @@ class LocalAzureProvider extends AzureProvider
 
     protected function getTokenUrl()
     {
+        if (! Ms365ConfigResolver::mockEnabled()) {
+            return parent::getTokenUrl();
+        }
+
         return rtrim(config('services.azure.mock_internal_base_url'), '/').'/oauth2/v2.0/token';
     }
 }

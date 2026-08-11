@@ -7,10 +7,10 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
+use App\Domain\UserManagement\Services\OnboardingAccessInitializer;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\SystemSetting;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -18,7 +18,10 @@ use Illuminate\Support\Str;
  */
 class CompleteOnboardingSsoLinkHandler implements CommandHandler
 {
-    public function __construct(private readonly StandardGroupMembershipRecorder $standardMemberships) {}
+    public function __construct(
+        private readonly OnboardingAccessInitializer $accessInitializer,
+        private readonly StandardGroupMembershipRecorder $standardMemberships,
+    ) {}
 
     public function handle(Command $command): User
     {
@@ -39,9 +42,7 @@ class CompleteOnboardingSsoLinkHandler implements CommandHandler
             throw new DomainRuleException('このEntra IDアカウント(またはメールアドレス)は既に登録済みのため、オンボーディングを完了できません。');
         }
 
-        if (! DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->exists()) {
-            throw new DomainRuleException('システム管理者グループが未作成のため、オンボーディングを完了できません。初期化を確認してください。');
-        }
+        $this->accessInitializer->initialize();
 
         // 完了フラグの原子的なコミットを先に確定させ、失敗する場合はユーザー行を
         // 作らない(先にユーザーを作ってしまうと、完了フラグの競合時に孤立行が残るため)。

@@ -38,6 +38,7 @@ tasks:
     dir: backend
     cmds:
       - php -r "file_exists('.env') || copy('.env.example', '.env');"
+      - php -r "file_put_contents('.env', preg_replace(['/^DB_CONNECTION=.*$/m', '/^DB_DATABASE=.*$/m', '/^MICROSOFT_MOCK_INTERNAL_BASE_URL=.*$/m'], ['DB_CONNECTION=sqlite', 'DB_DATABASE=database/database.sqlite', 'MICROSOFT_MOCK_INTERNAL_BASE_URL=http://localhost:9000'], file_get_contents('.env')) ?? file_get_contents('.env'));"
       - php -r "file_exists('database/database.sqlite') || touch('database/database.sqlite');"
 
   prepare:frontend:
@@ -53,6 +54,7 @@ tasks:
     dir: backend
     env:
       DB_CONNECTION: sqlite
+      DB_DATABASE: database/database.sqlite
       MICROSOFT_MOCK_ENABLED: "true"
       MICROSOFT_CLIENT_ID: mock-client-id
       MICROSOFT_CLIENT_SECRET: mock-client-secret
@@ -63,9 +65,20 @@ tasks:
       - sh: "php -r \"exit(file_exists('vendor/autoload.php') ? 0 : 1);\""
         msg: backendの依存関係がありません。先に `task install` を実行してください。
     cmds:
-      - php artisan optimize:clear
+      - php artisan config:clear
       - php artisan migrate:fresh --seed --force
       - php artisan db:seed --class=ScenarioSeeder --force
+
+  onboarding:reset:
+    desc: ローカルシナリオデータを維持したまま初回オンボーディングを未完了状態へ戻す
+    deps:
+      - prepare:backend
+    dir: backend
+    env:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: database/database.sqlite
+    cmds:
+      - php artisan tinker --execute="App\\Models\\SystemSetting::current()->update(['m365_tenant_id' => null, 'm365_client_id' => null, 'm365_client_secret' => null, 'm365_mock_enabled' => false, 'onboarding_started_at' => null, 'onboarding_completed_at' => null]);"
 
   dev:
     desc: DBを初期化してbackend/frontend/mock-oidcを並列起動する
@@ -91,6 +104,8 @@ tasks:
     desc: Laravel APIをhttp://localhost:8000で起動する
     dir: backend
     env:
+      DB_CONNECTION: sqlite
+      DB_DATABASE: database/database.sqlite
       MICROSOFT_MOCK_ENABLED: "true"
       MICROSOFT_CLIENT_ID: mock-client-id
       MICROSOFT_CLIENT_SECRET: mock-client-secret

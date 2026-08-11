@@ -8,15 +8,16 @@ cd /workspaces/flow-office/backend
 if [ ! -f .env ]; then
   cp .env.example .env
   sed -i 's/^MICROSOFT_MOCK_ENABLED=.*/MICROSOFT_MOCK_ENABLED=true/' .env
-  sed -i 's#^MICROSOFT_MOCK_INTERNAL_BASE_URL=.*#MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000#' .env
   sed -i 's/^MICROSOFT_CLIENT_ID=$/MICROSOFT_CLIENT_ID=mock-client-id/' .env
   sed -i 's/^MICROSOFT_CLIENT_SECRET=$/MICROSOFT_CLIENT_SECRET=mock-client-secret/' .env
   sed -i 's/^MICROSOFT_TENANT_ID=.*/MICROSOFT_TENANT_ID=mock/' .env
-  # このスクリプトはdocker-compose(dbサービス=MySQL)経由でのみ実行されるため、
-  # ここで作られる.envは常にMySQLへ向ける(dockerを経由しない通常起動では
-  # .env.exampleの既定どおりsqliteのままになる)。
-  sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
 fi
+
+# task devでSQLite用に変更された既存.envを再利用する場合もあるため、Docker起動時は
+# 常にdocker-composeのdbサービスへ向ける。
+sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
+sed -i 's#^DB_DATABASE=.*#DB_DATABASE=flow_office#' .env
+sed -i 's#^MICROSOFT_MOCK_INTERNAL_BASE_URL=.*#MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000#' .env
 
 if [ ! -d vendor ] || [ -z "$(ls -A vendor)" ]; then
   composer install

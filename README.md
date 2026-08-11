@@ -26,6 +26,8 @@ task dev
 backend (`http://localhost:8000`)、frontend (`http://localhost:5173`)、mock-oidc
 (`http://localhost:9000`)を並列起動する。`migrate:fresh`により既存のローカルDBは消去される。
 DBを維持して3サービスだけを再起動する場合は`task start`を使用する。
+シナリオデータを維持したまま初回オンボーディング画面を再検証する場合は、
+`task onboarding:reset`を実行する。
 
 個別に実行する場合は`task db:init`、`task backend`、`task frontend`、
 `task mock-oidc`を使用できる。起動中の3サービスは`Ctrl+C`でまとめて停止する。
