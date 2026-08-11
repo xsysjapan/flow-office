@@ -4,6 +4,9 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
+use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveRequest;
+use App\Models\PaidLeaveUsage;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,6 +188,65 @@ class AttendanceExportTest extends TestCase
             'prescribed_holiday_work_minutes' => 0,
         ]);
 
+        $grant = PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id,
+            'granted_on' => '2025-07-01',
+            'expires_on' => '2027-06-30',
+            'granted_days' => 10,
+            'used_days' => 4,
+            'remaining_days' => 6,
+        ]);
+        $juneRequest = PaidLeaveRequest::query()->create([
+            'user_id' => $employee->id,
+            'approver_user_id' => $admin->id,
+            'status' => 'approved',
+            'leave_type' => 'full',
+            'target_date' => '2026-06-15',
+            'requested_days' => 1.5,
+        ]);
+        PaidLeaveUsage::query()->create([
+            'user_id' => $employee->id,
+            'attendance_day_id' => $day->id,
+            'paid_leave_grant_id' => $grant->id,
+            'paid_leave_request_id' => $juneRequest->id,
+            'used_on' => '2026-06-15',
+            'used_days' => 1.5,
+            'usage_type' => 'full',
+            'is_confirmed' => true,
+        ]);
+        $julyDay = AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => '2026-07-15',
+            'status' => 'clocked_out',
+            'source' => 'manual',
+        ]);
+        $julyRequest = PaidLeaveRequest::query()->create([
+            'user_id' => $employee->id,
+            'approver_user_id' => $admin->id,
+            'status' => 'approved',
+            'leave_type' => 'full',
+            'target_date' => '2026-07-15',
+            'requested_days' => 2.5,
+        ]);
+        PaidLeaveUsage::query()->create([
+            'user_id' => $employee->id,
+            'attendance_day_id' => $julyDay->id,
+            'paid_leave_grant_id' => $grant->id,
+            'paid_leave_request_id' => $julyRequest->id,
+            'used_on' => '2026-07-15',
+            'used_days' => 2.5,
+            'usage_type' => 'full',
+            'is_confirmed' => true,
+        ]);
+        PaidLeaveGrant::query()->create([
+            'user_id' => $employee->id,
+            'granted_on' => '2026-07-01',
+            'expires_on' => '2028-06-30',
+            'granted_days' => 10,
+            'used_days' => 0,
+            'remaining_days' => 10,
+        ]);
+
         $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06');
 
         $response->assertSuccessful();
@@ -200,6 +262,8 @@ class AttendanceExportTest extends TestCase
         $this->assertSame('社員番号', $sheet->getCell('G1')->getValue());
         $this->assertSame('氏名', $sheet->getCell('G4')->getValue());
         $this->assertSame('締め済み社員', $sheet->getCell('I4')->getValue());
+        $this->assertSame('有給残日数', $sheet->getCell('H9')->getValue());
+        $this->assertSame('8.5日', $sheet->getCell('H10')->getValue());
         $this->assertSame('日', $sheet->getCell('A12')->getValue());
         $this->assertSame('09:00', $sheet->getCell('C27')->getValue());
         $this->assertSame('000000', $sheet->getStyle('A2')->getFont()->getColor()->getRGB());

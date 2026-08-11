@@ -87,11 +87,21 @@ class AttendanceExcelBuilder
             : $days->filter(fn (AttendanceDay $day) => ($day->calculation?->prescribed_work_minutes ?? 0) > 0)->count();
         $actualDays = $days->filter(fn (AttendanceDay $day) => ($day->calculation?->work_minutes ?? 0) > 0)->count();
         $paidLeaveDays = (float) ($snapshot['paid_leave_days'] ?? 0);
-        $latestPaidLeaveGrant = PaidLeaveGrant::query()
+        $monthEnd = Carbon::parse($yearMonth.'-01')->endOfMonth();
+        $paidLeaveBalance = PaidLeaveGrant::query()
             ->where('user_id', $month->user_id)
-            ->whereDate('granted_on', '<=', Carbon::parse($yearMonth.'-01')->endOfMonth())
-            ->latest('granted_on')
-            ->first();
+            ->whereDate('granted_on', '<=', $monthEnd)
+            ->whereDate('expires_on', '>=', $monthEnd)
+            ->withSum([
+                'usages as used_days_at_month_end' => fn ($query) => $query
+                    ->where('is_confirmed', true)
+                    ->whereDate('used_on', '<=', $monthEnd),
+            ], 'used_days')
+            ->get()
+            ->sum(fn (PaidLeaveGrant $grant): float => max(
+                0,
+                (float) $grant->granted_days - (float) ($grant->used_days_at_month_end ?? 0),
+            ));
 
         $sheet->mergeCells('A2:F3');
         $sheet->setCellValue('A2', $this->yearMonthTitle($yearMonth).' 勤怠管理表');
@@ -119,9 +129,9 @@ class AttendanceExcelBuilder
             ['必要出勤日数', $requiredDays],
             ['実出勤日数', $actualDays],
             ['欠勤日数', (int) ($snapshot['absence_days'] ?? 0)],
-            ['遅刻回数', $lateCount],
-            ['早退回数', $earlyCount],
-            ['有給取得数', $paidLeaveDays],
+            ['遅刻', $lateCount],
+            ['早退', $earlyCount],
+            ['有給', $paidLeaveDays],
             ['休日出勤日数', (int) (($snapshot['work_days_prescribed_holiday'] ?? 0) + ($snapshot['work_days_legal_holiday'] ?? 0))],
         ]);
 
@@ -130,7 +140,7 @@ class AttendanceExcelBuilder
             ['時間外労働時間合計', $this->minutesToExcelTime($overtimeMinutes), true],
             ['休日労働時間合計', $this->minutesToExcelTime((int) (($snapshot['legal_holiday_work_minutes'] ?? 0) + ($snapshot['prescribed_holiday_work_minutes'] ?? 0))), true],
             ['月45時間超確認', $overtimeMinutes > 2700 ? '有' : '無'],
-            ['有給休暇基準日', $latestPaidLeaveGrant?->granted_on?->format('Y年m月d日') ?? '-'],
+            ['有給残日数', $this->formatDays($paidLeaveBalance)],
             ['年5日取得確認', $paidLeaveDays >= 5 ? '済' : '未'],
         ]);
 
@@ -201,8 +211,8 @@ class AttendanceExcelBuilder
     {
         $itemCount = count($items);
         $columns = $itemCount === 7
-            ? [['A', 'B'], ['C', 'D'], ['E', 'F'], ['G', 'G'], ['H', 'H'], ['I', 'I'], ['J', 'K']]
-            : [['A', 'B'], ['C', 'D'], ['E', 'F'], ['G', 'H'], ['I', 'K']];
+            ? [['A', 'C'], ['D', 'E'], ['F', 'F'], ['G', 'G'], ['H', 'H'], ['I', 'I'], ['J', 'K']]
+            : [['A', 'C'], ['D', 'E'], ['F', 'G'], ['H', 'I'], ['J', 'K']];
 
         foreach ($items as $index => $item) {
             [$label, $value] = $item;
@@ -295,5 +305,10 @@ class AttendanceExcelBuilder
     private function minutesToExcelTime(int $minutes): float
     {
         return $minutes / 1440;
+    }
+
+    private function formatDays(float $days): string
+    {
+        return rtrim(rtrim(number_format($days, 1, '.', ''), '0'), '.').'日';
     }
 }
