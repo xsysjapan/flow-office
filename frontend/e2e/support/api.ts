@@ -232,39 +232,49 @@ export async function fetchEmploymentCategories(page: Page): Promise<Array<{ id:
 }
 
 /**
- * UC-C001: 年度カレンダーを作成する。専用の画面(`/admin/work-calendars`)はscenario-00で
- * 確認済みだが、通年運用シミュレーション(scenario-08)のように実在の暦年と衝突しない
- * `fiscal_year`を指定しつつ`starts_on`/`ends_on`は実在の日付にしたい場合、フォーム経由より
- * APIを直接叩く方が確実なため用意する。
+ * UC-C009: 会社カレンダー本体を作成し、続けて最初のカレンダー年度も作成する。専用の画面
+ * (`/admin/work-calendars`)はscenario-00で確認済みだが、通年運用シミュレーション
+ * (scenario-08)のように実在の暦年と衝突しない`fiscal_year`を指定しつつ`starts_on`/
+ * `ends_on`は実在の日付にしたい場合、フォーム経由よりAPIを直接叩く方が確実なため用意する。
+ * 返り値の`id`は本体(`company_calendars`)のid(`work_styles.company_calendar_id`に渡す用)。
+ * `yearId`は年度(`company_calendar_years`)のid(`putWorkCalendarDays`/`publishWorkCalendar`用)。
  */
 export async function createWorkCalendar(
   page: Page,
   input: { name: string; fiscalYear: number; startsOn: string; endsOn: string; weekStartsOn?: number },
-): Promise<{ id: string }> {
-  return apiFetch(page, '/work-calendars', {
+): Promise<{ id: string; yearId: string }> {
+  const calendar = await apiFetch<{ id: string }>(page, '/company-calendars', {
     method: 'POST',
     body: {
       name: input.name,
-      fiscal_year: input.fiscalYear,
-      starts_on: input.startsOn,
-      ends_on: input.endsOn,
       week_starts_on: input.weekStartsOn ?? 1,
     },
   })
+
+  const year = await apiFetch<{ id: string }>(page, `/company-calendars/${calendar.id}/years`, {
+    method: 'POST',
+    body: {
+      fiscal_year: input.fiscalYear,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+    },
+  })
+
+  return { id: calendar.id, yearId: year.id }
 }
 
-/** UC-C001: カレンダーの日別設定(休日区分)をまとめて登録する。 */
+/** UC-C010: カレンダー年度の日別設定(勤務区分・祝日区分)をまとめて登録する。 */
 export async function putWorkCalendarDays(
   page: Page,
-  calendarId: string,
+  companyCalendarYearId: string,
   days: Array<{ date: string; day_type: string; is_working_day: boolean; is_legal_holiday: boolean; is_company_holiday: boolean }>,
 ): Promise<void> {
-  await apiFetch(page, `/work-calendars/${calendarId}/days`, { method: 'PUT', body: { days } })
+  await apiFetch(page, `/company-calendar-years/${companyCalendarYearId}/days`, { method: 'PUT', body: { days } })
 }
 
-/** UC-C001: カレンダーを公開する。公開前は勤務形態から参照できない。 */
-export async function publishWorkCalendar(page: Page, calendarId: string): Promise<void> {
-  await apiFetch(page, `/work-calendars/${calendarId}/publish`, { method: 'POST' })
+/** UC-C009: カレンダー年度を公開する。公開前は勤務形態から参照できない。 */
+export async function publishWorkCalendar(page: Page, companyCalendarYearId: string): Promise<void> {
+  await apiFetch(page, `/company-calendar-years/${companyCalendarYearId}/publish`, { method: 'POST' })
 }
 
 /** UC-C003: 会社カレンダーの日区分をもとに、指定期間分の勤務予定を一括生成する。 */

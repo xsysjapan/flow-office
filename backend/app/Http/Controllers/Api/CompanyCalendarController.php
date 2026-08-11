@@ -48,7 +48,7 @@ class CompanyCalendarController extends Controller
         operationId: 'companyCalendars.store',
         summary: '会社カレンダー本体と最初のカレンダー年度を作成する',
         tags: ['勤務カレンダー'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name', 'fiscal_year', 'starts_on', 'ends_on'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer', description: '省略時は本体のみ作成する(最初の年度はPOST /company-calendars/{id}/yearsまたは定期バッチ/UC-C011で後から生成できる)'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -58,9 +58,12 @@ class CompanyCalendarController extends Controller
             'week_starts_on' => ['integer', 'between:1,7'],
             'fiscal_year_start_month' => ['integer', 'between:1,12'],
             'fiscal_year_start_day' => ['integer', 'between:1,31'],
-            'fiscal_year' => ['required', 'integer'],
-            'starts_on' => ['required', 'date'],
-            'ends_on' => ['required', 'date', 'after:starts_on'],
+            // 最初の年度の指定は任意(UC-C009手順1〜2は本体作成→年度作成の2段階の操作であり、
+            // 年度は省略して本体のみ作成できる。省略時は定期バッチ/UC-C011「今すぐ生成する」が
+            // fiscal_year_start_month/dayから標準の年度を生成する)。
+            'fiscal_year' => ['nullable', 'integer'],
+            'starts_on' => ['nullable', 'date', 'required_with:fiscal_year,ends_on'],
+            'ends_on' => ['nullable', 'date', 'after:starts_on', 'required_with:fiscal_year,starts_on'],
         ]);
 
         $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
@@ -71,14 +74,16 @@ class CompanyCalendarController extends Controller
             createdByUserId: $request->user()->id,
         ));
 
-        $commandBus->dispatch(new CreateCompanyCalendarYear(
-            companyCalendarId: $calendar->id,
-            fiscalYear: $data['fiscal_year'],
-            startsOn: $data['starts_on'],
-            endsOn: $data['ends_on'],
-            generatedFrom: 'manual',
-            createdByUserId: $request->user()->id,
-        ));
+        if (array_key_exists('fiscal_year', $data) && $data['fiscal_year'] !== null) {
+            $commandBus->dispatch(new CreateCompanyCalendarYear(
+                companyCalendarId: $calendar->id,
+                fiscalYear: $data['fiscal_year'],
+                startsOn: $data['starts_on'],
+                endsOn: $data['ends_on'],
+                generatedFrom: 'manual',
+                createdByUserId: $request->user()->id,
+            ));
+        }
 
         return (new CompanyCalendarResource($calendar->refresh()))->response()->setStatusCode(201);
     }

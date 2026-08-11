@@ -3,6 +3,7 @@ import {
   archiveWorkCalendarYear,
   createWorkCalendar,
   createWorkCalendarYear,
+  duplicateWorkCalendarYear,
   fetchWorkCalendars,
   fetchWorkCalendarYears,
   publishWorkCalendarYear,
@@ -77,6 +78,17 @@ export function useArchiveWorkCalendarYear(companyCalendarId: string) {
 
   return useMutation({
     mutationFn: (id: string) => archiveWorkCalendarYear(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
+    },
+  })
+}
+
+export function useDuplicateWorkCalendarYear(companyCalendarId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => duplicateWorkCalendarYear(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
     },

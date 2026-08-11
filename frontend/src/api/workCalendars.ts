@@ -10,14 +10,19 @@ export interface CreateWorkCalendarInput {
   week_starts_on?: number
   fiscal_year_start_month?: number
   fiscal_year_start_day?: number
-  // 本体作成に続けて最初のカレンダー年度も作成する(UC-C009 手順1〜2)。
-  fiscal_year: number
-  starts_on: string
-  ends_on: string
 }
 
+/**
+ * 会社カレンダー本体のみを作成する(UC-C009手順1)。最初のカレンダー年度は
+ * `WorkCalendarYearsPage`から個別に作成するか、UC-C011「今すぐ生成する」/UC-C014の
+ * 定期バッチによって`fiscal_year_start_month`/`fiscal_year_start_day`から自動生成される。
+ */
 export function createWorkCalendar(input: CreateWorkCalendarInput): Promise<WorkCalendar> {
   return apiFetch('/company-calendars', { method: 'POST', body: input })
+}
+
+export function duplicateWorkCalendarYear(id: string): Promise<WorkCalendarYear> {
+  return apiFetch(`/company-calendar-years/${id}/duplicate`, { method: 'POST' })
 }
 
 export function fetchWorkCalendarYears(companyCalendarId: string): Promise<WorkCalendarYear[]> {

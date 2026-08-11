@@ -53,6 +53,26 @@ class CompanyCalendarYearControllerTest extends TestCase
         $yearsResponse->assertJsonCount(1);
     }
 
+    public function test_creating_a_company_calendar_without_a_year_creates_only_the_body(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $response = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '名古屋事業所カレンダー',
+            'fiscal_year_start_month' => 4,
+            'fiscal_year_start_day' => 1,
+        ]);
+
+        $response->assertCreated();
+        $calendarId = $response->json('id');
+        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId, 'name' => '名古屋事業所カレンダー']);
+        $this->assertDatabaseCount('company_calendar_years', 0);
+
+        $yearsResponse = $this->actingAs($admin)->getJson("/api/company-calendars/{$calendarId}/years");
+        $yearsResponse->assertOk();
+        $yearsResponse->assertJsonCount(0);
+    }
+
     public function test_a_second_year_can_be_added_to_an_existing_calendar(): void
     {
         $admin = $this->makeAdmin();
