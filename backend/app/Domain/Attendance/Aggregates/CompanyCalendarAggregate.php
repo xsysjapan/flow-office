@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
+use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -26,6 +27,16 @@ class CompanyCalendarAggregate extends AggregateRoot
             fiscalYearStartMonth: $fiscalYearStartMonth,
             fiscalYearStartDay: $fiscalYearStartDay,
             createdByUserId: $createdByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function changeDefault(?string $previousDefaultCompanyCalendarId, string $changedByUserId): self
+    {
+        $this->recordThat(new CompanyCalendarDefaultChanged(
+            previousDefaultCompanyCalendarId: $previousDefaultCompanyCalendarId,
+            changedByUserId: $changedByUserId,
         ));
 
         return $this;

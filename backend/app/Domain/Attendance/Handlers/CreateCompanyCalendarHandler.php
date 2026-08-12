@@ -20,17 +20,27 @@ class CreateCompanyCalendarHandler implements CommandHandler
     {
         assert($command instanceof CreateCompanyCalendar);
 
+        // 会社カレンダーは常に高々1件のデフォルトが存在すべき(docs/16-database-schema.md)。
+        // 組織内で最初の1件は自動的にデフォルトにする(この判定のみ先に行い、実際の
+        // is_default反映はCompanyCalendarDefaultChangedイベント経由でProjectorに委ねる)。
+        $isFirst = CompanyCalendar::query()->count() === 0;
+
         $id = (string) Str::uuid();
 
-        CompanyCalendarAggregate::retrieve($id)
+        $aggregate = CompanyCalendarAggregate::retrieve($id)
             ->create(
                 name: $command->name,
                 weekStartsOn: $command->weekStartsOn,
                 fiscalYearStartMonth: $command->fiscalYearStartMonth,
                 fiscalYearStartDay: $command->fiscalYearStartDay,
                 createdByUserId: $command->createdByUserId,
-            )
-            ->persist();
+            );
+
+        if ($isFirst) {
+            $aggregate->changeDefault(null, $command->createdByUserId);
+        }
+
+        $aggregate->persist();
 
         return CompanyCalendar::query()->findOrFail($id);
     }

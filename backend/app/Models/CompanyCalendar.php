@@ -27,6 +27,16 @@ class CompanyCalendar extends Model
     protected $keyType = 'string';
 
     /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_default' => 'boolean',
+        ];
+    }
+
+    /**
      * @return HasMany<CompanyCalendarYear, $this>
      */
     public function years(): HasMany

@@ -19,6 +19,8 @@ class CompanyCalendarResource extends JsonResource
             'fiscal_year_start_month' => $this->fiscal_year_start_month,
             'fiscal_year_start_day' => $this->fiscal_year_start_day,
             'holiday_calendar_source_id' => $this->holiday_calendar_source_id,
+            'is_default' => $this->is_default,
+            'status' => $this->status,
         ];
     }
 }

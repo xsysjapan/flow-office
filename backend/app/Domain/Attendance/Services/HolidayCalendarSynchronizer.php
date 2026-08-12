@@ -30,7 +30,7 @@ class HolidayCalendarSynchronizer
     /**
      * @return array{
      *     event_changes: list<array{ics_uid: string, date: string, name: string, action: string}>,
-     *     day_changes: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string}>,
+     *     day_changes: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>,
      *     protected_conflicts: list<array{company_calendar_day_id: int, date: string}>,
      * }
      *
@@ -134,7 +134,7 @@ class HolidayCalendarSynchronizer
     /**
      * @param  array<string, array{date: string, name: string}>  $feedEvents
      * @param  list<array{ics_uid: string, date: string, name: string, action: string}>  $eventChanges
-     * @return array{0: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
+     * @return array{0: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
      */
     private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges): array
     {
@@ -190,6 +190,10 @@ class HolidayCalendarSynchronizer
                     'date' => $date,
                     'is_public_holiday' => $isPublicHoliday,
                     'public_holiday_name' => $isPublicHoliday ? $activeEventByDate[$date] : null,
+                    // 取消(RevertLastHolidayCalendarSync)のため、同期直前の値をイベントに
+                    // そのまま保存しておく(dayChangesから逆算しない)。
+                    'previous_is_public_holiday' => (bool) $day->is_public_holiday,
+                    'previous_public_holiday_name' => $day->public_holiday_name,
                 ];
             }
         }

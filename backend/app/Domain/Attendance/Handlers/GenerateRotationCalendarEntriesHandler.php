@@ -5,12 +5,12 @@ namespace App\Domain\Attendance\Handlers;
 use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
+use App\Domain\Attendance\Services\RotationScheduleResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\EmployeeRotationAssignment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -31,6 +31,7 @@ class GenerateRotationCalendarEntriesHandler implements CommandHandler
 {
     public function __construct(
         private readonly AttendanceEditGuard $guard,
+        private readonly RotationScheduleResolver $scheduleResolver,
     ) {}
 
     /**
@@ -40,17 +41,13 @@ class GenerateRotationCalendarEntriesHandler implements CommandHandler
     {
         assert($command instanceof GenerateRotationCalendarEntries);
 
-        $rotationAssignment = EmployeeRotationAssignment::query()
-            ->where('user_id', $command->userId)
-            ->with('rotationPattern.items.shiftPattern')
-            ->first();
+        $rotationAssignment = $this->scheduleResolver->assignmentFor($command->userId);
 
         if ($rotationAssignment === null) {
             throw new DomainRuleException('この社員にはローテーションが割り当てられていません。');
         }
 
         $pattern = $rotationAssignment->rotationPattern;
-        $itemsBySequence = $pattern->items->keyBy('sequence');
 
         $period = Carbon::parse($command->from)->toPeriod(Carbon::parse($command->to));
         $generated = collect();
@@ -81,26 +78,13 @@ class GenerateRotationCalendarEntriesHandler implements CommandHandler
                 continue;
             }
 
-            $sequenceIndex = $rotationAssignment->sequenceIndexFor($date, $pattern->cycle_length);
-            $item = $itemsBySequence->get($sequenceIndex);
+            $shiftPattern = $this->scheduleResolver->shiftPatternFor($rotationAssignment, $date);
 
-            if ($item === null) {
+            if ($shiftPattern === null) {
                 continue;
             }
 
-            $shiftPattern = $item->shiftPattern;
-
-            $plannedStartAt = $shiftPattern->start_time ? $date->copy()->setTimeFromTimeString($shiftPattern->start_time) : null;
-            $plannedEndAt = $shiftPattern->end_time ? $date->copy()->setTimeFromTimeString($shiftPattern->end_time) : null;
-            if ($plannedEndAt !== null && $shiftPattern->crosses_midnight) {
-                $plannedEndAt = $plannedEndAt->addDay();
-            }
-
-            $plannedBreakStartAt = $shiftPattern->break_start_time ? $date->copy()->setTimeFromTimeString($shiftPattern->break_start_time) : null;
-            $plannedBreakEndAt = $shiftPattern->break_end_time ? $date->copy()->setTimeFromTimeString($shiftPattern->break_end_time) : null;
-            if ($plannedBreakStartAt !== null && $plannedBreakEndAt !== null && $plannedBreakEndAt->lessThanOrEqualTo($plannedBreakStartAt)) {
-                $plannedBreakEndAt = $plannedBreakEndAt->addDay();
-            }
+            $schedule = $this->scheduleResolver->resolve($pattern, $shiftPattern, $date);
 
             $id = $existing?->id ?? (string) Str::uuid();
 
@@ -108,17 +92,17 @@ class GenerateRotationCalendarEntriesHandler implements CommandHandler
                 ->assign(
                     userId: $command->userId,
                     workDate: $date->toDateString(),
-                    workStyleId: $pattern->work_style_id,
-                    shiftPatternId: $shiftPattern->id,
-                    dayType: $shiftPattern->code,
-                    isWorkingDay: $shiftPattern->isWorkingPattern(),
-                    isLegalHoliday: false,
-                    isCompanyHoliday: ! $shiftPattern->isWorkingPattern(),
-                    plannedStartAt: $plannedStartAt?->toIso8601String(),
-                    plannedEndAt: $plannedEndAt?->toIso8601String(),
-                    plannedBreakMinutes: $shiftPattern->break_minutes,
-                    plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
-                    plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
+                    workStyleId: $schedule['work_style_id'],
+                    shiftPatternId: $schedule['shift_pattern_id'],
+                    dayType: $schedule['day_type'],
+                    isWorkingDay: $schedule['is_working_day'],
+                    isLegalHoliday: $schedule['is_legal_holiday'],
+                    isCompanyHoliday: $schedule['is_company_holiday'],
+                    plannedStartAt: $schedule['planned_start_at']?->toIso8601String(),
+                    plannedEndAt: $schedule['planned_end_at']?->toIso8601String(),
+                    plannedBreakMinutes: $schedule['planned_break_minutes'],
+                    plannedBreakStartAt: $schedule['planned_break_start_at']?->toIso8601String(),
+                    plannedBreakEndAt: $schedule['planned_break_end_at']?->toIso8601String(),
                     isPublished: false,
                     isManuallyOverridden: false,
                     assignedByUserId: $command->generatedByUserId,

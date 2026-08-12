@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\DisableHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
+use App\Domain\Attendance\Commands\RevertLastHolidayCalendarSync;
 use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
@@ -11,6 +12,7 @@ use App\Http\Resources\HolidayCalendarSourceResource;
 use App\Models\HolidayCalendarSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use OpenApi\Attributes as OA;
 
 /**
@@ -19,6 +21,18 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '祝日iCalendar同期', description: '祝日iCalendarソースの登録・同期')]
 class HolidayCalendarSourceController extends Controller
 {
+    #[OA\Get(
+        path: '/holiday-calendar-sources',
+        operationId: 'holidayCalendarSources.index',
+        summary: '祝日iCalendarソース一覧を取得する',
+        tags: ['祝日iCalendar同期'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function index(): AnonymousResourceCollection
+    {
+        return HolidayCalendarSourceResource::collection(HolidayCalendarSource::query()->orderBy('name')->get());
+    }
+
     #[OA\Post(
         path: '/holiday-calendar-sources',
         operationId: 'holidayCalendarSources.store',
@@ -74,6 +88,27 @@ class HolidayCalendarSourceController extends Controller
         $source = $commandBus->dispatch(new DisableHolidayCalendarSource(
             holidayCalendarSourceId: $holidayCalendarSource->id,
             disabledByUserId: $request->user()->id,
+        ));
+
+        return new HolidayCalendarSourceResource($source);
+    }
+
+    /**
+     * UC-C012 手順4後半: 直近1回分の祝日同期を取消す。
+     */
+    #[OA\Post(
+        path: '/holiday-calendar-sources/{holidayCalendarSource}/revert-last-sync',
+        operationId: 'holidayCalendarSources.revertLastSync',
+        summary: '直近の祝日同期1回分を取消す',
+        tags: ['祝日iCalendar同期'],
+        parameters: [new OA\Parameter(name: 'holidayCalendarSource', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function revertLastSync(Request $request, HolidayCalendarSource $holidayCalendarSource, CommandBus $commandBus): HolidayCalendarSourceResource
+    {
+        $source = $commandBus->dispatch(new RevertLastHolidayCalendarSync(
+            holidayCalendarSourceId: $holidayCalendarSource->id,
+            revertedByUserId: $request->user()->id,
         ));
 
         return new HolidayCalendarSourceResource($source);

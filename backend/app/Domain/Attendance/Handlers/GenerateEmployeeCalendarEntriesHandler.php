@@ -4,9 +4,9 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
+use App\Domain\Attendance\Services\CalendarDayScheduleResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Models\CompanyCalendarDay;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -26,6 +26,10 @@ use Illuminate\Support\Str;
  */
 class GenerateEmployeeCalendarEntriesHandler implements CommandHandler
 {
+    public function __construct(
+        private readonly CalendarDayScheduleResolver $scheduleResolver,
+    ) {}
+
     public function handle(Command $command): Collection
     {
         assert($command instanceof GenerateEmployeeCalendarEntries);
@@ -34,21 +38,20 @@ class GenerateEmployeeCalendarEntriesHandler implements CommandHandler
 
         // 会社カレンダー日はcompany_calendar_years配下にあるため、本体(company_calendar_id)
         // ではなく対象期間が属する年度を経由して取得する(複数年度をまたぐ期間も対応する)。
-        $calendarDaysByDate = $workStyle->company_calendar_id === null
-            ? collect()
-            : CompanyCalendarDay::query()
-                ->whereHas('year', fn ($query) => $query->where('company_calendar_id', $workStyle->company_calendar_id))
-                ->whereDate('date', '>=', $command->from)
-                ->whereDate('date', '<=', $command->to)
-                ->get()
-                ->keyBy(fn ($day) => $day->date->toDateString());
+        // 旧実装は公開ステータスで絞っていなかったため、この呼び出しでも絞らない。
+        $calendarDaysByDate = $this->scheduleResolver->calendarDaysForRange(
+            $workStyle->company_calendar_id,
+            $command->from,
+            $command->to,
+            onlyPublished: false,
+        );
 
         $period = Carbon::parse($command->from)->toPeriod(Carbon::parse($command->to));
         $assignments = collect();
 
         foreach ($period as $date) {
             $calendarDay = $calendarDaysByDate->get($date->toDateString());
-            $isWorkingDay = $calendarDay?->is_working_day ?? true;
+            $schedule = $this->scheduleResolver->resolve($workStyle, $date, $calendarDay);
 
             // 'work_date' はdateキャストのためDB上はdatetime文字列で保存される。
             // 厳密一致検索では既存行を見つけられないため、whereDateで明示的に検索する。
@@ -59,31 +62,21 @@ class GenerateEmployeeCalendarEntriesHandler implements CommandHandler
 
             $id = $existing?->id ?? (string) Str::uuid();
 
-            $plannedStartAt = $isWorkingDay && $workStyle->default_start_time
-                ? $date->copy()->setTimeFromTimeString($workStyle->default_start_time) : null;
-            $plannedEndAt = $isWorkingDay && $workStyle->default_end_time
-                ? $date->copy()->setTimeFromTimeString($workStyle->default_end_time) : null;
-            $plannedBreakMinutes = $isWorkingDay ? $workStyle->default_break_minutes : 0;
-            $plannedBreakStartAt = $isWorkingDay && $workStyle->default_break_start_time
-                ? $date->copy()->setTimeFromTimeString($workStyle->default_break_start_time) : null;
-            $plannedBreakEndAt = $isWorkingDay && $workStyle->default_break_end_time
-                ? $date->copy()->setTimeFromTimeString($workStyle->default_break_end_time) : null;
-
             EmployeeCalendarEntryAggregate::retrieve($id)
                 ->assign(
                     userId: $command->userId,
                     workDate: $date->toDateString(),
                     workStyleId: $workStyle->id,
                     shiftPatternId: null,
-                    dayType: $calendarDay?->day_type ?? 'weekday',
-                    isWorkingDay: $isWorkingDay,
-                    isLegalHoliday: $calendarDay?->is_legal_holiday ?? false,
-                    isCompanyHoliday: $calendarDay?->is_company_holiday ?? false,
-                    plannedStartAt: $plannedStartAt?->toIso8601String(),
-                    plannedEndAt: $plannedEndAt?->toIso8601String(),
-                    plannedBreakMinutes: $plannedBreakMinutes,
-                    plannedBreakStartAt: $plannedBreakStartAt?->toIso8601String(),
-                    plannedBreakEndAt: $plannedBreakEndAt?->toIso8601String(),
+                    dayType: $schedule['day_type'],
+                    isWorkingDay: $schedule['is_working_day'],
+                    isLegalHoliday: $schedule['is_legal_holiday'],
+                    isCompanyHoliday: $schedule['is_company_holiday'],
+                    plannedStartAt: $schedule['planned_start_at']?->toIso8601String(),
+                    plannedEndAt: $schedule['planned_end_at']?->toIso8601String(),
+                    plannedBreakMinutes: $schedule['planned_break_minutes'],
+                    plannedBreakStartAt: $schedule['planned_break_start_at']?->toIso8601String(),
+                    plannedBreakEndAt: $schedule['planned_break_end_at']?->toIso8601String(),
                     // カレンダー基準の一括生成は下書き公開の概念を持たず、従来通り即時有効にする。
                     isPublished: true,
                     // 旧実装はこのフィールドに触れず既存行の値を保持していた(個別上書き済みの日を

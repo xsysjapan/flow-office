@@ -6,6 +6,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
+use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
 use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
 use App\Models\HolidayCalendarEvent;
@@ -101,5 +102,15 @@ class HolidayCalendarSourceProjector extends Projector
         HolidayCalendarSource::query()->whereKey($event->aggregateRootUuid())->update([
             'disabled_at' => Carbon::now(),
         ]);
+    }
+
+    public function onHolidayCalendarSourceSyncReverted(HolidayCalendarSourceSyncReverted $event): void
+    {
+        foreach ($event->dayReverts as $dayRevert) {
+            CompanyCalendarDay::query()->whereKey($dayRevert['company_calendar_day_id'])->update([
+                'is_public_holiday' => $dayRevert['is_public_holiday'],
+                'public_holiday_name' => $dayRevert['public_holiday_name'],
+            ]);
+        }
     }
 }

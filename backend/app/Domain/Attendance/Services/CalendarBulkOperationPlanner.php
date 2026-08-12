@@ -5,9 +5,7 @@ namespace App\Domain\Attendance\Services;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
 use App\Models\CalendarBulkOperation;
-use App\Models\CompanyCalendarDay;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\EmployeeRotationAssignment;
 use App\Models\SystemSetting;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -18,18 +16,23 @@ use Illuminate\Support\Carbon;
  * プレビュー(何も保存しない)と確定適用(`CalendarBulkOperationAggregate::apply`経由)の
  * どちらからも同じ計算ロジックを使う(プレビュー→確定適用で結果がずれないようにするため)。
  *
- * - `calendar_apply`: 既存`GenerateEmployeeCalendarEntriesHandler`と同じ考え方(会社カレンダー
- *   日の`schedule_state`から所定時刻を計算する)を、ここでも独立に計算する(既存コマンド自体は
- *   変更しない)。
- * - `rotation_generate`: 既存`GenerateRotationCalendarEntriesHandler`と同じ考え方
- *   (ローテーション基準からシフトパターンを割り出す)。
+ * - `calendar_apply`: `CalendarDayScheduleResolver`(`GenerateEmployeeCalendarEntriesHandler`と
+ *   共有、会社カレンダー日の`schedule_state`から所定時刻を計算する)を呼ぶ。
+ * - `rotation_generate`: `RotationScheduleResolver`(`GenerateRotationCalendarEntriesHandler`と
+ *   共有、ローテーション基準からシフトパターンを割り出す)を呼ぶ。
  * - `bulk_edit`: `target_scope.entries`で個別に指定された`schedule_state`/`entry_type`を
  *   そのまま使う。
+ *
+ * 計算ロジック自体をHandlerと複製しない(CLAUDE.md原則9)。既存Handler(UC-C003・UC-C008)の
+ * 計算条件(公開済み年度のみに絞るか等)とこのPlannerの条件が異なる箇所は、Resolver呼び出しの
+ * 引数(`onlyPublished`等)で表現し、Resolver内部のロジックは完全に共有する。
  */
 class CalendarBulkOperationPlanner
 {
     public function __construct(
         private readonly AttendanceEditGuard $guard,
+        private readonly CalendarDayScheduleResolver $calendarDayScheduleResolver,
+        private readonly RotationScheduleResolver $rotationScheduleResolver,
     ) {}
 
     /**
@@ -96,14 +99,12 @@ class CalendarBulkOperationPlanner
         $from = $targetScope['from'];
         $to = $targetScope['to'];
 
-        $calendarDaysByDate = $workStyle->company_calendar_id === null
-            ? collect()
-            : CompanyCalendarDay::query()
-                ->whereHas('year', fn ($q) => $q->where('company_calendar_id', $workStyle->company_calendar_id)->where('status', 'published'))
-                ->whereDate('date', '>=', $from)
-                ->whereDate('date', '<=', $to)
-                ->get()
-                ->keyBy(fn ($day) => $day->date->toDateString());
+        $calendarDaysByDate = $this->calendarDayScheduleResolver->calendarDaysForRange(
+            $workStyle->company_calendar_id,
+            $from,
+            $to,
+            onlyPublished: true,
+        );
 
         $targets = [];
 
@@ -113,13 +114,7 @@ class CalendarBulkOperationPlanner
             foreach ($period as $date) {
                 $dateString = $date->toDateString();
                 $calendarDay = $calendarDaysByDate->get($dateString);
-                $isWorkingDay = $calendarDay?->is_working_day ?? true;
-                $scheduleState = $calendarDay?->schedule_state ?? ($isWorkingDay ? 'WORK' : 'OFF');
-
-                $plannedStartAt = $isWorkingDay && $workStyle->default_start_time
-                    ? $date->copy()->setTimeFromTimeString($workStyle->default_start_time) : null;
-                $plannedEndAt = $isWorkingDay && $workStyle->default_end_time
-                    ? $date->copy()->setTimeFromTimeString($workStyle->default_end_time) : null;
+                $schedule = $this->calendarDayScheduleResolver->resolve($workStyle, $date, $calendarDay);
 
                 $existing = $this->findExisting($userId, $dateString);
 
@@ -131,18 +126,18 @@ class CalendarBulkOperationPlanner
                     'attributes' => [
                         'work_style_id' => $workStyle->id,
                         'shift_pattern_id' => null,
-                        'day_type' => $calendarDay?->day_type ?? 'weekday',
-                        'is_working_day' => $isWorkingDay,
-                        'is_legal_holiday' => $calendarDay?->is_legal_holiday ?? false,
-                        'is_company_holiday' => $calendarDay?->is_company_holiday ?? false,
-                        'planned_start_at' => $plannedStartAt?->toIso8601String(),
-                        'planned_end_at' => $plannedEndAt?->toIso8601String(),
-                        'planned_break_minutes' => $isWorkingDay ? $workStyle->default_break_minutes : 0,
+                        'day_type' => $schedule['day_type'],
+                        'is_working_day' => $schedule['is_working_day'],
+                        'is_legal_holiday' => $schedule['is_legal_holiday'],
+                        'is_company_holiday' => $schedule['is_company_holiday'],
+                        'planned_start_at' => $schedule['planned_start_at']?->toIso8601String(),
+                        'planned_end_at' => $schedule['planned_end_at']?->toIso8601String(),
+                        'planned_break_minutes' => $schedule['planned_break_minutes'],
                         'planned_break_start_at' => null,
                         'planned_break_end_at' => null,
                         'is_published' => true,
                         'is_manually_overridden' => false,
-                        'schedule_state' => $scheduleState,
+                        'schedule_state' => $schedule['schedule_state'],
                         'entry_type' => 'OVERRIDE',
                         'source_type' => 'bulk_operation',
                     ],
@@ -164,36 +159,25 @@ class CalendarBulkOperationPlanner
         $targets = [];
 
         foreach ($targetScope['user_ids'] as $userId) {
-            $rotationAssignment = EmployeeRotationAssignment::query()
-                ->where('user_id', $userId)
-                ->with('rotationPattern.items.shiftPattern')
-                ->first();
+            $rotationAssignment = $this->rotationScheduleResolver->assignmentFor($userId);
 
             if ($rotationAssignment === null) {
                 continue;
             }
 
             $pattern = $rotationAssignment->rotationPattern;
-            $itemsBySequence = $pattern->items->keyBy('sequence');
             $period = Carbon::parse($from)->toPeriod(Carbon::parse($to));
 
             foreach ($period as $date) {
                 $dateString = $date->toDateString();
-                $sequenceIndex = $rotationAssignment->sequenceIndexFor($date, $pattern->cycle_length);
-                $item = $itemsBySequence->get($sequenceIndex);
+                $shiftPattern = $this->rotationScheduleResolver->shiftPatternFor($rotationAssignment, $date);
 
-                if ($item === null) {
+                if ($shiftPattern === null) {
                     continue;
                 }
 
-                $shiftPattern = $item->shiftPattern;
+                $schedule = $this->rotationScheduleResolver->resolve($pattern, $shiftPattern, $date);
                 $existing = $this->findExisting($userId, $dateString);
-
-                $plannedStartAt = $shiftPattern->start_time ? $date->copy()->setTimeFromTimeString($shiftPattern->start_time) : null;
-                $plannedEndAt = $shiftPattern->end_time ? $date->copy()->setTimeFromTimeString($shiftPattern->end_time) : null;
-                if ($plannedEndAt !== null && $shiftPattern->crosses_midnight) {
-                    $plannedEndAt = $plannedEndAt->addDay();
-                }
 
                 $targets[] = [
                     'user_id' => $userId,
@@ -202,20 +186,20 @@ class CalendarBulkOperationPlanner
                     'conflict' => (bool) $existing?->is_manually_overridden,
                     'guard_blocked' => $this->isGuardBlocked($userId, $dateString),
                     'attributes' => [
-                        'work_style_id' => $pattern->work_style_id,
-                        'shift_pattern_id' => $shiftPattern->id,
-                        'day_type' => $shiftPattern->code,
-                        'is_working_day' => $shiftPattern->isWorkingPattern(),
-                        'is_legal_holiday' => false,
-                        'is_company_holiday' => ! $shiftPattern->isWorkingPattern(),
-                        'planned_start_at' => $plannedStartAt?->toIso8601String(),
-                        'planned_end_at' => $plannedEndAt?->toIso8601String(),
-                        'planned_break_minutes' => $shiftPattern->break_minutes,
+                        'work_style_id' => $schedule['work_style_id'],
+                        'shift_pattern_id' => $schedule['shift_pattern_id'],
+                        'day_type' => $schedule['day_type'],
+                        'is_working_day' => $schedule['is_working_day'],
+                        'is_legal_holiday' => $schedule['is_legal_holiday'],
+                        'is_company_holiday' => $schedule['is_company_holiday'],
+                        'planned_start_at' => $schedule['planned_start_at']?->toIso8601String(),
+                        'planned_end_at' => $schedule['planned_end_at']?->toIso8601String(),
+                        'planned_break_minutes' => $schedule['planned_break_minutes'],
                         'planned_break_start_at' => null,
                         'planned_break_end_at' => null,
                         'is_published' => false,
                         'is_manually_overridden' => false,
-                        'schedule_state' => $shiftPattern->isWorkingPattern() ? 'WORK' : 'OFF',
+                        'schedule_state' => $schedule['schedule_state'],
                         'entry_type' => 'SHIFT_ASSIGNMENT',
                         'source_type' => 'bulk_operation',
                     ],

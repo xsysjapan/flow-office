@@ -65,6 +65,8 @@ use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
 use App\Domain\Attendance\Commands\RevertCalendarBulkOperation;
+use App\Domain\Attendance\Commands\RevertLastHolidayCalendarSync;
+use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
 use App\Domain\Attendance\Commands\SetDefaultWorkStyle;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
@@ -116,6 +118,8 @@ use App\Domain\Attendance\Handlers\RegisterHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\RevertCalendarBulkOperationHandler;
+use App\Domain\Attendance\Handlers\RevertLastHolidayCalendarSyncHandler;
+use App\Domain\Attendance\Handlers\SetDefaultCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\SetDefaultWorkStyleHandler;
 use App\Domain\Attendance\Handlers\StartBreakHandler;
 use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
@@ -431,6 +435,7 @@ return [
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 
         CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
+        SetDefaultCompanyCalendar::class => SetDefaultCompanyCalendarHandler::class,
         CreateCompanyCalendarYear::class => CreateCompanyCalendarYearHandler::class,
         PublishCompanyCalendarYear::class => PublishCompanyCalendarYearHandler::class,
         UnpublishCompanyCalendarYear::class => UnpublishCompanyCalendarYearHandler::class,
@@ -441,6 +446,7 @@ return [
         RegisterHolidayCalendarSource::class => RegisterHolidayCalendarSourceHandler::class,
         SyncHolidayCalendarSource::class => SyncHolidayCalendarSourceHandler::class,
         DisableHolidayCalendarSource::class => DisableHolidayCalendarSourceHandler::class,
+        RevertLastHolidayCalendarSync::class => RevertLastHolidayCalendarSyncHandler::class,
         ApplyCalendarBulkOperation::class => ApplyCalendarBulkOperationHandler::class,
         RevertCalendarBulkOperation::class => RevertCalendarBulkOperationHandler::class,
         CreateWorkStyle::class => CreateWorkStyleHandler::class,

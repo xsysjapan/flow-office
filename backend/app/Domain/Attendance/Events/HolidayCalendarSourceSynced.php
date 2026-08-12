@@ -15,7 +15,7 @@ class HolidayCalendarSourceSynced extends ShouldBeStored
 {
     /**
      * @param  list<array{ics_uid: string, date: string, name: string, action: string}>  $eventChanges  holiday_calendar_eventsへの差分反映内容(action: added/updated/removed)
-     * @param  list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string}>  $dayChanges  実際にis_public_holiday等を更新したcompany_calendar_days
+     * @param  list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>  $dayChanges  実際にis_public_holiday等を更新したcompany_calendar_days。previous_*は同期直前の値(RevertLastHolidayCalendarSyncでの取消用)。
      * @param  list<array{company_calendar_day_id: int, date: string}>  $protectedConflicts  手動変更保護のため自動上書きしなかった対象
      */
     public function __construct(

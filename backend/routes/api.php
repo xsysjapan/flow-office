@@ -209,6 +209,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C009〜UC-C013) ---
     Route::get('/company-calendars', [CompanyCalendarController::class, 'index']);
     Route::get('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'years']);
+    Route::get('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'index']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
     Route::get('/employee-calendar-entries', [EmployeeCalendarEntryController::class, 'index'])->middleware('ability:schedule:self:read');
@@ -219,6 +220,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::middleware('permission:attendance.manage,any')->group(function () {
         Route::post('/onboarding/calendar/generate-now', [OnboardingController::class, 'generateCalendarNow']);
         Route::post('/company-calendars', [CompanyCalendarController::class, 'store']);
+        Route::post('/company-calendars/{companyCalendar}/set-default', [CompanyCalendarController::class, 'setDefault']);
         Route::post('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'storeYear']);
         Route::post('/company-calendar-years/{companyCalendarYear}/publish', [CompanyCalendarController::class, 'publish']);
         Route::post('/company-calendar-years/{companyCalendarYear}/unpublish', [CompanyCalendarController::class, 'unpublish']);
@@ -228,6 +230,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'store']);
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}/sync', [HolidayCalendarSourceController::class, 'sync']);
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}/disable', [HolidayCalendarSourceController::class, 'disable']);
+        Route::post('/holiday-calendar-sources/{holidayCalendarSource}/revert-last-sync', [HolidayCalendarSourceController::class, 'revertLastSync']);
         Route::post('/calendar-bulk-operations/preview', [CalendarBulkOperationController::class, 'preview']);
         Route::post('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'store']);
         Route::get('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'index']);

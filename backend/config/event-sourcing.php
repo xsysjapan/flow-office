@@ -37,6 +37,7 @@ use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
 use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
+use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
@@ -50,6 +51,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
+use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
 use App\Domain\Attendance\Events\LegalHolidayDesignated;
 use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternCreated;
@@ -340,6 +342,7 @@ return [
         'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 
         'company_calendar.created' => CompanyCalendarCreated::class,
+        'company_calendar.default_changed' => CompanyCalendarDefaultChanged::class,
         'company_calendar_year.created' => CompanyCalendarYearCreated::class,
         'company_calendar_year.days_updated' => CompanyCalendarDaysUpdated::class,
         'company_calendar_year.published' => CompanyCalendarYearPublished::class,
@@ -351,6 +354,7 @@ return [
         'holiday_calendar_source.synced' => HolidayCalendarSourceSynced::class,
         'holiday_calendar_source.sync_failed' => HolidayCalendarSourceSyncFailed::class,
         'holiday_calendar_source.disabled' => HolidayCalendarSourceDisabled::class,
+        'holiday_calendar_source.sync_reverted' => HolidayCalendarSourceSyncReverted::class,
 
         'calendar_bulk_operation.applied' => CalendarBulkOperationApplied::class,
         'calendar_bulk_operation.reverted' => CalendarBulkOperationReverted::class,

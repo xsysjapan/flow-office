@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
+use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
 use App\Models\CompanyCalendar;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -24,5 +25,22 @@ class CompanyCalendarProjector extends Projector
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
             ],
         );
+    }
+
+    /**
+     * work_style.default_changed(WorkStyleProjector)と同じ考え方: 新しいデフォルトを
+     * trueにし、旧デフォルトを解除する。
+     */
+    public function onCompanyCalendarDefaultChanged(CompanyCalendarDefaultChanged $event): void
+    {
+        if ($event->previousDefaultCompanyCalendarId !== null) {
+            CompanyCalendar::query()
+                ->where('id', $event->previousDefaultCompanyCalendarId)
+                ->update(['is_default' => false]);
+        }
+
+        CompanyCalendar::query()
+            ->where('id', $event->aggregateRootUuid())
+            ->update(['is_default' => true]);
     }
 }

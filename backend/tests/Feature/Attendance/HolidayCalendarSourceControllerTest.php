@@ -151,6 +151,123 @@ class HolidayCalendarSourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_index_lists_registered_sources(): void
+    {
+        $admin = $this->makeAdmin();
+
+        HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソースB', 'ics_url' => 'https://example.com/b.ics',
+        ]);
+        HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソースA', 'ics_url' => 'https://example.com/a.ics',
+        ]);
+
+        $response = $this->actingAs($admin)->getJson('/api/holiday-calendar-sources');
+
+        $response->assertOk();
+        $response->assertJsonCount(2);
+        $this->assertSame(['ソースA', 'ソースB'], collect($response->json())->pluck('name')->all());
+    }
+
+    public function test_reverting_the_last_sync_restores_the_previous_holiday_state(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-3', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => '内閣府祝日カレンダー',
+            'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ])->assertOk();
+
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync")->assertOk();
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => 'こどもの日',
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/revert-last-sync");
+
+        $response->assertOk();
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'date' => '2026-05-05 00:00:00',
+            'is_public_holiday' => false,
+            'public_holiday_name' => null,
+        ]);
+    }
+
+    public function test_reverting_the_last_sync_does_not_touch_a_manually_overridden_day(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-4', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => 'ソース', 'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ]);
+
+        $day = CompanyCalendarDay::query()->where('calendar_id', $year->id)->whereDate('date', '2026-05-05')->first();
+        CompanyCalendarDaySource::query()->create([
+            'id' => (string) Str::uuid(),
+            'company_calendar_day_id' => $day->id,
+            'source_type' => 'manual',
+            'applied_at' => now(),
+            'applied_by_user_id' => $admin->id,
+        ]);
+        // 保護されているため、この日は同期でis_public_holidayを変更されない。
+        $day->update(['is_public_holiday' => true, 'public_holiday_name' => '手動設定の祝日']);
+
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync")->assertOk();
+
+        $response = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/revert-last-sync");
+
+        $response->assertOk();
+        // 手動設定日は同期でも取消でも変更されない。
+        $this->assertDatabaseHas('company_calendar_days', [
+            'id' => $day->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => '手動設定の祝日',
+        ]);
+    }
+
+    public function test_reverting_without_any_sync_history_fails(): void
+    {
+        $admin = $this->makeAdmin();
+        $source = HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソース', 'ics_url' => 'https://example.com/x.ics',
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$source->id}/revert-last-sync");
+
+        $response->assertStatus(422);
+    }
+
     public function test_disabling_a_source_prevents_further_batch_sync(): void
     {
         $admin = $this->makeAdmin();

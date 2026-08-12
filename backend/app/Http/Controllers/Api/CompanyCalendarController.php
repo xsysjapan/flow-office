@@ -7,6 +7,7 @@ use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
+use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
@@ -86,6 +87,28 @@ class CompanyCalendarController extends Controller
         }
 
         return (new CompanyCalendarResource($calendar->refresh()))->response()->setStatusCode(201);
+    }
+
+    /**
+     * docs/16-database-schema.md: 会社カレンダー本体で有効なデフォルトは常に高々1件。
+     * 既存のデフォルトを解除しつつ、指定した本体をデフォルトに切り替える。
+     */
+    #[OA\Post(
+        path: '/company-calendars/{companyCalendar}/set-default',
+        operationId: 'companyCalendars.setDefault',
+        summary: '会社カレンダー本体をデフォルトに設定する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function setDefault(Request $request, CompanyCalendar $companyCalendar, CommandBus $commandBus): CompanyCalendarResource
+    {
+        $calendar = $commandBus->dispatch(new SetDefaultCompanyCalendar(
+            companyCalendarId: $companyCalendar->id,
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new CompanyCalendarResource($calendar);
     }
 
     #[OA\Get(
