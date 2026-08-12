@@ -307,6 +307,7 @@ describe('AttendanceMonthDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: '提出する' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/編集できなくなります/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/先に有給申請の承認を完了してください/)).toBeInTheDocument()
 
     await userEvent.click(within(dialog).getByRole('combobox'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '花子')

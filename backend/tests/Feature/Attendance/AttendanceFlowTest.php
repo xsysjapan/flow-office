@@ -5,6 +5,7 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeShiftAssignment;
+use App\Models\PaidLeaveRequest;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkCalendar;
@@ -398,6 +399,56 @@ class AttendanceFlowTest extends TestCase
 
         $submit->assertStatus(422);
         $this->assertNull(AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first());
+    }
+
+    public function test_submitting_a_month_with_an_unapproved_paid_leave_request_is_rejected_without_creating_a_workflow_request(): void
+    {
+        $approver = User::factory()->create();
+
+        foreach (['submitted', 'returned'] as $status) {
+            $employee = User::factory()->create();
+            PaidLeaveRequest::query()->create([
+                'user_id' => $employee->id,
+                'approver_user_id' => $approver->id,
+                'status' => $status,
+                'leave_type' => 'full',
+                'target_date' => '2026-06-15',
+                'requested_days' => 1,
+            ]);
+
+            $this->actingAs($employee)
+                ->postJson('/api/attendance/months/2026-06/submit', ['approver_user_id' => $approver->id])
+                ->assertUnprocessable()
+                ->assertJsonPath('message', '対象月に未承認の有給申請があります。有給申請の承認を完了してから月次勤怠を提出してください。');
+
+            $this->assertDatabaseMissing('attendance_months', [
+                'user_id' => $employee->id,
+                'year_month' => '2026-06',
+            ]);
+            $this->assertDatabaseMissing('workflow_requests', [
+                'applicant_user_id' => $employee->id,
+                'subject_type' => 'attendance_month',
+            ]);
+        }
+    }
+
+    public function test_submitting_a_month_with_an_approved_paid_leave_request_is_allowed(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        PaidLeaveRequest::query()->create([
+            'user_id' => $employee->id,
+            'approver_user_id' => $approver->id,
+            'status' => 'approved',
+            'leave_type' => 'full',
+            'target_date' => '2026-06-15',
+            'requested_days' => 1,
+        ]);
+
+        $this->actingAs($employee)
+            ->postJson('/api/attendance/months/2026-06/submit', ['approver_user_id' => $approver->id])
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'submitted');
     }
 
     /**
