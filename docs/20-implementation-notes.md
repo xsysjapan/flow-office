@@ -51,23 +51,30 @@
 
 ## 会社カレンダー・従業員予定機能で残っている既知の制約・未実装事項
 
+**解消済み**(セルフレビューで見つけて対応):
+
+- `company_calendars.is_default`を設定・切り替える手段が無い問題 → `SetDefaultCompanyCalendar`
+  (`POST /company-calendars/{id}/set-default`)を追加。組織内最初の1件は自動的にデフォルトに
+  なる。
+- `CalendarBulkOperationPlanner`が既存の生成ロジック(`GenerateEmployeeCalendarEntriesHandler`・
+  `GenerateRotationCalendarEntriesHandler`)を独立に再実装していた問題 →
+  `CalendarDayScheduleResolver`・`RotationScheduleResolver`に計算ロジックを抜き出し、3箇所とも
+  同じServiceを呼ぶ形に統一。
+- 祝日iCalendarソース一覧のGET APIが無い問題 → `GET /holiday-calendar-sources`を追加、
+  フロントも永続的な一覧表示に対応。
+- 祝日同期の取消(UC-C012手順4後半) → `RevertLastHolidayCalendarSync`
+  (`POST /holiday-calendar-sources/{id}/revert-last-sync`、直近1回分のみ)を実装。
+- オンボーディング専用画面(UC-C011「今すぐ生成する」) → `OnboardingCalendarPage`を追加。
+
+**まだ残っている制約**:
+
 - **旧カラムの削除(2段階目)**: `company_calendar_days.day_type`/`is_working_day`/
   `is_company_holiday`、`employee_calendar_entries.day_type`/`is_working_day`/
   `is_company_holiday`は、新カラム(`schedule_state`/`is_public_holiday`等)と併存させたまま
   (Projectorが両方に整合する値を書き込む)。既存参照箇所を`schedule_state`ベースに置き換え、
   回帰確認が完了してから別マイグレーションで削除する。
-- **祝日同期の取消(UC-C012手順4後半)**: 同期実行1回分の内容は`holiday_calendar_source.synced`
-  イベントのpayload(`event_changes`/`day_changes`/`protected_conflicts`)に記録されるが、
-  「その実行が変更した日だけを同期前の状態へ取り消す」操作自体は未実装。
 - **祝日同期の差分確認画面(UC-C023、`GET /holiday-calendar-sources/{id}/sync-preview`相当)**:
   同期結果・競合は`stored_events`に記録されているが、専用の読み取りAPI・画面はまだ無い。
-- **祝日iCalendarソース一覧の永続化**: backendに`GET /holiday-calendar-sources`が無いため、
-  `HolidayCalendarSourcesPage`は当該画面表示中に作成・同期・無効化した結果をクライアント側の
-  状態としてのみ保持する(再読み込みで一覧が消える)。一覧取得APIを追加してから画面側も
-  永続的な一覧表示に直す。
-- **オンボーディング専用画面(UC-C011の「今すぐ生成する」)は未実装**: APIは実装済み
-  (`POST /onboarding/calendar/generate-now`)だが、専用の案内画面(指示書12.8節「この設定で
-  開始/カレンダーを確認」)はまだ無い。
 - **ICSのRRULE非対応**: 繰り返しルールを持つVEVENTは展開せず無視し、ログに警告を出すのみ。
   日本の祝日iCalendarフィードは通常年ごとに単発VEVENTのため実用上の支障は無いが、RRULEを
   使う祝日ソースには対応できない。
@@ -80,3 +87,8 @@
   適用する。従業員ごとの`work_styles.company_calendar_id`解決までは行っていない。
 - **一括操作のGROUPスコープ制限は実装しない**(`docs/05-user-roles.md`参照。既存の
   `attendance.manage`がGLOBALスコープのみのため)。
+- **新規E2Eシナリオ(scenario-12)がローカルで実行できない**: Playwrightの`global-setup`が
+  `POST /dev/reset-database`後にALL_USERSのデフォルトFeature割当が0件であることを前提にして
+  いるが、現在の`AccessControlSeeder`は既定で9件を割り当てるため、この前提が常に成立しない
+  (scenario-00等の既存シナリオも含め、環境上E2E実行そのものが現状ブロックされている。本機能
+  とは無関係な既存のテスト基盤側の不整合)。
