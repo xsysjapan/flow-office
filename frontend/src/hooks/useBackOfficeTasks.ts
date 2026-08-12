@@ -1,22 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   assignBackOfficeTask,
+  bulkCompleteBackOfficeTasks,
   changeBackOfficeTaskStatus,
   fetchBackOfficeTask,
   fetchMyTasks,
   fetchUnassignedTasks,
+  type BackOfficeTaskListOptions,
 } from '../api/backOfficeTasks'
 import type { BackOfficeTaskStatus } from '../api/types'
 
 const UNASSIGNED_KEY = ['backoffice-tasks', 'unassigned']
 const MINE_KEY = ['backoffice-tasks', 'mine']
 
-export function useUnassignedBackOfficeTasks() {
-  return useQuery({ queryKey: UNASSIGNED_KEY, queryFn: fetchUnassignedTasks })
+export function useUnassignedBackOfficeTasks(options: BackOfficeTaskListOptions = {}) {
+  return useQuery({ queryKey: [...UNASSIGNED_KEY, options], queryFn: () => fetchUnassignedTasks(options) })
 }
 
-export function useMyBackOfficeTasks() {
-  return useQuery({ queryKey: MINE_KEY, queryFn: fetchMyTasks })
+export function useMyBackOfficeTasks(options: BackOfficeTaskListOptions = {}) {
+  return useQuery({ queryKey: [...MINE_KEY, options], queryFn: () => fetchMyTasks(options) })
 }
 
 export function useBackOfficeTask(id: string) {
@@ -56,5 +58,14 @@ export function useChangeBackOfficeTaskStatus() {
     mutationFn: ({ id, status, comment }: { id: string; status: BackOfficeTaskStatus; comment?: string }) =>
       changeBackOfficeTaskStatus(id, status, comment),
     onSuccess: (_data, { id }) => invalidate(id),
+  })
+}
+
+export function useBulkCompleteBackOfficeTasks() {
+  const invalidate = useInvalidateBackOfficeTasks()
+
+  return useMutation({
+    mutationFn: (taskIds: string[]) => bulkCompleteBackOfficeTasks(taskIds),
+    onSuccess: () => invalidate(),
   })
 }

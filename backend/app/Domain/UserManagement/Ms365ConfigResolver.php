@@ -30,7 +30,7 @@ class Ms365ConfigResolver
         config([
             'services.azure.client_id' => $settings->m365_client_id,
             'services.azure.client_secret' => $settings->m365_client_secret,
-            'services.azure.tenant' => $settings->m365_tenant_id ?: 'common',
+            'services.azure.tenant' => $settings->m365_tenant_id,
             'services.azure.redirect' => $redirect,
         ]);
     }

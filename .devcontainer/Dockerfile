@@ -9,6 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends sqlite3 libsqlite3-dev libicu-dev libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
     && docker-php-ext-configure gd --with-jpeg --with-freetype \
     && docker-php-ext-install intl zip pdo_mysql pdo_sqlite gd \
+    && git config --system --add safe.directory /workspaces/flow-office \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

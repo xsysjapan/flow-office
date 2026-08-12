@@ -316,6 +316,45 @@ test('§5-15: 複数の労働時間制度が混在する月の月次締め', asy
   }
 })
 
+test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き続き確認できる', async ({ browser }) => {
+  test.setTimeout(180000)
+
+  const applicantContext = await browser.newContext()
+  const approverContext = await browser.newContext()
+  const adminContext = await browser.newContext()
+  const applicantPage = await applicantContext.newPage()
+  const approverPage = await approverContext.newPage()
+  const adminPage = await adminContext.newPage()
+
+  await loginAs(applicantPage, SCENARIO_USERS.punchEmployee)
+  await loginAs(approverPage, SCENARIO_USERS.approver)
+  await loginAs(adminPage, SCENARIO_USERS.admin)
+
+  const { yearMonth } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
+  expect(await fetchMonthStatus(applicantPage, yearMonth)).toBe('closed')
+
+  // 締め済みの月次勤怠タスクを開いても、締め前と同じ月次サマリー・日別内訳を
+  // 引き続き参照できる。バックオフィス業務の状態変更を先に判断してから、下段で
+  // 不可逆な月次締め処理を確認する画面順になっていることも合わせて確認する。
+  const attendanceTaskTitle = `月次勤怠確認: ${SCENARIO_USERS.punchEmployee} (${yearMonth})`
+  await adminPage.goto('/backoffice-tasks')
+  const attendanceTaskRow = adminPage.getByRole('row', { name: attendanceTaskTitle })
+  await expect(attendanceTaskRow).toBeVisible()
+  await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
+
+  await expect(
+    adminPage.getByText('締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。'),
+  ).toBeVisible()
+  await expect(adminPage.getByText('日別の内訳')).toBeVisible()
+  await expect(adminPage.getByText(yearMonth, { exact: true })).toBeVisible()
+
+  const statusHeadingBox = await adminPage.getByRole('heading', { name: '状態を変更する' }).boundingBox()
+  const closeHeadingBox = await adminPage.getByRole('heading', { name: '月次勤怠の締め処理' }).boundingBox()
+  expect(statusHeadingBox).not.toBeNull()
+  expect(closeHeadingBox).not.toBeNull()
+  expect(statusHeadingBox!.y).toBeLessThan(closeHeadingBox!.y)
+})
+
 test('§5-16: 月次締め後もバックオフィス処理(交通費精算・名刺申請)は独立して進められる', async ({ browser }) => {
   test.setTimeout(180000)
 

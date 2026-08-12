@@ -85,6 +85,17 @@ function randomToken() {
   return crypto.randomBytes(24).toString('hex')
 }
 
+function createOnboardingUser() {
+  const suffix = crypto.randomBytes(8).toString('hex')
+
+  return {
+    id: `mock-entra-onboarding-${suffix}`,
+    displayName: '初回システム管理者',
+    userPrincipalName: `onboarding-${suffix}@example.com`,
+    mail: `onboarding-${suffix}@example.com`,
+  }
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = ''
@@ -154,7 +165,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/oauth2/v2.0/authorize') {
     const params = Object.fromEntries(url.searchParams)
-    const users = await fetchUsers()
+    // 初回オンボーディングではDB上の既存ユーザーを選ぶと重複エラーになるため、
+    // 必ず未登録となる専用ユーザーだけを提示する。通常ログインでは従来どおりDBユーザーを使う。
+    const users = params.state === 'onboarding-sso-link'
+      ? [createOnboardingUser()]
+      : await fetchUsers()
     users.forEach((user) => usersById.set(user.id, user))
     return sendHtml(res, 200, renderLoginPage(params, users))
   }

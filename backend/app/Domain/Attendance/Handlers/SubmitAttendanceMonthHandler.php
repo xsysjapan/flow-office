@@ -5,6 +5,7 @@ namespace App\Domain\Attendance\Handlers;
 use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
+use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -26,6 +27,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
 {
     public function __construct(
         private readonly MonthlyOvertimeCalculator $monthlyOvertimeCalculator,
+        private readonly PaidLeaveApprovalGuard $paidLeaveApprovalGuard,
     ) {}
 
     public function handle(Command $command): AttendanceMonth
@@ -44,6 +46,8 @@ class SubmitAttendanceMonthHandler implements CommandHandler
         if ($this->hasUnfinishedDay($command->userId, $command->yearMonth)) {
             throw new DomainRuleException('勤務中・休憩中の日があるため提出できません。退勤してから提出してください。');
         }
+
+        $this->paidLeaveApprovalGuard->ensureApproved($command->userId, $command->yearMonth);
 
         // 月次勤怠申請(workflow_requestの下書きが先に作られる経路)では、subject_idとして
         // 確定済みの集約IDがコマンドに載ってくるのでそれを優先する。
