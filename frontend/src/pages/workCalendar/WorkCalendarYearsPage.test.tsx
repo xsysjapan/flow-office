@@ -15,6 +15,8 @@ const calendar: WorkCalendar = {
   fiscal_year_start_month: 4,
   fiscal_year_start_day: 1,
   holiday_calendar_source_id: null,
+  is_default: true,
+  status: 'active',
 }
 
 const draftYear: WorkCalendarYear = {

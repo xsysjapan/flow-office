@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
 import type { WorkCalendar } from '../../api/types'
-import { WorkCalendarListPage } from './WorkCalendarListPage'
+import { OnboardingCalendarPage } from './OnboardingCalendarPage'
 
 const calendars: WorkCalendar[] = [
   {
@@ -15,16 +15,6 @@ const calendars: WorkCalendar[] = [
     is_default: true,
     status: 'active',
   },
-  {
-    id: 'calendar-2',
-    name: '関西拠点カレンダー',
-    week_starts_on: 1,
-    fiscal_year_start_month: 4,
-    fiscal_year_start_day: 1,
-    holiday_calendar_source_id: 'holiday-source-1',
-    is_default: false,
-    status: 'active',
-  },
 ]
 
 function withSeeded(data: WorkCalendar[]) {
@@ -34,8 +24,8 @@ function withSeeded(data: WorkCalendar[]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/admin/work-calendars']}>
-          <WorkCalendarListPage />
+        <MemoryRouter>
+          <OnboardingCalendarPage />
         </MemoryRouter>
       </QueryClientProvider>
     )
@@ -43,17 +33,17 @@ function withSeeded(data: WorkCalendar[]) {
 }
 
 const meta = {
-  title: 'Pages/WorkCalendar/WorkCalendarListPage',
-  component: WorkCalendarListPage,
-} satisfies Meta<typeof WorkCalendarListPage>
+  title: 'Pages/WorkCalendar/OnboardingCalendarPage',
+  component: OnboardingCalendarPage,
+} satisfies Meta<typeof OnboardingCalendarPage>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Default: Story = {
-  render: withSeeded(calendars),
+export const NeedsCompanyCalendar: Story = {
+  render: withSeeded([]),
 }
 
-export const Empty: Story = {
-  render: withSeeded([]),
+export const ReadyToGenerate: Story = {
+  render: withSeeded(calendars),
 }

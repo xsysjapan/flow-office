@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
-import { useCreateWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
+import { useCreateWorkCalendar, useSetDefaultWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
 
 /**
- * UC-C009: 会社カレンダー本体の一覧・作成。カレンダー年度の作成・公開・複製は
- * 本体ごとの年度一覧ページ(WorkCalendarYearsPage)で行う。
+ * UC-C009: 会社カレンダー本体の一覧・作成・デフォルト切替。カレンダー年度の作成・公開・
+ * 複製は本体ごとの年度一覧ページ(WorkCalendarYearsPage)で行う。
+ * UC-C011「今すぐ生成する」はOnboardingCalendarPageへの導線から行う。
  */
 export function WorkCalendarListPage() {
   const { data, isLoading, error } = useWorkCalendars()
   const createCalendar = useCreateWorkCalendar()
+  const setDefaultCalendar = useSetDefaultWorkCalendar()
 
   const [name, setName] = useState('')
   const [weekStartsOn, setWeekStartsOn] = useState('')
@@ -47,6 +50,15 @@ export function WorkCalendarListPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card title="勤務カレンダーの初期設定">
+        <p className="text-sm text-muted-foreground">
+          カレンダー年度をまだ作成していない場合は、初期設定画面から標準の年度をまとめて生成できます。
+        </p>
+        <Button variant="secondary" asChild className="mt-2 self-start">
+          <Link to="/admin/onboarding/calendar">初期設定を見る</Link>
+        </Button>
+      </Card>
+
       <Card title="会社カレンダーを作成">
         {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
 
@@ -95,12 +107,14 @@ export function WorkCalendarListPage() {
       </Card>
 
       <Card title="会社カレンダー一覧">
+        {setDefaultCalendar.error && <ErrorMessage error={setDefaultCalendar.error} />}
+
         {calendars.length === 0 ? (
           <p className="text-sm text-muted-foreground">カレンダーはまだありません。</p>
         ) : (
           <ul className="divide-y divide-border">
             {calendars.map((calendar) => (
-              <li key={calendar.id} className="flex items-center gap-3 py-3">
+              <li key={calendar.id} className="flex flex-wrap items-center gap-3 py-3">
                 <div className="flex flex-1 flex-col">
                   <Link
                     to={`/admin/work-calendars/${calendar.id}/years`}
@@ -113,6 +127,18 @@ export function WorkCalendarListPage() {
                     {calendar.fiscal_year_start_day}日
                   </span>
                 </div>
+                <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
+                  {calendar.is_default ? 'デフォルト' : '非デフォルト'}
+                </Badge>
+                {!calendar.is_default && (
+                  <Button
+                    variant="secondary"
+                    isLoading={setDefaultCalendar.isPending}
+                    onClick={() => setDefaultCalendar.mutate(calendar.id)}
+                  >
+                    デフォルトに設定する
+                  </Button>
+                )}
                 <Button variant="secondary" asChild>
                   <Link to={`/admin/work-calendars/${calendar.id}/years`}>年度一覧</Link>
                 </Button>

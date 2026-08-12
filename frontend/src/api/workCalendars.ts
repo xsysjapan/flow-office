@@ -21,6 +21,14 @@ export function createWorkCalendar(input: CreateWorkCalendarInput): Promise<Work
   return apiFetch('/company-calendars', { method: 'POST', body: input })
 }
 
+/**
+ * docs/16-database-schema.md: 会社カレンダー本体で有効なデフォルトは常に高々1件。
+ * 指定した本体をデフォルトに切り替える(既存のデフォルトはbackend側で解除される)。
+ */
+export function setDefaultWorkCalendar(id: string): Promise<WorkCalendar> {
+  return apiFetch(`/company-calendars/${id}/set-default`, { method: 'POST' })
+}
+
 export function duplicateWorkCalendarYear(id: string): Promise<WorkCalendarYear> {
   return apiFetch(`/company-calendar-years/${id}/duplicate`, { method: 'POST' })
 }
@@ -71,4 +79,17 @@ export function putWorkCalendarDays(
   days: PutCalendarDayInput[],
 ): Promise<WorkCalendarDay[]> {
   return apiFetch(`/company-calendar-years/${companyCalendarYearId}/days`, { method: 'PUT', body: { days } })
+}
+
+export interface GenerateCompanyCalendarYearsNowResult {
+  generated_company_calendar_year_ids: string[]
+}
+
+/**
+ * UC-C011「今すぐ生成する」: 全ての会社カレンダー本体について、
+ * fiscal_year_start_month/dayから標準のカレンダー年度をまとめて生成する
+ * (`OnboardingCalendarPage`から呼ぶ)。
+ */
+export function generateCompanyCalendarYearsNow(): Promise<GenerateCompanyCalendarYearsNowResult> {
+  return apiFetch('/onboarding/calendar/generate-now', { method: 'POST' })
 }

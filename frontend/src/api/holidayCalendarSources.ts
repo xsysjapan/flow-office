@@ -1,14 +1,14 @@
 import { apiFetch } from './client'
 import type { HolidayCalendarSource } from './types'
 
-/**
- * UC-C012: 祝日iCalendarソースの登録・同期・無効化。backendには一覧取得(index)エンドポイントが
- * 無いため、一覧はフロント側でこれらのAPI呼び出しの結果を積み上げて表示する
- * (`hooks/useHolidayCalendarSources.ts`参照)。
- */
+/** UC-C012: 祝日iCalendarソースの一覧取得・登録・同期・無効化・直前同期の取消。 */
 export interface CreateHolidayCalendarSourceInput {
   name: string
   ics_url: string
+}
+
+export function fetchHolidayCalendarSources(): Promise<HolidayCalendarSource[]> {
+  return apiFetch('/holiday-calendar-sources')
 }
 
 export function createHolidayCalendarSource(
@@ -23,4 +23,9 @@ export function syncHolidayCalendarSource(id: string): Promise<HolidayCalendarSo
 
 export function disableHolidayCalendarSource(id: string): Promise<HolidayCalendarSource> {
   return apiFetch(`/holiday-calendar-sources/${id}/disable`, { method: 'POST' })
+}
+
+/** UC-C012 手順4後半: 直近1回分の祝日同期を取消す。 */
+export function revertLastHolidayCalendarSync(id: string): Promise<HolidayCalendarSource> {
+  return apiFetch(`/holiday-calendar-sources/${id}/revert-last-sync`, { method: 'POST' })
 }

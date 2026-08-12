@@ -26,16 +26,22 @@ function renderPage() {
 }
 
 describe('HolidayCalendarSourcesPage', () => {
-  it('shows an empty state before anything is registered', () => {
+  it('shows an empty state before anything is registered', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+
     renderPage()
 
-    expect(screen.getByText(/まだ登録されていません/)).toBeInTheDocument()
+    expect(await screen.findByText(/まだ登録されていません/)).toBeInTheDocument()
   })
 
   it('registers a source and shows it in the list', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([source])
     vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(source)
 
     renderPage()
+    await screen.findByText(/まだ登録されていません/)
 
     await userEvent.type(screen.getByLabelText('名称'), '内閣府祝日カレンダー')
     await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/holidays.ics')
@@ -51,28 +57,36 @@ describe('HolidayCalendarSourcesPage', () => {
     expect(screen.getByText('未同期')).toBeInTheDocument()
   })
 
-  it('syncs and then disables a registered source', async () => {
-    vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(source)
-    vi.spyOn(holidayCalendarSourcesApi, 'syncHolidayCalendarSource').mockResolvedValue({
+  it('syncs, reverts the last sync, and then disables a registered source', async () => {
+    const synced: HolidayCalendarSource = {
       ...source,
       sync_status: 'synced',
       last_synced_at: '2026-08-11T00:00:00+09:00',
-    })
+    }
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([source])
+      .mockResolvedValueOnce([synced])
+      .mockResolvedValueOnce([source])
+      .mockResolvedValue([{ ...source, disabled_at: '2026-08-11T00:00:00+09:00' }])
+    vi.spyOn(holidayCalendarSourcesApi, 'syncHolidayCalendarSource').mockResolvedValue(synced)
+    vi.spyOn(holidayCalendarSourcesApi, 'revertLastHolidayCalendarSync').mockResolvedValue(source)
     vi.spyOn(holidayCalendarSourcesApi, 'disableHolidayCalendarSource').mockResolvedValue({
       ...source,
       disabled_at: '2026-08-11T00:00:00+09:00',
     })
 
     renderPage()
-
-    await userEvent.type(screen.getByLabelText('名称'), '内閣府祝日カレンダー')
-    await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/holidays.ics')
-    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
     await screen.findByText('内閣府祝日カレンダー')
 
     await userEvent.click(screen.getByRole('button', { name: '今すぐ同期' }))
     await waitFor(() => expect(holidayCalendarSourcesApi.syncHolidayCalendarSource).toHaveBeenCalledWith('source-1'))
     expect(await screen.findByText('同期済み')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '直前の同期を取消す' }))
+    await waitFor(() =>
+      expect(holidayCalendarSourcesApi.revertLastHolidayCalendarSync).toHaveBeenCalledWith('source-1'),
+    )
+    expect(await screen.findByText('未同期')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '無効化する' }))
     await waitFor(() =>

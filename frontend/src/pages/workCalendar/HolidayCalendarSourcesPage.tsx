@@ -4,11 +4,13 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
 import {
   useCreateHolidayCalendarSource,
   useDisableHolidayCalendarSource,
-  useHolidayCalendarSourcesList,
+  useHolidayCalendarSources,
+  useRevertLastHolidayCalendarSync,
   useSyncHolidayCalendarSource,
 } from '../../hooks/useHolidayCalendarSources'
 
@@ -25,22 +27,26 @@ const SYNC_STATUS_TONE: Record<string, 'neutral' | 'success' | 'danger'> = {
 }
 
 /**
- * UC-C012: 祝日iCalendarソースの登録・手動同期・無効化。backendに一覧取得APIが無いため、
- * このページを開いている間に登録・同期・無効化した結果を一覧として表示する
- * (`useHolidayCalendarSourcesList`参照)。会社カレンダー本体への割り当ては
+ * UC-C012: 祝日iCalendarソースの登録・手動同期・無効化・直前同期の取消。一覧は
+ * `GET /holiday-calendar-sources`から取得し、永続化された状態を表示する
+ * (`useHolidayCalendarSources`参照)。会社カレンダー本体への割り当ては
  * `WorkCalendarListPage`側で行う。
  */
 export function HolidayCalendarSourcesPage() {
-  const { data } = useHolidayCalendarSourcesList()
+  const { data, isLoading, error } = useHolidayCalendarSources()
   const createSource = useCreateHolidayCalendarSource()
   const syncSource = useSyncHolidayCalendarSource()
   const disableSource = useDisableHolidayCalendarSource()
+  const revertLastSync = useRevertLastHolidayCalendarSync()
 
   const [name, setName] = useState('')
   const [icsUrl, setIcsUrl] = useState('')
 
   const sources = data ?? []
-  const actionError = createSource.error ?? syncSource.error ?? disableSource.error
+  const actionError = createSource.error ?? syncSource.error ?? disableSource.error ?? revertLastSync.error
+
+  if (isLoading) return <LoadingState />
+  if (error) return <ErrorMessage error={error} fallback="祝日iCalendarソース一覧の取得に失敗しました。" />
 
   const handleCreate = () => {
     createSource.mutate(
@@ -104,7 +110,7 @@ export function HolidayCalendarSourcesPage() {
                 </Badge>
 
                 {!source.disabled_at && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       variant="secondary"
                       isLoading={syncSource.isPending}
@@ -112,6 +118,15 @@ export function HolidayCalendarSourcesPage() {
                     >
                       今すぐ同期
                     </Button>
+                    {source.last_synced_at && (
+                      <Button
+                        variant="secondary"
+                        isLoading={revertLastSync.isPending}
+                        onClick={() => revertLastSync.mutate(source.id)}
+                      >
+                        直前の同期を取消す
+                      </Button>
+                    )}
                     <Button
                       variant="danger"
                       isLoading={disableSource.isPending}

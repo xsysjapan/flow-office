@@ -950,6 +950,8 @@ export interface WorkCalendarDay {
 
 // 会社カレンダー本体(docs/08-usecases-calendar-shift.md UC-C009)。年度依存フィールドは
 // WorkCalendarYear側にある(旧: 本体が直接保持していたが分離した)。
+export type WorkCalendarStatus = "active" | "archived";
+
 export interface WorkCalendar {
   id: string;
   name: string;
@@ -957,6 +959,8 @@ export interface WorkCalendar {
   fiscal_year_start_month: number;
   fiscal_year_start_day: number;
   holiday_calendar_source_id: string | null;
+  is_default: boolean;
+  status: WorkCalendarStatus;
 }
 
 export type WorkCalendarYearStatus = "draft" | "published" | "archived";

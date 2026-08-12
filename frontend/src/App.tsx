@@ -37,6 +37,7 @@ import { WorkCalendarListPage } from "./pages/workCalendar/WorkCalendarListPage"
 import { WorkCalendarYearsPage } from "./pages/workCalendar/WorkCalendarYearsPage";
 import { WorkCalendarDaysPage } from "./pages/workCalendar/WorkCalendarDaysPage";
 import { HolidayCalendarSourcesPage } from "./pages/workCalendar/HolidayCalendarSourcesPage";
+import { OnboardingCalendarPage } from "./pages/workCalendar/OnboardingCalendarPage";
 import { CalendarBulkOperationsPage } from "./pages/workCalendar/CalendarBulkOperationsPage";
 import { WorkStylesPage } from "./pages/workCalendar/WorkStylesPage";
 import { ShiftsPage } from "./pages/workCalendar/ShiftsPage";
@@ -160,6 +161,10 @@ function App() {
             element={<ExpenseCategoryEditPage />}
           />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
+          <Route
+            path="onboarding/calendar"
+            element={<OnboardingCalendarPage />}
+          />
           <Route
             path="work-calendars/:id/years"
             element={<WorkCalendarYearsPage />}

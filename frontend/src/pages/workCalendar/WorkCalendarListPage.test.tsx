@@ -14,6 +14,8 @@ const calendar: WorkCalendar = {
   fiscal_year_start_month: 4,
   fiscal_year_start_day: 1,
   holiday_calendar_source_id: null,
+  is_default: false,
+  status: 'active',
 }
 
 function renderPage() {
@@ -60,6 +62,20 @@ describe('WorkCalendarListPage', () => {
         fiscal_year_start_day: undefined,
       }),
     )
+  })
+
+  it('sets a non-default calendar as default', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
+    vi.spyOn(workCalendarsApi, 'setDefaultWorkCalendar').mockResolvedValue({ ...calendar, is_default: true })
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    expect(screen.getByText('非デフォルト')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'デフォルトに設定する' }))
+
+    await waitFor(() => expect(workCalendarsApi.setDefaultWorkCalendar).toHaveBeenCalledWith('calendar-1'))
   })
 
   it('navigates to the year list when the calendar name is clicked', async () => {

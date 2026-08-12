@@ -244,7 +244,8 @@ RoleAssignment・入社日を設定する。モックOIDCの
 2026-04-01〜2027-03-31を丸ごとカバーする年度を`POST /company-calendars/{id}/years`で作成
 する必要がある。`company_calendar_years.fiscal_year`は`unsignedSmallInteger`(最大65535)の
 ため、既存の`fiscal_year`(実行時点の実年)や他シナリオが使う年度レンジ(scenario-00/07:
-3000〜8999年度、scenario-09: 9000年台)と衝突しない範囲(例: 59000番台)のテスト専用値を
+3000〜8999年度(scenario-12は同プール内の8000〜8999年度を使用)、scenario-09: 9000年台)と
+衝突しない範囲(例: 59000番台)のテスト専用値を
 使う(`starts_on`/`ends_on`は`fiscal_year`の値と無関係な単なる日付フィールドのため、
 実在の2026-04-01〜2027-03-31を設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・
 月次入力ユーザー(伊藤舞)を使うと、
@@ -390,6 +391,18 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     既存UC-C003(カレンダー基準一括生成)・UC-C008(ローテーション一括生成)は、この一括操作の
     仕組み経由でも従来と同じ結果になることを回帰確認する(シナリオ0・シナリオ6と対象
     データが衝突しないよう、専用のカレンダー本体・対象社員を用意する)。
+
+    `frontend/e2e/scenario-12-calendar-lifecycle.spec.ts`は本項目の一部として、会社カレンダー
+    本体・年度の作成→デフォルトへの切替(`POST /company-calendars/{id}/set-default`、
+    `WorkCalendarListPage`の「デフォルトに設定する」ボタン)→日別編集での祝日の手動設定→
+    公開→対象社員への`calendar_apply`一括操作のプレビュー→確定適用→履歴からの取消→
+    年度複製までを1本の画面操作で通しで確認する(祝日iCalendarソースの実際の外部URLへの
+    同期には依存しない)。祝日iCalendarソース一覧の永続化取得(`GET /holiday-calendar-sources`)・
+    直前同期の取消(`POST /holiday-calendar-sources/{id}/revert-last-sync`)・オンボーディング
+    画面での標準カレンダー年度の即時生成(`POST /onboarding/calendar/generate-now`、
+    `OnboardingCalendarPage`)は`frontend/src/pages/workCalendar/*.test.tsx`側の単体テストで
+    カバーする。本シナリオはscenario-00(実行年+2年度)・scenario-07(7000年台)・
+    scenario-09(9000年台)・scenario-06/08(59000年台)と衝突しない8000〜8999年度を使う。
 18. **ユーザー・グループ・アクセス管理基盤**: 管理者が「システム」のグループ種別画面、
     「人事・組織」のユーザー詳細・所属管理を含むグループ詳細、所属変更画面、人事データ連携画面を利用して
     GroupType、Group、Membership、所属変更下書き、外部HR CSV取込を管理できることを確認する。
@@ -443,7 +456,14 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     シナリオ5(名刺申請〜承認〜総務タスク処理)、その他(§5-1差戻し→再申請、§5-2
     申請取消、§5-3月次締め後の編集制限、§5-4打刻ログ突合、§5-6+7ロール変更の即時反映と
     監査ログ記録、§5-8締めた月のCSV出力、§5-9新入社員の初回ログイン、§5-11打刻ログの
-    訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。
+    訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。§5-17(会社カレンダーの
+    ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済みだが、
+    本PR実行時のローカル環境では`POST /dev/reset-database`のグローバルセットアップ
+    チェック(ALL_USERSグループのFeature割当が初期0件であること)がscenario-00等の
+    既存シナリオも含めて全件失敗する状態だったため、実行確認は取れていない
+    (`AccessControlSeeder`がALL_USERSに既定でFeatureを割り当てるようになったことと
+    `frontend/e2e/global-setup.ts`の期待値の不一致と見られ、本タスクのフロントエンド
+    変更とは無関係)。
   - シナリオ2(月次入力ユーザーの日次入力)は、日次実績の新規作成画面がまだ無いため
     入力自体はAPIを直接叩いている(§4シナリオ2内の注記を参照)。
   - §5-3の実装過程で、`GET /attendance/months/to-approve`が「自分が承認者かつ
