@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -98,7 +98,9 @@ function presetItemToRow(item: ExpenseEntryPreset['definition'][number]): SaveEx
 
 /** 交通費はUC-X002/X003の移動区間テンプレートを廃止し、経費全体で共通の入力プリセットに
  *  一本化する。この区分に関係する明細を1件以上含むプリセットだけを候補として表示し、
- *  クリックすると明細の下書き行を追加する(保存は既存の表形式レビューで行う)。 */
+ *  クリックすると明細の下書き行を追加する(保存は既存の表形式レビューで行う)。
+ *  プリセット管理画面(/expenses/presets)へのリンクは、メニューではなくこの実際に
+ *  プリセットを使う場面にだけ置く(いきなりプリセット管理から使い始める人は少ないため)。 */
 function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
   const { data: presets, isLoading, error } = useExpenseEntryPresets()
   const applyPreset = useApplyExpenseEntryPreset()
@@ -109,27 +111,35 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
-  if (applicablePresets.length === 0) return null
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <span className="text-sm font-medium text-foreground">プリセットから追加</span>
-      <div className="flex flex-wrap gap-2">
-        {applicablePresets.map((preset) => (
-          <Button
-            key={preset.id}
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              applyPreset.mutate(preset.id)
-              onApply(preset.definition.map(presetItemToRow))
-            }}
-          >
-            {preset.name}({preset.definition.length}件)
-          </Button>
-        ))}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">プリセットから追加</span>
+        <Link className="text-xs text-muted-foreground underline" to="/expenses/presets">
+          プリセットを管理する
+        </Link>
       </div>
+      {applicablePresets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {applicablePresets.map((preset) => (
+            <Button
+              key={preset.id}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                applyPreset.mutate(preset.id)
+                onApply(preset.definition.map(presetItemToRow))
+              }}
+            >
+              {preset.name}({preset.definition.length}件)
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -156,27 +166,35 @@ function SinglePresetPicker({
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
-  if (applicablePresets.length === 0) return null
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <span className="text-sm font-medium text-foreground">プリセットから入力</span>
-      <div className="flex flex-wrap gap-2">
-        {applicablePresets.map(({ preset, item }) => (
-          <Button
-            key={preset.id}
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              applyPreset.mutate(preset.id)
-              onApply(item)
-            }}
-          >
-            {preset.name}
-          </Button>
-        ))}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">プリセットから入力</span>
+        <Link className="text-xs text-muted-foreground underline" to="/expenses/presets">
+          プリセットを管理する
+        </Link>
       </div>
+      {applicablePresets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {applicablePresets.map(({ preset, item }) => (
+            <Button
+              key={preset.id}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                applyPreset.mutate(preset.id)
+                onApply(item)
+              }}
+            >
+              {preset.name}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
