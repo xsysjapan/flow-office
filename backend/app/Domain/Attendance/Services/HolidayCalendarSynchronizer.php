@@ -6,6 +6,7 @@ use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarYear;
 use App\Models\HolidayCalendarEvent;
 use App\Models\HolidayCalendarSource;
+use Composer\CaBundle\CaBundle;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -59,7 +60,14 @@ class HolidayCalendarSynchronizer
     private function fetchAndParse(string $icsUrl): array
     {
         try {
-            $response = Http::timeout(15)->withHeaders(['User-Agent' => 'flow-office/1.0'])->get($icsUrl);
+            // XSERVER等、共有ホスティング環境ではシステムのCAルート証明書が古い/欠落しており
+            // 「unable to get local issuer certificate」でTLS検証が失敗することがあるため、
+            // composer/ca-bundleが提供する検証済みCAバンドルを明示的に指定する(証明書検証
+            // 自体を無効化しない)。
+            $response = Http::timeout(15)
+                ->withHeaders(['User-Agent' => 'flow-office/1.0'])
+                ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
+                ->get($icsUrl);
         } catch (Exception $e) {
             throw new RuntimeException('祝日iCalendarの取得に失敗しました: '.$e->getMessage(), previous: $e);
         }
