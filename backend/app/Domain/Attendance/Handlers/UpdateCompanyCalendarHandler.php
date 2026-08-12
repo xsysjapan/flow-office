@@ -28,6 +28,7 @@ class UpdateCompanyCalendarHandler implements CommandHandler
                 fiscalYearStartDay: $command->fiscalYearStartDay,
                 holidayCalendarSourceId: $command->holidayCalendarSourceId,
                 updatedByUserId: $command->updatedByUserId,
+                weekdayHolidayPattern: $command->weekdayHolidayPattern,
             )
             ->persist();
 

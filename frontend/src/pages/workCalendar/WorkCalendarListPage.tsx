@@ -3,12 +3,11 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { CreateCompanyCalendarModal } from '../../components/CreateCompanyCalendarModal/CreateCompanyCalendarModal'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
-import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
-import { Input } from '../../components/ui/input'
-import { useCreateWorkCalendar, useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
+import { useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
 
 const PER_PAGE = 20
 
@@ -16,19 +15,16 @@ const PER_PAGE = 20
  * UC-C009: 会社カレンダー本体の一覧・作成・削除。デフォルト切替・週起算曜日/年度開始月日の
  * 設定・祝日iCalendar同期は、カレンダー名のリンク先の本体詳細画面(WorkCalendarDetailPage)に
  * まとめてある。カレンダー年度の作成・公開・複製は本体ごとの年度一覧ページ
- * (WorkCalendarYearsPage)で行う。
+ * (WorkCalendarYearsPage)で行う。作成はモーダル(CreateCompanyCalendarModal)に切り出し、
+ * 週の開始曜日・年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当を作成時から
+ * 選べるようにする(段階的開示のため曜日ごとの休日設定は既定で折りたたまれている)。
  */
 export function WorkCalendarListPage() {
   const [page, setPage] = useState(1)
   const { data, isLoading, error } = useWorkCalendarsPage(page, PER_PAGE)
-  const createCalendar = useCreateWorkCalendar()
   const deleteCalendar = useDeleteWorkCalendar()
 
-  const [name, setName] = useState('')
-
-  const handleCreate = () => {
-    createCalendar.mutate({ name }, { onSuccess: () => setName('') })
-  }
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const handleDelete = (calendarId: string, calendarName: string) => {
     if (!window.confirm(`「${calendarName}」を削除します。よろしいですか?`)) return
@@ -39,21 +35,12 @@ export function WorkCalendarListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="会社カレンダーを作成">
-        {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
+      <CreateCompanyCalendarModal open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen} />
 
-        <div className="flex flex-wrap items-end gap-4">
-          <FormField label="カレンダー名" htmlFor="calendar-name" required>
-            <Input id="calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </FormField>
-
-          <Button isLoading={createCalendar.isPending} disabled={!name} onClick={handleCreate}>
-            作成する
-          </Button>
-        </div>
-      </Card>
-
-      <Card title="会社カレンダー一覧">
+      <Card
+        title="会社カレンダー一覧"
+        actions={<Button onClick={() => setIsCreateModalOpen(true)}>新規作成</Button>}
+      >
         {deleteCalendar.error && <ErrorMessage error={deleteCalendar.error} fallback="カレンダーの削除に失敗しました。" />}
 
         {isLoading ? (

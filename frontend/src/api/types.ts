@@ -952,6 +952,10 @@ export interface WorkCalendarDay {
 // WorkCalendarYear側にある(旧: 本体が直接保持していたが分離した)。
 export type WorkCalendarStatus = "active" | "archived";
 
+/** ISO曜日番号(文字列キー): "1"=月曜〜"7"=日曜。 */
+export type WeekdayHolidayPatternDayType = "working" | "company_holiday" | "legal_holiday";
+export type WeekdayHolidayPattern = Record<"1" | "2" | "3" | "4" | "5" | "6" | "7", WeekdayHolidayPatternDayType>;
+
 export interface WorkCalendar {
   id: string;
   name: string;
@@ -961,6 +965,7 @@ export interface WorkCalendar {
   holiday_calendar_source_id: string | null;
   is_default: boolean;
   status: WorkCalendarStatus;
+  weekday_holiday_pattern: WeekdayHolidayPattern;
 }
 
 export type WorkCalendarYearStatus = "draft" | "published" | "archived";

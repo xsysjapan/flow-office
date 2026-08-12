@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   archiveWorkCalendarYear,
   createWorkCalendar,
   createWorkCalendarYear,
   deleteWorkCalendar,
   duplicateWorkCalendarYear,
+  fetchCompanyCalendarYearDays,
   fetchWorkCalendars,
   fetchWorkCalendarsPage,
   fetchWorkCalendarYears,
@@ -25,6 +26,8 @@ const HOLIDAY_CALENDAR_SOURCES_KEY = ['holiday-calendar-sources']
 const YEARS_KEY_PREFIX = ['work-calendar-years']
 const yearsKey = (companyCalendarId: string) => [...YEARS_KEY_PREFIX, companyCalendarId]
 const listPageKey = (page: number, perPage: number) => [...LIST_KEY, 'page', page, perPage]
+const DAYS_KEY_PREFIX = ['work-calendar-year-days']
+const daysKey = (companyCalendarYearId: string) => [...DAYS_KEY_PREFIX, companyCalendarYearId]
 
 export function useWorkCalendars() {
   return useQuery({ queryKey: LIST_KEY, queryFn: fetchWorkCalendars })
@@ -170,8 +173,48 @@ export function usePutWorkCalendarDays() {
 
   return useMutation({
     mutationFn: ({ id, days }: { id: string; days: PutCalendarDayInput[] }) => putWorkCalendarDays(id, days),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+      void queryClient.invalidateQueries({ queryKey: daysKey(variables.id) })
     },
   })
+}
+
+/**
+ * UC-C010: カレンダー年度の日別属性(勤務区分・祝日等)の既存登録内容を取得する
+ * (`WorkCalendarDaysPage`の日別カレンダーグリッドが編集開始時に読み込む)。
+ */
+export function useCompanyCalendarYearDays(companyCalendarYearId: string) {
+  return useQuery({
+    queryKey: daysKey(companyCalendarYearId),
+    queryFn: () => fetchCompanyCalendarYearDays(companyCalendarYearId),
+    enabled: Boolean(companyCalendarYearId),
+  })
+}
+
+/**
+ * `WorkCalendarDaysPage`はルート上`yearId`のみを持ち、親のカレンダー本体IDを知らない
+ * (`WorkCalendarDetailPage`の年度一覧は年度リンクにyearIdのみを埋め込んでいるため)。
+ * 単体の年度取得APIが無いため、全カレンダー本体の年度一覧を並行取得して`yearId`で
+ * 探し当てる(各カレンダー本体の年度一覧取得は`useWorkCalendarYears`と同じquery keyを
+ * 共有するため、既にキャッシュ済みなら再取得は発生しない)。
+ */
+export function useCompanyCalendarYearById(yearId: string) {
+  const calendarsQuery = useWorkCalendars()
+  const calendars = calendarsQuery.data ?? []
+
+  const yearQueries = useQueries({
+    queries: calendars.map((calendar) => ({
+      queryKey: yearsKey(calendar.id),
+      queryFn: () => fetchWorkCalendarYears(calendar.id),
+      enabled: Boolean(calendarsQuery.data),
+    })),
+  })
+
+  const isLoading = calendarsQuery.isLoading || (calendars.length > 0 && yearQueries.some((q) => q.isLoading))
+  const error = calendarsQuery.error ?? yearQueries.find((q) => q.error)?.error ?? null
+  const year = yearQueries.flatMap((q) => q.data ?? []).find((y) => y.id === yearId) ?? null
+  const calendar = year ? calendars.find((c) => c.id === year.company_calendar_id) ?? null : null
+
+  return { year, calendar, isLoading, error }
 }

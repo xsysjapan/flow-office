@@ -29,6 +29,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   // --- UC-C009 手順1〜2: 会社カレンダー本体作成〜カレンダー年度作成 ---
   await page.goto("/admin/work-calendars");
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("カレンダー名").fill(calendarName);
   await page.getByRole("button", { name: "作成する" }).click();
 
@@ -55,6 +56,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("年度").fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
@@ -72,17 +74,17 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "行を追加" }).click();
-  await pickDate(page, "日付", workDate);
-  await page.getByLabel("勤務区分").selectOption({ value: "WORK" });
+  // 勤務日を1件確認する(自動生成された初期値のまま、勤務区分をWORKに設定し直す)。
+  await page.getByRole("button", { name: `${workDate} 勤務日`, exact: false }).click();
+  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "WORK" });
+  await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "行を追加" }).click();
-  const rows = page.getByRole("row").filter({ has: page.getByLabel("祝日") });
-  const holidayRow = rows.last();
-  await pickDate(page, "日付", holidayDate, { root: holidayRow });
-  await holidayRow.getByLabel("勤務区分").selectOption({ value: "OFF" });
-  await holidayRow.getByLabel("祝日").click();
-  await holidayRow.getByLabel("祝日名").fill("E2Eテスト祝日");
+  // 祝日を1件手動設定する。
+  await page.getByRole("button", { name: `${holidayDate}`, exact: false }).click();
+  await page.getByLabel(`${holidayDate}の勤務区分`).selectOption({ value: "OFF" });
+  await page.getByLabel(`${holidayDate}の祝日`).click();
+  await page.getByLabel(`${holidayDate}の祝日名`).fill("E2Eテスト祝日");
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "保存する" }).click();
   await expect(

@@ -34,6 +34,8 @@ class CreateCompanyCalendarHandler implements CommandHandler
                 fiscalYearStartMonth: $command->fiscalYearStartMonth,
                 fiscalYearStartDay: $command->fiscalYearStartDay,
                 createdByUserId: $command->createdByUserId,
+                weekdayHolidayPattern: $command->weekdayHolidayPattern,
+                holidayCalendarSourceId: $command->holidayCalendarSourceId,
             );
 
         if ($isFirst) {

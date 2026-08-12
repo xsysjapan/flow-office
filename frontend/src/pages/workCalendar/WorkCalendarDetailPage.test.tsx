@@ -18,6 +18,7 @@ const calendar: WorkCalendar = {
   holiday_calendar_source_id: null,
   is_default: false,
   status: 'active',
+  weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
 }
 
 const source: HolidayCalendarSource = {
@@ -302,6 +303,7 @@ describe('WorkCalendarDetailPage', () => {
 
       renderPage()
 
+      await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
       await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
 
@@ -321,6 +323,7 @@ describe('WorkCalendarDetailPage', () => {
 
       renderPage()
 
+      await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
       await userEvent.type(await screen.findByLabelText('年度'), '2026')
       await pickDate(userEvent.setup(), '開始日', '2026-04-05')
       await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))

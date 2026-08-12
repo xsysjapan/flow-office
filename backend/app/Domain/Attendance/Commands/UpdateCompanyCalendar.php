@@ -14,5 +14,6 @@ class UpdateCompanyCalendar implements Command
         public readonly int $fiscalYearStartDay,
         public readonly ?string $holidayCalendarSourceId,
         public readonly string $updatedByUserId,
+        public readonly ?array $weekdayHolidayPattern = null,
     ) {}
 }

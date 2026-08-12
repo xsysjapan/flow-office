@@ -92,6 +92,8 @@ class CompanyCalendarController extends Controller
             'fiscal_year' => ['nullable', 'integer'],
             'starts_on' => ['nullable', 'date', 'required_with:fiscal_year,ends_on'],
             'ends_on' => ['nullable', 'date', 'after:starts_on', 'required_with:fiscal_year,starts_on'],
+            'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
+            'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
         ]);
 
         $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
@@ -100,6 +102,8 @@ class CompanyCalendarController extends Controller
             fiscalYearStartMonth: $data['fiscal_year_start_month'] ?? 4,
             fiscalYearStartDay: $data['fiscal_year_start_day'] ?? 1,
             createdByUserId: $request->user()->id,
+            weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? null,
+            holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
         ));
 
         if (array_key_exists('fiscal_year', $data) && $data['fiscal_year'] !== null) {
@@ -137,6 +141,7 @@ class CompanyCalendarController extends Controller
             'fiscal_year_start_month' => ['integer', 'between:1,12'],
             'fiscal_year_start_day' => ['integer', 'between:1,31'],
             'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
+            'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
         ]);
 
         $calendar = $commandBus->dispatch(new UpdateCompanyCalendar(
@@ -147,6 +152,7 @@ class CompanyCalendarController extends Controller
             fiscalYearStartDay: $data['fiscal_year_start_day'] ?? $companyCalendar->fiscal_year_start_day,
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
             updatedByUserId: $request->user()->id,
+            weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? $companyCalendar->weekday_holiday_pattern,
         ));
 
         return new CompanyCalendarResource($calendar);
@@ -383,5 +389,56 @@ class CompanyCalendarController extends Controller
         ));
 
         return CompanyCalendarDayResource::collection($companyCalendarYear->days()->orderBy('date')->get());
+    }
+
+    /**
+     * 週次勤怠グリッド編集画面など、編集前に現在の日別設定を読み込む用途のGET(UC-C010の
+     * 一括登録`PUT`は上書き専用で現在値の取得手段が無かったため追加)。
+     */
+    #[OA\Get(
+        path: '/company-calendar-years/{companyCalendarYear}/days',
+        operationId: 'companyCalendarYears.days',
+        summary: 'カレンダー年度の日別設定一覧を取得する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function days(CompanyCalendarYear $companyCalendarYear): AnonymousResourceCollection
+    {
+        return CompanyCalendarDayResource::collection($companyCalendarYear->days()->orderBy('date')->get());
+    }
+
+    /**
+     * `weekday_holiday_pattern`は指定する場合、ISO曜日"1"〜"7"の7キー全てを過不足なく
+     * 持ち、各値はworking|company_holiday|legal_holidayのいずれかであることを要求する
+     * (どれか1つでも欠けている・不正な値であれば422にする)。
+     */
+    private static function weekdayHolidayPatternRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! is_array($value)) {
+                return;
+            }
+
+            $expectedKeys = ['1', '2', '3', '4', '5', '6', '7'];
+            $allowedValues = ['working', 'company_holiday', 'legal_holiday'];
+
+            $actualKeys = array_map('strval', array_keys($value));
+            sort($actualKeys);
+
+            if ($actualKeys !== $expectedKeys) {
+                $fail('曜日ごとの休日区分は月〜日(1〜7)の7つ全てを指定してください。');
+
+                return;
+            }
+
+            foreach ($value as $type) {
+                if (! in_array($type, $allowedValues, true)) {
+                    $fail('曜日区分の値が不正です。');
+
+                    return;
+                }
+            }
+        };
     }
 }

@@ -7,6 +7,7 @@ use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\GenerateCompanyCalendarYears;
 use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
+use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
@@ -35,6 +36,7 @@ class GenerateCompanyCalendarYearsHandler implements CommandHandler
 {
     public function __construct(
         private readonly CommandBus $commandBus,
+        private readonly CalendarWeekdayPatternDayGenerator $dayGenerator,
     ) {}
 
     /**
@@ -127,7 +129,7 @@ class GenerateCompanyCalendarYearsHandler implements CommandHandler
             createdByUserId: null, // バッチ/システム生成のため操作者無し。
         ));
 
-        $days = $this->standardWeekdayDays($startsOn, $endsOn);
+        $days = $this->dayGenerator->generate($startsOn, $endsOn, $calendar->effectiveWeekdayHolidayPattern());
 
         $this->commandBus->dispatch(new UpdateCompanyCalendarDays(
             companyCalendarYearId: $year->id,
@@ -149,35 +151,5 @@ class GenerateCompanyCalendarYearsHandler implements CommandHandler
         }
 
         return CompanyCalendarYear::query()->findOrFail($year->id)->id;
-    }
-
-    /**
-     * @return list<array{date: string, day_type: string, is_working_day: bool, is_legal_holiday: bool, is_company_holiday: bool, is_public_holiday: bool, public_holiday_name: ?string, schedule_state: string, note: ?string}>
-     */
-    private function standardWeekdayDays(Carbon $startsOn, Carbon $endsOn): array
-    {
-        $days = [];
-        $period = $startsOn->copy()->toPeriod($endsOn);
-
-        foreach ($period as $date) {
-            // ISO: 1=月〜5=金が勤務日、6=土は所定休日、7=日は所定休日かつ法定休日
-            // (docs/08-usecases-calendar-shift.md UC-C011、指示書6.1節)。
-            $isWorkingDay = $date->dayOfWeekIso < 6;
-            $isSunday = $date->dayOfWeekIso === 7;
-
-            $days[] = [
-                'date' => $date->toDateString(),
-                'day_type' => $isWorkingDay ? 'weekday' : 'company_holiday',
-                'is_working_day' => $isWorkingDay,
-                'is_legal_holiday' => $isSunday,
-                'is_company_holiday' => ! $isWorkingDay,
-                'is_public_holiday' => false,
-                'public_holiday_name' => null,
-                'schedule_state' => $isWorkingDay ? 'WORK' : 'OFF',
-                'note' => null,
-            ];
-        }
-
-        return $days;
     }
 }

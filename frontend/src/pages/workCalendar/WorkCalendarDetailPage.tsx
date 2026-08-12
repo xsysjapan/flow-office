@@ -7,6 +7,7 @@ import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import type { HolidayCalendarSyncSummary, WorkCalendarYearStatus } from '../../api/types'
@@ -162,6 +163,7 @@ export function WorkCalendarDetailPage() {
   const [editSourceIcsUrl, setEditSourceIcsUrl] = useState('')
   const [editSourceIcsFile, setEditSourceIcsFile] = useState<File | undefined>(undefined)
 
+  const [isYearModalOpen, setIsYearModalOpen] = useState(false)
   const [fiscalYear, setFiscalYear] = useState('')
   const [yearStartsOn, setYearStartsOn] = useState('')
   const [yearEndsOn, setYearEndsOn] = useState('')
@@ -268,9 +270,20 @@ export function WorkCalendarDetailPage() {
           setFiscalYear('')
           setYearStartsOn('')
           setYearEndsOn('')
+          setIsYearModalOpen(false)
         },
       },
     )
+  }
+
+  const handleYearModalOpenChange = (next: boolean) => {
+    setIsYearModalOpen(next)
+    if (next) {
+      setFiscalYear('')
+      setYearStartsOn('')
+      setYearEndsOn('')
+      createYear.reset()
+    }
   }
 
   const handleSyncYear = (yearId: string) => {
@@ -375,8 +388,65 @@ export function WorkCalendarDetailPage() {
         </div>
       </Card>
 
-      <Card title="カレンダー年度">
+      <Card
+        title="カレンダー年度"
+        actions={<Button onClick={() => handleYearModalOpenChange(true)}>新規作成</Button>}
+      >
         {yearActionError && <ErrorMessage error={yearActionError} />}
+
+        <Dialog open={isYearModalOpen} onOpenChange={handleYearModalOpenChange}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>カレンダー年度を作成</DialogTitle>
+            </DialogHeader>
+
+            {createYear.error && <ErrorMessage error={createYear.error} />}
+
+            <div className="flex flex-col gap-4">
+              <FormField label="年度" htmlFor="year-fiscal-year" required>
+                <Input
+                  id="year-fiscal-year"
+                  type="number"
+                  value={fiscalYear}
+                  onChange={(e) => handleFiscalYearChange(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="開始日" htmlFor="year-starts-on" required>
+                <DatePicker
+                  id="year-starts-on"
+                  value={yearStartsOn || undefined}
+                  onChange={(date) => setYearStartsOn(date ?? '')}
+                />
+              </FormField>
+
+              <FormField label="終了日" htmlFor="year-ends-on" required>
+                <DatePicker
+                  id="year-ends-on"
+                  value={yearEndsOn || undefined}
+                  onChange={(date) => setYearEndsOn(date ?? '')}
+                />
+              </FormField>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              年度を入力すると、このカレンダーの年度開始月日(設定は「基本設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                isLoading={createYear.isPending}
+                disabled={!fiscalYear || !yearStartsOn || !yearEndsOn}
+                onClick={handleCreateYear}
+              >
+                年度を作成する
+              </Button>
+              <Button variant="secondary" onClick={() => handleYearModalOpenChange(false)}>
+                キャンセル
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {isLoadingYears ? (
           <LoadingState />
@@ -384,49 +454,6 @@ export function WorkCalendarDetailPage() {
           <ErrorMessage error={yearsError} fallback="カレンダー年度一覧の取得に失敗しました。" />
         ) : (
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4 rounded-md border border-border p-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <FormField label="年度" htmlFor="year-fiscal-year" required>
-                  <Input
-                    id="year-fiscal-year"
-                    type="number"
-                    value={fiscalYear}
-                    onChange={(e) => handleFiscalYearChange(e.target.value)}
-                  />
-                </FormField>
-
-                <FormField label="開始日" htmlFor="year-starts-on" required>
-                  <DatePicker
-                    id="year-starts-on"
-                    value={yearStartsOn || undefined}
-                    onChange={(date) => setYearStartsOn(date ?? '')}
-                  />
-                </FormField>
-
-                <FormField label="終了日" htmlFor="year-ends-on" required>
-                  <DatePicker
-                    id="year-ends-on"
-                    value={yearEndsOn || undefined}
-                    onChange={(date) => setYearEndsOn(date ?? '')}
-                  />
-                </FormField>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                年度を入力すると、このカレンダーの年度開始月日(設定は「基本設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
-              </p>
-
-              <div className="flex justify-end">
-                <Button
-                  isLoading={createYear.isPending}
-                  disabled={!fiscalYear || !yearStartsOn || !yearEndsOn}
-                  onClick={handleCreateYear}
-                >
-                  年度を作成する
-                </Button>
-              </div>
-            </div>
-
             {!hasHolidaySource && (
               <p className="text-xs text-muted-foreground">
                 祝日iCalendarソースが未設定のため、年度ごとの同期は行えません。

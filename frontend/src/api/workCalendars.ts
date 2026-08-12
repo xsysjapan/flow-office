@@ -1,5 +1,12 @@
 import { apiFetch } from './client'
-import type { HolidayCalendarSource, Paginated, WorkCalendar, WorkCalendarDay, WorkCalendarYear } from './types'
+import type {
+  HolidayCalendarSource,
+  Paginated,
+  WeekdayHolidayPattern,
+  WorkCalendar,
+  WorkCalendarDay,
+  WorkCalendarYear,
+} from './types'
 
 export function fetchWorkCalendars(): Promise<WorkCalendar[]> {
   return apiFetch('/company-calendars')
@@ -30,6 +37,8 @@ export interface CreateWorkCalendarInput {
   week_starts_on?: number
   fiscal_year_start_month?: number
   fiscal_year_start_day?: number
+  weekday_holiday_pattern?: WeekdayHolidayPattern
+  holiday_calendar_source_id?: string | null
 }
 
 /**
@@ -47,6 +56,7 @@ export interface UpdateWorkCalendarInput {
   fiscal_year_start_month?: number
   fiscal_year_start_day?: number
   holiday_calendar_source_id?: string | null
+  weekday_holiday_pattern?: WeekdayHolidayPattern
 }
 
 /**
@@ -125,4 +135,13 @@ export function putWorkCalendarDays(
   days: PutCalendarDayInput[],
 ): Promise<WorkCalendarDay[]> {
   return apiFetch(`/company-calendar-years/${companyCalendarYearId}/days`, { method: 'PUT', body: { days } })
+}
+
+/**
+ * UC-C010: カレンダー年度の日別属性(勤務区分・祝日)の既存登録内容を取得する。
+ * 新規作成された年度は週次パターンからの初期値で自動的に埋まっているため
+ * (`WorkCalendarDaysPage`参照)、日別編集画面はこのAPIで現状を読み込んでから編集させる。
+ */
+export function fetchCompanyCalendarYearDays(companyCalendarYearId: string): Promise<WorkCalendarDay[]> {
+  return apiFetch(`/company-calendar-years/${companyCalendarYearId}/days`)
 }

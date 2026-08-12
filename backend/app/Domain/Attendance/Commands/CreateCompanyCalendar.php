@@ -12,5 +12,7 @@ class CreateCompanyCalendar implements Command
         public readonly int $fiscalYearStartMonth,
         public readonly int $fiscalYearStartDay,
         public readonly string $createdByUserId,
+        public readonly ?array $weekdayHolidayPattern = null,
+        public readonly ?string $holidayCalendarSourceId = null,
     ) {}
 }

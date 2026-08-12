@@ -417,13 +417,16 @@ class HolidayCalendarSourceControllerTest extends TestCase
             'name' => '本社カレンダー', 'fiscal_year' => 2026,
             'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
         ])->json('id');
-        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
         $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
         $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
             'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
         ])->assertOk();
 
-        // 同じソースを使う別年度(2027年度)にも同じ日付の日を作っておく。
+        // 同じ祝日ソースを使う別年度(2027年度)にも同じ日付の日を作っておく。
+        // holiday_calendar_source_idはこの時点ではまだ未設定にしておく(手動年度作成が
+        // 曜日パターンの自動反映と同時に祝日ソースの即時同期も行うようになったため、
+        // 先に設定すると本テストが検証したい「年度ごとにスコープした明示的な同期呼び出し」
+        // より前に祝日イベントを消費してしまい、後続のeventChanges計算が狂ってしまう)。
         $otherYear = $this->actingAs($admin)->postJson("/api/company-calendars/{$calendarId}/years", [
             'fiscal_year' => 2027, 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31',
         ]);
@@ -431,6 +434,8 @@ class HolidayCalendarSourceControllerTest extends TestCase
         $this->actingAs($admin)->putJson("/api/company-calendar-years/{$otherYearId}/days", [
             'days' => [['date' => '2027-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
         ])->assertOk();
+
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
 
         // 単一VCALENDAR内に2つのVEVENT(2026年度分・2027年度分)を持つICSへ差し替える。
         Http::fake([

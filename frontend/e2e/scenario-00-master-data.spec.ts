@@ -47,6 +47,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   // --- UC-C009: 会社カレンダー本体作成〜カレンダー年度作成〜日別属性登録〜公開 ---
   await page.goto("/admin/work-calendars");
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("カレンダー名").fill(calendarName);
   await page.getByRole("button", { name: "作成する" }).click();
 
@@ -57,9 +58,13 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
-    page.getByRole("heading", { name: `${calendarName} の年度一覧` }),
+    page.getByRole("heading", { name: calendarName, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("年度").fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
@@ -76,9 +81,11 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "行を追加" }).click();
-  await pickDate(page, "日付", `${fiscalYear}-04-01`);
-  await page.getByLabel("勤務区分").selectOption({ value: "WORK" });
+  const workDate = `${fiscalYear}-04-01`;
+  await page.getByRole("button", { name: workDate, exact: false }).click();
+  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "WORK" });
+  await page.keyboard.press("Escape");
+
   await page.getByRole("button", { name: "保存する" }).click();
   await expect(
     page.getByRole("button", { name: "保存する" }),

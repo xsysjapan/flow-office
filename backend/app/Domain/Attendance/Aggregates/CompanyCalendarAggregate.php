@@ -22,6 +22,8 @@ class CompanyCalendarAggregate extends AggregateRoot
         int $fiscalYearStartMonth,
         int $fiscalYearStartDay,
         string $createdByUserId,
+        ?array $weekdayHolidayPattern = null,
+        ?string $holidayCalendarSourceId = null,
     ): self {
         $this->recordThat(new CompanyCalendarCreated(
             name: $name,
@@ -29,6 +31,8 @@ class CompanyCalendarAggregate extends AggregateRoot
             fiscalYearStartMonth: $fiscalYearStartMonth,
             fiscalYearStartDay: $fiscalYearStartDay,
             createdByUserId: $createdByUserId,
+            weekdayHolidayPattern: $weekdayHolidayPattern,
+            holidayCalendarSourceId: $holidayCalendarSourceId,
         ));
 
         return $this;
@@ -41,6 +45,7 @@ class CompanyCalendarAggregate extends AggregateRoot
         int $fiscalYearStartDay,
         ?string $holidayCalendarSourceId,
         string $updatedByUserId,
+        ?array $weekdayHolidayPattern = null,
     ): self {
         $this->recordThat(new CompanyCalendarUpdated(
             name: $name,
@@ -49,6 +54,7 @@ class CompanyCalendarAggregate extends AggregateRoot
             fiscalYearStartDay: $fiscalYearStartDay,
             holidayCalendarSourceId: $holidayCalendarSourceId,
             updatedByUserId: $updatedByUserId,
+            weekdayHolidayPattern: $weekdayHolidayPattern,
         ));
 
         return $this;

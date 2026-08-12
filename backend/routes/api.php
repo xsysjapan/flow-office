@@ -210,6 +210,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C009〜UC-C013) ---
     Route::get('/company-calendars', [CompanyCalendarController::class, 'index']);
     Route::get('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'years']);
+    Route::get('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'days']);
     Route::get('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'index']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);

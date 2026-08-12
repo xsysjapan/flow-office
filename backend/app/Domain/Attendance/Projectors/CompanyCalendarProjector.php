@@ -25,6 +25,8 @@ class CompanyCalendarProjector extends Projector
                 'week_starts_on' => $event->weekStartsOn,
                 'fiscal_year_start_month' => $event->fiscalYearStartMonth,
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
+                'weekday_holiday_pattern' => $event->weekdayHolidayPattern,
+                'holiday_calendar_source_id' => $event->holidayCalendarSourceId,
             ],
         );
     }
@@ -39,6 +41,7 @@ class CompanyCalendarProjector extends Projector
                 'fiscal_year_start_month' => $event->fiscalYearStartMonth,
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
                 'holiday_calendar_source_id' => $event->holidayCalendarSourceId,
+                'weekday_holiday_pattern' => $event->weekdayHolidayPattern,
             ]);
     }
 
