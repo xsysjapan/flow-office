@@ -9,5 +9,6 @@ class SyncHolidayCalendarSource implements Command
     public function __construct(
         public readonly string $holidayCalendarSourceId,
         public readonly ?string $syncedByUserId,
+        public readonly ?string $companyCalendarYearId = null,
     ) {}
 }

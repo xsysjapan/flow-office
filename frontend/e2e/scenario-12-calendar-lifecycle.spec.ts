@@ -49,7 +49,10 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
-    page.getByRole("heading", { name: `${calendarName} の年度一覧` }),
+    page.getByRole("heading", { name: calendarName, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
   await page.getByLabel("年度").fill(String(fiscalYear));
@@ -148,7 +151,7 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
-    page.getByRole("heading", { name: `${calendarName} の年度一覧` }),
+    page.getByRole("heading", { name: calendarName, level: 1 }),
   ).toBeVisible();
   await yearRow.getByRole("button", { name: "複製して翌年度を作成" }).click();
 

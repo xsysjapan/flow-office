@@ -31,7 +31,7 @@ class SyncHolidayCalendarSourceHandler implements CommandHandler
         $source = HolidayCalendarSource::query()->findOrFail($command->holidayCalendarSourceId);
 
         try {
-            $result = $this->synchronizer->synchronize($source);
+            $result = $this->synchronizer->synchronize($source, $command->companyCalendarYearId);
         } catch (RuntimeException $e) {
             HolidayCalendarSourceAggregate::retrieve($source->id)
                 ->recordSyncFailed(error: $e->getMessage(), syncedByUserId: $command->syncedByUserId)

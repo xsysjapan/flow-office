@@ -9,6 +9,7 @@ use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
+use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
@@ -17,12 +18,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CompanyCalendarDayResource;
 use App\Http\Resources\CompanyCalendarResource;
 use App\Http\Resources\CompanyCalendarYearResource;
+use App\Http\Resources\HolidayCalendarSourceResource;
 use App\Models\CompanyCalendar;
 use App\Models\CompanyCalendarYear;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -311,6 +314,39 @@ class CompanyCalendarController extends Controller
         ));
 
         return (new CompanyCalendarYearResource($year))->response()->setStatusCode(201);
+    }
+
+    /**
+     * UC-C012: カレンダー年度単位で祝日iCalendarソースを同期する(そのカレンダー本体に
+     * 設定済みのソースを、この年度の年度範囲(starts_on〜ends_on)に限定して同期する)。
+     * 全年度一括同期の`POST /holiday-calendar-sources/{id}/sync`とは別の入口として、
+     * 年度一覧画面の各行から個別に同期できるようにする。
+     */
+    #[OA\Post(
+        path: '/company-calendar-years/{companyCalendarYear}/sync-holiday-calendar',
+        operationId: 'companyCalendarYears.syncHolidayCalendar',
+        summary: 'カレンダー年度単位で祝日iCalendarソースを同期する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function syncHolidayCalendar(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): HolidayCalendarSourceResource
+    {
+        $companyCalendar = $companyCalendarYear->companyCalendar;
+
+        if ($companyCalendar->holiday_calendar_source_id === null) {
+            throw ValidationException::withMessages([
+                'holiday_calendar_source_id' => ['このカレンダーには祝日iCalendarソースが設定されていません。'],
+            ]);
+        }
+
+        $source = $commandBus->dispatch(new SyncHolidayCalendarSource(
+            holidayCalendarSourceId: $companyCalendar->holiday_calendar_source_id,
+            syncedByUserId: $request->user()->id,
+            companyCalendarYearId: $companyCalendarYear->id,
+        ));
+
+        return new HolidayCalendarSourceResource($source);
     }
 
     /**

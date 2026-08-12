@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { Paginated, WorkCalendar, WorkCalendarDay, WorkCalendarYear } from './types'
+import type { HolidayCalendarSource, Paginated, WorkCalendar, WorkCalendarDay, WorkCalendarYear } from './types'
 
 export function fetchWorkCalendars(): Promise<WorkCalendar[]> {
   return apiFetch('/company-calendars')
@@ -96,6 +96,16 @@ export function unpublishWorkCalendarYear(id: string): Promise<WorkCalendarYear>
 
 export function archiveWorkCalendarYear(id: string): Promise<WorkCalendarYear> {
   return apiFetch(`/company-calendar-years/${id}/archive`, { method: 'POST' })
+}
+
+/**
+ * UC-C012: カレンダー年度1件分の期間だけを対象に祝日iCalendarソースと同期する
+ * (`syncHolidayCalendarSource`はカレンダー本体配下の全年度を一括同期するのに対し、
+ * こちらはこの年度の期間のみを同期する)。カレンダーに`holiday_calendar_source_id`が
+ * 設定されていない場合は422が返る。
+ */
+export function syncCompanyCalendarYearHolidayCalendar(yearId: string): Promise<HolidayCalendarSource> {
+  return apiFetch(`/company-calendar-years/${yearId}/sync-holiday-calendar`, { method: 'POST' })
 }
 
 export interface PutCalendarDayInput {

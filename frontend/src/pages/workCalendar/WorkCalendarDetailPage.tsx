@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
+import type { HolidayCalendarSyncSummary, WorkCalendarYearStatus } from '../../api/types'
 import {
   useCreateHolidayCalendarSource,
   useDisableHolidayCalendarSource,
@@ -16,7 +18,18 @@ import {
   useSyncHolidayCalendarSource,
   useUpdateHolidayCalendarSource,
 } from '../../hooks/useHolidayCalendarSources'
-import { useSetDefaultWorkCalendar, useUpdateWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
+import {
+  useArchiveWorkCalendarYear,
+  useCreateWorkCalendarYear,
+  useDuplicateWorkCalendarYear,
+  usePublishWorkCalendarYear,
+  useSetDefaultWorkCalendar,
+  useSyncCompanyCalendarYearHolidayCalendar,
+  useUnpublishWorkCalendarYear,
+  useUpdateWorkCalendar,
+  useWorkCalendarYears,
+  useWorkCalendars,
+} from '../../hooks/useWorkCalendars'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
   pending: '未同期',
@@ -40,12 +53,51 @@ const ICS_FILE_ACCEPT = '.ics,.ical,.ifb'
 /** ドロップダウンの「登録しない」選択肢の値。空文字はNativeSelectのvalueとして扱いやすいので採用する。 */
 const NONE_OPTION_VALUE = ''
 
+const YEAR_STATUS_LABEL: Record<WorkCalendarYearStatus, string> = {
+  draft: '未公開',
+  published: '公開済み',
+  archived: '廃止',
+}
+
+const YEAR_STATUS_TONE: Record<WorkCalendarYearStatus, 'neutral' | 'success' | 'danger'> = {
+  draft: 'neutral',
+  published: 'success',
+  archived: 'danger',
+}
+
+const HOLIDAY_SOURCE_MANAGEMENT_ANCHOR = 'holiday-source-management'
+
+function formatDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 /**
- * UC-C009/UC-C012: 会社カレンダー本体1件分の基本設定(名称・週起算曜日・年度開始月日・
- * デフォルト切替)と祝日iCalendar同期をまとめて行う詳細画面。祝日iCalendar同期は
- * 「ソースを選ぶ→選択して同期する」の1ボタンに単純化している。旧HolidayCalendarSourceModalは
- * 「このカレンダーに設定する」ボタンと「今すぐ同期」ボタンが別々で、同期結果がこのカレンダーに
- * どう反映されたか(反映件数・保護によるスキップ件数)が見えなかったため、その課題に対応する。
+ * カレンダー本体の年度開始月日(システム設定)から、入力した年度番号(例: 2026)に対応する
+ * 開始日・終了日を計算する(例: 開始月日が4/1なら2026-04-01〜2027-03-31)。
+ */
+export function calculateFiscalYearRange(
+  fiscalYear: number,
+  fiscalYearStartMonth: number,
+  fiscalYearStartDay: number,
+): { startsOn: string; endsOn: string } {
+  const startsOn = new Date(fiscalYear, fiscalYearStartMonth - 1, fiscalYearStartDay)
+  const endsOn = new Date(fiscalYear + 1, fiscalYearStartMonth - 1, fiscalYearStartDay)
+  endsOn.setDate(endsOn.getDate() - 1)
+
+  return { startsOn: formatDate(startsOn), endsOn: formatDate(endsOn) }
+}
+
+function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
+  return `追加 ${summary.added}件・更新 ${summary.updated}件・削除 ${summary.removed}件・カレンダーに反映 ${summary.applied}件(手動変更保護のためスキップ ${summary.protected_conflicts}件)`
+}
+
+/**
+ * UC-C009/UC-C012: 会社カレンダー本体1件分の基本設定(名称・週起算曜日・年度開始月日)、
+ * カレンダー年度の作成・公開・複製(旧WorkCalendarYearsPageを統合)、祝日iCalendar同期を
+ * まとめて行う詳細画面。デフォルト切替はページ見出し右上に配置し、祝日iCalendar同期は
+ * 「ソースの登録・割当」(このカードで行う)と「年度ごとの同期実行」(年度一覧の各行で行う)に
+ * 役割を分離している。年度ごとの同期はその年度の期間だけを対象にするため、カレンダー全体を
+ * 一括で同期していた旧仕様(意図しない年度まで同期されてしまう)の課題に対応する。
  */
 export function WorkCalendarDetailPage() {
   const { id: companyCalendarId } = useParams<{ id: string }>()
@@ -60,8 +112,21 @@ export function WorkCalendarDetailPage() {
   const disableSource = useDisableHolidayCalendarSource()
   const revertLastSync = useRevertLastHolidayCalendarSync()
 
+  const {
+    data: years,
+    isLoading: isLoadingYears,
+    error: yearsError,
+  } = useWorkCalendarYears(companyCalendarId ?? '')
+  const createYear = useCreateWorkCalendarYear(companyCalendarId ?? '')
+  const publishYear = usePublishWorkCalendarYear(companyCalendarId ?? '')
+  const unpublishYear = useUnpublishWorkCalendarYear(companyCalendarId ?? '')
+  const archiveYear = useArchiveWorkCalendarYear(companyCalendarId ?? '')
+  const duplicateYear = useDuplicateWorkCalendarYear(companyCalendarId ?? '')
+  const syncYearHolidayCalendar = useSyncCompanyCalendarYearHolidayCalendar()
+
   const calendar = calendars?.find((c) => c.id === companyCalendarId)
   const sources = sourcesData ?? []
+  const yearList = years ?? []
 
   const [name, setName] = useState('')
   const [weekStartsOn, setWeekStartsOn] = useState('')
@@ -96,6 +161,12 @@ export function WorkCalendarDetailPage() {
   const [editSourceMode, setEditSourceMode] = useState<'url' | 'upload'>('url')
   const [editSourceIcsUrl, setEditSourceIcsUrl] = useState('')
   const [editSourceIcsFile, setEditSourceIcsFile] = useState<File | undefined>(undefined)
+
+  const [fiscalYear, setFiscalYear] = useState('')
+  const [yearStartsOn, setYearStartsOn] = useState('')
+  const [yearEndsOn, setYearEndsOn] = useState('')
+  const [yearSyncSummaries, setYearSyncSummaries] = useState<Record<string, HolidayCalendarSyncSummary>>({})
+  const [syncingYearId, setSyncingYearId] = useState<string | null>(null)
 
   if (!companyCalendarId) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
   if (isLoading) return <LoadingState />
@@ -163,33 +234,69 @@ export function WorkCalendarDetailPage() {
     )
   }
 
-  const handleSyncClick = () => {
-    if (!selectedSourceId) return
+  const handleAssignSource = () => {
+    if (!selectedSourceId || selectedSourceId === calendar.holiday_calendar_source_id) return
 
-    if (selectedSourceId !== calendar.holiday_calendar_source_id) {
-      updateCalendar.mutate(
-        {
-          id: calendar.id,
-          input: {
-            name: calendar.name,
-            week_starts_on: calendar.week_starts_on,
-            fiscal_year_start_month: calendar.fiscal_year_start_month,
-            fiscal_year_start_day: calendar.fiscal_year_start_day,
-            holiday_calendar_source_id: selectedSourceId,
-          },
+    updateCalendar.mutate({
+      id: calendar.id,
+      input: {
+        name: calendar.name,
+        week_starts_on: calendar.week_starts_on,
+        fiscal_year_start_month: calendar.fiscal_year_start_month,
+        fiscal_year_start_day: calendar.fiscal_year_start_day,
+        holiday_calendar_source_id: selectedSourceId,
+      },
+    })
+  }
+
+  const handleFiscalYearChange = (value: string) => {
+    setFiscalYear(value)
+
+    const parsed = Number(value)
+    if (!value || !Number.isInteger(parsed)) return
+
+    const range = calculateFiscalYearRange(parsed, calendar.fiscal_year_start_month, calendar.fiscal_year_start_day)
+    setYearStartsOn(range.startsOn)
+    setYearEndsOn(range.endsOn)
+  }
+
+  const handleCreateYear = () => {
+    createYear.mutate(
+      { fiscal_year: Number(fiscalYear), starts_on: yearStartsOn, ends_on: yearEndsOn },
+      {
+        onSuccess: () => {
+          setFiscalYear('')
+          setYearStartsOn('')
+          setYearEndsOn('')
         },
-        { onSuccess: () => syncSource.mutate(selectedSourceId) },
-      )
-    } else {
-      syncSource.mutate(selectedSourceId)
-    }
+      },
+    )
+  }
+
+  const handleSyncYear = (yearId: string) => {
+    setSyncingYearId(yearId)
+    syncYearHolidayCalendar.mutate(yearId, {
+      onSuccess: (updatedSource) => {
+        if (updatedSource.last_sync_summary) {
+          setYearSyncSummaries((prev) => ({ ...prev, [yearId]: updatedSource.last_sync_summary! }))
+        }
+      },
+      onSettled: () => setSyncingYearId(null),
+    })
   }
 
   const selectedSource = sources.find((s) => s.id === selectedSourceId) ?? null
   const summary = selectedSource?.last_sync_summary ?? null
-  const isSyncBusy = updateCalendar.isPending || syncSource.isPending
   const sourceActionError =
-    createSource.error ?? updateSource.error ?? syncSource.error ?? disableSource.error ?? revertLastSync.error
+    createSource.error ??
+    updateSource.error ??
+    syncSource.error ??
+    disableSource.error ??
+    revertLastSync.error ??
+    updateCalendar.error
+  const yearActionError =
+    createYear.error ?? publishYear.error ?? unpublishYear.error ?? archiveYear.error ?? duplicateYear.error
+  const hasHolidaySource = Boolean(calendar.holiday_calendar_source_id)
 
   return (
     <div className="flex flex-col gap-6">
@@ -199,10 +306,9 @@ export function WorkCalendarDetailPage() {
         </Link>
       </div>
 
-      <Card title="基本設定">
-        {updateCalendar.error && <ErrorMessage error={updateCalendar.error} />}
-
-        <div className="mb-4 flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-foreground">{calendar.name}</h1>
+        <div className="flex items-center gap-3">
           <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
             {calendar.is_default ? 'デフォルト' : '非デフォルト'}
           </Badge>
@@ -216,6 +322,10 @@ export function WorkCalendarDetailPage() {
             </Button>
           )}
         </div>
+      </div>
+
+      <Card title="基本設定">
+        {updateCalendar.error && !sourceActionError && <ErrorMessage error={updateCalendar.error} />}
 
         <div className="flex flex-col gap-4">
           <FormField label="カレンダー名" htmlFor="company-calendar-name" required>
@@ -265,14 +375,148 @@ export function WorkCalendarDetailPage() {
         </div>
       </Card>
 
-      <Card
-        title="祝日iCalendar同期"
-        navigation={
-          <Button variant="secondary" asChild>
-            <Link to={`/admin/work-calendars/${calendar.id}/years`}>年度一覧を見る</Link>
-          </Button>
-        }
-      >
+      <Card title="カレンダー年度">
+        {yearActionError && <ErrorMessage error={yearActionError} />}
+
+        {isLoadingYears ? (
+          <LoadingState />
+        ) : yearsError ? (
+          <ErrorMessage error={yearsError} fallback="カレンダー年度一覧の取得に失敗しました。" />
+        ) : (
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4 rounded-md border border-border p-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <FormField label="年度" htmlFor="year-fiscal-year" required>
+                  <Input
+                    id="year-fiscal-year"
+                    type="number"
+                    value={fiscalYear}
+                    onChange={(e) => handleFiscalYearChange(e.target.value)}
+                  />
+                </FormField>
+
+                <FormField label="開始日" htmlFor="year-starts-on" required>
+                  <DatePicker
+                    id="year-starts-on"
+                    value={yearStartsOn || undefined}
+                    onChange={(date) => setYearStartsOn(date ?? '')}
+                  />
+                </FormField>
+
+                <FormField label="終了日" htmlFor="year-ends-on" required>
+                  <DatePicker
+                    id="year-ends-on"
+                    value={yearEndsOn || undefined}
+                    onChange={(date) => setYearEndsOn(date ?? '')}
+                  />
+                </FormField>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                年度を入力すると、このカレンダーの年度開始月日(設定は「基本設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
+              </p>
+
+              <div className="flex justify-end">
+                <Button
+                  isLoading={createYear.isPending}
+                  disabled={!fiscalYear || !yearStartsOn || !yearEndsOn}
+                  onClick={handleCreateYear}
+                >
+                  年度を作成する
+                </Button>
+              </div>
+            </div>
+
+            {!hasHolidaySource && (
+              <p className="text-xs text-muted-foreground">
+                祝日iCalendarソースが未設定のため、年度ごとの同期は行えません。
+                <a href={`#${HOLIDAY_SOURCE_MANAGEMENT_ANCHOR}`} className="ml-1 underline hover:text-foreground">
+                  祝日iCalendarソース管理
+                </a>
+                から設定してください。
+              </p>
+            )}
+
+            {yearList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">年度はまだありません。</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {yearList.map((year) => {
+                  const yearSummary = yearSyncSummaries[year.id]
+                  const isThisYearSyncing = syncYearHolidayCalendar.isPending && syncingYearId === year.id
+
+                  return (
+                    <li key={year.id} className="flex flex-wrap items-center gap-3 py-3">
+                      <div className="flex flex-1 flex-col gap-1">
+                        <Link
+                          to={`/admin/work-calendar-years/${year.id}/days`}
+                          className="text-sm font-medium text-foreground hover:text-primary hover:underline"
+                        >
+                          {year.fiscal_year}年度
+                        </Link>
+                        <span className="text-sm text-muted-foreground">
+                          {year.starts_on}〜{year.ends_on}
+                        </span>
+                        {yearSummary && (
+                          <span className="text-xs text-muted-foreground">{formatSyncSummary(yearSummary)}</span>
+                        )}
+                      </div>
+                      <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          isLoading={isThisYearSyncing}
+                          disabled={!hasHolidaySource || syncYearHolidayCalendar.isPending}
+                          onClick={() => handleSyncYear(year.id)}
+                        >
+                          この年度を祝日と同期する
+                        </Button>
+                        {year.status === 'draft' && (
+                          <Button
+                            variant="secondary"
+                            isLoading={publishYear.isPending}
+                            onClick={() => publishYear.mutate(year.id)}
+                          >
+                            公開する
+                          </Button>
+                        )}
+                        {year.status === 'published' && (
+                          <Button
+                            variant="secondary"
+                            isLoading={unpublishYear.isPending}
+                            onClick={() => unpublishYear.mutate(year.id)}
+                          >
+                            公開を取消す
+                          </Button>
+                        )}
+                        {year.status !== 'archived' && (
+                          <Button
+                            variant="danger"
+                            isLoading={archiveYear.isPending}
+                            onClick={() => archiveYear.mutate(year.id)}
+                          >
+                            廃止する
+                          </Button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          isLoading={duplicateYear.isPending}
+                          onClick={() => duplicateYear.mutate(year.id)}
+                        >
+                          複製して翌年度を作成
+                        </Button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <Card id={HOLIDAY_SOURCE_MANAGEMENT_ANCHOR} title="祝日iCalendarソース管理">
         {sourceActionError && <ErrorMessage error={sourceActionError} />}
 
         {isLoadingSources ? (
@@ -371,14 +615,13 @@ export function WorkCalendarDetailPage() {
               </div>
             )}
 
-            <div className="flex flex-col items-end gap-1">
-              <Button isLoading={isSyncBusy} disabled={!selectedSourceId || isSyncBusy} onClick={handleSyncClick}>
-                選択して同期する
-              </Button>
-              {updateSource.isSuccess && (
-                <span className="text-xs text-muted-foreground">変更を反映するには同期してください。</span>
-              )}
-            </div>
+            {selectedSourceId !== (calendar.holiday_calendar_source_id ?? NONE_OPTION_VALUE) && (
+              <div className="flex justify-end">
+                <Button isLoading={updateCalendar.isPending} onClick={handleAssignSource}>
+                  このカレンダーに設定する
+                </Button>
+              </div>
+            )}
 
             {selectedSource && (
               <div className="flex flex-col gap-3 rounded-md border border-border p-4">
@@ -410,10 +653,10 @@ export function WorkCalendarDetailPage() {
                 )}
 
                 {summary && (
-                  <p className="text-sm text-foreground">
-                    追加 {summary.added}件・更新 {summary.updated}件・削除 {summary.removed}件・カレンダーに反映{' '}
-                    {summary.applied}件(手動変更保護のためスキップ {summary.protected_conflicts}件)
-                  </p>
+                  <p className="text-sm text-foreground">{formatSyncSummary(summary)}</p>
+                )}
+                {updateSource.isSuccess && (
+                  <span className="text-xs text-muted-foreground">変更を反映するには同期してください。</span>
                 )}
 
                 {!isEditingSource ? (

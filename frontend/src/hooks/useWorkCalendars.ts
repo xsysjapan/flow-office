@@ -11,6 +11,7 @@ import {
   publishWorkCalendarYear,
   putWorkCalendarDays,
   setDefaultWorkCalendar,
+  syncCompanyCalendarYearHolidayCalendar,
   unpublishWorkCalendarYear,
   updateWorkCalendar,
   type CreateWorkCalendarInput,
@@ -20,6 +21,7 @@ import {
 } from '../api/workCalendars'
 
 const LIST_KEY = ['work-calendars']
+const HOLIDAY_CALENDAR_SOURCES_KEY = ['holiday-calendar-sources']
 const YEARS_KEY_PREFIX = ['work-calendar-years']
 const yearsKey = (companyCalendarId: string) => [...YEARS_KEY_PREFIX, companyCalendarId]
 const listPageKey = (page: number, perPage: number) => [...LIST_KEY, 'page', page, perPage]
@@ -143,6 +145,22 @@ export function useDuplicateWorkCalendarYear(companyCalendarId: string) {
     mutationFn: (id: string) => duplicateWorkCalendarYear(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
+    },
+  })
+}
+
+/**
+ * UC-C012: カレンダー年度1件分の期間だけを祝日iCalendarソースと同期する。
+ * 同期結果は祝日iCalendarソース(`holiday-calendar-sources`)側に反映されるため、
+ * そちらのキャッシュを無効化する(ソース管理カード側の表示も最新化される)。
+ */
+export function useSyncCompanyCalendarYearHolidayCalendar() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (yearId: string) => syncCompanyCalendarYearHolidayCalendar(yearId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: HOLIDAY_CALENDAR_SOURCES_KEY })
     },
   })
 }

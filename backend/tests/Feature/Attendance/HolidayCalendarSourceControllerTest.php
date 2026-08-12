@@ -400,6 +400,125 @@ class HolidayCalendarSourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_syncing_scoped_to_one_year_only_updates_that_years_calendar_days(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-scope-1', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => '内閣府祝日カレンダー',
+            'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ])->assertOk();
+
+        // 同じソースを使う別年度(2027年度)にも同じ日付の日を作っておく。
+        $otherYear = $this->actingAs($admin)->postJson("/api/company-calendars/{$calendarId}/years", [
+            'fiscal_year' => 2027, 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31',
+        ]);
+        $otherYearId = $otherYear->json('id');
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$otherYearId}/days", [
+            'days' => [['date' => '2027-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ])->assertOk();
+
+        // 単一VCALENDAR内に2つのVEVENT(2026年度分・2027年度分)を持つICSへ差し替える。
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response(<<<'ICS'
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            BEGIN:VEVENT
+            UID:uid-scope-1
+            DTSTART;VALUE=DATE:20260505
+            SUMMARY:こどもの日
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:uid-scope-2
+            DTSTART;VALUE=DATE:20270505
+            SUMMARY:こどもの日
+            END:VEVENT
+            END:VCALENDAR
+            ICS, 200),
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/sync-holiday-calendar");
+
+        $response->assertOk();
+        $response->assertJsonPath('sync_status', 'synced');
+
+        // スコープ対象の年度は更新される。
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => 'こどもの日',
+        ]);
+
+        // 別年度は同じソース・同じ祝日イベントが追加されたにもかかわらず、対象外なので変更されない。
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $otherYearId,
+            'date' => '2027-05-05 00:00:00',
+            'is_public_holiday' => false,
+        ]);
+    }
+
+    public function test_syncing_scoped_to_a_year_without_a_holiday_source_returns_422(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        $response = $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/sync-holiday-calendar");
+
+        $response->assertStatus(422);
+    }
+
+    public function test_unscoped_sync_endpoint_still_updates_all_years_using_the_source(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-all-1', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => '内閣府祝日カレンダー',
+            'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ])->assertOk();
+
+        $response = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync");
+
+        $response->assertOk();
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => 'こどもの日',
+        ]);
+    }
+
     public function test_updating_a_source_from_upload_kind_to_url_kind_deletes_the_old_uploaded_file(): void
     {
         Storage::fake('local');

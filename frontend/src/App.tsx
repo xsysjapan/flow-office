@@ -35,7 +35,6 @@ import { RequestTypeListPage } from "./pages/workflow/RequestTypeListPage";
 import { RequestTypeEditPage } from "./pages/workflow/RequestTypeEditPage";
 import { WorkCalendarListPage } from "./pages/workCalendar/WorkCalendarListPage";
 import { WorkCalendarDetailPage } from "./pages/workCalendar/WorkCalendarDetailPage";
-import { WorkCalendarYearsPage } from "./pages/workCalendar/WorkCalendarYearsPage";
 import { WorkCalendarDaysPage } from "./pages/workCalendar/WorkCalendarDaysPage";
 import { CalendarBulkOperationsPage } from "./pages/workCalendar/CalendarBulkOperationsPage";
 import { WorkStylesPage } from "./pages/workCalendar/WorkStylesPage";
@@ -163,10 +162,6 @@ function App() {
           <Route
             path="work-calendars/:id"
             element={<WorkCalendarDetailPage />}
-          />
-          <Route
-            path="work-calendars/:id/years"
-            element={<WorkCalendarYearsPage />}
           />
           <Route
             path="work-calendar-years/:yearId/days"

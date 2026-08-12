@@ -38,13 +38,13 @@ class HolidayCalendarSynchronizer
      *
      * @throws RuntimeException 取得・パースに失敗した場合
      */
-    public function synchronize(HolidayCalendarSource $source): array
+    public function synchronize(HolidayCalendarSource $source, ?string $scopeCompanyCalendarYearId = null): array
     {
         $feedEvents = $this->fetchAndParse($source);
 
         $eventChanges = $this->diffEvents($source, $feedEvents);
 
-        [$dayChanges, $protectedConflicts] = $this->planDayChanges($source, $feedEvents, $eventChanges);
+        [$dayChanges, $protectedConflicts] = $this->planDayChanges($source, $feedEvents, $eventChanges, $scopeCompanyCalendarYearId);
 
         return [
             'event_changes' => $eventChanges,
@@ -169,7 +169,7 @@ class HolidayCalendarSynchronizer
      * @param  list<array{ics_uid: string, date: string, name: string, action: string}>  $eventChanges
      * @return array{0: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
      */
-    private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges): array
+    private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges, ?string $scopeCompanyCalendarYearId = null): array
     {
         if ($eventChanges === []) {
             return [[], []];
@@ -177,9 +177,10 @@ class HolidayCalendarSynchronizer
 
         $affectedDates = array_unique(array_map(fn (array $change) => $change['date'], $eventChanges));
 
-        // このソースを祝日ソースとして利用している全カレンダー年度。
+        // このソースを祝日ソースとして利用している全カレンダー年度(スコープ指定時はその年度のみ)。
         $years = CompanyCalendarYear::query()
             ->whereHas('companyCalendar', fn ($q) => $q->where('holiday_calendar_source_id', $source->id))
+            ->when($scopeCompanyCalendarYearId !== null, fn ($q) => $q->where('id', $scopeCompanyCalendarYearId))
             ->get();
 
         if ($years->isEmpty()) {

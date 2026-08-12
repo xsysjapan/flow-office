@@ -5,7 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
-import type { HolidayCalendarSource, WorkCalendar } from '../../api/types'
+import type { HolidayCalendarSource, WorkCalendar, WorkCalendarYear } from '../../api/types'
+import { pickDate } from '../../test-support/pickerInteractions'
 import { WorkCalendarDetailPage } from './WorkCalendarDetailPage'
 
 const calendar: WorkCalendar = {
@@ -45,6 +46,18 @@ const uploadSource: HolidayCalendarSource = {
   last_sync_summary: null,
 }
 
+const draftYear: WorkCalendarYear = {
+  id: 'year-1',
+  company_calendar_id: 'calendar-1',
+  fiscal_year: 2026,
+  starts_on: '2026-04-01',
+  ends_on: '2027-03-31',
+  status: 'draft',
+  generated_from: 'manual',
+  published_at: null,
+  published_by_user_id: null,
+}
+
 function renderPage(calendars: WorkCalendar[] = [calendar]) {
   vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue(calendars)
 
@@ -54,7 +67,7 @@ function renderPage(calendars: WorkCalendar[] = [calendar]) {
       <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1']}>
         <Routes>
           <Route path="/admin/work-calendars/:id" element={<WorkCalendarDetailPage />} />
-          <Route path="/admin/work-calendars/:id/years" element={<p>カレンダー年度一覧ページ</p>} />
+          <Route path="/admin/work-calendar-years/:yearId/days" element={<p>日別編集ページ</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -68,6 +81,7 @@ describe('WorkCalendarDetailPage', () => {
 
   it('renders the settings form prefilled with the current calendar', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
 
     renderPage()
 
@@ -75,11 +89,22 @@ describe('WorkCalendarDetailPage', () => {
     expect(screen.getByLabelText('週の開始日(0=日曜)')).toHaveValue(1)
     expect(screen.getByLabelText('年度開始月')).toHaveValue(4)
     expect(screen.getByLabelText('年度開始日')).toHaveValue(1)
+  })
+
+  it('shows the header with the calendar name and the default badge/button, top-right', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: '本社カレンダー', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('非デフォルト')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'デフォルトに設定する' })).toBeInTheDocument()
   })
 
   it('saves the edited settings', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
       ...calendar,
       name: '名古屋事業所カレンダー',
@@ -107,8 +132,9 @@ describe('WorkCalendarDetailPage', () => {
     )
   })
 
-  it('sets the calendar as default', async () => {
+  it('sets the calendar as default from the header button', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'setDefaultWorkCalendar').mockResolvedValue({ ...calendar, is_default: true })
 
     renderPage()
@@ -119,27 +145,19 @@ describe('WorkCalendarDetailPage', () => {
     await waitFor(() => expect(workCalendarsApi.setDefaultWorkCalendar).toHaveBeenCalledWith('calendar-1'))
   })
 
-  it('assigns an existing source and syncs it, showing the reflected summary', async () => {
-    const syncedSource = {
-      ...source,
-      sync_status: 'synced',
-      last_synced_at: '2026-08-12T00:00:00+09:00',
-      last_sync_summary: { added: 3, updated: 1, removed: 0, applied: 3, protected_conflicts: 1 },
-    }
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
-      .mockResolvedValueOnce([source])
-      .mockResolvedValue([syncedSource])
+  it('assigns an existing source to the calendar', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
       ...calendar,
       holiday_calendar_source_id: source.id,
     })
-    vi.spyOn(holidayCalendarSourcesApi, 'syncHolidayCalendarSource').mockResolvedValue(syncedSource)
 
     renderPage()
 
     await screen.findByLabelText('使用する祝日iCalendarソース')
     await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
-    await userEvent.click(screen.getByRole('button', { name: '選択して同期する' }))
+    await userEvent.click(screen.getByRole('button', { name: 'このカレンダーに設定する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
@@ -150,17 +168,13 @@ describe('WorkCalendarDetailPage', () => {
         holiday_calendar_source_id: 'source-1',
       }),
     )
-    await waitFor(() => expect(holidayCalendarSourcesApi.syncHolidayCalendarSource).toHaveBeenCalledWith('source-1'))
-
-    expect(
-      await screen.findByText('追加 3件・更新 1件・削除 0件・カレンダーに反映 3件(手動変更保護のためスキップ 1件)'),
-    ).toBeInTheDocument()
   })
 
   it('registers a brand-new source inline and auto-selects it', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
       .mockResolvedValueOnce([])
       .mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(source)
 
     renderPage()
@@ -188,6 +202,7 @@ describe('WorkCalendarDetailPage', () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
       .mockResolvedValueOnce([])
       .mockResolvedValue([uploadSource])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(uploadSource)
 
     renderPage()
@@ -216,6 +231,7 @@ describe('WorkCalendarDetailPage', () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
       .mockResolvedValueOnce([source])
       .mockResolvedValue([updatedSource])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'updateHolidayCalendarSource').mockResolvedValue(updatedSource)
 
     renderPage()
@@ -244,6 +260,7 @@ describe('WorkCalendarDetailPage', () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
       .mockResolvedValueOnce([uploadSource])
       .mockResolvedValue([updatedSource])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'updateHolidayCalendarSource').mockResolvedValue(updatedSource)
 
     renderPage()
@@ -266,14 +283,131 @@ describe('WorkCalendarDetailPage', () => {
     )
   })
 
-  it('links to the year list', async () => {
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+  describe('カレンダー年度(旧WorkCalendarYearsPageの統合分)', () => {
+    it('shows the year list with a draft badge', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
 
-    renderPage()
+      renderPage()
 
-    await screen.findByLabelText('カレンダー名')
-    await userEvent.click(screen.getByRole('link', { name: '年度一覧を見る' }))
+      expect(await screen.findByText('2026年度')).toBeInTheDocument()
+      expect(screen.getByText('未公開')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '公開する' })).toBeInTheDocument()
+    })
 
-    expect(await screen.findByText('カレンダー年度一覧ページ')).toBeInTheDocument()
+    it('auto-calculates the start/end dates from the fiscal year and the calendar settings', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'createWorkCalendarYear').mockResolvedValue(draftYear)
+
+      renderPage()
+
+      await userEvent.type(await screen.findByLabelText('年度'), '2026')
+      await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
+
+      await waitFor(() =>
+        expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {
+          fiscal_year: 2026,
+          starts_on: '2026-04-01',
+          ends_on: '2027-03-31',
+        }),
+      )
+    })
+
+    it('allows customizing the auto-calculated start/end dates individually', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'createWorkCalendarYear').mockResolvedValue(draftYear)
+
+      renderPage()
+
+      await userEvent.type(await screen.findByLabelText('年度'), '2026')
+      await pickDate(userEvent.setup(), '開始日', '2026-04-05')
+      await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
+
+      await waitFor(() =>
+        expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {
+          fiscal_year: 2026,
+          starts_on: '2026-04-05',
+          ends_on: '2027-03-31',
+        }),
+      )
+    })
+
+    it('publishes a draft year when the publish button is clicked', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
+      vi.spyOn(workCalendarsApi, 'publishWorkCalendarYear').mockResolvedValue({ ...draftYear, status: 'published' })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
+
+      await waitFor(() => expect(workCalendarsApi.publishWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('duplicates a year when the duplicate button is clicked', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
+      vi.spyOn(workCalendarsApi, 'duplicateWorkCalendarYear').mockResolvedValue({
+        ...draftYear,
+        id: 'year-2',
+        fiscal_year: 2027,
+      })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '複製して翌年度を作成' }))
+
+      await waitFor(() => expect(workCalendarsApi.duplicateWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('navigates to the day editor when the year link is clicked', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
+
+      renderPage()
+
+      await userEvent.click(await screen.findByText('2026年度'))
+
+      expect(await screen.findByText('日別編集ページ')).toBeInTheDocument()
+    })
+
+    it('disables the per-year sync button and hints at source management when no source is set', async () => {
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
+
+      renderPage()
+
+      expect(await screen.findByRole('button', { name: 'この年度を祝日と同期する' })).toBeDisabled()
+      expect(screen.getByRole('link', { name: '祝日iCalendarソース管理' })).toBeInTheDocument()
+    })
+
+    it('syncs a single fiscal year holiday calendar and shows the reflected summary on that row', async () => {
+      const calendarWithSource = { ...calendar, holiday_calendar_source_id: source.id }
+      const syncedSource = {
+        ...source,
+        sync_status: 'synced',
+        last_synced_at: '2026-08-12T00:00:00+09:00',
+        last_sync_summary: { added: 2, updated: 0, removed: 1, applied: 2, protected_conflicts: 0 },
+      }
+      vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+      vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([draftYear])
+      vi.spyOn(workCalendarsApi, 'syncCompanyCalendarYearHolidayCalendar').mockResolvedValue(syncedSource)
+
+      renderPage([calendarWithSource])
+
+      const syncButton = await screen.findByRole('button', { name: 'この年度を祝日と同期する' })
+      expect(syncButton).toBeEnabled()
+      await userEvent.click(syncButton)
+
+      await waitFor(() =>
+        expect(workCalendarsApi.syncCompanyCalendarYearHolidayCalendar).toHaveBeenCalledWith('year-1'),
+      )
+
+      expect(
+        await screen.findByText('追加 2件・更新 0件・削除 1件・カレンダーに反映 2件(手動変更保護のためスキップ 0件)'),
+      ).toBeInTheDocument()
+    })
   })
 })

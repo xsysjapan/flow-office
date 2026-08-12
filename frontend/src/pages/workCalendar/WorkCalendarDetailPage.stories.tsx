@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { HolidayCalendarSource, WorkCalendar } from '../../api/types'
+import type { HolidayCalendarSource, WorkCalendar, WorkCalendarYear } from '../../api/types'
 import { WorkCalendarDetailPage } from './WorkCalendarDetailPage'
 
 const calendar: WorkCalendar = {
@@ -14,6 +14,31 @@ const calendar: WorkCalendar = {
   is_default: true,
   status: 'active',
 }
+
+const years: WorkCalendarYear[] = [
+  {
+    id: 'year-1',
+    company_calendar_id: 'calendar-1',
+    fiscal_year: 2026,
+    starts_on: '2026-04-01',
+    ends_on: '2027-03-31',
+    status: 'published',
+    generated_from: 'manual',
+    published_at: '2026-03-01T00:00:00+09:00',
+    published_by_user_id: 'user-1',
+  },
+  {
+    id: 'year-2',
+    company_calendar_id: 'calendar-1',
+    fiscal_year: 2027,
+    starts_on: '2027-04-01',
+    ends_on: '2028-03-31',
+    status: 'draft',
+    generated_from: 'manual',
+    published_at: null,
+    published_by_user_id: null,
+  },
+]
 
 const sources: HolidayCalendarSource[] = [
   {
@@ -34,6 +59,7 @@ function withSeeded() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['work-calendars'], [calendar])
   queryClient.setQueryData(['holiday-calendar-sources'], sources)
+  queryClient.setQueryData(['work-calendar-years', 'calendar-1'], years)
 
   return function Decorator() {
     return (
@@ -41,7 +67,7 @@ function withSeeded() {
         <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1']}>
           <Routes>
             <Route path="/admin/work-calendars/:id" element={<WorkCalendarDetailPage />} />
-            <Route path="/admin/work-calendars/:id/years" element={<p>カレンダー年度一覧ページ</p>} />
+            <Route path="/admin/work-calendar-years/:yearId/days" element={<p>日別編集ページ</p>} />
             <Route path="/admin/work-calendars" element={<p>カレンダー一覧ページ</p>} />
           </Routes>
         </MemoryRouter>
