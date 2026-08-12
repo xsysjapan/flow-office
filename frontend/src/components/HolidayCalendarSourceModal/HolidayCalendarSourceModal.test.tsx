@@ -3,8 +3,20 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
-import type { HolidayCalendarSource } from '../../api/types'
-import { HolidayCalendarSourcesPage } from './HolidayCalendarSourcesPage'
+import * as workCalendarsApi from '../../api/workCalendars'
+import type { HolidayCalendarSource, WorkCalendar } from '../../api/types'
+import { HolidayCalendarSourceModal } from './HolidayCalendarSourceModal'
+
+const calendar: WorkCalendar = {
+  id: 'calendar-1',
+  name: '本社カレンダー',
+  week_starts_on: 1,
+  fiscal_year_start_month: 4,
+  fiscal_year_start_day: 1,
+  holiday_calendar_source_id: null,
+  is_default: true,
+  status: 'active',
+}
 
 const source: HolidayCalendarSource = {
   id: 'source-1',
@@ -16,22 +28,23 @@ const source: HolidayCalendarSource = {
   disabled_at: null,
 }
 
-function renderPage() {
+function renderModal(companyCalendar: WorkCalendar = calendar) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <HolidayCalendarSourcesPage />
+      <HolidayCalendarSourceModal companyCalendar={companyCalendar} open onOpenChange={() => {}} />
     </QueryClientProvider>,
   )
 }
 
-describe('HolidayCalendarSourcesPage', () => {
+describe('HolidayCalendarSourceModal', () => {
   it('shows an empty state before anything is registered', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
 
-    renderPage()
+    renderModal()
 
     expect(await screen.findByText(/まだ登録されていません/)).toBeInTheDocument()
+    expect(screen.getByText('本社カレンダー の祝日iCalendar同期')).toBeInTheDocument()
   })
 
   it('registers a source and shows it in the list', async () => {
@@ -40,7 +53,7 @@ describe('HolidayCalendarSourcesPage', () => {
       .mockResolvedValue([source])
     vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(source)
 
-    renderPage()
+    renderModal()
     await screen.findByText(/まだ登録されていません/)
 
     await userEvent.type(screen.getByLabelText('名称'), '内閣府祝日カレンダー')
@@ -54,44 +67,37 @@ describe('HolidayCalendarSourcesPage', () => {
       }),
     )
     expect(await screen.findByText('内閣府祝日カレンダー')).toBeInTheDocument()
-    expect(screen.getByText('未同期')).toBeInTheDocument()
   })
 
-  it('syncs, reverts the last sync, and then disables a registered source', async () => {
-    const synced: HolidayCalendarSource = {
-      ...source,
-      sync_status: 'synced',
-      last_synced_at: '2026-08-11T00:00:00+09:00',
-    }
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
-      .mockResolvedValueOnce([source])
-      .mockResolvedValueOnce([synced])
-      .mockResolvedValueOnce([source])
-      .mockResolvedValue([{ ...source, disabled_at: '2026-08-11T00:00:00+09:00' }])
-    vi.spyOn(holidayCalendarSourcesApi, 'syncHolidayCalendarSource').mockResolvedValue(synced)
-    vi.spyOn(holidayCalendarSourcesApi, 'revertLastHolidayCalendarSync').mockResolvedValue(source)
-    vi.spyOn(holidayCalendarSourcesApi, 'disableHolidayCalendarSource').mockResolvedValue({
-      ...source,
-      disabled_at: '2026-08-11T00:00:00+09:00',
+  it('assigns a source to the calendar and can unassign it again', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
+      ...calendar,
+      holiday_calendar_source_id: source.id,
     })
 
-    renderPage()
+    renderModal()
     await screen.findByText('内閣府祝日カレンダー')
 
-    await userEvent.click(screen.getByRole('button', { name: '今すぐ同期' }))
-    await waitFor(() => expect(holidayCalendarSourcesApi.syncHolidayCalendarSource).toHaveBeenCalledWith('source-1'))
-    expect(await screen.findByText('同期済み')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'このカレンダーに設定する' }))
 
-    await userEvent.click(screen.getByRole('button', { name: '直前の同期を取消す' }))
     await waitFor(() =>
-      expect(holidayCalendarSourcesApi.revertLastHolidayCalendarSync).toHaveBeenCalledWith('source-1'),
+      expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
+        name: '本社カレンダー',
+        week_starts_on: 1,
+        fiscal_year_start_month: 4,
+        fiscal_year_start_day: 1,
+        holiday_calendar_source_id: 'source-1',
+      }),
     )
-    expect(await screen.findByText('未同期')).toBeInTheDocument()
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: '無効化する' }))
-    await waitFor(() =>
-      expect(holidayCalendarSourcesApi.disableHolidayCalendarSource).toHaveBeenCalledWith('source-1'),
-    )
-    expect(await screen.findByText('無効化済み')).toBeInTheDocument()
+  it('shows the assigned badge and unassign action for the currently assigned source', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+
+    renderModal({ ...calendar, holiday_calendar_source_id: source.id })
+
+    expect(await screen.findByText('このカレンダーに設定中')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '設定を解除する' })).toBeInTheDocument()
   })
 })

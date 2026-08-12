@@ -21,6 +21,22 @@ export function createWorkCalendar(input: CreateWorkCalendarInput): Promise<Work
   return apiFetch('/company-calendars', { method: 'POST', body: input })
 }
 
+export interface UpdateWorkCalendarInput {
+  name: string
+  week_starts_on?: number
+  fiscal_year_start_month?: number
+  fiscal_year_start_day?: number
+  holiday_calendar_source_id?: string | null
+}
+
+/**
+ * 会社カレンダー本体の名称・週起算曜日・年度開始月日・祝日iCalendarソースを編集する
+ * (作成時は名称のみを入力し、これらの設定は作成後にこのAPIで入力・変更する運用)。
+ */
+export function updateWorkCalendar(id: string, input: UpdateWorkCalendarInput): Promise<WorkCalendar> {
+  return apiFetch(`/company-calendars/${id}`, { method: 'PUT', body: input })
+}
+
 /**
  * docs/16-database-schema.md: 会社カレンダー本体で有効なデフォルトは常に高々1件。
  * 指定した本体をデフォルトに切り替える(既存のデフォルトはbackend側で解除される)。
@@ -79,17 +95,4 @@ export function putWorkCalendarDays(
   days: PutCalendarDayInput[],
 ): Promise<WorkCalendarDay[]> {
   return apiFetch(`/company-calendar-years/${companyCalendarYearId}/days`, { method: 'PUT', body: { days } })
-}
-
-export interface GenerateCompanyCalendarYearsNowResult {
-  generated_company_calendar_year_ids: string[]
-}
-
-/**
- * UC-C011「今すぐ生成する」: 全ての会社カレンダー本体について、
- * fiscal_year_start_month/dayから標準のカレンダー年度をまとめて生成する
- * (`OnboardingCalendarPage`から呼ぶ)。
- */
-export function generateCompanyCalendarYearsNow(): Promise<GenerateCompanyCalendarYearsNowResult> {
-  return apiFetch('/onboarding/calendar/generate-now', { method: 'POST' })
 }

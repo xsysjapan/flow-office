@@ -9,6 +9,7 @@ use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
+use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
@@ -87,6 +88,42 @@ class CompanyCalendarController extends Controller
         }
 
         return (new CompanyCalendarResource($calendar->refresh()))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 会社カレンダー本体の名称・週起算曜日・年度開始月日・祝日iCalendarソースを編集する。
+     * 作成時は名称だけを入力し、これらの設定は後から本APIで入力・変更する運用を想定する。
+     */
+    #[OA\Put(
+        path: '/company-calendars/{companyCalendar}',
+        operationId: 'companyCalendars.update',
+        summary: '会社カレンダー本体を編集する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'holiday_calendar_source_id', type: 'string', format: 'uuid', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function update(Request $request, CompanyCalendar $companyCalendar, CommandBus $commandBus): CompanyCalendarResource
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'week_starts_on' => ['integer', 'between:1,7'],
+            'fiscal_year_start_month' => ['integer', 'between:1,12'],
+            'fiscal_year_start_day' => ['integer', 'between:1,31'],
+            'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
+        ]);
+
+        $calendar = $commandBus->dispatch(new UpdateCompanyCalendar(
+            companyCalendarId: $companyCalendar->id,
+            name: $data['name'],
+            weekStartsOn: $data['week_starts_on'] ?? $companyCalendar->week_starts_on,
+            fiscalYearStartMonth: $data['fiscal_year_start_month'] ?? $companyCalendar->fiscal_year_start_month,
+            fiscalYearStartDay: $data['fiscal_year_start_day'] ?? $companyCalendar->fiscal_year_start_day,
+            holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
+            updatedByUserId: $request->user()->id,
+        ));
+
+        return new CompanyCalendarResource($calendar);
     }
 
     /**

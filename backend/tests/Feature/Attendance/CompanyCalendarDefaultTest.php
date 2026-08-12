@@ -83,4 +83,47 @@ class CompanyCalendarDefaultTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    public function test_a_company_calendar_can_be_created_with_only_a_name_and_edited_later(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $created = $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->json();
+        $this->assertSame(1, $created['week_starts_on']);
+        $this->assertSame(4, $created['fiscal_year_start_month']);
+        $this->assertSame(1, $created['fiscal_year_start_day']);
+
+        $updated = $this->actingAs($admin)->putJson("/api/company-calendars/{$created['id']}", [
+            'name' => '本社カレンダー(改称)',
+            'week_starts_on' => 7,
+            'fiscal_year_start_month' => 1,
+            'fiscal_year_start_day' => 1,
+        ]);
+
+        $updated->assertOk();
+        $updated->assertJsonPath('name', '本社カレンダー(改称)');
+        $updated->assertJsonPath('week_starts_on', 7);
+        $updated->assertJsonPath('fiscal_year_start_month', 1);
+        $updated->assertJsonPath('fiscal_year_start_day', 1);
+
+        $this->assertDatabaseHas('company_calendars', [
+            'id' => $created['id'],
+            'name' => '本社カレンダー(改称)',
+            'week_starts_on' => 7,
+            'fiscal_year_start_month' => 1,
+            'fiscal_year_start_day' => 1,
+        ]);
+    }
+
+    public function test_update_requires_attendance_manage_permission(): void
+    {
+        $admin = $this->makeAdmin();
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->json('id');
+
+        $plainUser = User::factory()->create();
+
+        $response = $this->actingAs($plainUser)->putJson("/api/company-calendars/{$calendarId}", ['name' => '改称後']);
+
+        $response->assertForbidden();
+    }
 }

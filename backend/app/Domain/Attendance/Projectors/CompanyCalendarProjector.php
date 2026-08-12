@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use App\Models\CompanyCalendar;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -25,6 +26,19 @@ class CompanyCalendarProjector extends Projector
                 'fiscal_year_start_day' => $event->fiscalYearStartDay,
             ],
         );
+    }
+
+    public function onCompanyCalendarUpdated(CompanyCalendarUpdated $event): void
+    {
+        CompanyCalendar::query()
+            ->where('id', $event->aggregateRootUuid())
+            ->update([
+                'name' => $event->name,
+                'week_starts_on' => $event->weekStartsOn,
+                'fiscal_year_start_month' => $event->fiscalYearStartMonth,
+                'fiscal_year_start_day' => $event->fiscalYearStartDay,
+                'holiday_calendar_source_id' => $event->holidayCalendarSourceId,
+            ]);
     }
 
     /**

@@ -44,13 +44,18 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
 期限到来済み所属変更の定期適用は`user-management:apply-membership-changes`で実行する。
 
-製品初期状態では一般利用者向けFeatureを`ALL_USERS`へ自動付与しない。本人スコープの基本Permissionを
-表す`EMPLOYEE` RoleAssignmentだけは`ALL_USERS`へ付与する。初回設定を行うため、
-`SYSTEM_ADMINISTRATORS`にはシステム管理Featureと管理Roleを、`HUMAN_RESOURCES_USERS`には
-人事管理Featureだけを明示付与する。開発・E2E用の一般利用者向け
-初期割当は`ScenarioAccessSeeder`へ分離し、製品の初期状態と混在させない。新Featureの追加時も
-既存企業へ自動開放しない。シナリオ環境でもバックオフィスタスクは`BACKOFFICE_USERS`だけへ付与し、
-一般利用者向けの経費入力Featureとは分離する。
+製品初期状態(`AccessControlSeeder`実行直後)では、`ALL_USERS`に打刻・勤怠入力・勤務表提出
+(`attendance`/`attendance.clock`/`attendance.entry`/`attendance.timesheet`)、汎用申請
+(`workflow`/`workflow.requests`)、休暇申請(`paid_leave`/`paid_leave.requests`)、経費入力
+(`backoffice.expenses`)の9件のFeatureを標準付与する(移行済み環境の現行運用を初期値として
+再現するため。真に空の状態からの導入を想定した「Featureを何も付与しない」設計ではない)。
+本人スコープの基本Permissionを表す`EMPLOYEE` RoleAssignmentも`ALL_USERS`へ付与する。初回設定を
+行うため、`SYSTEM_ADMINISTRATORS`にはシステム管理Featureと管理Roleを、`HUMAN_RESOURCES_USERS`
+には人事管理Featureだけを明示付与する。新Featureの追加時は既存企業へ自動開放しない(上記9件は
+既存の標準機能の初期値であり、新規Featureはこの対象に含めない)。開発・E2E用の追加の一般利用者
+向け初期割当は`ScenarioAccessSeeder`へ分離し、この標準9件とは混在させない。シナリオ環境でも
+バックオフィスタスクは`BACKOFFICE_USERS`だけへ付与し、一般利用者向けの経費入力Featureとは
+分離する。
 
 ## 31.2 設計原則
 
@@ -560,9 +565,11 @@ Membership、GroupAccess、Role、RoleAssignment、UserFeatureSuspensionから�
 
 ## 31.17 E2E検証
 
-製品初期状態の`ALL_USERS`にFeature・RoleAssignmentが存在しないことは、E2EのDBリセット時に
-`ScenarioAccessSeeder`適用前の状態を検査する。シナリオ用アクセスを投入した後は、Playwrightで
-次を検証する。
+製品初期状態(`ScenarioAccessSeeder`適用前)の`ALL_USERS`が、31.1節で定めた標準9Feature+
+`EMPLOYEE` RoleAssignment(1件)からズレていないことを、E2EのDBリセット時
+(`frontend/e2e/global-setup.ts`が`POST /dev/reset-database`のレスポンスで検証する)に検査する。
+新Featureの追加時にこの数が意図せず変わった場合は、`ALL_USERS`への自動開放が起きていないか
+確認すること。シナリオ用アクセスを投入した後は、Playwrightで次を検証する。
 
 - 個別Feature停止時の管理メニュー非表示、直URLリダイレクト、API 403。MCPはツール一覧からの
   非表示と直接呼出し拒否をMCP結合テストで検証する。

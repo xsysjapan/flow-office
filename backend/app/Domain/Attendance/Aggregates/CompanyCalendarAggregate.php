@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -27,6 +28,26 @@ class CompanyCalendarAggregate extends AggregateRoot
             fiscalYearStartMonth: $fiscalYearStartMonth,
             fiscalYearStartDay: $fiscalYearStartDay,
             createdByUserId: $createdByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function update(
+        string $name,
+        int $weekStartsOn,
+        int $fiscalYearStartMonth,
+        int $fiscalYearStartDay,
+        ?string $holidayCalendarSourceId,
+        string $updatedByUserId,
+    ): self {
+        $this->recordThat(new CompanyCalendarUpdated(
+            name: $name,
+            weekStartsOn: $weekStartsOn,
+            fiscalYearStartMonth: $fiscalYearStartMonth,
+            fiscalYearStartDay: $fiscalYearStartDay,
+            holidayCalendarSourceId: $holidayCalendarSourceId,
+            updatedByUserId: $updatedByUserId,
         ));
 
         return $this;

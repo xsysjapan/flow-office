@@ -58,21 +58,38 @@ describe('WorkCalendarYearsPage', () => {
     expect(screen.getByRole('button', { name: '公開する' })).toBeInTheDocument()
   })
 
-  it('creates a year with the entered values', async () => {
+  it('auto-calculates the start/end dates from the fiscal year and the calendar settings', async () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'createWorkCalendarYear').mockResolvedValue(draftYear)
 
     renderPage()
 
     await userEvent.type(await screen.findByLabelText('年度'), '2026')
-    await pickDate(userEvent.setup(), '開始日', '2026-04-01')
-    await pickDate(userEvent.setup(), '終了日', '2027-03-31')
     await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {
         fiscal_year: 2026,
         starts_on: '2026-04-01',
+        ends_on: '2027-03-31',
+      }),
+    )
+  })
+
+  it('allows customizing the auto-calculated start/end dates individually', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'createWorkCalendarYear').mockResolvedValue(draftYear)
+
+    renderPage()
+
+    await userEvent.type(await screen.findByLabelText('年度'), '2026')
+    await pickDate(userEvent.setup(), '開始日', '2026-04-05')
+    await userEvent.click(screen.getByRole('button', { name: '年度を作成する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.createWorkCalendarYear).toHaveBeenCalledWith('calendar-1', {
+        fiscal_year: 2026,
+        starts_on: '2026-04-05',
         ends_on: '2027-03-31',
       }),
     )

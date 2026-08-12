@@ -19,6 +19,26 @@ import {
   useWorkCalendars,
 } from '../../hooks/useWorkCalendars'
 
+function formatDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * カレンダー本体の年度開始月日(システム設定)から、入力した年度番号(例: 2026)に対応する
+ * 開始日・終了日を計算する(例: 開始月日が4/1なら2026-04-01〜2027-03-31)。
+ */
+export function calculateFiscalYearRange(
+  fiscalYear: number,
+  fiscalYearStartMonth: number,
+  fiscalYearStartDay: number,
+): { startsOn: string; endsOn: string } {
+  const startsOn = new Date(fiscalYear, fiscalYearStartMonth - 1, fiscalYearStartDay)
+  const endsOn = new Date(fiscalYear + 1, fiscalYearStartMonth - 1, fiscalYearStartDay)
+  endsOn.setDate(endsOn.getDate() - 1)
+
+  return { startsOn: formatDate(startsOn), endsOn: formatDate(endsOn) }
+}
+
 const STATUS_LABEL: Record<WorkCalendarYearStatus, string> = {
   draft: '未公開',
   published: '公開済み',
@@ -58,6 +78,17 @@ export function WorkCalendarYearsPage() {
   const actionError =
     createYear.error ?? publishYear.error ?? unpublishYear.error ?? archiveYear.error ?? duplicateYear.error
 
+  const handleFiscalYearChange = (value: string) => {
+    setFiscalYear(value)
+
+    const parsed = Number(value)
+    if (!value || !Number.isInteger(parsed) || !calendar) return
+
+    const range = calculateFiscalYearRange(parsed, calendar.fiscal_year_start_month, calendar.fiscal_year_start_day)
+    setStartsOn(range.startsOn)
+    setEndsOn(range.endsOn)
+  }
+
   const handleCreate = () => {
     createYear.mutate(
       { fiscal_year: Number(fiscalYear), starts_on: startsOn, ends_on: endsOn },
@@ -82,7 +113,7 @@ export function WorkCalendarYearsPage() {
               id="year-fiscal-year"
               type="number"
               value={fiscalYear}
-              onChange={(e) => setFiscalYear(e.target.value)}
+              onChange={(e) => handleFiscalYearChange(e.target.value)}
             />
           </FormField>
 
@@ -94,6 +125,10 @@ export function WorkCalendarYearsPage() {
             <DatePicker id="year-ends-on" value={endsOn || undefined} onChange={(date) => setEndsOn(date ?? '')} />
           </FormField>
         </div>
+
+        <p className="mb-4 text-xs text-muted-foreground">
+          年度を入力すると、このカレンダーの年度開始月日(設定は「設定」から変更できます)から開始日・終了日を自動計算します。開始日・終了日は個別に変更できます。
+        </p>
 
         <Button
           isLoading={createYear.isPending}

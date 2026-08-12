@@ -72,6 +72,7 @@ use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
+use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
 use App\Domain\Attendance\Commands\UpdateWorkStyle;
@@ -126,6 +127,7 @@ use App\Domain\Attendance\Handlers\SubmitAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\SyncHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\UnpublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
+use App\Domain\Attendance\Handlers\UpdateCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
@@ -435,6 +437,7 @@ return [
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 
         CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
+        UpdateCompanyCalendar::class => UpdateCompanyCalendarHandler::class,
         SetDefaultCompanyCalendar::class => SetDefaultCompanyCalendarHandler::class,
         CreateCompanyCalendarYear::class => CreateCompanyCalendarYearHandler::class,
         PublishCompanyCalendarYear::class => PublishCompanyCalendarYearHandler::class,

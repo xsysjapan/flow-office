@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { WorkCalendar } from '../../api/types'
 import { WorkCalendarListPage } from './WorkCalendarListPage'
@@ -57,9 +58,6 @@ describe('WorkCalendarListPage', () => {
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
-        week_starts_on: undefined,
-        fiscal_year_start_month: undefined,
-        fiscal_year_start_day: undefined,
       }),
     )
   })
@@ -86,5 +84,28 @@ describe('WorkCalendarListPage', () => {
     await userEvent.click(await screen.findByText('2026年度カレンダー'))
 
     expect(await screen.findByText('カレンダー年度一覧ページ')).toBeInTheDocument()
+  })
+
+  it('opens the settings modal for a calendar', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '設定' }))
+
+    expect(await screen.findByText('会社カレンダーの設定')).toBeInTheDocument()
+  })
+
+  it('opens the holiday calendar source modal for a calendar', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '祝日iCalendar同期' }))
+
+    expect(await screen.findByText('2026年度カレンダー の祝日iCalendar同期')).toBeInTheDocument()
   })
 })

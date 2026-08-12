@@ -457,13 +457,18 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     申請取消、§5-3月次締め後の編集制限、§5-4打刻ログ突合、§5-6+7ロール変更の即時反映と
     監査ログ記録、§5-8締めた月のCSV出力、§5-9新入社員の初回ログイン、§5-11打刻ログの
     訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。§5-17(会社カレンダーの
-    ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済みだが、
-    本PR実行時のローカル環境では`POST /dev/reset-database`のグローバルセットアップ
-    チェック(ALL_USERSグループのFeature割当が初期0件であること)がscenario-00等の
-    既存シナリオも含めて全件失敗する状態だったため、実行確認は取れていない
-    (`AccessControlSeeder`がALL_USERSに既定でFeatureを割り当てるようになったことと
-    `frontend/e2e/global-setup.ts`の期待値の不一致と見られ、本タスクのフロントエンド
-    変更とは無関係)。
+    ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済み。
+
+    本PR作成当時、`POST /dev/reset-database`のグローバルセットアップチェック
+    (ALL_USERSグループのFeature割当数の期待値)がscenario-00等の既存シナリオも含めて
+    全件失敗する状態だったため、当該シナリオ含め実行確認が取れていなかった。原因は
+    `AccessControlSeeder`が「移行済み環境の現行運用」として既定でALL_USERSへ9Feature
+    (打刻・勤怠入力・勤務表提出・汎用申請・休暇申請・経費入力)を割り当てる仕様に
+    変わった一方、`frontend/e2e/global-setup.ts`の期待値が旧仕様(0件)のままだった
+    ことによる不一致(本カレンダー機能とは無関係な既存の不整合)。ユーザー確認の上、
+    `docs/31-user-group-access-foundation.md`(31.1節・31.17節)と
+    `frontend/e2e/global-setup.ts`の期待値を実際の`AccessControlSeeder`の仕様
+    (9Feature + `EMPLOYEE` RoleAssignment 1件が製品初期状態)に合わせて更新済み。
   - シナリオ2(月次入力ユーザーの日次入力)は、日次実績の新規作成画面がまだ無いため
     入力自体はAPIを直接叩いている(§4シナリオ2内の注記を参照)。
   - §5-3の実装過程で、`GET /attendance/months/to-approve`が「自分が承認者かつ

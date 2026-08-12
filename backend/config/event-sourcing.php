@@ -38,6 +38,7 @@ use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
@@ -342,6 +343,7 @@ return [
         'attendance.submission_reminder_excluded' => AttendanceSubmissionReminderExcluded::class,
 
         'company_calendar.created' => CompanyCalendarCreated::class,
+        'company_calendar.updated' => CompanyCalendarUpdated::class,
         'company_calendar.default_changed' => CompanyCalendarDefaultChanged::class,
         'company_calendar_year.created' => CompanyCalendarYearCreated::class,
         'company_calendar_year.days_updated' => CompanyCalendarDaysUpdated::class,

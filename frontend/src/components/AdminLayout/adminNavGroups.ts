@@ -63,8 +63,8 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       {
         to: "/admin/work-calendars",
-        label: "カレンダー",
-        description: "休日・稼働日カレンダーを管理する",
+        label: "会社カレンダー",
+        description: "休日・稼働日カレンダーを管理する(祝日iCalendar同期は各カレンダーの画面から行う)",
         feature: "attendance.entry",
         permission: "attendance.manage",
       },
@@ -72,13 +72,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         to: "/admin/work-styles",
         label: "勤務形態",
         description: "勤務形態(所定労働時間・労働時間制)を管理する",
-        feature: "attendance.entry",
-        permission: "attendance.manage",
-      },
-      {
-        to: "/admin/holiday-calendar-sources",
-        label: "祝日iCalendar同期",
-        description: "祝日iCalendarソースを登録・同期する",
         feature: "attendance.entry",
         permission: "attendance.manage",
       },
