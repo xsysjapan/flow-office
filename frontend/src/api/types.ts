@@ -1473,7 +1473,9 @@ export interface HolidayCalendarSyncSummary {
 export interface HolidayCalendarSource {
   id: string;
   name: string;
-  ics_url: string;
+  source_kind: "url" | "upload";
+  ics_url: string | null;
+  uploaded_ics_filename: string | null;
   sync_status: string;
   last_synced_at: string | null;
   last_error: string | null;

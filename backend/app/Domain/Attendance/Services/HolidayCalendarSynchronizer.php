@@ -10,6 +10,7 @@ use Composer\CaBundle\CaBundle;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Sabre\VObject\Reader;
 
@@ -39,7 +40,7 @@ class HolidayCalendarSynchronizer
      */
     public function synchronize(HolidayCalendarSource $source): array
     {
-        $feedEvents = $this->fetchAndParse($source->ics_url);
+        $feedEvents = $this->fetchAndParse($source);
 
         $eventChanges = $this->diffEvents($source, $feedEvents);
 
@@ -57,27 +58,14 @@ class HolidayCalendarSynchronizer
      *
      * @throws RuntimeException
      */
-    private function fetchAndParse(string $icsUrl): array
+    private function fetchAndParse(HolidayCalendarSource $source): array
     {
-        try {
-            // XSERVER等、共有ホスティング環境ではシステムのCAルート証明書が古い/欠落しており
-            // 「unable to get local issuer certificate」でTLS検証が失敗することがあるため、
-            // composer/ca-bundleが提供する検証済みCAバンドルを明示的に指定する(証明書検証
-            // 自体を無効化しない)。
-            $response = Http::timeout(15)
-                ->withHeaders(['User-Agent' => 'flow-office/1.0'])
-                ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
-                ->get($icsUrl);
-        } catch (Exception $e) {
-            throw new RuntimeException('祝日iCalendarの取得に失敗しました: '.$e->getMessage(), previous: $e);
-        }
-
-        if (! $response->successful()) {
-            throw new RuntimeException('祝日iCalendarの取得に失敗しました: HTTP '.$response->status().' — '.substr($response->body(), 0, 200));
-        }
+        $icsBody = $source->source_kind === HolidayCalendarSource::SOURCE_KIND_UPLOAD
+            ? $this->readUploadedIcs($source)
+            : $this->fetchIcsFromUrl($source->ics_url);
 
         try {
-            $calendar = Reader::read($response->body());
+            $calendar = Reader::read($icsBody);
         } catch (Exception $e) {
             throw new RuntimeException('祝日iCalendarの解析に失敗しました: '.$e->getMessage(), previous: $e);
         }
@@ -105,6 +93,43 @@ class HolidayCalendarSynchronizer
         }
 
         return $events;
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    private function fetchIcsFromUrl(?string $icsUrl): string
+    {
+        try {
+            // XSERVER等、共有ホスティング環境ではシステムのCAルート証明書が古い/欠落しており
+            // 「unable to get local issuer certificate」でTLS検証が失敗することがあるため、
+            // composer/ca-bundleが提供する検証済みCAバンドルを明示的に指定する(証明書検証
+            // 自体を無効化しない)。
+            $response = Http::timeout(15)
+                ->withHeaders(['User-Agent' => 'flow-office/1.0'])
+                ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
+                ->get((string) $icsUrl);
+        } catch (Exception $e) {
+            throw new RuntimeException('祝日iCalendarの取得に失敗しました: '.$e->getMessage(), previous: $e);
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException('祝日iCalendarの取得に失敗しました: HTTP '.$response->status().' — '.substr($response->body(), 0, 200));
+        }
+
+        return $response->body();
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    private function readUploadedIcs(HolidayCalendarSource $source): string
+    {
+        if ($source->uploaded_ics_path === null || ! Storage::disk('local')->exists($source->uploaded_ics_path)) {
+            throw new RuntimeException('アップロードされたiCalendarファイルが見つかりません。再度アップロードしてください。');
+        }
+
+        return Storage::disk('local')->get($source->uploaded_ics_path);
     }
 
     /**

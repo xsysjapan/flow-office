@@ -54,6 +54,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
+use App\Domain\Attendance\Events\HolidayCalendarSourceUpdated;
 use App\Domain\Attendance\Events\LegalHolidayDesignated;
 use App\Domain\Attendance\Events\RotationPatternCreated;
 use App\Domain\Attendance\Events\ShiftPatternCreated;
@@ -355,6 +356,7 @@ return [
         'company_calendar_year.batch_generated' => CompanyCalendarYearBatchGenerated::class,
 
         'holiday_calendar_source.registered' => HolidayCalendarSourceRegistered::class,
+        'holiday_calendar_source.updated' => HolidayCalendarSourceUpdated::class,
         'holiday_calendar_source.synced' => HolidayCalendarSourceSynced::class,
         'holiday_calendar_source.sync_failed' => HolidayCalendarSourceSyncFailed::class,
         'holiday_calendar_source.disabled' => HolidayCalendarSourceDisabled::class,

@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
+use App\Domain\Attendance\Events\HolidayCalendarSourceUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -14,12 +15,41 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  */
 class HolidayCalendarSourceAggregate extends AggregateRoot
 {
-    public function register(string $name, string $icsUrl, string $registeredByUserId): self
-    {
+    public function register(
+        string $name,
+        string $sourceKind,
+        ?string $icsUrl,
+        ?string $uploadedIcsPath,
+        ?string $uploadedIcsFilename,
+        string $registeredByUserId,
+    ): self {
         $this->recordThat(new HolidayCalendarSourceRegistered(
             name: $name,
+            sourceKind: $sourceKind,
             icsUrl: $icsUrl,
+            uploadedIcsPath: $uploadedIcsPath,
+            uploadedIcsFilename: $uploadedIcsFilename,
             registeredByUserId: $registeredByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function update(
+        string $name,
+        string $sourceKind,
+        ?string $icsUrl,
+        ?string $uploadedIcsPath,
+        ?string $uploadedIcsFilename,
+        string $updatedByUserId,
+    ): self {
+        $this->recordThat(new HolidayCalendarSourceUpdated(
+            name: $name,
+            sourceKind: $sourceKind,
+            icsUrl: $icsUrl,
+            uploadedIcsPath: $uploadedIcsPath,
+            uploadedIcsFilename: $uploadedIcsFilename,
+            updatedByUserId: $updatedByUserId,
         ));
 
         return $this;

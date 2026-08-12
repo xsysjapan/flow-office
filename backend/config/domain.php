@@ -75,6 +75,7 @@ use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
+use App\Domain\Attendance\Commands\UpdateHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UpdateShiftPattern;
 use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
@@ -130,6 +131,7 @@ use App\Domain\Attendance\Handlers\SyncHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\UnpublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarDaysHandler;
 use App\Domain\Attendance\Handlers\UpdateCompanyCalendarHandler;
+use App\Domain\Attendance\Handlers\UpdateHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\UpdateShiftPatternHandler;
 use App\Domain\Attendance\Handlers\UpdateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\WarnMonthCloseDeadlineHandler;
@@ -450,6 +452,7 @@ return [
         DuplicateCompanyCalendarYear::class => DuplicateCompanyCalendarYearHandler::class,
         GenerateCompanyCalendarYears::class => GenerateCompanyCalendarYearsHandler::class,
         RegisterHolidayCalendarSource::class => RegisterHolidayCalendarSourceHandler::class,
+        UpdateHolidayCalendarSource::class => UpdateHolidayCalendarSourceHandler::class,
         SyncHolidayCalendarSource::class => SyncHolidayCalendarSourceHandler::class,
         DisableHolidayCalendarSource::class => DisableHolidayCalendarSourceHandler::class,
         RevertLastHolidayCalendarSync::class => RevertLastHolidayCalendarSyncHandler::class,

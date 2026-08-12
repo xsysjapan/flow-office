@@ -5,7 +5,8 @@ import {
   fetchHolidayCalendarSources,
   revertLastHolidayCalendarSync,
   syncHolidayCalendarSource,
-  type CreateHolidayCalendarSourceInput,
+  updateHolidayCalendarSource,
+  type HolidayCalendarSourceInput,
 } from '../api/holidayCalendarSources'
 
 const LIST_KEY = ['holiday-calendar-sources']
@@ -18,7 +19,19 @@ export function useCreateHolidayCalendarSource() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreateHolidayCalendarSourceInput) => createHolidayCalendarSource(input),
+    mutationFn: (input: HolidayCalendarSourceInput) => createHolidayCalendarSource(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
+}
+
+export function useUpdateHolidayCalendarSource() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: HolidayCalendarSourceInput }) =>
+      updateHolidayCalendarSource(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

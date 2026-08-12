@@ -19,7 +19,9 @@ const sources: HolidayCalendarSource[] = [
   {
     id: 'source-1',
     name: '内閣府祝日カレンダー',
+    source_kind: 'url',
     ics_url: 'https://example.com/holidays.ics',
+    uploaded_ics_filename: null,
     sync_status: 'synced',
     last_synced_at: '2026-08-11T00:00:00+09:00',
     last_error: null,

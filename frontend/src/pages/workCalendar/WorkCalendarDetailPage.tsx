@@ -14,6 +14,7 @@ import {
   useHolidayCalendarSources,
   useRevertLastHolidayCalendarSync,
   useSyncHolidayCalendarSource,
+  useUpdateHolidayCalendarSource,
 } from '../../hooks/useHolidayCalendarSources'
 import { useSetDefaultWorkCalendar, useUpdateWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
 
@@ -28,6 +29,13 @@ const SYNC_STATUS_TONE: Record<string, 'neutral' | 'success' | 'danger'> = {
   synced: 'success',
   failed: 'danger',
 }
+
+const SOURCE_KIND_LABEL: Record<string, string> = {
+  url: 'URL',
+  upload: 'アップロード',
+}
+
+const ICS_FILE_ACCEPT = '.ics,.ical,.ifb'
 
 /** ドロップダウンの「登録しない」選択肢の値。空文字はNativeSelectのvalueとして扱いやすいので採用する。 */
 const NONE_OPTION_VALUE = ''
@@ -47,6 +55,7 @@ export function WorkCalendarDetailPage() {
 
   const { data: sourcesData, isLoading: isLoadingSources, error: sourcesError } = useHolidayCalendarSources()
   const createSource = useCreateHolidayCalendarSource()
+  const updateSource = useUpdateHolidayCalendarSource()
   const syncSource = useSyncHolidayCalendarSource()
   const disableSource = useDisableHolidayCalendarSource()
   const revertLastSync = useRevertLastHolidayCalendarSync()
@@ -78,7 +87,15 @@ export function WorkCalendarDetailPage() {
 
   const [isRegisteringSource, setIsRegisteringSource] = useState(false)
   const [newSourceName, setNewSourceName] = useState('')
+  const [newSourceMode, setNewSourceMode] = useState<'url' | 'upload'>('url')
   const [newSourceIcsUrl, setNewSourceIcsUrl] = useState('')
+  const [newSourceIcsFile, setNewSourceIcsFile] = useState<File | undefined>(undefined)
+
+  const [isEditingSource, setIsEditingSource] = useState(false)
+  const [editSourceName, setEditSourceName] = useState('')
+  const [editSourceMode, setEditSourceMode] = useState<'url' | 'upload'>('url')
+  const [editSourceIcsUrl, setEditSourceIcsUrl] = useState('')
+  const [editSourceIcsFile, setEditSourceIcsFile] = useState<File | undefined>(undefined)
 
   if (!companyCalendarId) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
   if (isLoading) return <LoadingState />
@@ -100,13 +117,47 @@ export function WorkCalendarDetailPage() {
 
   const handleCreateSource = () => {
     createSource.mutate(
-      { name: newSourceName, ics_url: newSourceIcsUrl },
+      {
+        name: newSourceName,
+        ics_url: newSourceMode === 'url' ? newSourceIcsUrl : undefined,
+        ics_file: newSourceMode === 'upload' ? newSourceIcsFile : undefined,
+      },
       {
         onSuccess: (created) => {
           setNewSourceName('')
+          setNewSourceMode('url')
           setNewSourceIcsUrl('')
+          setNewSourceIcsFile(undefined)
           setIsRegisteringSource(false)
           setSelectedSourceId(created.id)
+        },
+      },
+    )
+  }
+
+  const handleStartEditSource = () => {
+    if (!selectedSource) return
+    setEditSourceName(selectedSource.name)
+    setEditSourceMode(selectedSource.source_kind)
+    setEditSourceIcsUrl(selectedSource.ics_url ?? '')
+    setEditSourceIcsFile(undefined)
+    setIsEditingSource(true)
+  }
+
+  const handleUpdateSource = () => {
+    if (!selectedSource) return
+    updateSource.mutate(
+      {
+        id: selectedSource.id,
+        input: {
+          name: editSourceName,
+          ics_url: editSourceMode === 'url' ? editSourceIcsUrl : undefined,
+          ics_file: editSourceMode === 'upload' ? editSourceIcsFile : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsEditingSource(false)
         },
       },
     )
@@ -137,7 +188,8 @@ export function WorkCalendarDetailPage() {
   const selectedSource = sources.find((s) => s.id === selectedSourceId) ?? null
   const summary = selectedSource?.last_sync_summary ?? null
   const isSyncBusy = updateCalendar.isPending || syncSource.isPending
-  const sourceActionError = createSource.error ?? syncSource.error ?? disableSource.error ?? revertLastSync.error
+  const sourceActionError =
+    createSource.error ?? updateSource.error ?? syncSource.error ?? disableSource.error ?? revertLastSync.error
 
   return (
     <div className="flex flex-col gap-6">
@@ -259,6 +311,32 @@ export function WorkCalendarDetailPage() {
                     />
                   </FormField>
 
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium text-foreground">登録方法</span>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="radio"
+                          name="holiday-source-mode"
+                          checked={newSourceMode === 'url'}
+                          onChange={() => setNewSourceMode('url')}
+                        />
+                        URLで登録
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="radio"
+                          name="holiday-source-mode"
+                          checked={newSourceMode === 'upload'}
+                          onChange={() => setNewSourceMode('upload')}
+                        />
+                        ファイルをアップロード
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {newSourceMode === 'url' ? (
                   <FormField label="iCalendar URL" htmlFor="holiday-source-ics-url" required>
                     <Input
                       id="holiday-source-ics-url"
@@ -267,7 +345,16 @@ export function WorkCalendarDetailPage() {
                       onChange={(e) => setNewSourceIcsUrl(e.target.value)}
                     />
                   </FormField>
-                </div>
+                ) : (
+                  <FormField label="iCalendarファイル" htmlFor="holiday-source-ics-file" required>
+                    <input
+                      id="holiday-source-ics-file"
+                      type="file"
+                      accept={ICS_FILE_ACCEPT}
+                      onChange={(e) => setNewSourceIcsFile(e.target.files?.[0])}
+                    />
+                  </FormField>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button variant="secondary" onClick={() => setIsRegisteringSource(false)}>
@@ -275,7 +362,7 @@ export function WorkCalendarDetailPage() {
                   </Button>
                   <Button
                     isLoading={createSource.isPending}
-                    disabled={!newSourceName || !newSourceIcsUrl}
+                    disabled={!newSourceName || (newSourceMode === 'url' ? !newSourceIcsUrl : !newSourceIcsFile)}
                     onClick={handleCreateSource}
                   >
                     登録する
@@ -284,10 +371,13 @@ export function WorkCalendarDetailPage() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex flex-col items-end gap-1">
               <Button isLoading={isSyncBusy} disabled={!selectedSourceId || isSyncBusy} onClick={handleSyncClick}>
                 選択して同期する
               </Button>
+              {updateSource.isSuccess && (
+                <span className="text-xs text-muted-foreground">変更を反映するには同期してください。</span>
+              )}
             </div>
 
             {selectedSource && (
@@ -307,6 +397,12 @@ export function WorkCalendarDetailPage() {
                   </Badge>
                 </div>
                 <span className="text-xs text-muted-foreground">
+                  種別: {SOURCE_KIND_LABEL[selectedSource.source_kind] ?? selectedSource.source_kind}
+                  {selectedSource.source_kind === 'upload'
+                    ? `(${selectedSource.uploaded_ics_filename ?? '未アップロード'})`
+                    : `(${selectedSource.ics_url ?? ''})`}
+                </span>
+                <span className="text-xs text-muted-foreground">
                   最終同期: {selectedSource.last_synced_at ?? '未同期'}
                 </span>
                 {selectedSource.last_error && (
@@ -320,24 +416,107 @@ export function WorkCalendarDetailPage() {
                   </p>
                 )}
 
-                {!selectedSource.disabled_at && (
+                {!isEditingSource ? (
                   <div className="flex flex-wrap gap-2">
-                    {selectedSource.last_synced_at && (
-                      <Button
-                        variant="secondary"
-                        isLoading={revertLastSync.isPending}
-                        onClick={() => revertLastSync.mutate(selectedSource.id)}
-                      >
-                        直前の同期を取消す
-                      </Button>
-                    )}
-                    <Button
-                      variant="danger"
-                      isLoading={disableSource.isPending}
-                      onClick={() => disableSource.mutate(selectedSource.id)}
-                    >
-                      無効化する
+                    <Button variant="secondary" onClick={handleStartEditSource}>
+                      編集
                     </Button>
+                    {!selectedSource.disabled_at && (
+                      <>
+                        {selectedSource.last_synced_at && (
+                          <Button
+                            variant="secondary"
+                            isLoading={revertLastSync.isPending}
+                            onClick={() => revertLastSync.mutate(selectedSource.id)}
+                          >
+                            直前の同期を取消す
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          isLoading={disableSource.isPending}
+                          onClick={() => disableSource.mutate(selectedSource.id)}
+                        >
+                          無効化する
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 rounded-md border border-border p-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <FormField label="名称" htmlFor="holiday-source-edit-name" required>
+                        <Input
+                          id="holiday-source-edit-name"
+                          value={editSourceName}
+                          onChange={(e) => setEditSourceName(e.target.value)}
+                        />
+                      </FormField>
+
+                      <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium text-foreground">登録方法</span>
+                        <div className="flex gap-4">
+                          <label className="flex items-center gap-2 text-sm text-foreground">
+                            <input
+                              type="radio"
+                              name="holiday-source-edit-mode"
+                              checked={editSourceMode === 'url'}
+                              onChange={() => setEditSourceMode('url')}
+                            />
+                            URLで登録
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-foreground">
+                            <input
+                              type="radio"
+                              name="holiday-source-edit-mode"
+                              checked={editSourceMode === 'upload'}
+                              onChange={() => setEditSourceMode('upload')}
+                            />
+                            ファイルをアップロード
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {editSourceMode === 'url' ? (
+                      <FormField label="iCalendar URL" htmlFor="holiday-source-edit-ics-url" required>
+                        <Input
+                          id="holiday-source-edit-ics-url"
+                          type="url"
+                          value={editSourceIcsUrl}
+                          onChange={(e) => setEditSourceIcsUrl(e.target.value)}
+                        />
+                      </FormField>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          現在のファイル: {selectedSource.uploaded_ics_filename ?? '未アップロード'}
+                        </span>
+                        <FormField label="iCalendarファイル(置き換え)" htmlFor="holiday-source-edit-ics-file">
+                          <input
+                            id="holiday-source-edit-ics-file"
+                            type="file"
+                            accept={ICS_FILE_ACCEPT}
+                            onChange={(e) => setEditSourceIcsFile(e.target.files?.[0])}
+                          />
+                        </FormField>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => setIsEditingSource(false)}>
+                        キャンセル
+                      </Button>
+                      <Button
+                        isLoading={updateSource.isPending}
+                        disabled={
+                          !editSourceName || (editSourceMode === 'url' ? !editSourceIcsUrl : !editSourceIcsFile)
+                        }
+                        onClick={handleUpdateSource}
+                      >
+                        更新する
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

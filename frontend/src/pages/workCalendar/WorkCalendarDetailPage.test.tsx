@@ -22,7 +22,22 @@ const calendar: WorkCalendar = {
 const source: HolidayCalendarSource = {
   id: 'source-1',
   name: '内閣府祝日カレンダー',
+  source_kind: 'url',
   ics_url: 'https://example.com/holidays.ics',
+  uploaded_ics_filename: null,
+  sync_status: 'pending',
+  last_synced_at: null,
+  last_error: null,
+  disabled_at: null,
+  last_sync_summary: null,
+}
+
+const uploadSource: HolidayCalendarSource = {
+  id: 'source-2',
+  name: 'アップロード祝日カレンダー',
+  source_kind: 'upload',
+  ics_url: null,
+  uploaded_ics_filename: 'holidays.ics',
   sync_status: 'pending',
   last_synced_at: null,
   last_error: null,
@@ -166,6 +181,88 @@ describe('WorkCalendarDetailPage', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText('使用する祝日iCalendarソース')).toHaveValue(source.id),
+    )
+  })
+
+  it('registers a brand-new source via file upload', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([uploadSource])
+    vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(uploadSource)
+
+    renderPage()
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
+
+    await userEvent.click(screen.getByLabelText('ファイルをアップロード'))
+    await userEvent.type(screen.getByLabelText('名称'), 'アップロード祝日カレンダー')
+
+    const file = new File(['BEGIN:VCALENDAR'], 'holidays.ics', { type: 'text/calendar' })
+    await userEvent.upload(screen.getByLabelText('iCalendarファイル'), file)
+
+    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+
+    await waitFor(() =>
+      expect(holidayCalendarSourcesApi.createHolidayCalendarSource).toHaveBeenCalledWith({
+        name: 'アップロード祝日カレンダー',
+        ics_file: file,
+      }),
+    )
+  })
+
+  it('edits an existing url-kind source and updates its URL', async () => {
+    const updatedSource = { ...source, ics_url: 'https://example.com/updated.ics' }
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([source])
+      .mockResolvedValue([updatedSource])
+    vi.spyOn(holidayCalendarSourcesApi, 'updateHolidayCalendarSource').mockResolvedValue(updatedSource)
+
+    renderPage()
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+    await userEvent.clear(screen.getByLabelText('iCalendar URL'))
+    await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/updated.ics')
+
+    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+
+    await waitFor(() =>
+      expect(holidayCalendarSourcesApi.updateHolidayCalendarSource).toHaveBeenCalledWith(source.id, {
+        name: source.name,
+        ics_url: 'https://example.com/updated.ics',
+      }),
+    )
+
+    expect(await screen.findByText('変更を反映するには同期してください。')).toBeInTheDocument()
+  })
+
+  it('edits an existing upload-kind source by replacing its file', async () => {
+    const updatedSource = { ...uploadSource, uploaded_ics_filename: 'new-holidays.ics' }
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([uploadSource])
+      .mockResolvedValue([updatedSource])
+    vi.spyOn(holidayCalendarSourcesApi, 'updateHolidayCalendarSource').mockResolvedValue(updatedSource)
+
+    renderPage()
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), uploadSource.id)
+
+    await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+
+    const file = new File(['BEGIN:VCALENDAR'], 'new-holidays.ics', { type: 'text/calendar' })
+    await userEvent.upload(screen.getByLabelText('iCalendarファイル(置き換え)'), file)
+
+    await userEvent.click(screen.getByRole('button', { name: '更新する' }))
+
+    await waitFor(() =>
+      expect(holidayCalendarSourcesApi.updateHolidayCalendarSource).toHaveBeenCalledWith(uploadSource.id, {
+        name: uploadSource.name,
+        ics_file: file,
+      }),
     )
   })
 

@@ -25,7 +25,10 @@ class RegisterHolidayCalendarSourceHandler implements CommandHandler
         HolidayCalendarSourceAggregate::retrieve($id)
             ->register(
                 name: $command->name,
+                sourceKind: $command->sourceKind,
                 icsUrl: $command->icsUrl,
+                uploadedIcsPath: $command->uploadedIcsPath,
+                uploadedIcsFilename: $command->uploadedIcsFilename,
                 registeredByUserId: $command->registeredByUserId,
             )
             ->persist();

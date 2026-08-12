@@ -15,7 +15,9 @@ class HolidayCalendarSourceResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'source_kind' => $this->source_kind,
             'ics_url' => $this->ics_url,
+            'uploaded_ics_filename' => $this->uploaded_ics_filename,
             'sync_status' => $this->sync_status,
             'last_synced_at' => $this->last_synced_at?->toIso8601String(),
             'last_error' => $this->last_error,

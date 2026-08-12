@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncFailed;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSyncReverted;
+use App\Domain\Attendance\Events\HolidayCalendarSourceUpdated;
 use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
 use App\Models\HolidayCalendarEvent;
@@ -27,10 +28,28 @@ class HolidayCalendarSourceProjector extends Projector
             ['id' => $event->aggregateRootUuid()],
             [
                 'name' => $event->name,
+                'source_kind' => $event->sourceKind,
                 'ics_url' => $event->icsUrl,
+                'uploaded_ics_path' => $event->uploadedIcsPath,
+                'uploaded_ics_filename' => $event->uploadedIcsFilename,
                 'sync_status' => HolidayCalendarSource::STATUS_PENDING,
             ],
         );
+    }
+
+    /**
+     * 名前/参照元を更新するのみ。sync_status/last_synced_at/last_errorはここでは触らない
+     * (次回同期をクリックするまで反映しない、既存の同期フローと同じ挙動)。
+     */
+    public function onHolidayCalendarSourceUpdated(HolidayCalendarSourceUpdated $event): void
+    {
+        HolidayCalendarSource::query()->whereKey($event->aggregateRootUuid())->update([
+            'name' => $event->name,
+            'source_kind' => $event->sourceKind,
+            'ics_url' => $event->icsUrl,
+            'uploaded_ics_path' => $event->uploadedIcsPath,
+            'uploaded_ics_filename' => $event->uploadedIcsFilename,
+        ]);
     }
 
     public function onHolidayCalendarSourceSynced(HolidayCalendarSourceSynced $event): void

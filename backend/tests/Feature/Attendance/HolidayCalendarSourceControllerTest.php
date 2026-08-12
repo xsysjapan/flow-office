@@ -10,7 +10,9 @@ use App\Models\HolidayCalendarSource;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -27,6 +29,21 @@ class HolidayCalendarSourceControllerTest extends TestCase
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         return $admin;
+    }
+
+    private function setUpCalendarFor(User $admin, string $sourceId): CompanyCalendarYear
+    {
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        CompanyCalendar::query()->whereKey($calendarId)->update(['holiday_calendar_source_id' => $sourceId]);
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [['date' => '2026-05-05', 'day_type' => 'weekday', 'schedule_state' => 'WORK']],
+        ])->assertOk();
+
+        return $year;
     }
 
     private function ics(string $uid, string $date, string $summary): string
@@ -287,5 +304,126 @@ class HolidayCalendarSourceControllerTest extends TestCase
             ->assertJsonPath('disabled_at', fn ($value) => $value !== null);
 
         $this->assertTrue($source->refresh()->isDisabled());
+    }
+
+    public function test_registering_a_source_via_ics_file_upload_and_syncing_reads_from_the_stored_file(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeAdmin();
+
+        $file = UploadedFile::fake()->createWithContent(
+            'holidays.ics',
+            $this->ics('uid-upload-1', '20260505', 'こどもの日'),
+        );
+
+        $response = $this->actingAs($admin)->post('/api/holiday-calendar-sources', [
+            'name' => '社内祝日リスト',
+            'ics_file' => $file,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('source_kind', 'upload');
+        $response->assertJsonPath('uploaded_ics_filename', 'holidays.ics');
+        $sourceId = $response->json('id');
+
+        $stored = HolidayCalendarSource::query()->findOrFail($sourceId);
+        Storage::disk('local')->assertExists($stored->uploaded_ics_path);
+
+        $year = $this->setUpCalendarFor($admin, $sourceId);
+
+        $syncResponse = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync");
+
+        $syncResponse->assertOk();
+        $syncResponse->assertJsonPath('sync_status', 'synced');
+        $this->assertDatabaseHas('holiday_calendar_events', ['ics_uid' => 'uid-upload-1', 'name' => 'こどもの日']);
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => 'こどもの日',
+        ]);
+    }
+
+    public function test_registering_a_source_rejects_when_both_ics_url_and_ics_file_are_given(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeAdmin();
+
+        $response = $this->actingAs($admin)->post('/api/holiday-calendar-sources', [
+            'name' => 'ソース',
+            'ics_url' => 'https://example.com/holidays.ics',
+            'ics_file' => UploadedFile::fake()->createWithContent('holidays.ics', $this->ics('uid-x', '20260505', '祝日')),
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_registering_a_source_rejects_when_neither_ics_url_nor_ics_file_are_given(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $response = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => 'ソース',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_updating_a_url_source_changes_the_url_and_sync_fetches_the_new_url(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/old.ics' => Http::response($this->ics('uid-old', '20260505', '旧祝日'), 200),
+            'https://example.com/new.ics' => Http::response($this->ics('uid-new', '20260505', '新祝日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => 'ソース', 'ics_url' => 'https://example.com/old.ics',
+        ])->json('id');
+
+        $year = $this->setUpCalendarFor($admin, $sourceId);
+
+        $updateResponse = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}", [
+            'name' => 'ソース', 'ics_url' => 'https://example.com/new.ics',
+        ]);
+        $updateResponse->assertOk();
+        $updateResponse->assertJsonPath('ics_url', 'https://example.com/new.ics');
+
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync")->assertOk();
+
+        $this->assertDatabaseHas('holiday_calendar_events', ['ics_uid' => 'uid-new', 'name' => '新祝日']);
+        $this->assertDatabaseMissing('holiday_calendar_events', ['ics_uid' => 'uid-old']);
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'is_public_holiday' => true,
+            'public_holiday_name' => '新祝日',
+        ]);
+    }
+
+    public function test_updating_a_source_from_upload_kind_to_url_kind_deletes_the_old_uploaded_file(): void
+    {
+        Storage::fake('local');
+        $admin = $this->makeAdmin();
+
+        $file = UploadedFile::fake()->createWithContent('holidays.ics', $this->ics('uid-old-upload', '20260505', '旧祝日'));
+        $sourceId = $this->actingAs($admin)->post('/api/holiday-calendar-sources', [
+            'name' => 'ソース',
+            'ics_file' => $file,
+        ])->json('id');
+
+        $oldPath = HolidayCalendarSource::query()->findOrFail($sourceId)->uploaded_ics_path;
+        Storage::disk('local')->assertExists($oldPath);
+
+        Http::fake([
+            'https://example.com/new.ics' => Http::response($this->ics('uid-new', '20260505', '新祝日'), 200),
+        ]);
+
+        $updateResponse = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}", [
+            'name' => 'ソース', 'ics_url' => 'https://example.com/new.ics',
+        ]);
+        $updateResponse->assertOk();
+        $updateResponse->assertJsonPath('source_kind', 'url');
+
+        Storage::disk('local')->assertMissing($oldPath);
     }
 }
