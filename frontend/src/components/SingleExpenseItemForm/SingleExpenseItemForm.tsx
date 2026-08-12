@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
-import type { ExpenseCategoryFieldDefinition, ExpensePaymentBearer } from '../../api/types'
+import type { ExpenseCategoryFieldDefinition, ExpenseEntryPresetDefinitionItem, ExpensePaymentBearer } from '../../api/types'
 import { Button } from '../Button/Button'
 import { DatePicker } from '../DatePicker/DatePicker'
 import { FormField } from '../FormField/FormField'
@@ -22,6 +22,26 @@ export interface SingleExpenseItemFormProps {
    *  (呼び出し側が明細作成後にこのファイルをアップロードする)。 */
   onSubmit: (input: SaveExpenseItemInput, receiptFile: File | null) => void
   isSubmitting?: boolean
+  /** プリセットから適用する下書き定義1件。利用日は持たないため利用日は変更しない。
+   *  同じプリセットを続けて選び直しても反映されるよう、呼び出し側は`presetApplyToken`を
+   *  クリックのたびにインクリメントして渡す。 */
+  presetItem?: ExpenseEntryPresetDefinitionItem | null
+  presetApplyToken?: number
+}
+
+/** プリセットのattributes(保存用の値)を、このフォームが保持するattributeValuesの
+ *  形(text/number/date/selectは文字列、booleanは真偽値)へ変換する。 */
+function attributesToFieldValues(
+  attributes: Record<string, unknown> | null | undefined,
+  fieldDefinitions?: ExpenseCategoryFieldDefinition[] | null,
+): Record<string, string | boolean> {
+  const values: Record<string, string | boolean> = {}
+  for (const field of fieldDefinitions ?? []) {
+    const raw = attributes?.[field.key]
+    if (raw === undefined || raw === null) continue
+    values[field.key] = field.type === 'boolean' ? Boolean(raw) : String(raw)
+  }
+  return values
 }
 
 /** 経費明細の添付ファイルとして許可される拡張子(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。 */
@@ -58,6 +78,8 @@ export function SingleExpenseItemForm({
   fieldDefinitions,
   onSubmit,
   isSubmitting,
+  presetItem,
+  presetApplyToken,
 }: SingleExpenseItemFormProps) {
   const [usageDate, setUsageDate] = useState('')
   const [amount, setAmount] = useState('')
@@ -83,6 +105,24 @@ export function SingleExpenseItemForm({
     // input[type=file]はvalueをプログラムから空にできないため、keyを変えて再マウントする。
     setReceiptInputKey((key) => key + 1)
   }
+
+  // プリセット選択時: 利用日はプリセットに持たせていない(利用のたびに変わるため)ので
+  // 変更せず、それ以外の項目だけをプリセットの値で置き換える。取引先は元の内容説明を
+  // 分解できないため空にし、内容欄にプリセットの説明文をそのまま入れてユーザーに確認・
+  // 調整させる。
+  useEffect(() => {
+    if (!presetItem || !presetApplyToken) return
+    setAmount(presetItem.amount != null ? String(presetItem.amount) : '')
+    setPayee('')
+    setContent(presetItem.description ?? '')
+    setParticipants('')
+    setParticipantCount('')
+    setPaymentBearer(presetItem.payment_bearer ?? 'employee')
+    setAttributeValues(attributesToFieldValues(presetItem.attributes, fieldDefinitions))
+    setReceiptFile(null)
+    setReceiptInputKey((key) => key + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetApplyToken])
 
   const hasRequiredAttributes = (fieldDefinitions ?? [])
     .filter((field) => field.required)

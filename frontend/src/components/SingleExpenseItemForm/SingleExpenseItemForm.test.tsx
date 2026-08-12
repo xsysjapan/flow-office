@@ -261,6 +261,64 @@ describe('SingleExpenseItemForm', () => {
     })
   })
 
+  describe('presetItem', () => {
+    it('fills amount, content, payment_bearer and attributes from the preset without touching the usage date', async () => {
+      const onSubmit = vi.fn()
+      const { rerender } = render(
+        <SingleExpenseItemForm
+          fieldSet="generic"
+          categoryId={4}
+          fieldDefinitions={[{ key: 'origin', label: '出発地', type: 'text', required: true }]}
+          onSubmit={onSubmit}
+        />,
+      )
+
+      await pickDate(userEvent.setup(), '利用日', '2026-07-12')
+
+      rerender(
+        <SingleExpenseItemForm
+          fieldSet="generic"
+          categoryId={4}
+          fieldDefinitions={[{ key: 'origin', label: '出発地', type: 'text', required: true }]}
+          onSubmit={onSubmit}
+          presetItem={{
+            category_id: 4,
+            description: '文具店での購入分',
+            amount: 3000,
+            payment_bearer: 'corporate_card',
+            attributes: { origin: '名古屋' },
+          }}
+          presetApplyToken={1}
+        />,
+      )
+
+      expect(screen.getByLabelText('利用日')).toHaveTextContent('2026-07-12')
+      expect(screen.getByLabelText('金額')).toHaveValue(3000)
+      expect(screen.getByLabelText('内容')).toHaveValue('文具店での購入分')
+      expect(screen.getByLabelText('取引先')).toHaveValue('')
+      expect(screen.getByLabelText('支払方法')).toHaveValue('corporate_card')
+      expect(screen.getByLabelText('出発地')).toHaveValue('名古屋')
+    })
+
+    it('re-applies the same preset again when presetApplyToken is bumped', async () => {
+      const onSubmit = vi.fn()
+      const preset = { category_id: 4, description: '文具店での購入分', amount: 3000 }
+      const { rerender } = render(
+        <SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} presetItem={preset} presetApplyToken={1} />,
+      )
+
+      await userEvent.clear(screen.getByLabelText('金額'))
+      await userEvent.type(screen.getByLabelText('金額'), '999')
+      expect(screen.getByLabelText('金額')).toHaveValue(999)
+
+      rerender(
+        <SingleExpenseItemForm fieldSet="generic" categoryId={4} onSubmit={onSubmit} presetItem={preset} presetApplyToken={2} />,
+      )
+
+      expect(screen.getByLabelText('金額')).toHaveValue(3000)
+    })
+  })
+
   describe('領収書の添付', () => {
     it('passes the selected receipt file to onSubmit alongside the item input, then clears it after submitting', async () => {
       const onSubmit = vi.fn()

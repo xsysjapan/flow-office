@@ -310,6 +310,52 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.getByRole('spinbutton', { name: /1行目の金額/ })).toHaveValue(420)
   })
 
+  it('lets a single-entry category (e.g. 宿泊費) be prefilled from a preset applicable to it', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 2,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '技術書購入',
+        description: null,
+        preset_type: 'single_item',
+        definition: [{ category_id: 1, description: '文具店での購入分', amount: 3000 }],
+        is_active: true,
+        usage_count: 1,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+      {
+        id: 3,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '出張ホテル',
+        description: null,
+        preset_type: 'single_item',
+        definition: [{ category_id: 2, description: 'ホテルABC', amount: 12000 }],
+        is_active: true,
+        usage_count: 1,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+    ]
+    const applyPreset = vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[1])
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+
+    expect(await screen.findByRole('button', { name: '出張ホテル' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '技術書購入' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '出張ホテル' }))
+
+    expect(applyPreset).toHaveBeenCalledWith(3)
+    expect(await screen.findByLabelText('金額')).toHaveValue(12000)
+    expect(screen.getByLabelText('内容')).toHaveValue('ホテルABC')
+  })
+
   it('creates a draft claim with no body only when the first rows are actually saved (batch category)', async () => {
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())

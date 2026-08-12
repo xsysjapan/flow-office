@@ -16,7 +16,7 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
-import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
+import type { ExpenseCategory, ExpenseEntryPreset, ExpenseEntryPresetDefinitionItem } from '../../api/types'
 import { useAppSettings } from '../../contexts/useAppSettings'
 import { useWeek } from '../../hooks/useAttendance'
 import {
@@ -127,6 +127,53 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
             }}
           >
             {preset.name}({preset.definition.length}件)
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 単票入力(会食・宿泊・消耗品・その他)向けのプリセット選択。表形式入力と異なり
+ *  フォームは1件分の項目しか持てないため、プリセットの明細のうちこの区分に該当する
+ *  1件だけを取り出してフォームへ適用する(複数該当してもプリセットごとに先頭の1件を使う)。 */
+function SinglePresetPicker({
+  categoryId,
+  onApply,
+}: {
+  categoryId: number
+  onApply: (item: ExpenseEntryPresetDefinitionItem) => void
+}) {
+  const { data: presets, isLoading, error } = useExpenseEntryPresets()
+  const applyPreset = useApplyExpenseEntryPreset()
+
+  const applicablePresets = (presets ?? [])
+    .map((preset) => ({ preset, item: preset.definition.find((item) => item.category_id === categoryId) }))
+    .filter(
+      (entry): entry is { preset: ExpenseEntryPreset; item: ExpenseEntryPresetDefinitionItem } =>
+        entry.item !== undefined,
+    )
+
+  if (isLoading) return null
+  if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+  if (applicablePresets.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <span className="text-sm font-medium text-foreground">プリセットから入力</span>
+      <div className="flex flex-wrap gap-2">
+        {applicablePresets.map(({ preset, item }) => (
+          <Button
+            key={preset.id}
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              applyPreset.mutate(preset.id)
+              onApply(item)
+            }}
+          >
+            {preset.name}
           </Button>
         ))}
       </div>
@@ -305,6 +352,10 @@ export function ExpenseClaimNewPage() {
   const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+  // 単票入力へ適用中のプリセット明細。同じプリセットを続けて選び直しても反映されるよう
+  // トークンをインクリメントして渡し、区分を切り替えたら次の区分に持ち越さないよう破棄する。
+  const [singlePresetItem, setSinglePresetItem] = useState<ExpenseEntryPresetDefinitionItem | null>(null)
+  const [singlePresetToken, setSinglePresetToken] = useState(0)
 
   const createClaim = useCreateExpenseClaim()
   const startClaimTitle = useUpdateExpenseClaimTitle()
@@ -324,6 +375,12 @@ export function ExpenseClaimNewPage() {
       setSelectedCategoryId(shortcutCategory.id)
     }
   }, [routeClaimId, categoryCodeParam, categories])
+
+  // 区分を切り替えたら、前の区分向けに選んだプリセットを次の区分の入力へ持ち越さない。
+  useEffect(() => {
+    setSinglePresetItem(null)
+    setSinglePresetToken(0)
+  }, [selectedCategoryId])
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
     useEditableRows<SaveExpenseItemInput>([])
@@ -526,12 +583,25 @@ export function ExpenseClaimNewPage() {
           <>
             {addItem.error && <ErrorMessage error={addItem.error} />}
             {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+
+            <div className="mb-4">
+              <SinglePresetPicker
+                categoryId={selectedCategory.id}
+                onApply={(item) => {
+                  setSinglePresetItem(item)
+                  setSinglePresetToken((token) => token + 1)
+                }}
+              />
+            </div>
+
             <SingleExpenseItemForm
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
               fieldDefinitions={selectedCategory.field_definitions}
               onSubmit={(input, receiptFile) => void handleSaveSingleItem(input, receiptFile)}
               isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
+              presetItem={singlePresetItem}
+              presetApplyToken={singlePresetToken}
             />
           </>
         )}
