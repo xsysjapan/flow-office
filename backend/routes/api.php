@@ -193,6 +193,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::middleware(['feature:backoffice.tasks', 'permission:backoffice_task.execute,any'])->group(function () {
         Route::get('/backoffice-tasks/unassigned', [BackOfficeTaskController::class, 'indexUnassigned']);
         Route::get('/backoffice-tasks/mine', [BackOfficeTaskController::class, 'indexMine']);
+        Route::post('/backoffice-tasks/bulk-complete', [BackOfficeTaskController::class, 'bulkComplete']);
         Route::get('/backoffice-tasks/{backOfficeTask}', [BackOfficeTaskController::class, 'show']);
         Route::post('/backoffice-tasks/{backOfficeTask}/assign', [BackOfficeTaskController::class, 'assign']);
         Route::post('/backoffice-tasks/{backOfficeTask}/status', [BackOfficeTaskController::class, 'changeStatus']);

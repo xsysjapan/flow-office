@@ -10,6 +10,7 @@ use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\LocalAzureProvider;
 use App\Domain\UserManagement\Ms365ConfigResolver;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceMonth;
 use App\Models\ExpenseClaim;
 use App\Models\ExpenseItem;
 use App\Models\WorkflowRequest;
@@ -19,7 +20,6 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
-use SocialiteProviders\Azure\AzureExtendSocialite;
 use SocialiteProviders\Manager\SocialiteWasCalled;
 
 class AppServiceProvider extends ServiceProvider
@@ -39,21 +39,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ローカル開発でモックOIDC(mock-oidc/)を使う場合は、実際のEntra IDドライバの代わりに
-        // LocalAzureProviderを "azure" ドライバとして登録する(docs/06-usecases-auth.md UC-001)。
-        if (Ms365ConfigResolver::mockEnabled()) {
-            Event::listen(
-                SocialiteWasCalled::class,
-                fn (SocialiteWasCalled $event) => $event->extendSocialite('azure', LocalAzureProvider::class)
-            );
-        } else {
-            Event::listen(SocialiteWasCalled::class, AzureExtendSocialite::class.'@handle');
-        }
+        // 初回オンボーディング中にもm365_mock_enabledが更新されるため、実Entra IDと
+        // mock-oidcを実行時に切り替えられるProviderを常に登録する。
+        Event::listen(
+            SocialiteWasCalled::class,
+            fn (SocialiteWasCalled $event) => $event->extendSocialite('azure', LocalAzureProvider::class)
+        );
 
         // attachments.owner_type / backoffice_tasks.source_type にDBへ安定な短い別名を保存する。
         Relation::morphMap([
             'workflow_request' => WorkflowRequest::class,
             'attendance_day' => AttendanceDay::class,
+            'attendance_month' => AttendanceMonth::class,
             'expense_claim' => ExpenseClaim::class,
             'expense_item' => ExpenseItem::class,
         ]);

@@ -7,10 +7,10 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\CompleteOnboardingWithLocalPassword;
+use App\Domain\UserManagement\Services\OnboardingAccessInitializer;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\SystemSetting;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -18,7 +18,10 @@ use Illuminate\Support\Str;
  */
 class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
 {
-    public function __construct(private readonly StandardGroupMembershipRecorder $standardMemberships) {}
+    public function __construct(
+        private readonly OnboardingAccessInitializer $accessInitializer,
+        private readonly StandardGroupMembershipRecorder $standardMemberships,
+    ) {}
 
     public function handle(Command $command): User
     {
@@ -30,9 +33,7 @@ class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
             throw new DomainRuleException('このメールアドレスは既に登録済みのため、オンボーディングを完了できません。');
         }
 
-        if (! DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->exists()) {
-            throw new DomainRuleException('システム管理者グループが未作成のため、オンボーディングを完了できません。初期化を確認してください。');
-        }
+        $this->accessInitializer->initialize();
 
         // ローカルモードは1リクエストで完結するため、開始(onboarding_started_at)と
         // 完了(onboarding_completed_at)を同時に原子的コミットする。

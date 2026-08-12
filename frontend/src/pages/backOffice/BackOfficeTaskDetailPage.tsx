@@ -15,7 +15,12 @@ import {
   useBackOfficeTask,
   useChangeBackOfficeTaskStatus,
 } from '../../hooks/useBackOfficeTasks'
-import { useAttendanceMonthById, useCloseMonth } from '../../hooks/useAttendance'
+import {
+  useAttendanceMonthById,
+  useCloseMonth,
+  useDownloadAttendanceCsv,
+  useDownloadAttendanceExcel,
+} from '../../hooks/useAttendance'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
 import { MonthlyReferenceView } from '../attendance/AttendanceReferencePage'
 
@@ -30,33 +35,57 @@ import { MonthlyReferenceView } from '../attendance/AttendanceReferencePage'
 function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceMonthId: string }) {
   const { data: month, isLoading, error, refetch } = useAttendanceMonthById(attendanceMonthId)
   const closeMonth = useCloseMonth()
+  const downloadCsv = useDownloadAttendanceCsv()
+  const downloadExcel = useDownloadAttendanceExcel()
 
   return (
     <div className="mt-5 border-t border-border pt-4">
       <h3 className="mb-3 text-sm font-semibold text-foreground">月次勤怠の締め処理</h3>
 
       {closeMonth.error && <ErrorMessage error={closeMonth.error} />}
+      {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
+      {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
 
       {isLoading ? (
         <LoadingState />
       ) : error ? (
         <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
       ) : month ? (
-        month.status === 'closed' ? (
-          <p className="text-sm text-muted-foreground">締め処理後は修正することはできません。</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-4 rounded-md border border-border p-3">
-              <MonthlyReferenceView userId={month.user_id} restrictToYearMonth={month.year_month} />
-            </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-md border border-border p-3">
+            <MonthlyReferenceView userId={month.user_id} restrictToYearMonth={month.year_month} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              isLoading={downloadCsv.isPending}
+              onClick={() =>
+                downloadCsv.mutate({ year_month: [month.year_month], user_id: [month.user_id], format: 'generic' })
+              }
+            >
+              CSV出力
+            </Button>
+            <Button
+              variant="secondary"
+              isLoading={downloadExcel.isPending}
+              onClick={() => downloadExcel.mutate({ year_month: [month.year_month], user_id: [month.user_id] })}
+            >
+              Excel出力
+            </Button>
+          </div>
+          {month.status === 'closed' ? (
+            <p className="text-sm text-muted-foreground">
+              締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。
+            </p>
+          ) : (
             <Button
               isLoading={closeMonth.isPending}
               onClick={() => closeMonth.mutate(attendanceMonthId, { onSuccess: () => void refetch() })}
             >
               締める
             </Button>
-          </div>
-        )
+          )}
+        </div>
       ) : null}
     </div>
   )
@@ -137,10 +166,6 @@ export function BackOfficeTaskDetailPage() {
         </div>
       )}
 
-      {task.task_type === 'attendance_month_confirmation' && task.source_type === 'attendance_month' && (
-        <AttendanceMonthConfirmationSection attendanceMonthId={task.source_id} />
-      )}
-
       <div className="mt-5 border-t border-border pt-4">
         <h3 className="mb-3 text-sm font-semibold text-foreground">状態を変更する</h3>
         <div className="flex flex-wrap items-end gap-3">
@@ -164,6 +189,10 @@ export function BackOfficeTaskDetailPage() {
           </Button>
         </div>
       </div>
+
+      {task.task_type === 'attendance_month_confirmation' && task.source_type === 'attendance_month' && (
+        <AttendanceMonthConfirmationSection attendanceMonthId={task.source_id} />
+      )}
     </Card>
   )
 }

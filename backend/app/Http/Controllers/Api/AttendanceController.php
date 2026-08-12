@@ -20,6 +20,7 @@ use App\Domain\Attendance\Services\AttendanceDayDefaultsResolver;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
+use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -680,8 +681,12 @@ class AttendanceController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['approver_user_id'], properties: [new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function submitMonth(Request $request, string $yearMonth, CommandBus $commandBus): AttendanceMonthResource
-    {
+    public function submitMonth(
+        Request $request,
+        string $yearMonth,
+        CommandBus $commandBus,
+        PaidLeaveApprovalGuard $paidLeaveApprovalGuard,
+    ): AttendanceMonthResource {
         // system_settings.attendance_requires_approval=falseの場合でも、月次勤怠申請は
         // (PaidLeaveと異なり)workflow_requestのオーケストレーションを経由させたまま、
         // 承認者省略時のプレースホルダIDだけを立てる。実際の自動承認はSubmitAttendanceMonthHandlerが
@@ -696,6 +701,10 @@ class AttendanceController extends Controller
         // 申請者自身のIDをプレースホルダとして使う(PaidLeaveControllerと同じ理由。このパスの
         // 申請は即座にapprovedになるため、実質的な承認者としては使われない)。
         $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
+
+        // workflow_requestの下書きを作る前に検証し、提出失敗時の孤立した申請を残さない。
+        // Handler側でも同じGuardを実行し、API以外のCommand実行経路にも制約を適用する。
+        $paidLeaveApprovalGuard->ensureApproved($request->user()->id, $yearMonth);
 
         // 月次勤怠申請はworkflow_requestの下書き作成を起点にする。集約ID(subject_id)だけを
         // 先に確定させ、実際の提出(attendance_month.submitted/locked/shared)と
