@@ -251,7 +251,9 @@ class AttendanceExcelBuilder
             ->setOrientation(PageSetup::ORIENTATION_PORTRAIT)
             ->setPaperSize(PageSetup::PAPERSIZE_A4)
             ->setFitToWidth(1)
-            ->setFitToHeight(1);
+            ->setFitToHeight(1)
+            ->setHorizontalCentered(true)
+            ->setVerticalCentered(true);
         $sheet->getPageSetup()->setFitToPage(true);
         $sheet->getPageMargins()->setTop(0.35)->setBottom(0.35)->setLeft(0.3)->setRight(0.3);
         $sheet->setShowGridlines(false);

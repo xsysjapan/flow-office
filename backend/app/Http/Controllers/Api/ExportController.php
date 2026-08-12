@@ -81,8 +81,8 @@ class ExportController extends Controller
 
     /**
      * UC-E001: 勤怠実績をExcel(.xlsx)で出力する。attendance()と同じ対象月抽出ロジック
-     * (承認済み・締め済みのみ)・権限チェックを使い、見た目を整えた月次サマリ+日別明細の
-     * 2シート構成で出力する。対象社員が2名以上の場合は各人の.xlsxをZIPにまとめて返す。
+     * (承認済み・締め済みのみ)・権限チェックを使い、見た目を整えた勤怠管理表を出力する。
+     * 対象が2件以上の場合は各人・各月の.xlsxをZIPにまとめて返す。
      */
     #[OA\Get(
         path: '/exports/attendance.xlsx',
@@ -110,9 +110,13 @@ class ExportController extends Controller
 
             $this->recordExport('attendance_xlsx', $data, $request->user()->id, $months->count());
 
+            $filename = $months->isEmpty()
+                ? '勤怠管理表_'.$this->yearMonthDisplayLabel($label).'.xlsx'
+                : $this->attendanceExcelFilename($months->first());
+
             return response($contents, 200, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition' => 'attachment; filename="attendance_'.$label.'.xlsx"',
+                'Content-Disposition' => $this->attachmentContentDisposition($filename, 'attendance_'.$label.'.xlsx'),
             ]);
         }
 
@@ -143,6 +147,7 @@ class ExportController extends Controller
                 throw new \RuntimeException("ZIPファイルの作成に失敗しました(エラーコード: {$openResult})。");
             }
 
+            $usedEntryNames = [];
             foreach ($months as $month) {
                 $spreadsheet = $builder->buildForMonth($month, $month->year_month);
                 $xlsxPath = $tmpDir.'/'.$month->user_id.'_'.$month->year_month.'_'.Str::uuid().'.xlsx';
@@ -153,16 +158,19 @@ class ExportController extends Controller
                 $writer = new Xlsx($spreadsheet);
                 $writer->save($xlsxPath);
 
-                $zip->addFile($xlsxPath, $month->user_id.'_'.$month->year_month.'.xlsx');
+                $entryName = $this->uniqueZipEntryName($this->attendanceExcelFilename($month), $usedEntryNames);
+                $usedEntryNames[] = $entryName;
+                $zip->addFile($xlsxPath, $entryName);
             }
 
             $zip->close();
 
             $contents = file_get_contents($zipPath);
+            $filename = $this->attendanceExcelZipFilename($months);
 
             return response($contents, 200, [
                 'Content-Type' => 'application/zip',
-                'Content-Disposition' => 'attachment; filename="attendance_'.$label.'.zip"',
+                'Content-Disposition' => $this->attachmentContentDisposition($filename, 'attendance_'.$label.'.zip'),
             ]);
         } finally {
             foreach ($xlsxPaths as $path) {
@@ -174,6 +182,75 @@ class ExportController extends Controller
                 unlink($zipPath);
             }
         }
+    }
+
+    private function attendanceExcelFilename(AttendanceMonth $month): string
+    {
+        $employeeName = $this->safeFilenamePart($month->user?->name ?: $month->user_id);
+
+        return '勤怠管理表_'.$employeeName.'_'.$this->yearMonthDisplayLabel($month->year_month).'.xlsx';
+    }
+
+    /** @param Collection<int, AttendanceMonth> $months */
+    private function attendanceExcelZipFilename(Collection $months): string
+    {
+        $yearMonths = $months->pluck('year_month')->unique()->sort()->values();
+        $periodLabel = $this->yearMonthDisplayLabel($yearMonths->first());
+        if ($yearMonths->count() > 1) {
+            $periodLabel .= '-'.$this->yearMonthDisplayLabel($yearMonths->last());
+        }
+
+        $userIds = $months->pluck('user_id')->unique();
+        $employeeLabel = '';
+        if ($userIds->count() === 1) {
+            $employeeLabel = $this->safeFilenamePart($months->first()->user?->name ?: $months->first()->user_id).'_';
+        }
+
+        return '勤怠管理表_'.$employeeLabel.$periodLabel.'.zip';
+    }
+
+    private function yearMonthDisplayLabel(string $yearMonth): string
+    {
+        if (preg_match('/^(\d{4})-(\d{2})$/', $yearMonth, $matches) === 1) {
+            return $matches[1].'年'.$matches[2].'月';
+        }
+
+        return $this->safeFilenamePart($yearMonth);
+    }
+
+    /** 社員名の半角・全角空白と、Windowsでファイル名に使用できない文字を除去する。 */
+    private function safeFilenamePart(string $value): string
+    {
+        $value = preg_replace('/[\s\x{3000}]+/u', '', $value) ?? '';
+        $value = preg_replace('~[\\\\/:*?"<>|\x00-\x1F]~u', '', $value) ?? '';
+        $value = trim($value, '.');
+
+        return $value !== '' ? $value : '社員名未設定';
+    }
+
+    /** @param list<string> $usedNames */
+    private function uniqueZipEntryName(string $filename, array $usedNames): string
+    {
+        if (! in_array($filename, $usedNames, true)) {
+            return $filename;
+        }
+
+        $base = Str::beforeLast($filename, '.xlsx');
+        for ($suffix = 2; ; $suffix++) {
+            $candidate = $base.'_'.($suffix).'.xlsx';
+            if (! in_array($candidate, $usedNames, true)) {
+                return $candidate;
+            }
+        }
+    }
+
+    private function attachmentContentDisposition(string $utf8Filename, string $asciiFallback): string
+    {
+        return sprintf(
+            "attachment; filename=\"%s\"; filename*=UTF-8''%s",
+            $asciiFallback,
+            rawurlencode($utf8Filename),
+        );
     }
 
     #[OA\Get(

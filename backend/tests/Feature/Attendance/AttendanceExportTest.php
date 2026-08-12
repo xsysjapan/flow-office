@@ -127,7 +127,10 @@ class AttendanceExportTest extends TestCase
 
         $response->assertSuccessful();
         $response->assertHeader('Content-Type', 'application/zip');
-        $this->assertStringContainsString('attendance_2026-06_2026-07.zip', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_複数月社員_2026年06月-2026年07月.zip'),
+            $response->headers->get('Content-Disposition'),
+        );
 
         $tmpZip = tempnam(sys_get_temp_dir(), 'zip');
         file_put_contents($tmpZip, $response->getContent());
@@ -135,8 +138,8 @@ class AttendanceExportTest extends TestCase
         $zip = new \ZipArchive;
         $zip->open($tmpZip);
         $this->assertSame(2, $zip->numFiles);
-        $this->assertNotFalse($zip->locateName($employee->id.'_2026-06.xlsx'));
-        $this->assertNotFalse($zip->locateName($employee->id.'_2026-07.xlsx'));
+        $this->assertNotFalse($zip->locateName('勤怠管理表_複数月社員_2026年06月.xlsx'));
+        $this->assertNotFalse($zip->locateName('勤怠管理表_複数月社員_2026年07月.xlsx'));
         $zip->close();
         unlink($tmpZip);
     }
@@ -153,7 +156,7 @@ class AttendanceExportTest extends TestCase
         $admin = User::factory()->create();
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
-        $employee = User::factory()->create(['name' => '締め済み社員']);
+        $employee = User::factory()->create(['name' => '締め 済み　社員']);
         AttendanceMonth::query()->create([
             'user_id' => $employee->id,
             'year_month' => '2026-06',
@@ -247,10 +250,20 @@ class AttendanceExportTest extends TestCase
             'remaining_days' => 10,
         ]);
 
-        $response = $this->actingAs($admin)->get('/api/exports/attendance.xlsx?year_month=2026-06');
+        $response = $this->withHeader('Origin', 'http://localhost:5173')
+            ->actingAs($admin)
+            ->get('/api/exports/attendance.xlsx?year_month=2026-06');
 
         $response->assertSuccessful();
         $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_締め済み社員_2026年06月.xlsx'),
+            $response->headers->get('Content-Disposition'),
+        );
+        $this->assertStringContainsString(
+            'Content-Disposition',
+            $response->headers->get('Access-Control-Expose-Headers'),
+        );
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
         file_put_contents($tmpFile, $response->getContent());
@@ -261,13 +274,15 @@ class AttendanceExportTest extends TestCase
         $this->assertSame('2026年6月度 勤怠管理表', $sheet->getCell('A2')->getValue());
         $this->assertSame('社員番号', $sheet->getCell('G1')->getValue());
         $this->assertSame('氏名', $sheet->getCell('G4')->getValue());
-        $this->assertSame('締め済み社員', $sheet->getCell('I4')->getValue());
+        $this->assertSame('締め 済み　社員', $sheet->getCell('I4')->getValue());
         $this->assertSame('有給残日数', $sheet->getCell('H9')->getValue());
         $this->assertSame('8.5日', $sheet->getCell('H10')->getValue());
         $this->assertSame('日', $sheet->getCell('A12')->getValue());
         $this->assertSame('09:00', $sheet->getCell('C27')->getValue());
         $this->assertSame('000000', $sheet->getStyle('A2')->getFont()->getColor()->getRGB());
         $this->assertSame('000000', $sheet->getStyle('A12')->getFont()->getColor()->getRGB());
+        $this->assertTrue($sheet->getPageSetup()->getHorizontalCentered());
+        $this->assertTrue($sheet->getPageSetup()->getVerticalCentered());
 
         unlink($tmpFile);
 
@@ -284,10 +299,10 @@ class AttendanceExportTest extends TestCase
         $admin = User::factory()->create();
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
-        $employeeIds = [];
+        $employeeNames = [];
         foreach (['社員A', '社員B'] as $name) {
             $employee = User::factory()->create(['name' => $name]);
-            $employeeIds[] = $employee->id;
+            $employeeNames[] = $name;
             AttendanceMonth::query()->create([
                 'user_id' => $employee->id,
                 'year_month' => '2026-06',
@@ -299,7 +314,10 @@ class AttendanceExportTest extends TestCase
 
         $response->assertSuccessful();
         $response->assertHeader('Content-Type', 'application/zip');
-        $this->assertStringContainsString('attendance_2026-06.zip', $response->headers->get('Content-Disposition'));
+        $this->assertStringContainsString(
+            rawurlencode('勤怠管理表_2026年06月.zip'),
+            $response->headers->get('Content-Disposition'),
+        );
 
         $tmpZip = tempnam(sys_get_temp_dir(), 'zip');
         file_put_contents($tmpZip, $response->getContent());
@@ -308,8 +326,8 @@ class AttendanceExportTest extends TestCase
         $zip->open($tmpZip);
         $this->assertSame(2, $zip->numFiles);
 
-        foreach ($employeeIds as $userId) {
-            $entryName = $userId.'_2026-06.xlsx';
+        foreach ($employeeNames as $employeeName) {
+            $entryName = '勤怠管理表_'.$employeeName.'_2026年06月.xlsx';
             $this->assertNotFalse($zip->locateName($entryName), "expected {$entryName} in zip");
 
             $xlsxContents = $zip->getFromName($entryName);
