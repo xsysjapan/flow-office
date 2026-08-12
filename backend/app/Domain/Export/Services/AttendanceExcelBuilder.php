@@ -5,7 +5,7 @@ namespace App\Domain\Export\Services;
 use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
 use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -67,14 +67,14 @@ class AttendanceExcelBuilder
         $days = AttendanceDay::query()
             ->where('user_id', $month->user_id)
             ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
-            ->with(['calculation', 'breaks', 'shiftAssignment'])
+            ->with(['calculation', 'breaks', 'calendarEntry'])
             ->orderBy('work_date')
             ->get()
             ->keyBy(fn (AttendanceDay $day) => $day->work_date->day);
 
         $snapshot = $month->snapshot_json ?? [];
         $workStyle = $this->workStyleResolver->resolveForUser($month->user_id, Carbon::parse($yearMonth.'-01'));
-        $shifts = EmployeeShiftAssignment::query()
+        $shifts = EmployeeCalendarEntry::query()
             ->where('user_id', $month->user_id)
             ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
             ->where('is_published', true)
@@ -269,15 +269,15 @@ class AttendanceExcelBuilder
     private function isLate(AttendanceDay $day): bool
     {
         return $day->actual_start_at !== null
-            && $day->shiftAssignment?->planned_start_at !== null
-            && $day->actual_start_at->greaterThan($day->shiftAssignment->planned_start_at);
+            && $day->calendarEntry?->planned_start_at !== null
+            && $day->actual_start_at->greaterThan($day->calendarEntry->planned_start_at);
     }
 
     private function isEarly(AttendanceDay $day): bool
     {
         return $day->actual_end_at !== null
-            && $day->shiftAssignment?->planned_end_at !== null
-            && $day->actual_end_at->lessThan($day->shiftAssignment->planned_end_at);
+            && $day->calendarEntry?->planned_end_at !== null
+            && $day->actual_end_at->lessThan($day->calendarEntry->planned_end_at);
     }
 
     private function dayNote(?AttendanceDay $day): string
