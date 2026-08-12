@@ -3,8 +3,10 @@ import {
   archiveWorkCalendarYear,
   createWorkCalendar,
   createWorkCalendarYear,
+  deleteWorkCalendar,
   duplicateWorkCalendarYear,
   fetchWorkCalendars,
+  fetchWorkCalendarsPage,
   fetchWorkCalendarYears,
   publishWorkCalendarYear,
   putWorkCalendarDays,
@@ -20,9 +22,33 @@ import {
 const LIST_KEY = ['work-calendars']
 const YEARS_KEY_PREFIX = ['work-calendar-years']
 const yearsKey = (companyCalendarId: string) => [...YEARS_KEY_PREFIX, companyCalendarId]
+const listPageKey = (page: number, perPage: number) => [...LIST_KEY, 'page', page, perPage]
 
 export function useWorkCalendars() {
   return useQuery({ queryKey: LIST_KEY, queryFn: fetchWorkCalendars })
+}
+
+/**
+ * WorkCalendarListPage専用のページネーション付き一覧取得。既存の`useWorkCalendars`
+ * (配列を返す非ページネーション版)は他画面(WorkCalendarYearsPage・
+ * WorkCalendarDetailPage等)がそのまま使い続けるため、こちらは別のquery keyで管理する。
+ */
+export function useWorkCalendarsPage(page: number, perPage = 20) {
+  return useQuery({
+    queryKey: listPageKey(page, perPage),
+    queryFn: () => fetchWorkCalendarsPage({ page, per_page: perPage }),
+  })
+}
+
+export function useDeleteWorkCalendar() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => deleteWorkCalendar(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
 }
 
 export function useCreateWorkCalendar() {

@@ -19,6 +19,7 @@ class HolidayCalendarSourceResource extends JsonResource
             'sync_status' => $this->sync_status,
             'last_synced_at' => $this->last_synced_at?->toIso8601String(),
             'last_error' => $this->last_error,
+            'last_sync_summary' => $this->last_sync_summary,
             'disabled_at' => $this->disabled_at?->toIso8601String(),
         ];
     }

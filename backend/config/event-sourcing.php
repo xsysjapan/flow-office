@@ -38,6 +38,7 @@ use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
@@ -345,6 +346,7 @@ return [
         'company_calendar.created' => CompanyCalendarCreated::class,
         'company_calendar.updated' => CompanyCalendarUpdated::class,
         'company_calendar.default_changed' => CompanyCalendarDefaultChanged::class,
+        'company_calendar.deleted' => CompanyCalendarDeleted::class,
         'company_calendar_year.created' => CompanyCalendarYearCreated::class,
         'company_calendar_year.days_updated' => CompanyCalendarDaysUpdated::class,
         'company_calendar_year.published' => CompanyCalendarYearPublished::class,

@@ -59,13 +59,13 @@ class HolidayCalendarSynchronizer
     private function fetchAndParse(string $icsUrl): array
     {
         try {
-            $response = Http::get($icsUrl);
+            $response = Http::timeout(15)->withHeaders(['User-Agent' => 'flow-office/1.0'])->get($icsUrl);
         } catch (Exception $e) {
             throw new RuntimeException('祝日iCalendarの取得に失敗しました: '.$e->getMessage(), previous: $e);
         }
 
         if (! $response->successful()) {
-            throw new RuntimeException('祝日iCalendarの取得に失敗しました: HTTP '.$response->status());
+            throw new RuntimeException('祝日iCalendarの取得に失敗しました: HTTP '.$response->status().' — '.substr($response->body(), 0, 200));
         }
 
         try {

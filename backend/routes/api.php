@@ -222,6 +222,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/onboarding/calendar/generate-now', [OnboardingController::class, 'generateCalendarNow']);
         Route::post('/company-calendars', [CompanyCalendarController::class, 'store']);
         Route::put('/company-calendars/{companyCalendar}', [CompanyCalendarController::class, 'update']);
+        Route::delete('/company-calendars/{companyCalendar}', [CompanyCalendarController::class, 'destroy']);
         Route::post('/company-calendars/{companyCalendar}/set-default', [CompanyCalendarController::class, 'setDefault']);
         Route::post('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'storeYear']);
         Route::post('/company-calendar-years/{companyCalendarYear}/publish', [CompanyCalendarController::class, 'publish']);

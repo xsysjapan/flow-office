@@ -5,6 +5,7 @@ namespace Tests\Feature\Attendance;
 use App\Models\CompanyCalendar;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -125,5 +126,98 @@ class CompanyCalendarDefaultTest extends TestCase
         $response = $this->actingAs($plainUser)->putJson("/api/company-calendars/{$calendarId}", ['name' => '改称後']);
 
         $response->assertForbidden();
+    }
+
+    public function test_deleting_a_non_default_company_calendar_removes_it_and_its_years(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->assertCreated();
+        $second = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '名古屋事業所カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json();
+
+        $this->assertDatabaseHas('company_calendar_years', ['company_calendar_id' => $second['id']]);
+
+        $response = $this->actingAs($admin)->deleteJson("/api/company-calendars/{$second['id']}");
+
+        $response->assertNoContent();
+        $this->assertDatabaseMissing('company_calendars', ['id' => $second['id']]);
+        $this->assertDatabaseMissing('company_calendar_years', ['company_calendar_id' => $second['id']]);
+    }
+
+    public function test_deleting_the_default_company_calendar_is_rejected(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->json('id');
+
+        $response = $this->actingAs($admin)->deleteJson("/api/company-calendars/{$calendarId}");
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('company_calendars', ['id' => $calendarId]);
+    }
+
+    public function test_deleting_a_company_calendar_used_by_a_work_style_is_rejected(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->assertCreated();
+        $second = $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '名古屋事業所カレンダー'])->json();
+
+        WorkStyle::query()->create([
+            'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '09:00', 'default_end_time' => '18:00',
+            'default_break_minutes' => 60, 'company_calendar_id' => $second['id'], 'is_shift_based' => false,
+        ]);
+
+        $response = $this->actingAs($admin)->deleteJson("/api/company-calendars/{$second['id']}");
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('company_calendars', ['id' => $second['id']]);
+    }
+
+    public function test_delete_requires_attendance_manage_permission(): void
+    {
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->assertCreated();
+        $second = $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '名古屋事業所カレンダー'])->json();
+
+        $plainUser = User::factory()->create();
+
+        $response = $this->actingAs($plainUser)->deleteJson("/api/company-calendars/{$second['id']}");
+
+        $response->assertForbidden();
+    }
+
+    public function test_index_without_page_param_returns_a_plain_array(): void
+    {
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->assertCreated();
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '名古屋事業所カレンダー'])->assertCreated();
+
+        $response = $this->actingAs($admin)->getJson('/api/company-calendars');
+
+        $response->assertOk();
+        $this->assertIsArray($response->json());
+        $this->assertArrayNotHasKey('data', $response->json());
+        $this->assertCount(2, $response->json());
+    }
+
+    public function test_index_with_page_param_returns_a_paginated_response(): void
+    {
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '本社カレンダー'])->assertCreated();
+        $this->actingAs($admin)->postJson('/api/company-calendars', ['name' => '名古屋事業所カレンダー'])->assertCreated();
+
+        $response = $this->actingAs($admin)->getJson('/api/company-calendars?page=1&per_page=1');
+
+        $response->assertOk();
+        $this->assertIsInt($response->json('meta.total'));
+        $this->assertSame(2, $response->json('meta.total'));
+        $this->assertSame(1, $response->json('meta.current_page'));
+        $this->assertCount(1, $response->json('data'));
     }
 }

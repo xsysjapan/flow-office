@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 祝日iCalendarソース (docs/16-database-schema.md holiday_calendar_sources、UC-C012)。
  * 同期処理は`App\Domain\Attendance\Services\HolidayCalendarSynchronizer`にまとめる。
  */
-#[Fillable(['id', 'name', 'ics_url', 'sync_status', 'last_synced_at', 'last_error', 'disabled_at'])]
+#[Fillable(['id', 'name', 'ics_url', 'sync_status', 'last_synced_at', 'last_error', 'last_sync_summary', 'disabled_at'])]
 class HolidayCalendarSource extends Model
 {
     use HasUuids;
@@ -31,6 +31,7 @@ class HolidayCalendarSource extends Model
         return [
             'last_synced_at' => 'datetime',
             'disabled_at' => 'datetime',
+            'last_sync_summary' => 'array',
         ];
     }
 

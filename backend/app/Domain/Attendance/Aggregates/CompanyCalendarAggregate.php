@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
@@ -58,6 +59,15 @@ class CompanyCalendarAggregate extends AggregateRoot
         $this->recordThat(new CompanyCalendarDefaultChanged(
             previousDefaultCompanyCalendarId: $previousDefaultCompanyCalendarId,
             changedByUserId: $changedByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function delete(string $deletedByUserId): self
+    {
+        $this->recordThat(new CompanyCalendarDeleted(
+            deletedByUserId: $deletedByUserId,
         ));
 
         return $this;

@@ -1450,11 +1450,23 @@ export interface Paginated<T> {
     current_page: number;
     last_page: number;
     total: number;
+    per_page?: number;
   };
   links: {
     next: string | null;
     prev: string | null;
   };
+}
+
+/** UC-C012: 祝日iCalendarソースの直近1回分の同期結果。同期実行前・未同期ならnull。 */
+export interface HolidayCalendarSyncSummary {
+  added: number;
+  updated: number;
+  removed: number;
+  /** 実際にこのカレンダーの祝日として反映された件数(手動変更保護でスキップされた分を除く)。 */
+  applied: number;
+  /** 手動変更保護のため反映がスキップされた件数。 */
+  protected_conflicts: number;
 }
 
 /** UC-C012: 祝日iCalendarソース(祝日カレンダーの自動同期元)。 */
@@ -1466,6 +1478,7 @@ export interface HolidayCalendarSource {
   last_synced_at: string | null;
   last_error: string | null;
   disabled_at: string | null;
+  last_sync_summary: HolidayCalendarSyncSummary | null;
 }
 
 export type CalendarBulkOperationType =

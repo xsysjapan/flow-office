@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
 use App\Domain\Attendance\Events\CompanyCalendarDefaultChanged;
+use App\Domain\Attendance\Events\CompanyCalendarDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarUpdated;
 use App\Models\CompanyCalendar;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -56,5 +57,14 @@ class CompanyCalendarProjector extends Projector
         CompanyCalendar::query()
             ->where('id', $event->aggregateRootUuid())
             ->update(['is_default' => true]);
+    }
+
+    /**
+     * company_calendar_years(cascadeOnDelete)経由でcompany_calendar_daysも
+     * 自動的に削除される(company_calendar_days.company_calendar_year_idのDB制約)。
+     */
+    public function onCompanyCalendarDeleted(CompanyCalendarDeleted $event): void
+    {
+        CompanyCalendar::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 }

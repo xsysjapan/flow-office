@@ -82,10 +82,24 @@ class HolidayCalendarSourceProjector extends Projector
             ]);
         }
 
+        $actionCounts = ['added' => 0, 'updated' => 0, 'removed' => 0];
+        foreach ($event->eventChanges as $change) {
+            if (array_key_exists($change['action'], $actionCounts)) {
+                $actionCounts[$change['action']]++;
+            }
+        }
+
         HolidayCalendarSource::query()->whereKey($sourceId)->update([
             'sync_status' => HolidayCalendarSource::STATUS_SYNCED,
             'last_synced_at' => $syncedAt,
             'last_error' => null,
+            'last_sync_summary' => [
+                'added' => $actionCounts['added'],
+                'updated' => $actionCounts['updated'],
+                'removed' => $actionCounts['removed'],
+                'applied' => count($event->dayChanges),
+                'protected_conflicts' => count($event->protectedConflicts),
+            ],
         ]);
     }
 

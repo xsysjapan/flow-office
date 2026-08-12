@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
+use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
@@ -21,6 +22,7 @@ use App\Models\CompanyCalendarYear;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use OpenApi\Attributes as OA;
 
 /**
@@ -29,16 +31,37 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '勤務カレンダー', description: '会社カレンダーと休日設定')]
 class CompanyCalendarController extends Controller
 {
+    /**
+     * pageクエリパラメータを省略した場合は既存挙動のまま全件配列を返す(フロントエンドの
+     * 他画面が全件取得に依存しているため)。pageを指定した場合のみページネーションする。
+     */
     #[OA\Get(
         path: '/company-calendars',
         operationId: 'companyCalendars.index',
         summary: '会社カレンダー本体一覧を取得する',
         tags: ['勤務カレンダー'],
+        parameters: [
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: '省略時は全件を配列で返す。指定時はページネーションされたオブジェクト({data, links, meta})を返す。', schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, description: '1ページあたりの件数(1〜100、既定20)。pageを指定した場合のみ有効。', schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return CompanyCalendarResource::collection(CompanyCalendar::query()->orderBy('name')->get());
+        $data = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'between:1,100'],
+        ]);
+
+        if (! $request->has('page')) {
+            return CompanyCalendarResource::collection(CompanyCalendar::query()->orderBy('name')->get());
+        }
+
+        $perPage = $data['per_page'] ?? 20;
+
+        return CompanyCalendarResource::collection(
+            CompanyCalendar::query()->orderBy('name')->paginate($perPage, page: $data['page'])
+        );
     }
 
     /**
@@ -146,6 +169,28 @@ class CompanyCalendarController extends Controller
         ));
 
         return new CompanyCalendarResource($calendar);
+    }
+
+    /**
+     * デフォルトカレンダー、または勤務形態から参照されているカレンダーは削除できない
+     * (DeleteCompanyCalendarHandler参照)。
+     */
+    #[OA\Delete(
+        path: '/company-calendars/{companyCalendar}',
+        operationId: 'companyCalendars.destroy',
+        summary: '会社カレンダー本体を削除する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 204, description: 'Deleted'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function destroy(Request $request, CompanyCalendar $companyCalendar, CommandBus $commandBus): Response
+    {
+        $commandBus->dispatch(new DeleteCompanyCalendar(
+            companyCalendarId: $companyCalendar->id,
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->noContent();
     }
 
     #[OA\Get(

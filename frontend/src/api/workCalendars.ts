@@ -1,8 +1,28 @@
 import { apiFetch } from './client'
-import type { WorkCalendar, WorkCalendarDay, WorkCalendarYear } from './types'
+import type { Paginated, WorkCalendar, WorkCalendarDay, WorkCalendarYear } from './types'
 
 export function fetchWorkCalendars(): Promise<WorkCalendar[]> {
   return apiFetch('/company-calendars')
+}
+
+export interface FetchWorkCalendarsPageParams {
+  page: number
+  per_page?: number
+}
+
+/**
+ * 一覧画面(WorkCalendarListPage)専用のページネーション付き取得。`fetchWorkCalendars`
+ * (クエリパラメータ無し)は他画面が配列前提で使っているため、挙動を変えずこちらを別関数として追加する。
+ */
+export function fetchWorkCalendarsPage({
+  page,
+  per_page,
+}: FetchWorkCalendarsPageParams): Promise<Paginated<WorkCalendar>> {
+  return apiFetch('/company-calendars', { query: { page, per_page } })
+}
+
+export function deleteWorkCalendar(id: string): Promise<void> {
+  return apiFetch(`/company-calendars/${id}`, { method: 'DELETE' })
 }
 
 export interface CreateWorkCalendarInput {

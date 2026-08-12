@@ -76,6 +76,13 @@ class HolidayCalendarSourceControllerTest extends TestCase
             'is_public_holiday' => true,
             'public_holiday_name' => 'こどもの日',
         ]);
+        $response->assertJsonPath('last_sync_summary', [
+            'added' => 1,
+            'updated' => 0,
+            'removed' => 0,
+            'applied' => 1,
+            'protected_conflicts' => 0,
+        ]);
     }
 
     public function test_fetch_failure_marks_status_failed_and_does_not_touch_calendar_days(): void
