@@ -10,7 +10,7 @@ import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
 import { paymentBearerLabel } from '../../utils/statusLabels'
 
-export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic' | 'other'
+export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic' | 'other' | 'transport'
 
 export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
@@ -52,6 +52,15 @@ const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   lodging: '宿泊費を入力',
   generic: '消耗品の経費を入力',
   other: 'その他の経費を入力',
+  transport: '交通費を入力',
+}
+
+/** 出発地/到着地の2項目から`description`用の1行テキストを組み立てる
+ *  (docs/30-usecases-expense.md UC-X004a: 「出発地 → 到着地」の所定フォーマット。
+ *  `ExpenseItemsTable`の表形式入力と同じ組み立てルールにしている)。 */
+function composeRouteDescription(departure: string, destination: string): string {
+  if (!departure && !destination) return ''
+  return `${departure} → ${destination}`
 }
 
 const PAYMENT_BEARERS: ExpensePaymentBearer[] = ['employee', 'corporate_card', 'company', 'customer', 'other']
@@ -64,11 +73,13 @@ function coerceAttributeValue(field: ExpenseCategoryFieldDefinition, raw: string
 }
 
 /**
- * UC-X004b〜d: 会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。
+ * UC-X004a〜d: 交通費・会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。
  * `fieldSet`によって追加入力項目とdescriptionの整形フォーマットのみが切り替わり、
  * 利用日・金額の共通フィールドと「保存後にフォームをリセットして続けて入力できる」
  * 挙動はどのfieldSetでも共通(バックエンドのデータ構造は増やさない、
- * docs/30-usecases-expense.md UC-X004b〜d)。
+ * docs/30-usecases-expense.md UC-X004a〜d)。交通費(`transport`)は「個別に登録」の
+ * ときだけこのフォームを使い、「まとめて登録」のときは複数明細をまとめて入力できる
+ * `ExpenseItemsTable`(表形式)を使う(呼び出し側の`ExpenseClaimNewPage`で出し分ける)。
  * fieldDefinitionsが設定された区分では、その追加項目を動的に表示しattributesへ保存する
  * (「経費精算機能 設計・実装指示書」6.5/7.2)。
  */
@@ -87,6 +98,8 @@ export function SingleExpenseItemForm({
   const [content, setContent] = useState('') // 内容
   const [participants, setParticipants] = useState('') // 参加者氏名(会食のみ)
   const [participantCount, setParticipantCount] = useState('') // 参加人数(会食のみ)
+  const [departure, setDeparture] = useState('') // 出発地(交通費のみ)
+  const [destination, setDestination] = useState('') // 到着地(交通費のみ)
   const [paymentBearer, setPaymentBearer] = useState<ExpensePaymentBearer>('employee')
   const [attributeValues, setAttributeValues] = useState<Record<string, string | boolean>>({})
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -99,6 +112,8 @@ export function SingleExpenseItemForm({
     setContent('')
     setParticipants('')
     setParticipantCount('')
+    setDeparture('')
+    setDestination('')
     setPaymentBearer('employee')
     setAttributeValues({})
     setReceiptFile(null)
@@ -117,6 +132,8 @@ export function SingleExpenseItemForm({
     setContent(presetItem.description ?? '')
     setParticipants('')
     setParticipantCount('')
+    setDeparture('')
+    setDestination('')
     setPaymentBearer(presetItem.payment_bearer ?? 'employee')
     setAttributeValues(attributesToFieldValues(presetItem.attributes, fieldDefinitions))
     setReceiptFile(null)
@@ -144,6 +161,10 @@ export function SingleExpenseItemForm({
       // 取引先・内容のどちらか一方が入力されていれば足りるとする。
       return Boolean(payee || content)
     }
+    if (fieldSet === 'transport') {
+      // 取引先の概念が無く、出発地→到着地(または自由入力の内容)があれば足りる。
+      return Boolean(content)
+    }
     return Boolean(payee)
   })()
 
@@ -154,6 +175,9 @@ export function SingleExpenseItemForm({
     if (fieldSet === 'other') {
       if (payee && content) return `${payee} - ${content}`
       return payee || content
+    }
+    if (fieldSet === 'transport') {
+      return content || undefined
     }
     return content ? `${payee} - ${content}` : payee
   }
@@ -232,6 +256,44 @@ export function SingleExpenseItemForm({
           </div>
           <FormField label="内容" htmlFor="single-item-content" required>
             <Textarea id="single-item-content" value={content} onChange={(e) => setContent(e.target.value)} />
+          </FormField>
+        </>
+      )}
+
+      {fieldSet === 'transport' && (
+        <>
+          <div className="flex items-center gap-1">
+            <FormField label="出発地" htmlFor="single-item-departure">
+              <Input
+                id="single-item-departure"
+                value={departure}
+                onChange={(e) => {
+                  setDeparture(e.target.value)
+                  setContent(composeRouteDescription(e.target.value, destination))
+                }}
+              />
+            </FormField>
+            <span aria-hidden="true" className="mt-6 text-muted-foreground">
+              →
+            </span>
+            <FormField label="到着地" htmlFor="single-item-destination">
+              <Input
+                id="single-item-destination"
+                value={destination}
+                onChange={(e) => {
+                  setDestination(e.target.value)
+                  setContent(composeRouteDescription(departure, e.target.value))
+                }}
+              />
+            </FormField>
+          </div>
+          <FormField label="内容" htmlFor="single-item-content" required>
+            <Input
+              id="single-item-content"
+              placeholder="例: (電車)、交通手段の補足など"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+            />
           </FormField>
         </>
       )}

@@ -5,6 +5,60 @@ import { pickDate } from '../../test-support/pickerInteractions'
 import { SingleExpenseItemForm } from './SingleExpenseItemForm'
 
 describe('SingleExpenseItemForm', () => {
+  describe('fieldSet=transport', () => {
+    it('composes 内容 from 出発地/到着地 and lets it be edited further (e.g. appending a transport method)', async () => {
+      const onSubmit = vi.fn()
+      render(<SingleExpenseItemForm fieldSet="transport" categoryId={1} onSubmit={onSubmit} />)
+
+      const button = screen.getByRole('button', { name: '明細を保存して続けて入力する' })
+      expect(button).toBeDisabled()
+
+      await pickDate(userEvent.setup(), '利用日', '2026-07-04')
+      await userEvent.type(screen.getByLabelText('金額'), '420')
+      expect(button).toBeDisabled()
+
+      await userEvent.type(screen.getByLabelText('出発地'), '自宅')
+      await userEvent.type(screen.getByLabelText('到着地'), '会社')
+      expect(screen.getByLabelText('内容')).toHaveValue('自宅 → 会社')
+
+      await userEvent.type(screen.getByLabelText('内容'), '(電車)')
+      expect(button).toBeEnabled()
+      await userEvent.click(button)
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          category_id: 1,
+          usage_date: '2026-07-04',
+          amount: 420,
+          description: '自宅 → 会社(電車)',
+          payment_bearer: 'employee',
+          attributes: undefined,
+        },
+        null,
+      )
+    })
+
+    it('does not require a 取引先 field, only usage date, amount and 内容', async () => {
+      render(<SingleExpenseItemForm fieldSet="transport" categoryId={1} onSubmit={vi.fn()} />)
+      expect(screen.queryByLabelText('取引先')).not.toBeInTheDocument()
+    })
+
+    it('resets the form after submitting so the next item can be entered', async () => {
+      const onSubmit = vi.fn()
+      render(<SingleExpenseItemForm fieldSet="transport" categoryId={1} onSubmit={onSubmit} />)
+
+      await pickDate(userEvent.setup(), '利用日', '2026-07-04')
+      await userEvent.type(screen.getByLabelText('金額'), '420')
+      await userEvent.type(screen.getByLabelText('出発地'), '自宅')
+      await userEvent.type(screen.getByLabelText('到着地'), '会社')
+      await userEvent.click(screen.getByRole('button', { name: '明細を保存して続けて入力する' }))
+
+      expect(screen.getByLabelText('出発地')).toHaveValue('')
+      expect(screen.getByLabelText('到着地')).toHaveValue('')
+      expect(screen.getByLabelText('内容')).toHaveValue('')
+    })
+  })
+
   describe('fieldSet=meal', () => {
     it('requires payee, participants, participant count and content before submitting', async () => {
       const onSubmit = vi.fn()

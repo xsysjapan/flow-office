@@ -41,11 +41,12 @@ function emptyItem(categoryId?: number): SaveExpenseItemInput {
   return { category_id: categoryId ?? 0, usage_date: '', amount: 0 }
 }
 
-/** UC-X004b〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊・その他以外は
- *  すべて汎用(取引先必須+内容)の`generic`にまとめ、区分が増えてもフロント分岐を増やさない。
- *  「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため、取引先を任意項目にした
- *  専用の`other`を使う。 */
+/** UC-X004a〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊・交通費・
+ *  その他以外はすべて汎用(取引先必須+内容)の`generic`にまとめ、区分が増えてもフロント
+ *  分岐を増やさない。「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため、
+ *  取引先を任意項目にした専用の`other`を使う。 */
 function fieldSetForCategory(category: ExpenseCategory): SingleExpenseItemFieldSet {
+  if (category.code === 'transport') return 'transport'
   if (category.code === 'meal') return 'meal'
   if (category.code === 'lodging') return 'lodging'
   if (category.code === 'other') return 'other'
@@ -551,6 +552,12 @@ export function ExpenseClaimNewPage() {
     )
   }
 
+  // 交通費(entry_mode='batch')は「まとめて登録」では複数明細をまとめて入力する表形式を、
+  // 「個別に登録」ではほかの単発経費と同様に1件入力で完結するフォームを使う。区分自体の
+  // entry_modeは変えず、どちらの画面を出すかだけをここで振り分ける(下書き再開時など
+  // entryModeが未確定の場合は、まとめて登録時と同じ表形式を既定にする)。
+  const showBatchTable = selectedCategory.entry_mode === 'batch' && entryMode !== 'individual'
+
   return (
     <div className="flex flex-col gap-6">
       <Card
@@ -561,10 +568,14 @@ export function ExpenseClaimNewPage() {
           </Button>
         }
       >
-        {selectedCategory.entry_mode === 'batch' ? (
-          <>
+        {selectedCategory.entry_mode === 'batch' && (
+          <div className="mb-4">
             <AttendanceReferenceLookup />
+          </div>
+        )}
 
+        {showBatchTable ? (
+          <>
             <div className="mt-4">
               <PresetPicker categoryId={selectedCategory.id} onApply={appendRows} />
             </div>

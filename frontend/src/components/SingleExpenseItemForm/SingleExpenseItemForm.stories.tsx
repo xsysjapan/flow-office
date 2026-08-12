@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'UC-X004b〜d: 会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。`fieldSet`で入力項目とdescriptionの整形フォーマットが切り替わる。保存後はフォームがリセットされ、続けて次の1件を入力できる。',
+          'UC-X004a〜d: 交通費・会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。`fieldSet`で入力項目とdescriptionの整形フォーマットが切り替わる。保存後はフォームがリセットされ、続けて次の1件を入力できる。',
       },
     },
   },
@@ -22,6 +22,14 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+/** 交通費は「個別に経費登録」で選んだときだけこのフォームを使う(「まとめて経費登録」では
+ *  複数明細をまとめて入力できる表形式を使う)。 */
+export const Transport: Story = {
+  args: {
+    fieldSet: 'transport',
+  },
+}
 
 export const Meal: Story = {
   args: {
