@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { Paginated, StoredEvent } from '../../api/types'
 import { AuditLogPage } from './AuditLogPage'
 
@@ -39,6 +40,7 @@ const defaultFilters = {
   user_id: undefined,
   from: undefined,
   to: undefined,
+  page: 1,
 }
 
 function withSeeded() {
@@ -48,7 +50,9 @@ function withSeeded() {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <AuditLogPage />
+        <MemoryRouter>
+          <AuditLogPage />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { useConfirmNotification, useMyNotifications } from '../../hooks/useNotifications'
@@ -44,7 +45,19 @@ export function NotificationsPage() {
       {confirmNotification.error && <ErrorMessage error={confirmNotification.error} />}
 
       {!isLoading && !error && notifications.length === 0 && (
-        <p className="text-sm text-muted-foreground">通知はありません。</p>
+        status === 'all' ? (
+          <EmptyState title="通知はありません。" description="新しい通知が届くとここに表示されます。" />
+        ) : (
+          <EmptyState
+            title="条件に一致する通知がありません。"
+            description="フィルターを変更すると他の通知が表示されることがあります。"
+            action={
+              <Button variant="secondary" onClick={() => setStatus('all')}>
+                すべて表示する
+              </Button>
+            }
+          />
+        )
       )}
 
       <ul className="divide-y divide-border">

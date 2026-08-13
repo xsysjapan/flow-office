@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -172,8 +173,13 @@ export function GroupTypeManagementPage() {
               })
             }
           >
-            グループ種別を追加
+            グループ種別を作成
           </Button>
+          {(!createForm.code || !createForm.name) && (
+            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
+              コードと名称を入力してください。
+            </p>
+          )}
         </div>
 
         <h2 className="mb-3 border-t pt-4 text-base font-semibold">
@@ -181,9 +187,10 @@ export function GroupTypeManagementPage() {
         </h2>
         <div className="mb-4 flex flex-wrap gap-2">
           {types.data?.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              グループ種別はまだ登録されていません。
-            </p>
+            <EmptyState
+              title="グループ種別はまだありません。"
+              description="上の「新規作成」からグループ種別を作成できます。"
+            />
           )}
           {types.data?.map((type) => (
             <span
@@ -356,6 +363,11 @@ export function GroupTypeManagementPage() {
           >
             変更を保存
           </Button>
+          {(!editForm.id || !editForm.name) && (
+            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
+              {editForm.id ? "名称を入力してください。" : "編集するグループ種別を選択してください。"}
+            </p>
+          )}
         </div>
       </Card>
     </div>

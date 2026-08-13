@@ -5,12 +5,17 @@ description: Use when creating a new reusable UI component in frontend/src/compo
 
 # 新しいUIコンポーネントを追加する
 
-flow-office のフロントエンドでは、`frontend/src/components/` 配下のコンポーネントは必ず
-「実装 + Storybook story + テスト」の3点セットで作る。story とテストを後回しに
-しない(ユーザー指示: 「コンポーネントを作成した際はstoriesファイルを作ってください」)。
+flow-office のフロントエンドでは、`frontend/src/components/<Name>/` 配下のドメイン
+コンポーネントは必ず「実装 + Storybook story + テスト」の3点セットで作る。story と
+テストを後回しにしない(ユーザー指示: 「コンポーネントを作成した際はstoriesファイルを
+作ってください」)。**`frontend/src/components/ui/` 配下のshadcn/ui風プリミティブは対象外**
+(軽量storyのみでよく、フルテストは求めない。`.claude/skills/ui-design-system` §2.2)。
 
 スタイリングは Tailwind CSS + shadcn/ui相当のプリミティブ(`frontend/src/components/ui/`)
-を使う(`.claude/skills/ui-design-system`参照)。デザイン刷新前の一部コンポーネントは
+を使う(見た目のルールは`.claude/skills/ui-design-system`)。コンポーネントが操作を伴う場合
+(確認ダイアログ・フォーム・一覧行のアクション・状態表示など)は、その挙動を
+`.claude/skills/ui-interaction-patterns`に合わせる(既存の`ConfirmActionDialog`のような
+共通の操作コンポーネントがあれば、似たものを新規に作らない)。デザイン刷新前の一部コンポーネントは
 まだ `fo-` 接頭辞の個別 `.css` ファイルを使っているが、新規追加や刷新時は個別CSSファイルを
 増やさず、`ui/`プリミティブ + Tailwindユーティリティクラスで表現する。
 
@@ -36,9 +41,8 @@ frontend/src/components/<ComponentName>/
 
 2. **スタイルはTailwindユーティリティ + `ui/`プリミティブで表現する**: 新しい見た目のバリエーション
    が必要なら `class-variance-authority`(`cva`)でvariantを定義する(`frontend/src/components/ui/badge.tsx`
-   参照)。色・間隔・角丸は `frontend/src/index.css` のデザイントークン経由のユーティリティ
-   クラス(`bg-card`, `text-muted-foreground`, `border-border`など)だけを使い、任意値
-   (`mt-[13px]`など)や生の16進色を直接書かない(詳細は `.claude/skills/ui-design-system`)。
+   参照)。色・間隔・角丸のトークン規約は `.claude/skills/ui-design-system` に従う
+   (ここでは繰り返さない)。
 
 3. **Storybook story を書く**: `Meta<typeof Component>` + `satisfies` パターンで、
    props の代表的なバリエーションを1 storyずつ用意する(例: Button の Primary/Secondary/

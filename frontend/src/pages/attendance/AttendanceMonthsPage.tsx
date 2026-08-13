@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -17,7 +17,8 @@ const PAGE_SIZE = 6
 
 /**
  * UC-A008: 自分の月次勤怠の一覧。月を選ぶと詳細画面(日別の内訳・提出)に遷移する
- * (オブジェクト指向UI)。
+ * (オブジェクト指向UI)。表示年・ページはURLに反映し、Browser Back・リロード・URL共有で
+ * 状態を維持する(`ui-interaction-patterns` §2.10)。
  */
 export function AttendanceMonthsPage() {
   const { user } = useAuth()
@@ -25,8 +26,9 @@ export function AttendanceMonthsPage() {
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const allYearMonths = employmentYearMonths(user?.hire_date, user?.termination_date, currentYearMonth)
   const years = [...new Set(allYearMonths.map((yearMonth) => yearMonth.slice(0, 4)))].reverse()
-  const [selectedYear, setSelectedYear] = useState('')
-  const [page, setPage] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedYear = searchParams.get('year') ?? ''
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="月次勤怠の取得に失敗しました。" />
@@ -41,8 +43,18 @@ export function AttendanceMonthsPage() {
   const displayedMonths = months.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const handleYearChange = (year: string) => {
-    setSelectedYear(year)
-    setPage(1)
+    const next = new URLSearchParams(searchParams)
+    if (year) next.set('year', year)
+    else next.delete('year')
+    next.delete('page')
+    setSearchParams(next)
+  }
+
+  const handlePageChange = (nextPage: number) => {
+    const next = new URLSearchParams(searchParams)
+    if (nextPage <= 1) next.delete('page')
+    else next.set('page', String(nextPage))
+    setSearchParams(next)
   }
 
   return (
@@ -62,7 +74,7 @@ export function AttendanceMonthsPage() {
       }
     >
       {months.length === 0 ? (
-        <p className="text-sm text-muted-foreground">入社日を設定すると、その月以降の月次勤怠を確認できます。</p>
+        <EmptyState title="入社日を設定すると、その月以降の月次勤怠を確認できます。" />
       ) : (
         <>
           <ul className="divide-y divide-border">
@@ -95,10 +107,10 @@ export function AttendanceMonthsPage() {
             <div className="mt-4 flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">{months.length}件 ({currentPage}/{pageCount}ページ)</span>
               <div className="flex gap-2">
-                <Button variant="secondary" size="icon" title="前のページ" aria-label="前のページ" disabled={currentPage === 1} onClick={() => setPage((previous) => previous - 1)}>
+                <Button variant="secondary" size="icon" title="前のページ" aria-label="前のページ" disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)}>
                   <ChevronLeft aria-hidden="true" />
                 </Button>
-                <Button variant="secondary" size="icon" title="次のページ" aria-label="次のページ" disabled={currentPage === pageCount} onClick={() => setPage((previous) => previous + 1)}>
+                <Button variant="secondary" size="icon" title="次のページ" aria-label="次のページ" disabled={currentPage === pageCount} onClick={() => handlePageChange(currentPage + 1)}>
                   <ChevronRight aria-hidden="true" />
                 </Button>
               </div>

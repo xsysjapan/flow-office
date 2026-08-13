@@ -11,8 +11,10 @@ import {
   CancelApprovedLeaveDialog,
   type ApprovedLeaveTarget,
 } from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { Duration } from '../../components/Duration/Duration'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { DateTimePicker } from '../../components/DateTimePicker/DateTimePicker'
 import { FormField } from '../../components/FormField/FormField'
@@ -118,6 +120,25 @@ function MonthLockedNotice() {
       月次勤怠が提出済みのため、この日は編集できません。修正が必要な場合は修正申請を利用してください。
     </p>
   )
+}
+
+/**
+ * 編集中に変更が失われるおそれがある間、タブを閉じる・リロードする操作に対してブラウザ標準の
+ * 確認を出す(`ui-interaction-patterns` §2.9)。react-router-domはBrowserRouter(データ
+ * ルーターではない)構成のため`useBlocker`が使えず、アプリ内Link遷移(前日・翌日・週次等)を
+ * 個別にブロックする仕組みは今回のスコープでは追加しない(大掛かりなルーティング変更が
+ * 必要になるため見送り。完了報告に記載)。
+ */
+function useUnsavedChangesGuard(active: boolean) {
+  useEffect(() => {
+    if (!active) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [active])
 }
 
 function weekdayLabel(date: string): string {
@@ -462,9 +483,9 @@ function PunchLogCard({ date, locked }: { date: string; locked: boolean }) {
       {isLoading ? (
         <LoadingState />
       ) : !punches || punches.length === 0 ? (
-        <p className="text-sm text-muted-foreground">この日の打刻ログはありません。</p>
+        <EmptyState title="この日の打刻ログはありません。" />
       ) : !visiblePunches || visiblePunches.length === 0 ? (
-        <p className="text-sm text-muted-foreground">有効な打刻ログはありません。</p>
+        <EmptyState title="有効な打刻ログはありません。" description="訂正・削除された打刻のみのため、表示できる打刻ログがありません。" />
       ) : (
         <ul className="divide-y divide-border">
           {visiblePunches.map((punch) => (
@@ -477,66 +498,62 @@ function PunchLogCard({ date, locked }: { date: string; locked: boolean }) {
   )
 }
 
-/** UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。 */
+/**
+ * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能。破壊的操作の
+ * 確認は共通の`ConfirmActionDialog`に統一する(`.claude/skills/ui-interaction-patterns`)。
+ * 削除理由は必須のため、未入力での確定操作は`onConfirm`内でエラーとして拒否し
+ * ダイアログを開いたままにする(`ConfirmActionDialog`はconfirmボタンのdisabled制御を
+ * 持たないため)。
+ */
 function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (punchLogAction: AttendanceDayPunchLogAction) => void }) {
-  const [isOpen, setIsOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [punchLogAction, setPunchLogAction] = useState<AttendanceDayPunchLogAction>('leave_punches')
+  const [validationError, setValidationError] = useState<Error | null>(null)
   const deleteDay = useDeleteAttendanceDay()
 
   return (
-    <Dialog
-      open={isOpen}
+    <ConfirmActionDialog
+      triggerLabel="削除"
+      triggerVariant="danger"
+      title="日次勤怠を削除しますか?"
+      description={`${day.work_date} の日次勤怠を削除します。この操作は元に戻せません。承認済みの月次に含まれる場合は削除できません。`}
+      confirmLabel="削除する"
+      isPending={deleteDay.isPending}
+      error={deleteDay.error ?? validationError ?? undefined}
       onOpenChange={(open) => {
-        setIsOpen(open)
         if (open) {
           setReason('')
           setPunchLogAction('leave_punches')
+          setValidationError(null)
           deleteDay.reset()
         }
       }}
+      onConfirm={async () => {
+        if (!reason) {
+          setValidationError(new Error('削除理由を入力してください。'))
+          throw new Error('削除理由を入力してください。')
+        }
+        setValidationError(null)
+        await deleteDay.mutateAsync({ id: day.id, input: { reason, punch_log_action: punchLogAction } })
+        onDeleted(punchLogAction)
+      }}
     >
-      <Button variant="danger" onClick={() => setIsOpen(true)}>
-        削除
-      </Button>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>日次勤怠を削除しますか?</DialogTitle>
-          <DialogDescription>
-            {day.work_date} の日次勤怠を削除します。承認済みの月次に含まれる場合は削除できません。
-          </DialogDescription>
-        </DialogHeader>
-        {deleteDay.error && <ErrorMessage error={deleteDay.error} />}
-        <Input
-          aria-label="削除理由"
-          placeholder="削除理由(必須)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <NativeSelect
-          aria-label="打刻ログの扱い"
-          value={punchLogAction}
-          onChange={(e) => setPunchLogAction(e.target.value as AttendanceDayPunchLogAction)}
-        >
-          <option value="leave_punches">打刻ログはそのまま残す</option>
-          <option value="delete_punches">有効な打刻ログも削除する</option>
-          <option value="recreate_from_punches">打刻ログに合わせて日次勤怠を再作成する</option>
-        </NativeSelect>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => setIsOpen(false)}>
-            キャンセル
-          </Button>
-          <Button
-            variant="danger"
-            isLoading={deleteDay.isPending}
-            disabled={!reason}
-            onClick={() => deleteDay.mutate({ id: day.id, input: { reason, punch_log_action: punchLogAction } }, { onSuccess: () => onDeleted(punchLogAction) })}
-          >
-            削除する
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Input
+        aria-label="削除理由"
+        placeholder="削除理由(必須)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <NativeSelect
+        aria-label="打刻ログの扱い"
+        value={punchLogAction}
+        onChange={(e) => setPunchLogAction(e.target.value as AttendanceDayPunchLogAction)}
+      >
+        <option value="leave_punches">打刻ログはそのまま残す</option>
+        <option value="delete_punches">有効な打刻ログも削除する</option>
+        <option value="recreate_from_punches">打刻ログに合わせて日次勤怠を再作成する</option>
+      </NativeSelect>
+    </ConfirmActionDialog>
   )
 }
 
@@ -807,6 +824,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
   const leaveController = useLeaveDesignationController(day.work_date, day.work_type, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
+  useUnsavedChangesGuard(true)
 
   const handleSave = () => {
     setLeaveError(null)
@@ -962,6 +980,10 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
   const leaveController = useLeaveDesignationController(date, null, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
+  const isDirty = Boolean(
+    actualStartAt || actualEndAt || note || workType || reason || rows.some((r) => r.start || r.end) || leaveController.kind !== 'none',
+  )
+  useUnsavedChangesGuard(isDirty)
 
   const handleCreate = () => {
     if (!user) return
@@ -1108,6 +1130,7 @@ function CalculationAdjustForm({ day, onDone }: { day: AttendanceDay; onDone: ()
   const [fields, setFields] = useState<AdjustmentFields>(adjustmentFieldsFrom(day))
   const [reason, setReason] = useState('')
   const adjustCalculation = useAdjustAttendanceDailyCalculation()
+  useUnsavedChangesGuard(true)
 
   const updateField = (key: keyof AdjustmentFields, value: string) => setFields((prev) => ({ ...prev, [key]: value }))
 
@@ -1546,7 +1569,6 @@ export function AttendanceDayPage() {
             ) : (
               <div className="flex gap-2 border-t border-border pt-4">
                 <Button
-                  variant="secondary"
                   onClick={() => {
                     setIsAdjustingCalculation(false)
                     setIsEditing(true)

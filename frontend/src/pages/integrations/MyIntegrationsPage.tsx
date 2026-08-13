@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -42,6 +43,10 @@ const SCOPE_LABELS: Record<IntegrationScopeType, string> = {
  * UC-I001〜UC-I003: 本人が自分専用のAPI・MCP連携(Claude等のAIアプリからの操作用)を
  * 登録・再発行・停止する。連携の登録・再発行・停止自体は連携トークンではなく本人の通常
  * ログインセッションで行う(docs/25-usecases-integrations-mcp.md)。
+ *
+ * Pattern exception: ボタン文言に「登録する」「新規登録」を使う。
+ * Reason: docs/25-usecases-integrations-mcp.mdでAPI/MCP連携の操作自体が「登録・再発行・停止」
+ * と定義されている業務用語のため(ui-interaction-patterns SKILL.md §2.7の例外)。
  */
 export function MyIntegrationsPage() {
   const { data: integrations, isLoading, error } = useMyIntegrations()
@@ -167,11 +172,24 @@ export function MyIntegrationsPage() {
           >
             登録する
           </Button>
+          {(!clientName || scopes.length === 0) && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              名称を入力し、許可する操作を1つ以上選択してください。
+            </p>
+          )}
         </div>
       )}
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">登録済みの連携はまだありません。</p>
+        <EmptyState
+          title="登録済みの連携はまだありません。"
+          description="API・MCP連携を登録すると、ClaudeなどのAIアプリから許可した操作だけを行えるようになります。"
+          action={
+            !isFormOpen ? (
+              <Button onClick={() => setIsFormOpen(true)}>新規登録</Button>
+            ) : undefined
+          }
+        />
       ) : (
         <Table>
           <TableHeader>

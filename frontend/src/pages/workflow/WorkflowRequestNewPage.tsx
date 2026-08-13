@@ -93,7 +93,10 @@ export function WorkflowRequestNewPage() {
         <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
       </FormField>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/requests')}>
+          キャンセル
+        </Button>
         <Button
           variant="secondary"
           isLoading={isBusy}
@@ -110,6 +113,12 @@ export function WorkflowRequestNewPage() {
           提出する
         </Button>
       </div>
+      {(!requestTypeCode || !title) && (
+        <p className="mt-2 text-xs text-muted-foreground">申請種別とタイトルを入力すると保存できます。</p>
+      )}
+      {requestTypeCode && title && !approverUserId && (
+        <p className="mt-2 text-xs text-muted-foreground">提出するには承認者を選択してください。</p>
+      )}
     </Card>
   )
 }

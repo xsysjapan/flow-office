@@ -74,4 +74,20 @@ describe('RequestTypeListPage', () => {
       '/admin/request-types/new',
     )
   })
+
+  it('shows an empty state with a create action when there are no request types', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(requestTypesApi, 'fetchRequestTypes').mockResolvedValue([])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <RequestTypeListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('申請種別はまだありません。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '申請種別を作成' })).toHaveAttribute('href', '/admin/request-types/new')
+  })
 })

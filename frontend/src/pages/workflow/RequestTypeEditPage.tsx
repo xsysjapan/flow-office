@@ -275,11 +275,17 @@ export function RequestTypeEditPage() {
         項目を追加
       </Button>
 
-      <div className="mt-5">
+      <div className="mt-5 flex items-center gap-3">
+        <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/admin/request-types')}>
+          キャンセル
+        </Button>
         <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
           保存する
         </Button>
       </div>
+      {(!code || !name) && (
+        <p className="mt-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
+      )}
     </Card>
   )
 }

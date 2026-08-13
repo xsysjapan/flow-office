@@ -1,11 +1,14 @@
-import { type Dispatch, type FormEvent, type SetStateAction, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
+import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -101,10 +104,19 @@ function BackOfficeTaskTable({ tasks, selectedIds, onToggleRow, onToggleAll, isR
  * 選択してから操作を適用するUI)。
  */
 export function BackOfficeTaskListPage() {
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
-  const [unassignedPage, setUnassignedPage] = useState(1)
-  const [minePage, setMinePage] = useState(1)
+  /** 検索・ページはURLに載せ、一覧→詳細→一覧と戻っても状態が壊れないようにする(SKILL.md §2.10)。
+   *  未割り当て/自分のタスクの2つの一覧は検索語を共有しつつ、ページングは独立させる。 */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
+  const unassignedPageParam = Number(searchParams.get('unassignedPage'))
+  const unassignedPage = Number.isInteger(unassignedPageParam) && unassignedPageParam > 0 ? unassignedPageParam : 1
+  const minePageParam = Number(searchParams.get('minePage'))
+  const minePage = Number.isInteger(minePageParam) && minePageParam > 0 ? minePageParam : 1
+  const isFiltered = Boolean(search)
+
+  const [searchInput, setSearchInput] = useState(search)
+  useEffect(() => setSearchInput(search), [search])
+
   const unassigned = useUnassignedBackOfficeTasks({ search: search || undefined, page: unassignedPage })
   const mine = useMyBackOfficeTasks({ search: search || undefined, page: minePage })
   const assignTask = useAssignBackOfficeTask()
@@ -117,6 +129,11 @@ export function BackOfficeTaskListPage() {
   const [bulkError, setBulkError] = useState<Error | null>(null)
 
   if (unassigned.isLoading || mine.isLoading) return <LoadingState />
+
+  const permissionDeniedError = [unassigned.error, mine.error].find(
+    (candidate): candidate is ApiError => candidate instanceof ApiError && candidate.status === 403,
+  )
+  if (permissionDeniedError) return <PermissionDenied />
   if (unassigned.error) {
     return <ErrorMessage error={unassigned.error} fallback="未割り当てタスクの取得に失敗しました。" />
   }
@@ -124,6 +141,20 @@ export function BackOfficeTaskListPage() {
 
   const unassignedTasks = unassigned.data?.data ?? []
   const myTasks = mine.data?.data ?? []
+
+  function updateParams(patch: Record<string, string | null>) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) next.delete(key)
+          else next.set(key, value)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   function toggleRow(setter: Dispatch<SetStateAction<Set<string>>>, id: string) {
     setter((prev) => {
@@ -168,10 +199,25 @@ export function BackOfficeTaskListPage() {
 
   function handleSearch(event: FormEvent) {
     event.preventDefault()
-    setSearch(searchInput.trim())
-    setUnassignedPage(1)
-    setMinePage(1)
+    updateParams({ q: searchInput.trim() || null, unassignedPage: null, minePage: null })
     setSelectedUnassignedIds(new Set())
+    setSelectedMyTaskIds(new Set())
+  }
+
+  function clearSearch() {
+    setSearchInput('')
+    updateParams({ q: null, unassignedPage: null, minePage: null })
+    setSelectedUnassignedIds(new Set())
+    setSelectedMyTaskIds(new Set())
+  }
+
+  function handleUnassignedPageChange(page: number) {
+    updateParams({ unassignedPage: page > 1 ? String(page) : null })
+    setSelectedUnassignedIds(new Set())
+  }
+
+  function handleMinePageChange(page: number) {
+    updateParams({ minePage: page > 1 ? String(page) : null })
     setSelectedMyTaskIds(new Set())
   }
 
@@ -187,16 +233,7 @@ export function BackOfficeTaskListPage() {
           />
           <Button type="submit">検索</Button>
           {search && (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setSearchInput('')
-                setSearch('')
-                setUnassignedPage(1)
-                setMinePage(1)
-              }}
-            >
+            <Button type="button" variant="secondary" onClick={clearSearch}>
               クリア
             </Button>
           )}
@@ -207,7 +244,7 @@ export function BackOfficeTaskListPage() {
         title="未割り当てタスク"
         actions={
           selectedUnassignedIds.size > 0 ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedUnassignedIds.size}件を選択中</span>
               <div className="w-56">
                 <UserPicker id="bulk-assignee" value={bulkAssignee} onChange={setBulkAssignee} placeholder="担当者を選択" />
@@ -215,13 +252,26 @@ export function BackOfficeTaskListPage() {
               <Button onClick={() => void handleBulkAssign()} isLoading={isBulkAssigning} disabled={!bulkAssignee}>
                 割り当てる
               </Button>
+              {!bulkAssignee && <span className="text-xs text-muted-foreground">担当者を選択してください</span>}
             </div>
           ) : undefined
         }
       >
         {bulkError && <ErrorMessage error={bulkError} />}
         {unassignedTasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">未割り当てのタスクはありません。</p>
+          isFiltered ? (
+            <EmptyState
+              title="条件に一致するタスクがありません。"
+              description="検索条件を変えると表示される場合があります。"
+              action={
+                <Button variant="secondary" size="sm" onClick={clearSearch}>
+                  検索条件をクリア
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState title="未割り当てのタスクはありません。" />
+          )
         ) : (
           <>
             <BackOfficeTaskTable
@@ -235,7 +285,7 @@ export function BackOfficeTaskListPage() {
                 currentPage={unassigned.data.meta.current_page}
                 lastPage={unassigned.data.meta.last_page}
                 total={unassigned.data.meta.total}
-                onPageChange={setUnassignedPage}
+                onPageChange={handleUnassignedPageChange}
               />
             )}
           </>
@@ -257,7 +307,19 @@ export function BackOfficeTaskListPage() {
       >
         {bulkComplete.error && <ErrorMessage error={bulkComplete.error} fallback="タスクの一括完了に失敗しました。" />}
         {myTasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">担当中のタスクはありません。</p>
+          isFiltered ? (
+            <EmptyState
+              title="条件に一致するタスクがありません。"
+              description="検索条件を変えると表示される場合があります。"
+              action={
+                <Button variant="secondary" size="sm" onClick={clearSearch}>
+                  検索条件をクリア
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState title="担当中のタスクはありません。" />
+          )
         ) : (
           <>
             <BackOfficeTaskTable
@@ -272,7 +334,7 @@ export function BackOfficeTaskListPage() {
                 currentPage={mine.data.meta.current_page}
                 lastPage={mine.data.meta.last_page}
                 total={mine.data.meta.total}
-                onPageChange={setMinePage}
+                onPageChange={handleMinePageChange}
               />
             )}
           </>

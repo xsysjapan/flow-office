@@ -6,6 +6,7 @@ import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -79,6 +80,15 @@ function CompensatoryLeaveRequestForm() {
     targetDates.length > 0 &&
     (!approvalRequired || approverUserId) &&
     (isMultiDay || effectiveLeaveType !== 'hourly' || Number(hours) > 0)
+
+  const disabledReason =
+    targetDates.length === 0
+      ? '対象日を1つ以上選択してください。'
+      : approvalRequired && !approverUserId
+        ? '承認者を選択してください。'
+        : !isMultiDay && effectiveLeaveType === 'hourly' && !(Number(hours) > 0)
+          ? '取得時間を入力してください。'
+          : null
 
   /** 日付を選ぶと即座に対象日一覧へ加える(重複は無視し、日付順に並べる)。 */
   const addDate = (value: string | undefined) => {
@@ -231,9 +241,12 @@ function CompensatoryLeaveRequestForm() {
         </FormField>
       </div>
 
-      <Button className="self-start" isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
-        申請する
-      </Button>
+      <div className="flex flex-col items-start gap-1">
+        <Button isLoading={createRequest.isPending} disabled={!canSubmit} onClick={handleSubmit}>
+          申請する
+        </Button>
+        {!canSubmit && disabledReason && <p className="text-xs text-muted-foreground">{disabledReason}</p>}
+      </div>
     </div>
   )
 }
@@ -247,7 +260,9 @@ function MyCompensatoryLeaveRequestList() {
 
   const requests = data ?? []
 
-  if (requests.length === 0) return <p className="text-sm text-muted-foreground">代休申請はまだありません。</p>
+  if (requests.length === 0) {
+    return <EmptyState title="代休申請はまだありません。" description="代休を申請すると、ここに一覧が表示されます。" />
+  }
 
   return (
     <ul className="divide-y divide-border">
@@ -299,7 +314,7 @@ export function MyCompensatoryLeavePage() {
         </p>
 
         {grants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">代休の付与はまだありません。</p>
+          <EmptyState title="代休の付与はまだありません。" description="休日出勤の勤怠実績が確定すると、ここに一覧が表示されます。" />
         ) : (
           <Table>
             <TableHeader>

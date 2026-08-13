@@ -4,6 +4,7 @@ import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -165,7 +166,15 @@ export function GroupDetailPage() {
                     name: form.name,
                     parent_group_id: form.parent_group_id || undefined,
                   },
-                  { onSuccess: () => navigate("/admin/groups") },
+                  {
+                    // 作成後は更新時と同じ「詳細画面に留まる」挙動に揃えるため、一覧ではなく
+                    // 作成されたグループ自身の詳細画面(このページ)へ遷移する(SKILL.md §2.6)。
+                    onSuccess: (data) =>
+                      navigate(
+                        `/admin/groups/${(data as { id: string }).id}`,
+                        { replace: true },
+                      ),
+                  },
                 );
                 return;
               }
@@ -282,9 +291,10 @@ function GroupMembersCard({
       </div>
 
       {group.memberships.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          所属メンバーはいません。
-        </p>
+        <EmptyState
+          title="所属メンバーはいません。"
+          description="「所属を追加」からユーザーをこのグループに追加できます。"
+        />
       ) : (
         <div className="divide-y divide-border rounded border">
           {group.memberships.map((membership) => (
@@ -322,9 +332,7 @@ function GroupMembersCard({
           このグループに関する直近20件の即時変更と予約を表示します。
         </p>
         {(changes.data ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            変更履歴はありません。
-          </p>
+          <EmptyState title="変更履歴はありません。" />
         ) : (
           <div className="divide-y divide-border">
             {changes.data?.map((change) => (

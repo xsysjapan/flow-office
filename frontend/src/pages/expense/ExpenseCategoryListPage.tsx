@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -35,7 +36,15 @@ export function ExpenseCategoryListPage() {
       }
     >
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">経費区分はまだありません。</p>
+        <EmptyState
+          title="経費区分はまだありません。"
+          description="経費区分を作成すると、社員が経費精算の明細を入力できるようになります。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/admin/expense-categories/new">経費区分を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>

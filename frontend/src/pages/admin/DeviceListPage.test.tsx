@@ -162,6 +162,35 @@ describe('DeviceListPage', () => {
     fetchSpy.mockRestore()
   })
 
+  it('opens the device detail modal when a row is activated via keyboard', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('本社1階受付')
+    screen.getByRole('button', { name: '本社1階受付の詳細を開く' }).focus()
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByRole('heading', { name: '本社1階受付' })).toBeInTheDocument()
+  })
+
+  it('shows an empty state with no shared devices registered', async () => {
+    const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({
+      data: [],
+      meta: { current_page: 1, last_page: 1, total: 0 },
+      links: { next: null, prev: null },
+    })
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <DeviceListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('登録済みの共有端末はまだありません。')).toBeInTheDocument()
+    fetchSpy.mockRestore()
+  })
+
   it('toggles the with_trashed query param when showing deleted devices', async () => {
     const user = userEvent.setup()
     const fetchSpy = vi.spyOn(devicesApi, 'fetchDevices').mockResolvedValue({

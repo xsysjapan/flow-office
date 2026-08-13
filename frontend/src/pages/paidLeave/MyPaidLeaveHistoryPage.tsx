@@ -1,4 +1,5 @@
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
 import { useMyPaidLeaveHistory } from '../../hooks/usePaidLeave'
 
@@ -7,10 +8,15 @@ import { useMyPaidLeaveHistory } from '../../hooks/usePaidLeave'
  */
 export function MyPaidLeaveHistoryPage() {
   const { data, isLoading, error } = useMyPaidLeaveHistory()
+  const isEmpty = !isLoading && !error && (data?.length ?? 0) === 0
 
   return (
     <Card title="有給履歴">
-      <LeaveHistoryList domain="paid_leave" events={data} isLoading={isLoading} error={error} />
+      {isEmpty ? (
+        <EmptyState title="有給履歴はまだありません。" description="有給を申請すると、ここに履歴が表示されます。" />
+      ) : (
+        <LeaveHistoryList domain="paid_leave" events={data} isLoading={isLoading} error={error} />
+      )}
     </Card>
   )
 }

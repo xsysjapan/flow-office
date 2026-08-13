@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -42,8 +45,16 @@ export function WorkflowRequestListPage() {
     })
   }
 
+  /** 取消は元に戻せない操作(SKILL.md §2.12)のため、確認ダイアログ(ConfirmActionDialog)を
+   *  経由させる。理由未入力の場合はダイアログを開いたまま留める(Promiseをthrowして
+   *  ConfirmActionDialog側のcatchで「開いたまま」を維持する)。 */
   async function handleBulkCancel() {
-    if (!bulkReason || selectedIds.size === 0) return
+    if (selectedIds.size === 0) return
+    if (!bulkReason) {
+      const emptyReasonError = new Error('取消理由を入力してください。')
+      setBulkError(emptyReasonError)
+      throw emptyReasonError
+    }
     setBulkError(null)
     setIsBulkCancelling(true)
     try {
@@ -54,6 +65,7 @@ export function WorkflowRequestListPage() {
       setBulkReason('')
     } catch (e) {
       setBulkError(e as Error)
+      throw e
     } finally {
       setIsBulkCancelling(false)
     }
@@ -66,17 +78,31 @@ export function WorkflowRequestListPage() {
         selectedIds.size > 0 ? (
           <div className="flex items-center gap-2">
             <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedIds.size}件を選択中</span>
-            <div className="w-48">
-              <Input placeholder="取消理由" value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} />
-            </div>
-            <Button
-              variant="danger"
-              onClick={() => void handleBulkCancel()}
-              isLoading={isBulkCancelling}
-              disabled={!bulkReason}
+            <ConfirmActionDialog
+              triggerLabel="まとめて取消"
+              triggerVariant="danger"
+              title={`選択した${selectedIds.size}件の申請を取り消しますか?`}
+              description="この操作は元に戻せません。選択した申請はすべて取消状態になります。"
+              confirmLabel="まとめて取り消す"
+              isPending={isBulkCancelling}
+              error={bulkError}
+              onConfirm={handleBulkCancel}
+              onOpenChange={(open) => {
+                if (open) {
+                  setBulkReason('')
+                  setBulkError(null)
+                }
+              }}
             >
-              まとめて取り消す
-            </Button>
+              <FormField label="取消理由" htmlFor="bulk-cancel-reason" required>
+                <Input
+                  id="bulk-cancel-reason"
+                  placeholder="取消理由"
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                />
+              </FormField>
+            </ConfirmActionDialog>
           </div>
         ) : (
           <Button asChild>
@@ -85,9 +111,16 @@ export function WorkflowRequestListPage() {
         )
       }
     >
-      {bulkError && <ErrorMessage error={bulkError} />}
       {requests.length === 0 ? (
-        <p className="text-sm text-muted-foreground">申請はまだありません。</p>
+        <EmptyState
+          title="申請はまだありません。"
+          description="新規作成から名刺作成や証明書発行などの申請を行えます。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/requests/new">申請を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>

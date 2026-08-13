@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { Duration } from '../../components/Duration/Duration'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -290,7 +292,7 @@ function ReadOnlyPunchLogCard({ date, userId }: { date: string; userId: string }
       {isLoading ? (
         <LoadingState />
       ) : !activePunches || activePunches.length === 0 ? (
-        <p className="text-sm text-muted-foreground">この日の打刻ログはありません。</p>
+        <EmptyState title="この日の打刻ログはありません。" />
       ) : (
         <ul className="divide-y divide-border">
           {activePunches.map((punch) => {
@@ -380,7 +382,7 @@ export function DailyReferenceView({
       ) : error ? (
         <ErrorMessage error={error} fallback="日次勤怠の取得に失敗しました。" />
       ) : !day ? (
-        <p className="text-sm text-muted-foreground">この日の勤怠記録はありません。</p>
+        <EmptyState title="この日の勤怠記録はありません。" />
       ) : (
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
@@ -454,11 +456,29 @@ export function DailyReferenceView({
 
 /**
  * 管理者が自分以外の社員の勤怠を月次・週次・日次で参照する画面(閲覧専用。編集は行わない)。
- * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。
+ * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。対象社員・
+ * 表示モードはURLに反映し、Browser Back・リロード・URL共有で状態を維持する
+ * (`ui-interaction-patterns` §2.10)。年月・週・日といった各ビュー内部のナビゲーションは
+ * `ui-interaction-patterns`の指示に沿い、既存のナビゲーション的な状態としてURL化しない。
  */
 export function AttendanceReferencePage() {
-  const [userId, setUserId] = useState<string | undefined>(undefined)
-  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get('user') ?? undefined
+  const viewModeParam = searchParams.get('view')
+  const viewMode: ViewMode = VIEW_MODES.some((mode) => mode.key === viewModeParam) ? (viewModeParam as ViewMode) : 'month'
+
+  const setUserId = (id: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (id) next.set('user', id)
+    else next.delete('user')
+    setSearchParams(next)
+  }
+
+  const setViewMode = (mode: ViewMode) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('view', mode)
+    setSearchParams(next)
+  }
 
   return (
     <div className="flex flex-col gap-6">

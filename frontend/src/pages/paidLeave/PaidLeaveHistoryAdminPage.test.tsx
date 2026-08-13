@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
@@ -17,12 +18,14 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage() {
+function renderPage(initialPath = '/paid-leave/history') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <PaidLeaveHistoryAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <PaidLeaveHistoryAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -35,6 +38,7 @@ describe('PaidLeaveHistoryAdminPage', () => {
 
     expect(fetchHistory).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('有給履歴')).not.toBeInTheDocument()
+    expect(screen.getByText('対象社員を選択してください。')).toBeInTheDocument()
   })
 
   it('shows the selected users history', async () => {
@@ -63,6 +67,15 @@ describe('PaidLeaveHistoryAdminPage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
 
     expect(await screen.findByText('10日を付与(有効期限 2027-06-30)')).toBeInTheDocument()
+    expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
+  })
+
+  it('reads the selected user from the ?userId= URL query param', async () => {
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveHistoryForUser').mockResolvedValue([])
+
+    renderPage('/paid-leave/history?userId=user-3')
+
+    expect(await screen.findByText('有給履歴はまだありません。')).toBeInTheDocument()
     expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

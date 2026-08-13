@@ -14,7 +14,7 @@ export function LoginPage() {
   const { data: status } = useOnboardingStatus()
 
   const [isRedirecting, setIsRedirecting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -33,7 +33,7 @@ export function LoginPage() {
     try {
       await login()
     } catch {
-      setError('ログインURLの取得に失敗しました。時間をおいて再度お試しください。')
+      setError(new Error('ログインURLの取得に失敗しました。時間をおいて再度お試しください。'))
       setIsRedirecting(false)
     }
   }
@@ -59,7 +59,7 @@ export function LoginPage() {
         {status?.sso_configured !== false && (
           <>
             <p className="text-sm text-muted-foreground">社内アカウント(Microsoft)でログインしてください。</p>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <ErrorMessage error={error} />}
             <Button className="w-full" onClick={() => void handleLogin()} isLoading={isRedirecting}>
               Microsoftでログイン
             </Button>
@@ -91,6 +91,9 @@ export function LoginPage() {
             >
               ログイン
             </Button>
+            {(!email || !password) && (
+              <p className="mt-1 text-xs text-muted-foreground">メールアドレスとパスワードを入力してください。</p>
+            )}
           </div>
         )}
       </div>

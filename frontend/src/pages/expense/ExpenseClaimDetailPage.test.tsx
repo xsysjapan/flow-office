@@ -149,11 +149,42 @@ describe('ExpenseClaimDetailPage', () => {
     )
   })
 
-  it('shows cancel action for the applicant', async () => {
+  it('shows a cancel trigger for the applicant', async () => {
     renderPage(inReviewClaim)
 
     expect(await screen.findByRole('button', { name: '取り消す' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
+  })
+
+  it('links back to the expense claim list', async () => {
+    renderPage(inReviewClaim)
+
+    expect(await screen.findByRole('link', { name: '← 経費精算一覧へ戻る' })).toHaveAttribute('href', '/expenses')
+  })
+
+  it('cancels the claim with a reason after confirming in the dialog', async () => {
+    vi.spyOn(expenseClaimsApi, 'cancelExpenseClaim').mockResolvedValue({ ...inReviewClaim, status: 'cancelled' })
+
+    renderPage(inReviewClaim)
+    await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
+    await userEvent.type(await screen.findByLabelText('取消理由'), '出張が中止になったため')
+    await userEvent.click(screen.getByRole('button', { name: '取り消しを確定する' }))
+
+    await waitFor(() =>
+      expect(expenseClaimsApi.cancelExpenseClaim).toHaveBeenCalledWith('claim-1', '出張が中止になったため'),
+    )
+  })
+
+  it('shows a validation error and does not cancel when no reason is entered', async () => {
+    const cancelSpy = vi.spyOn(expenseClaimsApi, 'cancelExpenseClaim')
+    cancelSpy.mockClear()
+
+    renderPage(inReviewClaim)
+    await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
+    await userEvent.click(screen.getByRole('button', { name: '取り消しを確定する' }))
+
+    expect(await screen.findByText('取消理由を入力してください')).toBeInTheDocument()
+    expect(cancelSpy).not.toHaveBeenCalled()
   })
 
   it('shows the event history', async () => {

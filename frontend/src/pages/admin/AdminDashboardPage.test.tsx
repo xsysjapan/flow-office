@@ -76,4 +76,13 @@ describe("AdminDashboardPage", () => {
       screen.queryByRole("link", { name: /監査ログ/ }),
     ).not.toBeInTheDocument();
   });
+
+  it("shows a permission denied state when the user has no accessible admin function", () => {
+    renderPage({ ...mockUser, effective_features: [], effective_permissions: [] });
+
+    expect(
+      screen.getByText("管理メニューにアクセスできる権限がありません。必要な場合は管理者に付与を依頼してください。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
 });

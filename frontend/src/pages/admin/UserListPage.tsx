@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Card } from "../../components/Card/Card";
 import { Button } from "../../components/Button/Button";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Input } from "../../components/ui/input";
@@ -22,16 +23,34 @@ import {
   employmentStatusLabel,
 } from "../../utils/userLabels";
 
+const FILTER_PARAM_KEYS = [
+  "q",
+  "account_status",
+  "external_unlinked",
+  "external_hr",
+  "group_id",
+  "group_type_id",
+] as const;
+
 /**
  * UC-M001: ユーザーを検索し、人事・所属情報を確認する一覧。
+ * 検索文字列・フィルターはURL(`?q=...&account_status=...`)へ反映し、ブラウザの戻る/
+ * リロード/URL共有で検索状態が壊れないようにする(SKILL.md §2.10)。
+ *
+ * Pattern exception: 一覧のページングは導入していない。
+ * Reason: `api/users.ts`の`fetchUsers`はページ番号を受け取らない仕様であり、この画面の
+ * 対象範囲(pages/admin配下の画面修正)ではAPIクライアント・hooksのインターフェースを
+ * 変更しないため、Paginationコンポーネントを導入すると壊れる呼び出し互換を保てない。
  */
 export function UserListPage() {
-  const [query, setQuery] = useState("");
-  const [accountStatus, setAccountStatus] = useState("");
-  const [externalUnlinked, setExternalUnlinked] = useState(false);
-  const [externalHr, setExternalHr] = useState(false);
-  const [groupId, setGroupId] = useState("");
-  const [groupTypeId, setGroupTypeId] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("q") ?? "";
+  const accountStatus = searchParams.get("account_status") ?? "";
+  const externalUnlinked = searchParams.get("external_unlinked") === "1";
+  const externalHr = searchParams.get("external_hr") === "1";
+  const groupId = searchParams.get("group_id") ?? "";
+  const groupTypeId = searchParams.get("group_type_id") ?? "";
+
   const [showCreate, setShowCreate] = useState(false);
   const [newUser, setNewUser] = useState({
     name: "",
@@ -48,6 +67,24 @@ export function UserListPage() {
     group_id: groupId || undefined,
     group_type_id: groupTypeId ? Number(groupTypeId) : undefined,
   });
+
+  const isFiltered = FILTER_PARAM_KEYS.some((key) => Boolean(searchParams.get(key)));
+
+  function updateParam(key: (typeof FILTER_PARAM_KEYS)[number], value: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function clearFilters() {
+    setSearchParams({}, { replace: true });
+  }
 
   if (isLoading) return <LoadingState />;
   if (error)
@@ -95,7 +132,7 @@ export function UserListPage() {
           variant="secondary"
           onClick={() => setShowCreate((value) => !value)}
         >
-          {showCreate ? "登録フォームを閉じる" : "ユーザーを登録"}
+          {showCreate ? "キャンセル" : "ユーザーを作成"}
         </Button>
         {showCreate && (
           <div className="mt-3 grid gap-2 rounded border p-3 md:grid-cols-3">
@@ -138,37 +175,44 @@ export function UserListPage() {
                 setNewUser({ ...newUser, job_title: e.target.value })
               }
             />
-            <Button
-              disabled={!newUser.name || !newUser.email}
-              isLoading={createUser.isPending}
-              onClick={() =>
-                createUser.mutate(
-                  {
-                    name: newUser.name,
-                    email: newUser.email,
-                    employee_number: newUser.employee_number || null,
-                    department: newUser.department || null,
-                    job_title: newUser.job_title || null,
-                    employment_status: "active",
-                    account_status: "active",
-                  },
-                  {
-                    onSuccess: () => {
-                      setNewUser({
-                        name: "",
-                        email: "",
-                        employee_number: "",
-                        department: "",
-                        job_title: "",
-                      });
-                      setShowCreate(false);
+            <div>
+              <Button
+                disabled={!newUser.name || !newUser.email}
+                isLoading={createUser.isPending}
+                onClick={() =>
+                  createUser.mutate(
+                    {
+                      name: newUser.name,
+                      email: newUser.email,
+                      employee_number: newUser.employee_number || null,
+                      department: newUser.department || null,
+                      job_title: newUser.job_title || null,
+                      employment_status: "active",
+                      account_status: "active",
                     },
-                  },
-                )
-              }
-            >
-              登録する
-            </Button>
+                    {
+                      onSuccess: () => {
+                        setNewUser({
+                          name: "",
+                          email: "",
+                          employee_number: "",
+                          department: "",
+                          job_title: "",
+                        });
+                        setShowCreate(false);
+                      },
+                    },
+                  )
+                }
+              >
+                作成する
+              </Button>
+              {(!newUser.name || !newUser.email) && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  氏名とメールアドレスを入力してください。
+                </p>
+              )}
+            </div>
             {createUser.error && (
               <div className="md:col-span-3">
                 <ErrorMessage error={createUser.error} />
@@ -181,13 +225,13 @@ export function UserListPage() {
         className="mb-4 max-w-xs"
         placeholder="氏名またはメールアドレスで検索"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => updateParam("q", e.target.value)}
       />
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <NativeSelect
           aria-label="グループ種別で絞り込み"
           value={groupTypeId}
-          onChange={(e) => setGroupTypeId(e.target.value)}
+          onChange={(e) => updateParam("group_type_id", e.target.value)}
         >
           <option value="">すべてのグループ種別</option>
           {groupTypeOptions.map((type) => (
@@ -199,7 +243,7 @@ export function UserListPage() {
         <NativeSelect
           aria-label="グループで絞り込み"
           value={groupId}
-          onChange={(e) => setGroupId(e.target.value)}
+          onChange={(e) => updateParam("group_id", e.target.value)}
         >
           <option value="">すべてのグループ</option>
           {groupOptions.map((group) => (
@@ -210,7 +254,7 @@ export function UserListPage() {
         </NativeSelect>
         <NativeSelect
           value={accountStatus}
-          onChange={(e) => setAccountStatus(e.target.value)}
+          onChange={(e) => updateParam("account_status", e.target.value)}
         >
           <option value="">全アカウント状態</option>
           {ACCOUNT_STATUS_OPTIONS.map((status) => (
@@ -223,7 +267,7 @@ export function UserListPage() {
           <input
             type="checkbox"
             checked={externalUnlinked}
-            onChange={(e) => setExternalUnlinked(e.target.checked)}
+            onChange={(e) => updateParam("external_unlinked", e.target.checked ? "1" : "")}
           />
           Microsoft未連携
         </label>
@@ -231,16 +275,26 @@ export function UserListPage() {
           <input
             type="checkbox"
             checked={externalHr}
-            onChange={(e) => setExternalHr(e.target.checked)}
+            onChange={(e) => updateParam("external_hr", e.target.checked ? "1" : "")}
           />
           外部HR管理
         </label>
+        {isFiltered && (
+          <Button variant="secondary" onClick={clearFilters}>
+            フィルターをクリア
+          </Button>
+        )}
       </div>
 
       {users.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          該当するユーザーはいません。
-        </p>
+        <EmptyState
+          title={isFiltered ? "条件に一致するユーザーはいません。" : "該当するユーザーはいません。"}
+          description={
+            isFiltered
+              ? "検索条件を変更するか、上の「フィルターをクリア」から条件を解除してください。"
+              : "「ユーザーを作成」から新しいユーザーを追加できます。"
+          }
+        />
       ) : (
         <Table>
           <TableHeader>

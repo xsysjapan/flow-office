@@ -252,10 +252,18 @@ export function ExpenseCategoryEditPage() {
         有効
       </label>
 
-      <div className="mt-5">
-        <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
-          保存する
-        </Button>
+      <div className="mt-5 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => navigate('/admin/expense-categories')}>
+            キャンセル
+          </Button>
+          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+            {isCreate ? '作成' : '保存'}
+          </Button>
+        </div>
+        {(!code || !name) && (
+          <p className="text-xs text-muted-foreground">コードと名称を入力してください</p>
+        )}
       </div>
     </Card>
   )

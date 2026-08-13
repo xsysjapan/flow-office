@@ -97,6 +97,42 @@ function renderPage() {
 }
 
 describe("GroupDetailPage", () => {
+  it("navigates to the new group's own detail page after creating it, matching the update flow", async () => {
+    const newGroup: ManagedGroup = { ...parent, id: "group-new", name: "新規グループ" };
+    const fetchGroupsSpy = vi
+      .spyOn(userManagementApi, "fetchManagedGroups")
+      .mockResolvedValue([parent, group]);
+    vi.spyOn(userManagementApi, "fetchGroupTypes").mockResolvedValue([
+      groupType,
+    ]);
+    vi.spyOn(userManagementApi, "createGroup").mockResolvedValue({
+      id: "group-new",
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/admin/groups/new"]}>
+          <Routes>
+            <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("グループを新規作成")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
+    await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
+    // 作成後にグループ一覧が再取得された際、新規グループ自身が含まれるようにする
+    fetchGroupsSpy.mockResolvedValue([parent, group, newGroup]);
+    await userEvent.click(screen.getByRole("button", { name: "作成する" }));
+
+    // 作成後は一覧ではなく作成されたグループ自身の詳細画面(このページ)へ遷移する
+    // (更新時に同ページへ留まる挙動と揃える。SKILL.md §2.6)。
+    expect(await screen.findByText("新規グループの詳細")).toBeInTheDocument();
+  });
+
   it("updates individual fields including the parent group", async () => {
     vi.spyOn(userManagementApi, "updateGroup").mockResolvedValue(undefined);
     renderPage();

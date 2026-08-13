@@ -4,6 +4,7 @@ import {
   adminNavGroups,
   canAccessAdminItem,
 } from "../../components/AdminLayout/adminNavGroups";
+import { PermissionDenied } from "../../components/PermissionDenied/PermissionDenied";
 
 /** 管理メニューのトップ画面。管理系の各機能をカード形式でまとめて一覧表示する。 */
 export function AdminDashboardPage() {
@@ -14,6 +15,15 @@ export function AdminDashboardPage() {
       items: group.items.filter((item) => canAccessAdminItem(user, item)),
     }))
     .filter((group) => group.items.length > 0);
+
+  if (visibleGroups.length === 0) {
+    return (
+      <div className="flex flex-col gap-8">
+        <h1 className="text-lg font-semibold text-foreground">管理メニュー</h1>
+        <PermissionDenied message="管理メニューにアクセスできる権限がありません。必要な場合は管理者に付与を依頼してください。" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">

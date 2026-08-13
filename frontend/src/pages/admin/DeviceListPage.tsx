@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -216,11 +217,23 @@ export function DeviceListPage() {
           >
             登録する
           </Button>
+          {(!name || roleTypes.length === 0) && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {!name ? '名称を入力してください。' : '役割を1つ以上選択してください。'}
+            </p>
+          )}
         </div>
       )}
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">登録済みの共有端末はまだありません。</p>
+        <EmptyState
+          title={showDeleted ? '削除済みの共有端末はありません。' : '登録済みの共有端末はまだありません。'}
+          description={
+            showDeleted
+              ? '「削除済みを非表示」に切り替えると稼働中の端末が表示されます。'
+              : '右上の「新規登録」から打刻リーダー等の共有端末を登録できます。'
+          }
+        />
       ) : (
         <>
           <Table>
@@ -242,8 +255,18 @@ export function DeviceListPage() {
                   <TableRow
                     key={device.id}
                     className={isDeleted ? undefined : 'cursor-pointer'}
+                    role={isDeleted ? undefined : 'button'}
+                    tabIndex={isDeleted ? undefined : 0}
+                    aria-label={isDeleted ? undefined : `${device.name}の詳細を開く`}
                     onClick={() => {
                       if (!isDeleted) setSelectedDeviceId(device.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (isDeleted) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedDeviceId(device.id)
+                      }
                     }}
                   >
                     <TableCell className="font-medium text-foreground">{device.name}</TableCell>

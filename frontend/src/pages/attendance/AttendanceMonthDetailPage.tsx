@@ -57,7 +57,14 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
 
   return (
     <div className="flex gap-2">
-      <Button variant="secondary" size="icon" title="前月" aria-label="前月" disabled={!prevMonth} onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`)}>
+      <Button
+        variant="secondary"
+        size="icon"
+        title={prevMonth ? '前月' : '入社月より前の月には移動できません'}
+        aria-label="前月"
+        disabled={!prevMonth}
+        onClick={() => prevMonth && navigate(`/attendance/months/${prevMonth}`)}
+      >
         <ChevronLeft aria-hidden="true" />
       </Button>
       {yearMonth === currentYearMonth ? (
@@ -75,7 +82,14 @@ function MonthNav({ yearMonth, canSubmit }: { yearMonth: string; canSubmit: bool
           一覧
         </Link>
       </Button>
-      <Button variant="secondary" size="icon" title="次月" aria-label="次月" disabled={!nextMonth} onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}>
+      <Button
+        variant="secondary"
+        size="icon"
+        title={nextMonth ? '次月' : '退社月または今月より先の月には移動できません'}
+        aria-label="次月"
+        disabled={!nextMonth}
+        onClick={() => nextMonth && navigate(`/attendance/months/${nextMonth}`)}
+      >
         <ChevronRight aria-hidden="true" />
       </Button>
       {canSubmit && <SubmitMonthDialog yearMonth={yearMonth} />}

@@ -51,4 +51,8 @@ src/
 - `add-api-hook` — 新しいbackend APIエンドポイントに対応する型・APIクライアント関数・
   React Queryフックを追加する
 - `add-page` — 新しい画面(ルーティング込み)を追加する
-- `ui-design-system` — 画面・共通コンポーネントのデザイン言語
+- `ui-design-system` — 見た目(デザイントークン・色・余白・タイポグラフィ・角丸・影・
+  `ui/`プリミティブ・Visual Variant・禁止する装飾)
+- `ui-interaction-patterns` — 操作(CRUD・保存/キャンセル/戻る・Dialog/Sheet/Pageの使い分け・
+  削除確認・Loading/Empty/Error/Permission・検索/フィルター/ページングとURL状態・
+  キーボード操作・実装前メモ)。新規画面や画面刷新では`ui-design-system`と併用する

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -28,7 +29,15 @@ export function RequestTypeListPage() {
       }
     >
       {types.length === 0 ? (
-        <p className="text-sm text-muted-foreground">申請種別はまだありません。</p>
+        <EmptyState
+          title="申請種別はまだありません。"
+          description="申請種別を作成すると、社員が申請フォームからその種別で申請できるようになります。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/admin/request-types/new">申請種別を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>

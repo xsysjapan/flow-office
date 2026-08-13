@@ -75,6 +75,7 @@ function renderPage(request: WorkflowRequest, attachments: Attachment[] = []) {
 
 describe('WorkflowRequestDetailPage', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     currentUser = applicant
   })
 
@@ -82,7 +83,7 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage({ ...submittedRequest, status: 'draft', submitted_at: null })
 
     expect(await screen.findByRole('button', { name: '提出する' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '取り消す' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
   })
 
@@ -131,6 +132,40 @@ describe('WorkflowRequestDetailPage', () => {
     renderPage(submittedRequest)
 
     expect(await screen.findByRole('button', { name: '差戻す' })).toBeDisabled()
+  })
+
+  it('cancels the request with a reason via the confirmation dialog', async () => {
+    vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockResolvedValue({
+      ...submittedRequest,
+      status: 'cancelled',
+    })
+
+    renderPage(submittedRequest)
+
+    await userEvent.click(await screen.findByRole('button', { name: '取消' }))
+    expect(screen.getByText('この操作は元に戻せません。申請は取消状態になります。')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText('取消理由'), '出張が中止になったため')
+    await userEvent.click(screen.getByRole('button', { name: '取り消す' }))
+
+    await waitFor(() =>
+      expect(workflowRequestsApi.cancelWorkflowRequest).toHaveBeenCalledWith('workflow-request-1', '出張が中止になったため'),
+    )
+  })
+
+  it('keeps the cancel confirmation dialog open and shows a message when no reason is entered', async () => {
+    const cancelSpy = vi.spyOn(workflowRequestsApi, 'cancelWorkflowRequest').mockResolvedValue({
+      ...submittedRequest,
+      status: 'cancelled',
+    })
+
+    renderPage(submittedRequest)
+
+    await userEvent.click(await screen.findByRole('button', { name: '取消' }))
+    await userEvent.click(screen.getByRole('button', { name: '取り消す' }))
+
+    expect(await screen.findByText('取消理由を入力してください。')).toBeInTheDocument()
+    expect(cancelSpy).not.toHaveBeenCalled()
   })
 
   it('shows the event history', async () => {

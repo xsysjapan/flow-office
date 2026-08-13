@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
+import { ApiError } from '../../api/client'
 import * as usersApi from '../../api/users'
 import type { BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskListPage } from './BackOfficeTaskListPage'
@@ -16,11 +17,11 @@ function paginate<T>(data: T[], meta?: Partial<Paginated<T>['meta']>): Paginated
   }
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/backoffice-tasks']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <BackOfficeTaskListPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -224,5 +225,41 @@ describe('BackOfficeTaskListPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '選択したタスクを完了' }))
 
     await waitFor(() => expect(completeSpy).toHaveBeenCalledWith(['my-task-1', 'my-task-2']))
+  })
+
+  it('shows a filtered empty state distinct from the initial empty state when search has no matches', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate([]))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage(['/backoffice-tasks?q=%E5%AD%98%E5%9C%A8%E3%81%97%E3%81%AA%E3%81%84'])
+
+    expect(await screen.findAllByText('条件に一致するタスクがありません。')).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: '検索条件をクリア' }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('未割り当てのタスクはありません。')).not.toBeInTheDocument()
+  })
+
+  it('keeps the search term in the URL so it survives navigation and reload', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockResolvedValue(paginate([]))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage()
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'タスクを検索' }), '名刺')
+    await userEvent.click(screen.getByRole('button', { name: '検索' }))
+
+    await waitFor(() =>
+      expect(backOfficeTasksApi.fetchUnassignedTasks).toHaveBeenCalledWith({ search: '名刺', page: 1 }),
+    )
+    expect(screen.getByRole('textbox', { name: 'タスクを検索' })).toHaveValue('名刺')
+    expect(screen.getByRole('button', { name: 'クリア' })).toBeInTheDocument()
+  })
+
+  it('shows a permission denied state instead of a generic error on 403', async () => {
+    vi.spyOn(backOfficeTasksApi, 'fetchUnassignedTasks').mockRejectedValue(new ApiError(403, 'Forbidden'))
+    vi.spyOn(backOfficeTasksApi, 'fetchMyTasks').mockResolvedValue(paginate([]))
+
+    renderPage()
+
+    expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
   })
 })

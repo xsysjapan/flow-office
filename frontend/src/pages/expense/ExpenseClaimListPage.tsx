@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
-import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -30,10 +31,16 @@ export function ExpenseClaimListPage() {
         </Button>
       }
     >
-      {deleteClaim.error && <ErrorMessage error={deleteClaim.error} />}
-
       {claims.length === 0 ? (
-        <p className="text-sm text-muted-foreground">経費精算はまだありません。</p>
+        <EmptyState
+          title="経費精算はまだありません。"
+          description="経費を使ったら新規作成から精算を申請できます。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/expenses/new">経費精算を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>
@@ -77,16 +84,15 @@ export function ExpenseClaimListPage() {
                         </Button>
                       )}
                       {isDeletable && (
-                        <ConfirmDialog
-                          trigger={
-                            <Button variant="danger" size="sm">
-                              削除
-                            </Button>
-                          }
-                          title="この下書きを削除しますか?"
+                        <ConfirmActionDialog
+                          triggerLabel="削除"
+                          triggerVariant="danger"
+                          title={`「${claim.title ?? '無題の下書き'}」を削除しますか?`}
                           description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
-                          isConfirming={deleteClaim.isPending && deleteClaim.variables === claim.id}
-                          onConfirm={() => deleteClaim.mutate(claim.id)}
+                          confirmLabel="削除する"
+                          isPending={deleteClaim.isPending && deleteClaim.variables === claim.id}
+                          error={deleteClaim.variables === claim.id ? deleteClaim.error : undefined}
+                          onConfirm={() => deleteClaim.mutateAsync(claim.id)}
                         />
                       )}
                     </div>

@@ -116,6 +116,11 @@ export function OnboardingPage() {
               >
                 保存してMicrosoftにログインする
               </Button>
+              {!isSsoValid && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  テナントID・クライアントID・クライアントシークレットを入力してください。
+                </p>
+              )}
             </>
           )}
 
@@ -159,6 +164,11 @@ export function OnboardingPage() {
               >
                 セットアップを完了する
               </Button>
+              {!isLocalValid && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  氏名・メールアドレス・8文字以上のパスワード(確認と一致)を入力してください。
+                </p>
+              )}
             </>
           )}
         </Card>

@@ -6,7 +6,8 @@ description: Use when adding a new routed screen to the flow-office frontend (e.
 # 新しいページ(画面)を追加する
 
 flow-office のページは `frontend/src/pages/<domain>/` (attendance/workflow/paidLeave/
-specialLeave/backOffice/workCalendar/admin/auth) にドメインごとに分けて置き、
+specialLeave/compensatoryLeave/backOffice/workCalendar/admin/auth/approvals/expense/
+account/integrations/notifications等) にドメインごとに分けて置き、
 `frontend/src/components/` のコンポーネントと `frontend/src/hooks/` のAPIフックを
 組み合わせて作る。ページ自体は `apiFetch`を直接呼ばない。
 
@@ -23,6 +24,9 @@ specialLeave/backOffice/workCalendar/admin/auth) にドメインごとに分け�
    - データ取得は `.claude/skills/add-api-hook` で用意したhookを使う
    - ローディング/エラーは `LoadingState` / `ErrorMessage` コンポーネントで統一する
      (`if (isLoading) return <LoadingState />` / `if (error) return <ErrorMessage error={error} />`)
+   - **画面の挙動(一覧/詳細/作成/編集の構造、保存・キャンセル・戻る、Dialog/Sheet/Pageの
+     使い分け、Empty/Permissionの扱い、URL状態、用語)は`.claude/skills/ui-interaction-patterns`
+     に従う。** 見た目(トークン・色・余白・variant)は`.claude/skills/ui-design-system`。
    - 見た目は `Card` / `Badge` / `Button` / `FormField` を組み合わせる。新しい見た目の
      部品が必要になったら先に `.claude/skills/add-frontend-component` でコンポーネントを
      切り出す(ページの中に直接複雑なJSXを書き続けない)。
@@ -86,6 +90,8 @@ specialLeave/backOffice/workCalendar/admin/auth) にドメインごとに分け�
 
 - [ ] ページは`apiFetch`を直接呼ばず、hooksだけを使っている
 - [ ] ローディング/エラー表示が`LoadingState`/`ErrorMessage`で統一されている
+- [ ] `ui-interaction-patterns`のImplementation Checklistを通した(用語・保存/キャンセル/
+      戻る・Empty/Error/Permission・URL状態・行クリック挙動)
 - [ ] `App.tsx`にルートを追加し、認証が必要なら`RequireAuth`配下に置いた
 - [ ] 必要なら`AppLayout`の`navGroups`または`AdminLayout`の`adminNavGroups`に追加した
 - [ ] ナビのラベル/構造を変えた場合、`frontend/e2e/`を該当ラベルでgrepし、

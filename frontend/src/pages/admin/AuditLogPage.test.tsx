@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as auditLogApi from '../../api/auditLog'
 import type { Paginated, StoredEvent } from '../../api/types'
@@ -29,7 +30,9 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuditLogPage />
+      <MemoryRouter>
+        <AuditLogPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
