@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
@@ -25,13 +26,25 @@ class ExpenseEntryPresetController extends Controller
     #[OA\Get(
         path: '/expense-entry-presets',
         operationId: 'expenseEntryPresets.index',
-        summary: 'プリセット一覧を取得する(本人のpersonal + 全社のcompany/systemをマージ)',
+        summary: 'プリセット一覧を取得する(本人のpersonal + 全社のcompany/systemをマージ)。名称検索(q)・経費区分(category_id)で絞り込み、ページングして返す',
         tags: ['経費入力プリセット'],
+        parameters: [
+            new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'category_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $userId = $request->user()->id;
+
+        $validated = $request->validate([
+            'q' => ['sometimes', 'string', 'max:100'],
+            'category_id' => ['sometimes', 'integer', 'exists:expense_categories,id'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
 
         $presets = ExpenseEntryPreset::query()
             ->where('is_active', true)
@@ -42,11 +55,50 @@ class ExpenseEntryPresetController extends Controller
                             ->where('owner_user_id', $userId);
                     });
             })
+            ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('name', 'like', "%{$q}%"))
             ->orderByDesc('usage_count')
             ->orderBy('name')
             ->get();
 
-        return ExpenseEntryPresetResource::collection($presets);
+        // category_idは各明細(definition item)が持つ値のため、JSON列の中身をPHP側で
+        // 絞り込む(definitionは1プリセットあたり数件程度で、DB間のJSON演算の差異を
+        // 気にしなくてよいようにするため)。
+        if ($categoryId = $validated['category_id'] ?? null) {
+            $presets = $presets->filter(
+                fn (ExpenseEntryPreset $preset) => collect($preset->definition)
+                    ->contains(fn ($item) => (int) ($item['category_id'] ?? 0) === (int) $categoryId)
+            )->values();
+        }
+
+        $perPage = $validated['per_page'] ?? 50;
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $paginated = new LengthAwarePaginator(
+            $presets->forPage($page, $perPage)->values(),
+            $presets->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        return ExpenseEntryPresetResource::collection($paginated);
+    }
+
+    #[OA\Get(
+        path: '/expense-entry-presets/{expenseEntryPreset}',
+        operationId: 'expenseEntryPresets.show',
+        summary: 'プリセット1件を取得する',
+        tags: ['経費入力プリセット'],
+        parameters: [new OA\Parameter(name: 'expenseEntryPreset', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 404, description: 'Not Found')],
+    )]
+    public function show(Request $request, ExpenseEntryPreset $expenseEntryPreset): ExpenseEntryPresetResource
+    {
+        $userId = $request->user()->id;
+        $isVisible = $expenseEntryPreset->visibility !== ExpenseEntryPreset::VISIBILITY_PERSONAL
+            || $expenseEntryPreset->owner_user_id === $userId;
+        abort_unless($isVisible, Response::HTTP_NOT_FOUND);
+
+        return new ExpenseEntryPresetResource($expenseEntryPreset);
     }
 
     #[OA\Post(
@@ -158,6 +210,14 @@ class ExpenseEntryPresetController extends Controller
     /**
      * @return array<string, array<int, string>>
      */
+    /**
+     * definition.*.payee〜destinationは単票入力フォーム(SingleExpenseItemForm)の入力補助欄
+     * (取引先・内容・参加者情報・出発地/到着地)をそのまま適用するための構造化データ。
+     * どの項目を使うかはfieldSet(区分)ごとにフロント側で決まるため、バックエンドは
+     * 型だけを検証し、区分との組み合わせ制約までは持たせない。
+     *
+     * @return array<string, array<int, string>>
+     */
     private function definitionRules(): array
     {
         return [
@@ -166,6 +226,12 @@ class ExpenseEntryPresetController extends Controller
             'definition.*.amount' => ['nullable', 'integer', 'min:0'],
             'definition.*.payment_bearer' => ['nullable', 'string', 'in:employee,company,corporate_card,customer,other'],
             'definition.*.attributes' => ['nullable', 'array'],
+            'definition.*.payee' => ['nullable', 'string', 'max:200'],
+            'definition.*.content' => ['nullable', 'string', 'max:1000'],
+            'definition.*.participants' => ['nullable', 'string', 'max:500'],
+            'definition.*.participant_count' => ['nullable', 'integer', 'min:0'],
+            'definition.*.departure' => ['nullable', 'string', 'max:200'],
+            'definition.*.destination' => ['nullable', 'string', 'max:200'],
         ];
     }
 

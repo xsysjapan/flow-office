@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MemoryRouter } from 'react-router-dom'
 import { fn } from 'storybook/test'
-import type { ExpenseEntryPreset, User } from '../../api/types'
+import type { ExpenseCategory, ExpenseEntryPreset, User } from '../../api/types'
 import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { ExpenseEntryPresetListPage } from './ExpenseEntryPresetListPage'
 
@@ -45,9 +45,41 @@ const presets: ExpenseEntryPreset[] = [
   },
 ]
 
+const categories: ExpenseCategory[] = [
+  {
+    id: 1,
+    code: 'transportation',
+    name: '交通費',
+    description: null,
+    evidence_type_default: 'fact_reference_available',
+    entry_mode: 'batch',
+    field_definitions: null,
+    receipt_required_threshold: null,
+    approval_skip_threshold: null,
+    is_active: true,
+  },
+  {
+    id: 2,
+    code: 'lodging',
+    name: '宿泊費',
+    description: null,
+    evidence_type_default: 'receipt_required',
+    entry_mode: 'single',
+    field_definitions: null,
+    receipt_required_threshold: null,
+    approval_skip_threshold: null,
+    is_active: true,
+  },
+]
+
 function withSeededList(data: ExpenseEntryPreset[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['expense-entry-presets'], data)
+  queryClient.setQueryData(['expense-categories', false], categories)
+  queryClient.setQueryData(['expense-entry-presets', { q: undefined, category_id: undefined, page: 1 }], {
+    data,
+    meta: { current_page: 1, last_page: 1, total: data.length },
+    links: { next: null, prev: null },
+  })
 
   const authValue: AuthContextValue = {
     user: applicant,

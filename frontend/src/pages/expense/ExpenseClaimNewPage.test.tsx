@@ -30,7 +30,7 @@ vi.mock('../../auth/useAuth', () => ({
 
 const transportCategory: ExpenseCategory = {
   id: 1,
-  code: 'transport',
+  code: 'transportation',
   name: '交通費',
   description: null,
   evidence_type_default: 'fact_reference_available',
@@ -78,7 +78,18 @@ function renderPage(
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
-  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockResolvedValue(presets)
+  // プリセットの経費区分での絞り込みはAPI側(definition item側のcategory_id)で行うため、
+  // モックでも同じ絞り込みを再現する。
+  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockImplementation((filters = {}) => {
+    const matched = filters.category_id
+      ? presets.filter((preset) => preset.definition.some((item) => item.category_id === filters.category_id))
+      : presets
+    return Promise.resolve({
+      data: matched,
+      meta: { current_page: 1, last_page: 1, total: matched.length },
+      links: { next: null, prev: null },
+    })
+  })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
   vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({
     data: [],
@@ -363,7 +374,15 @@ describe('ExpenseClaimNewPage', () => {
         name: '出張ホテル',
         description: null,
         preset_type: 'single_item',
-        definition: [{ category_id: 2, description: 'ホテルABC', amount: 12000 }],
+        definition: [
+          {
+            category_id: 2,
+            description: 'ホテルABC - 素泊まり',
+            amount: 12000,
+            payee: 'ホテルABC',
+            content: '素泊まり',
+          },
+        ],
         is_active: true,
         usage_count: 1,
         last_used_at: null,
@@ -384,7 +403,47 @@ describe('ExpenseClaimNewPage', () => {
 
     expect(applyPreset).toHaveBeenCalledWith(3)
     expect(await screen.findByLabelText('金額')).toHaveValue(12000)
-    expect(screen.getByLabelText('内容')).toHaveValue('ホテルABC')
+    // 内容だけでなく、区分ごとの入力補助欄(宿泊費なら宿泊先名)も埋まる。
+    expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+    expect(screen.getByLabelText('内容')).toHaveValue('素泊まり')
+  })
+
+  it('prefills 出発地/到着地 on the 交通費 single-item form from a preset', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 4,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '自宅⇔会社',
+        description: null,
+        preset_type: 'single_item',
+        definition: [
+          {
+            category_id: 1,
+            description: '自宅 → 会社(電車)',
+            amount: 420,
+            departure: '自宅',
+            destination: '会社',
+          },
+        ],
+        is_active: true,
+        usage_count: 3,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+    ]
+    vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[0])
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    await userEvent.click(await screen.findByRole('button', { name: '自宅⇔会社' }))
+
+    expect(await screen.findByLabelText('出発地')).toHaveValue('自宅')
+    expect(screen.getByLabelText('到着地')).toHaveValue('会社')
+    expect(screen.getByLabelText('内容')).toHaveValue('自宅 → 会社(電車)')
+    expect(screen.getByLabelText('金額')).toHaveValue(420)
   })
 
   it('defers creating items via addExpenseItemsBulk until 明細を保存する is clicked, and reuses the claim created at the title step (batch category)', async () => {

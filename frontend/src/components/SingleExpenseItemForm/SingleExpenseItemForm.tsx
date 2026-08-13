@@ -9,8 +9,9 @@ import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
 import { paymentBearerLabel } from '../../utils/statusLabels'
+import { buildExpenseItemDescription, composeRouteDescription, type SingleExpenseItemFieldSet } from '../../utils/expenseItemFieldSet'
 
-export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic' | 'other' | 'transport'
+export type { SingleExpenseItemFieldSet }
 
 export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
@@ -53,14 +54,6 @@ const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   generic: '消耗品の経費を入力',
   other: 'その他の経費を入力',
   transport: '交通費を入力',
-}
-
-/** 出発地/到着地の2項目から`description`用の1行テキストを組み立てる
- *  (docs/30-usecases-expense.md UC-X004a: 「出発地 → 到着地」の所定フォーマット。
- *  `ExpenseItemsTable`の表形式入力と同じ組み立てルールにしている)。 */
-function composeRouteDescription(departure: string, destination: string): string {
-  if (!departure && !destination) return ''
-  return `${departure} → ${destination}`
 }
 
 const PAYMENT_BEARERS: ExpensePaymentBearer[] = ['employee', 'corporate_card', 'company', 'customer', 'other']
@@ -122,18 +115,22 @@ export function SingleExpenseItemForm({
   }
 
   // プリセット選択時: 利用日はプリセットに持たせていない(利用のたびに変わるため)ので
-  // 変更せず、それ以外の項目だけをプリセットの値で置き換える。取引先は元の内容説明を
-  // 分解できないため空にし、内容欄にプリセットの説明文をそのまま入れてユーザーに確認・
-  // 調整させる。
+  // 変更せず、それ以外の入力補助欄をプリセットの構造化データ(payee/content/participants/
+  // departure/destination等)でそのまま埋める。これらが無い古い形式のプリセットでは
+  // descriptionだけを内容欄に入れ、取引先等はユーザーに入力させる。
   useEffect(() => {
     if (!presetItem || !presetApplyToken) return
     setAmount(presetItem.amount != null ? String(presetItem.amount) : '')
-    setPayee('')
-    setContent(presetItem.description ?? '')
-    setParticipants('')
-    setParticipantCount('')
-    setDeparture('')
-    setDestination('')
+    setPayee(presetItem.payee ?? '')
+    setParticipants(presetItem.participants ?? '')
+    setParticipantCount(presetItem.participant_count != null ? String(presetItem.participant_count) : '')
+    setDeparture(presetItem.departure ?? '')
+    setDestination(presetItem.destination ?? '')
+    setContent(
+      fieldSet === 'transport'
+        ? (presetItem.description ?? composeRouteDescription(presetItem.departure ?? '', presetItem.destination ?? ''))
+        : (presetItem.content ?? presetItem.description ?? ''),
+    )
     setPaymentBearer(presetItem.payment_bearer ?? 'employee')
     setAttributeValues(attributesToFieldValues(presetItem.attributes, fieldDefinitions))
     setReceiptFile(null)
@@ -168,19 +165,8 @@ export function SingleExpenseItemForm({
     return Boolean(payee)
   })()
 
-  const buildDescription = (): string | undefined => {
-    if (fieldSet === 'meal') {
-      return `${payee} - ${content} (${participantCount}名: ${participants})`
-    }
-    if (fieldSet === 'other') {
-      if (payee && content) return `${payee} - ${content}`
-      return payee || content
-    }
-    if (fieldSet === 'transport') {
-      return content || undefined
-    }
-    return content ? `${payee} - ${content}` : payee
-  }
+  const buildDescription = (): string | undefined =>
+    buildExpenseItemDescription(fieldSet, { payee, content, participants, participantCount })
 
   const buildAttributes = (): Record<string, unknown> | undefined => {
     if (!fieldDefinitions || fieldDefinitions.length === 0) return undefined

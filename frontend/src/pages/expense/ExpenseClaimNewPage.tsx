@@ -10,7 +10,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { SingleExpenseItemForm, type SingleExpenseItemFieldSet } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
+import { SingleExpenseItemForm } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
@@ -36,21 +36,10 @@ import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/
 import { useUploadAttachment } from '../../hooks/useAttachments'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { workLocationTypeLabel } from '../../utils/statusLabels'
+import { fieldSetForCategory } from '../../utils/expenseItemFieldSet'
 
 function emptyItem(categoryId?: number): SaveExpenseItemInput {
   return { category_id: categoryId ?? 0, usage_date: '', amount: 0 }
-}
-
-/** UC-X004a〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊・交通費・
- *  その他以外はすべて汎用(取引先必須+内容)の`generic`にまとめ、区分が増えてもフロント
- *  分岐を増やさない。「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため、
- *  取引先を任意項目にした専用の`other`を使う。 */
-function fieldSetForCategory(category: ExpenseCategory): SingleExpenseItemFieldSet {
-  if (category.code === 'transport') return 'transport'
-  if (category.code === 'meal') return 'meal'
-  if (category.code === 'lodging') return 'lodging'
-  if (category.code === 'other') return 'other'
-  return 'generic'
 }
 
 /** UC-X004: 対象日の勤怠実績(出社/客先訪問等)を入力補助として参考表示するのみで、
@@ -98,17 +87,16 @@ function presetItemToRow(item: ExpenseEntryPreset['definition'][number]): SaveEx
 }
 
 /** 交通費はUC-X002/X003の移動区間テンプレートを廃止し、経費全体で共通の入力プリセットに
- *  一本化する。この区分に関係する明細を1件以上含むプリセットだけを候補として表示し、
- *  クリックすると明細の下書き行を追加する(保存は既存の表形式レビューで行う)。
- *  プリセット管理画面(/expenses/presets)へのリンクは、メニューではなくこの実際に
- *  プリセットを使う場面にだけ置く(いきなりプリセット管理から使い始める人は少ないため)。 */
+ *  一本化する。プリセットはcategory_id(明細側)で経費区分に紐づいているため、この区分を
+ *  含むプリセットだけをAPI側で絞り込んで取得し、クリックすると明細の下書き行を追加する
+ *  (保存は既存の表形式レビューで行う)。プリセット管理画面(/expenses/presets)へのリンクは、
+ *  メニューではなくこの実際にプリセットを使う場面にだけ置き(いきなりプリセット管理から
+ *  使い始める人は少ないため)、遷移先ではこの区分で自動的に絞り込まれた状態にする。 */
 function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
-  const { data: presets, isLoading, error } = useExpenseEntryPresets()
+  const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
 
-  const applicablePresets = (presets ?? []).filter((preset) =>
-    preset.definition.some((item) => item.category_id === categoryId),
-  )
+  const applicablePresets = presets?.data ?? []
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
@@ -117,7 +105,7 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-foreground">プリセットから追加</span>
-        <Link className="text-xs text-muted-foreground underline" to="/expenses/presets">
+        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
           プリセットを管理する
         </Link>
       </div>
@@ -155,10 +143,10 @@ function SinglePresetPicker({
   categoryId: number
   onApply: (item: ExpenseEntryPresetDefinitionItem) => void
 }) {
-  const { data: presets, isLoading, error } = useExpenseEntryPresets()
+  const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
 
-  const applicablePresets = (presets ?? [])
+  const applicablePresets = (presets?.data ?? [])
     .map((preset) => ({ preset, item: preset.definition.find((item) => item.category_id === categoryId) }))
     .filter(
       (entry): entry is { preset: ExpenseEntryPreset; item: ExpenseEntryPresetDefinitionItem } =>
@@ -172,7 +160,7 @@ function SinglePresetPicker({
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-foreground">プリセットから入力</span>
-        <Link className="text-xs text-muted-foreground underline" to="/expenses/presets">
+        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
           プリセットを管理する
         </Link>
       </div>

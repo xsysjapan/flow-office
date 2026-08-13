@@ -167,6 +167,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
 
     Route::get('/expense-entry-presets', [ExpenseEntryPresetController::class, 'index']);
     Route::post('/expense-entry-presets', [ExpenseEntryPresetController::class, 'store']);
+    Route::get('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'show']);
     Route::put('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'update']);
     Route::delete('/expense-entry-presets/{expenseEntryPreset}', [ExpenseEntryPresetController::class, 'destroy']);
     Route::post('/expense-entry-presets/{expenseEntryPreset}/apply', [ExpenseEntryPresetController::class, 'apply']);

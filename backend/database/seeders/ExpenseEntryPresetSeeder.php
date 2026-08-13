@@ -52,11 +52,11 @@ class ExpenseEntryPresetSeeder extends Seeder
                 'description' => '往路・宿泊・復路をまとめて下書きします。',
                 'preset_type' => ExpenseEntryPreset::TYPE_MULTIPLE_ITEMS,
                 'definition' => array_values(array_filter([
-                    ['category_id' => $transportationId, 'description' => '出張・往路', 'payment_bearer' => 'employee'],
+                    ['category_id' => $transportationId, 'description' => '出張・往路', 'content' => '出張・往路', 'payment_bearer' => 'employee'],
                     isset($categoryIdByCode['lodging'])
-                        ? ['category_id' => $categoryIdByCode['lodging'], 'description' => '出張・宿泊', 'payment_bearer' => 'employee']
+                        ? ['category_id' => $categoryIdByCode['lodging'], 'description' => '出張・宿泊', 'content' => '出張・宿泊', 'payment_bearer' => 'employee']
                         : null,
-                    ['category_id' => $transportationId, 'description' => '出張・復路', 'payment_bearer' => 'employee'],
+                    ['category_id' => $transportationId, 'description' => '出張・復路', 'content' => '出張・復路', 'payment_bearer' => 'employee'],
                 ])),
             ],
             [
@@ -99,7 +99,7 @@ class ExpenseEntryPresetSeeder extends Seeder
                 'description' => '接待・関係構築目的の会食費を記録します。',
                 'preset_type' => ExpenseEntryPreset::TYPE_SINGLE_ITEM,
                 'definition' => [
-                    ['category_id' => $categoryIdByCode['meal'], 'description' => '顧客との会食', 'payment_bearer' => 'employee'],
+                    ['category_id' => $categoryIdByCode['meal'], 'description' => '顧客との会食', 'content' => '顧客との会食', 'payment_bearer' => 'employee'],
                 ],
             ];
         }
@@ -110,7 +110,7 @@ class ExpenseEntryPresetSeeder extends Seeder
                 'description' => '業務に必要な文房具・消耗品の購入費を記録します。',
                 'preset_type' => ExpenseEntryPreset::TYPE_SINGLE_ITEM,
                 'definition' => [
-                    ['category_id' => $categoryIdByCode['supplies'], 'description' => '文房具購入', 'payment_bearer' => 'employee'],
+                    ['category_id' => $categoryIdByCode['supplies'], 'description' => '文房具購入', 'content' => '文房具購入', 'payment_bearer' => 'employee'],
                 ],
             ];
         }
