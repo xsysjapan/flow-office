@@ -164,7 +164,7 @@ function App() {
             element={<WorkCalendarDetailPage />}
           />
           <Route
-            path="work-calendar-years/:yearId/days"
+            path="work-calendars/:calendarId/years/:yearId/days"
             element={<WorkCalendarDaysPage />}
           />
           <Route

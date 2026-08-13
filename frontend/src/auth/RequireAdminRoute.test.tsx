@@ -63,6 +63,12 @@ describe('RequireAdminRoute', () => {
     expect(screen.getByText('管理画面')).toBeInTheDocument()
   })
 
+  it('allows a calendar manager to access a nested work calendar year page', () => {
+    renderAt('/admin/work-calendars/calendar-1/years/year-1/days', ['attendance.entry'], ['attendance.manage'])
+
+    expect(screen.getByText('管理画面')).toBeInTheDocument()
+  })
+
   it('redirects a plain employee away from the admin dashboard root', () => {
     renderAt('/admin')
 

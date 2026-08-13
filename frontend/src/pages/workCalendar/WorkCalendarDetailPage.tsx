@@ -433,7 +433,7 @@ export function WorkCalendarDetailPage() {
                   <li key={year.id} className="flex flex-wrap items-center gap-3 py-3">
                     <div className="flex flex-1 flex-col gap-1">
                       <Link
-                        to={`/admin/work-calendar-years/${year.id}/days`}
+                        to={`/admin/work-calendars/${calendar.id}/years/${year.id}/days`}
                         className="text-sm font-medium text-foreground hover:text-primary hover:underline"
                       >
                         {year.fiscal_year}年度

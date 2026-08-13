@@ -66,9 +66,9 @@ function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarY
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/admin/work-calendar-years/year-1/days']}>
+      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
         <Routes>
-          <Route path="/admin/work-calendar-years/:yearId/days" element={<WorkCalendarDaysPage />} />
+          <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
