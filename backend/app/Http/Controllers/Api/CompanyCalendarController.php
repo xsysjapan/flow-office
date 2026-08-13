@@ -6,6 +6,7 @@ use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
+use App\Domain\Attendance\Commands\DeleteCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
@@ -305,6 +306,29 @@ class CompanyCalendarController extends Controller
         ));
 
         return new CompanyCalendarYearResource($year);
+    }
+
+    /**
+     * UC-C009 手順5: カレンダー年度を削除する(旧「廃止」を置き換える操作。廃止は
+     * ステータスを変えるだけで同じ年度番号を作り直せなかったため、実際に削除して
+     * 同じ年度を再作成できるようにする)。
+     */
+    #[OA\Delete(
+        path: '/company-calendar-years/{companyCalendarYear}',
+        operationId: 'companyCalendarYears.destroy',
+        summary: 'カレンダー年度を削除する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 204, description: 'No Content'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function destroyYear(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): JsonResponse
+    {
+        $commandBus->dispatch(new DeleteCompanyCalendarYear(
+            companyCalendarYearId: $companyCalendarYear->id,
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->json(null, 204);
     }
 
     /**

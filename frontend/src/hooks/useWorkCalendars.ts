@@ -4,6 +4,7 @@ import {
   createWorkCalendar,
   createWorkCalendarYear,
   deleteWorkCalendar,
+  deleteWorkCalendarYear,
   duplicateWorkCalendarYear,
   fetchCompanyCalendarYearDays,
   fetchWorkCalendars,
@@ -136,6 +137,21 @@ export function useArchiveWorkCalendarYear(companyCalendarId: string) {
 
   return useMutation({
     mutationFn: (id: string) => archiveWorkCalendarYear(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
+    },
+  })
+}
+
+/**
+ * カレンダー年度を削除する(旧「廃止する」を置き換える操作)。削除後は同じ年度番号で
+ * 作り直せるようになる。
+ */
+export function useDeleteWorkCalendarYear(companyCalendarId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => deleteWorkCalendarYear(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
     },

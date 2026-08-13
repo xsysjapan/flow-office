@@ -5,6 +5,7 @@ namespace App\Domain\Attendance\Projectors;
 use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
+use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Models\CompanyCalendarDay;
@@ -94,5 +95,15 @@ class CompanyCalendarYearProjector extends Projector
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => 'archived',
         ]);
+    }
+
+    /**
+     * カレンダー年度を削除する(UC-C009 手順5、旧「廃止」を置き換える操作)。
+     * `company_calendar_days`はcompany_calendar_years.idへの外部キーにcascadeOnDeleteが
+     * 設定されているため、この行を削除するだけで自動的に削除される。
+     */
+    public function onCompanyCalendarYearDeleted(CompanyCalendarYearDeleted $event): void
+    {
+        CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 }

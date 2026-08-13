@@ -6,6 +6,7 @@ use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
+use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -112,6 +113,15 @@ class CompanyCalendarYearAggregate extends AggregateRoot
     {
         $this->recordThat(new CompanyCalendarYearArchived(
             archivedByUserId: $archivedByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function delete(string $deletedByUserId): self
+    {
+        $this->recordThat(new CompanyCalendarYearDeleted(
+            deletedByUserId: $deletedByUserId,
         ));
 
         return $this;

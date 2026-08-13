@@ -113,6 +113,14 @@ export function archiveWorkCalendarYear(id: string): Promise<WorkCalendarYear> {
 }
 
 /**
+ * カレンダー年度を削除する(旧「廃止する」を置き換える操作。廃止はステータスを変えるだけで
+ * 同じ年度番号を作り直せなかったため、実際に削除して同じ年度を再作成できるようにする)。
+ */
+export function deleteWorkCalendarYear(id: string): Promise<void> {
+  return apiFetch(`/company-calendar-years/${id}`, { method: 'DELETE' })
+}
+
+/**
  * UC-C012: カレンダー年度1件分の期間だけを対象に祝日iCalendarソースと同期する
  * (`syncHolidayCalendarSource`はカレンダー本体配下の全年度を一括同期するのに対し、
  * こちらはこの年度の期間のみを同期する)。カレンダーに`holiday_calendar_source_id`が

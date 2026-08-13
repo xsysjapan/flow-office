@@ -179,6 +179,7 @@ describe('WorkCalendarDetailPage', () => {
     renderPage()
 
     await screen.findByLabelText('カレンダー名')
+    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
     await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
@@ -189,6 +190,7 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_month: 4,
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
+        weekday_holiday_pattern: calendar.weekday_holiday_pattern,
         allow_daily_holiday_override: false,
       }),
     )

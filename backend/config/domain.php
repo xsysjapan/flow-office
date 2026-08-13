@@ -46,6 +46,7 @@ use App\Domain\Attendance\Commands\CreateWorkStyle;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
+use App\Domain\Attendance\Commands\DeleteCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\DisableHolidayCalendarSource;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
@@ -102,6 +103,7 @@ use App\Domain\Attendance\Handlers\CreateWorkStyleHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DeleteCompanyCalendarHandler;
+use App\Domain\Attendance\Handlers\DeleteCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\DisableHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\DuplicateCompanyCalendarYearHandler;
@@ -448,6 +450,7 @@ return [
         PublishCompanyCalendarYear::class => PublishCompanyCalendarYearHandler::class,
         UnpublishCompanyCalendarYear::class => UnpublishCompanyCalendarYearHandler::class,
         ArchiveCompanyCalendarYear::class => ArchiveCompanyCalendarYearHandler::class,
+        DeleteCompanyCalendarYear::class => DeleteCompanyCalendarYearHandler::class,
         UpdateCompanyCalendarDays::class => UpdateCompanyCalendarDaysHandler::class,
         DuplicateCompanyCalendarYear::class => DuplicateCompanyCalendarYearHandler::class,
         GenerateCompanyCalendarYears::class => GenerateCompanyCalendarYearsHandler::class,

@@ -108,12 +108,22 @@ describe('CreateCompanyCalendarModal', () => {
     renderModal()
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
     await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
+        weekday_holiday_pattern: {
+          '1': 'working',
+          '2': 'working',
+          '3': 'working',
+          '4': 'working',
+          '5': 'working',
+          '6': 'company_holiday',
+          '7': 'legal_holiday',
+        },
         allow_daily_holiday_override: false,
       }),
     )

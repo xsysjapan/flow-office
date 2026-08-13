@@ -229,6 +229,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/company-calendar-years/{companyCalendarYear}/publish', [CompanyCalendarController::class, 'publish']);
         Route::post('/company-calendar-years/{companyCalendarYear}/unpublish', [CompanyCalendarController::class, 'unpublish']);
         Route::post('/company-calendar-years/{companyCalendarYear}/archive', [CompanyCalendarController::class, 'archive']);
+        Route::delete('/company-calendar-years/{companyCalendarYear}', [CompanyCalendarController::class, 'destroyYear']);
         Route::put('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'putDays']);
         Route::post('/company-calendar-years/{companyCalendarYear}/duplicate', [CompanyCalendarController::class, 'duplicate']);
         Route::post('/company-calendar-years/{companyCalendarYear}/regenerate', [CompanyCalendarController::class, 'regenerateYear']);

@@ -70,6 +70,7 @@ function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarY
       <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
         <Routes>
           <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
+          <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -208,15 +209,29 @@ describe('WorkCalendarDaysPage', () => {
       await waitFor(() => expect(workCalendarsApi.unpublishWorkCalendarYear).toHaveBeenCalledWith('year-1'))
     })
 
-    it('archives a year when the archive button is clicked', async () => {
+    it('deletes a year when the delete button is confirmed, then navigates back to the calendar', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
-      vi.spyOn(workCalendarsApi, 'archiveWorkCalendarYear').mockResolvedValue({ ...year, status: 'archived' })
+      vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
 
       renderPage()
 
-      await userEvent.click(await screen.findByRole('button', { name: '廃止する' }))
+      await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
-      await waitFor(() => expect(workCalendarsApi.archiveWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+      await waitFor(() => expect(workCalendarsApi.deleteWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+      expect(await screen.findByText('カレンダー詳細ページ')).toBeInTheDocument()
+    })
+
+    it('does not delete a year when the confirmation is dismissed', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+
+      expect(workCalendarsApi.deleteWorkCalendarYear).not.toHaveBeenCalled()
     })
 
     it('duplicates a year when the duplicate button is clicked', async () => {

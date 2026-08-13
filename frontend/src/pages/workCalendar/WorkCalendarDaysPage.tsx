@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -18,9 +18,9 @@ import type {
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
-  useArchiveWorkCalendarYear,
   useCompanyCalendarYearById,
   useCompanyCalendarYearDays,
+  useDeleteWorkCalendarYear,
   useDuplicateWorkCalendarYear,
   usePublishWorkCalendarYear,
   usePutWorkCalendarDays,
@@ -49,13 +49,13 @@ const DEFAULT_DAY_STATE: DayState = {
 const CLASSIFICATION_OPTIONS: { value: DayClassification; label: string }[] = [
   { value: 'working', label: '勤務日' },
   { value: 'company_holiday', label: '所定休日' },
-  { value: 'legal_holiday', label: '法定休日(所定休日を含む)' },
+  { value: 'legal_holiday', label: '法定休日' },
 ]
 
 const CLASSIFICATION_LABELS: Record<DayClassification, string> = {
   working: '勤務日',
   company_holiday: '所定休日',
-  legal_holiday: '法定休日(所定休日を含む)',
+  legal_holiday: '法定休日',
 }
 
 /**
@@ -178,18 +178,24 @@ interface DayCellProps {
   onChange: (next: DayState) => void
 }
 
+/** 区分ごとのセル配色(凡例と対応)。所定休日=青、法定休日=赤、祝日=橙のマーカーを重ねる。 */
+const CLASSIFICATION_CELL_CLASSES: Record<DayClassification, string> = {
+  working: 'border-border bg-card text-foreground hover:bg-accent',
+  company_holiday: 'border-info/40 bg-info/15 text-info hover:bg-info/25',
+  legal_holiday: 'border-destructive/40 bg-destructive/15 text-destructive hover:bg-destructive/25',
+}
+
 function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps) {
   const dayOfMonth = Number(date.slice(8, 10))
 
   if (!inRange) {
     return (
-      <div className="flex aspect-square min-h-9 items-center justify-center rounded-md text-sm text-muted-foreground opacity-40">
+      <div className="flex min-h-14 items-center justify-center rounded-md text-sm text-muted-foreground opacity-40">
         {dayOfMonth}
       </div>
     )
   }
 
-  const isOff = state.classification !== 'working'
   const statusLabel = state.is_public_holiday
     ? `祝日${state.public_holiday_name ? `(${state.public_holiday_name})` : ''}`
     : CLASSIFICATION_LABELS[state.classification]
@@ -200,17 +206,19 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
         <button
           type="button"
           aria-label={`${date} ${statusLabel}`}
+          title={state.is_public_holiday && state.public_holiday_name ? state.public_holiday_name : undefined}
           className={cn(
-            'flex aspect-square min-h-9 flex-col items-center justify-center gap-0.5 rounded-md border text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-            state.is_public_holiday
-              ? 'border-warning/40 bg-warning/15 text-warning hover:bg-warning/25'
-              : isOff
-                ? 'border-border bg-muted text-muted-foreground hover:bg-accent'
-                : 'border-border bg-card text-foreground hover:bg-accent',
+            'flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-md border p-0.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            CLASSIFICATION_CELL_CLASSES[state.classification],
+            state.is_public_holiday && 'ring-1 ring-warning/70',
           )}
         >
           <span>{dayOfMonth}</span>
-          {state.is_public_holiday && <span className="text-[10px] leading-none">祝</span>}
+          {state.is_public_holiday && (
+            <span className="w-full truncate px-0.5 text-center text-[10px] leading-none text-warning">
+              祝{state.public_holiday_name ? `:${state.public_holiday_name}` : ''}
+            </span>
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-4">
@@ -281,6 +289,7 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
  */
 export function WorkCalendarDaysPage() {
   const { yearId } = useParams<{ yearId: string }>()
+  const navigate = useNavigate()
   const putDays = usePutWorkCalendarDays()
 
   const { year, calendar, isLoading: isLoadingYear, error: yearError } = useCompanyCalendarYearById(yearId ?? '')
@@ -288,7 +297,7 @@ export function WorkCalendarDaysPage() {
 
   const publishYear = usePublishWorkCalendarYear(calendar?.id ?? '')
   const unpublishYear = useUnpublishWorkCalendarYear(calendar?.id ?? '')
-  const archiveYear = useArchiveWorkCalendarYear(calendar?.id ?? '')
+  const deleteYear = useDeleteWorkCalendarYear(calendar?.id ?? '')
   const duplicateYear = useDuplicateWorkCalendarYear(calendar?.id ?? '')
   const syncYearHolidayCalendar = useSyncCompanyCalendarYearHolidayCalendar()
   const regenerateYear = useRegenerateCompanyCalendarYear()
@@ -361,7 +370,7 @@ export function WorkCalendarDaysPage() {
   const yearActionError =
     publishYear.error ??
     unpublishYear.error ??
-    archiveYear.error ??
+    deleteYear.error ??
     duplicateYear.error ??
     syncYearHolidayCalendar.error ??
     regenerateYear.error
@@ -386,6 +395,15 @@ export function WorkCalendarDaysPage() {
           note: state.note || undefined,
         }
       }),
+    })
+  }
+
+  const handleDeleteYear = () => {
+    if (!calendar || !year) return
+    if (!window.confirm(`「${year.fiscal_year}年度」を削除します。よろしいですか?`)) return
+
+    deleteYear.mutate(year.id, {
+      onSuccess: () => navigate(`/admin/work-calendars/${calendar.id}`),
     })
   }
 
@@ -464,11 +482,9 @@ export function WorkCalendarDaysPage() {
                 公開を取消す
               </Button>
             )}
-            {year.status !== 'archived' && (
-              <Button variant="danger" isLoading={archiveYear.isPending} onClick={() => archiveYear.mutate(year.id)}>
-                廃止する
-              </Button>
-            )}
+            <Button variant="danger" isLoading={deleteYear.isPending} onClick={handleDeleteYear}>
+              削除する
+            </Button>
             <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
               複製して翌年度を作成
             </Button>
@@ -553,6 +569,25 @@ export function WorkCalendarDaysPage() {
           <LoadingState />
         ) : (
           <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm border border-border bg-card" />
+                勤務日
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm border border-info/40 bg-info/15" />
+                所定休日
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm border border-destructive/40 bg-destructive/15" />
+                法定休日
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-3 rounded-sm ring-1 ring-warning/70" />
+                祝日
+              </span>
+            </div>
+
             {months.map((yearMonth) => {
               const weeks = buildMonthWeeks(yearMonth, weekStartsOn)
               const [y, m] = yearMonth.split('-').map(Number)

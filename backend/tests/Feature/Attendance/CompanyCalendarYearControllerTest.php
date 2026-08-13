@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
 use App\Models\CompanyCalendarYear;
 use App\Models\HolidayCalendarSource;
@@ -164,6 +165,50 @@ class CompanyCalendarYearControllerTest extends TestCase
         $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/archive")
             ->assertOk()
             ->assertJsonPath('status', 'archived');
+    }
+
+    public function test_deleting_a_year_removes_it_and_its_days_and_allows_recreating_the_same_fiscal_year(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        $this->actingAs($admin)->deleteJson("/api/company-calendar-years/{$year->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('company_calendar_years', ['id' => $year->id]);
+        $this->assertDatabaseMissing('company_calendar_days', ['calendar_id' => $year->id]);
+
+        // 同じ年度番号で作り直せる(削除前は一意制約で拒否されていた)。
+        $this->actingAs($admin)->postJson("/api/company-calendars/{$calendarId}/years", [
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->assertCreated();
+    }
+
+    public function test_deleting_a_year_with_closed_months_is_rejected(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        AttendanceMonth::query()->create([
+            'user_id' => $admin->id,
+            'year_month' => '2026-04',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($admin)->deleteJson("/api/company-calendar-years/{$year->id}")
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('company_calendar_years', ['id' => $year->id]);
     }
 
     public function test_creating_a_company_calendar_with_a_custom_weekday_holiday_pattern_reflects_in_the_resource(): void

@@ -27,7 +27,7 @@ const WEEKDAY_LABELS: Record<keyof WeekdayHolidayPattern, string> = {
 const DAY_TYPE_OPTIONS: { value: WeekdayHolidayPatternDayType; label: string }[] = [
   { value: 'working', label: '勤務日' },
   { value: 'company_holiday', label: '所定休日' },
-  { value: 'legal_holiday', label: '法定休日(所定休日を含む)' },
+  { value: 'legal_holiday', label: '法定休日' },
 ]
 
 /** 今日時点の暗黙ルール(土=所定休日・日=法定休日)と同じデフォルト値。 */
@@ -199,15 +199,6 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
           </FormField>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox
-            aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
-            checked={form.allowDailyHolidayOverride}
-            onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
-          />
-          曜日ごとの休日設定を日ごとに個別変更できるようにする
-        </label>
-
         {!isWeekdayPatternOpen ? (
           <Button variant="secondary" onClick={handleOpenWeekdayPattern}>
             曜日ごとの休日設定を変更する
@@ -217,6 +208,14 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
             <p className="text-xs text-muted-foreground">
               未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
             </p>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+                checked={form.allowDailyHolidayOverride}
+                onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
+              />
+              曜日ごとの休日設定を日ごとに個別変更できるようにする
+            </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {WEEKDAY_KEYS.map((weekdayKey) => (
                 <FormField
