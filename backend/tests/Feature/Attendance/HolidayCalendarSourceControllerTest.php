@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Models\CompanyCalendar;
 use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
@@ -14,6 +15,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 use Tests\TestCase;
 
 /**
@@ -58,6 +60,82 @@ class HolidayCalendarSourceControllerTest extends TestCase
         END:VEVENT
         END:VCALENDAR
         ICS;
+    }
+
+    /**
+     * ICSアップロード対応でHolidayCalendarSourceRegisteredにsource_kind/uploaded_ics_path/
+     * uploaded_ics_filenameを追加した際、既定値なしの必須引数として追加すると、これらの
+     * キーを持たない過去のstored_events(URL登録しか無かった時代のイベント)が
+     * デシリアライズできず「Failed to unserialize」で壊れる回帰を防ぐ。
+     */
+    public function test_a_legacy_registered_event_without_upload_fields_still_deserializes(): void
+    {
+        $sourceId = (string) Str::uuid();
+
+        EloquentStoredEvent::create([
+            'aggregate_uuid' => $sourceId,
+            'aggregate_version' => 1,
+            'event_version' => 1,
+            'event_class' => 'holiday_calendar_source.registered',
+            'event_properties' => [
+                'name' => '内閣府祝日カレンダー',
+                'icsUrl' => 'https://example.com/holidays.ics',
+                'registeredByUserId' => (string) Str::uuid(),
+            ],
+            'meta_data' => [],
+            'created_at' => now(),
+        ]);
+
+        $storedEvent = EloquentStoredEvent::query()
+            ->where('aggregate_uuid', $sourceId)
+            ->firstOrFail();
+
+        $event = $storedEvent->event;
+
+        $this->assertInstanceOf(HolidayCalendarSourceRegistered::class, $event);
+        $this->assertSame('内閣府祝日カレンダー', $event->name);
+        $this->assertSame('url', $event->sourceKind);
+        $this->assertNull($event->uploadedIcsPath);
+        $this->assertNull($event->uploadedIcsFilename);
+    }
+
+    /**
+     * 上のテストが単体のデシリアライズだけを見ているのに対し、こちらは実際に
+     * ユーザーが遭遇した状況(旧形式のイベントを持つ祝日iCalendarソースに対して
+     * 同期を実行する)を通しで再現し、SyncHolidayCalendarSourceHandlerが
+     * HolidayCalendarSourceAggregate::retrieve()で例外を起こさず正常に完了することを
+     * 確認する。
+     */
+    public function test_syncing_a_source_with_a_legacy_registered_event_succeeds(): void
+    {
+        $admin = $this->makeAdmin();
+        $sourceId = (string) Str::uuid();
+
+        EloquentStoredEvent::create([
+            'aggregate_uuid' => $sourceId,
+            'aggregate_version' => 1,
+            'event_version' => 1,
+            'event_class' => 'holiday_calendar_source.registered',
+            'event_properties' => [
+                'name' => '内閣府祝日カレンダー',
+                'icsUrl' => 'https://example.com/holidays.ics',
+                'registeredByUserId' => (string) Str::uuid(),
+            ],
+            'meta_data' => [],
+            'created_at' => now(),
+        ]);
+        HolidayCalendarSource::query()->create([
+            'id' => $sourceId, 'name' => '内閣府祝日カレンダー', 'ics_url' => 'https://example.com/holidays.ics',
+        ]);
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-legacy', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $response = $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync");
+
+        $response->assertOk();
+        $response->assertJsonPath('sync_status', 'synced');
     }
 
     public function test_registering_and_syncing_a_source_updates_public_holidays(): void
