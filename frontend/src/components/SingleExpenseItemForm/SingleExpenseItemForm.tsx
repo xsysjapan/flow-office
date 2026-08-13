@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
-import type { ExpenseCategoryFieldDefinition, ExpensePaymentBearer } from '../../api/types'
+import type { ExpenseCategoryFieldDefinition, ExpenseEntryPresetDefinitionItem, ExpensePaymentBearer } from '../../api/types'
 import { Button } from '../Button/Button'
 import { DatePicker } from '../DatePicker/DatePicker'
 import { FormField } from '../FormField/FormField'
@@ -9,8 +9,9 @@ import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
 import { Textarea } from '../ui/textarea'
 import { paymentBearerLabel } from '../../utils/statusLabels'
+import { buildExpenseItemDescription, composeRouteDescription, type SingleExpenseItemFieldSet } from '../../utils/expenseItemFieldSet'
 
-export type SingleExpenseItemFieldSet = 'meal' | 'lodging' | 'generic' | 'other'
+export type { SingleExpenseItemFieldSet }
 
 export interface SingleExpenseItemFormProps {
   /** UC-X004b〜d: 経費区分ごとに入力項目が異なる(会食/宿泊/消耗品・その他)。 */
@@ -22,6 +23,26 @@ export interface SingleExpenseItemFormProps {
    *  (呼び出し側が明細作成後にこのファイルをアップロードする)。 */
   onSubmit: (input: SaveExpenseItemInput, receiptFile: File | null) => void
   isSubmitting?: boolean
+  /** プリセットから適用する下書き定義1件。利用日は持たないため利用日は変更しない。
+   *  同じプリセットを続けて選び直しても反映されるよう、呼び出し側は`presetApplyToken`を
+   *  クリックのたびにインクリメントして渡す。 */
+  presetItem?: ExpenseEntryPresetDefinitionItem | null
+  presetApplyToken?: number
+}
+
+/** プリセットのattributes(保存用の値)を、このフォームが保持するattributeValuesの
+ *  形(text/number/date/selectは文字列、booleanは真偽値)へ変換する。 */
+function attributesToFieldValues(
+  attributes: Record<string, unknown> | null | undefined,
+  fieldDefinitions?: ExpenseCategoryFieldDefinition[] | null,
+): Record<string, string | boolean> {
+  const values: Record<string, string | boolean> = {}
+  for (const field of fieldDefinitions ?? []) {
+    const raw = attributes?.[field.key]
+    if (raw === undefined || raw === null) continue
+    values[field.key] = field.type === 'boolean' ? Boolean(raw) : String(raw)
+  }
+  return values
 }
 
 /** 経費明細の添付ファイルとして許可される拡張子(AttachmentController::EXPENSE_ITEM_ALLOWED_EXTENSIONS)。 */
@@ -32,6 +53,7 @@ const fieldSetTitle: Record<SingleExpenseItemFieldSet, string> = {
   lodging: '宿泊費を入力',
   generic: '消耗品の経費を入力',
   other: 'その他の経費を入力',
+  transport: '交通費を入力',
 }
 
 const PAYMENT_BEARERS: ExpensePaymentBearer[] = ['employee', 'corporate_card', 'company', 'customer', 'other']
@@ -44,11 +66,13 @@ function coerceAttributeValue(field: ExpenseCategoryFieldDefinition, raw: string
 }
 
 /**
- * UC-X004b〜d: 会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。
+ * UC-X004a〜d: 交通費・会食・宿泊・消耗品/その他の単発経費を1件ずつ入力するフォーム。
  * `fieldSet`によって追加入力項目とdescriptionの整形フォーマットのみが切り替わり、
  * 利用日・金額の共通フィールドと「保存後にフォームをリセットして続けて入力できる」
  * 挙動はどのfieldSetでも共通(バックエンドのデータ構造は増やさない、
- * docs/30-usecases-expense.md UC-X004b〜d)。
+ * docs/30-usecases-expense.md UC-X004a〜d)。交通費(`transport`)は「個別に登録」の
+ * ときだけこのフォームを使い、「まとめて登録」のときは複数明細をまとめて入力できる
+ * `ExpenseItemsTable`(表形式)を使う(呼び出し側の`ExpenseClaimNewPage`で出し分ける)。
  * fieldDefinitionsが設定された区分では、その追加項目を動的に表示しattributesへ保存する
  * (「経費精算機能 設計・実装指示書」6.5/7.2)。
  */
@@ -58,6 +82,8 @@ export function SingleExpenseItemForm({
   fieldDefinitions,
   onSubmit,
   isSubmitting,
+  presetItem,
+  presetApplyToken,
 }: SingleExpenseItemFormProps) {
   const [usageDate, setUsageDate] = useState('')
   const [amount, setAmount] = useState('')
@@ -65,6 +91,8 @@ export function SingleExpenseItemForm({
   const [content, setContent] = useState('') // 内容
   const [participants, setParticipants] = useState('') // 参加者氏名(会食のみ)
   const [participantCount, setParticipantCount] = useState('') // 参加人数(会食のみ)
+  const [departure, setDeparture] = useState('') // 出発地(交通費のみ)
+  const [destination, setDestination] = useState('') // 到着地(交通費のみ)
   const [paymentBearer, setPaymentBearer] = useState<ExpensePaymentBearer>('employee')
   const [attributeValues, setAttributeValues] = useState<Record<string, string | boolean>>({})
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -77,12 +105,38 @@ export function SingleExpenseItemForm({
     setContent('')
     setParticipants('')
     setParticipantCount('')
+    setDeparture('')
+    setDestination('')
     setPaymentBearer('employee')
     setAttributeValues({})
     setReceiptFile(null)
     // input[type=file]はvalueをプログラムから空にできないため、keyを変えて再マウントする。
     setReceiptInputKey((key) => key + 1)
   }
+
+  // プリセット選択時: 利用日はプリセットに持たせていない(利用のたびに変わるため)ので
+  // 変更せず、それ以外の入力補助欄をプリセットの構造化データ(payee/content/participants/
+  // departure/destination等)でそのまま埋める。これらが無い古い形式のプリセットでは
+  // descriptionだけを内容欄に入れ、取引先等はユーザーに入力させる。
+  useEffect(() => {
+    if (!presetItem || !presetApplyToken) return
+    setAmount(presetItem.amount != null ? String(presetItem.amount) : '')
+    setPayee(presetItem.payee ?? '')
+    setParticipants(presetItem.participants ?? '')
+    setParticipantCount(presetItem.participant_count != null ? String(presetItem.participant_count) : '')
+    setDeparture(presetItem.departure ?? '')
+    setDestination(presetItem.destination ?? '')
+    setContent(
+      fieldSet === 'transport'
+        ? (presetItem.description ?? composeRouteDescription(presetItem.departure ?? '', presetItem.destination ?? ''))
+        : (presetItem.content ?? presetItem.description ?? ''),
+    )
+    setPaymentBearer(presetItem.payment_bearer ?? 'employee')
+    setAttributeValues(attributesToFieldValues(presetItem.attributes, fieldDefinitions))
+    setReceiptFile(null)
+    setReceiptInputKey((key) => key + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetApplyToken])
 
   const hasRequiredAttributes = (fieldDefinitions ?? [])
     .filter((field) => field.required)
@@ -104,19 +158,15 @@ export function SingleExpenseItemForm({
       // 取引先・内容のどちらか一方が入力されていれば足りるとする。
       return Boolean(payee || content)
     }
+    if (fieldSet === 'transport') {
+      // 取引先の概念が無く、出発地→到着地(または自由入力の内容)があれば足りる。
+      return Boolean(content)
+    }
     return Boolean(payee)
   })()
 
-  const buildDescription = (): string | undefined => {
-    if (fieldSet === 'meal') {
-      return `${payee} - ${content} (${participantCount}名: ${participants})`
-    }
-    if (fieldSet === 'other') {
-      if (payee && content) return `${payee} - ${content}`
-      return payee || content
-    }
-    return content ? `${payee} - ${content}` : payee
-  }
+  const buildDescription = (): string | undefined =>
+    buildExpenseItemDescription(fieldSet, { payee, content, participants, participantCount })
 
   const buildAttributes = (): Record<string, unknown> | undefined => {
     if (!fieldDefinitions || fieldDefinitions.length === 0) return undefined
@@ -192,6 +242,44 @@ export function SingleExpenseItemForm({
           </div>
           <FormField label="内容" htmlFor="single-item-content" required>
             <Textarea id="single-item-content" value={content} onChange={(e) => setContent(e.target.value)} />
+          </FormField>
+        </>
+      )}
+
+      {fieldSet === 'transport' && (
+        <>
+          <div className="flex items-center gap-1">
+            <FormField label="出発地" htmlFor="single-item-departure">
+              <Input
+                id="single-item-departure"
+                value={departure}
+                onChange={(e) => {
+                  setDeparture(e.target.value)
+                  setContent(composeRouteDescription(e.target.value, destination))
+                }}
+              />
+            </FormField>
+            <span aria-hidden="true" className="mt-6 text-muted-foreground">
+              →
+            </span>
+            <FormField label="到着地" htmlFor="single-item-destination">
+              <Input
+                id="single-item-destination"
+                value={destination}
+                onChange={(e) => {
+                  setDestination(e.target.value)
+                  setContent(composeRouteDescription(departure, e.target.value))
+                }}
+              />
+            </FormField>
+          </div>
+          <FormField label="内容" htmlFor="single-item-content" required>
+            <Input
+              id="single-item-content"
+              placeholder="例: (電車)、交通手段の補足など"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+            />
           </FormField>
         </>
       )}

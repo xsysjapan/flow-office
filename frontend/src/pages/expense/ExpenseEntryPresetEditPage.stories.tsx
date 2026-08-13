@@ -7,7 +7,7 @@ import { ExpenseEntryPresetEditPage } from './ExpenseEntryPresetEditPage'
 const categories: ExpenseCategory[] = [
   {
     id: 1,
-    code: 'transport',
+    code: 'transportation',
     name: '交通費',
     description: null,
     evidence_type_default: 'fact_reference_available',
@@ -38,17 +38,26 @@ const preset: ExpenseEntryPreset = {
   name: '自宅⇔会社',
   description: null,
   preset_type: 'single_item',
-  definition: [{ category_id: 1, description: '自宅 → 会社(電車)', amount: 420, payment_bearer: 'employee' }],
+  definition: [
+    {
+      category_id: 1,
+      description: '自宅 → 会社',
+      amount: 420,
+      payment_bearer: 'employee',
+      departure: '自宅',
+      destination: '会社',
+    },
+  ],
   is_active: true,
   usage_count: 3,
   last_used_at: null,
   created_by: 'applicant-1',
 }
 
-function withSeeded(initialPath: string, presets: ExpenseEntryPreset[]) {
+function withSeeded(initialPath: string, existing: ExpenseEntryPreset) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['expense-categories', false], categories)
-  queryClient.setQueryData(['expense-entry-presets'], presets)
+  queryClient.setQueryData(['expense-entry-presets', 'detail', existing.id], existing)
 
   return function Decorator() {
     return (
@@ -73,9 +82,9 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Create: Story = {
-  render: withSeeded('/expenses/presets/new', [preset]),
+  render: withSeeded('/expenses/presets/new', preset),
 }
 
 export const Edit: Story = {
-  render: withSeeded('/expenses/presets/1', [preset]),
+  render: withSeeded('/expenses/presets/1', preset),
 }

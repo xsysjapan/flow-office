@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -10,13 +10,13 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { SingleExpenseItemForm, type SingleExpenseItemFieldSet } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
+import { SingleExpenseItemForm } from '../../components/SingleExpenseItemForm/SingleExpenseItemForm'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import type { SaveExpenseItemInput } from '../../api/expenseClaims'
-import type { ExpenseCategory, ExpenseEntryPreset } from '../../api/types'
+import type { ExpenseCategory, ExpenseEntryPreset, ExpenseEntryPresetDefinitionItem } from '../../api/types'
 import { useAppSettings } from '../../contexts/useAppSettings'
 import { useWeek } from '../../hooks/useAttendance'
 import {
@@ -36,20 +36,10 @@ import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/
 import { useUploadAttachment } from '../../hooks/useAttachments'
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import { workLocationTypeLabel } from '../../utils/statusLabels'
+import { fieldSetForCategory } from '../../utils/expenseItemFieldSet'
 
 function emptyItem(categoryId?: number): SaveExpenseItemInput {
   return { category_id: categoryId ?? 0, usage_date: '', amount: 0 }
-}
-
-/** UC-X004b〜d: 区分コードから単発入力フォームの`fieldSet`を決める。会食・宿泊・その他以外は
- *  すべて汎用(取引先必須+内容)の`generic`にまとめ、区分が増えてもフロント分岐を増やさない。
- *  「その他」は取引先が無い経費(郵送料の実費精算等)もあり得るため、取引先を任意項目にした
- *  専用の`other`を使う。 */
-function fieldSetForCategory(category: ExpenseCategory): SingleExpenseItemFieldSet {
-  if (category.code === 'meal') return 'meal'
-  if (category.code === 'lodging') return 'lodging'
-  if (category.code === 'other') return 'other'
-  return 'generic'
 }
 
 /** UC-X004: 対象日の勤怠実績(出社/客先訪問等)を入力補助として参考表示するのみで、
@@ -96,40 +86,144 @@ function presetItemToRow(item: ExpenseEntryPreset['definition'][number]): SaveEx
   }
 }
 
+/** プリセットのうち、いま選んでいる経費区分に該当する明細だけを取り出す。プリセットは
+ *  複数区分にまたがれる(例: 出張プリセット = 交通費 + 宿泊費)が、入力画面では常に区分を
+ *  1つ選んでから明細を入力するため、選択中の区分以外の明細を混ぜて追加しない
+ *  (「交通費を選んでいるのに宿泊費の行が増える」状態を作らない)。他の区分の明細は、
+ *  その区分に切り替えて同じプリセットを選び直すことで同じ申請に追加できる。 */
+function presetItemsForCategory(preset: ExpenseEntryPreset, categoryId: number): ExpenseEntryPresetDefinitionItem[] {
+  return preset.definition.filter((item) => item.category_id === categoryId)
+}
+
+/** 選択中の区分以外の明細も持つプリセットであることの補足表示。件数を隠して黙って
+ *  捨てるのではなく、「この区分の分だけを追加する」と分かるようにする。 */
+function otherCategoryNotice(preset: ExpenseEntryPreset, categoryId: number): string | undefined {
+  const others = preset.definition.length - presetItemsForCategory(preset, categoryId).length
+  return others > 0 ? `${preset.name}には他の区分の明細が${others}件あります` : undefined
+}
+
 /** 交通費はUC-X002/X003の移動区間テンプレートを廃止し、経費全体で共通の入力プリセットに
- *  一本化する。この区分に関係する明細を1件以上含むプリセットだけを候補として表示し、
- *  クリックすると明細の下書き行を追加する(保存は既存の表形式レビューで行う)。 */
+ *  一本化する。プリセットはcategory_id(明細側)で経費区分に紐づいているため、この区分を
+ *  含むプリセットだけをAPI側で絞り込んで取得し、クリックするとこの区分の明細だけを下書き行
+ *  として追加する(保存は既存の表形式レビューで行う)。プリセット管理画面(/expenses/presets)
+ *  へのリンクは、メニューではなくこの実際にプリセットを使う場面にだけ置き(いきなりプリセット
+ *  管理から使い始める人は少ないため)、遷移先ではこの区分で自動的に絞り込まれた状態にする。 */
 function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
-  const { data: presets, isLoading, error } = useExpenseEntryPresets()
+  const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
 
-  const applicablePresets = (presets ?? []).filter((preset) =>
-    preset.definition.some((item) => item.category_id === categoryId),
-  )
+  const applicablePresets = (presets?.data ?? [])
+    .map((preset) => ({ preset, items: presetItemsForCategory(preset, categoryId) }))
+    .filter((entry) => entry.items.length > 0)
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
-  if (applicablePresets.length === 0) return null
+
+  const notices = applicablePresets
+    .map(({ preset }) => otherCategoryNotice(preset, categoryId))
+    .filter((notice): notice is string => notice !== undefined)
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <span className="text-sm font-medium text-foreground">プリセットから追加</span>
-      <div className="flex flex-wrap gap-2">
-        {applicablePresets.map((preset) => (
-          <Button
-            key={preset.id}
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              applyPreset.mutate(preset.id)
-              onApply(preset.definition.map(presetItemToRow))
-            }}
-          >
-            {preset.name}({preset.definition.length}件)
-          </Button>
-        ))}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">プリセットから追加</span>
+        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
+          プリセットを管理する
+        </Link>
       </div>
+      {applicablePresets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {applicablePresets.map(({ preset, items }) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  applyPreset.mutate(preset.id)
+                  onApply(items.map(presetItemToRow))
+                }}
+              >
+                {preset.name}({items.length}件)
+              </Button>
+            ))}
+          </div>
+          {notices.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {notices.join('、')}。他の区分に切り替えてから同じプリセットを選ぶと、同じ申請に追加できます。
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+/** 単票入力(会食・宿泊・消耗品・その他)向けのプリセット選択。表形式入力と異なり
+ *  フォームは1件分の項目しか持てないため、プリセットの明細のうちこの区分に該当する
+ *  1件だけを取り出してフォームへ適用する(複数該当してもプリセットごとに先頭の1件を使う)。 */
+function SinglePresetPicker({
+  categoryId,
+  onApply,
+}: {
+  categoryId: number
+  onApply: (item: ExpenseEntryPresetDefinitionItem) => void
+}) {
+  const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
+  const applyPreset = useApplyExpenseEntryPreset()
+
+  const applicablePresets = (presets?.data ?? [])
+    .map((preset) => ({ preset, item: presetItemsForCategory(preset, categoryId)[0] }))
+    .filter(
+      (entry): entry is { preset: ExpenseEntryPreset; item: ExpenseEntryPresetDefinitionItem } =>
+        entry.item !== undefined,
+    )
+
+  if (isLoading) return null
+  if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+
+  const notices = applicablePresets
+    .map(({ preset }) => otherCategoryNotice(preset, categoryId))
+    .filter((notice): notice is string => notice !== undefined)
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">プリセットから入力</span>
+        <Link className="text-xs text-muted-foreground underline" to={`/expenses/presets?category_id=${categoryId}`}>
+          プリセットを管理する
+        </Link>
+      </div>
+      {applicablePresets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {applicablePresets.map(({ preset, item }) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  applyPreset.mutate(preset.id)
+                  onApply(item)
+                }}
+              >
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+          {notices.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {notices.join('、')}。他の区分に切り替えてから同じプリセットを選ぶと、同じ申請に追加できます。
+            </p>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -305,6 +399,10 @@ export function ExpenseClaimNewPage() {
   const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+  // 単票入力へ適用中のプリセット明細。同じプリセットを続けて選び直しても反映されるよう
+  // トークンをインクリメントして渡し、区分を切り替えたら次の区分に持ち越さないよう破棄する。
+  const [singlePresetItem, setSinglePresetItem] = useState<ExpenseEntryPresetDefinitionItem | null>(null)
+  const [singlePresetToken, setSinglePresetToken] = useState(0)
 
   const createClaim = useCreateExpenseClaim()
   const startClaimTitle = useUpdateExpenseClaimTitle()
@@ -324,6 +422,12 @@ export function ExpenseClaimNewPage() {
       setSelectedCategoryId(shortcutCategory.id)
     }
   }, [routeClaimId, categoryCodeParam, categories])
+
+  // 区分を切り替えたら、前の区分向けに選んだプリセットを次の区分の入力へ持ち越さない。
+  useEffect(() => {
+    setSinglePresetItem(null)
+    setSinglePresetToken(0)
+  }, [selectedCategoryId])
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
     useEditableRows<SaveExpenseItemInput>([])
@@ -476,6 +580,12 @@ export function ExpenseClaimNewPage() {
     )
   }
 
+  // 交通費(entry_mode='batch')は「まとめて登録」では複数明細をまとめて入力する表形式を、
+  // 「個別に登録」ではほかの単発経費と同様に1件入力で完結するフォームを使う。区分自体の
+  // entry_modeは変えず、どちらの画面を出すかだけをここで振り分ける(下書き再開時など
+  // entryModeが未確定の場合は、まとめて登録時と同じ表形式を既定にする)。
+  const showBatchTable = selectedCategory.entry_mode === 'batch' && entryMode !== 'individual'
+
   return (
     <div className="flex flex-col gap-6">
       <Card
@@ -486,10 +596,14 @@ export function ExpenseClaimNewPage() {
           </Button>
         }
       >
-        {selectedCategory.entry_mode === 'batch' ? (
-          <>
+        {selectedCategory.entry_mode === 'batch' && (
+          <div className="mb-4">
             <AttendanceReferenceLookup />
+          </div>
+        )}
 
+        {showBatchTable ? (
+          <>
             <div className="mt-4">
               <PresetPicker categoryId={selectedCategory.id} onApply={appendRows} />
             </div>
@@ -526,12 +640,25 @@ export function ExpenseClaimNewPage() {
           <>
             {addItem.error && <ErrorMessage error={addItem.error} />}
             {uploadAttachment.error && <ErrorMessage error={uploadAttachment.error} />}
+
+            <div className="mb-4">
+              <SinglePresetPicker
+                categoryId={selectedCategory.id}
+                onApply={(item) => {
+                  setSinglePresetItem(item)
+                  setSinglePresetToken((token) => token + 1)
+                }}
+              />
+            </div>
+
             <SingleExpenseItemForm
               fieldSet={fieldSetForCategory(selectedCategory)}
               categoryId={selectedCategory.id}
               fieldDefinitions={selectedCategory.field_definitions}
               onSubmit={(input, receiptFile) => void handleSaveSingleItem(input, receiptFile)}
               isSubmitting={createClaim.isPending || addItem.isPending || uploadAttachment.isPending}
+              presetItem={singlePresetItem}
+              presetApplyToken={singlePresetToken}
             />
           </>
         )}

@@ -9,7 +9,7 @@ import { ExpenseCategoryEditPage } from './ExpenseCategoryEditPage'
 
 const transportCategory: ExpenseCategory = {
   id: 1,
-  code: 'transport',
+  code: 'transportation',
   name: '交通費',
   description: null,
   evidence_type_default: 'fact_reference_available',
@@ -47,7 +47,7 @@ describe('ExpenseCategoryEditPage', () => {
   it('prefills the form and disables the code field in edit mode', async () => {
     renderPage('/admin/expense-categories/1')
 
-    expect(await screen.findByLabelText('コード')).toHaveValue('transport')
+    expect(await screen.findByLabelText('コード')).toHaveValue('transportation')
     expect(screen.getByLabelText('コード')).toBeDisabled()
     expect(screen.getByLabelText('名称')).toHaveValue('交通費')
     expect(screen.getByLabelText('承認省略しきい値(円・任意)')).toHaveValue(3000)
@@ -116,7 +116,7 @@ describe('ExpenseCategoryEditPage', () => {
 
     await waitFor(() =>
       expect(expenseCategoriesApi.updateExpenseCategory).toHaveBeenCalledWith(1, {
-        code: 'transport',
+        code: 'transportation',
         name: '交通費',
         description: undefined,
         evidence_type_default: 'fact_reference_available',

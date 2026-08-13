@@ -11,7 +11,7 @@ import { ExpenseEntryPresetEditPage } from './ExpenseEntryPresetEditPage'
 const categories: ExpenseCategory[] = [
   {
     id: 1,
-    code: 'transport',
+    code: 'transportation',
     name: '交通費',
     description: null,
     evidence_type_default: 'fact_reference_available',
@@ -42,16 +42,25 @@ const preset: ExpenseEntryPreset = {
   name: '自宅⇔会社',
   description: null,
   preset_type: 'single_item',
-  definition: [{ category_id: 1, description: '自宅 → 会社(電車)', amount: 420, payment_bearer: 'employee' }],
+  definition: [
+    {
+      category_id: 1,
+      description: '自宅 → 会社',
+      amount: 420,
+      payment_bearer: 'employee',
+      departure: '自宅',
+      destination: '会社',
+    },
+  ],
   is_active: true,
   usage_count: 3,
   last_used_at: null,
   created_by: 'applicant-1',
 }
 
-function renderPage(initialPath: string, presets: ExpenseEntryPreset[] = [preset]) {
+function renderPage(initialPath: string, existing: ExpenseEntryPreset = preset) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockResolvedValue(presets)
+  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPreset').mockResolvedValue(existing)
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
 
   return render(
@@ -74,15 +83,33 @@ describe('ExpenseEntryPresetEditPage', () => {
     expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled()
   })
 
-  it('prefills the form in edit mode', async () => {
+  it('prefills the form in edit mode, including the per-category assist fields', async () => {
     renderPage('/expenses/presets/1')
 
     expect(await screen.findByLabelText('名称')).toHaveValue('自宅⇔会社')
-    expect(screen.getByLabelText('1番目の明細の内容の初期値')).toHaveValue('自宅 → 会社(電車)')
+    expect(screen.getByLabelText('1番目の明細の出発地の初期値')).toHaveValue('自宅')
+    expect(screen.getByLabelText('1番目の明細の到着地の初期値')).toHaveValue('会社')
     expect(screen.getByLabelText('1番目の明細の金額の初期値')).toHaveValue(420)
   })
 
-  it('creates a new personal preset with one item and navigates back to the list', async () => {
+  it('shows 出発地/到着地 for 交通費 and 取引先/内容 for other categories', async () => {
+    renderPage('/expenses/presets/new')
+
+    await screen.findByLabelText('名称')
+    // 区分を選ぶまでは区分固有の入力補助欄を出さない。
+    expect(screen.queryByLabelText('1番目の明細の出発地の初期値')).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('1番目の明細の経費区分'), '交通費')
+    expect(screen.getByLabelText('1番目の明細の出発地の初期値')).toBeInTheDocument()
+    expect(screen.queryByLabelText('1番目の明細の取引先の初期値')).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('1番目の明細の経費区分'), '宿泊費')
+    expect(screen.queryByLabelText('1番目の明細の出発地の初期値')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('1番目の明細の宿泊先名の初期値')).toBeInTheDocument()
+    expect(screen.getByLabelText('1番目の明細の内容の初期値')).toBeInTheDocument()
+  })
+
+  it('creates a 交通費 preset from 出発地/到着地 and auto-composes the description', async () => {
     const createPreset = vi.spyOn(expenseEntryPresetsApi, 'createExpenseEntryPreset').mockResolvedValue({
       ...preset,
       id: 2,
@@ -92,7 +119,8 @@ describe('ExpenseEntryPresetEditPage', () => {
 
     await userEvent.type(await screen.findByLabelText('名称'), '本社⇔A社')
     await userEvent.selectOptions(screen.getByLabelText('1番目の明細の経費区分'), '交通費')
-    await userEvent.type(screen.getByLabelText('1番目の明細の内容の初期値'), '本社 → A社(電車)')
+    await userEvent.type(screen.getByLabelText('1番目の明細の出発地の初期値'), '本社')
+    await userEvent.type(screen.getByLabelText('1番目の明細の到着地の初期値'), 'A社')
     await userEvent.type(screen.getByLabelText('1番目の明細の金額の初期値'), '400')
 
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
@@ -104,12 +132,49 @@ describe('ExpenseEntryPresetEditPage', () => {
           name: '本社⇔A社',
           preset_type: 'single_item',
           definition: [
-            expect.objectContaining({ category_id: 1, description: '本社 → A社(電車)', amount: 400 }),
+            expect.objectContaining({
+              category_id: 1,
+              description: '本社 → A社',
+              amount: 400,
+              departure: '本社',
+              destination: 'A社',
+            }),
           ],
         }),
       ),
     )
     expect(await screen.findByText('入力プリセット一覧ページ')).toBeInTheDocument()
+  })
+
+  it('creates a 宿泊費 preset from 宿泊先名/内容 and auto-composes the description', async () => {
+    const createPreset = vi.spyOn(expenseEntryPresetsApi, 'createExpenseEntryPreset').mockResolvedValue({
+      ...preset,
+      id: 3,
+      name: '出張ホテル',
+    })
+    renderPage('/expenses/presets/new')
+
+    await userEvent.type(await screen.findByLabelText('名称'), '出張ホテル')
+    await userEvent.selectOptions(screen.getByLabelText('1番目の明細の経費区分'), '宿泊費')
+    await userEvent.type(screen.getByLabelText('1番目の明細の宿泊先名の初期値'), 'ホテルABC')
+    await userEvent.type(screen.getByLabelText('1番目の明細の内容の初期値'), '素泊まり')
+
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() =>
+      expect(createPreset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          definition: [
+            expect.objectContaining({
+              category_id: 2,
+              description: 'ホテルABC - 素泊まり',
+              payee: 'ホテルABC',
+              content: '素泊まり',
+            }),
+          ],
+        }),
+      ),
+    )
   })
 
   it('adds and removes definition item rows', async () => {

@@ -77,11 +77,6 @@ function navGroups(
             ]
           : []),
         { to: "/expenses", label: "経費精算", feature: "backoffice.expenses" },
-        {
-          to: "/expenses/presets",
-          label: "入力プリセット",
-          feature: "backoffice.expenses",
-        },
         { to: "/requests", label: "その他申請", feature: "workflow.requests" },
       ],
     },
