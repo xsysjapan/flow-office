@@ -19,6 +19,7 @@ import type {
 } from '../../api/types'
 import {
   useCreateHolidayCalendarSource,
+  useDeleteHolidayCalendarSource,
   useDisableHolidayCalendarSource,
   useHolidayCalendarSources,
   useRevertLastHolidayCalendarSync,
@@ -131,6 +132,7 @@ export function WorkCalendarDetailPage() {
   const syncSource = useSyncHolidayCalendarSource()
   const disableSource = useDisableHolidayCalendarSource()
   const revertLastSync = useRevertLastHolidayCalendarSync()
+  const deleteSource = useDeleteHolidayCalendarSource()
 
   const {
     data: years,
@@ -318,7 +320,17 @@ export function WorkCalendarDetailPage() {
     syncSource.error ??
     disableSource.error ??
     revertLastSync.error ??
+    deleteSource.error ??
     updateCalendar.error
+
+  const handleDeleteSource = (id: string) => {
+    if (!window.confirm('この祝日iCalendarソースを削除します。よろしいですか?')) return
+    deleteSource.mutate(id, {
+      onSuccess: () => {
+        setSelectedSourceId(NONE_OPTION_VALUE)
+      },
+    })
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -701,6 +713,13 @@ export function WorkCalendarDetailPage() {
                         </Button>
                       </>
                     )}
+                    <Button
+                      variant="danger"
+                      isLoading={deleteSource.isPending}
+                      onClick={() => handleDeleteSource(selectedSource.id)}
+                    >
+                      削除する
+                    </Button>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 rounded-md border border-border p-4">

@@ -384,6 +384,57 @@ class HolidayCalendarSourceControllerTest extends TestCase
         $this->assertTrue($source->refresh()->isDisabled());
     }
 
+    /**
+     * 無効化(disable)したソースを再度有効化する手段が無いため、削除できるようにする。
+     */
+    public function test_a_disabled_source_can_be_deleted(): void
+    {
+        $admin = $this->makeAdmin();
+        $source = HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソース', 'ics_url' => 'https://example.com/x.ics',
+        ]);
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$source->id}/disable")->assertOk();
+
+        $this->actingAs($admin)->deleteJson("/api/holiday-calendar-sources/{$source->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('holiday_calendar_sources', ['id' => $source->id]);
+    }
+
+    public function test_deleting_a_source_used_by_a_company_calendar_is_rejected(): void
+    {
+        $admin = $this->makeAdmin();
+        $source = HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソース', 'ics_url' => 'https://example.com/x.ics',
+        ]);
+        $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'holiday_calendar_source_id' => $source->id,
+        ])->assertCreated();
+
+        $this->actingAs($admin)->deleteJson("/api/holiday-calendar-sources/{$source->id}")
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('holiday_calendar_sources', ['id' => $source->id]);
+    }
+
+    public function test_deleting_a_source_also_deletes_its_holiday_calendar_events(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-del', '20260505', 'こどもの日'), 200),
+        ]);
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => 'ソース', 'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync")->assertOk();
+        $this->assertDatabaseHas('holiday_calendar_events', ['holiday_calendar_source_id' => $sourceId]);
+
+        $this->actingAs($admin)->deleteJson("/api/holiday-calendar-sources/{$sourceId}")->assertNoContent();
+
+        $this->assertDatabaseMissing('holiday_calendar_events', ['holiday_calendar_source_id' => $sourceId]);
+    }
+
     public function test_registering_a_source_via_ics_file_upload_and_syncing_reads_from_the_stored_file(): void
     {
         Storage::fake('local');
@@ -551,6 +602,59 @@ class HolidayCalendarSourceControllerTest extends TestCase
             'calendar_id' => $otherYearId,
             'date' => '2027-05-05 00:00:00',
             'is_public_holiday' => false,
+        ]);
+    }
+
+    /**
+     * 回帰テスト: holiday_calendar_eventsは祝日ソース単位で年度をまたいで共有されるため、
+     * 一度同期済みの祝日と内容が変わっていない場合、旧実装はeventChanges(added/updated/
+     * removed)が空になることを理由にday_changesの計算自体をスキップしていた。そのため、
+     * 年度を削除して同じ年度番号で作り直した後に再同期しても、新しい年度のcompany_calendar_days
+     * には祝日が一切反映されない不具合があった(削除→再作成後の再同期が機能しない)。
+     */
+    public function test_resyncing_after_deleting_and_recreating_a_year_still_applies_the_holiday(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays.ics' => Http::response($this->ics('uid-recreate', '20260505', 'こどもの日'), 200),
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => '内閣府祝日カレンダー',
+            'ics_url' => 'https://example.com/holidays.ics',
+        ])->json('id');
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'holiday_calendar_source_id' => $sourceId,
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        // 1回目の同期(この時点でholiday_calendar_eventsにuid-recreateが記録される)。
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/sync-holiday-calendar")
+            ->assertOk()
+            ->assertJsonPath('sync_status', 'synced');
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-05-05 00:00:00', 'is_public_holiday' => true,
+        ]);
+
+        // 年度を削除して同じ年度番号で作り直す(company_calendar_daysは総入れ替えされ、
+        // holiday_calendar_eventsはソース単位のため変わらず残る)。
+        $this->actingAs($admin)->deleteJson("/api/company-calendar-years/{$year->id}")->assertNoContent();
+        $newYear = $this->actingAs($admin)->postJson("/api/company-calendars/{$calendarId}/years", [
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json();
+
+        // フィードの内容は1回目と全く同じ(ICSのUIDが同じ=holiday_calendar_eventsに変更なし)まま
+        // 再同期しても、新しい年度に祝日が反映されなければならない。
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$newYear['id']}/sync-holiday-calendar")
+            ->assertOk()
+            ->assertJsonPath('sync_status', 'synced');
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $newYear['id'], 'date' => '2026-05-05 00:00:00',
+            'is_public_holiday' => true, 'public_holiday_name' => 'こどもの日',
         ]);
     }
 

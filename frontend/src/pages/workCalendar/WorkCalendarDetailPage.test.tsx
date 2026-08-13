@@ -347,6 +347,42 @@ describe('WorkCalendarDetailPage', () => {
     )
   })
 
+  it('deletes a source when the delete button is confirmed, then clears the selection', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([source])
+      .mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(holidayCalendarSourcesApi, 'deleteHolidayCalendarSource').mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderPage()
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+
+    await waitFor(() => expect(holidayCalendarSourcesApi.deleteHolidayCalendarSource).toHaveBeenCalledWith(source.id))
+
+    await waitFor(() => expect(screen.getByLabelText('使用する祝日iCalendarソース')).toHaveValue(''))
+  })
+
+  it('does not delete a source when the confirmation is dismissed', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(holidayCalendarSourcesApi, 'deleteHolidayCalendarSource').mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    renderPage()
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+
+    expect(holidayCalendarSourcesApi.deleteHolidayCalendarSource).not.toHaveBeenCalled()
+  })
+
   describe('カレンダー年度(旧WorkCalendarYearsPageの統合分)', () => {
     it('shows the year list with a draft badge', async () => {
       vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])

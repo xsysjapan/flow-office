@@ -50,6 +50,7 @@ use App\Domain\Attendance\Events\EmployeeCalendarEntryAssigned;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPlanChanged;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryPublished;
 use App\Domain\Attendance\Events\EmployeeRotationAssigned;
+use App\Domain\Attendance\Events\HolidayCalendarSourceDeleted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
@@ -362,6 +363,7 @@ return [
         'holiday_calendar_source.synced' => HolidayCalendarSourceSynced::class,
         'holiday_calendar_source.sync_failed' => HolidayCalendarSourceSyncFailed::class,
         'holiday_calendar_source.disabled' => HolidayCalendarSourceDisabled::class,
+        'holiday_calendar_source.deleted' => HolidayCalendarSourceDeleted::class,
         'holiday_calendar_source.sync_reverted' => HolidayCalendarSourceSyncReverted::class,
 
         'calendar_bulk_operation.applied' => CalendarBulkOperationApplied::class,

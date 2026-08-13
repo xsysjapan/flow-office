@@ -56,3 +56,12 @@ export function disableHolidayCalendarSource(id: string): Promise<HolidayCalenda
 export function revertLastHolidayCalendarSync(id: string): Promise<HolidayCalendarSource> {
   return apiFetch(`/holiday-calendar-sources/${id}/revert-last-sync`, { method: 'POST' })
 }
+
+/**
+ * 祝日iCalendarソースを削除する。無効化(disable)したソースを再度有効化する手段が無いため、
+ * 不要になったソースを削除できるようにする。いずれかの会社カレンダーが現在使用している
+ * 場合はサーバ側で422になる。
+ */
+export function deleteHolidayCalendarSource(id: string): Promise<void> {
+  return apiFetch(`/holiday-calendar-sources/${id}`, { method: 'DELETE' })
+}

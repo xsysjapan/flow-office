@@ -171,12 +171,6 @@ class HolidayCalendarSynchronizer
      */
     private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges, ?string $scopeCompanyCalendarYearId = null): array
     {
-        if ($eventChanges === []) {
-            return [[], []];
-        }
-
-        $affectedDates = array_unique(array_map(fn (array $change) => $change['date'], $eventChanges));
-
         // このソースを祝日ソースとして利用している全カレンダー年度(スコープ指定時はその年度のみ)。
         $years = CompanyCalendarYear::query()
             ->whereHas('companyCalendar', fn ($q) => $q->where('holiday_calendar_source_id', $source->id))
@@ -191,6 +185,22 @@ class HolidayCalendarSynchronizer
         $activeEventByDate = [];
         foreach ($feedEvents as $event) {
             $activeEventByDate[$event['date']] = $event['name'];
+        }
+
+        // 対象日付は「フィード上の全祝日の日付」+「フィードから削除された祝日の日付」とする
+        // (eventChangesの有無だけで絞らない)。holiday_calendar_eventsは祝日ソース単位で
+        // 年度をまたいで共有されるため、既に他の年度へ同期済みで内容が変わっていない祝日でも、
+        // この年度(年度削除→再作成後の新しい年度、後から追加された年度など)がまだその祝日を
+        // 反映していないことがある。eventChangesが空でも、フィード上の祝日は必ずこの年度へ
+        // 適用し直す。
+        $removedDates = array_values(array_map(
+            fn (array $change) => $change['date'],
+            array_filter($eventChanges, fn (array $change) => $change['action'] === 'removed'),
+        ));
+        $affectedDates = array_unique([...array_keys($activeEventByDate), ...$removedDates]);
+
+        if ($affectedDates === []) {
+            return [[], []];
         }
 
         $dayChanges = [];

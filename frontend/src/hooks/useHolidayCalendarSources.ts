@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createHolidayCalendarSource,
+  deleteHolidayCalendarSource,
   disableHolidayCalendarSource,
   fetchHolidayCalendarSources,
   revertLastHolidayCalendarSync,
@@ -65,6 +66,17 @@ export function useRevertLastHolidayCalendarSync() {
 
   return useMutation({
     mutationFn: (id: string) => revertLastHolidayCalendarSync(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY })
+    },
+  })
+}
+
+export function useDeleteHolidayCalendarSource() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => deleteHolidayCalendarSource(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
     },

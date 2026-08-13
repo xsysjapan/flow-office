@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\DeleteHolidayCalendarSource;
 use App\Domain\Attendance\Commands\DisableHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RevertLastHolidayCalendarSync;
@@ -196,5 +197,27 @@ class HolidayCalendarSourceController extends Controller
         ));
 
         return new HolidayCalendarSourceResource($source);
+    }
+
+    /**
+     * UC-C012: 祝日iCalendarソースを削除する。無効化(disable)したソースを再び有効化する
+     * 手段が無かったため、不要なソースを削除できるようにする。
+     */
+    #[OA\Delete(
+        path: '/holiday-calendar-sources/{holidayCalendarSource}',
+        operationId: 'holidayCalendarSources.destroy',
+        summary: '祝日iCalendarソースを削除する',
+        tags: ['祝日iCalendar同期'],
+        parameters: [new OA\Parameter(name: 'holidayCalendarSource', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 204, description: 'No Content'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function destroy(Request $request, HolidayCalendarSource $holidayCalendarSource, CommandBus $commandBus): JsonResponse
+    {
+        $commandBus->dispatch(new DeleteHolidayCalendarSource(
+            holidayCalendarSourceId: $holidayCalendarSource->id,
+            deletedByUserId: $request->user()->id,
+        ));
+
+        return response()->json(null, 204);
     }
 }

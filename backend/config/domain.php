@@ -47,6 +47,7 @@ use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\DeleteAttendancePunch;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendarYear;
+use App\Domain\Attendance\Commands\DeleteHolidayCalendarSource;
 use App\Domain\Attendance\Commands\DesignateLegalHoliday;
 use App\Domain\Attendance\Commands\DisableHolidayCalendarSource;
 use App\Domain\Attendance\Commands\DuplicateCompanyCalendarYear;
@@ -104,6 +105,7 @@ use App\Domain\Attendance\Handlers\DeleteAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\DeleteAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\DeleteCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\DeleteCompanyCalendarYearHandler;
+use App\Domain\Attendance\Handlers\DeleteHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\DesignateLegalHolidayHandler;
 use App\Domain\Attendance\Handlers\DisableHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\DuplicateCompanyCalendarYearHandler;
@@ -458,6 +460,7 @@ return [
         UpdateHolidayCalendarSource::class => UpdateHolidayCalendarSourceHandler::class,
         SyncHolidayCalendarSource::class => SyncHolidayCalendarSourceHandler::class,
         DisableHolidayCalendarSource::class => DisableHolidayCalendarSourceHandler::class,
+        DeleteHolidayCalendarSource::class => DeleteHolidayCalendarSourceHandler::class,
         RevertLastHolidayCalendarSync::class => RevertLastHolidayCalendarSyncHandler::class,
         ApplyCalendarBulkOperation::class => ApplyCalendarBulkOperationHandler::class,
         RevertCalendarBulkOperation::class => RevertCalendarBulkOperationHandler::class,

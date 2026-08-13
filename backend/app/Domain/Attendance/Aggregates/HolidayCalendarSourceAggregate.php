@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Aggregates;
 
+use App\Domain\Attendance\Events\HolidayCalendarSourceDeleted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
@@ -86,6 +87,15 @@ class HolidayCalendarSourceAggregate extends AggregateRoot
     {
         $this->recordThat(new HolidayCalendarSourceDisabled(
             disabledByUserId: $disabledByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function delete(string $deletedByUserId): self
+    {
+        $this->recordThat(new HolidayCalendarSourceDeleted(
+            deletedByUserId: $deletedByUserId,
         ));
 
         return $this;

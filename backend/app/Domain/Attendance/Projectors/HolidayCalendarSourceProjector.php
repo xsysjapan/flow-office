@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Projectors;
 
+use App\Domain\Attendance\Events\HolidayCalendarSourceDeleted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
 use App\Domain\Attendance\Events\HolidayCalendarSourceSynced;
@@ -145,5 +146,15 @@ class HolidayCalendarSourceProjector extends Projector
                 'public_holiday_name' => $dayRevert['public_holiday_name'],
             ]);
         }
+    }
+
+    /**
+     * 祝日iCalendarソースを削除する。holiday_calendar_eventsはholiday_calendar_source_idへの
+     * 外部キーにcascadeOnDeleteが設定されているため、この行を削除するだけで自動的に
+     * 削除される。
+     */
+    public function onHolidayCalendarSourceDeleted(HolidayCalendarSourceDeleted $event): void
+    {
+        HolidayCalendarSource::query()->whereKey($event->aggregateRootUuid())->delete();
     }
 }

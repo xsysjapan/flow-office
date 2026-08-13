@@ -239,6 +239,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}/sync', [HolidayCalendarSourceController::class, 'sync']);
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}/disable', [HolidayCalendarSourceController::class, 'disable']);
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}/revert-last-sync', [HolidayCalendarSourceController::class, 'revertLastSync']);
+        Route::delete('/holiday-calendar-sources/{holidayCalendarSource}', [HolidayCalendarSourceController::class, 'destroy']);
         Route::post('/calendar-bulk-operations/preview', [CalendarBulkOperationController::class, 'preview']);
         Route::post('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'store']);
         Route::get('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'index']);
