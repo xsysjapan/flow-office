@@ -148,12 +148,13 @@ describe('WorkCalendarListPage', () => {
   it('deletes a calendar after confirmation', async () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
     vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     renderPage()
 
     await screen.findByText('2026年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '削除' }))
+    expect(await screen.findByText('「2026年度カレンダー」を削除しますか?')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(workCalendarsApi.deleteWorkCalendar).toHaveBeenCalledWith('calendar-1'))
   })
@@ -161,12 +162,12 @@ describe('WorkCalendarListPage', () => {
   it('does not delete when the confirmation is cancelled', async () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
     vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     renderPage()
 
     await screen.findByText('2026年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
     expect(workCalendarsApi.deleteWorkCalendar).not.toHaveBeenCalled()
   })
@@ -176,12 +177,12 @@ describe('WorkCalendarListPage', () => {
     vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockRejectedValue(
       new ApiError(422, 'デフォルトカレンダーは削除できません。'),
     )
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     renderPage()
 
     await screen.findByText('2026年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     expect(await screen.findByText('デフォルトカレンダーは削除できません。')).toBeInTheDocument()
   })

@@ -204,7 +204,7 @@ describe('WorkStylesPage', () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-2', code: 'discretionary' })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '新規登録' }))
+    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
     expect(await screen.findByRole('heading', { name: '勤務形態を登録' })).toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText('コード'), 'discretionary')
@@ -242,7 +242,7 @@ describe('WorkStylesPage', () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-3', code: 'shift' })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '新規登録' }))
+    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
     await userEvent.type(await screen.findByLabelText('コード'), 'shift')
     await userEvent.type(screen.getByLabelText('名称'), 'シフト勤務')
     await userEvent.selectOptions(screen.getByLabelText('労働時間制'), '通常勤務')
@@ -269,7 +269,7 @@ describe('WorkStylesPage', () => {
     vi.spyOn(workStylesApi, 'createWorkStyle').mockResolvedValue({ ...workStyle, id: 'work-style-4', code: 'flex' })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '新規登録' }))
+    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
     await userEvent.type(await screen.findByLabelText('コード'), 'flex')
     await userEvent.type(screen.getByLabelText('名称'), 'フレックスタイム制')
     await userEvent.selectOptions(screen.getByLabelText('労働時間制'), 'フレックスタイム制')

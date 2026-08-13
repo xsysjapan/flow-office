@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -399,25 +400,15 @@ export function WorkCalendarDaysPage() {
   }
 
   const handleDeleteYear = () => {
-    if (!calendar || !year) return
-    if (!window.confirm(`「${year.fiscal_year}年度」を削除します。よろしいですか?`)) return
-
-    deleteYear.mutate(year.id, {
+    if (!calendar || !year) return Promise.resolve()
+    return deleteYear.mutateAsync(year.id, {
       onSuccess: () => navigate(`/admin/work-calendars/${calendar.id}`),
     })
   }
 
   const handleRegenerateYear = () => {
-    if (!yearId) return
-    if (
-      !window.confirm(
-        'この年度の日別データを、カレンダーの現在の曜日ごとの休日設定から作り直します。これまでの手動編集はすべて破棄されます。よろしいですか?',
-      )
-    ) {
-      return
-    }
-
-    regenerateYear.mutate(yearId, {
+    if (!yearId) return Promise.resolve()
+    return regenerateYear.mutateAsync(yearId, {
       onSuccess: () => {
         // 再作成でサーバ側の日別データが総入れ替えされるため、編集中のローカル状態を破棄して
         // 再読み込みさせる(祝日iCalendar同期後の再読み込みと同じパターン)。
@@ -482,20 +473,30 @@ export function WorkCalendarDaysPage() {
                 公開を取消す
               </Button>
             )}
-            <Button variant="danger" isLoading={deleteYear.isPending} onClick={handleDeleteYear}>
-              削除する
-            </Button>
+            <ConfirmActionDialog
+              triggerLabel="削除"
+              triggerVariant="danger"
+              title={`「${year.fiscal_year}年度」を削除しますか?`}
+              description="削除すると元に戻せません。"
+              confirmLabel="削除する"
+              isPending={deleteYear.isPending}
+              error={deleteYear.error}
+              onConfirm={handleDeleteYear}
+            />
             <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
               複製して翌年度を作成
             </Button>
-            <Button
-              variant="secondary"
-              isLoading={regenerateYear.isPending}
-              disabled={year.status !== 'draft' || regenerateYear.isPending}
-              onClick={handleRegenerateYear}
-            >
-              年度を再作成する
-            </Button>
+            {year.status === 'draft' && (
+              <ConfirmActionDialog
+                triggerLabel="年度を再作成する"
+                title="この年度の日別データを作り直しますか?"
+                description="カレンダーの現在の曜日ごとの休日設定から日別データを作り直します。これまでの手動編集はすべて破棄され、元に戻せません。"
+                confirmLabel="作り直す"
+                isPending={regenerateYear.isPending}
+                error={regenerateYear.error}
+                onConfirm={handleRegenerateYear}
+              />
+            )}
           </div>
 
           {!hasHolidaySource && calendar && (

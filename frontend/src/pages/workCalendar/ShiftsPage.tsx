@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -105,7 +106,7 @@ function ShiftGenerationCard() {
           {isLoadingShifts ? (
             <LoadingState />
           ) : (shiftAssignments ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">シフトはまだありません。</p>
+            <EmptyState title="シフトはまだありません。" />
           ) : (
             <ul className="divide-y divide-border">
               {shiftAssignments?.map((assignment) => (
@@ -629,7 +630,7 @@ function ShiftPatternFormCard() {
       {isLoading ? (
         <LoadingState />
       ) : (patterns ?? []).length === 0 ? (
-        <p className="text-sm text-muted-foreground">シフトパターンはまだありません。</p>
+        <EmptyState title="シフトパターンはまだありません。" />
       ) : (
         <ul className="mb-4 divide-y divide-border">
           {(patterns ?? []).map((pattern) => (
@@ -758,7 +759,9 @@ function RotationPatternFormCard() {
       {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
 
       {(rotationPatterns ?? []).length === 0 ? (
-        <p className="mb-4 text-sm text-muted-foreground">ローテーションパターンはまだありません。</p>
+        <div className="mb-4">
+          <EmptyState title="ローテーションパターンはまだありません。" />
+        </div>
       ) : (
         <ul className="mb-4 divide-y divide-border">
           {rotationPatterns?.map((pattern) => (

@@ -379,13 +379,13 @@ describe('WorkCalendarDetailPage', () => {
       .mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'deleteHolidayCalendarSource').mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     renderPage()
 
     await screen.findByLabelText('使用する祝日iCalendarソース')
     await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
 
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(holidayCalendarSourcesApi.deleteHolidayCalendarSource).toHaveBeenCalledWith(source.id))
@@ -397,14 +397,14 @@ describe('WorkCalendarDetailPage', () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
     vi.spyOn(holidayCalendarSourcesApi, 'deleteHolidayCalendarSource').mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     renderPage()
 
     await screen.findByLabelText('使用する祝日iCalendarソース')
     await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
 
-    await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
     expect(holidayCalendarSourcesApi.deleteHolidayCalendarSource).not.toHaveBeenCalled()
   })

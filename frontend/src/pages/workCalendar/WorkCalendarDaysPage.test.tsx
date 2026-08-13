@@ -212,10 +212,11 @@ describe('WorkCalendarDaysPage', () => {
     it('deletes a year when the delete button is confirmed, then navigates back to the calendar', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
-      vi.spyOn(window, 'confirm').mockReturnValue(true)
 
       renderPage()
 
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      expect(await screen.findByText('「2026年度」を削除しますか?')).toBeInTheDocument()
       await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
       await waitFor(() => expect(workCalendarsApi.deleteWorkCalendarYear).toHaveBeenCalledWith('year-1'))
@@ -225,11 +226,11 @@ describe('WorkCalendarDaysPage', () => {
     it('does not delete a year when the confirmation is dismissed', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
-      vi.spyOn(window, 'confirm').mockReturnValue(false)
 
       renderPage()
 
-      await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
       expect(workCalendarsApi.deleteWorkCalendarYear).not.toHaveBeenCalled()
     })
@@ -255,15 +256,14 @@ describe('WorkCalendarDaysPage', () => {
         .mockResolvedValue(buildAprilDays())
       const regenerated = buildAprilDays()
       vi.spyOn(workCalendarsApi, 'regenerateCompanyCalendarYear').mockResolvedValue(regenerated)
-      vi.spyOn(window, 'confirm').mockReturnValue(true)
 
       renderPage()
 
       const regenerateButton = await screen.findByRole('button', { name: '年度を再作成する' })
       expect(regenerateButton).toBeEnabled()
       await userEvent.click(regenerateButton)
+      await userEvent.click(await screen.findByRole('button', { name: '作り直す' }))
 
-      expect(window.confirm).toHaveBeenCalled()
       await waitFor(() =>
         expect(workCalendarsApi.regenerateCompanyCalendarYear).toHaveBeenCalledWith('year-1'),
       )
@@ -272,25 +272,23 @@ describe('WorkCalendarDaysPage', () => {
     it('does not regenerate when the confirmation is declined', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'regenerateCompanyCalendarYear').mockResolvedValue(buildAprilDays())
-      vi.spyOn(window, 'confirm').mockReturnValue(false)
 
       renderPage()
 
       await userEvent.click(await screen.findByRole('button', { name: '年度を再作成する' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
       expect(workCalendarsApi.regenerateCompanyCalendarYear).not.toHaveBeenCalled()
     })
 
-    it('disables the regenerate button for a published year', async () => {
+    it('hides the regenerate button for a published year', async () => {
       const publishedYear: WorkCalendarYear = { ...year, status: 'published' }
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
 
       renderPage([calendar], [publishedYear])
 
-      expect(await screen.findByRole('button', { name: '年度を再作成する' })).toBeDisabled()
-      expect(
-        screen.getByText('公開済み・廃止済みの年度は再作成できません(未公開の年度のみ再作成できます)。'),
-      ).toBeInTheDocument()
+      await screen.findByText('公開済み・廃止済みの年度は再作成できません(未公開の年度のみ再作成できます)。')
+      expect(screen.queryByRole('button', { name: '年度を再作成する' })).not.toBeInTheDocument()
     })
 
     it('disables the sync button and hints at source management when no source is set', async () => {

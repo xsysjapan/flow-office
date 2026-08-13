@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -119,6 +121,10 @@ function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
  * 「ソースの登録・割当」(このカードで行う)と「年度ごとの同期実行」(年度一覧の各行で行う)に
  * 役割を分離している。年度ごとの同期はその年度の期間だけを対象にするため、カレンダー全体を
  * 一括で同期していた旧仕様(意図しない年度まで同期されてしまう)の課題に対応する。
+ *
+ * Pattern exception: 祝日iCalendarソースの追加ボタン文言に「登録する」を使う。
+ * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
+ * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
 export function WorkCalendarDetailPage() {
   const { id: companyCalendarId } = useParams<{ id: string }>()
@@ -323,9 +329,9 @@ export function WorkCalendarDetailPage() {
     deleteSource.error ??
     updateCalendar.error
 
-  const handleDeleteSource = (id: string) => {
-    if (!window.confirm('この祝日iCalendarソースを削除します。よろしいですか?')) return
-    deleteSource.mutate(id, {
+  const handleDeleteSource = () => {
+    if (!selectedSource) return Promise.resolve()
+    return deleteSource.mutateAsync(selectedSource.id, {
       onSuccess: () => {
         setSelectedSourceId(NONE_OPTION_VALUE)
       },
@@ -520,7 +526,15 @@ export function WorkCalendarDetailPage() {
         ) : (
           <div className="flex flex-col gap-6">
             {yearList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">年度はまだありません。</p>
+              <EmptyState
+                title="年度はまだありません。"
+                description="カレンダー年度を作成すると、日別の勤務区分・祝日を設定できます。"
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => handleYearModalOpenChange(true)}>
+                    カレンダー年度を作成
+                  </Button>
+                }
+              />
             ) : (
               <ul className="divide-y divide-border">
                 {yearList.map((year) => (
@@ -713,13 +727,16 @@ export function WorkCalendarDetailPage() {
                         </Button>
                       </>
                     )}
-                    <Button
-                      variant="danger"
-                      isLoading={deleteSource.isPending}
-                      onClick={() => handleDeleteSource(selectedSource.id)}
-                    >
-                      削除する
-                    </Button>
+                    <ConfirmActionDialog
+                      triggerLabel="削除"
+                      triggerVariant="danger"
+                      title={`「${selectedSource.name}」を削除しますか?`}
+                      description="削除すると元に戻せません。このソースを使用しているカレンダーの割当も解除されます。"
+                      confirmLabel="削除する"
+                      isPending={deleteSource.isPending}
+                      error={deleteSource.error}
+                      onConfirm={handleDeleteSource}
+                    />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 rounded-md border border-border p-4">

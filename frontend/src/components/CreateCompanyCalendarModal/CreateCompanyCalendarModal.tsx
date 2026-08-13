@@ -76,6 +76,10 @@ export interface CreateCompanyCalendarModalProps {
  * 年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当は任意。曜日ごとの休日設定は
  * 段階的開示にし、ユーザーがこの区画を開いて初めて`weekday_holiday_pattern`を送信する
  * (開かなければbackend側の既定値(平日勤務・土曜所定休日・日曜法定休日)が適用される)。
+ *
+ * Pattern exception: 祝日iCalendarソースの追加ボタン文言に「登録する」を使う。
+ * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
+ * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
 export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompanyCalendarModalProps) {
   const { data: sourcesData } = useHolidayCalendarSources()

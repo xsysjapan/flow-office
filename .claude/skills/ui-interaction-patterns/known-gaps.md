@@ -3,10 +3,10 @@
 `SKILL.md`を策定した時点で、既存画面に残っている不統一の記録。新規画面は最初から`SKILL.md`
 に従う。
 
-**2026-08 追記**: カレンダー(`pages/workCalendar/`)を除く全画面にSKILL.mdを適用済み。
-経費入力プリセット編集(`pages/expense/ExpenseEntryPreset*`)は別作業でのmain統合後に
-追って対応し、対応済みとなった。以下の項目はその対応状況を反映して更新した。カレンダー
-画面は対象外のまま残っている(別作業で編集中)。
+**2026-08 追記**: 経費入力プリセット編集(`pages/expense/ExpenseEntryPreset*`)・カレンダー
+(`pages/workCalendar/`・`components/CreateCompanyCalendarModal/`)とも、別作業でのmain統合後に
+追って対応し、リポジトリ内の全画面がSKILL.mdの対象になった。以下の項目はその対応状況を
+反映して更新した。
 
 ## 1. 確認ダイアログが2種類あった(解消)
 
@@ -122,11 +122,37 @@
 理由(名称未入力/経費区分未選択)を明示した(§2.14)。`pages/expense/
 ExpenseEntryPresetListPage.tsx`は§1・§3・§8で述べた通り対応済み。
 
+## 15. カレンダー画面の`window.confirm()`(解消・最重要)
+
+`pages/workCalendar/WorkCalendarListPage.tsx`(カレンダー削除)・
+`pages/workCalendar/WorkCalendarDetailPage.tsx`(祝日iCalendarソース削除)・
+`pages/workCalendar/WorkCalendarDaysPage.tsx`(年度削除・年度再作成)の4箇所が、
+Mandatory Rule 7(確認UIを新規に発明しない)に反してブラウザ標準の`window.confirm()`を
+使っていた。すべて`ConfirmActionDialog`に置き換え、対象名と不可逆であることを明示する
+確認文言にした。`pages/workCalendar/CalendarBulkOperationsPage.tsx`の一括操作取消
+(「取消す」)は確認自体が無かったため、同様に`ConfirmActionDialog`を新規に追加した。
+
+## 16. カレンダー画面のEmpty State・用語(解消)
+
+`pages/workCalendar/WorkCalendarListPage.tsx`・`WorkCalendarDetailPage.tsx`(年度一覧)・
+`ShiftsPage.tsx`(シフト一覧・シフトパターン・ローテーションパターン)・
+`WorkStylesPage.tsx`(勤務形態一覧・割当履歴)・`CalendarBulkOperationsPage.tsx`(操作履歴)の
+空状態を`EmptyState`へ統一した。`WorkStylesPage.tsx`の「新規登録」は「新規作成」に変更した
+(§2.7、対応するe2e `scenario-00-master-data.spec.ts`/`scenario-12-calendar-lifecycle.spec.ts`
+を更新)。祝日iCalendarソースの「登録する」は業務用語としての例外のまま維持し、
+`CreateCompanyCalendarModal.tsx`/`WorkCalendarDetailPage.tsx`のdocblockに
+`Pattern exception:`を明記した。
+
 ## 残っている既知の未対応項目(次のスコープの候補)
 
 - `pages/admin/UserListPage.tsx`のページング(API側に`page`パラメータが無いため未導入)
 - `pages/expense/ExpenseClaimNewPage.tsx`のウィザードのURL状態化
 - Toast基盤の導入判断(§7)
-- Modal系コンポーネントの命名統一(§10。カレンダー領域の`CreateCompanyCalendarModal`を
-  含むため、カレンダー作業と合わせて判断する)
+- Modal系コンポーネントの命名統一(§10。`CreateCompanyCalendarModal`は入力項目数が多く
+  §2.11の「入力項目が増え始めたDialogをそのまま巨大化させない」に照らすとPage化も
+  検討候補だが、今回は大規模な構造変更を避けるため見送った)
 - セル内`Link`方式と行全体クリック方式、両方の行クリック実装の1方式への統一(§2)
+- `pages/workCalendar/ShiftsPage.tsx`・`CalendarBulkOperationsPage.tsx`は多数のフォームが
+  1画面に並ぶバッチ操作系ツールで、個別のDisabledボタンすべてに理由テキストを付ける
+  網羅対応は今回見送った(該当ボタンは`required`マーク付きFormFieldの未入力に連動する
+  自明な理由のみで、個別画面のUserManagementAccessPageと同様の理由による)

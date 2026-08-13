@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { CreateCompanyCalendarModal } from '../../components/CreateCompanyCalendarModal/CreateCompanyCalendarModal'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
@@ -26,11 +28,6 @@ export function WorkCalendarListPage() {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  const handleDelete = (calendarId: string, calendarName: string) => {
-    if (!window.confirm(`「${calendarName}」を削除します。よろしいですか?`)) return
-    deleteCalendar.mutate(calendarId)
-  }
-
   const calendars = data?.data ?? []
 
   return (
@@ -41,14 +38,16 @@ export function WorkCalendarListPage() {
         title="会社カレンダー一覧"
         actions={<Button onClick={() => setIsCreateModalOpen(true)}>新規作成</Button>}
       >
-        {deleteCalendar.error && <ErrorMessage error={deleteCalendar.error} fallback="カレンダーの削除に失敗しました。" />}
-
         {isLoading ? (
           <LoadingState />
         ) : error ? (
           <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
         ) : calendars.length === 0 ? (
-          <p className="text-sm text-muted-foreground">カレンダーはまだありません。</p>
+          <EmptyState
+            title="カレンダーはまだありません。"
+            description="会社カレンダーを作成すると、社員の勤務予定や祝日をカレンダー単位で管理できます。"
+            action={<Button onClick={() => setIsCreateModalOpen(true)}>会社カレンダーを作成</Button>}
+          />
         ) : (
           <>
             <ul className="divide-y divide-border">
@@ -69,13 +68,16 @@ export function WorkCalendarListPage() {
                   <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
                     {calendar.is_default ? 'デフォルト' : '非デフォルト'}
                   </Badge>
-                  <Button
-                    variant="danger"
-                    isLoading={deleteCalendar.isPending}
-                    onClick={() => handleDelete(calendar.id, calendar.name)}
-                  >
-                    削除
-                  </Button>
+                  <ConfirmActionDialog
+                    triggerLabel="削除"
+                    triggerVariant="danger"
+                    title={`「${calendar.name}」を削除しますか?`}
+                    description="削除すると元に戻せません。"
+                    confirmLabel="削除する"
+                    isPending={deleteCalendar.isPending && deleteCalendar.variables === calendar.id}
+                    error={deleteCalendar.variables === calendar.id ? deleteCalendar.error : undefined}
+                    onConfirm={() => deleteCalendar.mutateAsync(calendar.id)}
+                  />
                 </li>
               ))}
             </ul>

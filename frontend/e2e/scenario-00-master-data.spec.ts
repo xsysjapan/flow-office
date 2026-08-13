@@ -96,7 +96,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---
   await page.goto("/admin/work-styles");
-  await page.getByRole("button", { name: "新規登録" }).click();
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("コード").fill(workStyleCode);
   await page.getByLabel("名称").fill("E2Eテスト用勤務形態");
   await page.getByLabel("労働時間制").selectOption({ value: "fixed" });
