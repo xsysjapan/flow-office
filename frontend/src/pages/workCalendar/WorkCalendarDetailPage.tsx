@@ -263,7 +263,7 @@ export function WorkCalendarDetailPage() {
   }
 
   const handleAssignSource = () => {
-    if (!selectedSourceId || selectedSourceId === calendar.holiday_calendar_source_id) return
+    if (selectedSourceId === (calendar.holiday_calendar_source_id ?? NONE_OPTION_VALUE)) return
 
     updateCalendar.mutate({
       id: calendar.id,
@@ -272,7 +272,7 @@ export function WorkCalendarDetailPage() {
         week_starts_on: calendar.week_starts_on,
         fiscal_year_start_month: calendar.fiscal_year_start_month,
         fiscal_year_start_day: calendar.fiscal_year_start_day,
-        holiday_calendar_source_id: selectedSourceId,
+        holiday_calendar_source_id: selectedSourceId || null,
       },
     })
   }

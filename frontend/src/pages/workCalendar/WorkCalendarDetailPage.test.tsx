@@ -234,6 +234,32 @@ describe('WorkCalendarDetailPage', () => {
     )
   })
 
+  it('clears the assigned source back to "登録しない"', async () => {
+    const assignedCalendar = { ...calendar, holiday_calendar_source_id: source.id }
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
+      ...assignedCalendar,
+      holiday_calendar_source_id: null,
+    })
+
+    renderPage([assignedCalendar])
+
+    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), '')
+    await userEvent.click(screen.getByRole('button', { name: 'このカレンダーに設定する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
+        name: '本社カレンダー',
+        week_starts_on: 1,
+        fiscal_year_start_month: 4,
+        fiscal_year_start_day: 1,
+        holiday_calendar_source_id: null,
+      }),
+    )
+  })
+
   it('registers a brand-new source inline and auto-selects it', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
       .mockResolvedValueOnce([])
