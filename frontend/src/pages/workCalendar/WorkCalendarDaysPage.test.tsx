@@ -58,9 +58,9 @@ function buildAprilDays(): WorkCalendarDay[] {
   })
 }
 
-function renderPage() {
-  vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([calendar])
-  vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([year])
+function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarYear[] = [year]) {
+  vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue(calendars)
+  vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue(years)
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
@@ -141,5 +141,157 @@ describe('WorkCalendarDaysPage', () => {
 
     const cell = await screen.findByRole('button', { name: '2026-04-01 勤務日' })
     expect(within(cell).getByText('1')).toBeInTheDocument()
+  })
+
+  describe('年度アクション(旧WorkCalendarDetailPageの年度一覧行から移設)', () => {
+    it('publishes a draft year when the publish button is clicked', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'publishWorkCalendarYear').mockResolvedValue({ ...year, status: 'published' })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
+
+      await waitFor(() => expect(workCalendarsApi.publishWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('unpublishes a published year when the unpublish button is clicked', async () => {
+      const publishedYear: WorkCalendarYear = { ...year, status: 'published' }
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'unpublishWorkCalendarYear').mockResolvedValue({ ...publishedYear, status: 'draft' })
+
+      renderPage([calendar], [publishedYear])
+
+      await userEvent.click(await screen.findByRole('button', { name: '公開を取消す' }))
+
+      await waitFor(() => expect(workCalendarsApi.unpublishWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('archives a year when the archive button is clicked', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'archiveWorkCalendarYear').mockResolvedValue({ ...year, status: 'archived' })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '廃止する' }))
+
+      await waitFor(() => expect(workCalendarsApi.archiveWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('duplicates a year when the duplicate button is clicked', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'duplicateWorkCalendarYear').mockResolvedValue({
+        ...year,
+        id: 'year-2',
+        fiscal_year: 2027,
+      })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '複製して翌年度を作成' }))
+
+      await waitFor(() => expect(workCalendarsApi.duplicateWorkCalendarYear).toHaveBeenCalledWith('year-1'))
+    })
+
+    it('disables the sync button and hints at source management when no source is set', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+
+      renderPage()
+
+      expect(await screen.findByRole('button', { name: 'この年度を祝日と同期する' })).toBeDisabled()
+      expect(screen.getByRole('link', { name: '祝日iCalendarソース管理' })).toBeInTheDocument()
+    })
+
+    it('syncs the year holiday calendar and shows the reflected summary', async () => {
+      const calendarWithSource = { ...calendar, holiday_calendar_source_id: 'source-1' }
+      const syncedSource = {
+        id: 'source-1',
+        name: '内閣府祝日カレンダー',
+        source_kind: 'url' as const,
+        ics_url: 'https://example.com/holidays.ics',
+        uploaded_ics_filename: null,
+        sync_status: 'synced' as const,
+        last_synced_at: '2026-08-12T00:00:00+09:00',
+        last_error: null,
+        disabled_at: null,
+        last_sync_summary: { added: 2, updated: 0, removed: 1, applied: 2, protected_conflicts: 0 },
+      }
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'syncCompanyCalendarYearHolidayCalendar').mockResolvedValue(syncedSource)
+
+      renderPage([calendarWithSource])
+
+      const syncButton = await screen.findByRole('button', { name: 'この年度を祝日と同期する' })
+      expect(syncButton).toBeEnabled()
+      await userEvent.click(syncButton)
+
+      await waitFor(() =>
+        expect(workCalendarsApi.syncCompanyCalendarYearHolidayCalendar).toHaveBeenCalledWith('year-1'),
+      )
+
+      expect(
+        await screen.findByText('追加 2件・更新 0件・削除 1件・カレンダーに反映 2件(手動変更保護のためスキップ 0件)'),
+      ).toBeInTheDocument()
+    })
+
+    /**
+     * 同期はサーバ側の日別データ(祝日フラグ・祝日名)を書き換えるため、同期後はグリッドが
+     * 再読み込みされて同期結果を反映していなければならない。これが無いと、画面には同期前の
+     * 内容が残ったままになり、その状態で「保存する」を押すと同期結果を古い内容で
+     * 上書きしてしまう(データ消失)。
+     */
+    it('reloads the grid from the server after a sync so the synced holidays are not overwritten on save', async () => {
+      const calendarWithSource = { ...calendar, holiday_calendar_source_id: 'source-1' }
+      const syncedSource = {
+        id: 'source-1',
+        name: '内閣府祝日カレンダー',
+        source_kind: 'url' as const,
+        ics_url: 'https://example.com/holidays.ics',
+        uploaded_ics_filename: null,
+        sync_status: 'synced' as const,
+        last_synced_at: '2026-08-12T00:00:00+09:00',
+        last_error: null,
+        disabled_at: null,
+        last_sync_summary: { added: 1, updated: 0, removed: 0, applied: 1, protected_conflicts: 0 },
+      }
+
+      // 同期後は 2026-04-29 が祝日として反映された状態がサーバから返る。
+      const daysAfterSync = buildAprilDays()
+      daysAfterSync[28] = {
+        ...daysAfterSync[28],
+        schedule_state: 'OFF',
+        is_working_day: false,
+        is_public_holiday: true,
+        public_holiday_name: '昭和の日',
+      }
+
+      const fetchDays = vi
+        .spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays')
+        .mockResolvedValueOnce(buildAprilDays())
+        .mockResolvedValue(daysAfterSync)
+      vi.spyOn(workCalendarsApi, 'syncCompanyCalendarYearHolidayCalendar').mockResolvedValue(syncedSource)
+      vi.spyOn(workCalendarsApi, 'putWorkCalendarDays').mockResolvedValue([])
+
+      renderPage([calendarWithSource])
+
+      // 同期前は全日勤務日(祝日セルは存在しない)。
+      expect(await screen.findByRole('button', { name: '2026-04-29 勤務日' })).toBeInTheDocument()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'この年度を祝日と同期する' }))
+
+      // 同期後、グリッドが再取得され祝日が反映されている。
+      expect(await screen.findByRole('button', { name: '2026-04-29 祝日(昭和の日)' })).toBeInTheDocument()
+      expect(fetchDays.mock.calls.length).toBeGreaterThan(1)
+
+      // その状態で保存すると、同期結果(祝日)が保持されたまま送信される。
+      await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+      await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
+
+      const savedDays = vi.mocked(workCalendarsApi.putWorkCalendarDays).mock.calls[0][1]
+      const savedApril29 = savedDays.find((d) => d.date === '2026-04-29')
+      expect(savedApril29?.is_public_holiday).toBe(true)
+      expect(savedApril29?.public_holiday_name).toBe('昭和の日')
+    })
   })
 })

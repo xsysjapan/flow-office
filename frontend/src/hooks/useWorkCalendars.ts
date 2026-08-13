@@ -162,8 +162,12 @@ export function useSyncCompanyCalendarYearHolidayCalendar() {
 
   return useMutation({
     mutationFn: (yearId: string) => syncCompanyCalendarYearHolidayCalendar(yearId),
-    onSuccess: () => {
+    onSuccess: (_data, yearId) => {
       void queryClient.invalidateQueries({ queryKey: HOLIDAY_CALENDAR_SOURCES_KEY })
+      // 同期はこの年度の`company_calendar_days`(祝日フラグ・祝日名)を書き換えるため、
+      // 日別データも再取得する。これを怠ると日別編集画面のグリッドが同期前の内容のまま残り、
+      // そのまま保存すると同期結果を古い内容で上書きしてしまう。
+      void queryClient.invalidateQueries({ queryKey: daysKey(yearId) })
     },
   })
 }

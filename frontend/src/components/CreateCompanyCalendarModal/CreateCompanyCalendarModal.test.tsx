@@ -41,7 +41,6 @@ const source: HolidayCalendarSource = {
 }
 
 function renderModal() {
-  vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const onOpenChange = vi.fn()
 
@@ -56,6 +55,7 @@ function renderModal() {
 
 describe('CreateCompanyCalendarModal', () => {
   it('creates a calendar with only the name when no optional field is touched', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
     const { onOpenChange } = renderModal()
@@ -72,6 +72,7 @@ describe('CreateCompanyCalendarModal', () => {
   })
 
   it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
     renderModal()
@@ -97,7 +98,57 @@ describe('CreateCompanyCalendarModal', () => {
     )
   })
 
+  it('registers a brand-new holiday calendar source inline and auto-selects it for creation', async () => {
+    const createdSource: HolidayCalendarSource = {
+      id: 'source-2',
+      name: '新規祝日カレンダー',
+      source_kind: 'url',
+      ics_url: 'https://example.com/new-holidays.ics',
+      uploaded_ics_filename: null,
+      sync_status: 'pending',
+      last_synced_at: null,
+      last_error: null,
+      disabled_at: null,
+      last_sync_summary: null,
+    }
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources')
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([createdSource])
+    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
+    vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(createdSource)
+
+    renderModal()
+
+    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
+
+    await userEvent.type(screen.getByLabelText('名称'), '新規祝日カレンダー')
+    await userEvent.type(screen.getByLabelText('iCalendar URL'), 'https://example.com/new-holidays.ics')
+    await userEvent.click(screen.getByRole('button', { name: '登録する' }))
+
+    await waitFor(() =>
+      expect(holidayCalendarSourcesApi.createHolidayCalendarSource).toHaveBeenCalledWith({
+        name: '新規祝日カレンダー',
+        ics_url: 'https://example.com/new-holidays.ics',
+      }),
+    )
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('休日iCalendarソース')).toHaveValue(createdSource.id),
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
+        name: '2027年度カレンダー',
+        holiday_calendar_source_id: createdSource.id,
+      }),
+    )
+  })
+
   it('sends the selected holiday calendar source', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
     renderModal()

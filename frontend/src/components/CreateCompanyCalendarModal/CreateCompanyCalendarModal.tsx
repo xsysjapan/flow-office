@@ -5,9 +5,11 @@ import { FormField } from '../FormField/FormField'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
-import { useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
+import { useCreateHolidayCalendarSource, useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
 import { useCreateWorkCalendar } from '../../hooks/useWorkCalendars'
 import type { WeekdayHolidayPattern, WeekdayHolidayPatternDayType } from '../../api/types'
+
+const ICS_FILE_ACCEPT = '.ics,.ical,.ifb'
 
 const WEEKDAY_KEYS: (keyof WeekdayHolidayPattern)[] = ['1', '2', '3', '4', '5', '6', '7']
 
@@ -77,15 +79,28 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
   const { data: sourcesData } = useHolidayCalendarSources()
   const sources = sourcesData ?? []
   const createCalendar = useCreateWorkCalendar()
+  const createSource = useCreateHolidayCalendarSource()
 
   const [form, setForm] = useState(emptyFormState())
   const [isWeekdayPatternOpen, setIsWeekdayPatternOpen] = useState(false)
+
+  const [isRegisteringSource, setIsRegisteringSource] = useState(false)
+  const [newSourceName, setNewSourceName] = useState('')
+  const [newSourceMode, setNewSourceMode] = useState<'url' | 'upload'>('url')
+  const [newSourceIcsUrl, setNewSourceIcsUrl] = useState('')
+  const [newSourceIcsFile, setNewSourceIcsFile] = useState<File | undefined>(undefined)
 
   useEffect(() => {
     if (!open) return
     setForm(emptyFormState())
     setIsWeekdayPatternOpen(false)
+    setIsRegisteringSource(false)
+    setNewSourceName('')
+    setNewSourceMode('url')
+    setNewSourceIcsUrl('')
+    setNewSourceIcsFile(undefined)
     createCalendar.reset()
+    createSource.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -93,6 +108,26 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
 
   const handleOpenWeekdayPattern = () => {
     setIsWeekdayPatternOpen(true)
+  }
+
+  const handleCreateSource = () => {
+    createSource.mutate(
+      {
+        name: newSourceName,
+        ics_url: newSourceMode === 'url' ? newSourceIcsUrl : undefined,
+        ics_file: newSourceMode === 'upload' ? newSourceIcsFile : undefined,
+      },
+      {
+        onSuccess: (created) => {
+          setNewSourceName('')
+          setNewSourceMode('url')
+          setNewSourceIcsUrl('')
+          setNewSourceIcsFile(undefined)
+          setIsRegisteringSource(false)
+          patch({ holidaySourceId: created.id })
+        },
+      },
+    )
   }
 
   const handleSubmit = () => {
@@ -215,6 +250,83 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
             ))}
           </NativeSelect>
         </FormField>
+
+        {createSource.error && <ErrorMessage error={createSource.error} />}
+
+        {!isRegisteringSource ? (
+          <Button variant="secondary" onClick={() => setIsRegisteringSource(true)}>
+            新しいiCalendarを登録する
+          </Button>
+        ) : (
+          <div className="flex flex-col gap-4 rounded-md border border-border p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="名称" htmlFor="create-calendar-holiday-source-name" required>
+                <Input
+                  id="create-calendar-holiday-source-name"
+                  value={newSourceName}
+                  onChange={(e) => setNewSourceName(e.target.value)}
+                />
+              </FormField>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-foreground">登録方法</span>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="radio"
+                      name="create-calendar-holiday-source-mode"
+                      checked={newSourceMode === 'url'}
+                      onChange={() => setNewSourceMode('url')}
+                    />
+                    URLで登録
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="radio"
+                      name="create-calendar-holiday-source-mode"
+                      checked={newSourceMode === 'upload'}
+                      onChange={() => setNewSourceMode('upload')}
+                    />
+                    ファイルをアップロード
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {newSourceMode === 'url' ? (
+              <FormField label="iCalendar URL" htmlFor="create-calendar-holiday-source-ics-url" required>
+                <Input
+                  id="create-calendar-holiday-source-ics-url"
+                  type="url"
+                  value={newSourceIcsUrl}
+                  onChange={(e) => setNewSourceIcsUrl(e.target.value)}
+                />
+              </FormField>
+            ) : (
+              <FormField label="iCalendarファイル" htmlFor="create-calendar-holiday-source-ics-file" required>
+                <input
+                  id="create-calendar-holiday-source-ics-file"
+                  type="file"
+                  accept={ICS_FILE_ACCEPT}
+                  onChange={(e) => setNewSourceIcsFile(e.target.files?.[0])}
+                />
+              </FormField>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setIsRegisteringSource(false)}>
+                キャンセル
+              </Button>
+              <Button
+                isLoading={createSource.isPending}
+                disabled={!newSourceName || (newSourceMode === 'url' ? !newSourceIcsUrl : !newSourceIcsFile)}
+                onClick={handleCreateSource}
+              >
+                登録する
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>

@@ -9,10 +9,19 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import type { WorkCalendarDay, WorkCalendarYearStatus } from '../../api/types'
+import type { HolidayCalendarSyncSummary, WorkCalendarDay, WorkCalendarYearStatus } from '../../api/types'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
-import { useCompanyCalendarYearById, useCompanyCalendarYearDays, usePutWorkCalendarDays } from '../../hooks/useWorkCalendars'
+import {
+  useArchiveWorkCalendarYear,
+  useCompanyCalendarYearById,
+  useCompanyCalendarYearDays,
+  useDuplicateWorkCalendarYear,
+  usePublishWorkCalendarYear,
+  usePutWorkCalendarDays,
+  useSyncCompanyCalendarYearHolidayCalendar,
+  useUnpublishWorkCalendarYear,
+} from '../../hooks/useWorkCalendars'
 
 type ScheduleState = 'WORK' | 'OFF'
 
@@ -42,6 +51,12 @@ const YEAR_STATUS_TONE: Record<WorkCalendarYearStatus, 'neutral' | 'success' | '
   draft: 'neutral',
   published: 'success',
   archived: 'danger',
+}
+
+const HOLIDAY_SOURCE_MANAGEMENT_ANCHOR = 'holiday-source-management'
+
+function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
+  return `追加 ${summary.added}件・更新 ${summary.updated}件・削除 ${summary.removed}件・カレンダーに反映 ${summary.applied}件(手動変更保護のためスキップ ${summary.protected_conflicts}件)`
 }
 
 /** UC-C010: 祝日属性(祝日か否か)と勤務区分(WORK/OFF)を別の入力として扱う。 */
@@ -211,6 +226,14 @@ export function WorkCalendarDaysPage() {
   const { year, calendar, isLoading: isLoadingYear, error: yearError } = useCompanyCalendarYearById(yearId ?? '')
   const daysQuery = useCompanyCalendarYearDays(yearId ?? '')
 
+  const publishYear = usePublishWorkCalendarYear(calendar?.id ?? '')
+  const unpublishYear = useUnpublishWorkCalendarYear(calendar?.id ?? '')
+  const archiveYear = useArchiveWorkCalendarYear(calendar?.id ?? '')
+  const duplicateYear = useDuplicateWorkCalendarYear(calendar?.id ?? '')
+  const syncYearHolidayCalendar = useSyncCompanyCalendarYearHolidayCalendar()
+
+  const [syncSummary, setSyncSummary] = useState<HolidayCalendarSyncSummary | null>(null)
+
   const [daysMap, setDaysMap] = useState<Map<string, DayState>>(new Map())
   const [loadedForYearId, setLoadedForYearId] = useState<string | null>(null)
   const [hoursPerDay, setHoursPerDay] = useState(8)
@@ -258,6 +281,24 @@ export function WorkCalendarDaysPage() {
 
   if (!yearId) return <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
 
+  const handleSyncYear = () => {
+    syncYearHolidayCalendar.mutate(yearId, {
+      onSuccess: (updatedSource) => {
+        if (updatedSource.last_sync_summary) {
+          setSyncSummary(updatedSource.last_sync_summary)
+        }
+        // 同期でサーバ側の日別データ(祝日フラグ・祝日名)が変わるため、編集中のローカル状態を
+        // 破棄して再読み込みさせる(そうしないとグリッドが同期前の内容のままになり、保存時に
+        // 同期結果を古い内容で上書きしてしまう)。
+        setLoadedForYearId(null)
+      },
+    })
+  }
+
+  const hasHolidaySource = Boolean(calendar?.holiday_calendar_source_id)
+  const yearActionError =
+    publishYear.error ?? unpublishYear.error ?? archiveYear.error ?? duplicateYear.error ?? syncYearHolidayCalendar.error
+
   const handleSave = () => {
     if (!yearId) return
 
@@ -297,14 +338,66 @@ export function WorkCalendarDaysPage() {
       ) : !year ? (
         <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-lg font-semibold text-foreground">{year.fiscal_year}年度</h1>
-            <span className="text-sm text-muted-foreground">
-              {year.starts_on}〜{year.ends_on}
-            </span>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-lg font-semibold text-foreground">{year.fiscal_year}年度</h1>
+              <span className="text-sm text-muted-foreground">
+                {year.starts_on}〜{year.ends_on}
+              </span>
+            </div>
+            <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
           </div>
-          <Badge tone={YEAR_STATUS_TONE[year.status]}>{YEAR_STATUS_LABEL[year.status]}</Badge>
+
+          {yearActionError && <ErrorMessage error={yearActionError} />}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              isLoading={syncYearHolidayCalendar.isPending}
+              disabled={!hasHolidaySource || syncYearHolidayCalendar.isPending}
+              onClick={handleSyncYear}
+            >
+              この年度を祝日と同期する
+            </Button>
+            {year.status === 'draft' && (
+              <Button variant="secondary" isLoading={publishYear.isPending} onClick={() => publishYear.mutate(year.id)}>
+                公開する
+              </Button>
+            )}
+            {year.status === 'published' && (
+              <Button
+                variant="secondary"
+                isLoading={unpublishYear.isPending}
+                onClick={() => unpublishYear.mutate(year.id)}
+              >
+                公開を取消す
+              </Button>
+            )}
+            {year.status !== 'archived' && (
+              <Button variant="danger" isLoading={archiveYear.isPending} onClick={() => archiveYear.mutate(year.id)}>
+                廃止する
+              </Button>
+            )}
+            <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
+              複製して翌年度を作成
+            </Button>
+          </div>
+
+          {!hasHolidaySource && calendar && (
+            <p className="text-xs text-muted-foreground">
+              祝日iCalendarソースが未設定のため、同期は行えません。
+              <Link
+                to={`/admin/work-calendars/${calendar.id}#${HOLIDAY_SOURCE_MANAGEMENT_ANCHOR}`}
+                className="ml-1 underline hover:text-foreground"
+              >
+                祝日iCalendarソース管理
+              </Link>
+              から設定してください。
+            </p>
+          )}
+
+          {syncSummary && <p className="text-sm text-foreground">{formatSyncSummary(syncSummary)}</p>}
         </div>
       )}
 

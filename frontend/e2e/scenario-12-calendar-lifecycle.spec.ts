@@ -91,10 +91,9 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("button", { name: "保存する" }),
   ).not.toBeDisabled();
 
-  // --- UC-C009 手順3: 公開する ---
-  await page.goBack();
-  await yearRow.getByRole("button", { name: "公開する" }).click();
-  await expect(yearRow.getByRole("status", { name: "公開済み" })).toBeVisible();
+  // --- UC-C009 手順3: 公開する(年度自身のページから) ---
+  await page.getByRole("button", { name: "公開する" }).click();
+  await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: このカレンダーを使う勤務形態を作成する(一括操作の前提) ---
   await page.goto("/admin/work-styles");
@@ -149,14 +148,20 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await expect(historyRow.getByText("取消済み")).toBeVisible();
   await expect(historyRow.getByRole("button", { name: "取消す" })).toHaveCount(0);
 
-  // --- UC-C009 手順4: 年度を複製して翌年度を作成する ---
+  // --- UC-C009 手順4: 年度を複製して翌年度を作成する(年度自身のページから) ---
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
     page.getByRole("heading", { name: calendarName, level: 1 }),
   ).toBeVisible();
-  await yearRow.getByRole("button", { name: "複製して翌年度を作成" }).click();
+  await yearRow.getByRole("link", { name: `${fiscalYear}年度` }).click();
+  await expect(
+    page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "複製して翌年度を作成" }).click();
 
+  await page.goto("/admin/work-calendars");
+  await calendarRow.getByRole("link", { name: calendarName }).click();
   const nextYearRow = page.locator("li", {
     has: page.getByRole("link", { name: `${fiscalYear + 1}年度` }),
   });
