@@ -14,5 +14,6 @@ class CreateCompanyCalendar implements Command
         public readonly string $createdByUserId,
         public readonly ?array $weekdayHolidayPattern = null,
         public readonly ?string $holidayCalendarSourceId = null,
+        public readonly ?bool $allowDailyHolidayOverride = null,
     ) {}
 }

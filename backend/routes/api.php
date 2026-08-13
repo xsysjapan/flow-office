@@ -231,6 +231,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/company-calendar-years/{companyCalendarYear}/archive', [CompanyCalendarController::class, 'archive']);
         Route::put('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'putDays']);
         Route::post('/company-calendar-years/{companyCalendarYear}/duplicate', [CompanyCalendarController::class, 'duplicate']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/regenerate', [CompanyCalendarController::class, 'regenerateYear']);
         Route::post('/company-calendar-years/{companyCalendarYear}/sync-holiday-calendar', [CompanyCalendarController::class, 'syncHolidayCalendar']);
         Route::post('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'store']);
         Route::post('/holiday-calendar-sources/{holidayCalendarSource}', [HolidayCalendarSourceController::class, 'update']);

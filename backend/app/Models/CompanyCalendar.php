@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 主キーはUUID(HasUuids)。集約ID(aggregate_id)としてstored_eventsに書き込まれるため、
  * DB採番だと確定前にProjectorが行を作成できない(docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'name', 'week_starts_on', 'timezone', 'fiscal_year_start_month', 'fiscal_year_start_day', 'is_default', 'status', 'holiday_calendar_source_id', 'weekday_holiday_pattern'])]
+#[Fillable(['id', 'name', 'week_starts_on', 'timezone', 'fiscal_year_start_month', 'fiscal_year_start_day', 'is_default', 'status', 'holiday_calendar_source_id', 'weekday_holiday_pattern', 'allow_daily_holiday_override'])]
 class CompanyCalendar extends Model
 {
     use HasUuids;
@@ -51,6 +51,7 @@ class CompanyCalendar extends Model
         return [
             'is_default' => 'boolean',
             'weekday_holiday_pattern' => 'array',
+            'allow_daily_holiday_override' => 'boolean',
         ];
     }
 

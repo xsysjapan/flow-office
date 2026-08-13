@@ -7,10 +7,16 @@ import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Checkbox } from '../../components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
-import type { HolidayCalendarSyncSummary, WorkCalendarYearStatus } from '../../api/types'
+import type {
+  HolidayCalendarSyncSummary,
+  WeekdayHolidayPattern,
+  WeekdayHolidayPatternDayType,
+  WorkCalendarYearStatus,
+} from '../../api/types'
 import {
   useCreateHolidayCalendarSource,
   useDisableHolidayCalendarSource,
@@ -62,6 +68,24 @@ const YEAR_STATUS_TONE: Record<WorkCalendarYearStatus, 'neutral' | 'success' | '
 }
 
 const HOLIDAY_SOURCE_MANAGEMENT_ANCHOR = 'holiday-source-management'
+
+const WEEKDAY_KEYS: (keyof WeekdayHolidayPattern)[] = ['1', '2', '3', '4', '5', '6', '7']
+
+const WEEKDAY_LABELS: Record<keyof WeekdayHolidayPattern, string> = {
+  '1': '月曜日',
+  '2': '火曜日',
+  '3': '水曜日',
+  '4': '木曜日',
+  '5': '金曜日',
+  '6': '土曜日',
+  '7': '日曜日',
+}
+
+const DAY_TYPE_OPTIONS: { value: WeekdayHolidayPatternDayType; label: string }[] = [
+  { value: 'working', label: '勤務日' },
+  { value: 'company_holiday', label: '所定休日' },
+  { value: 'legal_holiday', label: '法定休日(所定休日を含む)' },
+]
 
 function formatDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -123,6 +147,9 @@ export function WorkCalendarDetailPage() {
   const [weekStartsOn, setWeekStartsOn] = useState('')
   const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState('')
   const [fiscalYearStartDay, setFiscalYearStartDay] = useState('')
+  const [allowDailyHolidayOverride, setAllowDailyHolidayOverride] = useState(true)
+  const [isWeekdayPatternOpen, setIsWeekdayPatternOpen] = useState(false)
+  const [weekdayPattern, setWeekdayPattern] = useState<WeekdayHolidayPattern | null>(null)
 
   useEffect(() => {
     if (!calendar) return
@@ -130,6 +157,9 @@ export function WorkCalendarDetailPage() {
     setWeekStartsOn(String(calendar.week_starts_on))
     setFiscalYearStartMonth(String(calendar.fiscal_year_start_month))
     setFiscalYearStartDay(String(calendar.fiscal_year_start_day))
+    setAllowDailyHolidayOverride(calendar.allow_daily_holiday_override)
+    setIsWeekdayPatternOpen(false)
+    setWeekdayPattern(calendar.weekday_holiday_pattern)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.id])
 
@@ -163,6 +193,10 @@ export function WorkCalendarDetailPage() {
   if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
   if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
 
+  const handleOpenWeekdayPattern = () => {
+    setIsWeekdayPatternOpen(true)
+  }
+
   const handleSaveSettings = () => {
     updateCalendar.mutate({
       id: calendar.id,
@@ -172,6 +206,8 @@ export function WorkCalendarDetailPage() {
         fiscal_year_start_month: Number(fiscalYearStartMonth),
         fiscal_year_start_day: Number(fiscalYearStartDay),
         holiday_calendar_source_id: calendar.holiday_calendar_source_id,
+        weekday_holiday_pattern: isWeekdayPatternOpen && weekdayPattern ? weekdayPattern : undefined,
+        allow_daily_holiday_override: allowDailyHolidayOverride,
       },
     })
   }
@@ -352,6 +388,53 @@ export function WorkCalendarDetailPage() {
               />
             </FormField>
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox
+              aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+              checked={allowDailyHolidayOverride}
+              onCheckedChange={(checked) => setAllowDailyHolidayOverride(checked === true)}
+            />
+            曜日ごとの休日設定を日ごとに個別変更できるようにする
+          </label>
+
+          {!isWeekdayPatternOpen ? (
+            <Button variant="secondary" onClick={handleOpenWeekdayPattern}>
+              曜日ごとの休日設定を変更する
+            </Button>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+              <p className="text-xs text-muted-foreground">
+                未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {WEEKDAY_KEYS.map((weekdayKey) => (
+                  <FormField
+                    key={weekdayKey}
+                    label={WEEKDAY_LABELS[weekdayKey]}
+                    htmlFor={`company-calendar-weekday-pattern-${weekdayKey}`}
+                  >
+                    <NativeSelect
+                      id={`company-calendar-weekday-pattern-${weekdayKey}`}
+                      value={weekdayPattern?.[weekdayKey] ?? 'working'}
+                      onChange={(e) =>
+                        setWeekdayPattern((prev) => ({
+                          ...(prev ?? calendar.weekday_holiday_pattern),
+                          [weekdayKey]: e.target.value as WeekdayHolidayPatternDayType,
+                        }))
+                      }
+                    >
+                      {DAY_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex justify-end">

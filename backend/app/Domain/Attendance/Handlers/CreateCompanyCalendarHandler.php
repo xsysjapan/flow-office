@@ -36,6 +36,7 @@ class CreateCompanyCalendarHandler implements CommandHandler
                 createdByUserId: $command->createdByUserId,
                 weekdayHolidayPattern: $command->weekdayHolidayPattern,
                 holidayCalendarSourceId: $command->holidayCalendarSourceId,
+                allowDailyHolidayOverride: $command->allowDailyHolidayOverride,
             );
 
         if ($isFirst) {

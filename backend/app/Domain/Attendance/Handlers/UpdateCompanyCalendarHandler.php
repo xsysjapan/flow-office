@@ -29,6 +29,7 @@ class UpdateCompanyCalendarHandler implements CommandHandler
                 holidayCalendarSourceId: $command->holidayCalendarSourceId,
                 updatedByUserId: $command->updatedByUserId,
                 weekdayHolidayPattern: $command->weekdayHolidayPattern,
+                allowDailyHolidayOverride: $command->allowDailyHolidayOverride,
             )
             ->persist();
 

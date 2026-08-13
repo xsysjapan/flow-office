@@ -13,6 +13,7 @@ use App\Domain\Attendance\Commands\SyncHolidayCalendarSource;
 use App\Domain\Attendance\Commands\UnpublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendar;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
+use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompanyCalendarDayResource;
@@ -25,6 +26,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
@@ -76,7 +78,7 @@ class CompanyCalendarController extends Controller
         operationId: 'companyCalendars.store',
         summary: '会社カレンダー本体と最初のカレンダー年度を作成する',
         tags: ['勤務カレンダー'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer', description: '省略時は本体のみ作成する(最初の年度はPOST /company-calendars/{id}/yearsまたは定期バッチ/UC-C011で後から生成できる)'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date')])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'fiscal_year', type: 'integer', description: '省略時は本体のみ作成する(最初の年度はPOST /company-calendars/{id}/yearsまたは定期バッチ/UC-C011で後から生成できる)'), new OA\Property(property: 'starts_on', type: 'string', format: 'date'), new OA\Property(property: 'ends_on', type: 'string', format: 'date'), new OA\Property(property: 'allow_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時はカラムの既定値(true)。falseにすると日別の休日区分編集をロックする')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function store(Request $request, CommandBus $commandBus): JsonResponse
@@ -94,6 +96,7 @@ class CompanyCalendarController extends Controller
             'ends_on' => ['nullable', 'date', 'after:starts_on', 'required_with:fiscal_year,starts_on'],
             'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
             'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
+            'allow_daily_holiday_override' => ['nullable', 'boolean'],
         ]);
 
         $calendar = $commandBus->dispatch(new CreateCompanyCalendar(
@@ -104,6 +107,7 @@ class CompanyCalendarController extends Controller
             createdByUserId: $request->user()->id,
             weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? null,
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
+            allowDailyHolidayOverride: $data['allow_daily_holiday_override'] ?? null,
         ));
 
         if (array_key_exists('fiscal_year', $data) && $data['fiscal_year'] !== null) {
@@ -130,7 +134,7 @@ class CompanyCalendarController extends Controller
         summary: '会社カレンダー本体を編集する',
         tags: ['勤務カレンダー'],
         parameters: [new OA\Parameter(name: 'companyCalendar', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'holiday_calendar_source_id', type: 'string', format: 'uuid', nullable: true)])),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['name'], properties: [new OA\Property(property: 'name', type: 'string'), new OA\Property(property: 'week_starts_on', type: 'integer'), new OA\Property(property: 'fiscal_year_start_month', type: 'integer'), new OA\Property(property: 'fiscal_year_start_day', type: 'integer'), new OA\Property(property: 'holiday_calendar_source_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'allow_daily_holiday_override', type: 'boolean', nullable: true, description: '省略時は現在値を維持する。falseにすると日別の休日区分編集をロックする')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function update(Request $request, CompanyCalendar $companyCalendar, CommandBus $commandBus): CompanyCalendarResource
@@ -142,6 +146,7 @@ class CompanyCalendarController extends Controller
             'fiscal_year_start_day' => ['integer', 'between:1,31'],
             'holiday_calendar_source_id' => ['nullable', 'uuid', 'exists:holiday_calendar_sources,id'],
             'weekday_holiday_pattern' => ['nullable', 'array', self::weekdayHolidayPatternRule()],
+            'allow_daily_holiday_override' => ['nullable', 'boolean'],
         ]);
 
         $calendar = $commandBus->dispatch(new UpdateCompanyCalendar(
@@ -153,6 +158,7 @@ class CompanyCalendarController extends Controller
             holidayCalendarSourceId: $data['holiday_calendar_source_id'] ?? null,
             updatedByUserId: $request->user()->id,
             weekdayHolidayPattern: $data['weekday_holiday_pattern'] ?? $companyCalendar->weekday_holiday_pattern,
+            allowDailyHolidayOverride: $data['allow_daily_holiday_override'] ?? $companyCalendar->allow_daily_holiday_override,
         ));
 
         return new CompanyCalendarResource($calendar);
@@ -320,6 +326,54 @@ class CompanyCalendarController extends Controller
         ));
 
         return (new CompanyCalendarYearResource($year))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 曜日休日パターンがロック(`allow_daily_holiday_override = false`)されているカレンダーで
+     * 日別の分類を誤って登録してしまった場合の救済措置。この年度の日別設定を、カレンダー本体の
+     * *現在の*曜日休日パターンから丸ごと再生成し、以前の手動編集を破棄する
+     * (`CreateCompanyCalendarYearHandler`と同じ生成→同期のオーケストレーションを再利用する)。
+     * 公開済み年度は既に実績データが依存しているため対象外とする。
+     */
+    #[OA\Post(
+        path: '/company-calendar-years/{companyCalendarYear}/regenerate',
+        operationId: 'companyCalendarYears.regenerate',
+        summary: 'カレンダー年度の日別設定を現在の曜日休日パターンから再生成する',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function regenerateYear(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): AnonymousResourceCollection
+    {
+        if ($companyCalendarYear->status !== 'draft') {
+            throw ValidationException::withMessages([
+                'status' => ['公開済みのカレンダー年度は再作成できません。'],
+            ]);
+        }
+
+        $companyCalendar = $companyCalendarYear->companyCalendar;
+
+        $days = app(CalendarWeekdayPatternDayGenerator::class)->generate(
+            Carbon::parse($companyCalendarYear->starts_on),
+            Carbon::parse($companyCalendarYear->ends_on),
+            $companyCalendar->effectiveWeekdayHolidayPattern(),
+        );
+
+        $commandBus->dispatch(new UpdateCompanyCalendarDays(
+            companyCalendarYearId: $companyCalendarYear->id,
+            days: $days,
+            updatedByUserId: $request->user()->id,
+        ));
+
+        if ($companyCalendar->holiday_calendar_source_id !== null) {
+            $commandBus->dispatch(new SyncHolidayCalendarSource(
+                holidayCalendarSourceId: $companyCalendar->holiday_calendar_source_id,
+                syncedByUserId: $request->user()->id,
+                companyCalendarYearId: $companyCalendarYear->id,
+            ));
+        }
+
+        return CompanyCalendarDayResource::collection($companyCalendarYear->days()->orderBy('date')->get());
     }
 
     /**

@@ -25,6 +25,7 @@ const calendar: WorkCalendar = {
     '6': 'company_holiday',
     '7': 'legal_holiday',
   },
+  allow_daily_holiday_override: true,
 }
 
 const source: HolidayCalendarSource = {
@@ -66,6 +67,7 @@ describe('CreateCompanyCalendarModal', () => {
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
+        allow_daily_holiday_override: true,
       }),
     )
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
@@ -94,6 +96,25 @@ describe('CreateCompanyCalendarModal', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
+        allow_daily_holiday_override: true,
+      }),
+    )
+  })
+
+  it('does not send the override-lock flag as true when the checkbox is unchecked', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
+
+    renderModal()
+
+    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
+    await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
+        name: '2027年度カレンダー',
+        allow_daily_holiday_override: false,
       }),
     )
   })
@@ -143,6 +164,7 @@ describe('CreateCompanyCalendarModal', () => {
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
         holiday_calendar_source_id: createdSource.id,
+        allow_daily_holiday_override: true,
       }),
     )
   })
@@ -161,6 +183,7 @@ describe('CreateCompanyCalendarModal', () => {
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
         holiday_calendar_source_id: source.id,
+        allow_daily_holiday_override: true,
       }),
     )
   })

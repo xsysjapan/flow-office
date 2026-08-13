@@ -39,6 +39,8 @@ export interface CreateWorkCalendarInput {
   fiscal_year_start_day?: number
   weekday_holiday_pattern?: WeekdayHolidayPattern
   holiday_calendar_source_id?: string | null
+  /** 省略時はbackend側の既定値(true)が使われる。 */
+  allow_daily_holiday_override?: boolean
 }
 
 /**
@@ -57,6 +59,8 @@ export interface UpdateWorkCalendarInput {
   fiscal_year_start_day?: number
   holiday_calendar_source_id?: string | null
   weekday_holiday_pattern?: WeekdayHolidayPattern
+  /** 省略時は現在値が維持される。 */
+  allow_daily_holiday_override?: boolean
 }
 
 /**
@@ -135,6 +139,15 @@ export function putWorkCalendarDays(
   days: PutCalendarDayInput[],
 ): Promise<WorkCalendarDay[]> {
   return apiFetch(`/company-calendar-years/${companyCalendarYearId}/days`, { method: 'PUT', body: { days } })
+}
+
+/**
+ * カレンダー年度を`draft`状態のときだけ再作成する。カレンダー本体の現在の曜日ごとの休日設定から
+ * 全日を作り直し(手動での日別編集は破棄される)、祝日iCalendarソースが割り当てられていれば
+ * この年度の期間だけ再同期する。`published`/`archived`の年度に対しては422が返る。
+ */
+export function regenerateCompanyCalendarYear(yearId: string): Promise<WorkCalendarDay[]> {
+  return apiFetch(`/company-calendar-years/${yearId}/regenerate`, { method: 'POST' })
 }
 
 /**

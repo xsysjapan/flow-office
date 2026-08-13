@@ -76,12 +76,12 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   // 勤務日を1件確認する(自動生成された初期値のまま、勤務区分をWORKに設定し直す)。
   await page.getByRole("button", { name: `${workDate} 勤務日`, exact: false }).click();
-  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "WORK" });
+  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "working" });
   await page.keyboard.press("Escape");
 
   // 祝日を1件手動設定する。
   await page.getByRole("button", { name: `${holidayDate}`, exact: false }).click();
-  await page.getByLabel(`${holidayDate}の勤務区分`).selectOption({ value: "OFF" });
+  await page.getByLabel(`${holidayDate}の勤務区分`).selectOption({ value: "company_holiday" });
   await page.getByLabel(`${holidayDate}の祝日`).click();
   await page.getByLabel(`${holidayDate}の祝日名`).fill("E2Eテスト祝日");
   await page.keyboard.press("Escape");

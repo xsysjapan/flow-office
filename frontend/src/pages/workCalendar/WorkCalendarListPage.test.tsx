@@ -19,6 +19,7 @@ const calendar: WorkCalendar = {
   is_default: false,
   status: 'active',
   weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
+  allow_daily_holiday_override: true,
 }
 
 function page(calendars: WorkCalendar[], overrides: Partial<Paginated<WorkCalendar>['meta']> = {}): Paginated<WorkCalendar> {
@@ -96,6 +97,7 @@ describe('WorkCalendarListPage', () => {
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
+        allow_daily_holiday_override: true,
       }),
     )
   })
@@ -128,6 +130,7 @@ describe('WorkCalendarListPage', () => {
           '6': 'company_holiday',
           '7': 'company_holiday',
         },
+        allow_daily_holiday_override: true,
       }),
     )
   })

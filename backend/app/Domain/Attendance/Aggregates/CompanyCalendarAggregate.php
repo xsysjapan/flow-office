@@ -24,6 +24,7 @@ class CompanyCalendarAggregate extends AggregateRoot
         string $createdByUserId,
         ?array $weekdayHolidayPattern = null,
         ?string $holidayCalendarSourceId = null,
+        ?bool $allowDailyHolidayOverride = null,
     ): self {
         $this->recordThat(new CompanyCalendarCreated(
             name: $name,
@@ -33,6 +34,7 @@ class CompanyCalendarAggregate extends AggregateRoot
             createdByUserId: $createdByUserId,
             weekdayHolidayPattern: $weekdayHolidayPattern,
             holidayCalendarSourceId: $holidayCalendarSourceId,
+            allowDailyHolidayOverride: $allowDailyHolidayOverride,
         ));
 
         return $this;
@@ -46,6 +48,7 @@ class CompanyCalendarAggregate extends AggregateRoot
         ?string $holidayCalendarSourceId,
         string $updatedByUserId,
         ?array $weekdayHolidayPattern = null,
+        ?bool $allowDailyHolidayOverride = null,
     ): self {
         $this->recordThat(new CompanyCalendarUpdated(
             name: $name,
@@ -55,6 +58,7 @@ class CompanyCalendarAggregate extends AggregateRoot
             holidayCalendarSourceId: $holidayCalendarSourceId,
             updatedByUserId: $updatedByUserId,
             weekdayHolidayPattern: $weekdayHolidayPattern,
+            allowDailyHolidayOverride: $allowDailyHolidayOverride,
         ));
 
         return $this;

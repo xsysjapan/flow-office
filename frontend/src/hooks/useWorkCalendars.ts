@@ -11,6 +11,7 @@ import {
   fetchWorkCalendarYears,
   publishWorkCalendarYear,
   putWorkCalendarDays,
+  regenerateCompanyCalendarYear,
   setDefaultWorkCalendar,
   syncCompanyCalendarYearHolidayCalendar,
   unpublishWorkCalendarYear,
@@ -180,6 +181,21 @@ export function usePutWorkCalendarDays() {
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: LIST_KEY })
       void queryClient.invalidateQueries({ queryKey: daysKey(variables.id) })
+    },
+  })
+}
+
+/**
+ * カレンダー年度を(draft状態のときだけ)カレンダー本体の現在の曜日ごとの休日設定から
+ * 全日作り直す。日別編集画面の`daysKey`キャッシュを無効化し、最新の日別データを再取得させる。
+ */
+export function useRegenerateCompanyCalendarYear() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (yearId: string) => regenerateCompanyCalendarYear(yearId),
+    onSuccess: (_data, yearId) => {
+      void queryClient.invalidateQueries({ queryKey: daysKey(yearId) })
     },
   })
 }

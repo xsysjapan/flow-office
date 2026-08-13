@@ -15,5 +15,6 @@ class UpdateCompanyCalendar implements Command
         public readonly ?string $holidayCalendarSourceId,
         public readonly string $updatedByUserId,
         public readonly ?array $weekdayHolidayPattern = null,
+        public readonly ?bool $allowDailyHolidayOverride = null,
     ) {}
 }

@@ -9,7 +9,12 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import type { HolidayCalendarSyncSummary, WorkCalendarDay, WorkCalendarYearStatus } from '../../api/types'
+import type {
+  HolidayCalendarSyncSummary,
+  WeekdayHolidayPatternDayType,
+  WorkCalendarDay,
+  WorkCalendarYearStatus,
+} from '../../api/types'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
@@ -19,24 +24,65 @@ import {
   useDuplicateWorkCalendarYear,
   usePublishWorkCalendarYear,
   usePutWorkCalendarDays,
+  useRegenerateCompanyCalendarYear,
   useSyncCompanyCalendarYearHolidayCalendar,
   useUnpublishWorkCalendarYear,
 } from '../../hooks/useWorkCalendars'
 
-type ScheduleState = 'WORK' | 'OFF'
+type DayClassification = WeekdayHolidayPatternDayType
 
 interface DayState {
-  schedule_state: ScheduleState
+  classification: DayClassification
   is_public_holiday: boolean
   public_holiday_name: string
   note: string
 }
 
 const DEFAULT_DAY_STATE: DayState = {
-  schedule_state: 'WORK',
+  classification: 'working',
   is_public_holiday: false,
   public_holiday_name: '',
   note: '',
+}
+
+/** `CreateCompanyCalendarModal`/`WorkCalendarDetailPage`の曜日ごとの休日設定と同じ3択・同じラベル。 */
+const CLASSIFICATION_OPTIONS: { value: DayClassification; label: string }[] = [
+  { value: 'working', label: '勤務日' },
+  { value: 'company_holiday', label: '所定休日' },
+  { value: 'legal_holiday', label: '法定休日(所定休日を含む)' },
+]
+
+const CLASSIFICATION_LABELS: Record<DayClassification, string> = {
+  working: '勤務日',
+  company_holiday: '所定休日',
+  legal_holiday: '法定休日(所定休日を含む)',
+}
+
+/**
+ * `CalendarWeekdayPatternDayGenerator`(backend)が定義する3区分を、日別編集画面が送信する
+ * `schedule_state`/`is_working_day`/`is_legal_holiday`/`is_company_holiday`にそのまま対応させる。
+ */
+function classificationToFlags(classification: DayClassification): {
+  schedule_state: 'WORK' | 'OFF'
+  is_working_day: boolean
+  is_legal_holiday: boolean
+  is_company_holiday: boolean
+} {
+  switch (classification) {
+    case 'working':
+      return { schedule_state: 'WORK', is_working_day: true, is_legal_holiday: false, is_company_holiday: false }
+    case 'company_holiday':
+      return { schedule_state: 'OFF', is_working_day: false, is_legal_holiday: false, is_company_holiday: true }
+    case 'legal_holiday':
+      return { schedule_state: 'OFF', is_working_day: false, is_legal_holiday: true, is_company_holiday: true }
+  }
+}
+
+/** 読み込み時点のサーバ側フラグから、3区分のどれに該当するかを復元する(逆写像)。 */
+function classificationFromDay(day: WorkCalendarDay): DayClassification {
+  if (day.is_legal_holiday) return 'legal_holiday'
+  if (day.is_company_holiday) return 'company_holiday'
+  return 'working'
 }
 
 const WEEKDAY_LABELS_JA = ['日', '月', '火', '水', '木', '金', '土']
@@ -59,15 +105,15 @@ function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
   return `追加 ${summary.added}件・更新 ${summary.updated}件・削除 ${summary.removed}件・カレンダーに反映 ${summary.applied}件(手動変更保護のためスキップ ${summary.protected_conflicts}件)`
 }
 
-/** UC-C010: 祝日属性(祝日か否か)と勤務区分(WORK/OFF)を別の入力として扱う。 */
+/** UC-C010: 祝日属性(祝日か否か)と勤務区分(3区分)を別の入力として扱う。 */
 function deriveDayType(state: DayState): string {
   if (state.is_public_holiday) return 'public_holiday'
-  return state.schedule_state === 'WORK' ? 'weekday' : 'holiday'
+  return state.classification
 }
 
 function toDayState(day: WorkCalendarDay): DayState {
   return {
-    schedule_state: day.schedule_state,
+    classification: classificationFromDay(day),
     is_public_holiday: day.is_public_holiday,
     public_holiday_name: day.public_holiday_name ?? '',
     note: day.note ?? '',
@@ -127,10 +173,12 @@ interface DayCellProps {
   date: string
   state: DayState
   inRange: boolean
+  /** falseの場合、勤務区分は読み取り専用表示になる(カレンダー本体側でロックされている)。 */
+  allowOverride: boolean
   onChange: (next: DayState) => void
 }
 
-function DayCell({ date, state, inRange, onChange }: DayCellProps) {
+function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps) {
   const dayOfMonth = Number(date.slice(8, 10))
 
   if (!inRange) {
@@ -141,11 +189,10 @@ function DayCell({ date, state, inRange, onChange }: DayCellProps) {
     )
   }
 
+  const isOff = state.classification !== 'working'
   const statusLabel = state.is_public_holiday
     ? `祝日${state.public_holiday_name ? `(${state.public_holiday_name})` : ''}`
-    : state.schedule_state === 'WORK'
-      ? '勤務日'
-      : '休日'
+    : CLASSIFICATION_LABELS[state.classification]
 
   return (
     <Popover>
@@ -157,7 +204,7 @@ function DayCell({ date, state, inRange, onChange }: DayCellProps) {
             'flex aspect-square min-h-9 flex-col items-center justify-center gap-0.5 rounded-md border text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             state.is_public_holiday
               ? 'border-warning/40 bg-warning/15 text-warning hover:bg-warning/25'
-              : state.schedule_state === 'OFF'
+              : isOff
                 ? 'border-border bg-muted text-muted-foreground hover:bg-accent'
                 : 'border-border bg-card text-foreground hover:bg-accent',
           )}
@@ -170,17 +217,30 @@ function DayCell({ date, state, inRange, onChange }: DayCellProps) {
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium text-foreground">{date}</p>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm text-foreground">勤務区分</span>
-            <NativeSelect
-              aria-label={`${date}の勤務区分`}
-              value={state.schedule_state}
-              onChange={(e) => onChange({ ...state, schedule_state: e.target.value as ScheduleState })}
-            >
-              <option value="WORK">WORK(勤務日)</option>
-              <option value="OFF">OFF(休日)</option>
-            </NativeSelect>
-          </div>
+          {allowOverride ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm text-foreground">勤務区分</span>
+              <NativeSelect
+                aria-label={`${date}の勤務区分`}
+                value={state.classification}
+                onChange={(e) => onChange({ ...state, classification: e.target.value as DayClassification })}
+              >
+                {CLASSIFICATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm text-foreground">勤務区分</span>
+              <p className="text-sm text-foreground">{CLASSIFICATION_LABELS[state.classification]}</p>
+              <p className="text-xs text-muted-foreground">
+                曜日ごとの休日設定に従います(会社カレンダーの設定でロックされています)。
+              </p>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox
@@ -231,6 +291,7 @@ export function WorkCalendarDaysPage() {
   const archiveYear = useArchiveWorkCalendarYear(calendar?.id ?? '')
   const duplicateYear = useDuplicateWorkCalendarYear(calendar?.id ?? '')
   const syncYearHolidayCalendar = useSyncCompanyCalendarYearHolidayCalendar()
+  const regenerateYear = useRegenerateCompanyCalendarYear()
 
   const [syncSummary, setSyncSummary] = useState<HolidayCalendarSyncSummary | null>(null)
 
@@ -270,7 +331,7 @@ export function WorkCalendarDaysPage() {
 
     for (const date of dates) {
       const state = getDay(date)
-      if (state.schedule_state === 'WORK') workCount += 1
+      if (state.classification === 'working') workCount += 1
       else offCount += 1
       if (state.is_public_holiday) publicHolidayCount += 1
     }
@@ -296,8 +357,14 @@ export function WorkCalendarDaysPage() {
   }
 
   const hasHolidaySource = Boolean(calendar?.holiday_calendar_source_id)
+  const allowDailyHolidayOverride = calendar?.allow_daily_holiday_override ?? true
   const yearActionError =
-    publishYear.error ?? unpublishYear.error ?? archiveYear.error ?? duplicateYear.error ?? syncYearHolidayCalendar.error
+    publishYear.error ??
+    unpublishYear.error ??
+    archiveYear.error ??
+    duplicateYear.error ??
+    syncYearHolidayCalendar.error ??
+    regenerateYear.error
 
   const handleSave = () => {
     if (!yearId) return
@@ -306,15 +373,38 @@ export function WorkCalendarDaysPage() {
       id: yearId,
       days: dates.map((date) => {
         const state = getDay(date)
+        const flags = classificationToFlags(state.classification)
         return {
           date,
           day_type: deriveDayType(state),
-          schedule_state: state.schedule_state,
+          schedule_state: flags.schedule_state,
+          is_working_day: flags.is_working_day,
+          is_legal_holiday: flags.is_legal_holiday,
+          is_company_holiday: flags.is_company_holiday,
           is_public_holiday: state.is_public_holiday,
           public_holiday_name: state.is_public_holiday && state.public_holiday_name ? state.public_holiday_name : undefined,
           note: state.note || undefined,
         }
       }),
+    })
+  }
+
+  const handleRegenerateYear = () => {
+    if (!yearId) return
+    if (
+      !window.confirm(
+        'この年度の日別データを、カレンダーの現在の曜日ごとの休日設定から作り直します。これまでの手動編集はすべて破棄されます。よろしいですか?',
+      )
+    ) {
+      return
+    }
+
+    regenerateYear.mutate(yearId, {
+      onSuccess: () => {
+        // 再作成でサーバ側の日別データが総入れ替えされるため、編集中のローカル状態を破棄して
+        // 再読み込みさせる(祝日iCalendar同期後の再読み込みと同じパターン)。
+        setLoadedForYearId(null)
+      },
     })
   }
 
@@ -382,6 +472,14 @@ export function WorkCalendarDaysPage() {
             <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
               複製して翌年度を作成
             </Button>
+            <Button
+              variant="secondary"
+              isLoading={regenerateYear.isPending}
+              disabled={year.status !== 'draft' || regenerateYear.isPending}
+              onClick={handleRegenerateYear}
+            >
+              年度を再作成する
+            </Button>
           </div>
 
           {!hasHolidaySource && calendar && (
@@ -394,6 +492,18 @@ export function WorkCalendarDaysPage() {
                 祝日iCalendarソース管理
               </Link>
               から設定してください。
+            </p>
+          )}
+
+          {year.status !== 'draft' && (
+            <p className="text-xs text-muted-foreground">
+              公開済み・廃止済みの年度は再作成できません(未公開の年度のみ再作成できます)。
+            </p>
+          )}
+
+          {!allowDailyHolidayOverride && (
+            <p className="text-xs text-muted-foreground">
+              このカレンダーは曜日ごとの休日設定の日別変更がロックされています。日別の勤務区分を変更したい場合は、カレンダー本体の設定でロックを解除するか、この年度を再作成してください。
             </p>
           )}
 
@@ -473,6 +583,7 @@ export function WorkCalendarDaysPage() {
                               date={date}
                               state={getDay(date)}
                               inRange={year ? date >= year.starts_on && date <= year.ends_on : true}
+                              allowOverride={allowDailyHolidayOverride}
                               onChange={(next) => updateDay(date, next)}
                             />
                           ),

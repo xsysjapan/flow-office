@@ -83,7 +83,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   const workDate = `${fiscalYear}-04-01`;
   await page.getByRole("button", { name: workDate, exact: false }).click();
-  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "WORK" });
+  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "working" });
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "保存する" }).click();

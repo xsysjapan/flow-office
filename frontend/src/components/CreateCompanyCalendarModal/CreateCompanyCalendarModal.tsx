@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
+import { Checkbox } from '../ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { NativeSelect } from '../ui/native-select'
@@ -60,6 +61,7 @@ function emptyFormState() {
     fiscalYearStartMonth: '',
     fiscalYearStartDay: '',
     weekdayPattern: DEFAULT_PATTERN,
+    allowDailyHolidayOverride: true,
     holidaySourceId: NONE_OPTION_VALUE,
   }
 }
@@ -138,6 +140,7 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
         fiscal_year_start_month: form.fiscalYearStartMonth ? Number(form.fiscalYearStartMonth) : undefined,
         fiscal_year_start_day: form.fiscalYearStartDay ? Number(form.fiscalYearStartDay) : undefined,
         weekday_holiday_pattern: isWeekdayPatternOpen ? form.weekdayPattern : undefined,
+        allow_daily_holiday_override: form.allowDailyHolidayOverride,
         holiday_calendar_source_id: form.holidaySourceId === NONE_OPTION_VALUE ? undefined : form.holidaySourceId,
       },
       { onSuccess: () => onOpenChange(false) },
@@ -195,6 +198,15 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
             />
           </FormField>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
+            aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+            checked={form.allowDailyHolidayOverride}
+            onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
+          />
+          曜日ごとの休日設定を日ごとに個別変更できるようにする
+        </label>
 
         {!isWeekdayPatternOpen ? (
           <Button variant="secondary" onClick={handleOpenWeekdayPattern}>

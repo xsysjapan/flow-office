@@ -19,6 +19,7 @@ const calendar: WorkCalendar = {
   is_default: false,
   status: 'active',
   weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
+  allow_daily_holiday_override: true,
 }
 
 const source: HolidayCalendarSource = {
@@ -129,6 +130,66 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_month: 1,
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
+        allow_daily_holiday_override: true,
+      }),
+    )
+  })
+
+  it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue(calendar)
+
+    renderPage()
+
+    await screen.findByLabelText('カレンダー名')
+    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
+    await userEvent.selectOptions(screen.getByLabelText('月曜日'), 'company_holiday')
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
+        name: '本社カレンダー',
+        week_starts_on: 1,
+        fiscal_year_start_month: 4,
+        fiscal_year_start_day: 1,
+        holiday_calendar_source_id: null,
+        allow_daily_holiday_override: true,
+        weekday_holiday_pattern: {
+          '1': 'company_holiday',
+          '2': 'working',
+          '3': 'working',
+          '4': 'working',
+          '5': 'working',
+          '6': 'company_holiday',
+          '7': 'legal_holiday',
+        },
+      }),
+    )
+  })
+
+  it('unchecks the override-lock checkbox and saves it as false', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
+      ...calendar,
+      allow_daily_holiday_override: false,
+    })
+
+    renderPage()
+
+    await screen.findByLabelText('カレンダー名')
+    await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalledWith('calendar-1', {
+        name: '本社カレンダー',
+        week_starts_on: 1,
+        fiscal_year_start_month: 4,
+        fiscal_year_start_day: 1,
+        holiday_calendar_source_id: null,
+        allow_daily_holiday_override: false,
       }),
     )
   })

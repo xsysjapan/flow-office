@@ -20,5 +20,6 @@ class CompanyCalendarCreated extends ShouldBeStored
         public readonly string $createdByUserId,
         public readonly ?array $weekdayHolidayPattern = null,
         public readonly ?string $holidayCalendarSourceId = null,
+        public readonly ?bool $allowDailyHolidayOverride = null,
     ) {}
 }

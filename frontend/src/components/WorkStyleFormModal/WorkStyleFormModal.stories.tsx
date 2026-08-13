@@ -14,6 +14,7 @@ const calendar: WorkCalendar = {
   is_default: true,
   status: 'active',
   weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
+  allow_daily_holiday_override: true,
 }
 
 const workStyle: WorkStyle = {

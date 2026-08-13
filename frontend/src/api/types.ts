@@ -966,6 +966,8 @@ export interface WorkCalendar {
   is_default: boolean;
   status: WorkCalendarStatus;
   weekday_holiday_pattern: WeekdayHolidayPattern;
+  /** falseの場合、日別編集画面で個別の勤務区分・祝日区分を変更できない(常に曜日ごとの休日設定から導出される)。 */
+  allow_daily_holiday_override: boolean;
 }
 
 export type WorkCalendarYearStatus = "draft" | "published" | "archived";
