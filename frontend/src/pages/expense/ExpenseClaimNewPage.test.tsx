@@ -352,6 +352,45 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.getByRole('spinbutton', { name: /1行目の金額/ })).toHaveValue(420)
   })
 
+  it('adds only the selected category rows from a preset that spans multiple categories', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 5,
+        visibility: 'system',
+        owner_user_id: null,
+        name: '国内1泊出張',
+        description: null,
+        preset_type: 'multiple_items',
+        definition: [
+          { category_id: 1, description: '自宅 → 出張先(新幹線)', amount: 14000 },
+          { category_id: 2, description: '出張先ホテル', amount: 9000 },
+          { category_id: 1, description: '出張先 → 自宅(新幹線)', amount: 14000 },
+        ],
+        is_active: true,
+        usage_count: 0,
+        last_used_at: null,
+        created_by: null,
+      },
+    ]
+    vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[0])
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectBulkEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    // 交通費を選んでいるので、宿泊費の明細は件数にも追加行にも含めない。
+    await userEvent.click(await screen.findByRole('button', { name: '国内1泊出張(2件)' }))
+
+    expect(await screen.findByDisplayValue('自宅 → 出張先(新幹線)')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('出張先 → 自宅(新幹線)')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('出張先ホテル')).not.toBeInTheDocument()
+    expect(screen.getByText(/国内1泊出張には他の区分の明細が1件あります/)).toBeInTheDocument()
+  })
+
   it('lets a single-entry category (e.g. 宿泊費) be prefilled from a preset applicable to it', async () => {
     const presets: ExpenseEntryPreset[] = [
       {

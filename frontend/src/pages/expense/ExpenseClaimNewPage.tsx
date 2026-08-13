@@ -86,20 +86,42 @@ function presetItemToRow(item: ExpenseEntryPreset['definition'][number]): SaveEx
   }
 }
 
+/** プリセットのうち、いま選んでいる経費区分に該当する明細だけを取り出す。プリセットは
+ *  複数区分にまたがれる(例: 出張プリセット = 交通費 + 宿泊費)が、入力画面では常に区分を
+ *  1つ選んでから明細を入力するため、選択中の区分以外の明細を混ぜて追加しない
+ *  (「交通費を選んでいるのに宿泊費の行が増える」状態を作らない)。他の区分の明細は、
+ *  その区分に切り替えて同じプリセットを選び直すことで同じ申請に追加できる。 */
+function presetItemsForCategory(preset: ExpenseEntryPreset, categoryId: number): ExpenseEntryPresetDefinitionItem[] {
+  return preset.definition.filter((item) => item.category_id === categoryId)
+}
+
+/** 選択中の区分以外の明細も持つプリセットであることの補足表示。件数を隠して黙って
+ *  捨てるのではなく、「この区分の分だけを追加する」と分かるようにする。 */
+function otherCategoryNotice(preset: ExpenseEntryPreset, categoryId: number): string | undefined {
+  const others = preset.definition.length - presetItemsForCategory(preset, categoryId).length
+  return others > 0 ? `${preset.name}には他の区分の明細が${others}件あります` : undefined
+}
+
 /** 交通費はUC-X002/X003の移動区間テンプレートを廃止し、経費全体で共通の入力プリセットに
  *  一本化する。プリセットはcategory_id(明細側)で経費区分に紐づいているため、この区分を
- *  含むプリセットだけをAPI側で絞り込んで取得し、クリックすると明細の下書き行を追加する
- *  (保存は既存の表形式レビューで行う)。プリセット管理画面(/expenses/presets)へのリンクは、
- *  メニューではなくこの実際にプリセットを使う場面にだけ置き(いきなりプリセット管理から
- *  使い始める人は少ないため)、遷移先ではこの区分で自動的に絞り込まれた状態にする。 */
+ *  含むプリセットだけをAPI側で絞り込んで取得し、クリックするとこの区分の明細だけを下書き行
+ *  として追加する(保存は既存の表形式レビューで行う)。プリセット管理画面(/expenses/presets)
+ *  へのリンクは、メニューではなくこの実際にプリセットを使う場面にだけ置き(いきなりプリセット
+ *  管理から使い始める人は少ないため)、遷移先ではこの区分で自動的に絞り込まれた状態にする。 */
 function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (rows: SaveExpenseItemInput[]) => void }) {
   const { data: presets, isLoading, error } = useExpenseEntryPresets({ category_id: categoryId, perPage: 50 })
   const applyPreset = useApplyExpenseEntryPreset()
 
-  const applicablePresets = presets?.data ?? []
+  const applicablePresets = (presets?.data ?? [])
+    .map((preset) => ({ preset, items: presetItemsForCategory(preset, categoryId) }))
+    .filter((entry) => entry.items.length > 0)
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+
+  const notices = applicablePresets
+    .map(({ preset }) => otherCategoryNotice(preset, categoryId))
+    .filter((notice): notice is string => notice !== undefined)
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
@@ -112,22 +134,29 @@ function PresetPicker({ categoryId, onApply }: { categoryId: number; onApply: (r
       {applicablePresets.length === 0 ? (
         <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {applicablePresets.map((preset) => (
-            <Button
-              key={preset.id}
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                applyPreset.mutate(preset.id)
-                onApply(preset.definition.map(presetItemToRow))
-              }}
-            >
-              {preset.name}({preset.definition.length}件)
-            </Button>
-          ))}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {applicablePresets.map(({ preset, items }) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  applyPreset.mutate(preset.id)
+                  onApply(items.map(presetItemToRow))
+                }}
+              >
+                {preset.name}({items.length}件)
+              </Button>
+            ))}
+          </div>
+          {notices.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {notices.join('、')}。他の区分に切り替えてから同じプリセットを選ぶと、同じ申請に追加できます。
+            </p>
+          )}
+        </>
       )}
     </div>
   )
@@ -147,7 +176,7 @@ function SinglePresetPicker({
   const applyPreset = useApplyExpenseEntryPreset()
 
   const applicablePresets = (presets?.data ?? [])
-    .map((preset) => ({ preset, item: preset.definition.find((item) => item.category_id === categoryId) }))
+    .map((preset) => ({ preset, item: presetItemsForCategory(preset, categoryId)[0] }))
     .filter(
       (entry): entry is { preset: ExpenseEntryPreset; item: ExpenseEntryPresetDefinitionItem } =>
         entry.item !== undefined,
@@ -155,6 +184,10 @@ function SinglePresetPicker({
 
   if (isLoading) return null
   if (error) return <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
+
+  const notices = applicablePresets
+    .map(({ preset }) => otherCategoryNotice(preset, categoryId))
+    .filter((notice): notice is string => notice !== undefined)
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
@@ -167,22 +200,29 @@ function SinglePresetPicker({
       {applicablePresets.length === 0 ? (
         <p className="text-sm text-muted-foreground">この区分に使えるプリセットはまだありません。</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {applicablePresets.map(({ preset, item }) => (
-            <Button
-              key={preset.id}
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                applyPreset.mutate(preset.id)
-                onApply(item)
-              }}
-            >
-              {preset.name}
-            </Button>
-          ))}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {applicablePresets.map(({ preset, item }) => (
+              <Button
+                key={preset.id}
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  applyPreset.mutate(preset.id)
+                  onApply(item)
+                }}
+              >
+                {preset.name}
+              </Button>
+            ))}
+          </div>
+          {notices.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {notices.join('、')}。他の区分に切り替えてから同じプリセットを選ぶと、同じ申請に追加できます。
+            </p>
+          )}
+        </>
       )}
     </div>
   )
