@@ -3,13 +3,13 @@
 namespace Tests\Feature\CompensatoryLeave;
 
 use App\Models\AttendanceDay;
+use App\Models\CompanyCalendar;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveUsage;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,23 +25,20 @@ class CompensatoryLeaveTest extends TestCase
 
     private function makeWorkStyle(int $prescribedDailyMinutes = 480): WorkStyle
     {
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
 
         return WorkStyle::query()->create([
             'code' => 'standard-'.uniqid(), 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => $prescribedDailyMinutes, 'prescribed_weekly_minutes' => $prescribedDailyMinutes * 5,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
     private function makeHolidayShift(User $user, WorkStyle $workStyle, string $date): void
     {
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'company_holiday', 'is_working_day' => false,
             'is_legal_holiday' => false, 'is_company_holiday' => true,
@@ -51,7 +48,7 @@ class CompensatoryLeaveTest extends TestCase
 
     private function makeWorkingDayShift(User $user, WorkStyle $workStyle, string $date): void
     {
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true,
             'is_legal_holiday' => false, 'is_company_holiday' => false,

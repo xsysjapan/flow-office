@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * 働き方(employee_shift_assignments.work_style_id)が設定されていない日でも勤怠を
+ * 働き方(employee_calendar_entries.work_style_id)が設定されていない日でも勤怠を
  * 記録できる。その際のフォールバック先(月次働き方割当 → システムのデフォルト働き方)を
  * 確認する(docs/08-usecases-calendar-shift.md参照)。
  */
@@ -53,7 +53,7 @@ class DefaultWorkStyleFallbackTest extends TestCase
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
     }
 
-    public function test_a_day_with_no_shift_assignment_and_no_default_has_zero_prescribed_minutes(): void
+    public function test_a_day_with_no_calendar_entry_and_no_default_has_zero_prescribed_minutes(): void
     {
         $employee = User::factory()->create();
 

@@ -10,11 +10,14 @@ import { WorkStyleFormModal } from './WorkStyleFormModal'
 const calendar: WorkCalendar = {
   id: 'calendar-1',
   name: '2026年度カレンダー',
-  fiscal_year: 2026,
-  starts_on: '2026-04-01',
-  ends_on: '2027-03-31',
   week_starts_on: 0,
-  status: 'published',
+  fiscal_year_start_month: 4,
+  fiscal_year_start_day: 1,
+  holiday_calendar_source_id: null,
+  is_default: true,
+  status: 'active',
+  weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
+  allow_daily_holiday_override: true,
 }
 
 const workStyle: WorkStyle = {
@@ -33,7 +36,7 @@ const workStyle: WorkStyle = {
   default_break_start_time: '12:00',
   default_break_end_time: '13:00',
   auto_break_enabled: false,
-  calendar_id: 'calendar-1',
+  company_calendar_id: 'calendar-1',
   is_shift_based: false,
   is_default: true,
   system_generated: true,

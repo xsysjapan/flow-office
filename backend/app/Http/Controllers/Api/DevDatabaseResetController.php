@@ -45,7 +45,9 @@ class DevDatabaseResetController extends Controller
         Artisan::call('migrate:fresh', ['--seed' => true, '--force' => true]);
 
         // ScenarioAccessSeeder を適用する前の製品初期状態を返し、E2E の globalSetup で
-        // 「一般利用者向けの Feature / RoleAssignment は初期 OFF」を検証できるようにする。
+        // AccessControlSeeder が意図する標準初期値(ALL_USERSへFeature9件・RoleAssignment1件、
+        // docs/31-user-group-access-foundation.md 31.1節参照)からズレていないかを検証できる
+        // ようにする(数値そのものはAccessControlSeederの`$initialFeatures`が正)。
         $allUsersGroupId = DB::table('groups')->where('code', 'ALL_USERS')->value('id');
         $productInitialAccess = [
             'all_users_feature_assignments' => $allUsersGroupId === null

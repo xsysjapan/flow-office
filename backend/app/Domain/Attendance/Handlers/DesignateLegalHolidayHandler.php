@@ -11,7 +11,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\AttendanceDay;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\LegalHolidayDesignation;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -107,7 +107,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
 
     private function resolveWorkStyle(string $userId, Carbon $weekStart, Carbon $weekEnd): ?WorkStyle
     {
-        return EmployeeShiftAssignment::query()
+        return EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $weekStart->toDateString())
             ->whereDate('work_date', '<=', $weekEnd->toDateString())
@@ -138,7 +138,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
                 continue;
             }
 
-            $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle.calendar'));
+            $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle.calendar'));
 
             $plan[] = ['dayId' => $day->id, 'calculation' => $calculation];
         }

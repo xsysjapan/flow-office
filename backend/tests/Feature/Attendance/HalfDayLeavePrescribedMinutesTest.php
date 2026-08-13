@@ -4,7 +4,7 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,14 +36,14 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         ?string $actualEnd,
         ?string $workType,
     ): AttendanceDay {
-        $shift = EmployeeShiftAssignment::query()->create([
+        $shift = EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false,
             'is_company_holiday' => false, 'planned_break_minutes' => 60,
         ]);
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => $workDate, 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => $workDate, 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 

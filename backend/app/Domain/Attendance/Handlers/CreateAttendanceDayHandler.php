@@ -13,7 +13,7 @@ use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
@@ -50,7 +50,7 @@ class CreateAttendanceDayHandler implements CommandHandler
 
         $offsetMinutes = $this->resolveOffsetMinutes($command);
 
-        $shiftAssignment = EmployeeShiftAssignment::query()
+        $calendarEntry = EmployeeCalendarEntry::query()
             ->where('user_id', $command->userId)
             ->whereDate('work_date', $command->workDate)
             ->first();
@@ -81,7 +81,7 @@ class CreateAttendanceDayHandler implements CommandHandler
             ->create(
                 userId: $command->userId,
                 workDate: $command->workDate,
-                shiftAssignmentId: $shiftAssignment?->id,
+                calendarEntryId: $calendarEntry?->id,
                 status: $status,
                 source: AttendanceDaySource::MANUAL,
                 utcOffsetMinutes: $offsetMinutes,
@@ -101,7 +101,7 @@ class CreateAttendanceDayHandler implements CommandHandler
 
         // 計算(AttendanceCalculator)は永続化後の実データから読み直す(通常のDBに保存された
         // Projectionを使う。これはCreate/Edit時のみの割り切りで、パフォーマンス上問題ない範囲)。
-        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'));
+        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'));
 
         AttendanceDayAggregate::retrieve($dayId)->calculate($calculation)->persist();
 

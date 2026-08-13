@@ -4,11 +4,11 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -22,21 +22,20 @@ class MonthlyOvertimeCalculationTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
-    private function makeWorkStyle(WorkCalendar $calendar): WorkStyle
+    private function makeWorkStyle(CompanyCalendar $calendar): WorkStyle
     {
         return WorkStyle::query()->create([
             'code' => 'fixed-'.uniqid(), 'name' => '通常勤務', 'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
@@ -49,7 +48,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
         bool $isLegalHoliday = false,
         bool $isCompanyHoliday = false,
     ): AttendanceDay {
-        $shift = EmployeeShiftAssignment::query()->create([
+        $shift = EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => $isLegalHoliday ? 'legal_holiday' : ($isCompanyHoliday ? 'company_holiday' : 'weekday'),
             'is_working_day' => ! $isCompanyHoliday, 'is_legal_holiday' => $isLegalHoliday, 'is_company_holiday' => $isCompanyHoliday,
@@ -57,7 +56,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
         ]);
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => $workDate, 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => $workDate, 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -160,14 +159,14 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         // 20:00〜23:00の所定休日勤務(休憩なし) => 深夜(22:00〜23:00)60分が
         // late_night_prescribed_holiday_work_minutesに計上される。
-        $shift = EmployeeShiftAssignment::query()->create([
+        $shift = EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => '2026-06-01', 'work_style_id' => $workStyle->id,
             'day_type' => 'company_holiday', 'is_working_day' => false,
             'is_legal_holiday' => false, 'is_company_holiday' => true,
             'planned_break_minutes' => 0,
         ]);
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
         $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
@@ -266,7 +265,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
         ]);
 
         // 全休(誕生日休暇) 2026-06-03。
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => '2026-06-03', 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => '2026-06-03 09:00:00', 'planned_end_at' => '2026-06-03 18:00:00',
@@ -282,7 +281,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $this->actingAs($approver)->postJson("/api/special-leave/requests/{$birthdayRequestId}/approve")->assertOk();
 
         // 時間単位(リフレッシュ休暇) 2026-06-04, 3時間。
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => '2026-06-04', 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => '2026-06-04 09:00:00', 'planned_end_at' => '2026-06-04 18:00:00',
@@ -328,7 +327,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
             'requires_grant' => true,
         ]);
 
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => '2026-08-10', 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => '2026-08-10 09:00:00', 'planned_end_at' => '2026-08-10 18:00:00',

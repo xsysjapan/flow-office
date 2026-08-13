@@ -27,7 +27,7 @@ class AttendanceDayAggregate extends AggregateRoot
     public function create(
         string $userId,
         string $workDate,
-        ?string $shiftAssignmentId,
+        ?string $calendarEntryId,
         string $status,
         string $source,
         int $utcOffsetMinutes,
@@ -44,7 +44,7 @@ class AttendanceDayAggregate extends AggregateRoot
         $this->recordThat(new AttendanceDayCreated(
             userId: $userId,
             workDate: $workDate,
-            shiftAssignmentId: $shiftAssignmentId,
+            calendarEntryId: $calendarEntryId,
             status: $status,
             source: $source,
             utcOffsetMinutes: $utcOffsetMinutes,
@@ -158,7 +158,7 @@ class AttendanceDayAggregate extends AggregateRoot
     public function syncLiveStatus(
         string $userId,
         string $workDate,
-        ?string $shiftAssignmentId,
+        ?string $calendarEntryId,
         string $status,
         string $source,
         ?string $actualStartAt,
@@ -167,7 +167,7 @@ class AttendanceDayAggregate extends AggregateRoot
         $this->recordThat(new AttendanceDayLiveStatusSynced(
             userId: $userId,
             workDate: $workDate,
-            shiftAssignmentId: $shiftAssignmentId,
+            calendarEntryId: $calendarEntryId,
             status: $status,
             source: $source,
             actualStartAt: $actualStartAt,
@@ -183,7 +183,7 @@ class AttendanceDayAggregate extends AggregateRoot
     public function syncFromPunches(
         string $userId,
         string $workDate,
-        ?string $shiftAssignmentId,
+        ?string $calendarEntryId,
         string $actualStartAt,
         string $actualEndAt,
         int $utcOffsetMinutes,
@@ -193,7 +193,7 @@ class AttendanceDayAggregate extends AggregateRoot
         $this->recordThat(new AttendanceDaySyncedFromPunches(
             userId: $userId,
             workDate: $workDate,
-            shiftAssignmentId: $shiftAssignmentId,
+            calendarEntryId: $calendarEntryId,
             actualStartAt: $actualStartAt,
             actualEndAt: $actualEndAt,
             utcOffsetMinutes: $utcOffsetMinutes,

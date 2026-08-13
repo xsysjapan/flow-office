@@ -189,9 +189,9 @@ test('2026年度(2026-04〜2027-03)の12か月連続サイクル', async ({ brow
 
     const months = fiscalYearMonths()
     for (const [year, month] of months) {
-      await putWorkCalendarDays(adminPage, calendar.id, calendarDaysForMonth(year, month))
+      await putWorkCalendarDays(adminPage, calendar.yearId, calendarDaysForMonth(year, month))
     }
-    await publishWorkCalendar(adminPage, calendar.id)
+    await publishWorkCalendar(adminPage, calendar.yearId)
 
     const workStyle = await createWorkStyleViaApi(adminPage, {
       code: `cycle_${fiscalYearMarker}`,

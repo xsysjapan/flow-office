@@ -31,7 +31,7 @@ class WorkStyleResource extends JsonResource
             'default_break_start_time' => $this->default_break_start_time,
             'default_break_end_time' => $this->default_break_end_time,
             'auto_break_enabled' => $this->auto_break_enabled,
-            'calendar_id' => $this->calendar_id,
+            'company_calendar_id' => $this->company_calendar_id,
             'is_shift_based' => $this->is_shift_based,
             'is_default' => $this->is_default,
             'system_generated' => $this->system_generated,

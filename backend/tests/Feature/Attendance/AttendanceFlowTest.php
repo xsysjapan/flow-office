@@ -4,11 +4,11 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveRequest;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,18 +29,15 @@ class AttendanceFlowTest extends TestCase
         $employee = User::factory()->create();
         $today = Carbon::today($employee->timezone);
 
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $today->toDateString(), 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => $today->copy()->setTime(9, 0), 'planned_end_at' => $today->copy()->setTime(18, 0),
@@ -88,18 +85,15 @@ class AttendanceFlowTest extends TestCase
         $dateString = $today->toDateString();
         $nextDateString = $today->copy()->addDay()->toDateString();
 
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'part-time', 'name' => '時短勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 360, 'prescribed_weekly_minutes' => 1800,
             'default_start_time' => '16:00', 'default_end_time' => '22:00',
-            'default_break_minutes' => 0, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 0, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
-        EmployeeShiftAssignment::query()->create([
+        EmployeeCalendarEntry::query()->create([
             'user_id' => $employee->id, 'work_date' => $dateString, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => $today->copy()->setTime(16, 0), 'planned_end_at' => $today->copy()->setTime(22, 0),

@@ -2,14 +2,14 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-C004 手順5: 3交代制シフト表を公開する前に、法定休日不足・連続勤務・月間予定時間を
  * チェックする。判定結果はイベントとして記録せず、公開前確認画面の表示のたびに
- * `employee_shift_assignments` から都度再計算する(LegalHolidayRequirementChecker と同様、
+ * `employee_calendar_entries` から都度再計算する(LegalHolidayRequirementChecker と同様、
  * 状態変更を伴わない読み取り専用の確認情報のため)。警告があっても公開自体はブロックしない
  * (最終判断は管理者・社労士確認に委ねる。docs/08-usecases-calendar-shift.md UC-C005と同じ方針)。
  */
@@ -66,7 +66,7 @@ class ShiftScheduleReviewService
         $monthStart = Carbon::createFromFormat('Y-m-d', "{$yearMonth}-01")->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
 
-        return EmployeeShiftAssignment::query()
+        return EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $monthStart->toDateString())
             ->whereDate('work_date', '<=', $monthEnd->toDateString())
@@ -96,7 +96,7 @@ class ShiftScheduleReviewService
         $windowStart = $monthStart->copy()->subDays(7);
         $windowEnd = $monthEnd->copy()->addDays(7);
 
-        $assignments = EmployeeShiftAssignment::query()
+        $assignments = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $windowStart->toDateString())
             ->whereDate('work_date', '<=', $windowEnd->toDateString())
@@ -146,7 +146,7 @@ class ShiftScheduleReviewService
 
     /**
      * 月間の所定労働時間合計が、その月の日数に応じた法定労働時間の総枠
-     * (週40時間の平均、`EditEmployeeShiftAssignmentHandler::assertWithinVariablePeriodCap`と同じ考え方)
+     * (週40時間の平均、`EditEmployeeCalendarEntryHandler::assertWithinVariablePeriodCap`と同じ考え方)
      * を超えていないかを確認する。
      *
      * @return array{user_id: int, year_month: string, planned_minutes: int, statutory_cap_minutes: int}|null
@@ -158,13 +158,13 @@ class ShiftScheduleReviewService
         $monthStart = Carbon::createFromFormat('Y-m-d', "{$yearMonth}-01")->startOfMonth();
         $monthEnd = $monthStart->copy()->endOfMonth();
 
-        $plannedMinutes = EmployeeShiftAssignment::query()
+        $plannedMinutes = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $monthStart->toDateString())
             ->whereDate('work_date', '<=', $monthEnd->toDateString())
             ->get()
-            ->sum(fn (EmployeeShiftAssignment $assignment) => $assignment->plannedWorkMinutes());
+            ->sum(fn (EmployeeCalendarEntry $assignment) => $assignment->plannedWorkMinutes());
 
         $daysInMonth = $monthStart->daysInMonth;
         $statutoryCapMinutes = (int) round(2400 * $daysInMonth / 7); // 労基法32条: 1週40時間の平均

@@ -41,7 +41,7 @@ class PublicSystemSettingTest extends TestCase
         $workStyle = WorkStyle::query()->create([
             'code' => 'default-work-style', 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => null, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => null, 'is_shift_based' => false,
         ]);
 
         SystemSetting::current()->update([

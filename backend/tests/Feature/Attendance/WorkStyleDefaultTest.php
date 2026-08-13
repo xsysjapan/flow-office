@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Models\CompanyCalendar;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -79,11 +79,8 @@ class WorkStyleDefaultTest extends TestCase
     public function test_switching_the_default_unsets_the_previous_one_and_syncs_system_settings(): void
     {
         $admin = $this->makeAdmin();
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
 
         $original = $this->actingAs($admin)->postJson('/api/work-styles/default', [])->json();
 
@@ -93,7 +90,7 @@ class WorkStyleDefaultTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ])->json();
 
         $response = $this->actingAs($admin)->postJson("/api/work-styles/{$flex['id']}/set-default");

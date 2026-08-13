@@ -9,7 +9,7 @@ use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
 use App\Models\SystemSetting;
@@ -122,7 +122,7 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
             ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
-            $userIds = EmployeeShiftAssignment::query()
+            $userIds = EmployeeCalendarEntry::query()
                 ->where('work_style_id', $rule->work_style_id)
                 ->whereDate('work_date', $today->toDateString())
                 ->pluck('user_id');
@@ -157,7 +157,7 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
     {
         $periodStart = $today->copy()->subMonths($rule->grant_cycle_months);
 
-        $scheduledDates = EmployeeShiftAssignment::query()
+        $scheduledDates = EmployeeCalendarEntry::query()
             ->where('user_id', $user->id)
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $periodStart->toDateString())

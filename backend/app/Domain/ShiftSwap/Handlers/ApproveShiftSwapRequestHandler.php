@@ -2,14 +2,14 @@
 
 namespace App\Domain\ShiftSwap\Handlers;
 
-use App\Domain\Attendance\Aggregates\EmployeeShiftAssignmentAggregate;
+use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\ShiftSwap\Aggregates\ShiftSwapRequestAggregate;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\ShiftSwapRequest;
 use App\Models\ShiftSwapRequestStatus;
 use Illuminate\Support\Carbon;
@@ -17,12 +17,12 @@ use Illuminate\Support\Str;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * 振替休日申請を承認する。承認時に対象日・振替先日それぞれのEmployeeShiftAssignmentの
+ * 振替休日申請を承認する。承認時に対象日・振替先日それぞれのEmployeeCalendarEntryの
  * 休日区分・所定時刻を丸ごと入れ替える。振替先日にまだ勤務予定行が展開されていない場合
  * (固定勤務は将来日のシフト行が未展開のことが多い)は、働き方のデフォルト値から
  * 通常の勤務日として先に作成してから入れ替えに進む。
  *
- * ShiftSwapRequestAggregate::approve()と2つのEmployeeShiftAssignmentAggregate::assign()を
+ * ShiftSwapRequestAggregate::approve()と2つのEmployeeCalendarEntryAggregate::assign()を
  * persistInTransaction()でまとめて永続化する(ApproveSpecialLeaveRequestHandlerの
  * persistInTransactionと同じ手法)。
  *
@@ -48,7 +48,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
 
-        $targetAssignment = EmployeeShiftAssignment::query()
+        $targetAssignment = EmployeeCalendarEntry::query()
             ->where('user_id', $request->user_id)
             ->whereDate('work_date', $request->target_date)
             ->firstOrFail();
@@ -61,7 +61,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
 
         $aggregates = [
             ShiftSwapRequestAggregate::retrieve($request->id)->approve($command->approvedByUserId),
-            EmployeeShiftAssignmentAggregate::retrieve($targetAssignment->id)->assign(
+            EmployeeCalendarEntryAggregate::retrieve($targetAssignment->id)->assign(
                 userId: $targetAssignment->user_id,
                 workDate: $targetAssignment->work_date->toDateString(),
                 workStyleId: $targetAssignment->work_style_id,
@@ -79,7 +79,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
                 isManuallyOverridden: true,
                 assignedByUserId: $assignedByUserId,
             ),
-            EmployeeShiftAssignmentAggregate::retrieve($substituteAssignment->id)->assign(
+            EmployeeCalendarEntryAggregate::retrieve($substituteAssignment->id)->assign(
                 userId: $substituteAssignment->user_id,
                 workDate: $substituteAssignment->work_date->toDateString(),
                 workStyleId: $substituteAssignment->work_style_id,
@@ -110,9 +110,9 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
      * 後続の入れ替え処理が対象行を取得できないため)。Projectorは同期実行されるため
      * (docs/29-event-sourcing-framework-migration.md)、persist()直後にEloquentから読み直せる。
      */
-    private function resolveOrCreateSubstituteAssignment(ShiftSwapRequest $request, EmployeeShiftAssignment $targetAssignment): EmployeeShiftAssignment
+    private function resolveOrCreateSubstituteAssignment(ShiftSwapRequest $request, EmployeeCalendarEntry $targetAssignment): EmployeeCalendarEntry
     {
-        $existing = EmployeeShiftAssignment::query()
+        $existing = EmployeeCalendarEntry::query()
             ->where('user_id', $request->user_id)
             ->whereDate('work_date', $request->substitute_date)
             ->first();
@@ -140,7 +140,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
 
         $id = (string) Str::uuid();
 
-        EmployeeShiftAssignmentAggregate::retrieve($id)
+        EmployeeCalendarEntryAggregate::retrieve($id)
             ->assign(
                 userId: $request->user_id,
                 workDate: $substituteDate->toDateString(),
@@ -161,7 +161,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
             )
             ->persist();
 
-        return EmployeeShiftAssignment::query()->findOrFail($id);
+        return EmployeeCalendarEntry::query()->findOrFail($id);
     }
 
     /**
@@ -172,7 +172,7 @@ class ApproveShiftSwapRequestHandler implements CommandHandler
      *
      * @return array{day_type: string, is_working_day: bool, is_legal_holiday: bool, is_company_holiday: bool, planned_start_time: ?string, planned_end_time: ?string, planned_break_minutes: int, planned_break_start_time: ?string, planned_break_end_time: ?string}
      */
-    private function snapshot(EmployeeShiftAssignment $assignment): array
+    private function snapshot(EmployeeCalendarEntry $assignment): array
     {
         return [
             'day_type' => $assignment->day_type,

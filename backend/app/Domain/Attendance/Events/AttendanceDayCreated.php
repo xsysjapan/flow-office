@@ -23,7 +23,7 @@ class AttendanceDayCreated extends ShouldBeStored
     public function __construct(
         public readonly string $userId,
         public readonly string $workDate,
-        public readonly ?string $shiftAssignmentId,
+        public readonly ?string $calendarEntryId,
         public readonly string $status,
         public readonly string $source,
         public readonly int $utcOffsetMinutes,

@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
             UserManagementSeeder::class,
             AccessControlSeeder::class,
             DefaultWorkStyleSeeder::class,
+            DefaultCompanyCalendarSeeder::class,
         ]);
 
         DB::table('memberships')->updateOrInsert(

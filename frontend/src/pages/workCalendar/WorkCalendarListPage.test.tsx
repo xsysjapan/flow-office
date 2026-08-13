@@ -2,20 +2,32 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
-import type { WorkCalendar } from '../../api/types'
-import { pickDate } from '../../test-support/pickerInteractions'
+import { ApiError } from '../../api/client'
+import type { Paginated, WorkCalendar } from '../../api/types'
 import { WorkCalendarListPage } from './WorkCalendarListPage'
 
-const draftCalendar: WorkCalendar = {
+const calendar: WorkCalendar = {
   id: 'calendar-1',
   name: '2026年度カレンダー',
-  fiscal_year: 2026,
-  starts_on: '2026-04-01',
-  ends_on: '2027-03-31',
   week_starts_on: 0,
-  status: 'draft',
+  fiscal_year_start_month: 4,
+  fiscal_year_start_day: 1,
+  holiday_calendar_source_id: null,
+  is_default: false,
+  status: 'active',
+  weekday_holiday_pattern: { '1': 'working', '2': 'working', '3': 'working', '4': 'working', '5': 'working', '6': 'company_holiday', '7': 'legal_holiday' },
+  allow_daily_holiday_override: true,
+}
+
+function page(calendars: WorkCalendar[], overrides: Partial<Paginated<WorkCalendar>['meta']> = {}): Paginated<WorkCalendar> {
+  return {
+    data: calendars,
+    meta: { current_page: 1, last_page: 1, total: calendars.length, per_page: 20, ...overrides },
+    links: { next: null, prev: null },
+  }
 }
 
 function renderPage() {
@@ -25,7 +37,7 @@ function renderPage() {
       <MemoryRouter initialEntries={['/admin/work-calendars']}>
         <Routes>
           <Route path="/admin/work-calendars" element={<WorkCalendarListPage />} />
-          <Route path="/admin/work-calendars/:id/days" element={<p>カレンダー日別編集ページ</p>} />
+          <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -33,63 +45,144 @@ function renderPage() {
 }
 
 describe('WorkCalendarListPage', () => {
-  it('shows the calendar list with a draft badge and publish button', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // CreateCompanyCalendarModalは(未オープン時も含め)常にマウントされ、休日iCalendarソース
+    // 一覧を取得するため、モーダル操作を検証しないテストでも既定で空配列を返しておく。
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+  })
+
+  it('shows the calendar list', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
 
     renderPage()
 
     expect(await screen.findByText('2026年度カレンダー')).toBeInTheDocument()
-    expect(screen.getByText('未公開')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '公開する' })).toBeInTheDocument()
+    expect(screen.getByText(/週開始: 0/)).toBeInTheDocument()
+    expect(workCalendarsApi.fetchWorkCalendarsPage).toHaveBeenCalledWith({ page: 1, per_page: 20 })
+  })
+
+  it('renders pagination controls and moves to the next page', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(
+      page([calendar], { current_page: 1, last_page: 3, total: 45 }),
+    )
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    expect(screen.getByText(/45件中 1 \/ 3 ページ/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '前のページ' })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: '次のページ' }))
+
+    await waitFor(() =>
+      expect(workCalendarsApi.fetchWorkCalendarsPage).toHaveBeenCalledWith({ page: 2, per_page: 20 }),
+    )
   })
 
   it('creates a calendar with the entered values', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([]))
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
-      ...draftCalendar,
+      ...calendar,
       id: 'calendar-2',
     })
 
     renderPage()
 
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2026年度カレンダー')
-    await userEvent.type(screen.getByLabelText('年度'), '2026')
-    await pickDate(userEvent.setup(), '開始日', '2026-04-01')
-    await pickDate(userEvent.setup(), '終了日', '2027-03-31')
+    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
+    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2026年度カレンダー',
-        fiscal_year: 2026,
-        starts_on: '2026-04-01',
-        ends_on: '2027-03-31',
-        week_starts_on: undefined,
+        name: '2027年度カレンダー',
+        allow_daily_holiday_override: true,
       }),
     )
   })
 
-  it('publishes a draft calendar when the publish button is clicked', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
-    vi.spyOn(workCalendarsApi, 'publishWorkCalendar').mockResolvedValue({
-      ...draftCalendar,
-      status: 'published',
+  it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([]))
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
+      ...calendar,
+      id: 'calendar-2',
     })
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '公開する' }))
+    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
+    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
+    await userEvent.selectOptions(screen.getByLabelText('日曜日'), 'company_holiday')
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
-    await waitFor(() => expect(workCalendarsApi.publishWorkCalendar).toHaveBeenCalledWith('calendar-1'))
+    await waitFor(() =>
+      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
+        name: '2027年度カレンダー',
+        weekday_holiday_pattern: {
+          '1': 'working',
+          '2': 'working',
+          '3': 'working',
+          '4': 'working',
+          '5': 'working',
+          '6': 'company_holiday',
+          '7': 'company_holiday',
+        },
+        allow_daily_holiday_override: true,
+      }),
+    )
   })
 
-  it('navigates to the day editor when the calendar name is clicked', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([draftCalendar])
+  it('navigates to the detail page when the calendar name is clicked', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
 
     renderPage()
 
     await userEvent.click(await screen.findByText('2026年度カレンダー'))
 
-    expect(await screen.findByText('カレンダー日別編集ページ')).toBeInTheDocument()
+    expect(await screen.findByText('カレンダー詳細ページ')).toBeInTheDocument()
+  })
+
+  it('deletes a calendar after confirmation', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
+    vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '削除' }))
+
+    await waitFor(() => expect(workCalendarsApi.deleteWorkCalendar).toHaveBeenCalledWith('calendar-1'))
+  })
+
+  it('does not delete when the confirmation is cancelled', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
+    vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '削除' }))
+
+    expect(workCalendarsApi.deleteWorkCalendar).not.toHaveBeenCalled()
+  })
+
+  it('shows the server error message when deletion fails', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
+    vi.spyOn(workCalendarsApi, 'deleteWorkCalendar').mockRejectedValue(
+      new ApiError(422, 'デフォルトカレンダーは削除できません。'),
+    )
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderPage()
+
+    await screen.findByText('2026年度カレンダー')
+    await userEvent.click(screen.getByRole('button', { name: '削除' }))
+
+    expect(await screen.findByText('デフォルトカレンダーは削除できません。')).toBeInTheDocument()
   })
 })

@@ -56,7 +56,7 @@ Teams通知に集中する。
 
 - **EventStoreを正とする**: `stored_events` が真実の記録。Projection(画面表示用テーブル)は
   いつでも再生成可能な派生データとして扱う。
-- **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /
+- **勤怠の正は日次実績・勤務予定・有給付与**: `employee_calendar_entries` /
   `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。月次勤怠(`attendance_months`)
   はこれらの集計結果であり、直接入力しない。
 - **週次勤怠は独立データではない**: 日次勤怠の編集ビュー。保存時は日次単位の編集イベントに分解する。

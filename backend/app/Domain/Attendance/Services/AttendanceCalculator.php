@@ -28,7 +28,7 @@ use Illuminate\Support\Carbon;
  * - 管理監督者(work_time_system=manager_supervisor)は労働時間・休憩・休日の規定の適用が
  *   除外されるため、残業・休日の割増計算対象にはしない。ただし深夜割増は適用される。
  * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
- *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
+ *   `employee_calendar_entries.is_legal_holiday`を直接使わず、LegalHolidayResolverが
  *   指定または自動推定した日かどうかで判定する。
  * - 週40時間・月60時間超の法定外残業判定はここでは計算しない。週ごとの内訳は
  *   WeeklyOvertimeCalculatorが日次実績から都度計算する表示専用の参考情報とし、月60時間超は
@@ -54,7 +54,7 @@ use Illuminate\Support\Carbon;
  *   コアタイム設定(work_styles.core_time_enabled)がある場合、実際の勤務がコアタイムを
  *   全てカバーしているかを`core_time_violation`として判定する(労働時間の過不足とは別枠の
  *   警告。指示書 7.4節)。
- * - その日の勤務予定(employee_shift_assignments)に働き方が紐づいていない場合でも
+ * - その日の勤務予定(employee_calendar_entries)に働き方が紐づいていない場合でも
  *   勤怠は記録できる。その際の働き方は、(1) その月に割り当てられた働き方
  *   (user_work_style_monthly_assignments)、(2) それも無ければシステム全体設定の
  *   デフォルト働き方(system_settings.default_work_style_id)、の順にフォールバックする
@@ -142,7 +142,7 @@ class AttendanceCalculator
             ->where('usage_type', PaidLeaveType::HOURLY)
             ->sum('used_minutes');
 
-        $shift = $day->shiftAssignment;
+        $shift = $day->calendarEntry;
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 

@@ -5,10 +5,10 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceMonth;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,29 +30,28 @@ class MonthlyVariableWorkTimeTest extends TestCase
         return $admin;
     }
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
-    private function makeMonthlyVariableWorkStyle(WorkCalendar $calendar): WorkStyle
+    private function makeMonthlyVariableWorkStyle(CompanyCalendar $calendar): WorkStyle
     {
         return WorkStyle::query()->create([
             'code' => 'mv-'.uniqid(), 'name' => '1か月単位変形労働時間制',
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => true,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => true,
             'variable_period_start_day' => 1,
         ]);
     }
 
-    private function makeShiftAssignment(User $user, WorkStyle $workStyle, string $workDate, string $plannedStart, string $plannedEnd, int $plannedBreakMinutes = 60): EmployeeShiftAssignment
+    private function makeCalendarEntry(User $user, WorkStyle $workStyle, string $workDate, string $plannedStart, string $plannedEnd, int $plannedBreakMinutes = 60): EmployeeCalendarEntry
     {
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$workDate} {$plannedStart}:00",
@@ -68,10 +67,10 @@ class MonthlyVariableWorkTimeTest extends TestCase
         $user = User::factory()->create();
 
         // あらかじめ9時間(10:00〜20:00, 休憩1時間)を所定労働時間として設定した日。
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01', '09:00', '19:00');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01', '09:00', '19:00');
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -106,15 +105,15 @@ class MonthlyVariableWorkTimeTest extends TestCase
         $workStyle = $this->makeMonthlyVariableWorkStyle($calendar);
         $user = User::factory()->create();
 
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01', '09:00', '18:00');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01', '09:00', '18:00');
 
         AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::CLOCKED_OUT, 'source' => 'manual', 'utc_offset_minutes' => 540,
             'actual_start_at' => '2026-06-01 09:00:00', 'actual_end_at' => '2026-06-01 18:00:00',
         ]);
 
-        $response = $this->actingAs($admin)->putJson("/api/employee-shift-assignments/{$shift->id}", [
+        $response = $this->actingAs($admin)->putJson("/api/employee-calendar-entries/{$shift->id}", [
             'planned_start_at' => '2026-06-01T09:00:00+09:00',
             'planned_end_at' => '2026-06-01T21:00:00+09:00',
             'planned_break_minutes' => 60,
@@ -136,10 +135,10 @@ class MonthlyVariableWorkTimeTest extends TestCase
         $user = User::factory()->create();
         $approver = User::factory()->create();
 
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01', '09:00', '18:00');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01', '09:00', '18:00');
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::CLOCKED_OUT, 'source' => 'manual', 'utc_offset_minutes' => 540,
             'actual_start_at' => '2026-06-01 09:00:00', 'actual_end_at' => '2026-06-01 18:00:00',
         ]);
@@ -155,7 +154,7 @@ class MonthlyVariableWorkTimeTest extends TestCase
         $this->actingAs($admin)->deleteJson("/api/attendance/days/{$day->id}", ['reason' => '削除を試みる'])
             ->assertStatus(422);
 
-        $response = $this->actingAs($admin)->putJson("/api/employee-shift-assignments/{$shift->id}", [
+        $response = $this->actingAs($admin)->putJson("/api/employee-calendar-entries/{$shift->id}", [
             'planned_start_at' => '2026-06-01T09:00:00+09:00',
             'planned_end_at' => '2026-06-01T21:00:00+09:00',
             'planned_break_minutes' => 60,
@@ -176,12 +175,12 @@ class MonthlyVariableWorkTimeTest extends TestCase
         // 29日間、所定8時間(480分)ずつ設定すると13920分になり、既にこの時点で総枠を超える。
         for ($i = 1; $i <= 29; $i++) {
             $date = sprintf('2026-06-%02d', $i);
-            $this->makeShiftAssignment($user, $workStyle, $date, '09:00', '18:00');
+            $this->makeCalendarEntry($user, $workStyle, $date, '09:00', '18:00');
         }
 
-        $target = $this->makeShiftAssignment($user, $workStyle, '2026-06-30', '09:00', '12:00', 0);
+        $target = $this->makeCalendarEntry($user, $workStyle, '2026-06-30', '09:00', '12:00', 0);
 
-        $response = $this->actingAs($admin)->putJson("/api/employee-shift-assignments/{$target->id}", [
+        $response = $this->actingAs($admin)->putJson("/api/employee-calendar-entries/{$target->id}", [
             'planned_start_at' => '2026-06-30T09:00:00+09:00',
             'planned_end_at' => '2026-06-30T20:00:00+09:00',
             'planned_break_minutes' => 60,
@@ -201,10 +200,10 @@ class MonthlyVariableWorkTimeTest extends TestCase
         // 月〜金、あらかじめ1日8.8時間(528分)ずつ設定(週合計44時間)。労働時間も所定通り。
         foreach (['06-01', '06-02', '06-03', '06-04', '06-05'] as $day) {
             $date = "2026-{$day}";
-            $shift = $this->makeShiftAssignment($user, $workStyle, $date, '09:00', '18:48');
+            $shift = $this->makeCalendarEntry($user, $workStyle, $date, '09:00', '18:48');
 
             $attendanceDay = AttendanceDay::query()->create([
-                'user_id' => $user->id, 'work_date' => $date, 'shift_assignment_id' => $shift->id,
+                'user_id' => $user->id, 'work_date' => $date, 'calendar_entry_id' => $shift->id,
                 'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
             ]);
 
