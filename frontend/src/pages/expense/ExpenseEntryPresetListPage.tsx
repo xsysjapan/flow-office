@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
-import { ConfirmDialog } from "../../components/ConfirmDialog/ConfirmDialog";
+import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -42,13 +42,18 @@ const visibilityLabel: Record<ExpenseEntryPresetVisibility, string> = {
  * プリセットは明細側のcategory_idで経費区分に紐づいているため、名称検索と経費区分での
  * 絞り込みをつけてページングする。経費精算の入力画面から遷移してきた場合は
  * `?category_id=`が付いており、その区分で最初から絞り込まれた状態で開く。
+ *
+ * 検索語・経費区分での絞り込み・ページはすべてURLに反映する
+ * (`.claude/skills/ui-interaction-patterns` §2.10)。Browser Back・リロード・URL共有で
+ * 状態を維持する。
  */
 export function ExpenseEntryPresetListPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryIdParam = searchParams.get("category_id");
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
+  const q = searchParams.get("q") ?? "";
+  const pageParam = Number(searchParams.get("page"));
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
 
   const { data: categories } = useExpenseCategories();
   const {
@@ -70,11 +75,23 @@ export function ExpenseEntryPresetListPage() {
       ? preset.owner_user_id === user?.id
       : canManageShared;
 
-  const changeCategoryFilter = (value: string) => {
-    setPage(1);
-    setSearchParams(value ? { category_id: value } : {});
+  const updateParams = (patch: Record<string, string | null>) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key);
+        else next.set(key, value);
+      }
+      return next;
+    });
   };
 
+  const changeSearch = (value: string) => updateParams({ q: value || null, page: null });
+  const changeCategoryFilter = (value: string) => updateParams({ category_id: value || null, page: null });
+  const changePage = (value: number) => updateParams({ page: value > 1 ? String(value) : null });
+  const clearFilters = () => updateParams({ q: null, category_id: null, page: null });
+
+  const isFiltered = Boolean(q || categoryIdParam);
   const list = presets?.data ?? [];
 
   return (
@@ -86,18 +103,13 @@ export function ExpenseEntryPresetListPage() {
         </Button>
       }
     >
-      {deletePreset.error && <ErrorMessage error={deletePreset.error} />}
-
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="名称で検索" htmlFor="preset-search">
           <Input
             id="preset-search"
             placeholder="例: 自宅⇔会社"
             value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => changeSearch(e.target.value)}
           />
         </FormField>
         <FormField label="経費区分で絞り込む" htmlFor="preset-category-filter">
@@ -121,9 +133,22 @@ export function ExpenseEntryPresetListPage() {
       ) : error ? (
         <ErrorMessage error={error} fallback="プリセットの取得に失敗しました。" />
       ) : list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          条件に一致するプリセットはありません。
-        </p>
+        isFiltered ? (
+          <EmptyState
+            title="条件に一致するプリセットはありません。"
+            description="検索語や経費区分の条件を変えると表示される場合があります。"
+            action={
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                検索条件をクリア
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="入力プリセットはまだありません。"
+            description="よく使う経費の内容をプリセットとして登録すると、入力画面で選ぶだけで初期値を埋められます。"
+          />
+        )
       ) : (
         <>
           <Table>
@@ -186,19 +211,22 @@ export function ExpenseEntryPresetListPage() {
                     </TableCell>
                     <TableCell>
                       {canEdit(preset) && (
-                        <ConfirmDialog
-                          trigger={
-                            <Button variant="danger" size="sm">
-                              削除
-                            </Button>
-                          }
-                          title="このプリセットを削除しますか?"
+                        <ConfirmActionDialog
+                          triggerLabel="削除"
+                          triggerVariant="danger"
+                          title={`「${preset.name}」を削除しますか?`}
                           description="削除すると元に戻せません。"
-                          isConfirming={
+                          confirmLabel="削除する"
+                          isPending={
                             deletePreset.isPending &&
                             deletePreset.variables === preset.id
                           }
-                          onConfirm={() => deletePreset.mutate(preset.id)}
+                          error={
+                            deletePreset.variables === preset.id
+                              ? deletePreset.error
+                              : undefined
+                          }
+                          onConfirm={() => deletePreset.mutateAsync(preset.id)}
                         />
                       )}
                     </TableCell>
@@ -213,7 +241,7 @@ export function ExpenseEntryPresetListPage() {
               currentPage={presets.meta.current_page}
               lastPage={presets.meta.last_page}
               total={presets.meta.total}
-              onPageChange={setPage}
+              onPageChange={changePage}
             />
           )}
         </>

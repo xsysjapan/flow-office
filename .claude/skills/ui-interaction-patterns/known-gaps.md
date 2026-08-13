@@ -3,21 +3,21 @@
 `SKILL.md`を策定した時点で、既存画面に残っている不統一の記録。新規画面は最初から`SKILL.md`
 に従う。
 
-**2026-08 追記**: カレンダー(`pages/workCalendar/`)と経費入力プリセット編集
-(`pages/expense/ExpenseEntryPreset*`)を除く全画面にSKILL.mdを適用済み。以下の項目は
-その対応状況を反映して更新した。カレンダー・プリセット編集画面は対象外のまま残っている
-(別作業で編集中)。
+**2026-08 追記**: カレンダー(`pages/workCalendar/`)を除く全画面にSKILL.mdを適用済み。
+経費入力プリセット編集(`pages/expense/ExpenseEntryPreset*`)は別作業でのmain統合後に
+追って対応し、対応済みとなった。以下の項目はその対応状況を反映して更新した。カレンダー
+画面は対象外のまま残っている(別作業で編集中)。
 
-## 1. 確認ダイアログが2種類ある(統合候補)
+## 1. 確認ダイアログが2種類あった(解消)
 
 - `frontend/src/components/ConfirmDialog/` — trigger要素を渡す形(`DialogTrigger`)
 - `frontend/src/components/ConfirmActionDialog/` — `triggerLabel`文字列 + variant、`children`で
   フォームを足せる
 
-2026-08時点で `pages/expense/ExpenseClaimListPage.tsx` / `pages/expense/ExpenseClaimNewPage.tsx` は
-`ConfirmActionDialog`へ移行済み。残る利用者は`pages/expense/ExpenseEntryPresetListPage.tsx`
-(プリセット編集画面。今回のスコープ外・別作業で編集中)のみ。この画面の移行が完了したら
-`ConfirmDialog`コンポーネント自体を削除できる。
+`pages/expense/ExpenseClaimListPage.tsx` / `pages/expense/ExpenseClaimNewPage.tsx` /
+`pages/expense/ExpenseEntryPresetListPage.tsx`をすべて`ConfirmActionDialog`へ移行し、
+利用者が0件になった`ConfirmDialog`コンポーネント自体(`.tsx`/`.test.tsx`/`.stories.tsx`)を
+削除した。確認ダイアログは今後`ConfirmActionDialog`のみを使う。
 
 ## 2. 行クリックの実装が3種類(部分解消)
 
@@ -43,6 +43,8 @@
   `pages/backOffice/BackOfficeTaskListPage.tsx` もURL同期済み
 - `pages/expense/ExpenseClaimNewPage.tsx` — `?category=`を読むが書かない(未対応、
   ウィザード構造の変更を伴うため見送り)
+- `pages/expense/ExpenseEntryPresetListPage.tsx` — 検索語(`q`)・経費区分での絞り込み
+  (`category_id`)・ページをすべてURL同期済み
 - ソートのURL反映例は無し(該当画面が現状無い)
 
 ## 4. 保存後の遷移が非対称(解消)
@@ -71,10 +73,11 @@
 
 ## 8. Empty Stateの共通化(解消)
 
-`frontend/src/components/EmptyState/`を新規追加し、カレンダー・プリセット編集を除く全画面の
-空状態をこのコンポーネントへ統一した。検索/フィルターが効く一覧ではInitial EmptyとFiltered
-Empty(+条件クリアの導線)を区別している。共有コンポーネント`LeaveHistoryList`内部の空状態
-文言自体は変更していない(呼び出し側でラップして対応)。
+`frontend/src/components/EmptyState/`を新規追加し、カレンダーを除く全画面(経費入力プリセット
+一覧`ExpenseEntryPresetListPage.tsx`を含む)の空状態をこのコンポーネントへ統一した。検索/
+フィルターが効く一覧ではInitial EmptyとFiltered Empty(+条件クリアの導線)を区別している。
+共有コンポーネント`LeaveHistoryList`内部の空状態文言自体は変更していない(呼び出し側で
+ラップして対応)。
 
 ## 9. Permission Denied状態(部分解消)
 
@@ -112,11 +115,17 @@ Empty(+条件クリアの導線)を区別している。共有コンポーネン
 各画面のDisabledな操作に理由テキストを追加し、確認ダイアログは新規に発明せず
 `ConfirmActionDialog`に統一した(§1-6, §1-7, §2.14)。
 
+## 14. 経費入力プリセット編集(解消)
+
+`pages/expense/ExpenseEntryPresetEditPage.tsx`に欠けていた`[キャンセル]`を追加し(§2.6)、
+保存ボタンの用語を新規作成時は「作成する」・編集時は「保存する」に分けた(§2.7)。Disabled
+理由(名称未入力/経費区分未選択)を明示した(§2.14)。`pages/expense/
+ExpenseEntryPresetListPage.tsx`は§1・§3・§8で述べた通り対応済み。
+
 ## 残っている既知の未対応項目(次のスコープの候補)
 
 - `pages/admin/UserListPage.tsx`のページング(API側に`page`パラメータが無いため未導入)
 - `pages/expense/ExpenseClaimNewPage.tsx`のウィザードのURL状態化
-- `ConfirmDialog`コンポーネント自体の削除(`ExpenseEntryPresetListPage.tsx`の移行待ち。§1)
 - Toast基盤の導入判断(§7)
 - Modal系コンポーネントの命名統一(§10。カレンダー領域の`CreateCompanyCalendarModal`を
   含むため、カレンダー作業と合わせて判断する)
