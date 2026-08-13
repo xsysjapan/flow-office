@@ -16,10 +16,18 @@ return new class extends Migration
     {
         Schema::create('calendar_bulk_operation_targets', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('calendar_bulk_operation_id')->constrained('calendar_bulk_operations')->cascadeOnDelete();
+            // 規約通りの外部キー名(calendar_bulk_operation_targets_calendar_bulk_operation_id_foreign /
+            // calendar_bulk_operation_targets_employee_calendar_entry_id_foreign)はいずれも66文字で
+            // MySQLの識別子長上限(64文字)を超えるため、明示的に短い名前を指定する。
+            $table->foreignUuid('calendar_bulk_operation_id')
+                ->constrained('calendar_bulk_operations', indexName: 'calendar_bulk_operation_targets_operation_id_foreign')
+                ->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained();
             $table->date('work_date');
-            $table->foreignUuid('employee_calendar_entry_id')->nullable()->constrained('employee_calendar_entries')->nullOnDelete();
+            $table->foreignUuid('employee_calendar_entry_id')
+                ->nullable()
+                ->constrained('employee_calendar_entries', indexName: 'calendar_bulk_operation_targets_entry_id_foreign')
+                ->nullOnDelete();
             $table->string('result'); // applied, skipped_existing, failed
             $table->string('error_code')->nullable();
             $table->json('previous_snapshot')->nullable();

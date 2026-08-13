@@ -54,9 +54,20 @@ return new class extends Migration
         }
 
         // company_calendar_days.calendar_id の参照先を company_calendars.id から
-        // company_calendar_years.id へ repoint する。
+        // company_calendar_years.id へ repoint する。この外部キーは本テーブルが
+        // work_calendar_days という名前だった時代(2026_07_09_151954_a1)に作られたため、
+        // MySQLでは制約名が今も work_calendar_days_calendar_id_foreign のままである
+        // (テーブルのRENAMEは制約名まで追従しない)。dropForeign(['calendar_id'])は
+        // 現在のテーブル名から規約で company_calendar_days_calendar_id_foreign を
+        // 組み立ててしまい、MySQL上で「該当する制約が無い」エラーになるため、MySQLでは
+        // 実際に存在する制約名を明示する。一方SQLiteは外部キーを名前でdropできず
+        // (テーブル再作成方式のため列指定のみ対応)、列指定の形を使う必要がある。
         Schema::table('company_calendar_days', function (Blueprint $table) {
-            $table->dropForeign(['calendar_id']);
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->dropForeign(['calendar_id']);
+            } else {
+                $table->dropForeign('work_calendar_days_calendar_id_foreign');
+            }
         });
 
         foreach ($yearIdByCalendarId as $calendarId => $yearId) {

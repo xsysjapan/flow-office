@@ -23,7 +23,9 @@ return new class extends Migration
             $table->dateTime('synced_at');
             $table->timestamps();
 
-            $table->unique(['holiday_calendar_source_id', 'ics_uid']);
+            // 規約通りの名前(holiday_calendar_events_holiday_calendar_source_id_ics_uid_unique)は
+            // 67文字でMySQLの識別子長上限(64文字)を超えるため、明示的に短い名前を指定する。
+            $table->unique(['holiday_calendar_source_id', 'ics_uid'], 'holiday_calendar_events_source_uid_unique');
         });
     }
 
