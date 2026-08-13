@@ -105,7 +105,7 @@ class ExpenseMasterCrudTest extends TestCase
 
         // 全社共有プリセットは全社員の候補一覧に表示される。
         $index = $this->actingAs($employee)->getJson('/api/expense-entry-presets');
-        $index->assertOk()->assertJsonCount(1);
+        $index->assertOk()->assertJsonCount(1, 'data');
     }
 
     public function test_presets_index_merges_own_personal_and_all_company_and_system_presets(): void
@@ -140,11 +140,62 @@ class ExpenseMasterCrudTest extends TestCase
 
         $response = $this->actingAs($employee)->getJson('/api/expense-entry-presets');
         $response->assertOk();
-        $names = collect($response->json())->pluck('name');
+        $names = collect($response->json('data'))->pluck('name');
         $this->assertContains('自分のプリセット', $names);
         $this->assertContains('全社共有プリセット', $names);
         $this->assertContains('システム標準プリセット', $names);
         $this->assertNotContains('他人のプリセット', $names);
+    }
+
+    public function test_presets_index_supports_name_search_category_filter_and_pagination(): void
+    {
+        $employee = User::factory()->create();
+        $transportation = ExpenseCategory::query()->create([
+            'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
+        ]);
+        $lodging = ExpenseCategory::query()->create([
+            'code' => 'lodging', 'name' => '宿泊費', 'evidence_type_default' => 'receipt_required',
+        ]);
+
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $employee->id, 'name' => '自宅⇔会社',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $transportation->id, 'amount' => 300]],
+            'created_by' => $employee->id,
+        ]);
+        ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $employee->id, 'name' => '出張ホテル',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $lodging->id, 'amount' => 12000]],
+            'created_by' => $employee->id,
+        ]);
+
+        $byName = $this->actingAs($employee)->getJson('/api/expense-entry-presets?q=会社');
+        $byName->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', '自宅⇔会社');
+
+        $byCategory = $this->actingAs($employee)->getJson("/api/expense-entry-presets?category_id={$lodging->id}");
+        $byCategory->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', '出張ホテル');
+
+        $paged = $this->actingAs($employee)->getJson('/api/expense-entry-presets?per_page=1');
+        $paged->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 2)->assertJsonPath('meta.last_page', 2);
+    }
+
+    public function test_show_returns_a_single_preset_but_not_someone_elses_personal_preset(): void
+    {
+        $employee = User::factory()->create();
+        $stranger = User::factory()->create();
+        $category = ExpenseCategory::query()->create([
+            'code' => 'transportation', 'name' => '交通費', 'evidence_type_default' => 'fact_reference_available',
+        ]);
+        $preset = ExpenseEntryPreset::query()->create([
+            'visibility' => 'personal', 'owner_user_id' => $employee->id, 'name' => '自宅⇔会社',
+            'preset_type' => 'single_item', 'definition' => [['category_id' => $category->id, 'amount' => 300]],
+            'created_by' => $employee->id,
+        ]);
+
+        $this->actingAs($employee)->getJson("/api/expense-entry-presets/{$preset->id}")
+            ->assertOk()->assertJsonPath('name', '自宅⇔会社');
+
+        $this->actingAs($stranger)->getJson("/api/expense-entry-presets/{$preset->id}")
+            ->assertNotFound();
     }
 
     public function test_applying_a_preset_increments_usage_count(): void

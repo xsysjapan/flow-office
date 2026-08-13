@@ -8,7 +8,7 @@ import type { ExpenseCategory } from '../../api/types'
 const categories: ExpenseCategory[] = [
   {
     id: 1,
-    code: 'transport',
+    code: 'transportation',
     name: '交通費',
     description: null,
     evidence_type_default: 'receipt_optional',

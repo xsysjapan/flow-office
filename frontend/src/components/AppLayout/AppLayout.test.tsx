@@ -62,16 +62,18 @@ describe('AppLayout', () => {
     expect(screen.getByText('開発部')).toBeInTheDocument()
   })
 
-  it('shows その他申請・経費精算・入力プリセット inside the 勤怠・申請 dropdown menu, without a separate 新規申請 or 新規作成 shortcut', async () => {
+  it('shows その他申請・経費精算 inside the 勤怠・申請 dropdown menu, without a separate 新規申請、新規作成 or 入力プリセット shortcut', async () => {
     renderLayout()
 
     await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
     expect(await screen.findByRole('menuitem', { name: 'その他申請' })).toHaveAttribute('href', '/requests')
     expect(screen.getByRole('menuitem', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
-    expect(screen.getByRole('menuitem', { name: '入力プリセット' })).toHaveAttribute('href', '/expenses/presets')
     expect(screen.queryByRole('menuitem', { name: '新規申請' })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '経費精算(新規作成)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '経費精算一覧' })).not.toBeInTheDocument()
+    // 入力プリセット画面は、いきなり使う人が少ないと想定してメニューには置かない。
+    // 経費精算画面のプリセット表示箇所からのみ遷移できるようにする。
+    expect(screen.queryByRole('menuitem', { name: '入力プリセット' })).not.toBeInTheDocument()
   })
 
   it('links 月次勤怠 to the current month detail page', async () => {

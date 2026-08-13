@@ -30,7 +30,7 @@ vi.mock('../../auth/useAuth', () => ({
 
 const transportCategory: ExpenseCategory = {
   id: 1,
-  code: 'transport',
+  code: 'transportation',
   name: '交通費',
   description: null,
   evidence_type_default: 'fact_reference_available',
@@ -78,7 +78,18 @@ function renderPage(
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue(categories)
-  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockResolvedValue(presets)
+  // プリセットの経費区分での絞り込みはAPI側(definition item側のcategory_id)で行うため、
+  // モックでも同じ絞り込みを再現する。
+  vi.spyOn(expenseEntryPresetsApi, 'fetchExpenseEntryPresets').mockImplementation((filters = {}) => {
+    const matched = filters.category_id
+      ? presets.filter((preset) => preset.definition.some((item) => item.category_id === filters.category_id))
+      : presets
+    return Promise.resolve({
+      data: matched,
+      meta: { current_page: 1, last_page: 1, total: matched.length },
+      links: { next: null, prev: null },
+    })
+  })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue([])
   vi.spyOn(usersApi, 'fetchUsers').mockResolvedValue({
     data: [],
@@ -123,6 +134,17 @@ function renderPage(
  *  選択自体ではなく、その先の区分選択・入力フォームの挙動を検証するために使う。 */
 async function selectIndividualEntryMode() {
   await userEvent.click(await screen.findByRole('button', { name: '個別に登録する' }))
+}
+
+/** 「まとめて経費登録」を選び、タイトルを決めて区分選択ステップまで進める。交通費
+ *  (entry_mode='batch')は「まとめて登録」のときだけ表形式(複数行)の入力になるため、
+ *  表形式入力そのものを検証するテストはこのヘルパーを使う。呼び出し側で
+ *  createExpenseClaim・updateExpenseClaimTitle・fetchExpenseClaimをあらかじめ
+ *  モックしておくこと。 */
+async function selectBulkEntryMode(title = 'テスト用タイトル') {
+  await userEvent.click(await screen.findByRole('button', { name: 'まとめて登録する' }))
+  await userEvent.type(await screen.findByLabelText('タイトル'), title)
+  await userEvent.click(screen.getByRole('button', { name: '次へ' }))
 }
 
 describe('ExpenseClaimNewPage', () => {
@@ -240,7 +262,22 @@ describe('ExpenseClaimNewPage', () => {
     )
   })
 
-  it('shows the item entry tools for a batch category without creating a draft claim yet', async () => {
+  it('shows the batch table for 交通費 when registered via まとめて経費登録, without creating items yet', async () => {
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+    const addItemsBulk = vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk')
+
+    renderPage()
+    await selectBulkEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    expect(await screen.findByRole('button', { name: '行を追加' })).toBeInTheDocument()
+    expect(addItemsBulk).not.toHaveBeenCalled()
+  })
+
+  it('shows a single-item form for 交通費 when registered via 個別に経費登録, without a batch table', async () => {
     const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
 
     renderPage()
@@ -248,7 +285,9 @@ describe('ExpenseClaimNewPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
-    expect(await screen.findByRole('button', { name: '行を追加' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('出発地')).toBeInTheDocument()
+    expect(await screen.findByLabelText('到着地')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '行を追加' })).not.toBeInTheDocument()
     expect(createClaim).not.toHaveBeenCalled()
   })
 
@@ -294,9 +333,12 @@ describe('ExpenseClaimNewPage', () => {
       last_used_at: null,
       created_by: 'applicant-1',
     })
+    vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
 
     renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
-    await selectIndividualEntryMode()
+    await selectBulkEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
@@ -310,17 +352,150 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.getByRole('spinbutton', { name: /1行目の金額/ })).toHaveValue(420)
   })
 
-  it('creates a draft claim with no body only when the first rows are actually saved (batch category)', async () => {
+  it('adds only the selected category rows from a preset that spans multiple categories', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 5,
+        visibility: 'system',
+        owner_user_id: null,
+        name: '国内1泊出張',
+        description: null,
+        preset_type: 'multiple_items',
+        definition: [
+          { category_id: 1, description: '自宅 → 出張先(新幹線)', amount: 14000 },
+          { category_id: 2, description: '出張先ホテル', amount: 9000 },
+          { category_id: 1, description: '出張先 → 自宅(新幹線)', amount: 14000 },
+        ],
+        is_active: true,
+        usage_count: 0,
+        last_used_at: null,
+        created_by: null,
+      },
+    ]
+    vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[0])
     vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
-    vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([])
     vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
 
-    renderPage()
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectBulkEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+
+    // 交通費を選んでいるので、宿泊費の明細は件数にも追加行にも含めない。
+    await userEvent.click(await screen.findByRole('button', { name: '国内1泊出張(2件)' }))
+
+    expect(await screen.findByDisplayValue('自宅 → 出張先(新幹線)')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('出張先 → 自宅(新幹線)')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('出張先ホテル')).not.toBeInTheDocument()
+    expect(screen.getByText(/国内1泊出張には他の区分の明細が1件あります/)).toBeInTheDocument()
+  })
+
+  it('lets a single-entry category (e.g. 宿泊費) be prefilled from a preset applicable to it', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 2,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '技術書購入',
+        description: null,
+        preset_type: 'single_item',
+        definition: [{ category_id: 1, description: '文具店での購入分', amount: 3000 }],
+        is_active: true,
+        usage_count: 1,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+      {
+        id: 3,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '出張ホテル',
+        description: null,
+        preset_type: 'single_item',
+        definition: [
+          {
+            category_id: 2,
+            description: 'ホテルABC - 素泊まり',
+            amount: 12000,
+            payee: 'ホテルABC',
+            content: '素泊まり',
+          },
+        ],
+        is_active: true,
+        usage_count: 1,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+    ]
+    const applyPreset = vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[1])
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+
+    expect(await screen.findByRole('button', { name: '出張ホテル' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '技術書購入' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '出張ホテル' }))
+
+    expect(applyPreset).toHaveBeenCalledWith(3)
+    expect(await screen.findByLabelText('金額')).toHaveValue(12000)
+    // 内容だけでなく、区分ごとの入力補助欄(宿泊費なら宿泊先名)も埋まる。
+    expect(screen.getByLabelText('宿泊先名')).toHaveValue('ホテルABC')
+    expect(screen.getByLabelText('内容')).toHaveValue('素泊まり')
+  })
+
+  it('prefills 出発地/到着地 on the 交通費 single-item form from a preset', async () => {
+    const presets: ExpenseEntryPreset[] = [
+      {
+        id: 4,
+        visibility: 'personal',
+        owner_user_id: 'applicant-1',
+        name: '自宅⇔会社',
+        description: null,
+        preset_type: 'single_item',
+        definition: [
+          {
+            category_id: 1,
+            description: '自宅 → 会社(電車)',
+            amount: 420,
+            departure: '自宅',
+            destination: '会社',
+          },
+        ],
+        is_active: true,
+        usage_count: 3,
+        last_used_at: null,
+        created_by: 'applicant-1',
+      },
+    ]
+    vi.spyOn(expenseEntryPresetsApi, 'applyExpenseEntryPreset').mockResolvedValue(presets[0])
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/new', presets)
     await selectIndividualEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
-    expect(expenseClaimsApi.createExpenseClaim).not.toHaveBeenCalled()
+    await userEvent.click(await screen.findByRole('button', { name: '自宅⇔会社' }))
+
+    expect(await screen.findByLabelText('出発地')).toHaveValue('自宅')
+    expect(screen.getByLabelText('到着地')).toHaveValue('会社')
+    expect(screen.getByLabelText('内容')).toHaveValue('自宅 → 会社(電車)')
+    expect(screen.getByLabelText('金額')).toHaveValue(420)
+  })
+
+  it('defers creating items via addExpenseItemsBulk until 明細を保存する is clicked, and reuses the claim created at the title step (batch category)', async () => {
+    const createClaim = vi.spyOn(expenseClaimsApi, 'createExpenseClaim').mockResolvedValue(draftClaim())
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(draftClaim())
+    const addItemsBulk = vi.spyOn(expenseClaimsApi, 'addExpenseItemsBulk').mockResolvedValue([])
+    vi.spyOn(expenseClaimsApi, 'updateExpenseClaimTitle').mockResolvedValue(draftClaim())
+
+    renderPage()
+    await selectBulkEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    expect(addItemsBulk).not.toHaveBeenCalled()
 
     await userEvent.click(await screen.findByRole('button', { name: '行を追加' }))
     await pickDate(userEvent.setup(), '1行目の日付', '2026-07-04')
@@ -328,12 +503,13 @@ describe('ExpenseClaimNewPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /明細を保存する/ }))
 
-    await waitFor(() => expect(expenseClaimsApi.createExpenseClaim).toHaveBeenCalledWith())
     await waitFor(() =>
-      expect(expenseClaimsApi.addExpenseItemsBulk).toHaveBeenCalledWith('claim-1', [
+      expect(addItemsBulk).toHaveBeenCalledWith('claim-1', [
         expect.objectContaining({ usage_date: '2026-07-04', amount: 420, category_id: 1 }),
       ]),
     )
+    // タイトル確定時に作成した下書きをそのまま使い、明細保存のたびに再作成しない。
+    expect(createClaim).toHaveBeenCalledTimes(1)
   })
 
   it('shows the single-item form for a single-entry category without creating a draft claim yet', async () => {
@@ -475,7 +651,7 @@ describe('ExpenseClaimNewPage', () => {
     })
 
     renderPage()
-    await selectIndividualEntryMode()
+    await selectBulkEntryMode()
 
     await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
 
@@ -608,7 +784,7 @@ describe('ExpenseClaimNewPage', () => {
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '交通費' }))
-    await screen.findByRole('button', { name: '行を追加' })
+    await screen.findByLabelText('出発地')
     expect(createClaim.mock.calls.length).toBe(callCountAfterFirstSave)
   })
 

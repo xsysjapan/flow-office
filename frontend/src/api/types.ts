@@ -1321,13 +1321,23 @@ export type ExpenseEntryPresetVisibility = "personal" | "company" | "system";
 /** 表示上の分類。適用処理自体はdefinitionの件数に従うため、内部の挙動は共通。 */
 export type ExpenseEntryPresetType = "single_item" | "multiple_items";
 
-/** プリセットが生成する経費明細1件分の下書き定義。 */
+/** プリセットが生成する経費明細1件分の下書き定義。descriptionは一覧表示・交通費の
+ *  まとめ入力(表形式)でそのまま使う自由記述の1行テキスト。payee〜destinationは
+ *  単票入力フォーム(SingleExpenseItemForm)の入力補助欄(取引先・内容・参加者情報・
+ *  出発地/到着地)にそのまま反映するための構造化データで、fieldSetに応じて使う項目が
+ *  変わる(区分・テーブル定義は変えず、JSON列であるdefinitionの中身だけを拡張している)。 */
 export interface ExpenseEntryPresetDefinitionItem {
   category_id: number;
   description?: string | null;
   amount?: number | null;
   payment_bearer?: ExpensePaymentBearer | null;
   attributes?: Record<string, unknown> | null;
+  payee?: string | null;
+  content?: string | null;
+  participants?: string | null;
+  participant_count?: number | null;
+  departure?: string | null;
+  destination?: string | null;
 }
 
 export interface ExpenseEntryPreset {

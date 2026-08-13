@@ -6,7 +6,7 @@ import { ExpenseCategoryEditPage } from './ExpenseCategoryEditPage'
 
 const transportCategory: ExpenseCategory = {
   id: 1,
-  code: 'transport',
+  code: 'transportation',
   name: '交通費',
   description: '通勤・出張時の交通費',
   evidence_type_default: 'fact_reference_available',

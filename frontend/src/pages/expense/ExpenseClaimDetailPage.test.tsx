@@ -39,7 +39,7 @@ const claimItem = {
   id: 'item-1',
   claim_id: 'claim-1',
   category_id: 1,
-  category: { id: 1, code: 'transport', name: '交通費', evidence_type_default: 'fact_reference_available' as const },
+  category: { id: 1, code: 'transportation', name: '交通費', evidence_type_default: 'fact_reference_available' as const },
   usage_date: '2026-07-04',
   description: '自宅 → 本社(電車)',
   amount: 420,
