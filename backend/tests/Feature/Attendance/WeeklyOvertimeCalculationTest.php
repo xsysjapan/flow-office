@@ -4,9 +4,9 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -24,21 +24,20 @@ class WeeklyOvertimeCalculationTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
-    private function makeWorkStyle(WorkCalendar $calendar): WorkStyle
+    private function makeWorkStyle(CompanyCalendar $calendar): WorkStyle
     {
         return WorkStyle::query()->create([
             'code' => 'fixed-'.uniqid(), 'name' => '通常勤務', 'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
@@ -55,7 +54,7 @@ class WeeklyOvertimeCalculationTest extends TestCase
         bool $isLegalHoliday = false,
         bool $isCompanyHoliday = false,
     ): void {
-        $shift = EmployeeShiftAssignment::query()->create([
+        $shift = EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => $isLegalHoliday ? 'legal_holiday' : ($isCompanyHoliday ? 'company_holiday' : 'weekday'),
             'is_working_day' => true,
@@ -65,7 +64,7 @@ class WeeklyOvertimeCalculationTest extends TestCase
         ]);
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => $workDate, 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => $workDate, 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 

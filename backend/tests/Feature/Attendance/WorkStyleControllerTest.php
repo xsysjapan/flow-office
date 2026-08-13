@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Models\CompanyCalendar;
 use App\Models\EmploymentCategory;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,13 +17,12 @@ class WorkStyleControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
     private function makeAdmin(): User
@@ -45,7 +44,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
             'rounding_unit_minutes' => 15,
             'default_break_start_time' => '12:00',
             'default_break_end_time' => '13:00',
@@ -68,7 +67,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
             'rounding_unit_minutes' => 7,
         ])->assertStatus(422);
     }
@@ -84,7 +83,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertCreated()->assertJsonPath('legal_holiday_rule', 'weekly');
@@ -101,7 +100,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'discretionary',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertCreated()->assertJsonPath('work_time_system', 'discretionary');
@@ -118,7 +117,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'something_undefined',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors('work_time_system');
@@ -135,7 +134,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
             'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS,
         ]);
@@ -154,7 +153,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
             'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS,
             'four_week_period_start_date' => '2026-06-01',
@@ -178,7 +177,7 @@ class WorkStyleControllerTest extends TestCase
             'is_shift_based' => true,
         ]);
 
-        $response->assertCreated()->assertJsonPath('calendar_id', null);
+        $response->assertCreated()->assertJsonPath('company_calendar_id', null);
     }
 
     public function test_a_work_style_can_be_associated_with_an_employment_category(): void
@@ -194,7 +193,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 360,
             'prescribed_weekly_minutes' => 1800,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
             'is_shift_based' => true,
         ]);
 
@@ -212,7 +211,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
         $monthlyVariable->assertCreated()->assertJsonPath('work_time_system', 'monthly_variable');
 
@@ -222,7 +221,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
         $managerSupervisor->assertCreated()->assertJsonPath('work_time_system', 'manager_supervisor');
     }
@@ -239,7 +238,7 @@ class WorkStyleControllerTest extends TestCase
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
             'deemed_daily_minutes' => 540,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertCreated()->assertJsonPath('deemed_daily_minutes', 540);
@@ -256,7 +255,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
@@ -265,7 +264,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 420,
             'prescribed_weekly_minutes' => 2100,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertOk()
@@ -325,7 +324,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $workStyle = WorkStyle::query()->create([
@@ -334,7 +333,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
@@ -343,7 +342,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors('code');
@@ -360,7 +359,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response = $this->actingAs($user)->putJson("/api/work-styles/{$workStyle->id}", [
@@ -369,7 +368,7 @@ class WorkStyleControllerTest extends TestCase
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
             'prescribed_daily_minutes' => 480,
             'prescribed_weekly_minutes' => 2400,
-            'calendar_id' => $calendar->id,
+            'company_calendar_id' => $calendar->id,
         ]);
 
         $response->assertOk()->assertJsonPath('name', '編集対象(改)');

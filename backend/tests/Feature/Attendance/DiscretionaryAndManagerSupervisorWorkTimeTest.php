@@ -4,9 +4,9 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -21,39 +21,38 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
-    private function makeDiscretionaryWorkStyle(WorkCalendar $calendar, int $deemedDailyMinutes = 540): WorkStyle
+    private function makeDiscretionaryWorkStyle(CompanyCalendar $calendar, int $deemedDailyMinutes = 540): WorkStyle
     {
         return WorkStyle::query()->create([
             'code' => 'disc-'.uniqid(), 'name' => '裁量労働制',
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_DISCRETIONARY,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'deemed_daily_minutes' => $deemedDailyMinutes,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
-    private function makeManagerSupervisorWorkStyle(WorkCalendar $calendar): WorkStyle
+    private function makeManagerSupervisorWorkStyle(CompanyCalendar $calendar): WorkStyle
     {
         return WorkStyle::query()->create([
             'code' => 'mgr-'.uniqid(), 'name' => '管理監督者',
             'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
     }
 
-    private function makeShiftAssignment(User $user, WorkStyle $workStyle, string $workDate, bool $isLegalHoliday = false): EmployeeShiftAssignment
+    private function makeCalendarEntry(User $user, WorkStyle $workStyle, string $workDate, bool $isLegalHoliday = false): EmployeeCalendarEntry
     {
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
             'day_type' => $isLegalHoliday ? 'legal_holiday' : 'weekday',
             'is_working_day' => ! $isLegalHoliday,
@@ -89,10 +88,10 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeDiscretionaryWorkStyle($calendar, deemedDailyMinutes: 540); // 9時間
         $user = User::factory()->create();
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01');
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -112,10 +111,10 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeDiscretionaryWorkStyle($calendar, deemedDailyMinutes: 540);
         $user = User::factory()->create();
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01');
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -133,10 +132,10 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeDiscretionaryWorkStyle($calendar, deemedDailyMinutes: 540);
         $user = User::factory()->create();
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-07', isLegalHoliday: true);
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-07', isLegalHoliday: true);
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-07', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-07', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -154,10 +153,10 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeManagerSupervisorWorkStyle($calendar);
         $user = User::factory()->create();
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-07', isLegalHoliday: true);
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-07', isLegalHoliday: true);
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-07', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-07', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
@@ -178,10 +177,10 @@ class DiscretionaryAndManagerSupervisorWorkTimeTest extends TestCase
         $calendar = $this->makeCalendar();
         $workStyle = $this->makeManagerSupervisorWorkStyle($calendar);
         $user = User::factory()->create();
-        $shift = $this->makeShiftAssignment($user, $workStyle, '2026-06-01');
+        $shift = $this->makeCalendarEntry($user, $workStyle, '2026-06-01');
 
         $day = AttendanceDay::query()->create([
-            'user_id' => $user->id, 'work_date' => '2026-06-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $user->id, 'work_date' => '2026-06-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 

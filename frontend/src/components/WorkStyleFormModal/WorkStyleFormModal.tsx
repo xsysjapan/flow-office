@@ -57,7 +57,7 @@ function emptyFormState(workStyle: WorkStyle | undefined) {
     defaultBreakStartTime: workStyle?.default_break_start_time ?? '',
     defaultBreakEndTime: workStyle?.default_break_end_time ?? '',
     autoBreakEnabled: workStyle?.auto_break_enabled ?? false,
-    calendarId: workStyle?.calendar_id ?? '',
+    calendarId: workStyle?.company_calendar_id ?? '',
     isShiftBased: workStyle?.is_shift_based ?? false,
     legalHolidayRule: (workStyle?.legal_holiday_rule ?? 'weekly') as LegalHolidayRule,
     fourWeekPeriodStartDate: workStyle?.four_week_period_start_date ?? '',
@@ -121,7 +121,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
       default_break_start_time: form.defaultBreakStartTime || undefined,
       default_break_end_time: form.defaultBreakEndTime || undefined,
       auto_break_enabled: form.autoBreakEnabled,
-      calendar_id: form.calendarId,
+      company_calendar_id: form.calendarId,
       is_shift_based: form.isShiftBased,
       legal_holiday_rule: form.isShiftBased ? form.legalHolidayRule : undefined,
       four_week_period_start_date:

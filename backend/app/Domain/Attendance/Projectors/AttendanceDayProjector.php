@@ -29,7 +29,7 @@ class AttendanceDayProjector extends Projector
             [
                 'user_id' => $event->userId,
                 'work_date' => $event->workDate,
-                'shift_assignment_id' => $event->shiftAssignmentId,
+                'calendar_entry_id' => $event->calendarEntryId,
                 'status' => $event->status,
                 'source' => $event->source,
                 'utc_offset_minutes' => $event->utcOffsetMinutes,
@@ -79,7 +79,7 @@ class AttendanceDayProjector extends Projector
             $attributes = [
                 'user_id' => $event->userId,
                 'work_date' => $event->workDate,
-                'shift_assignment_id' => $event->shiftAssignmentId,
+                'calendar_entry_id' => $event->calendarEntryId,
                 'status' => $event->status,
                 'source' => $event->source,
             ];
@@ -107,7 +107,7 @@ class AttendanceDayProjector extends Projector
         $attributes = [
             'user_id' => $event->userId,
             'work_date' => $event->workDate,
-            'shift_assignment_id' => $event->shiftAssignmentId,
+            'calendar_entry_id' => $event->calendarEntryId,
             'actual_start_at' => $this->parse($event->actualStartAt),
             'actual_end_at' => $this->parse($event->actualEndAt),
             'utc_offset_minutes' => $event->utcOffsetMinutes,

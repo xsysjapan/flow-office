@@ -9,7 +9,7 @@ use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceLeaveSegment;
 use App\Models\AttendancePunch;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveUsage;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
@@ -154,14 +154,14 @@ class AttendanceDayPunchSyncer
             return null;
         }
 
-        $shiftAssignmentId = $day?->shift_assignment_id ?? $this->resolveShiftAssignmentId($userId, $workDate);
+        $calendarEntryId = $day?->calendar_entry_id ?? $this->resolveCalendarEntryId($userId, $workDate);
 
         $actualStartAt = null;
         $utcOffsetMinutes = null;
         if ($status === AttendanceDayStatus::WORKING && $day?->actual_start_at === null) {
             $firstClockIn = $punches->firstWhere('punch_type', PunchType::CLOCK_IN);
             if ($firstClockIn !== null) {
-                $workStyle = $this->resolveWorkStyle($userId, $workDate, $shiftAssignmentId);
+                $workStyle = $this->resolveWorkStyle($userId, $workDate, $calendarEntryId);
                 $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
                 $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
 
@@ -174,7 +174,7 @@ class AttendanceDayPunchSyncer
         $aggregate->syncLiveStatus(
             userId: $userId,
             workDate: $workDate,
-            shiftAssignmentId: $shiftAssignmentId,
+            calendarEntryId: $calendarEntryId,
             status: $status,
             source: AttendanceDaySource::PUNCH,
             actualStartAt: $actualStartAt,
@@ -196,10 +196,10 @@ class AttendanceDayPunchSyncer
         array $reconciled,
         Collection $punches,
     ): AttendanceDayAggregate {
-        $shiftAssignmentId = $day?->shift_assignment_id ?? $this->resolveShiftAssignmentId($userId, $workDate);
+        $calendarEntryId = $day?->calendar_entry_id ?? $this->resolveCalendarEntryId($userId, $workDate);
         $offsetMinutes = $reconciled['utc_offset_minutes'];
 
-        $workStyle = $this->resolveWorkStyle($userId, $workDate, $shiftAssignmentId);
+        $workStyle = $this->resolveWorkStyle($userId, $workDate, $calendarEntryId);
         $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
         $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
 
@@ -231,7 +231,7 @@ class AttendanceDayPunchSyncer
         $aggregate->syncFromPunches(
             userId: $userId,
             workDate: $workDate,
-            shiftAssignmentId: $shiftAssignmentId,
+            calendarEntryId: $calendarEntryId,
             actualStartAt: LocalDateTime::formatWithOffsetMinutes($reconciled['clock_in'], $offsetMinutes),
             actualEndAt: LocalDateTime::formatWithOffsetMinutes($reconciled['clock_out'], $offsetMinutes),
             utcOffsetMinutes: $offsetMinutes,
@@ -243,7 +243,7 @@ class AttendanceDayPunchSyncer
             $aggregate,
             $userId,
             $workDate,
-            $shiftAssignmentId,
+            $calendarEntryId,
             $reconciled,
             $workLocationType,
             $day,
@@ -268,7 +268,7 @@ class AttendanceDayPunchSyncer
         AttendanceDayAggregate $aggregate,
         string $userId,
         string $workDate,
-        ?string $shiftAssignmentId,
+        ?string $calendarEntryId,
         array $reconciled,
         ?string $workLocationType,
         ?AttendanceDay $existingDay,
@@ -277,7 +277,7 @@ class AttendanceDayPunchSyncer
             'id' => $aggregate->uuid(),
             'user_id' => $userId,
             'work_date' => $workDate,
-            'shift_assignment_id' => $shiftAssignmentId,
+            'calendar_entry_id' => $calendarEntryId,
             'status' => AttendanceDayStatus::CLOCKED_OUT,
             'source' => AttendanceDaySource::PUNCH,
             'utc_offset_minutes' => $reconciled['utc_offset_minutes'],
@@ -311,17 +311,17 @@ class AttendanceDayPunchSyncer
                 : collect(),
         );
 
-        $shiftAssignment = $shiftAssignmentId !== null
-            ? EmployeeShiftAssignment::query()->with('workStyle.calendar')->find($shiftAssignmentId)
+        $calendarEntry = $calendarEntryId !== null
+            ? EmployeeCalendarEntry::query()->with('workStyle.calendar')->find($calendarEntryId)
             : null;
-        $day->setRelation('shiftAssignment', $shiftAssignment);
+        $day->setRelation('calendarEntry', $calendarEntry);
 
         return $day;
     }
 
-    private function resolveShiftAssignmentId(string $userId, string $workDate): ?string
+    private function resolveCalendarEntryId(string $userId, string $workDate): ?string
     {
-        return EmployeeShiftAssignment::query()
+        return EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
             ->value('id');
@@ -331,10 +331,10 @@ class AttendanceDayPunchSyncer
      * 丸め設定の元になる働き方を、勤務予定 → その月の割当 → システム既定の順で解決する
      * (WorkStyleFallbackResolver参照)。
      */
-    private function resolveWorkStyle(string $userId, string $workDate, ?string $shiftAssignmentId): ?WorkStyle
+    private function resolveWorkStyle(string $userId, string $workDate, ?string $calendarEntryId): ?WorkStyle
     {
-        $workStyle = $shiftAssignmentId !== null
-            ? EmployeeShiftAssignment::query()->with('workStyle')->find($shiftAssignmentId)?->workStyle
+        $workStyle = $calendarEntryId !== null
+            ? EmployeeCalendarEntry::query()->with('workStyle')->find($calendarEntryId)?->workStyle
             : null;
 
         return $workStyle ?? $this->workStyleFallbackResolver->resolveForUser($userId, Carbon::parse($workDate));

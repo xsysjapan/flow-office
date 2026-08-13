@@ -7,12 +7,14 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "composer/ca-bundle": "^1.5",
         "darkaonline/l5-swagger": "^11.1",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.28",
         "laravel/tinker": "^3.0",
         "phpoffice/phpspreadsheet": "^5.9",
+        "sabre/vobject": "^5.0",
         "socialiteproviders/microsoft-azure": "^5.2",
         "spatie/laravel-event-sourcing": "^7.15"
     },

@@ -3,13 +3,13 @@
 namespace Tests\Feature\PaidLeave;
 
 use App\Models\AttendanceDay;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,21 +23,18 @@ class PaidLeaveRequestTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createWorkingDayShift(User $user, string $date, int $prescribedDailyMinutes = 480): EmployeeShiftAssignment
+    private function createWorkingDayShift(User $user, string $date, int $prescribedDailyMinutes = 480): EmployeeCalendarEntry
     {
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
         $workStyle = WorkStyle::query()->create([
             'code' => 'standard-'.$user->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => $prescribedDailyMinutes, 'prescribed_weekly_minutes' => $prescribedDailyMinutes * 5,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
 
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
@@ -153,18 +150,18 @@ class PaidLeaveRequestTest extends TestCase
     }
 
     /**
-     * 通常勤務は運用上employee_shift_assignmentsが事前展開されないことが多いため、
+     * 通常勤務は運用上employee_calendar_entriesが事前展開されないことが多いため、
      * 勤務予定が無くてもシステムのデフォルト働き方(カレンダー未設定)から平日を
      * 所定労働日とみなして申請できる(ScheduledWorkingDayResolver参照)。
      */
-    public function test_a_leave_request_without_a_shift_assignment_succeeds_on_a_weekday_when_the_default_work_style_has_no_calendar(): void
+    public function test_a_leave_request_without_a_calendar_entry_succeeds_on_a_weekday_when_the_default_work_style_has_no_calendar(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $defaultWorkStyle = WorkStyle::query()->create([
             'code' => 'default-'.$employee->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => null, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => null, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
 
@@ -173,7 +170,7 @@ class PaidLeaveRequestTest extends TestCase
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
         ]);
 
-        // 2026-08-10は月曜日(平日)。employee_shift_assignmentsの行は無い。
+        // 2026-08-10は月曜日(平日)。employee_calendar_entriesの行は無い。
         $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-10',
             'leave_type' => 'full',
@@ -181,14 +178,14 @@ class PaidLeaveRequestTest extends TestCase
         ])->assertCreated();
     }
 
-    public function test_a_leave_request_without_a_shift_assignment_is_rejected_on_a_weekend_when_the_default_work_style_has_no_calendar(): void
+    public function test_a_leave_request_without_a_calendar_entry_is_rejected_on_a_weekend_when_the_default_work_style_has_no_calendar(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
         $defaultWorkStyle = WorkStyle::query()->create([
             'code' => 'default-'.$employee->id, 'name' => '通常勤務', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => null, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => null, 'is_shift_based' => false,
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
 

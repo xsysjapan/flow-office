@@ -1,0 +1,247 @@
+<?php
+
+namespace App\Domain\Attendance\Services;
+
+use App\Models\CompanyCalendarDay;
+use App\Models\CompanyCalendarYear;
+use App\Models\HolidayCalendarEvent;
+use App\Models\HolidayCalendarSource;
+use Composer\CaBundle\CaBundle;
+use Exception;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use Sabre\VObject\Reader;
+
+/**
+ * UC-C012: 祝日iCalendarソースを同期する。
+ *
+ * `ics_url`からICS(iCalendar)を取得・パースし、既存の`holiday_calendar_events`との差分
+ * (追加・更新・削除)、およびそれに伴う`company_calendar_days`側の変更計画を計算する。
+ * 実際の永続化(holiday_calendar_events/company_calendar_days/company_calendar_day_sources
+ * への書き込み)は呼び出し元HandlerがHolidayCalendarSourceAggregateのイベントを介して行う
+ * (このクラス自身はDBに書き込まない、純粋な計算のみを担う)。
+ *
+ * VEVENTのUID・DTSTART・SUMMARYのみを読み取る。終日イベントを基本とし、RRULE(繰り返し
+ * ルール)を持つVEVENTは展開せず無視してログに警告を出す(対象外。日本の祝日iCalendarフィード
+ * は通常年ごとに単発VEVENTを配信するため実用上問題ない)。
+ */
+class HolidayCalendarSynchronizer
+{
+    /**
+     * @return array{
+     *     event_changes: list<array{ics_uid: string, date: string, name: string, action: string}>,
+     *     day_changes: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>,
+     *     protected_conflicts: list<array{company_calendar_day_id: int, date: string}>,
+     * }
+     *
+     * @throws RuntimeException 取得・パースに失敗した場合
+     */
+    public function synchronize(HolidayCalendarSource $source, ?string $scopeCompanyCalendarYearId = null): array
+    {
+        $feedEvents = $this->fetchAndParse($source);
+
+        $eventChanges = $this->diffEvents($source, $feedEvents);
+
+        [$dayChanges, $protectedConflicts] = $this->planDayChanges($source, $feedEvents, $eventChanges, $scopeCompanyCalendarYearId);
+
+        return [
+            'event_changes' => $eventChanges,
+            'day_changes' => $dayChanges,
+            'protected_conflicts' => $protectedConflicts,
+        ];
+    }
+
+    /**
+     * @return array<string, array{date: string, name: string}> ics_uid => [date, name]
+     *
+     * @throws RuntimeException
+     */
+    private function fetchAndParse(HolidayCalendarSource $source): array
+    {
+        $icsBody = $source->source_kind === HolidayCalendarSource::SOURCE_KIND_UPLOAD
+            ? $this->readUploadedIcs($source)
+            : $this->fetchIcsFromUrl($source->ics_url);
+
+        try {
+            $calendar = Reader::read($icsBody);
+        } catch (Exception $e) {
+            throw new RuntimeException('祝日iCalendarの解析に失敗しました: '.$e->getMessage(), previous: $e);
+        }
+
+        $events = [];
+
+        foreach ($calendar->select('VEVENT') as $vevent) {
+            if (isset($vevent->RRULE)) {
+                Log::warning('祝日iCalendar同期: RRULE付きVEVENTは展開せず無視しました。', [
+                    'uid' => (string) ($vevent->UID ?? ''),
+                ]);
+
+                continue;
+            }
+
+            $uid = (string) ($vevent->UID ?? '');
+            if ($uid === '' || ! isset($vevent->DTSTART)) {
+                continue;
+            }
+
+            $date = $vevent->DTSTART->getDateTime()->format('Y-m-d');
+            $name = (string) ($vevent->SUMMARY ?? '');
+
+            $events[$uid] = ['date' => $date, 'name' => $name];
+        }
+
+        return $events;
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    private function fetchIcsFromUrl(?string $icsUrl): string
+    {
+        try {
+            // XSERVER等、共有ホスティング環境ではシステムのCAルート証明書が古い/欠落しており
+            // 「unable to get local issuer certificate」でTLS検証が失敗することがあるため、
+            // composer/ca-bundleが提供する検証済みCAバンドルを明示的に指定する(証明書検証
+            // 自体を無効化しない)。
+            $response = Http::timeout(15)
+                ->withHeaders(['User-Agent' => 'flow-office/1.0'])
+                ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
+                ->get((string) $icsUrl);
+        } catch (Exception $e) {
+            throw new RuntimeException('祝日iCalendarの取得に失敗しました: '.$e->getMessage(), previous: $e);
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException('祝日iCalendarの取得に失敗しました: HTTP '.$response->status().' — '.substr($response->body(), 0, 200));
+        }
+
+        return $response->body();
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    private function readUploadedIcs(HolidayCalendarSource $source): string
+    {
+        if ($source->uploaded_ics_path === null || ! Storage::disk('local')->exists($source->uploaded_ics_path)) {
+            throw new RuntimeException('アップロードされたiCalendarファイルが見つかりません。再度アップロードしてください。');
+        }
+
+        return Storage::disk('local')->get($source->uploaded_ics_path);
+    }
+
+    /**
+     * @param  array<string, array{date: string, name: string}>  $feedEvents
+     * @return list<array{ics_uid: string, date: string, name: string, action: string}>
+     */
+    private function diffEvents(HolidayCalendarSource $source, array $feedEvents): array
+    {
+        $existing = HolidayCalendarEvent::query()
+            ->where('holiday_calendar_source_id', $source->id)
+            ->get()
+            ->keyBy('ics_uid');
+
+        $changes = [];
+
+        foreach ($feedEvents as $uid => $event) {
+            $current = $existing->get($uid);
+
+            if ($current === null) {
+                $changes[] = ['ics_uid' => $uid, 'date' => $event['date'], 'name' => $event['name'], 'action' => 'added'];
+            } elseif ($current->date->toDateString() !== $event['date'] || $current->name !== $event['name']) {
+                $changes[] = ['ics_uid' => $uid, 'date' => $event['date'], 'name' => $event['name'], 'action' => 'updated'];
+            }
+        }
+
+        foreach ($existing as $uid => $current) {
+            if (! array_key_exists($uid, $feedEvents)) {
+                $changes[] = ['ics_uid' => $uid, 'date' => $current->date->toDateString(), 'name' => $current->name, 'action' => 'removed'];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * @param  array<string, array{date: string, name: string}>  $feedEvents
+     * @param  list<array{ics_uid: string, date: string, name: string, action: string}>  $eventChanges
+     * @return array{0: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
+     */
+    private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges, ?string $scopeCompanyCalendarYearId = null): array
+    {
+        // このソースを祝日ソースとして利用している全カレンダー年度(スコープ指定時はその年度のみ)。
+        $years = CompanyCalendarYear::query()
+            ->whereHas('companyCalendar', fn ($q) => $q->where('holiday_calendar_source_id', $source->id))
+            ->when($scopeCompanyCalendarYearId !== null, fn ($q) => $q->where('id', $scopeCompanyCalendarYearId))
+            ->get();
+
+        if ($years->isEmpty()) {
+            return [[], []];
+        }
+
+        // 更新後、その日付がまだ祝日として存在するか(=フィード上に残っているか)。
+        $activeEventByDate = [];
+        foreach ($feedEvents as $event) {
+            $activeEventByDate[$event['date']] = $event['name'];
+        }
+
+        // 対象日付は「フィード上の全祝日の日付」+「フィードから削除された祝日の日付」とする
+        // (eventChangesの有無だけで絞らない)。holiday_calendar_eventsは祝日ソース単位で
+        // 年度をまたいで共有されるため、既に他の年度へ同期済みで内容が変わっていない祝日でも、
+        // この年度(年度削除→再作成後の新しい年度、後から追加された年度など)がまだその祝日を
+        // 反映していないことがある。eventChangesが空でも、フィード上の祝日は必ずこの年度へ
+        // 適用し直す。
+        $removedDates = array_values(array_map(
+            fn (array $change) => $change['date'],
+            array_filter($eventChanges, fn (array $change) => $change['action'] === 'removed'),
+        ));
+        $affectedDates = array_unique([...array_keys($activeEventByDate), ...$removedDates]);
+
+        if ($affectedDates === []) {
+            return [[], []];
+        }
+
+        $dayChanges = [];
+        $protectedConflicts = [];
+
+        foreach ($years as $year) {
+            foreach ($affectedDates as $date) {
+                if ($date < $year->starts_on->toDateString() || $date > $year->ends_on->toDateString()) {
+                    continue;
+                }
+
+                $day = CompanyCalendarDay::query()
+                    ->where('calendar_id', $year->id)
+                    ->whereDate('date', $date)
+                    ->first();
+
+                if ($day === null) {
+                    continue;
+                }
+
+                $latestSource = $day->sources()->orderByDesc('applied_at')->orderByDesc('id')->first();
+                if ($latestSource !== null && $latestSource->source_type === 'manual') {
+                    $protectedConflicts[] = ['company_calendar_day_id' => $day->id, 'date' => $date];
+
+                    continue;
+                }
+
+                $isPublicHoliday = array_key_exists($date, $activeEventByDate);
+                $dayChanges[] = [
+                    'company_calendar_day_id' => $day->id,
+                    'date' => $date,
+                    'is_public_holiday' => $isPublicHoliday,
+                    'public_holiday_name' => $isPublicHoliday ? $activeEventByDate[$date] : null,
+                    // 取消(RevertLastHolidayCalendarSync)のため、同期直前の値をイベントに
+                    // そのまま保存しておく(dayChangesから逆算しない)。
+                    'previous_is_public_holiday' => (bool) $day->is_public_holiday,
+                    'previous_public_holiday_name' => $day->public_holiday_name,
+                ];
+            }
+        }
+
+        return [$dayChanges, $protectedConflicts];
+    }
+}

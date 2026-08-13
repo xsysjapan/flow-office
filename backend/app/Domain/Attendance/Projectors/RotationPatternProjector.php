@@ -9,7 +9,7 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 /**
  * rotation_pattern.createdからrotation_patterns + rotation_pattern_itemsを作成する
  * (.claude/skills/add-projection参照)。rotation_pattern_itemsは独立した集約ではなく、
- * 親の再生成のたびにまとめて置き換える子行(work_calendar_daysと同じ扱い)。
+ * 親の再生成のたびにまとめて置き換える子行(company_calendar_daysと同じ扱い)。
  */
 class RotationPatternProjector extends Projector
 {

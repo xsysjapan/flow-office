@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\Attendance\Commands\GenerateCompanyCalendarYears;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\UserManagement\Commands\CompleteOnboardingWithLocalPassword;
 use App\Domain\UserManagement\Commands\StartOnboardingSso;
@@ -141,5 +142,26 @@ class OnboardingController extends Controller
             'token' => $token,
             'user' => new UserResource($user),
         ]);
+    }
+
+    /**
+     * UC-C011 手順2: 「今すぐ生成する」。UC-C014手順1〜3と同じロジックをその場で1回実行する
+     * (バッチと同じべき等性を共有するため、`isBatch: false`のみが異なる)。
+     */
+    #[OA\Post(
+        path: '/onboarding/calendar/generate-now',
+        operationId: 'onboarding.calendar.generateNow',
+        summary: '標準カレンダーを今すぐ生成する',
+        tags: ['初回オンボーディング'],
+        responses: [
+            new OA\Response(response: 200, description: 'Successful response'),
+            new OA\Response(response: 401, description: 'Unauthenticated'),
+        ],
+    )]
+    public function generateCalendarNow(CommandBus $commandBus): JsonResponse
+    {
+        $generatedIds = $commandBus->dispatch(new GenerateCompanyCalendarYears(isBatch: false));
+
+        return response()->json(['generated_company_calendar_year_ids' => $generatedIds]);
     }
 }

@@ -362,10 +362,15 @@ Focus Indicatorの見た目・消さないルールは`ui-design-system` §2.5�
 - **Object First**: 「編集する → 誰を?」ではなく「従業員 → 次に何をする?」の順で設計する。
 - **Canonical Detail Page**: 主要業務オブジェクト(Employee / Attendance Day / Application /
   Company Calendar / Calendar Year / Expense Claim)は正史となる詳細画面を1つ持つ。どこから
-  参照されても同じ詳細画面に辿り着く。
+  参照されても同じ詳細画面に辿り着く(実例: 会社カレンダー本体`CompanyCalendar`の詳細画面
+  `WorkCalendarDetailPage`に、名称・年度一覧・祝日iCalendar設定をすべて集約し、年度
+  `CompanyCalendarYear`の同期もその年度オブジェクトの行に文脈として置く)。
 - **Related Objects**: 関連オブジェクトは一覧側に要約だけ埋め込み、詳細は正史画面へ逃がす。
 - **失敗の兆候**: 同じエンティティが無関係な複数画面からバラバラの項目だけ編集でき、
   「このオブジェクトに関するすべて」を見られる場所が無い状態。
+- **入れ子オブジェクト**を意識する。あるオブジェクトが別オブジェクトを内包/参照する場合
+  (カレンダー年度が日別設定を内包する、申請が承認履歴を内包する等)、一覧では要約だけ
+  埋め込み、詳細はリンクで正史画面に逃がす。
 
 ---
 

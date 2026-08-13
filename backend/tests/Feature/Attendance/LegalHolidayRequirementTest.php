@@ -3,9 +3,9 @@
 namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceMonth;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,13 +18,12 @@ class LegalHolidayRequirementTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeCalendar(): WorkCalendar
+    private function makeCalendar(): CompanyCalendar
     {
-        return WorkCalendar::query()->create([
-            'name' => '2026年度', 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+
+        return $calendar;
     }
 
     public function test_weekly_rule_flags_a_week_with_no_legal_holiday(): void
@@ -33,7 +32,7 @@ class LegalHolidayRequirementTest extends TestCase
         $workStyle = WorkStyle::query()->create([
             'code' => 'shift-weekly', 'name' => 'シフト勤務(週1日休日)', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => true,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
         ]);
         $employee = User::factory()->create();
@@ -45,7 +44,7 @@ class LegalHolidayRequirementTest extends TestCase
             $isWeek4 = $date >= '2026-06-22' && $date <= '2026-06-28';
             $isSunday = date('N', strtotime($date)) === '7';
 
-            EmployeeShiftAssignment::query()->create([
+            EmployeeCalendarEntry::query()->create([
                 'user_id' => $employee->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
                 'day_type' => $isSunday && ! $isWeek4 ? 'legal_holiday' : 'weekday',
                 'is_working_day' => ! ($isSunday && ! $isWeek4),
@@ -81,7 +80,7 @@ class LegalHolidayRequirementTest extends TestCase
         $workStyle = WorkStyle::query()->create([
             'code' => 'shift-4w4d', 'name' => 'シフト勤務(変形休日制)', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => true,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => true,
             'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_FOUR_WEEKS_FOUR_DAYS,
             'four_week_period_start_date' => '2026-06-01',
         ]);
@@ -90,7 +89,7 @@ class LegalHolidayRequirementTest extends TestCase
 
         // 起算日2026-06-01からの最初の4週間(6/1〜6/28)に法定休日を3日しか与えない。
         foreach (['2026-06-07', '2026-06-14', '2026-06-21'] as $date) {
-            EmployeeShiftAssignment::query()->create([
+            EmployeeCalendarEntry::query()->create([
                 'user_id' => $employee->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
                 'day_type' => 'legal_holiday', 'is_working_day' => false, 'is_legal_holiday' => true,
                 'is_company_holiday' => false, 'planned_break_minutes' => 0,
@@ -100,7 +99,7 @@ class LegalHolidayRequirementTest extends TestCase
             if (in_array($date, ['2026-06-07', '2026-06-14', '2026-06-21'], true)) {
                 continue;
             }
-            EmployeeShiftAssignment::query()->create([
+            EmployeeCalendarEntry::query()->create([
                 'user_id' => $employee->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
                 'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false,
                 'is_company_holiday' => false, 'planned_break_minutes' => 60,
@@ -127,13 +126,13 @@ class LegalHolidayRequirementTest extends TestCase
         $workStyle = WorkStyle::query()->create([
             'code' => 'fixed-standard', 'name' => '固定時間制', 'work_time_system' => 'fixed',
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
         ]);
         $employee = User::factory()->create();
         $approver = User::factory()->create();
 
         foreach ($this->datesInRange('2026-06-01', '2026-06-30') as $date) {
-            EmployeeShiftAssignment::query()->create([
+            EmployeeCalendarEntry::query()->create([
                 'user_id' => $employee->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
                 'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false,
                 'is_company_holiday' => false, 'planned_break_minutes' => 60,

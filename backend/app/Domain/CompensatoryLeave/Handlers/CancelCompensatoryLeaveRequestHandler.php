@@ -103,7 +103,7 @@ class CancelCompensatoryLeaveRequestHandler implements CommandHandler
             $day->save();
 
             $calculation = $this->calculator->calculate(
-                $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'shiftAssignment.workStyle'),
+                $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
             );
 
             AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();

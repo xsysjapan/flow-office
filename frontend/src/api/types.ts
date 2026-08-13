@@ -942,19 +942,46 @@ export interface WorkCalendarDay {
   is_working_day: boolean;
   is_legal_holiday: boolean;
   is_company_holiday: boolean;
+  is_public_holiday: boolean;
+  public_holiday_name: string | null;
+  schedule_state: "WORK" | "OFF";
   note: string | null;
 }
 
-export type WorkCalendarStatus = "draft" | "published";
+// 会社カレンダー本体(docs/08-usecases-calendar-shift.md UC-C009)。年度依存フィールドは
+// WorkCalendarYear側にある(旧: 本体が直接保持していたが分離した)。
+export type WorkCalendarStatus = "active" | "archived";
+
+/** ISO曜日番号(文字列キー): "1"=月曜〜"7"=日曜。 */
+export type WeekdayHolidayPatternDayType = "working" | "company_holiday" | "legal_holiday";
+export type WeekdayHolidayPattern = Record<"1" | "2" | "3" | "4" | "5" | "6" | "7", WeekdayHolidayPatternDayType>;
 
 export interface WorkCalendar {
   id: string;
   name: string;
+  week_starts_on: number;
+  fiscal_year_start_month: number;
+  fiscal_year_start_day: number;
+  holiday_calendar_source_id: string | null;
+  is_default: boolean;
+  status: WorkCalendarStatus;
+  weekday_holiday_pattern: WeekdayHolidayPattern;
+  /** falseの場合、日別編集画面で個別の勤務区分・祝日区分を変更できない(常に曜日ごとの休日設定から導出される)。 */
+  allow_daily_holiday_override: boolean;
+}
+
+export type WorkCalendarYearStatus = "draft" | "published" | "archived";
+
+export interface WorkCalendarYear {
+  id: string;
+  company_calendar_id: string;
   fiscal_year: number;
   starts_on: string;
   ends_on: string;
-  week_starts_on: number;
-  status: WorkCalendarStatus;
+  status: WorkCalendarYearStatus;
+  generated_from: "manual" | "standard_template";
+  published_at: string | null;
+  published_by_user_id: string | null;
 }
 
 export interface WorkStyle {
@@ -981,7 +1008,7 @@ export interface WorkStyle {
   /** 退勤時、休憩が1件も記録されていない日に標準休憩(default_break_start_time〜
    *  default_break_end_time)を自動でattendance_breaksへ補完するかどうか。 */
   auto_break_enabled: boolean;
-  calendar_id: string;
+  company_calendar_id: string;
   is_shift_based: boolean;
   /** 会社のデフォルト働き方かどうか。常に高々1件のみtrue。 */
   is_default: boolean;
@@ -1440,9 +1467,88 @@ export interface Paginated<T> {
     current_page: number;
     last_page: number;
     total: number;
+    per_page?: number;
   };
   links: {
     next: string | null;
     prev: string | null;
   };
+}
+
+/** UC-C012: 祝日iCalendarソースの直近1回分の同期結果。同期実行前・未同期ならnull。 */
+export interface HolidayCalendarSyncSummary {
+  added: number;
+  updated: number;
+  removed: number;
+  /** 実際にこのカレンダーの祝日として反映された件数(手動変更保護でスキップされた分を除く)。 */
+  applied: number;
+  /** 手動変更保護のため反映がスキップされた件数。 */
+  protected_conflicts: number;
+}
+
+/** UC-C012: 祝日iCalendarソース(祝日カレンダーの自動同期元)。 */
+export interface HolidayCalendarSource {
+  id: string;
+  name: string;
+  source_kind: "url" | "upload";
+  ics_url: string | null;
+  uploaded_ics_filename: string | null;
+  sync_status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  disabled_at: string | null;
+  last_sync_summary: HolidayCalendarSyncSummary | null;
+}
+
+export type CalendarBulkOperationType =
+  | "calendar_apply"
+  | "rotation_generate"
+  | "bulk_edit";
+
+export type CalendarBulkOperationConflictPolicy =
+  | "skip_existing"
+  | "overwrite"
+  | "fail_on_conflict";
+
+export type CalendarBulkOperationStatus =
+  | "applied"
+  | "reverted"
+  | "failed";
+
+/**
+ * UC-C013: 一括操作の対象1件分の適用結果。プレビュー(`conflict`/`guard_blocked`/
+ * `attributes`)と確定後の一覧・詳細(`id`/`employee_calendar_entry_id`/`error_code`)では
+ * レスポンスの形が異なるため、両方をオプショナルとして受ける。
+ */
+export interface CalendarBulkOperationTarget {
+  id?: string;
+  user_id: string;
+  work_date: string;
+  conflict?: boolean;
+  guard_blocked?: boolean;
+  attributes?: Record<string, unknown>;
+  employee_calendar_entry_id?: string | null;
+  error_code?: string | null;
+  result: "applied" | "skipped_existing" | "failed";
+}
+
+/** UC-C013: 複数従業員予定の一括操作(プレビュー→確定適用→取消)の1件。 */
+export interface CalendarBulkOperation {
+  id: string;
+  operation_type: CalendarBulkOperationType;
+  target_scope: Record<string, unknown>;
+  conflict_policy: CalendarBulkOperationConflictPolicy;
+  status: CalendarBulkOperationStatus;
+  requested_by_user_id: string;
+  applied_at: string | null;
+  reverted_at: string | null;
+  reason: string;
+  targets?: CalendarBulkOperationTarget[];
+}
+
+/** UC-C013: プレビューAPIのレスポンス(保存しない)。 */
+export interface CalendarBulkOperationPreview {
+  targets: CalendarBulkOperationTarget[];
+  conflict_count: number;
+  executable: boolean;
 }

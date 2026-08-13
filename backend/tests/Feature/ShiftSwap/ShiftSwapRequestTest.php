@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\ShiftSwap;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\CompanyCalendar;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\ShiftSwapRequest;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkCalendar;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,26 +27,23 @@ class ShiftSwapRequestTest extends TestCase
         string $workTimeSystem = WorkStyle::WORK_TIME_SYSTEM_FIXED,
         string $legalHolidayRule = WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
     ): WorkStyle {
-        $calendar = WorkCalendar::query()->create([
-            'name' => '2026年度-'.Str::random(6), 'fiscal_year' => 2026,
-            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
-            'week_starts_on' => 1, 'status' => 'published',
-        ]);
+        $calendar = CompanyCalendar::query()->create(['name' => '2026年度-'.Str::random(6), 'week_starts_on' => 1]);
+        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
 
         return WorkStyle::query()->create([
             'code' => 'fixed-'.Str::random(8), 'name' => '固定勤務', 'work_time_system' => $workTimeSystem,
             'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
             'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'calendar_id' => $calendar->id, 'is_shift_based' => false,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
             'legal_holiday_rule' => $legalHolidayRule,
         ]);
     }
 
-    private function createWorkdayAssignment(User $user, WorkStyle $workStyle, string $date, int $minutes = 480): EmployeeShiftAssignment
+    private function createWorkdayAssignment(User $user, WorkStyle $workStyle, string $date, int $minutes = 480): EmployeeCalendarEntry
     {
         $endTime = date('H:i:s', strtotime('09:00:00') + $minutes * 60);
 
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
             'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} {$endTime}",
@@ -54,18 +51,18 @@ class ShiftSwapRequestTest extends TestCase
         ]);
     }
 
-    private function createLegalHolidayAssignment(User $user, WorkStyle $workStyle, string $date): EmployeeShiftAssignment
+    private function createLegalHolidayAssignment(User $user, WorkStyle $workStyle, string $date): EmployeeCalendarEntry
     {
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'legal_holiday', 'is_working_day' => false, 'is_legal_holiday' => true, 'is_company_holiday' => false,
             'planned_start_at' => null, 'planned_end_at' => null, 'planned_break_minutes' => 0,
         ]);
     }
 
-    private function createCompanyHolidayAssignment(User $user, WorkStyle $workStyle, string $date): EmployeeShiftAssignment
+    private function createCompanyHolidayAssignment(User $user, WorkStyle $workStyle, string $date): EmployeeCalendarEntry
     {
-        return EmployeeShiftAssignment::query()->create([
+        return EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
             'day_type' => 'company_holiday', 'is_working_day' => false, 'is_legal_holiday' => false, 'is_company_holiday' => true,
             'planned_start_at' => null, 'planned_end_at' => null, 'planned_break_minutes' => 0,
@@ -156,11 +153,11 @@ class ShiftSwapRequestTest extends TestCase
         $this->actingAs($approver)->postJson("/api/shift-swap/requests/{$requestId}/approve")
             ->assertOk()->assertJsonPath('status', 'approved');
 
-        $target = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-12')->firstOrFail();
+        $target = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-12')->firstOrFail();
         $this->assertFalse((bool) $target->is_working_day);
         $this->assertTrue((bool) $target->is_legal_holiday);
 
-        $substitute = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
+        $substitute = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
         $this->assertTrue((bool) $substitute->is_working_day);
         $this->assertFalse((bool) $substitute->is_legal_holiday);
     }
@@ -256,7 +253,7 @@ class ShiftSwapRequestTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'approved');
 
-        $target = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
+        $target = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
         $this->assertTrue((bool) $target->is_working_day);
         $this->assertFalse((bool) $target->is_legal_holiday);
         $this->assertFalse((bool) $target->is_company_holiday);
@@ -264,7 +261,7 @@ class ShiftSwapRequestTest extends TestCase
         $this->assertSame('2026-08-16 18:00:00', $target->planned_end_at->format('Y-m-d H:i:s'));
         $this->assertTrue((bool) $target->is_manually_overridden);
 
-        $substitute = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-24')->firstOrFail();
+        $substitute = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-24')->firstOrFail();
         $this->assertFalse((bool) $substitute->is_working_day);
         $this->assertTrue((bool) $substitute->is_legal_holiday);
         $this->assertFalse((bool) $substitute->is_company_holiday);
@@ -359,10 +356,10 @@ class ShiftSwapRequestTest extends TestCase
 
         $this->assertSame(0, WorkflowRequest::query()->where('subject_id', $requestId)->count());
 
-        $target = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
+        $target = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-16')->firstOrFail();
         $this->assertTrue((bool) $target->is_working_day);
 
-        $substitute = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-12')->firstOrFail();
+        $substitute = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-12')->firstOrFail();
         $this->assertFalse((bool) $substitute->is_working_day);
         $this->assertTrue((bool) $substitute->is_legal_holiday);
     }

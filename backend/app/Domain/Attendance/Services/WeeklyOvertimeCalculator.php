@@ -3,7 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -27,7 +27,7 @@ use Illuminate\Support\Carbon;
  * - 1か月単位変形労働時間制(work_time_system=monthly_variable)で、あらかじめ40時間を
  *   超える所定労働時間を設定した週は、その時間を超えた部分のみが週40時間超の法定時間外になる。
  * - 法定休日「決めない方式」(work_styles.legal_holiday_rule=undetermined)は、
- *   `employee_shift_assignments.is_legal_holiday`を直接使わず、LegalHolidayResolverが
+ *   `employee_calendar_entries.is_legal_holiday`を直接使わず、LegalHolidayResolverが
  *   指定または自動推定した日かどうかで判定する(AttendanceCalculatorと同じ判定基準)。
  */
 class WeeklyOvertimeCalculator
@@ -71,7 +71,7 @@ class WeeklyOvertimeCalculator
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $weekStartDate)
             ->whereDate('work_date', '<=', $weekEndDate)
-            ->with(['calculation', 'shiftAssignment.workStyle.calendar'])
+            ->with(['calculation', 'calendarEntry.workStyle.calendar'])
             ->get();
 
         $workMinutes = 0;
@@ -88,7 +88,7 @@ class WeeklyOvertimeCalculator
 
             $legalHolidayWorkMinutes += $calculation->legal_holiday_work_minutes;
 
-            if ($day->shiftAssignment !== null && $this->legalHolidayResolver->isLegalHoliday($day->shiftAssignment)) {
+            if ($day->calendarEntry !== null && $this->legalHolidayResolver->isLegalHoliday($day->calendarEntry)) {
                 continue;
             }
 
@@ -96,8 +96,8 @@ class WeeklyOvertimeCalculator
             $dailyStatutoryOvertimeMinutes += $calculation->statutory_excess_overtime_minutes;
             $withinDailyLimitMinutes += $calculation->work_minutes - $calculation->statutory_excess_overtime_minutes;
 
-            if ($day->shiftAssignment?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
-                $plannedMinutesForMonthlyVariable += $day->shiftAssignment->plannedWorkMinutes();
+            if ($day->calendarEntry?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
+                $plannedMinutesForMonthlyVariable += $day->calendarEntry->plannedWorkMinutes();
             }
         }
 
@@ -115,7 +115,7 @@ class WeeklyOvertimeCalculator
 
     private function resolveWeekStartsOn(string $userId, Carbon $monthStart, Carbon $monthEnd): int
     {
-        $assignment = EmployeeShiftAssignment::query()
+        $assignment = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', '>=', $monthStart->toDateString())
             ->whereDate('work_date', '<=', $monthEnd->toDateString())

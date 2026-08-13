@@ -3,135 +3,92 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { CreateCompanyCalendarModal } from '../../components/CreateCompanyCalendarModal/CreateCompanyCalendarModal'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
-import { FormField } from '../../components/FormField/FormField'
-import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { Input } from '../../components/ui/input'
-import { useCreateWorkCalendar, usePublishWorkCalendar, useWorkCalendars } from '../../hooks/useWorkCalendars'
+import { Pagination } from '../../components/Pagination/Pagination'
+import { useDeleteWorkCalendar, useWorkCalendarsPage } from '../../hooks/useWorkCalendars'
+
+const PER_PAGE = 20
 
 /**
- * UC-C001: 年度カレンダーの一覧・作成・公開。
+ * UC-C009: 会社カレンダー本体の一覧・作成・削除。デフォルト切替・週起算曜日/年度開始月日の
+ * 設定・祝日iCalendar同期は、カレンダー名のリンク先の本体詳細画面(WorkCalendarDetailPage)に
+ * まとめてある。カレンダー年度の作成・公開・複製は本体ごとの年度一覧ページ
+ * (WorkCalendarYearsPage)で行う。作成はモーダル(CreateCompanyCalendarModal)に切り出し、
+ * 週の開始曜日・年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当を作成時から
+ * 選べるようにする(段階的開示のため曜日ごとの休日設定は既定で折りたたまれている)。
  */
 export function WorkCalendarListPage() {
-  const { data, isLoading, error } = useWorkCalendars()
-  const createCalendar = useCreateWorkCalendar()
-  const publishCalendar = usePublishWorkCalendar()
+  const [page, setPage] = useState(1)
+  const { data, isLoading, error } = useWorkCalendarsPage(page, PER_PAGE)
+  const deleteCalendar = useDeleteWorkCalendar()
 
-  const [name, setName] = useState('')
-  const [fiscalYear, setFiscalYear] = useState('')
-  const [startsOn, setStartsOn] = useState('')
-  const [endsOn, setEndsOn] = useState('')
-  const [weekStartsOn, setWeekStartsOn] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
-
-  const calendars = data ?? []
-  const actionError = createCalendar.error ?? publishCalendar.error
-
-  const handleCreate = () => {
-    createCalendar.mutate(
-      {
-        name,
-        fiscal_year: Number(fiscalYear),
-        starts_on: startsOn,
-        ends_on: endsOn,
-        week_starts_on: weekStartsOn === '' ? undefined : Number(weekStartsOn),
-      },
-      {
-        onSuccess: () => {
-          setName('')
-          setFiscalYear('')
-          setStartsOn('')
-          setEndsOn('')
-          setWeekStartsOn('')
-        },
-      },
-    )
+  const handleDelete = (calendarId: string, calendarName: string) => {
+    if (!window.confirm(`「${calendarName}」を削除します。よろしいですか?`)) return
+    deleteCalendar.mutate(calendarId)
   }
+
+  const calendars = data?.data ?? []
 
   return (
     <div className="flex flex-col gap-6">
-      <Card title="年度カレンダーを作成">
-        {actionError && <ErrorMessage error={actionError} />}
+      <CreateCompanyCalendarModal open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen} />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="カレンダー名" htmlFor="calendar-name" required>
-            <Input id="calendar-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </FormField>
+      <Card
+        title="会社カレンダー一覧"
+        actions={<Button onClick={() => setIsCreateModalOpen(true)}>新規作成</Button>}
+      >
+        {deleteCalendar.error && <ErrorMessage error={deleteCalendar.error} fallback="カレンダーの削除に失敗しました。" />}
 
-          <FormField label="年度" htmlFor="calendar-fiscal-year" required>
-            <Input
-              id="calendar-fiscal-year"
-              type="number"
-              value={fiscalYear}
-              onChange={(e) => setFiscalYear(e.target.value)}
-            />
-          </FormField>
-
-          <FormField label="開始日" htmlFor="calendar-starts-on" required>
-            <DatePicker id="calendar-starts-on" value={startsOn || undefined} onChange={(date) => setStartsOn(date ?? '')} />
-          </FormField>
-
-          <FormField label="終了日" htmlFor="calendar-ends-on" required>
-            <DatePicker id="calendar-ends-on" value={endsOn || undefined} onChange={(date) => setEndsOn(date ?? '')} />
-          </FormField>
-
-          <FormField label="週の開始日(0=日曜)" htmlFor="calendar-week-starts-on">
-            <Input
-              id="calendar-week-starts-on"
-              type="number"
-              min={0}
-              max={6}
-              value={weekStartsOn}
-              onChange={(e) => setWeekStartsOn(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <Button
-          isLoading={createCalendar.isPending}
-          disabled={!name || !fiscalYear || !startsOn || !endsOn}
-          onClick={handleCreate}
-        >
-          作成する
-        </Button>
-      </Card>
-
-      <Card title="年度カレンダー一覧">
-        {calendars.length === 0 ? (
+        {isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
+        ) : calendars.length === 0 ? (
           <p className="text-sm text-muted-foreground">カレンダーはまだありません。</p>
         ) : (
-          <ul className="divide-y divide-border">
-            {calendars.map((calendar) => (
-              <li key={calendar.id} className="flex items-center gap-3 py-3">
-                <div className="flex flex-1 flex-col">
-                  <Link
-                    to={`/admin/work-calendars/${calendar.id}/days`}
-                    className="text-sm font-medium text-foreground hover:text-primary hover:underline"
-                  >
-                    {calendar.name}
-                  </Link>
-                  <span className="text-sm text-muted-foreground">
-                    {calendar.fiscal_year}年度 ({calendar.starts_on}〜{calendar.ends_on})
-                  </span>
-                </div>
-                <Badge tone={calendar.status === 'published' ? 'success' : 'neutral'}>
-                  {calendar.status === 'published' ? '公開済み' : '未公開'}
-                </Badge>
-                {calendar.status === 'draft' && (
+          <>
+            <ul className="divide-y divide-border">
+              {calendars.map((calendar) => (
+                <li key={calendar.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <div className="flex flex-1 flex-col">
+                    <Link
+                      to={`/admin/work-calendars/${calendar.id}`}
+                      className="text-sm font-medium text-foreground hover:text-primary hover:underline"
+                    >
+                      {calendar.name}
+                    </Link>
+                    <span className="text-sm text-muted-foreground">
+                      週開始: {calendar.week_starts_on} / 年度開始: {calendar.fiscal_year_start_month}月
+                      {calendar.fiscal_year_start_day}日
+                    </span>
+                  </div>
+                  <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
+                    {calendar.is_default ? 'デフォルト' : '非デフォルト'}
+                  </Badge>
                   <Button
-                    variant="secondary"
-                    isLoading={publishCalendar.isPending}
-                    onClick={() => publishCalendar.mutate(calendar.id)}
+                    variant="danger"
+                    isLoading={deleteCalendar.isPending}
+                    onClick={() => handleDelete(calendar.id, calendar.name)}
                   >
-                    公開する
+                    削除
                   </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+
+            {data && (
+              <Pagination
+                currentPage={data.meta.current_page}
+                lastPage={data.meta.last_page}
+                total={data.meta.total}
+                onPageChange={setPage}
+              />
+            )}
+          </>
         )}
       </Card>
     </div>

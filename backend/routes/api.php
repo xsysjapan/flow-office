@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
+use App\Http\Controllers\Api\CalendarBulkOperationController;
+use App\Http\Controllers\Api\CompanyCalendarController;
 use App\Http\Controllers\Api\CompensatoryLeaveController;
 use App\Http\Controllers\Api\DevApplyMembershipChangesController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
@@ -18,13 +20,14 @@ use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\DeviceIdentityController;
 use App\Http\Controllers\Api\DevicePunchController;
 use App\Http\Controllers\Api\EffectiveAccessController;
+use App\Http\Controllers\Api\EmployeeCalendarEntryController;
 use App\Http\Controllers\Api\EmployeeRotationAssignmentController;
-use App\Http\Controllers\Api\EmployeeShiftAssignmentController;
 use App\Http\Controllers\Api\EmploymentCategoryController;
 use App\Http\Controllers\Api\ExpenseCategoryController;
 use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\HolidayCalendarSourceController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
 use App\Http\Controllers\Api\MockOidcUserController;
@@ -41,7 +44,6 @@ use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
-use App\Http\Controllers\Api\WorkCalendarController;
 use App\Http\Controllers\Api\WorkflowRequestController;
 use App\Http\Controllers\Api\WorkStyleController;
 use Illuminate\Support\Facades\Route;
@@ -206,37 +208,62 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
         ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
 
-    // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C001〜UC-C003) ---
-    Route::get('/work-calendars', [WorkCalendarController::class, 'index']);
+    // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C009〜UC-C013) ---
+    Route::get('/company-calendars', [CompanyCalendarController::class, 'index']);
+    Route::get('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'years']);
+    Route::get('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'days']);
+    Route::get('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'index']);
     Route::get('/employment-categories', [EmploymentCategoryController::class, 'index']);
     Route::get('/work-styles', [WorkStyleController::class, 'index']);
-    Route::get('/employee-shift-assignments', [EmployeeShiftAssignmentController::class, 'index'])->middleware('ability:schedule:self:read');
+    Route::get('/employee-calendar-entries', [EmployeeCalendarEntryController::class, 'index'])->middleware('ability:schedule:self:read');
     Route::get('/shift-patterns', [ShiftPatternController::class, 'index']);
     Route::get('/rotation-patterns', [RotationPatternController::class, 'index']);
     Route::get('/employee-rotation-assignments', [EmployeeRotationAssignmentController::class, 'show']);
     Route::get('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'index']);
     Route::middleware('permission:attendance.manage,any')->group(function () {
-        Route::post('/work-calendars', [WorkCalendarController::class, 'store']);
-        Route::post('/work-calendars/{workCalendar}/publish', [WorkCalendarController::class, 'publish']);
-        Route::put('/work-calendars/{workCalendar}/days', [WorkCalendarController::class, 'putDays']);
+        Route::post('/onboarding/calendar/generate-now', [OnboardingController::class, 'generateCalendarNow']);
+        Route::post('/company-calendars', [CompanyCalendarController::class, 'store']);
+        Route::put('/company-calendars/{companyCalendar}', [CompanyCalendarController::class, 'update']);
+        Route::delete('/company-calendars/{companyCalendar}', [CompanyCalendarController::class, 'destroy']);
+        Route::post('/company-calendars/{companyCalendar}/set-default', [CompanyCalendarController::class, 'setDefault']);
+        Route::post('/company-calendars/{companyCalendar}/years', [CompanyCalendarController::class, 'storeYear']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/publish', [CompanyCalendarController::class, 'publish']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/unpublish', [CompanyCalendarController::class, 'unpublish']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/archive', [CompanyCalendarController::class, 'archive']);
+        Route::delete('/company-calendar-years/{companyCalendarYear}', [CompanyCalendarController::class, 'destroyYear']);
+        Route::put('/company-calendar-years/{companyCalendarYear}/days', [CompanyCalendarController::class, 'putDays']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/duplicate', [CompanyCalendarController::class, 'duplicate']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/regenerate', [CompanyCalendarController::class, 'regenerateYear']);
+        Route::post('/company-calendar-years/{companyCalendarYear}/sync-holiday-calendar', [CompanyCalendarController::class, 'syncHolidayCalendar']);
+        Route::post('/holiday-calendar-sources', [HolidayCalendarSourceController::class, 'store']);
+        Route::post('/holiday-calendar-sources/{holidayCalendarSource}', [HolidayCalendarSourceController::class, 'update']);
+        Route::post('/holiday-calendar-sources/{holidayCalendarSource}/sync', [HolidayCalendarSourceController::class, 'sync']);
+        Route::post('/holiday-calendar-sources/{holidayCalendarSource}/disable', [HolidayCalendarSourceController::class, 'disable']);
+        Route::post('/holiday-calendar-sources/{holidayCalendarSource}/revert-last-sync', [HolidayCalendarSourceController::class, 'revertLastSync']);
+        Route::delete('/holiday-calendar-sources/{holidayCalendarSource}', [HolidayCalendarSourceController::class, 'destroy']);
+        Route::post('/calendar-bulk-operations/preview', [CalendarBulkOperationController::class, 'preview']);
+        Route::post('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'store']);
+        Route::get('/calendar-bulk-operations', [CalendarBulkOperationController::class, 'index']);
+        Route::get('/calendar-bulk-operations/{calendarBulkOperation}', [CalendarBulkOperationController::class, 'show']);
+        Route::post('/calendar-bulk-operations/{calendarBulkOperation}/revert', [CalendarBulkOperationController::class, 'revert']);
         Route::post('/employment-categories', [EmploymentCategoryController::class, 'store']);
         Route::post('/work-styles', [WorkStyleController::class, 'store']);
         Route::post('/work-styles/default', [WorkStyleController::class, 'storeDefault']);
         Route::put('/work-styles/{workStyle}', [WorkStyleController::class, 'update']);
         Route::post('/work-styles/{workStyle}/set-default', [WorkStyleController::class, 'setDefault']);
-        Route::post('/employee-shift-assignments/generate', [EmployeeShiftAssignmentController::class, 'generate']);
-        Route::post('/employee-shift-assignments/preview-pattern', [EmployeeShiftAssignmentController::class, 'previewPattern']);
-        Route::post('/employee-shift-assignments/generate-pattern', [EmployeeShiftAssignmentController::class, 'generatePattern']);
-        Route::put('/employee-shift-assignments/{employeeShiftAssignment}', [EmployeeShiftAssignmentController::class, 'update']);
+        Route::post('/employee-calendar-entries/generate', [EmployeeCalendarEntryController::class, 'generate']);
+        Route::post('/employee-calendar-entries/preview-pattern', [EmployeeCalendarEntryController::class, 'previewPattern']);
+        Route::post('/employee-calendar-entries/generate-pattern', [EmployeeCalendarEntryController::class, 'generatePattern']);
+        Route::put('/employee-calendar-entries/{employeeCalendarEntry}', [EmployeeCalendarEntryController::class, 'update']);
         Route::post('/user-work-style-monthly-assignments', [UserWorkStyleMonthlyAssignmentController::class, 'store']);
         Route::delete('/user-work-style-monthly-assignments/{userWorkStyleMonthlyAssignment}', [UserWorkStyleMonthlyAssignmentController::class, 'destroy']);
 
         // --- 3交代制シフト表 (docs/08-usecases-calendar-shift.md UC-C004) ---
         Route::post('/shift-patterns', [ShiftPatternController::class, 'store']);
         Route::put('/shift-patterns/{shiftPattern}', [ShiftPatternController::class, 'update']);
-        Route::post('/employee-shift-assignments/assign-pattern', [EmployeeShiftAssignmentController::class, 'assignPattern']);
-        Route::get('/employee-shift-assignments/review', [EmployeeShiftAssignmentController::class, 'review']);
-        Route::post('/employee-shift-assignments/publish', [EmployeeShiftAssignmentController::class, 'publish']);
+        Route::post('/employee-calendar-entries/assign-pattern', [EmployeeCalendarEntryController::class, 'assignPattern']);
+        Route::get('/employee-calendar-entries/review', [EmployeeCalendarEntryController::class, 'review']);
+        Route::post('/employee-calendar-entries/publish', [EmployeeCalendarEntryController::class, 'publish']);
 
         // --- 交代制ローテーション (指示書 8章) ---
         Route::post('/rotation-patterns', [RotationPatternController::class, 'store']);

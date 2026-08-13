@@ -2,7 +2,7 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
@@ -35,13 +35,13 @@ class WorkStyleUsageSummaryCalculator
             ->groupBy('work_style_id')
             ->pluck('aggregate', 'work_style_id');
 
-        $shiftPatternCounts = EmployeeShiftAssignment::query()
+        $shiftPatternCounts = EmployeeCalendarEntry::query()
             ->whereNotNull('shift_pattern_id')
             ->selectRaw('work_style_id, count(distinct shift_pattern_id) as aggregate')
             ->groupBy('work_style_id')
             ->pluck('aggregate', 'work_style_id');
 
-        $usedWorkStyleIds = EmployeeShiftAssignment::query()->select('work_style_id')->distinct()->pluck('work_style_id');
+        $usedWorkStyleIds = EmployeeCalendarEntry::query()->select('work_style_id')->distinct()->pluck('work_style_id');
 
         $defaultWorkStyle = $workStyles->firstWhere('is_default', true);
         // 明示的な月次割当が無い全社員は会社のデフォルト働き方にフォールバックする

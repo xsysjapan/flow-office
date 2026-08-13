@@ -60,3 +60,13 @@ Schedule::command('attendance:warn-month-close-deadline')
 Schedule::command('devices:health-check')
     ->dailyAt('03:00')
     ->withoutOverlapping();
+
+// UC-C012手順2: 祝日iCalendarソースを毎日同期する。
+Schedule::command('holiday-calendar:sync')
+    ->daily()
+    ->withoutOverlapping();
+
+// UC-C014: カレンダー年度を定期バッチで生成する。
+Schedule::command('calendar:generate-years')
+    ->daily()
+    ->withoutOverlapping();

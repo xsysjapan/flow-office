@@ -306,7 +306,11 @@ function formatDateUtc(date: Date): string {
 }
 
 /** 法定休日「決めない方式」シナリオ用: 対象週の指定日(日曜)だけ休みにしたカレンダーを作る。 */
-async function createCalendarWithOneRestDay(page: Page, year: number, restDate: string): Promise<{ id: string }> {
+async function createCalendarWithOneRestDay(
+  page: Page,
+  year: number,
+  restDate: string,
+): Promise<{ id: string; yearId: string }> {
   const apiBase = process.env.E2E_API_BASE_URL ?? 'http://localhost:8000/api'
 
   return page.evaluate(
@@ -314,21 +318,30 @@ async function createCalendarWithOneRestDay(page: Page, year: number, restDate: 
       const token = localStorage.getItem('flow-office.token')
       const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' }
 
-      const createResponse = await fetch(`${apiBase}/work-calendars`, {
+      const createResponse = await fetch(`${apiBase}/company-calendars`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           name: `E2E 決めない方式用カレンダー${year}`,
-          fiscal_year: year,
-          starts_on: `${year}-04-01`,
-          ends_on: `${year + 1}-03-31`,
           week_starts_on: 1,
         }),
       })
       if (!createResponse.ok) throw new Error(`E2E setup: create calendar failed (${createResponse.status})`)
       const calendar = await createResponse.json()
 
-      const daysResponse = await fetch(`${apiBase}/work-calendars/${calendar.id}/days`, {
+      const yearResponse = await fetch(`${apiBase}/company-calendars/${calendar.id}/years`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          fiscal_year: year,
+          starts_on: `${year}-04-01`,
+          ends_on: `${year + 1}-03-31`,
+        }),
+      })
+      if (!yearResponse.ok) throw new Error(`E2E setup: create calendar year failed (${yearResponse.status})`)
+      const calendarYear = await yearResponse.json()
+
+      const daysResponse = await fetch(`${apiBase}/company-calendar-years/${calendarYear.id}/days`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({
@@ -345,10 +358,13 @@ async function createCalendarWithOneRestDay(page: Page, year: number, restDate: 
       })
       if (!daysResponse.ok) throw new Error(`E2E setup: set calendar days failed (${daysResponse.status})`)
 
-      const publishResponse = await fetch(`${apiBase}/work-calendars/${calendar.id}/publish`, { method: 'POST', headers })
+      const publishResponse = await fetch(`${apiBase}/company-calendar-years/${calendarYear.id}/publish`, {
+        method: 'POST',
+        headers,
+      })
       if (!publishResponse.ok) throw new Error(`E2E setup: publish calendar failed (${publishResponse.status})`)
 
-      return calendar
+      return { id: calendar.id, yearId: calendarYear.id }
     },
     { apiBase, year, restDate },
   )

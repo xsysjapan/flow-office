@@ -45,40 +45,54 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
 
   await loginAs(page, SCENARIO_USERS.admin);
 
-  // --- UC-C001: カレンダー作成〜日別属性登録〜公開 ---
+  // --- UC-C009: 会社カレンダー本体作成〜カレンダー年度作成〜日別属性登録〜公開 ---
   await page.goto("/admin/work-calendars");
+  await page.getByRole("button", { name: "新規作成" }).click();
   await page.getByLabel("カレンダー名").fill(calendarName);
-  await page.getByLabel("年度").fill(String(fiscalYear));
-  await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
-  await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
   await page.getByRole("button", { name: "作成する" }).click();
 
   const calendarRow = page.locator("li", {
     has: page.getByRole("link", { name: calendarName }),
   });
   await expect(calendarRow).toBeVisible();
-  await expect(
-    calendarRow.getByRole("status", { name: "未公開" }),
-  ).toBeVisible();
 
   await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
-    page.getByRole("heading", { name: `${calendarName} の日別編集` }),
+    page.getByRole("heading", { name: calendarName, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "行を追加" }).click();
-  await pickDate(page, "日付", `${fiscalYear}-04-01`);
-  await page.getByLabel("区分").fill("weekday");
+  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByLabel("年度").fill(String(fiscalYear));
+  await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
+  await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
+  await page.getByRole("button", { name: "年度を作成する" }).click();
+
+  const yearRow = page.locator("li", {
+    has: page.getByRole("link", { name: `${fiscalYear}年度` }),
+  });
+  await expect(yearRow).toBeVisible();
+  await expect(yearRow.getByRole("status", { name: "未公開" })).toBeVisible();
+
+  await yearRow.getByRole("link", { name: `${fiscalYear}年度` }).click();
+  await expect(
+    page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
+  ).toBeVisible();
+
+  const workDate = `${fiscalYear}-04-01`;
+  await page.getByRole("button", { name: workDate, exact: false }).click();
+  await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "working" });
+  await page.keyboard.press("Escape");
+
   await page.getByRole("button", { name: "保存する" }).click();
   await expect(
     page.getByRole("button", { name: "保存する" }),
   ).not.toBeDisabled();
 
-  await page.goto("/admin/work-calendars");
-  await calendarRow.getByRole("button", { name: "公開する" }).click();
-  await expect(
-    calendarRow.getByRole("status", { name: "公開済み" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "公開する" }).click();
+  await expect(page.getByRole("status", { name: "公開済み" })).toBeVisible();
 
   // --- UC-C002: 勤務形態作成(一覧のモーダル経由) ---
   await page.goto("/admin/work-styles");

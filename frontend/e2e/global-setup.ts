@@ -31,12 +31,21 @@ export default async function globalSetup(): Promise<void> {
       all_users_role_assignments: number
     }
   }
+
+  // AccessControlSeederが移行済み環境の現行運用として付与する標準初期値
+  // (docs/31-user-group-access-foundation.md 31.1節: 打刻・勤怠入力・勤務表提出、汎用申請、
+  // 休暇申請、経費入力の9Feature + EMPLOYEE RoleAssignment 1件)からズレていないかを検証する。
+  // ズレている場合、新Featureが意図せずALL_USERSへ自動開放された可能性がある。
+  const EXPECTED_ALL_USERS_FEATURE_ASSIGNMENTS = 9
+  const EXPECTED_ALL_USERS_ROLE_ASSIGNMENTS = 1
+
   if (
-    result.product_initial_access?.all_users_feature_assignments !== 0 ||
-    result.product_initial_access?.all_users_role_assignments !== 1
+    result.product_initial_access?.all_users_feature_assignments !== EXPECTED_ALL_USERS_FEATURE_ASSIGNMENTS ||
+    result.product_initial_access?.all_users_role_assignments !== EXPECTED_ALL_USERS_ROLE_ASSIGNMENTS
   ) {
     throw new Error(
-      `E2E globalSetup: product features must be OFF and ALL_USERS must have only the basic employee role: ${JSON.stringify(result.product_initial_access)}`,
+      `E2E globalSetup: ALL_USERS の標準初期値(Feature ${EXPECTED_ALL_USERS_FEATURE_ASSIGNMENTS}件・Role ${EXPECTED_ALL_USERS_ROLE_ASSIGNMENTS}件)からズレています: ${JSON.stringify(result.product_initial_access)}\n` +
+        'AccessControlSeederのinitialFeaturesが変更された場合は、この期待値とdocs/31-user-group-access-foundation.md 31.1節/31.17節も合わせて更新してください。',
     )
   }
 }

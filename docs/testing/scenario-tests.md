@@ -80,8 +80,9 @@ RoleAssignment・入社日を設定する。モックOIDCの
 できるが、**初回は必ず一度、画面から手作業でも実施して管理画面が壊れていないか確認する**。
 
 1. 管理者でログインし、システム設定(タイムゾーン)を確認する(`GET/PUT /system-settings`)。
-2. 年度カレンダーを作成→休日を設定→公開する(UC-C001、`POST /work-calendars` →
-   `PUT /work-calendars/{id}/days` → `POST /work-calendars/{id}/publish`)。
+2. 会社カレンダー本体を作成→年度を作成→休日を設定→公開する(UC-C001/UC-C009、
+   `POST /company-calendars` → `POST /company-calendars/{id}/years` →
+   `PATCH /company-calendar-days/{id}`(日ごと) → `POST /company-calendar-years/{id}/publish`)。
 3. 勤務形態を2種類作成する: 「標準勤務(打刻)」「標準勤務(月次入力)」
    (UC-C002、`POST /work-styles`)。この2つは打刻するかどうかで**運用を分けるだけ**で、
    スキーマ上の`attendance_mode`のようなフラグはない(打刻APIを使うか、日次編集APIを
@@ -92,7 +93,8 @@ RoleAssignment・入社日を設定する。モックOIDCの
 7. 申請種別マスタ(交通費精算・名刺申請 等)を確認する(UC-W001、`GET /request-types`)。
    `RequestTypeSeeder` で初期投入済みのため、ここでは中身の確認と、必要なら
    `RequestTypeListPage`/`RequestTypeEditPage` からの追加・修正ができることを確認する。
-8. 社員のシフト(勤務予定)を対象月分まとめて生成する(`POST /employee-shift-assignments/generate`)。
+8. 社員のシフト(勤務予定)を対象月分まとめて生成する(UC-C003が統合された一括操作、
+   `POST /api/calendar-bulk-operations`、`operation_type=calendar_apply`)。
 
 **確認ポイント**: カレンダー未公開のまま勤務形態が参照できないか、勤務予定生成が
 カレンダーの休日設定を正しく反映しているか。
@@ -235,15 +237,18 @@ RoleAssignment・入社日を設定する。モックOIDCの
 **年度またぎ・複数月連続運用**での不具合を確認する。2026年度(2026-04-01〜2027-03-31)の
 12か月分を通しで動かす。
 
-**実装上の注意(対象社員・カレンダー)**: `ScenarioSeeder`が投入するカレンダーは実行時点の
-実年(例: 実行日が2026-07なら`fiscal_year=2026`)を使い、期間も実行月の前後1か月しか
-カバーしないため、本シナリオ専用に2026-04-01〜2027-03-31を丸ごとカバーする
-`WorkCalendar`を`POST /work-calendars`で新規作成する必要がある。`work_calendars.fiscal_year`
-は`unsignedSmallInteger`(最大65535)のため、既存の`fiscal_year`(実行時点の実年)や
-他シナリオが使う年度レンジ(scenario-00/07: 3000〜8999年度、scenario-09: 9000年台)と
-衝突しない範囲(例: 59000番台)のテスト専用値を使う(`starts_on`/`ends_on`は
-`fiscal_year`の値と無関係な単なる日付フィールドのため、実在の2026-04-01〜2027-03-31を
-設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・月次入力ユーザー(伊藤舞)を使うと、
+**実装上の注意(対象社員・カレンダー)**: `ScenarioSeeder`が投入するカレンダー年度
+(`company_calendar_years.fiscal_year`)は実行時点の実年(例: 実行日が2026-07なら
+`fiscal_year=2026`)を使い、期間も実行月の前後1か月しかカバーしないため、本シナリオ専用の
+`company_calendars`本体を`POST /company-calendars`で新規作成し、その配下に
+2026-04-01〜2027-03-31を丸ごとカバーする年度を`POST /company-calendars/{id}/years`で作成
+する必要がある。`company_calendar_years.fiscal_year`は`unsignedSmallInteger`(最大65535)の
+ため、既存の`fiscal_year`(実行時点の実年)や他シナリオが使う年度レンジ(scenario-00/07:
+3000〜8999年度(scenario-12は同プール内の8000〜8999年度を使用)、scenario-09: 9000年台)と
+衝突しない範囲(例: 59000番台)のテスト専用値を
+使う(`starts_on`/`ends_on`は`fiscal_year`の値と無関係な単なる日付フィールドのため、
+実在の2026-04-01〜2027-03-31を設定して問題ない)。対象社員に打刻ユーザー(高橋健太)・
+月次入力ユーザー(伊藤舞)を使うと、
 2026-04〜2027-03という実在の期間の一部(特に実行時点に近い月)が他の多数のシナリオ
 (シナリオ1〜5、その他§5-1〜16等)による月次提出・承認・締めと衝突し、
 `AttendanceEditGuard`により日次実績が編集不能になる恐れがある。予備枠
@@ -264,8 +269,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
 「1年間の運用」を検証し**、実時刻に依存する年次付与・失効警告・年5日警告の3バッチは
 別途「境界条件の単発確認」として切り出す(下記手順4)。
 
-1. **12か月連続の勤怠サイクル**: 各月について、(a) `POST
-   /employee-shift-assignments/generate` でその月の勤務予定を生成する、(b) 対象月の
+1. **12か月連続の勤怠サイクル**: 各月について、(a) `POST /api/calendar-bulk-operations`
+   (`operation_type=calendar_apply`)でその月の勤務予定を生成する、(b) 対象月の
    全営業日ぶん日次実績を入力する(通常勤務を主としつつ、月ごとに残業日・遅刻日・
    法定休日出勤日・有給消化日を最低1件ずつ混ぜる)、(c) 月次提出→承認→締めまで進める、
    を2026年4月から2027年3月まで順に繰り返す。`submitAndApproveMonth`/`closeMonth`
@@ -374,7 +379,31 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     `ordered`→`shipped`→`completed`)完了まで進められることを確認する。月次締めが
     誤って他ドメインの処理をブロックしないか(CLAUDE.md「バックオフィス処理は承認とは
     別ステータス系列」の回帰確認)。
-17. **ユーザー・グループ・アクセス管理基盤**: 管理者が「システム」のグループ種別画面、
+17. **会社カレンダー・従業員予定の運用一式**(UC-C009〜UC-C014): 標準カレンダー自動生成
+    (定期バッチまたはオンボーディングでの即時実行、下書きのまま作成されること)→祝日
+    iCalendarソース登録・同期(祝日が`is_public_holiday`として反映されること、既に手動
+    設定済みの日は自動上書きされず競合一覧に積まれること)→会社カレンダー年度の公開→
+    対象部署への一括適用(プレビューで暫定予定を確認してから確定、`skip_existing`既定で
+    既存行がスキップされること、`fail_on_conflict`指定時に競合が1件でもあれば全体が
+    実行されないこと)→従業員が公開済みの予定のみ閲覧できること、の一連を1シナリオとして
+    通す。加えて、休日出勤・振替休日の個別登録、一括操作の取消(取消時点で実績が付いた日は
+    除外されること)、締め済み月を含む年度の下書き差し戻し・廃止が拒否されることも確認する。
+    既存UC-C003(カレンダー基準一括生成)・UC-C008(ローテーション一括生成)は、この一括操作の
+    仕組み経由でも従来と同じ結果になることを回帰確認する(シナリオ0・シナリオ6と対象
+    データが衝突しないよう、専用のカレンダー本体・対象社員を用意する)。
+
+    `frontend/e2e/scenario-12-calendar-lifecycle.spec.ts`は本項目の一部として、会社カレンダー
+    本体・年度の作成→デフォルトへの切替(`POST /company-calendars/{id}/set-default`、
+    `WorkCalendarListPage`の「デフォルトに設定する」ボタン)→日別編集での祝日の手動設定→
+    公開→対象社員への`calendar_apply`一括操作のプレビュー→確定適用→履歴からの取消→
+    年度複製までを1本の画面操作で通しで確認する(祝日iCalendarソースの実際の外部URLへの
+    同期には依存しない)。祝日iCalendarソース一覧の永続化取得(`GET /holiday-calendar-sources`)・
+    直前同期の取消(`POST /holiday-calendar-sources/{id}/revert-last-sync`)・オンボーディング
+    画面での標準カレンダー年度の即時生成(`POST /onboarding/calendar/generate-now`、
+    `OnboardingCalendarPage`)は`frontend/src/pages/workCalendar/*.test.tsx`側の単体テストで
+    カバーする。本シナリオはscenario-00(実行年+2年度)・scenario-07(7000年台)・
+    scenario-09(9000年台)・scenario-06/08(59000年台)と衝突しない8000〜8999年度を使う。
+18. **ユーザー・グループ・アクセス管理基盤**: 管理者が「システム」のグループ種別画面、
     「人事・組織」のユーザー詳細・所属管理を含むグループ詳細、所属変更画面、人事データ連携画面を利用して
     GroupType、Group、Membership、所属変更下書き、外部HR CSV取込を管理できることを確認する。
     所属変更画面は予約管理に限定し、人事データ連携画面は外部HR CSV取込に限定する。
@@ -427,7 +456,19 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     シナリオ5(名刺申請〜承認〜総務タスク処理)、その他(§5-1差戻し→再申請、§5-2
     申請取消、§5-3月次締め後の編集制限、§5-4打刻ログ突合、§5-6+7ロール変更の即時反映と
     監査ログ記録、§5-8締めた月のCSV出力、§5-9新入社員の初回ログイン、§5-11打刻ログの
-    訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。
+    訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。§5-17(会社カレンダーの
+    ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済み。
+
+    本PR作成当時、`POST /dev/reset-database`のグローバルセットアップチェック
+    (ALL_USERSグループのFeature割当数の期待値)がscenario-00等の既存シナリオも含めて
+    全件失敗する状態だったため、当該シナリオ含め実行確認が取れていなかった。原因は
+    `AccessControlSeeder`が「移行済み環境の現行運用」として既定でALL_USERSへ9Feature
+    (打刻・勤怠入力・勤務表提出・汎用申請・休暇申請・経費入力)を割り当てる仕様に
+    変わった一方、`frontend/e2e/global-setup.ts`の期待値が旧仕様(0件)のままだった
+    ことによる不一致(本カレンダー機能とは無関係な既存の不整合)。ユーザー確認の上、
+    `docs/31-user-group-access-foundation.md`(31.1節・31.17節)と
+    `frontend/e2e/global-setup.ts`の期待値を実際の`AccessControlSeeder`の仕様
+    (9Feature + `EMPLOYEE` RoleAssignment 1件が製品初期状態)に合わせて更新済み。
   - シナリオ2(月次入力ユーザーの日次入力)は、日次実績の新規作成画面がまだ無いため
     入力自体はAPIを直接叩いている(§4シナリオ2内の注記を参照)。
   - §5-3の実装過程で、`GET /attendance/months/to-approve`が「自分が承認者かつ

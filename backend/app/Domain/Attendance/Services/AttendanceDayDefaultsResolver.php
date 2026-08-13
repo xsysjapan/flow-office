@@ -3,7 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendancePunch;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
 use App\Models\SystemSetting;
@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  *
  * 1. 打刻(attendance_punches)があれば、その内容を働き方の丸め単位・丸め方向(work_styles.
  *    rounding_unit_minutes・rounding_mode)で丸めて反映する。
- * 2. 打刻が無く勤務予定(employee_shift_assignments)があれば、その予定(休憩を含む)を表示する。
+ * 2. 打刻が無く勤務予定(employee_calendar_entries)があれば、その予定(休憩を含む)を表示する。
  * 3. 勤務予定も無ければ、システムの初期設定(その月に割り当てられた働き方 → 会社の
  *    デフォルト働き方の標準時刻・標準休憩)を表示する(WorkStyleFallbackResolver参照)。
  *
@@ -49,7 +49,7 @@ class AttendanceDayDefaultsResolver
             return $this->resolveFromPunches($userId, $workDateCarbon, $punches);
         }
 
-        $shift = EmployeeShiftAssignment::query()
+        $shift = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate)
             ->first();
@@ -67,7 +67,7 @@ class AttendanceDayDefaultsResolver
      */
     private function resolveFromPunches(string $userId, Carbon $workDate, $punches): array
     {
-        $shift = EmployeeShiftAssignment::query()
+        $shift = EmployeeCalendarEntry::query()
             ->where('user_id', $userId)
             ->whereDate('work_date', $workDate->toDateString())
             ->first();
@@ -109,7 +109,7 @@ class AttendanceDayDefaultsResolver
     /**
      * @return array{source: string, actual_start_at: ?string, actual_end_at: ?string, breaks: array<int, array{start: string, end: ?string}>}
      */
-    private function resolveFromShift(EmployeeShiftAssignment $shift, Carbon $workDate): array
+    private function resolveFromShift(EmployeeCalendarEntry $shift, Carbon $workDate): array
     {
         $timezone = $this->defaultTimezone();
 

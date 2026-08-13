@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Attendance;
 
-use App\Domain\Attendance\Commands\GenerateRotationShiftAssignments;
+use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeShiftAssignment;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
 use App\Models\ShiftPattern;
 use App\Models\User;
@@ -185,7 +185,7 @@ class RotationShiftTest extends TestCase
         $this->assertSame('off', $days[2]['shift_pattern_code']);
         $this->assertSame('b-shift', $days[3]['shift_pattern_code']);
         $this->assertSame('off', $days[8]['shift_pattern_code']);
-        $this->assertSame(0, EmployeeShiftAssignment::query()->count());
+        $this->assertSame(0, EmployeeCalendarEntry::query()->count());
     }
 
     public function test_generating_shifts_from_a_rotation_matches_the_expected_cycle(): void
@@ -211,7 +211,7 @@ class RotationShiftTest extends TestCase
         $this->assertSame(9, $response->json('generated_count'));
         $this->assertEmpty($response->json('skipped_dates'));
 
-        $assignments = EmployeeShiftAssignment::query()->where('user_id', $employee->id)->orderBy('work_date')->get();
+        $assignments = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->orderBy('work_date')->get();
         $this->assertSame('a-shift', $assignments[0]->day_type);
         $this->assertSame('a-shift', $assignments[1]->day_type);
         $this->assertSame('off', $assignments[2]->day_type);
@@ -240,7 +240,7 @@ class RotationShiftTest extends TestCase
         ])->assertOk();
 
         // 8月3日(休の予定)を有給に個別上書きする。
-        $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id,
             'work_style_id' => $result['work_style']->id,
             'work_date' => '2026-08-03',
@@ -255,7 +255,7 @@ class RotationShiftTest extends TestCase
         $response->assertOk();
         $this->assertSame(['2026-08-03'], $response->json('skipped_dates'));
 
-        $overridden = EmployeeShiftAssignment::query()
+        $overridden = EmployeeCalendarEntry::query()
             ->where('user_id', $employee->id)->whereDate('work_date', '2026-08-03')->firstOrFail();
         $this->assertFalse($overridden->is_company_holiday, '個別上書きした内容が保持されている');
     }
@@ -276,7 +276,7 @@ class RotationShiftTest extends TestCase
             'user_id' => $employee->id, 'from' => '2026-08-01', 'to' => '2026-08-09',
         ])->assertOk();
 
-        $this->actingAs($admin)->postJson('/api/employee-shift-assignments/assign-pattern', [
+        $this->actingAs($admin)->postJson('/api/employee-calendar-entries/assign-pattern', [
             'user_id' => $employee->id,
             'work_style_id' => $result['work_style']->id,
             'work_date' => '2026-08-03',
@@ -286,13 +286,13 @@ class RotationShiftTest extends TestCase
 
         $response = $this->actingAs($admin)->postJson('/api/employee-rotation-assignments/generate', [
             'user_id' => $employee->id, 'from' => '2026-08-01', 'to' => '2026-08-09',
-            'overwrite_mode' => GenerateRotationShiftAssignments::OVERWRITE_MODE_OVERWRITE_ALL,
+            'overwrite_mode' => GenerateRotationCalendarEntries::OVERWRITE_MODE_OVERWRITE_ALL,
         ]);
 
         $response->assertOk();
         $this->assertEmpty($response->json('skipped_dates'));
 
-        $regenerated = EmployeeShiftAssignment::query()
+        $regenerated = EmployeeCalendarEntry::query()
             ->where('user_id', $employee->id)->whereDate('work_date', '2026-08-03')->firstOrFail();
         $this->assertTrue($regenerated->is_company_holiday, 'overwrite_allでは個別上書きも再生成される');
         $this->assertFalse($regenerated->is_manually_overridden);
@@ -314,17 +314,17 @@ class RotationShiftTest extends TestCase
             'user_id' => $employee->id, 'from' => '2026-08-01', 'to' => '2026-08-09',
         ])->assertOk();
 
-        $shift = EmployeeShiftAssignment::query()
+        $shift = EmployeeCalendarEntry::query()
             ->where('user_id', $employee->id)->whereDate('work_date', '2026-08-01')->firstOrFail();
         AttendanceDay::query()->create([
-            'user_id' => $employee->id, 'work_date' => '2026-08-01', 'shift_assignment_id' => $shift->id,
+            'user_id' => $employee->id, 'work_date' => '2026-08-01', 'calendar_entry_id' => $shift->id,
             'status' => AttendanceDayStatus::CLOCKED_OUT, 'source' => 'manual', 'utc_offset_minutes' => 540,
             'actual_start_at' => '2026-08-01 06:00:00', 'actual_end_at' => '2026-08-01 14:00:00',
         ]);
 
         $response = $this->actingAs($admin)->postJson('/api/employee-rotation-assignments/generate', [
             'user_id' => $employee->id, 'from' => '2026-08-01', 'to' => '2026-08-09',
-            'overwrite_mode' => GenerateRotationShiftAssignments::OVERWRITE_MODE_OVERWRITE_ALL,
+            'overwrite_mode' => GenerateRotationCalendarEntries::OVERWRITE_MODE_OVERWRITE_ALL,
         ]);
 
         $response->assertOk();

@@ -120,7 +120,7 @@ class FlexWorkTimeTest extends TestCase
 
     public function test_the_settlement_summary_reports_required_actual_and_remaining_minutes(): void
     {
-        $workStyle = $this->makeFlexWorkStyle(['calendar_id' => null]);
+        $workStyle = $this->makeFlexWorkStyle(['company_calendar_id' => null]);
         $user = User::factory()->create();
         $this->assignForMonth($user, $workStyle, '2026-06');
 
