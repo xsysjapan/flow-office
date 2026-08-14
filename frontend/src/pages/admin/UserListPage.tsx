@@ -6,6 +6,7 @@ import { Button } from "../../components/Button/Button";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
+import { Pagination } from "../../components/Pagination/Pagination";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
@@ -17,6 +18,7 @@ import {
   TableRow,
 } from "../../components/ui/table";
 import { useCreateUser, useUsers } from "../../hooks/useUsers";
+import { useGroupTypes, useManagedGroups } from "../../hooks/useUserManagement";
 import {
   ACCOUNT_STATUS_OPTIONS,
   accountStatusLabel,
@@ -32,15 +34,12 @@ const FILTER_PARAM_KEYS = [
   "group_type_id",
 ] as const;
 
+const PER_PAGE = 20;
+
 /**
  * UC-M001: ユーザーを検索し、人事・所属情報を確認する一覧。
- * 検索文字列・フィルターはURL(`?q=...&account_status=...`)へ反映し、ブラウザの戻る/
- * リロード/URL共有で検索状態が壊れないようにする(SKILL.md §2.10)。
- *
- * Pattern exception: 一覧のページングは導入していない。
- * Reason: `api/users.ts`の`fetchUsers`はページ番号を受け取らない仕様であり、この画面の
- * 対象範囲(pages/admin配下の画面修正)ではAPIクライアント・hooksのインターフェースを
- * 変更しないため、Paginationコンポーネントを導入すると壊れる呼び出し互換を保てない。
+ * 検索文字列・フィルター・ページはURL(`?q=...&account_status=...&page=...`)へ反映し、
+ * ブラウザの戻る/リロード/URL共有で状態が壊れないようにする(SKILL.md §2.10)。
  */
 export function UserListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,6 +49,8 @@ export function UserListPage() {
   const externalHr = searchParams.get("external_hr") === "1";
   const groupId = searchParams.get("group_id") ?? "";
   const groupTypeId = searchParams.get("group_type_id") ?? "";
+  const pageParam = Number(searchParams.get("page"));
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
 
   const [showCreate, setShowCreate] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -60,13 +61,20 @@ export function UserListPage() {
     job_title: "",
   });
   const createUser = useCreateUser();
-  const { data, isLoading, error } = useUsers(query, undefined, {
-    account_status: accountStatus || undefined,
-    external_unlinked: externalUnlinked || undefined,
-    external_hr: externalHr || undefined,
-    group_id: groupId || undefined,
-    group_type_id: groupTypeId ? Number(groupTypeId) : undefined,
-  });
+  const { data: managedGroups } = useManagedGroups();
+  const { data: groupTypes } = useGroupTypes();
+  const { data, isLoading, error } = useUsers(
+    query,
+    PER_PAGE,
+    {
+      account_status: accountStatus || undefined,
+      external_unlinked: externalUnlinked || undefined,
+      external_hr: externalHr || undefined,
+      group_id: groupId || undefined,
+      group_type_id: groupTypeId ? Number(groupTypeId) : undefined,
+    },
+    page,
+  );
 
   const isFiltered = FILTER_PARAM_KEYS.some((key) => Boolean(searchParams.get(key)));
 
@@ -76,6 +84,19 @@ export function UserListPage() {
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        next.delete("page");
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function changePage(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (nextPage > 1) next.set("page", String(nextPage));
+        else next.delete("page");
         return next;
       },
       { replace: true },
@@ -96,24 +117,11 @@ export function UserListPage() {
     );
 
   const users = data?.data ?? [];
-  const groupOptions = Array.from(
-    new Map(
-      users
-        .flatMap((user) => user.memberships ?? [])
-        .map((membership) => [membership.group.id, membership.group]),
-    ).values(),
-  );
-  const groupTypeOptions = Array.from(
-    new Map(
-      groupOptions.map((group) => [
-        group.group_type_id,
-        {
-          id: group.group_type_id,
-          name: group.group_type_name ?? group.group_type,
-        },
-      ]),
-    ).values(),
-  );
+  // フィルターの選択肢は現在のページのユーザーからではなく、グループ・グループ種別の
+  // 全件一覧(useManagedGroups/useGroupTypes)から組み立てる。ページングを導入したことで
+  // 「今のページに写っているユーザーが持つグループしか選べない」状態を避けるため。
+  const groupOptions = managedGroups ?? [];
+  const groupTypeOptions = groupTypes ?? [];
 
   return (
     <Card
@@ -406,6 +414,15 @@ export function UserListPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {data && (
+        <Pagination
+          currentPage={data.meta.current_page}
+          lastPage={data.meta.last_page}
+          total={data.meta.total}
+          onPageChange={changePage}
+        />
       )}
     </Card>
   );
