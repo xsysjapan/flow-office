@@ -86,8 +86,15 @@ Primary Actionは右上。1画面に強いPrimary Actionは原則1つ。
 行クリック → そのオブジェクトの詳細画面
 ```
 
-「ある一覧では編集、別の一覧では詳細」という差異を作らない。行全体をクリック可能にする場合は
-`cursor-pointer`と`role`/キーボード到達性を必ず伴わせ、セル内リンクと二重の遷移先を作らない。
+「ある一覧では編集、別の一覧では詳細」という差異を作らない。
+
+**実装は`frontend/src/components/ClickableTableRow/`に統一する**(`TableRow`のラッパー。
+行全体に`cursor-pointer`・`role="button"`・`tabIndex`・Enter/Spaceでの起動を実装済み)。
+主要フィールド(名称等)のセルは、ルート遷移する一覧では実体の`<Link>`のままにして
+中クリック・新規タブで開く操作を残す。行内アクション(削除ボタン等)を含むセルは
+`onClick={(e) => e.stopPropagation()}`で行クリックとの二重発火を防ぐ。行の主目的が
+Dialog/Modalを開くことである一覧(承認詳細プレビュー等)でも同じ`ClickableTableRow`を使う。
+削除済み等クリック自体を無効化したい行は`disabled`propで通常の`TableRow`として描画する。
 
 ### 2.3 行内アクション
 
