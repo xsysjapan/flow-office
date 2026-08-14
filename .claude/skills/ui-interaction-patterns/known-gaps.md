@@ -143,6 +143,18 @@ Mandatory Rule 7(確認UIを新規に発明しない)に反してブラウザ標
 `CreateCompanyCalendarModal.tsx`/`WorkCalendarDetailPage.tsx`のdocblockに
 `Pattern exception:`を明記した。
 
+## 17. カレンダー画面の追加修正取り込み後の再点検(解消)
+
+カレンダー機能に別作業で機能修正が入った後、リポジトリ全体を再点検した。
+`CreateCompanyCalendarModal.tsx`のdocblockが「曜日ごとの休日設定は段階的開示」という
+古い記述のまま残っていた(段階的開示のトグル自体が別作業で削除され常時表示になったため)
+のを修正。`WorkCalendarDetailPage.tsx`の基本設定保存ボタン・`CreateCompanyCalendarModal.tsx`
+の作成ボタンにDisabled理由(カレンダー名未入力)を追加。ページ単位の空状態走査では
+見つからなかった埋め込みコンポーネント`AuthenticationKeysPanel`(認証キー一覧)・
+`AttendanceSubmissionReminderExclusionPanel`(督促除外設定一覧)の空状態も`EmptyState`へ
+統一した。`window.confirm()`の再混入や新規Mandatory Rule違反は無いことをリポジトリ全体で
+再確認済み。
+
 ## 残っている既知の未対応項目(次のスコープの候補)
 
 - `pages/admin/UserListPage.tsx`のページング(API側に`page`パラメータが無いため未導入)

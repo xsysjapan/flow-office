@@ -73,9 +73,7 @@ export interface CreateCompanyCalendarModalProps {
 
 /**
  * UC-C009: 会社カレンダー本体の新規作成モーダル。名称のみが必須で、週の開始曜日・
- * 年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当は任意。曜日ごとの休日設定は
- * 段階的開示にし、ユーザーがこの区画を開いて初めて`weekday_holiday_pattern`を送信する
- * (開かなければbackend側の既定値(平日勤務・土曜所定休日・日曜法定休日)が適用される)。
+ * 年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当は任意。
  *
  * Pattern exception: 祝日iCalendarソースの追加ボタン文言に「登録する」を使う。
  * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
@@ -334,13 +332,16 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>
-            作成する
-          </Button>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            キャンセル
-          </Button>
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-3">
+            <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>
+              作成する
+            </Button>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              キャンセル
+            </Button>
+          </div>
+          {!form.name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
         </div>
       </DialogContent>
     </Dialog>

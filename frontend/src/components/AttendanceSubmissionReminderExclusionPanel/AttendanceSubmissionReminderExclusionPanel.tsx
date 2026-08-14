@@ -4,6 +4,7 @@ import {
   useExcludeAttendanceSubmissionReminder,
 } from '../../hooks/useAttendanceSubmissionReminderExclusions'
 import { Button } from '../Button/Button'
+import { EmptyState } from '../EmptyState/EmptyState'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
 import { LoadingState } from '../LoadingState/LoadingState'
@@ -85,7 +86,7 @@ export function AttendanceSubmissionReminderExclusionPanel({ userId }: Attendanc
       </div>
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">除外設定はまだありません。</p>
+        <EmptyState title="除外設定はまだありません。" />
       ) : (
         <ul className="divide-y divide-border text-sm">
           {list.map((exclusion) => (

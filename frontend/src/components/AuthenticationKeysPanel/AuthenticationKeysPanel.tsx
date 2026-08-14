@@ -8,6 +8,7 @@ import {
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
 import { ConfirmActionDialog } from '../ConfirmActionDialog/ConfirmActionDialog'
+import { EmptyState } from '../EmptyState/EmptyState'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
 import { LoadingState } from '../LoadingState/LoadingState'
@@ -139,7 +140,7 @@ export function AuthenticationKeysPanel({ userId }: AuthenticationKeysPanelProps
       )}
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">登録済みの認証キーはまだありません。</p>
+        <EmptyState title="登録済みの認証キーはまだありません。" />
       ) : (
         <Table>
           <TableHeader>

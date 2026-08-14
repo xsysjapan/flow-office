@@ -445,10 +445,11 @@ export function WorkCalendarDetailPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-col items-end gap-1">
           <Button isLoading={updateCalendar.isPending} disabled={!name} onClick={handleSaveSettings}>
             保存する
           </Button>
+          {!name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
         </div>
       </Card>
 
