@@ -99,6 +99,9 @@ function ShiftGenerationCard() {
       >
         生成する
       </Button>
+      {(!shiftUserId || !shiftWorkStyleId || !shiftFrom || !shiftTo) && (
+        <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・開始日・終了日を入力してください。</p>
+      )}
 
       {shiftUserId !== undefined && shiftFrom && shiftTo && (
         <div className="mt-5 border-t border-border pt-4">
@@ -291,9 +294,14 @@ function WeeklyPatternShiftAssignmentCard() {
       <WeekdayPatternGrid state={weeklyPatternState} onChange={handleWeekdayChange} />
 
       <div className="my-4 flex flex-wrap gap-3">
-        <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
-          週次パターンをプレビューする
-        </Button>
+        <div>
+          <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
+            週次パターンをプレビューする
+          </Button>
+          {(!from || !to) && (
+            <p className="mt-1 text-xs text-muted-foreground">適用開始日・適用終了日を入力してください。</p>
+          )}
+        </div>
       </div>
 
       {previewPattern.data && (
@@ -325,6 +333,9 @@ function WeeklyPatternShiftAssignmentCard() {
       >
         週次パターンで確定する
       </Button>
+      {(!targetUserId || !workStyleId || !from || !to) && (
+        <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・適用開始日・適用終了日を入力してください。</p>
+      )}
 
       {generatePattern.data && (
         <p className="mt-3 text-sm text-foreground">
@@ -532,9 +543,14 @@ function MonthlyPatternShiftAssignmentCard() {
       )}
 
       <div className="my-4 flex flex-wrap gap-3">
-        <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
-          月次パターンをプレビューする
-        </Button>
+        <div>
+          <Button variant="secondary" isLoading={previewPattern.isPending} disabled={!from || !to} onClick={handlePreview}>
+            月次パターンをプレビューする
+          </Button>
+          {(!from || !to) && (
+            <p className="mt-1 text-xs text-muted-foreground">対象年月を入力してください。</p>
+          )}
+        </div>
       </div>
 
       {previewPattern.data && (
@@ -567,6 +583,9 @@ function MonthlyPatternShiftAssignmentCard() {
       >
         月次パターンで確定する
       </Button>
+      {(!targetUserId || !workStyleId || !from || !to) && (
+        <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象年月を入力してください。</p>
+      )}
 
       {generatePattern.data && (
         <p className="mt-3 text-sm text-foreground">
@@ -710,6 +729,9 @@ function ShiftPatternFormCard() {
       <Button isLoading={createShiftPattern.isPending} disabled={!code || !name} onClick={handleCreate}>
         シフトパターンを作成する
       </Button>
+      {(!code || !name) && (
+        <p className="mt-1 text-xs text-muted-foreground">パターンコード・パターン名称を入力してください。</p>
+      )}
     </Card>
   )
 }
@@ -835,6 +857,11 @@ function RotationPatternFormCard() {
       <Button isLoading={createRotationPattern.isPending} disabled={!canCreate} onClick={handleCreate}>
         ローテーションパターンを作成する
       </Button>
+      {!canCreate && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          対象の働き方・ローテーションパターン名称と、周期内のすべてのシフトパターンを入力してください。
+        </p>
+      )}
     </Card>
   )
 }
@@ -953,6 +980,9 @@ function RotationAssignmentCard() {
       >
         ローテーションを割り当てる
       </Button>
+      {(!targetUserId || !rotationPatternId || !rotationStartDate) && (
+        <p className="mt-1 text-xs text-muted-foreground">対象社員・ローテーションパターン・ローテーション開始日を入力してください。</p>
+      )}
 
       <div className="mt-5 border-t border-border pt-4">
         <h3 className="mb-2 text-sm font-semibold text-foreground">カレンダープレビュー・生成</h3>
@@ -968,14 +998,21 @@ function RotationAssignmentCard() {
         </div>
 
         <div className="mb-4 flex flex-wrap gap-3">
-          <Button
-            variant="secondary"
-            isLoading={previewRotation.isPending}
-            disabled={!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo}
-            onClick={handlePreview}
-          >
-            プレビューする
-          </Button>
+          <div>
+            <Button
+              variant="secondary"
+              isLoading={previewRotation.isPending}
+              disabled={!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo}
+              onClick={handlePreview}
+            >
+              プレビューする
+            </Button>
+            {(!rotationPatternId || !rotationStartDate || !generateFrom || !generateTo) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                ローテーションパターン・ローテーション開始日・生成開始日・生成終了日を入力してください。
+              </p>
+            )}
+          </div>
         </div>
 
         {previewRotation.data && (
@@ -1007,6 +1044,9 @@ function RotationAssignmentCard() {
         >
           勤務予定を生成する
         </Button>
+        {(!targetUserId || !generateFrom || !generateTo) && (
+          <p className="mt-1 text-xs text-muted-foreground">対象社員・生成開始日・生成終了日を入力してください。</p>
+        )}
 
         {generateShifts.data && (
           <p className="mt-3 text-sm text-foreground">
@@ -1105,6 +1145,9 @@ function ShiftScheduleBoardCard() {
       >
         割り当てる(下書き)
       </Button>
+      {(!userId || !workStyleId || !workDate || !shiftPatternId) && (
+        <p className="mt-1 text-xs text-muted-foreground">対象社員・勤務形態・対象日・シフトパターンを入力してください。</p>
+      )}
 
       <div className="mt-6 border-t border-border pt-4">
         <h3 className="mb-3 text-sm font-semibold text-foreground">公開前確認・公開</h3>
@@ -1171,6 +1214,9 @@ function ShiftScheduleBoardCard() {
         <Button isLoading={publishSchedule.isPending} disabled={!department || !yearMonth} onClick={handlePublish}>
           公開する
         </Button>
+        {(!department || !yearMonth) && (
+          <p className="mt-1 text-xs text-muted-foreground">対象部署・対象月を入力してください。</p>
+        )}
       </div>
     </Card>
   )

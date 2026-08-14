@@ -285,6 +285,13 @@ export function CalendarBulkOperationsPage() {
         <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
           プレビューする
         </Button>
+        {!canPreview && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isEntryBased
+              ? '対象社員・対象日を1件以上入力してください。'
+              : `対象社員を1名以上、対象期間(開始・終了)を入力してください${operationType === 'calendar_apply' ? '(会社カレンダー適用は勤務形態も必須)' : ''}。`}
+          </p>
+        )}
       </Card>
 
       {preview.data && (
@@ -338,6 +345,15 @@ export function CalendarBulkOperationsPage() {
           >
             この内容で確定適用する
           </Button>
+          {(!preview.data.executable || !reason) && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {!preview.data.executable && !reason
+                ? '競合があり実行不可のため確定適用できません。理由を入力してください。'
+                : !preview.data.executable
+                  ? '競合があり実行不可のため確定適用できません。競合ポリシーを見直すか対象を変更してください。'
+                  : '理由を入力してください。'}
+            </p>
+          )}
         </Card>
       )}
 
