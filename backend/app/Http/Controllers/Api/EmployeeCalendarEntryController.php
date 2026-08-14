@@ -10,6 +10,8 @@ use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\ShiftScheduleReviewService;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
+use App\Domain\Attendance\Services\AttendanceApproverAccess;
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EmployeeCalendarEntryResource;
@@ -48,7 +50,20 @@ class EmployeeCalendarEntryController extends Controller
 
         // 本人または管理者のみ閲覧できる(docs/25-usecases-integrations-mcp.md UC-I002、
         // 個人API/MCP連携からの`schedule:self:read`スコープでの利用を想定)。
-        $this->abortUnlessOwnerOrAdmin($request, $data['user_id'], '他の社員の勤務予定を閲覧する権限がありません。');
+        $isSelf = $request->user()->id === $data['user_id'];
+        $hasAttendanceRead = $this->currentTokenHasFullAccess($request)
+            && app(EffectiveAccessResolver::class)->hasGlobalPermission($request->user(), 'attendance.read');
+        $yearMonths = collect(Carbon::parse($data['from'])->monthsUntil(Carbon::parse($data['to'])->addMonth()))
+            ->map(fn ($month) => $month->format('Y-m'))
+            ->unique()
+            ->values()
+            ->all();
+        $isApprover = app(AttendanceApproverAccess::class)->isApproverForAnyYearMonth(
+            $request->user()->id,
+            $data['user_id'],
+            $yearMonths,
+        );
+        abort_if(! $isSelf && ! $hasAttendanceRead && ! $isApprover, 403, '他の社員の勤務予定を閲覧する権限がありません。');
 
         $assignments = EmployeeCalendarEntry::query()
             ->where('user_id', $data['user_id'])
@@ -56,6 +71,8 @@ class EmployeeCalendarEntryController extends Controller
             ->whereDate('work_date', '<=', $data['to'])
             ->orderBy('work_date')
             ->get();
+
+        $assignments->each(fn (EmployeeCalendarEntry $entry) => $entry->schedule_source = 'employee_calendar_entry');
 
         // UC-C014手順5: バッチ生成(または「今すぐ生成する」)を待たずに取得が必要な場合の
         // 読み取りフォールバック。company_calendar_years/company_calendar_daysには書き込まない。
@@ -70,7 +87,9 @@ class EmployeeCalendarEntryController extends Controller
 
         return response()->json([
             'data' => EmployeeCalendarEntryResource::collection($merged),
-            'provisional' => $provisionalAssignments !== [],
+            'provisional' => collect($provisionalAssignments)->contains(
+                fn (EmployeeCalendarEntry $entry) => ($entry->provisional ?? false) === true
+            ),
         ]);
     }
 

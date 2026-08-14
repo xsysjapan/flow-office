@@ -67,9 +67,9 @@ function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarY
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
+      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/2026/days']}>
         <Routes>
-          <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
+          <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<WorkCalendarDaysPage />} />
           <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
@@ -102,7 +102,7 @@ describe('WorkCalendarDaysPage', () => {
     const workCell = await screen.findByRole('button', { name: '2026-04-01 勤務日' })
     expect(workCell).toBeInTheDocument()
 
-    const holidayCell = screen.getByRole('button', { name: '2026-04-04 祝日(昭和の日改め)' })
+    const holidayCell = screen.getByRole('button', { name: '2026-04-04 休日(昭和の日改め)' })
     expect(holidayCell).toBeInTheDocument()
 
     expect(await screen.findByText('29日')).toBeInTheDocument()
@@ -121,8 +121,8 @@ describe('WorkCalendarDaysPage', () => {
 
     await user.click(await screen.findByRole('button', { name: '2026-04-05 勤務日' }))
     await user.selectOptions(screen.getByLabelText('2026-04-05の勤務区分'), 'company_holiday')
-    await user.click(screen.getByLabelText('2026-04-05の祝日'))
-    await user.type(screen.getByLabelText('2026-04-05の祝日名'), 'こどもの日')
+    await user.click(screen.getByLabelText('2026-04-05の休日'))
+    await user.type(screen.getByLabelText('2026-04-05の休日名'), 'こどもの日')
     await user.keyboard('{Escape}')
 
     expect(await screen.findByText('29日')).toBeInTheDocument()
@@ -154,9 +154,9 @@ describe('WorkCalendarDaysPage', () => {
 
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
+        <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/2026/days']}>
           <Routes>
-            <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
+            <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<WorkCalendarDaysPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -173,7 +173,7 @@ describe('WorkCalendarDaysPage', () => {
     ).toBeInTheDocument()
 
     // 祝日・メモはロック中でも編集できる。
-    expect(screen.getByLabelText('2026-04-01の祝日')).toBeEnabled()
+    expect(screen.getByLabelText('2026-04-01の休日')).toBeEnabled()
   })
 
   it('shows an empty grid without blocking when the year has no days yet', async () => {
@@ -296,8 +296,8 @@ describe('WorkCalendarDaysPage', () => {
 
       renderPage()
 
-      expect(await screen.findByRole('button', { name: 'この年度を祝日と同期する' })).toBeDisabled()
-      expect(screen.getByRole('link', { name: '祝日iCalendarソース管理' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'この年度を休日と同期する' })).toBeDisabled()
+      expect(screen.getByRole('link', { name: '休日iCalendarソース管理' })).toBeInTheDocument()
     })
 
     it('syncs the year holiday calendar and shows the reflected summary', async () => {
@@ -319,7 +319,7 @@ describe('WorkCalendarDaysPage', () => {
 
       renderPage([calendarWithSource])
 
-      const syncButton = await screen.findByRole('button', { name: 'この年度を祝日と同期する' })
+      const syncButton = await screen.findByRole('button', { name: 'この年度を休日と同期する' })
       expect(syncButton).toBeEnabled()
       await userEvent.click(syncButton)
 
@@ -375,10 +375,10 @@ describe('WorkCalendarDaysPage', () => {
       // 同期前は全日勤務日(祝日セルは存在しない)。
       expect(await screen.findByRole('button', { name: '2026-04-29 勤務日' })).toBeInTheDocument()
 
-      await userEvent.click(await screen.findByRole('button', { name: 'この年度を祝日と同期する' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'この年度を休日と同期する' }))
 
       // 同期後、グリッドが再取得され祝日が反映されている。
-      expect(await screen.findByRole('button', { name: '2026-04-29 祝日(昭和の日)' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: '2026-04-29 休日(昭和の日)' })).toBeInTheDocument()
       expect(fetchDays.mock.calls.length).toBeGreaterThan(1)
 
       // その状態で保存すると、同期結果(祝日)が保持されたまま送信される。

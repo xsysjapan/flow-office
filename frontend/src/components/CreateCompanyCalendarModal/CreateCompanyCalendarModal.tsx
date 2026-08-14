@@ -61,7 +61,7 @@ function emptyFormState() {
     fiscalYearStartMonth: '',
     fiscalYearStartDay: '',
     weekdayPattern: DEFAULT_PATTERN,
-    allowDailyHolidayOverride: true,
+    allowDailyHolidayOverride: false,
     holidaySourceId: NONE_OPTION_VALUE,
   }
 }
@@ -88,7 +88,6 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
   const createSource = useCreateHolidayCalendarSource()
 
   const [form, setForm] = useState(emptyFormState())
-  const [isWeekdayPatternOpen, setIsWeekdayPatternOpen] = useState(false)
 
   const [isRegisteringSource, setIsRegisteringSource] = useState(false)
   const [newSourceName, setNewSourceName] = useState('')
@@ -99,7 +98,6 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
   useEffect(() => {
     if (!open) return
     setForm(emptyFormState())
-    setIsWeekdayPatternOpen(false)
     setIsRegisteringSource(false)
     setNewSourceName('')
     setNewSourceMode('url')
@@ -111,10 +109,6 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
   }, [open])
 
   const patch = (next: Partial<typeof form>) => setForm((prev) => ({ ...prev, ...next }))
-
-  const handleOpenWeekdayPattern = () => {
-    setIsWeekdayPatternOpen(true)
-  }
 
   const handleCreateSource = () => {
     createSource.mutate(
@@ -143,7 +137,7 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
         week_starts_on: form.weekStartsOn === NONE_OPTION_VALUE ? undefined : Number(form.weekStartsOn),
         fiscal_year_start_month: form.fiscalYearStartMonth ? Number(form.fiscalYearStartMonth) : undefined,
         fiscal_year_start_day: form.fiscalYearStartDay ? Number(form.fiscalYearStartDay) : undefined,
-        weekday_holiday_pattern: isWeekdayPatternOpen ? form.weekdayPattern : undefined,
+        weekday_holiday_pattern: form.weekdayPattern,
         allow_daily_holiday_override: form.allowDailyHolidayOverride,
         holiday_calendar_source_id: form.holidaySourceId === NONE_OPTION_VALUE ? undefined : form.holidaySourceId,
       },
@@ -203,53 +197,50 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
           </FormField>
         </div>
 
-        {!isWeekdayPatternOpen ? (
-          <Button variant="secondary" onClick={handleOpenWeekdayPattern}>
-            曜日ごとの休日設定を変更する
-          </Button>
-        ) : (
-          <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-            <p className="text-xs text-muted-foreground">
-              未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
-            </p>
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
-                checked={form.allowDailyHolidayOverride}
-                onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
-              />
-              曜日ごとの休日設定を日ごとに個別変更できるようにする
-            </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {WEEKDAY_KEYS.map((weekdayKey) => (
-                <FormField
-                  key={weekdayKey}
-                  label={WEEKDAY_LABELS[weekdayKey]}
-                  htmlFor={`create-calendar-weekday-pattern-${weekdayKey}`}
+        <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+          <p className="text-xs text-muted-foreground">
+            ここで設定した内容がカレンダーの年度作成時の曜日ごとの休日区分になります。
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {WEEKDAY_KEYS.map((weekdayKey) => (
+              <FormField
+                key={weekdayKey}
+                label={WEEKDAY_LABELS[weekdayKey]}
+                htmlFor={`create-calendar-weekday-pattern-${weekdayKey}`}
+              >
+                <NativeSelect
+                  id={`create-calendar-weekday-pattern-${weekdayKey}`}
+                  value={form.weekdayPattern[weekdayKey]}
+                  onChange={(e) =>
+                    patch({
+                      weekdayPattern: {
+                        ...form.weekdayPattern,
+                        [weekdayKey]: e.target.value as WeekdayHolidayPatternDayType,
+                      },
+                    })
+                  }
                 >
-                  <NativeSelect
-                    id={`create-calendar-weekday-pattern-${weekdayKey}`}
-                    value={form.weekdayPattern[weekdayKey]}
-                    onChange={(e) =>
-                      patch({
-                        weekdayPattern: {
-                          ...form.weekdayPattern,
-                          [weekdayKey]: e.target.value as WeekdayHolidayPatternDayType,
-                        },
-                      })
-                    }
-                  >
-                    {DAY_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
-              ))}
-            </div>
+                  {DAY_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            ))}
           </div>
-        )}
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox
+              aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+              checked={form.allowDailyHolidayOverride}
+              onCheckedChange={(checked) => patch({ allowDailyHolidayOverride: checked === true })}
+            />
+            曜日ごとの休日設定を日ごとに個別変更できるようにする
+          </label>
+          <p className="text-xs text-muted-foreground">
+            この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
+          </p>
+        </div>
 
         <FormField label="休日iCalendarソース" htmlFor="create-calendar-holiday-source">
           <NativeSelect

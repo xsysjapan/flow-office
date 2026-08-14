@@ -69,7 +69,7 @@ function renderPage(calendars: WorkCalendar[] = [calendar]) {
       <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1']}>
         <Routes>
           <Route path="/admin/work-calendars/:id" element={<WorkCalendarDetailPage />} />
-          <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<p>日別編集ページ</p>} />
+          <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<p>日別編集ページ</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -130,6 +130,7 @@ describe('WorkCalendarDetailPage', () => {
         fiscal_year_start_month: 1,
         fiscal_year_start_day: 1,
         holiday_calendar_source_id: null,
+        weekday_holiday_pattern: calendar.weekday_holiday_pattern,
         allow_daily_holiday_override: true,
       }),
     )
@@ -143,7 +144,6 @@ describe('WorkCalendarDetailPage', () => {
     renderPage()
 
     await screen.findByLabelText('カレンダー名')
-    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
     await userEvent.selectOptions(screen.getByLabelText('月曜日'), 'company_holiday')
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
@@ -179,7 +179,6 @@ describe('WorkCalendarDetailPage', () => {
     renderPage()
 
     await screen.findByLabelText('カレンダー名')
-    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
     await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
     await userEvent.click(screen.getByRole('button', { name: '保存する' }))
 
@@ -219,8 +218,8 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
     await userEvent.click(screen.getByRole('button', { name: 'このカレンダーに設定する' }))
 
     await waitFor(() =>
@@ -245,8 +244,8 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage([assignedCalendar])
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), '')
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), '')
     await userEvent.click(screen.getByRole('button', { name: 'このカレンダーに設定する' }))
 
     await waitFor(() =>
@@ -269,7 +268,7 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await screen.findByLabelText('使用する休日iCalendarソース')
     await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
 
     await userEvent.type(screen.getByLabelText('名称'), '内閣府祝日カレンダー')
@@ -284,7 +283,7 @@ describe('WorkCalendarDetailPage', () => {
     )
 
     await waitFor(() =>
-      expect(screen.getByLabelText('使用する祝日iCalendarソース')).toHaveValue(source.id),
+      expect(screen.getByLabelText('使用する休日iCalendarソース')).toHaveValue(source.id),
     )
   })
 
@@ -297,7 +296,7 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
+    await screen.findByLabelText('使用する休日iCalendarソース')
     await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
 
     await userEvent.click(screen.getByLabelText('ファイルをアップロード'))
@@ -326,8 +325,8 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
 
     await userEvent.click(await screen.findByRole('button', { name: '編集' }))
     await userEvent.clear(screen.getByLabelText('iCalendar URL'))
@@ -355,8 +354,8 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), uploadSource.id)
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), uploadSource.id)
 
     await userEvent.click(await screen.findByRole('button', { name: '編集' }))
 
@@ -382,15 +381,15 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
 
     await userEvent.click(await screen.findByRole('button', { name: '削除' }))
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
     await waitFor(() => expect(holidayCalendarSourcesApi.deleteHolidayCalendarSource).toHaveBeenCalledWith(source.id))
 
-    await waitFor(() => expect(screen.getByLabelText('使用する祝日iCalendarソース')).toHaveValue(''))
+    await waitFor(() => expect(screen.getByLabelText('使用する休日iCalendarソース')).toHaveValue(''))
   })
 
   it('does not delete a source when the confirmation is dismissed', async () => {
@@ -400,8 +399,8 @@ describe('WorkCalendarDetailPage', () => {
 
     renderPage()
 
-    await screen.findByLabelText('使用する祝日iCalendarソース')
-    await userEvent.selectOptions(screen.getByLabelText('使用する祝日iCalendarソース'), source.id)
+    await screen.findByLabelText('使用する休日iCalendarソース')
+    await userEvent.selectOptions(screen.getByLabelText('使用する休日iCalendarソース'), source.id)
 
     await userEvent.click(await screen.findByRole('button', { name: '削除' }))
     await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
@@ -485,7 +484,7 @@ describe('WorkCalendarDetailPage', () => {
       expect(screen.queryByRole('button', { name: '公開を取消す' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '廃止する' })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '複製して翌年度を作成' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'この年度を祝日と同期する' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'この年度を休日と同期する' })).not.toBeInTheDocument()
     })
   })
 })

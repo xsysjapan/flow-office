@@ -3,6 +3,7 @@
 namespace App\Domain\Export\Services;
 
 use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
+use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeCalendarEntry;
@@ -30,7 +31,10 @@ class AttendanceExcelBuilder
 
     private const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
-    public function __construct(private readonly WorkStyleFallbackResolver $workStyleResolver) {}
+    public function __construct(
+        private readonly WorkStyleFallbackResolver $workStyleResolver,
+        private readonly ProvisionalScheduleCalculator $scheduleCalculator,
+    ) {}
 
     public function buildForMonth(AttendanceMonth $month, string $yearMonth): Spreadsheet
     {
@@ -66,7 +70,8 @@ class AttendanceExcelBuilder
         $this->configurePage($sheet);
         $days = AttendanceDay::query()
             ->where('user_id', $month->user_id)
-            ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
+            ->whereDate('work_date', '>=', $yearMonth.'-01')
+            ->whereDate('work_date', '<=', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString())
             ->with(['calculation', 'breaks', 'calendarEntry'])
             ->orderBy('work_date')
             ->get()
@@ -76,9 +81,18 @@ class AttendanceExcelBuilder
         $workStyle = $this->workStyleResolver->resolveForUser($month->user_id, Carbon::parse($yearMonth.'-01'));
         $shifts = EmployeeCalendarEntry::query()
             ->where('user_id', $month->user_id)
-            ->whereBetween('work_date', [$yearMonth.'-01', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString()])
+            ->whereDate('work_date', '>=', $yearMonth.'-01')
+            ->whereDate('work_date', '<=', Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString())
             ->where('is_published', true)
             ->get();
+        $effectiveSchedule = $shifts
+            ->concat($this->scheduleCalculator->fillGaps(
+                $month->user_id,
+                $yearMonth.'-01',
+                Carbon::parse($yearMonth.'-01')->endOfMonth()->toDateString(),
+                $shifts,
+            ))
+            ->keyBy(fn (EmployeeCalendarEntry $entry) => $entry->work_date->toDateString());
 
         $lateCount = $days->filter(fn (AttendanceDay $day) => $this->isLate($day))->count();
         $earlyCount = $days->filter(fn (AttendanceDay $day) => $this->isEarly($day))->count();
@@ -168,20 +182,26 @@ class AttendanceExcelBuilder
                 return (int) $break->break_start_at->diffInMinutes($break->break_end_at);
             }) ?? 0;
             $overtime = ($calculation?->statutory_within_overtime_minutes ?? 0)
-                + ($calculation?->statutory_excess_overtime_minutes ?? 0);
+                + ($calculation?->statutory_excess_overtime_minutes ?? 0)
+                + ($calculation?->prescribed_holiday_work_minutes ?? 0)
+                + ($calculation?->legal_holiday_work_minutes ?? 0);
+            $regularWorkMinutes = $calculation === null ? 0 : max(
+                0,
+                (int) $calculation->work_minutes - (int) $overtime,
+            );
 
             $sheet->fromArray([
                 $dayNumber,
                 self::WEEKDAY_LABELS[$date->dayOfWeek],
                 $day?->actual_start_at?->format('H:i') ?? '',
                 $day?->actual_end_at?->format('H:i') ?? '',
-                $calculation ? $this->minutesToExcelTime((int) $calculation->prescribed_work_minutes) : '',
+                $calculation ? $this->minutesToExcelTime($regularWorkMinutes) : '',
                 $calculation ? $this->minutesToExcelTime((int) $overtime) : '',
                 $day ? $this->minutesToExcelTime($breakMinutes) : '',
                 $day && $this->isLate($day) ? '○' : '',
                 $day && $this->isEarly($day) ? '○' : '',
                 $calculation && $calculation->absence_minutes > 0 ? '○' : '',
-                $this->dayNote($day),
+                $this->dayNote($day, $effectiveSchedule->get($date->toDateString())?->public_holiday_name),
             ], null, "A{$row}");
 
             if ($date->isWeekend()) {
@@ -193,8 +213,14 @@ class AttendanceExcelBuilder
         $totalRow = $headerRow + $daysInMonth + 1;
         $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
         $sheet->setCellValue("A{$totalRow}", '労働時間合計');
-        $sheet->setCellValue("E{$totalRow}", $this->minutesToExcelTime((int) ($snapshot['prescribed_work_minutes'] ?? 0)));
-        $sheet->setCellValue("F{$totalRow}", $this->minutesToExcelTime($overtimeMinutes));
+        $totalOutsideMinutes = (int) ($snapshot['statutory_within_overtime_minutes'] ?? 0)
+            + $overtimeMinutes
+            + (int) ($snapshot['prescribed_holiday_work_minutes'] ?? 0)
+            + (int) ($snapshot['legal_holiday_work_minutes'] ?? 0);
+        $totalRegularMinutes = (int) ($snapshot['weekday_regular_work_minutes']
+            ?? max(0, (int) ($snapshot['work_minutes'] ?? 0) - $totalOutsideMinutes));
+        $sheet->setCellValue("E{$totalRow}", $this->minutesToExcelTime($totalRegularMinutes));
+        $sheet->setCellValue("F{$totalRow}", $this->minutesToExcelTime($totalOutsideMinutes));
         $sheet->getStyle("A{$totalRow}:K{$totalRow}")->getFont()->setBold(true);
 
         $sheet->getStyle("E13:G{$totalRow}")->getNumberFormat()->setFormatCode(self::TIME_FORMAT);
@@ -282,19 +308,15 @@ class AttendanceExcelBuilder
             && $day->actual_end_at->lessThan($day->calendarEntry->planned_end_at);
     }
 
-    private function dayNote(?AttendanceDay $day): string
+    private function dayNote(?AttendanceDay $day, ?string $holidayName = null): string
     {
-        if ($day === null) {
-            return '';
-        }
-
         $leave = match (true) {
-            (float) ($day->calculation?->paid_leave_days ?? 0) > 0 => '有給休暇',
-            (float) ($day->calculation?->special_leave_days ?? 0) > 0 => '特別休暇',
+            (float) ($day?->calculation?->paid_leave_days ?? 0) > 0 => '有給休暇',
+            (float) ($day?->calculation?->special_leave_days ?? 0) > 0 => '特別休暇',
             default => null,
         };
 
-        return collect([$leave, $day->note])->filter()->implode(' / ');
+        return collect([$holidayName, $leave, $day?->note])->filter()->implode(' / ');
     }
 
     private function yearMonthTitle(string $yearMonth): string

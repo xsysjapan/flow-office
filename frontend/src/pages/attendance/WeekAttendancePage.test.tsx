@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import type { AttendanceDay } from '../../api/types'
 import { addDays, formatDate, mondayOf } from '../../utils/weekDates'
 import { WeekAttendancePage } from './WeekAttendancePage'
@@ -58,6 +59,7 @@ const mondayRecord: AttendanceDay = {
 function renderPage(days: AttendanceDay[] = [mondayRecord]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
+  vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
 
   return render(
     <QueryClientProvider client={queryClient}>

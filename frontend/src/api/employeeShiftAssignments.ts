@@ -2,7 +2,9 @@ import { apiFetch } from './client'
 import type { EmployeeShiftAssignment, ShiftScheduleReview } from './types'
 
 export function fetchShiftAssignments(userId: string, from: string, to: string): Promise<EmployeeShiftAssignment[]> {
-  return apiFetch('/employee-calendar-entries', { query: { user_id: userId, from, to } })
+  return apiFetch<{ data: EmployeeShiftAssignment[]; provisional: boolean }>('/employee-calendar-entries', {
+    query: { user_id: userId, from, to },
+  }).then((response) => response.data)
 }
 
 export interface GenerateShiftAssignmentsInput {

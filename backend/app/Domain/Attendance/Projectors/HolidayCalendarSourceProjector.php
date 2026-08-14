@@ -87,9 +87,17 @@ class HolidayCalendarSourceProjector extends Projector
                 continue;
             }
 
+            $holidaySchedule = $dayChange['is_public_holiday'] ? [
+                'day_type' => $day->is_legal_holiday ? 'legal_holiday' : 'company_holiday',
+                'is_working_day' => false,
+                'is_company_holiday' => ! $day->is_legal_holiday,
+                'schedule_state' => CompanyCalendarDay::SCHEDULE_OFF,
+            ] : [];
+
             $day->update([
                 'is_public_holiday' => $dayChange['is_public_holiday'],
                 'public_holiday_name' => $dayChange['public_holiday_name'],
+                ...$holidaySchedule,
             ]);
 
             CompanyCalendarDaySource::query()->create([

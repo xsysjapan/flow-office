@@ -11,8 +11,9 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
-import type { AttendanceDay } from '../../api/types'
+import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { useAttendanceMonth, usePunches, useWeek } from '../../hooks/useAttendance'
+import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
@@ -45,13 +46,22 @@ function weekdayLabel(date: string): string {
 function ReadOnlyDayRow({
   date,
   day,
+  schedule,
   onSelect,
 }: {
   date: string
   day: AttendanceDay | undefined
+  schedule?: EmployeeShiftAssignment
   onSelect?: (date: string) => void
 }) {
-  const { label, tone } = day ? attendanceDayDisplayLabel(day) : { label: '未入力', tone: 'neutral' as const }
+  const holidayMeta = schedule?.is_legal_holiday
+    ? { label: '法定休日', tone: 'danger' as const }
+    : schedule?.is_company_holiday || schedule?.is_working_day === false
+      ? { label: '所定休日', tone: 'warning' as const }
+      : null
+  const { label, tone } = holidayMeta ?? (day
+    ? attendanceDayDisplayLabel(day)
+    : { label: '未入力', tone: 'neutral' as const })
   const warnings = dayWarnings(date, day, formatDate(new Date()))
 
   const content = (
@@ -61,6 +71,9 @@ function ReadOnlyDayRow({
           {date}({weekdayLabel(date)})
         </span>
         <Badge tone={tone}>{label}</Badge>
+        {schedule?.public_holiday_name && (
+          <span className="text-xs text-muted-foreground">{schedule.public_holiday_name}</span>
+        )}
       </div>
       <div className="col-start-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:contents">
         {day && (day.actual_start_at || day.actual_end_at) && (
@@ -124,6 +137,7 @@ export function MonthlyReferenceView({
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((data?.schedule ?? []).map((entry) => [entry.work_date, entry]))
   const dates = datesInMonth(yearMonth)
 
   return (
@@ -186,7 +200,7 @@ export function MonthlyReferenceView({
         <Card title="日別の内訳">
           <ul className="divide-y divide-border">
             {dates.map((date) => (
-              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} onSelect={onSelectDate} />
+              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} onSelect={onSelectDate} />
             ))}
           </ul>
         </Card>
@@ -211,7 +225,9 @@ export function WeeklyReferenceView({
   const { data, isLoading, error } = useWeek(weekStart, userId)
 
   const dates = weekDates(weekStart)
+  const { data: schedule } = useShiftAssignments(userId, dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
   const { totals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
 
   return (
@@ -273,7 +289,7 @@ export function WeeklyReferenceView({
         <Card title="日別の内訳">
           <ul className="divide-y divide-border">
             {dates.map((date) => (
-              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} />
+              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} />
             ))}
           </ul>
         </Card>
@@ -329,8 +345,14 @@ export function DailyReferenceView({
   const today = formatDate(new Date())
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
   const { data, isLoading, error } = useWeek(monday, userId)
+  const { data: scheduleDays } = useShiftAssignments(userId, monday, addDays(monday, 6))
   const day = data?.find((d) => d.work_date === date)
-  const statusMeta = day ? attendanceDayDisplayLabel(day) : null
+  const schedule = scheduleDays?.find((entry) => entry.work_date === date)
+  const statusMeta = schedule?.is_legal_holiday
+    ? { label: '法定休日', tone: 'danger' as const }
+    : schedule?.is_company_holiday || schedule?.is_working_day === false
+      ? { label: '所定休日', tone: 'warning' as const }
+      : day ? attendanceDayDisplayLabel(day) : null
 
   return (
     <>
@@ -376,6 +398,9 @@ export function DailyReferenceView({
       <p className="mb-3 text-sm text-muted-foreground">
         {date}({weekdayLabel(date)})
       </p>
+      {schedule?.public_holiday_name && (
+        <p className="mb-3 text-sm text-muted-foreground">{schedule.public_holiday_name}</p>
+      )}
 
       {isLoading ? (
         <LoadingState />
@@ -451,6 +476,55 @@ export function DailyReferenceView({
       </Card>
       <ReadOnlyPunchLogCard date={date} userId={userId} />
     </>
+  )
+}
+
+/** Read-only month/week/day drill-down shared by approval and back-office reviews. */
+export function AttendanceMonthReferenceTabs({ userId, yearMonth }: { userId: string; yearMonth: string }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const dates = datesInMonth(yearMonth)
+  const dateRange = { min: dates[0], max: dates[dates.length - 1] }
+  const weekRange = {
+    min: formatDate(mondayOf(new Date(`${dates[0]}T00:00:00`))),
+    max: formatDate(mondayOf(new Date(`${dates[dates.length - 1]}T00:00:00`))),
+  }
+
+  function selectDate(date: string) {
+    setSelectedDate(date)
+    setViewMode('day')
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        {VIEW_MODES.map((mode) => (
+          <Button
+            key={mode.key}
+            type="button"
+            variant={viewMode === mode.key ? 'primary' : 'secondary'}
+            onClick={() => setViewMode(mode.key)}
+          >
+            {mode.label}
+          </Button>
+        ))}
+      </div>
+      {viewMode === 'month' && (
+        <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={selectDate} />
+      )}
+      {viewMode === 'week' && (
+        <WeeklyReferenceView userId={userId} initialWeekStart={weekRange.min} weekRange={weekRange} />
+      )}
+      {viewMode === 'day' && (
+        <DailyReferenceView
+          key={selectedDate ?? dates[0]}
+          userId={userId}
+          initialDate={selectedDate ?? dates[0]}
+          dateRange={dateRange}
+          onBack={() => setViewMode('month')}
+        />
+      )}
+    </div>
   )
 }
 

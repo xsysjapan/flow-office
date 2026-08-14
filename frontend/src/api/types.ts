@@ -1046,16 +1046,19 @@ export interface UserWorkStyleMonthlyAssignment {
 }
 
 export interface EmployeeShiftAssignment {
-  id: string;
+  id: string | null;
   user_id: string;
   work_date: string;
-  work_style_id: string;
+  work_style_id: string | null;
   /** UC-C004: 3交代制シフトパターンからの割当の場合のみ設定される。 */
   shift_pattern_id: string | null;
   day_type: string;
   is_working_day: boolean;
   is_legal_holiday: boolean;
   is_company_holiday: boolean;
+  is_public_holiday?: boolean;
+  public_holiday_name?: string | null;
+  schedule_state?: "WORK" | "OFF" | "LEAVE";
   planned_start_at: string | null;
   planned_end_at: string | null;
   planned_break_minutes: number;
@@ -1066,6 +1069,9 @@ export interface EmployeeShiftAssignment {
   is_published: boolean;
   /** 個別にシフトパターンを上書きした日かどうか。ローテーションの再生成では上書きされない。 */
   is_manually_overridden: boolean;
+  /** company_calendar is the base schedule; employee_calendar_entry is a persisted override. */
+  schedule_source?: "company_calendar" | "employee_calendar_entry" | "provisional";
+  provisional?: boolean;
 }
 
 /** UC-C004 手順2: シフトパターン(日勤/準夜勤/深夜勤/公休/明け休み等)。 */

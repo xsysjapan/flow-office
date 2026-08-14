@@ -97,7 +97,19 @@ describe('WorkCalendarListPage', () => {
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
-        allow_daily_holiday_override: true,
+        week_starts_on: undefined,
+        fiscal_year_start_month: undefined,
+        fiscal_year_start_day: undefined,
+        weekday_holiday_pattern: {
+          '1': 'working',
+          '2': 'working',
+          '3': 'working',
+          '4': 'working',
+          '5': 'working',
+          '6': 'company_holiday',
+          '7': 'legal_holiday',
+        },
+        allow_daily_holiday_override: false,
       }),
     )
   })
@@ -114,13 +126,15 @@ describe('WorkCalendarListPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.click(screen.getByRole('button', { name: '曜日ごとの休日設定を変更する' }))
     await userEvent.selectOptions(screen.getByLabelText('日曜日'), 'company_holiday')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
         name: '2027年度カレンダー',
+        week_starts_on: undefined,
+        fiscal_year_start_month: undefined,
+        fiscal_year_start_day: undefined,
         weekday_holiday_pattern: {
           '1': 'working',
           '2': 'working',
@@ -130,7 +144,7 @@ describe('WorkCalendarListPage', () => {
           '6': 'company_holiday',
           '7': 'company_holiday',
         },
-        allow_daily_holiday_override: true,
+        allow_daily_holiday_override: false,
       }),
     )
   })

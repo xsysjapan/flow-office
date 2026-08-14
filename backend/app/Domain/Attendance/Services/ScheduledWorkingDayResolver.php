@@ -2,8 +2,8 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Models\CompanyCalendarDay;
 use App\Models\WorkStyle;
+use App\Models\EmployeeCalendarEntry;
 use Illuminate\Support\Carbon;
 
 /**
@@ -15,18 +15,23 @@ use Illuminate\Support\Carbon;
  */
 class ScheduledWorkingDayResolver
 {
-    public function __construct(private readonly WorkStyleFallbackResolver $workStyleFallbackResolver) {}
+    public function __construct(
+        private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
+    ) {}
 
     public function isWorkingDay(string $userId, Carbon $date): bool
     {
-        $workStyle = $this->workStyleFallbackResolver->resolveForUser($userId, $date);
+        return (bool) $this->effectiveScheduleResolver->resolve($userId, $date)?->is_working_day;
+    }
 
-        return $workStyle !== null && $this->isWorkingDayForWorkStyle($workStyle, $date);
+    public function resolveSchedule(string $userId, Carbon $date): ?EmployeeCalendarEntry
+    {
+        return $this->effectiveScheduleResolver->resolve($userId, $date);
     }
 
     public function resolveWorkStyle(string $userId, Carbon $date): ?WorkStyle
     {
-        return $this->workStyleFallbackResolver->resolveForUser($userId, $date);
+        return $this->effectiveScheduleResolver->resolve($userId, $date)?->workStyle;
     }
 
     /**
@@ -35,15 +40,4 @@ class ScheduledWorkingDayResolver
      * 土日を除く平日を所定労働日とみなす(FlexSettlementSummaryCalculator::workingDatesWithinPeriod
      * と同じ考え方)。
      */
-    private function isWorkingDayForWorkStyle(WorkStyle $workStyle, Carbon $date): bool
-    {
-        if ($workStyle->company_calendar_id !== null) {
-            return (bool) CompanyCalendarDay::query()
-                ->whereHas('year', fn ($query) => $query->where('company_calendar_id', $workStyle->company_calendar_id))
-                ->whereDate('date', $date->toDateString())
-                ->value('is_working_day');
-        }
-
-        return ! $date->isWeekend();
-    }
 }

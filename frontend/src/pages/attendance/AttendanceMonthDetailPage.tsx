@@ -181,6 +181,7 @@ export function AttendanceMonthDetailPage() {
     (month === null || month?.status === 'not_submitted' || month?.status === 'returned')
   const bulkEntryLocked = month != null && (month.status === 'submitted' || month.status === 'approved' || month.status === 'closed')
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((data?.schedule ?? []).map((entry) => [entry.work_date, entry]))
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
 
@@ -243,6 +244,7 @@ export function AttendanceMonthDetailPage() {
                 key={date}
                 date={date}
                 day={daysByDate.get(date)}
+                schedule={scheduleByDate.get(date)}
                 warnings={dayWarnings(date, daysByDate.get(date), today)}
                 approvedPaidLeaveRequestId={approvedRequestFor(paidLeaveRequests, date)}
                 approvedSpecialLeaveRequestId={approvedRequestFor(specialLeaveRequests, date)}

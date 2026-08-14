@@ -45,7 +45,7 @@ export function WorkCalendarListPage() {
         ) : calendars.length === 0 ? (
           <EmptyState
             title="カレンダーはまだありません。"
-            description="会社カレンダーを作成すると、社員の勤務予定や祝日をカレンダー単位で管理できます。"
+            description="会社カレンダーを作成すると、社員の勤務予定や休日をカレンダー単位で管理できます。"
             action={<Button onClick={() => setIsCreateModalOpen(true)}>会社カレンダーを作成</Button>}
           />
         ) : (

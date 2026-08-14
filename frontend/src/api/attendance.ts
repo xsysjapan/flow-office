@@ -7,6 +7,7 @@ import type {
   AttendanceMonthlyCalculationTotals,
   AttendanceMonthStatus,
   AttendancePunch,
+  EmployeeShiftAssignment,
   FlexSettlementSummary,
   Paginated,
   SpecialLeaveBreakdownEntry,
@@ -212,6 +213,7 @@ export function deletePunch(id: string, reason: string): Promise<AttendancePunch
 /** UC-A007: 月次勤怠。userIdを指定すると自分以外の社員を参照できる(adminのみ)。 */
 export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   days: AttendanceDay[]
+  schedule?: EmployeeShiftAssignment[]
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
   monthly_calculation_totals: AttendanceMonthlyCalculationTotals

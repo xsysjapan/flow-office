@@ -31,7 +31,7 @@ class AttendanceStandardBreakInserter
     /** 標準休憩の自動補完を検討する最短実働時間(6時間)。 */
     private const AUTO_BREAK_MINIMUM_WORK_MINUTES = 360;
 
-    public function __construct(private readonly WorkStyleFallbackResolver $workStyleFallbackResolver) {}
+    public function __construct(private readonly EffectiveScheduleResolver $effectiveScheduleResolver) {}
 
     /**
      * 補完した場合はtrueを返す(呼び出し元は$aggregateを永続化する必要がある)。$dayの
@@ -54,8 +54,11 @@ class AttendanceStandardBreakInserter
             return false;
         }
 
-        $workStyle = $day->calendarEntry?->workStyle
-            ?? $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date->copy());
+        $workStyle = $this->effectiveScheduleResolver->resolve(
+            $day->user_id,
+            $day->work_date->copy(),
+            $day->calendarEntry,
+        )?->workStyle;
 
         if (! $this->supportsAutoBreak($workStyle)) {
             return false;

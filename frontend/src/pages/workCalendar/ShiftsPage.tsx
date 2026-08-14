@@ -110,7 +110,7 @@ function ShiftGenerationCard() {
           ) : (
             <ul className="divide-y divide-border">
               {shiftAssignments?.map((assignment) => (
-                <li key={assignment.id} className="py-2 text-sm text-foreground">
+                <li key={assignment.id ?? assignment.work_date} className="py-2 text-sm text-foreground">
                   {assignment.work_date}({assignment.day_type}) {assignment.planned_start_at ?? '--:--'}〜
                   {assignment.planned_end_at ?? '--:--'}
                   {assignment.shift_pattern_id !== null && (

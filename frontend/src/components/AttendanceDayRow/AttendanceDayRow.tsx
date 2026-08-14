@@ -1,6 +1,6 @@
 import { ChevronRight, MoreVertical } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import type { AttendanceDay } from '../../api/types'
+import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
 import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
@@ -19,6 +19,7 @@ function weekdayLabel(date: string): string {
 export interface AttendanceDayRowProps {
   date: string
   day: AttendanceDay | undefined
+  schedule?: EmployeeShiftAssignment
   warnings?: string[]
   /** この日に承認済みの有給休暇申請があれば、そのID(取消メニュー項目を表示するため)。 */
   approvedPaidLeaveRequestId?: string
@@ -41,13 +42,21 @@ export interface AttendanceDayRowProps {
 export function AttendanceDayRow({
   date,
   day,
+  schedule,
   warnings = [],
   approvedPaidLeaveRequestId,
   approvedSpecialLeaveRequestId,
   approvedCompensatoryLeaveRequestId,
   onRequestCancelApprovedLeave,
 }: AttendanceDayRowProps) {
-  const { label, tone } = day ? attendanceDayDisplayLabel(day) : { label: '未入力', tone: 'neutral' as const }
+  const holidayMeta = schedule?.is_legal_holiday
+    ? { label: '法定休日', tone: 'danger' as const }
+    : schedule?.is_company_holiday || schedule?.is_working_day === false
+      ? { label: '所定休日', tone: 'warning' as const }
+      : null
+  const { label, tone } = holidayMeta ?? (day
+    ? attendanceDayDisplayLabel(day)
+    : { label: '未入力', tone: 'neutral' as const })
   const hasApprovedLeaveToCancel =
     !!approvedPaidLeaveRequestId || !!approvedSpecialLeaveRequestId || !!approvedCompensatoryLeaveRequestId
 
@@ -62,6 +71,9 @@ export function AttendanceDayRow({
             {date}({weekdayLabel(date)})
           </span>
           <Badge tone={tone}>{label}</Badge>
+          {schedule?.public_holiday_name && (
+            <span className="text-xs text-muted-foreground">{schedule.public_holiday_name}</span>
+          )}
         </div>
         <div className="col-start-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:contents">
           {day && (day.actual_start_at || day.actual_end_at) && (

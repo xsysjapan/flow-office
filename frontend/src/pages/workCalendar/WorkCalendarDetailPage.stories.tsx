@@ -69,7 +69,7 @@ function withSeeded() {
         <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1']}>
           <Routes>
             <Route path="/admin/work-calendars/:id" element={<WorkCalendarDetailPage />} />
-            <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<p>日別編集ページ</p>} />
+            <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<p>日別編集ページ</p>} />
             <Route path="/admin/work-calendars" element={<p>カレンダー一覧ページ</p>} />
           </Routes>
         </MemoryRouter>

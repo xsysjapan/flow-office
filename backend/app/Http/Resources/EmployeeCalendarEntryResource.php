@@ -22,6 +22,9 @@ class EmployeeCalendarEntryResource extends JsonResource
             'is_working_day' => $this->is_working_day,
             'is_legal_holiday' => $this->is_legal_holiday,
             'is_company_holiday' => $this->is_company_holiday,
+            'is_public_holiday' => (bool) ($this->is_public_holiday ?? false),
+            'public_holiday_name' => $this->public_holiday_name ?? null,
+            'schedule_state' => $this->schedule_state,
             'planned_start_at' => $this->planned_start_at?->toIso8601String(),
             'planned_end_at' => $this->planned_end_at?->toIso8601String(),
             'planned_break_minutes' => $this->planned_break_minutes,
@@ -32,6 +35,7 @@ class EmployeeCalendarEntryResource extends JsonResource
             // UC-C014手順5: company_calendar_years未生成期間の暫定計算結果であることの印。
             // 通常のemployee_calendar_entries行はfalse。
             'provisional' => $this->provisional ?? false,
+            'schedule_source' => $this->schedule_source ?? 'employee_calendar_entry',
         ];
     }
 }

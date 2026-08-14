@@ -25,7 +25,7 @@ import {
   useDownloadAttendanceExcel,
 } from '../../hooks/useAttendance'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
-import { MonthlyReferenceView } from '../attendance/AttendanceReferencePage'
+import { AttendanceMonthReferenceTabs } from '../attendance/AttendanceReferencePage'
 
 /**
  * 月次勤怠承認(attendance.month_approved)から自動生成されたバックオフィスタスク専用の
@@ -55,7 +55,7 @@ function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceM
       ) : month ? (
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 rounded-md border border-border p-3">
-            <MonthlyReferenceView userId={month.user_id} restrictToYearMonth={month.year_month} />
+            <AttendanceMonthReferenceTabs userId={month.user_id} yearMonth={month.year_month} />
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

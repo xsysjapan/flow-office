@@ -21,6 +21,7 @@ use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
+use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
@@ -29,6 +30,7 @@ use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AttendanceDayResource;
 use App\Http\Resources\AttendanceMonthResource;
+use App\Http\Resources\EmployeeCalendarEntryResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
@@ -616,6 +618,24 @@ class AttendanceController extends Controller
             ->orderBy('work_date')
             ->get();
 
+        $calendarEntries = EmployeeCalendarEntry::query()
+            ->where('user_id', $userId)
+            ->where('work_date', 'like', "{$yearMonth}%")
+            ->orderBy('work_date')
+            ->get();
+        $calendarEntries->each(fn (EmployeeCalendarEntry $entry) => $entry->schedule_source = 'employee_calendar_entry');
+
+        $from = Carbon::parse("{$yearMonth}-01")->startOfMonth();
+        $effectiveSchedule = $calendarEntries
+            ->concat(app(ProvisionalScheduleCalculator::class)->fillGaps(
+                $userId,
+                $from->toDateString(),
+                $from->copy()->endOfMonth()->toDateString(),
+                $calendarEntries,
+            ))
+            ->sortBy(fn (EmployeeCalendarEntry $entry) => $entry->work_date)
+            ->values();
+
         $month = AttendanceMonth::query()
             ->with(['user', 'approver'])
             ->where('user_id', $userId)
@@ -624,6 +644,7 @@ class AttendanceController extends Controller
 
         return [
             'days' => AttendanceDayResource::collection($days),
+            'schedule' => EmployeeCalendarEntryResource::collection($effectiveSchedule),
             'month' => $month ? new AttendanceMonthResource($month) : null,
             // フレックスタイム制(指示書 7.6節)のみ非nullを返す。attendance_monthsの提出前
             // (未提出でまだ行が存在しない月)でも表示できるよう、monthとは独立して都度計算する。
