@@ -430,19 +430,20 @@ Calendar / Scheduler / Spreadsheet / Wizard のような画面は、通常CRUD�
 
 | Pattern | Reference |
 | --- | --- |
-| List(フィルター + ページング + 一括操作) | `frontend/src/pages/approvals/ApprovalsPage.tsx` |
+| List(フィルター + ページング + 一括操作 + URL状態) | `frontend/src/pages/approvals/ApprovalsPage.tsx` |
 | List(シンプルなTable一覧) | `frontend/src/pages/expense/ExpenseClaimListPage.tsx` |
+| 行クリック | `frontend/src/components/ClickableTableRow/` |
 | Detail(役割による操作分岐) | `frontend/src/pages/workflow/WorkflowRequestDetailPage.tsx` |
+| Create Page(項目数が多くDialogから切り出した例) | `frontend/src/pages/workCalendar/WorkCalendarCreatePage.tsx` |
 | Create / Edit Form(項目構成のみ参照) | `frontend/src/pages/expense/ExpenseCategoryEditPage.tsx`(保存後の遷移は§2.6未準拠 — `known-gaps.md` §4) |
 | Destructive Confirmation | `frontend/src/components/ConfirmActionDialog/` |
 | Loading | `frontend/src/components/LoadingState/` |
 | Error | `frontend/src/components/ErrorMessage/` |
+| Empty State | `frontend/src/components/EmptyState/` |
+| Permission Denied | `frontend/src/components/PermissionDenied/` |
 | Pagination | `frontend/src/components/Pagination/` |
 | Form項目 | `frontend/src/components/FormField/` |
-| URL状態同期 | `frontend/src/pages/approvals/ApprovalsPage.tsx`(詳細IDのみ同期。Filter/PageのURL化は未実装) |
-
-Empty State・Permission Deniedには現状Reference実装が無い。該当画面に着手した際に、
-§2.17 / §2.15に沿った実装を最初に作り、それをReferenceに昇格させる。
+| URL状態同期 | `frontend/src/pages/approvals/ApprovalsPage.tsx`(status/yearMonth/page/requestIdすべて同期) |
 
 ### 4.2 他スキルとの関係(責務は重複させない)
 
