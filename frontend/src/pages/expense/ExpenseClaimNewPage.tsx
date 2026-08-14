@@ -386,10 +386,15 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  * URLに`:id`が含まれる場合(下書きの編集を再開する`/expenses/:id/edit`)は、既存のclaimIdを
  * そのまま使う。また`?category=<区分コード>`が付いている場合(メニューのよく使う区分への
  * ショートカット)は、新規作成時に限り区分選択ステップを飛ばしてそのまま該当区分の入力
- * フォームを表示する。選択中の区分は逆方向にも`?category=`へ書き込み(SKILL.md §2.10)、
- * リロード・URL共有で選択中の区分を維持できるようにする(読み取りと同じく下書き編集時は
- * 対象外)。ウィザードの他のステップ(登録方法選択・タイトル入力等)はclaimId/entryMode/
- * 保存済み明細の有無が絡み合っており、無理にURL化すると状態管理が複雑化するため見送った。
+ * フォームを表示する。選択中の区分・登録方法(個別/まとめて)は逆方向にも`?category=`/
+ * `?mode=`へ書き込み(SKILL.md §2.10)、リロード・URL共有で状態を維持できるようにする
+ * (読み取りと同じく下書き編集時は対象外)。ただし、まだ何も保存していない新規作成の間
+ * (claimId確定前)に限る。明細を1件でも保存してclaimIdが確定した後は、そのclaimId自体が
+ * URLに反映されないため(`/expenses/new`のまま)、以降のステップ(タイトル入力・区分の
+ * 追加選択等)はURL化していない。claimId確定後も`/expenses/:id/edit`へ遷移させれば
+ * リロード耐性を持たせられるが、既存の`/expenses/:id/edit`ルート(下書き編集の再開)と
+ * 動作を揃えるための状態構造の見直しが必要になるため、大規模な構造変更を避ける方針のもと
+ * 今回は見送っている(`known-gaps.md`参照)。
  */
 export function ExpenseClaimNewPage() {
   const { systemSettings } = useAppSettings()
@@ -398,8 +403,11 @@ export function ExpenseClaimNewPage() {
   const { id: routeClaimId } = useParams<{ id?: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const categoryCodeParam = searchParams.get('category')
+  const modeParam = searchParams.get('mode')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
-  const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
+  const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(
+    !routeClaimId && (modeParam === 'individual' || modeParam === 'bulk') ? modeParam : undefined,
+  )
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   // 単票入力へ適用中のプリセット明細。同じプリセットを続けて選び直しても反映されるよう
@@ -437,9 +445,11 @@ export function ExpenseClaimNewPage() {
     setSinglePresetToken(0)
   }, [selectedCategoryId])
 
-  /** 選択中の経費区分を`?category=`へ書き込む(既存の読み取りと対称にする。SKILL.md §2.10)。
-   *  下書き編集(`/expenses/:id/edit`)では、そもそも読み取り側もこのショートカットを使わない
-   *  ため、URLも書き換えない。 */
+  /** 選択中の経費区分・登録方法(個別/まとめて)を`?category=`/`?mode=`へ書き込む
+   *  (既存の読み取りと対称にする。SKILL.md §2.10)。下書き編集(`/expenses/:id/edit`)では、
+   *  そもそも読み取り側もこのショートカットを使わないため、URLも書き換えない。claimIdが
+   *  一度作成された後(保存済み明細がある状態)のURL化は、状態構造の見直しが必要になるため
+   *  見送っている(`known-gaps.md`参照)。 */
   function setCategoryParam(code: string | null) {
     if (routeClaimId) return
     setSearchParams(
@@ -447,6 +457,19 @@ export function ExpenseClaimNewPage() {
         const next = new URLSearchParams(prev)
         if (code) next.set('category', code)
         else next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function setModeParam(mode: ExpenseClaimEntryMode | null) {
+    if (routeClaimId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (mode) next.set('mode', mode)
+        else next.delete('mode')
         return next
       },
       { replace: true },
@@ -483,6 +506,13 @@ export function ExpenseClaimNewPage() {
 
   const handleSelectEntryMode = (mode: ExpenseClaimEntryMode) => {
     setEntryMode(mode)
+    setModeParam(mode)
+  }
+
+  /** 登録方法選択ステップへ戻る(まだ何も保存していない新規作成のみ)。 */
+  const handleClearEntryMode = () => {
+    setEntryMode(undefined)
+    setModeParam(null)
   }
 
   /** 「まとめて経費登録」: 先にタイトルを確定させてから下書きを作成する。 */
@@ -573,7 +603,7 @@ export function ExpenseClaimNewPage() {
   if (!claimId && entryMode === 'bulk') {
     return (
       <BulkTitleStep
-        onBack={() => setEntryMode(undefined)}
+        onBack={handleClearEntryMode}
         onSubmit={(title) => void handleStartBulkClaim(title)}
         isSubmitting={createClaim.isPending || startClaimTitle.isPending}
         error={createClaim.error ?? startClaimTitle.error}
@@ -589,7 +619,7 @@ export function ExpenseClaimNewPage() {
         <CategorySelectionStep
           categories={categories ?? []}
           onSelect={handleSelectCategory}
-          onBack={!claimId ? () => setEntryMode(undefined) : undefined}
+          onBack={!claimId ? handleClearEntryMode : undefined}
         />
 
         {claim && (

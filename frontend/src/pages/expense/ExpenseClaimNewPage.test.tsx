@@ -735,7 +735,46 @@ describe('ExpenseClaimNewPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
 
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
-    expect(screen.getByTestId('location-search')).toHaveTextContent('')
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('category=')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual')
+  })
+
+  it('reflects the selected entry mode into ?mode= so a reload/URL share keeps the same mode', async () => {
+    renderPage([transportCategory, lodgingCategory])
+
+    await selectIndividualEntryMode()
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual'))
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    await screen.findByLabelText('利用日')
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+    await screen.findByRole('button', { name: '交通費' })
+
+    expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual')
+  })
+
+  it('skips the entry mode selection step when a ?mode= shortcut param matches a valid mode', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual')
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '個別に登録する' })).not.toBeInTheDocument()
+  })
+
+  it('clears ?mode= from the URL when the user goes back to entry mode selection', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual')
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    await screen.findByLabelText('利用日')
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+    await screen.findByRole('button', { name: '交通費' })
+
+    await userEvent.click(screen.getByRole('button', { name: '登録方法の選択に戻る' }))
+
+    expect(await screen.findByRole('button', { name: '個別に登録する' })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('mode=')
   })
 
   it('lets the applicant set an optional title for the claim', async () => {

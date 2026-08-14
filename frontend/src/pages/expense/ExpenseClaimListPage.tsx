@@ -9,7 +9,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useDeleteExpenseClaim, useMyExpenseClaims } from '../../hooks/useExpenseClaims'
-import { expenseClaimStatusLabel } from '../../utils/statusLabels'
+import { expenseClaimStatusLabel, isExpenseClaimDeletable, isExpenseClaimEditable } from '../../utils/statusLabels'
 
 /**
  * UC-X010: 自分の経費精算一覧。まだ申請していない不要な下書きはここから削除できる。
@@ -59,8 +59,8 @@ export function ExpenseClaimListPage() {
           <TableBody>
             {claims.map((claim) => {
               const { label, tone } = expenseClaimStatusLabel(claim.status)
-              const isEditable = claim.status === 'draft' || claim.status === 'returned'
-              const isDeletable = claim.status === 'draft'
+              const isEditable = isExpenseClaimEditable(claim.status)
+              const isDeletable = isExpenseClaimDeletable(claim.status)
               return (
                 <ClickableTableRow
                   key={claim.id}

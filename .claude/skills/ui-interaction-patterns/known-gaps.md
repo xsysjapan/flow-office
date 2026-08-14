@@ -3,7 +3,8 @@
 `SKILL.md`を策定した時点で、既存画面に残っている不統一の記録。新規画面は最初から`SKILL.md`
 に従う。リポジトリ内の全画面(経費入力プリセット編集・カレンダーを含む)が対応済みで、
 以下の項目はすべて解消済み。ユーザー承認を得たAPI変更・Modal→Page変換・行クリック方式の
-全画面統一も含めて完了している。
+全画面統一、ウィザードのURL状態化、判定ロジックの置き場所統一も含めて完了しており、
+「残っている既知の項目」は無い。
 
 ## 1. 確認ダイアログが2種類あった(解消)
 
@@ -41,9 +42,13 @@
 だったため、フロントエンドの引数追加のみで対応できた)、フィルターの選択肢を現在の
 ページのユーザーからではなく`useManagedGroups`/`useGroupTypes`の全件一覧から組み立てる
 よう修正した(ページングにより選択肢が現在ページの内容に限定される問題を避けるため)。
-`pages/expense/ExpenseClaimNewPage.tsx`は選択中の経費区分(`?category=`)をURLへ書き込む
-ようにした(ウィザードの各ステップ自体のURL化は、状態構造上の理由で見送っている。
-下記「残っている既知の項目」参照)。ソートのURL反映例は無し(該当画面が現状無い)。
+`pages/expense/ExpenseClaimNewPage.tsx`は選択中の経費区分(`?category=`)と登録方法・個別/
+まとめて(`?mode=`)の両方をURLへ書き込むようにした。どちらも新規作成でまだ何も保存して
+いない間(claimId確定前)のみ有効で、「区分を変更する」「登録方法の選択に戻る」で戻ると
+対応するパラメータを削除する。claimId確定後(明細を1件でも保存した後)のステップは、
+URLが`/expenses/new`のまま変わらない既存の`/expenses/:id/edit`ルートとの統合が必要になる
+ため、大規模な構造変更を避ける方針のもと見送っている(コード上のコメントに理由を明記)。
+ソートのURL反映例は無し(該当画面が現状無い)。
 
 ## 4. 保存後の遷移が非対称(解消)
 
@@ -92,22 +97,26 @@
 (`isApplicant`/`isApprover`等)は今回維持している(ページ単位でアクセス不能になるケースと
 ボタン単位の権限分岐は区別して扱う)。
 
-## 10. Modal系コンポーネントの命名・構成(部分解消)
+## 10. Modal系コンポーネントの命名・構成(解消・決定確定)
 
 `CreateCompanyCalendarModal`(入力項目が多く§2.11に照らしDialogとして不適切だった)は
 `WorkCalendarCreatePage`としてPage化し、削除した。`DeviceDetailModal` /
 `WorkStyleFormModal` / `MonthlyAttendanceBulkEntryModal` / `WeeklyAttendanceBulkEntryModal`
-は入力項目数が少なく妥当な規模のため、`*Modal`のまま残している(`*Dialog`との命名統一は
-見送り。両者は「フォームモーダル」と「確認ダイアログ」という異なる役割を持つため、
-命名の違いは責務の違いを表しているとも言える)。`Sheet`は`AppLayout`/`AdminLayout`の
-モバイルナビ専用で、Filter用途には未使用。
+は入力項目数が少なく妥当な規模のため、`*Modal`のまま残すことを決定として明記する
+(`*Dialog`との命名統一は行わない。両者は「フォームモーダル」と「確認ダイアログ」という
+異なる役割を持ち、命名の違いは責務の違いを表しているため、統一しないことが正しい)。
+`Sheet`は`AppLayout`/`AdminLayout`のモバイルナビ専用で、Filter用途には未使用。
 
-## 11. 「編集可能/削除可能」判定の置き場所が画面ごと
+## 11. 「編集可能/削除可能」判定の置き場所が画面ごと(解消)
 
-`pages/expense/ExpenseClaimListPage.tsx`はコンポーネント内でstatus文字列比較、
-`pages/workflow/WorkflowRequestListPage.tsx`はモジュールトップレベルの定数配列
-(`CANCELLABLE_STATUSES`)。共通化されていない(各画面内で一貫していれば実害は小さいため
-優先度は低い)。
+`pages/expense/ExpenseClaimListPage.tsx`のコンポーネント内status文字列比較と、
+`pages/workflow/WorkflowRequestListPage.tsx`のモジュールトップレベル定数配列
+(`CANCELLABLE_STATUSES`)という異なる置き場所を統一した。両ドメインとも対応する
+`*StatusLabel`関数の隣に`utils/statusLabels.ts`へ判定関数を切り出し
+(`isExpenseClaimEditable` / `isExpenseClaimDeletable` / `isWorkflowRequestCancellable`)、
+各画面はその関数を呼ぶだけにした。ステータスの意味付け(ラベル・色)と編集可否・削除可否・
+取消可否の判定はいずれも「そのステータス値が何を意味するか」という同じ関心事のため、
+同じファイル内に置くことで今後ステータスが増えた際の見落としを減らす。
 
 ## 12. Detail Pageのアクション配置(Pattern exceptionとして明記)
 
@@ -125,12 +134,9 @@
 `pages/workCalendar/ShiftsPage.tsx`・`CalendarBulkOperationsPage.tsx`のような多数の
 フォームが1画面に並ぶバッチ操作系ツールも含めて網羅対応済み。
 
-## 残っている既知の項目(意図的に見送ったもの)
+## 残っている既知の項目
 
-- `pages/expense/ExpenseClaimNewPage.tsx`のウィザードの各ステップ自体のURL化 —
-  ステップが`claimId`/`entryMode`/保存済み明細の有無が絡み合った分岐で決まっており、
-  安全にURL化するには状態構造自体の見直しが必要なため見送った(選択中の経費区分
-  `?category=`のURL化は対応済み。§3参照)
-- `DeviceDetailModal`等の`*Modal`系コンポーネントの命名統一(§10。入力項目数が少なく
-  Page化の必要性は無いと判断し、`*Modal`のまま維持することを決定として明記した)
-- `pages/expense/ExpenseClaimListPage.tsx`の「編集可能/削除可能」判定ロジックの共通化(§11)
+現時点で無し。上記1〜13すべて解消済み。§3のclaimId確定後(明細を1件でも保存した後)の
+ウィザードステップURL化のみ、`/expenses/:id/edit`ルートとの統合という構造的な見直しを
+要するため意図的に対象外としているが、これは個別の既知の不整合ではなく、コード上の
+docblockに理由を明記した恒久的な設計上のスコープ境界として扱う。

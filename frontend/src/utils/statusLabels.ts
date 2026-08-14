@@ -81,6 +81,13 @@ export function workflowRequestStatusLabel(status: WorkflowRequestStatus): Statu
   return workflowRequestStatusMeta[status]
 }
 
+const CANCELLABLE_WORKFLOW_REQUEST_STATUSES: WorkflowRequestStatus[] = ['draft', 'submitted', 'returned']
+
+/** 申請者が取り消せる状態か(まだ確定していない下書き・提出中・差戻し)。 */
+export function isWorkflowRequestCancellable(status: WorkflowRequestStatus): boolean {
+  return CANCELLABLE_WORKFLOW_REQUEST_STATUSES.includes(status)
+}
+
 const expenseClaimStatusMeta: Record<ExpenseClaimStatus, StatusMeta> = {
   draft: { label: '下書き', tone: 'neutral' },
   in_review: { label: '申請中', tone: 'info' },
@@ -91,6 +98,16 @@ const expenseClaimStatusMeta: Record<ExpenseClaimStatus, StatusMeta> = {
 
 export function expenseClaimStatusLabel(status: ExpenseClaimStatus): StatusMeta {
   return expenseClaimStatusMeta[status]
+}
+
+/** 申請者が明細・タイトルを編集し続けられる状態か(下書き・差戻し)。 */
+export function isExpenseClaimEditable(status: ExpenseClaimStatus): boolean {
+  return status === 'draft' || status === 'returned'
+}
+
+/** 申請者が精算自体を削除できる状態か(まだ提出していない下書きのみ)。 */
+export function isExpenseClaimDeletable(status: ExpenseClaimStatus): boolean {
+  return status === 'draft'
 }
 
 const paymentBearerLabels: Record<ExpensePaymentBearer, string> = {

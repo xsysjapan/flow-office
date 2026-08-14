@@ -12,11 +12,8 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import type { WorkflowRequestStatus } from '../../api/types'
 import { useCancelWorkflowRequest, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
-import { workflowRequestStatusLabel } from '../../utils/statusLabels'
-
-const CANCELLABLE_STATUSES: WorkflowRequestStatus[] = ['draft', 'submitted', 'returned']
+import { isWorkflowRequestCancellable, workflowRequestStatusLabel } from '../../utils/statusLabels'
 
 /**
  * UC-W002手順6周辺: 自分の申請一覧。
@@ -136,7 +133,7 @@ export function WorkflowRequestListPage() {
           <TableBody>
             {requests.map((request) => {
               const { label, tone } = workflowRequestStatusLabel(request.status)
-              const cancellable = CANCELLABLE_STATUSES.includes(request.status)
+              const cancellable = isWorkflowRequestCancellable(request.status)
               const selected = selectedIds.has(request.id)
               return (
                 <ClickableTableRow
