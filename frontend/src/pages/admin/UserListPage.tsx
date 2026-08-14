@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Card } from "../../components/Card/Card";
 import { Button } from "../../components/Button/Button";
+import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableTableRow";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
@@ -42,6 +43,7 @@ const PER_PAGE = 20;
  * ブラウザの戻る/リロード/URL共有で状態が壊れないようにする(SKILL.md §2.10)。
  */
 export function UserListPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
   const accountStatus = searchParams.get("account_status") ?? "";
@@ -323,11 +325,16 @@ export function UserListPage() {
           </TableHeader>
           <TableBody>
             {users.map((user) => (
-              <TableRow key={user.id}>
+              <ClickableTableRow
+                key={user.id}
+                onRowClick={() => navigate(`/admin/users/${user.id}`)}
+                rowLabel={`${user.name}の詳細を開く`}
+              >
                 <TableCell>
                   <Link
                     to={`/admin/users/${user.id}`}
                     className="font-medium text-foreground hover:text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {user.name}
                   </Link>
@@ -410,7 +417,7 @@ export function UserListPage() {
                     </span>
                   )}
                 </TableCell>
-              </TableRow>
+              </ClickableTableRow>
             ))}
           </TableBody>
         </Table>

@@ -4,6 +4,7 @@ import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/Approv
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
@@ -301,11 +302,11 @@ export function ApprovalsPage() {
               const subtitle = subjectSubtitle(request)
               const selected = selectedIds.has(request.id)
               return (
-                <TableRow
+                <ClickableTableRow
                   key={request.id}
                   data-state={selected ? 'selected' : undefined}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedId(request.id)}
+                  onRowClick={() => setSelectedId(request.id)}
+                  rowLabel={`${request.title}の詳細を開く`}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     {isRowActionable(request) && (
@@ -340,7 +341,7 @@ export function ApprovalsPage() {
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatSubmittedAt(request.submitted_at)}</TableCell>
-                </TableRow>
+                </ClickableTableRow>
               )
             })}
           </TableBody>

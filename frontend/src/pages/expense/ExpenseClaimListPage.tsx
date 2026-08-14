@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -14,6 +15,7 @@ import { expenseClaimStatusLabel } from '../../utils/statusLabels'
  * UC-X010: 自分の経費精算一覧。まだ申請していない不要な下書きはここから削除できる。
  */
 export function ExpenseClaimListPage() {
+  const navigate = useNavigate()
   const { data, isLoading, error } = useMyExpenseClaims()
   const deleteClaim = useDeleteExpenseClaim()
 
@@ -60,12 +62,17 @@ export function ExpenseClaimListPage() {
               const isEditable = claim.status === 'draft' || claim.status === 'returned'
               const isDeletable = claim.status === 'draft'
               return (
-                <TableRow key={claim.id}>
+                <ClickableTableRow
+                  key={claim.id}
+                  onRowClick={() => navigate(`/expenses/${claim.id}`)}
+                  rowLabel={`${claim.title ?? '経費精算'}の詳細を開く`}
+                >
                   <TableCell className="text-foreground">{claim.title ?? '-'}</TableCell>
                   <TableCell>
                     <Link
                       to={`/expenses/${claim.id}`}
                       className="font-medium text-foreground hover:text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '-'}
                     </Link>
@@ -76,7 +83,7 @@ export function ExpenseClaimListPage() {
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{claim.approver?.name ?? '-'}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       {isEditable && (
                         <Button asChild variant="secondary" size="sm">
@@ -97,7 +104,7 @@ export function ExpenseClaimListPage() {
                       )}
                     </div>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               )
             })}
           </TableBody>

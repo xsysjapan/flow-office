@@ -386,14 +386,17 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  * URLに`:id`が含まれる場合(下書きの編集を再開する`/expenses/:id/edit`)は、既存のclaimIdを
  * そのまま使う。また`?category=<区分コード>`が付いている場合(メニューのよく使う区分への
  * ショートカット)は、新規作成時に限り区分選択ステップを飛ばしてそのまま該当区分の入力
- * フォームを表示する。
+ * フォームを表示する。選択中の区分は逆方向にも`?category=`へ書き込み(SKILL.md §2.10)、
+ * リロード・URL共有で選択中の区分を維持できるようにする(読み取りと同じく下書き編集時は
+ * 対象外)。ウィザードの他のステップ(登録方法選択・タイトル入力等)はclaimId/entryMode/
+ * 保存済み明細の有無が絡み合っており、無理にURL化すると状態管理が複雑化するため見送った。
  */
 export function ExpenseClaimNewPage() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.expense_claim_requires_approval
   const navigate = useNavigate()
   const { id: routeClaimId } = useParams<{ id?: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const categoryCodeParam = searchParams.get('category')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
   const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
@@ -412,22 +415,43 @@ export function ExpenseClaimNewPage() {
   // ?category=のショートカットはページ表示時に1回だけ適用する。「区分を変更する」で
   // 選択を解除した後にこのeffectが再実行され、同じ区分へ戻されてしまわないようにする。
   // メニューからのショートカットは「個別に経費登録」相当として扱い、登録方法選択を省略する。
+  // 初期表示時の値をrefで固定して使う(選択中の区分をこの後`?category=`へ書き戻すため、
+  // 生の`categoryCodeParam`を依存に使うと、その書き戻し自体でこのeffectが再度走ってしまう)。
   const appliedCategoryShortcut = useRef(false)
+  const initialCategoryCodeParam = useRef(categoryCodeParam).current
   useEffect(() => {
-    if (routeClaimId || appliedCategoryShortcut.current || !categoryCodeParam || !categories) return
+    if (routeClaimId || appliedCategoryShortcut.current || !initialCategoryCodeParam || !categories) return
     appliedCategoryShortcut.current = true
-    const shortcutCategory = categories.find((category) => category.code === categoryCodeParam && category.is_active)
+    const shortcutCategory = categories.find(
+      (category) => category.code === initialCategoryCodeParam && category.is_active,
+    )
     if (shortcutCategory) {
       setEntryMode('individual')
       setSelectedCategoryId(shortcutCategory.id)
     }
-  }, [routeClaimId, categoryCodeParam, categories])
+  }, [routeClaimId, initialCategoryCodeParam, categories])
 
   // 区分を切り替えたら、前の区分向けに選んだプリセットを次の区分の入力へ持ち越さない。
   useEffect(() => {
     setSinglePresetItem(null)
     setSinglePresetToken(0)
   }, [selectedCategoryId])
+
+  /** 選択中の経費区分を`?category=`へ書き込む(既存の読み取りと対称にする。SKILL.md §2.10)。
+   *  下書き編集(`/expenses/:id/edit`)では、そもそも読み取り側もこのショートカットを使わない
+   *  ため、URLも書き換えない。 */
+  function setCategoryParam(code: string | null) {
+    if (routeClaimId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (code) next.set('category', code)
+        else next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
     useEditableRows<SaveExpenseItemInput>([])
@@ -469,6 +493,14 @@ export function ExpenseClaimNewPage() {
 
   const handleSelectCategory = (category: ExpenseCategory) => {
     setSelectedCategoryId(category.id)
+    setCategoryParam(category.code)
+  }
+
+  /** 区分選択ステップへ戻る(区分を変更する/別の区分の明細を追加する)。URLの`?category=`も
+   *  合わせてクリアし、リロード・URL共有時に古い区分へ戻らないようにする。 */
+  const handleClearSelectedCategory = () => {
+    setSelectedCategoryId(undefined)
+    setCategoryParam(null)
   }
 
   const handleSaveItems = async () => {
@@ -591,7 +623,7 @@ export function ExpenseClaimNewPage() {
       <Card
         title={`${selectedCategory.name}の明細を入力`}
         actions={
-          <Button variant="secondary" size="sm" onClick={() => setSelectedCategoryId(undefined)}>
+          <Button variant="secondary" size="sm" onClick={handleClearSelectedCategory}>
             {(claim?.items.length ?? 0) > 0 ? '別の区分の明細を追加する' : '区分を変更する'}
           </Button>
         }

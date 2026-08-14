@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -23,6 +24,7 @@ const CANCELLABLE_STATUSES: WorkflowRequestStatus[] = ['draft', 'submitted', 're
  * 取り消せる(オブジェクトを選択してから操作を適用するUI)。
  */
 export function WorkflowRequestListPage() {
+  const navigate = useNavigate()
   const { data, isLoading, error } = useMyWorkflowRequests()
   const cancelRequest = useCancelWorkflowRequest()
 
@@ -137,8 +139,13 @@ export function WorkflowRequestListPage() {
               const cancellable = CANCELLABLE_STATUSES.includes(request.status)
               const selected = selectedIds.has(request.id)
               return (
-                <TableRow key={request.id} data-state={selected ? 'selected' : undefined}>
-                  <TableCell>
+                <ClickableTableRow
+                  key={request.id}
+                  data-state={selected ? 'selected' : undefined}
+                  onRowClick={() => navigate(`/requests/${request.id}`)}
+                  rowLabel={`${request.title}の詳細を開く`}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {cancellable && (
                       <Checkbox
                         checked={selected}
@@ -151,6 +158,7 @@ export function WorkflowRequestListPage() {
                     <Link
                       to={`/requests/${request.id}`}
                       className="font-medium text-foreground hover:text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {request.title}
                     </Link>
@@ -159,7 +167,7 @@ export function WorkflowRequestListPage() {
                   <TableCell>
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               )
             })}
           </TableBody>

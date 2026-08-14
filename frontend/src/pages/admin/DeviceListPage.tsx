@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
@@ -252,22 +253,11 @@ export function DeviceListPage() {
               {list.map((device) => {
                 const isDeleted = device.deleted_at !== null
                 return (
-                  <TableRow
+                  <ClickableTableRow
                     key={device.id}
-                    className={isDeleted ? undefined : 'cursor-pointer'}
-                    role={isDeleted ? undefined : 'button'}
-                    tabIndex={isDeleted ? undefined : 0}
-                    aria-label={isDeleted ? undefined : `${device.name}の詳細を開く`}
-                    onClick={() => {
-                      if (!isDeleted) setSelectedDeviceId(device.id)
-                    }}
-                    onKeyDown={(e) => {
-                      if (isDeleted) return
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setSelectedDeviceId(device.id)
-                      }
-                    }}
+                    onRowClick={() => setSelectedDeviceId(device.id)}
+                    rowLabel={`${device.name}の詳細を開く`}
+                    disabled={isDeleted}
                   >
                     <TableCell className="font-medium text-foreground">{device.name}</TableCell>
                     <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
@@ -300,7 +290,7 @@ export function DeviceListPage() {
                         </div>
                       )}
                     </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 )
               })}
             </TableBody>

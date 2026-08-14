@@ -1,8 +1,9 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
+import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableTableRow";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
@@ -48,6 +49,7 @@ const visibilityLabel: Record<ExpenseEntryPresetVisibility, string> = {
  * 状態を維持する。
  */
 export function ExpenseEntryPresetListPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryIdParam = searchParams.get("category_id");
@@ -176,13 +178,20 @@ export function ExpenseEntryPresetListPage() {
                       .filter((name): name is string => Boolean(name)),
                   ),
                 ];
+                const editable = canEdit(preset);
                 return (
-                  <TableRow key={preset.id}>
+                  <ClickableTableRow
+                    key={preset.id}
+                    disabled={!editable}
+                    onRowClick={() => navigate(`/expenses/presets/${preset.id}`)}
+                    rowLabel={`${preset.name}の詳細を開く`}
+                  >
                     <TableCell>
-                      {canEdit(preset) ? (
+                      {editable ? (
                         <Link
                           to={`/expenses/presets/${preset.id}`}
                           className="font-medium text-foreground hover:text-primary hover:underline"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {preset.name}
                         </Link>
@@ -209,8 +218,8 @@ export function ExpenseEntryPresetListPage() {
                         {preset.is_active ? "有効" : "無効"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      {canEdit(preset) && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {editable && (
                         <ConfirmActionDialog
                           triggerLabel="削除"
                           triggerVariant="danger"
@@ -230,7 +239,7 @@ export function ExpenseEntryPresetListPage() {
                         />
                       )}
                     </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 );
               })}
             </TableBody>

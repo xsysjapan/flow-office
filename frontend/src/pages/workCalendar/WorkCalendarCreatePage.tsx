@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Button } from '../Button/Button'
-import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
-import { FormField } from '../FormField/FormField'
-import { Checkbox } from '../ui/checkbox'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
-import { Input } from '../ui/input'
-import { NativeSelect } from '../ui/native-select'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Button } from '../../components/Button/Button'
+import { Card } from '../../components/Card/Card'
+import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
+import { FormField } from '../../components/FormField/FormField'
+import { Checkbox } from '../../components/ui/checkbox'
+import { Input } from '../../components/ui/input'
+import { NativeSelect } from '../../components/ui/native-select'
 import { useCreateHolidayCalendarSource, useHolidayCalendarSources } from '../../hooks/useHolidayCalendarSources'
 import { useCreateWorkCalendar } from '../../hooks/useWorkCalendars'
 import type { WeekdayHolidayPattern, WeekdayHolidayPatternDayType } from '../../api/types'
@@ -66,20 +67,18 @@ function emptyFormState() {
   }
 }
 
-export interface CreateCompanyCalendarModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}
-
 /**
- * UC-C009: 会社カレンダー本体の新規作成モーダル。名称のみが必須で、週の開始曜日・
+ * UC-C009: 会社カレンダー本体の新規作成ページ。名称のみが必須で、週の開始曜日・
  * 年度開始月日・曜日ごとの休日設定・祝日iCalendarソースの割当は任意。
+ * 入力項目が多いため、以前はDialogだったが`ui-interaction-patterns` SKILL.md §2.11に
+ * 従いPageへ切り出した(`known-gaps.md` §10)。
  *
  * Pattern exception: 祝日iCalendarソースの追加ボタン文言に「登録する」を使う。
  * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
  * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
-export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompanyCalendarModalProps) {
+export function WorkCalendarCreatePage() {
+  const navigate = useNavigate()
   const { data: sourcesData } = useHolidayCalendarSources()
   const sources = sourcesData ?? []
   const createCalendar = useCreateWorkCalendar()
@@ -92,19 +91,6 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
   const [newSourceMode, setNewSourceMode] = useState<'url' | 'upload'>('url')
   const [newSourceIcsUrl, setNewSourceIcsUrl] = useState('')
   const [newSourceIcsFile, setNewSourceIcsFile] = useState<File | undefined>(undefined)
-
-  useEffect(() => {
-    if (!open) return
-    setForm(emptyFormState())
-    setIsRegisteringSource(false)
-    setNewSourceName('')
-    setNewSourceMode('url')
-    setNewSourceIcsUrl('')
-    setNewSourceIcsFile(undefined)
-    createCalendar.reset()
-    createSource.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
 
   const patch = (next: Partial<typeof form>) => setForm((prev) => ({ ...prev, ...next }))
 
@@ -139,17 +125,25 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
         allow_daily_holiday_override: form.allowDailyHolidayOverride,
         holiday_calendar_source_id: form.holidaySourceId === NONE_OPTION_VALUE ? undefined : form.holidaySourceId,
       },
-      { onSuccess: () => onOpenChange(false) },
+      {
+        // 作成後は作成された会社カレンダーの詳細画面(正史画面)へ遷移する(SKILL.md §2.5)。
+        onSuccess: (created) => navigate(`/admin/work-calendars/${created.id}`),
+      },
     )
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>会社カレンダーを作成</DialogTitle>
-        </DialogHeader>
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link
+          to="/admin/work-calendars"
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          ← 会社カレンダー一覧に戻る
+        </Link>
+      </div>
 
+      <Card title="会社カレンダーを作成">
         {createCalendar.error && <ErrorMessage error={createCalendar.error} />}
 
         <FormField label="カレンダー名" htmlFor="create-calendar-name" required>
@@ -334,16 +328,16 @@ export function CreateCompanyCalendarModal({ open, onOpenChange }: CreateCompany
 
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" onClick={() => navigate('/admin/work-calendars')}>
+              キャンセル
+            </Button>
             <Button isLoading={createCalendar.isPending} disabled={!form.name} onClick={handleSubmit}>
               作成する
-            </Button>
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              キャンセル
             </Button>
           </div>
           {!form.name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
         </div>
-      </DialogContent>
-    </Dialog>
+      </Card>
+    </div>
   )
 }

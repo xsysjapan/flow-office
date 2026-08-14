@@ -21,7 +21,7 @@ describe('ClickableTableRow', () => {
     const onRowClick = vi.fn()
     renderRow(onRowClick)
 
-    await userEvent.click(screen.getByRole('button', { name: '山田太郎の詳細を開く' }))
+    await userEvent.click(screen.getByRole('row', { name: '山田太郎の詳細を開く' }))
 
     expect(onRowClick).toHaveBeenCalledTimes(1)
   })
@@ -30,7 +30,7 @@ describe('ClickableTableRow', () => {
     const onRowClick = vi.fn()
     renderRow(onRowClick)
 
-    const row = screen.getByRole('button', { name: '山田太郎の詳細を開く' })
+    const row = screen.getByRole('row', { name: '山田太郎の詳細を開く' })
     row.focus()
     await userEvent.keyboard('{Enter}')
     await userEvent.keyboard(' ')
@@ -42,7 +42,7 @@ describe('ClickableTableRow', () => {
     const onRowClick = vi.fn()
     renderRow(onRowClick, true)
 
-    expect(screen.queryByRole('button', { name: '山田太郎の詳細を開く' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('row', { name: '山田太郎の詳細を開く' })).not.toBeInTheDocument()
     expect(screen.getByText('山田太郎')).toBeInTheDocument()
   })
 })

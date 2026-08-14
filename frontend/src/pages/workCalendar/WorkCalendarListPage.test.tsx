@@ -3,7 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
 import { ApiError } from '../../api/client'
 import type { Paginated, WorkCalendar } from '../../api/types'
@@ -37,6 +36,7 @@ function renderPage() {
       <MemoryRouter initialEntries={['/admin/work-calendars']}>
         <Routes>
           <Route path="/admin/work-calendars" element={<WorkCalendarListPage />} />
+          <Route path="/admin/work-calendars/new" element={<p>カレンダー作成ページ</p>} />
           <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
@@ -47,9 +47,6 @@ function renderPage() {
 describe('WorkCalendarListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // CreateCompanyCalendarModalは(未オープン時も含め)常にマウントされ、休日iCalendarソース
-    // 一覧を取得するため、モーダル操作を検証しないテストでも既定で空配列を返しておく。
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
   })
 
   it('shows the calendar list', async () => {
@@ -80,73 +77,24 @@ describe('WorkCalendarListPage', () => {
     )
   })
 
-  it('creates a calendar with the entered values', async () => {
-    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([]))
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
-    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
-      ...calendar,
-      id: 'calendar-2',
-    })
+  it('navigates to the create page when "新規作成" is clicked', async () => {
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([calendar]))
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    await userEvent.click(await screen.findByRole('link', { name: '新規作成' }))
 
-    await waitFor(() =>
-      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2027年度カレンダー',
-        week_starts_on: undefined,
-        fiscal_year_start_month: undefined,
-        fiscal_year_start_day: undefined,
-        weekday_holiday_pattern: {
-          '1': 'working',
-          '2': 'working',
-          '3': 'working',
-          '4': 'working',
-          '5': 'working',
-          '6': 'company_holiday',
-          '7': 'legal_holiday',
-        },
-        allow_daily_holiday_override: false,
-      }),
-    )
+    expect(await screen.findByText('カレンダー作成ページ')).toBeInTheDocument()
   })
 
-  it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
+  it('navigates to the create page from the empty state action', async () => {
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarsPage').mockResolvedValue(page([]))
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
-    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue({
-      ...calendar,
-      id: 'calendar-2',
-    })
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: '新規作成' }))
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.selectOptions(screen.getByLabelText('日曜日'), 'company_holiday')
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    await userEvent.click(await screen.findByRole('link', { name: '会社カレンダーを作成' }))
 
-    await waitFor(() =>
-      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2027年度カレンダー',
-        week_starts_on: undefined,
-        fiscal_year_start_month: undefined,
-        fiscal_year_start_day: undefined,
-        weekday_holiday_pattern: {
-          '1': 'working',
-          '2': 'working',
-          '3': 'working',
-          '4': 'working',
-          '5': 'working',
-          '6': 'company_holiday',
-          '7': 'company_holiday',
-        },
-        allow_daily_holiday_override: false,
-      }),
-    )
+    expect(await screen.findByText('カレンダー作成ページ')).toBeInTheDocument()
   })
 
   it('navigates to the detail page when the calendar name is clicked', async () => {

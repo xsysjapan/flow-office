@@ -14,7 +14,11 @@ export interface ClickableTableRowProps extends HTMLAttributes<HTMLTableRowEleme
 /**
  * 一覧の行クリックで対象オブジェクトの詳細(ページ遷移・Dialog等)を開く際の共通実装
  * (`.claude/skills/ui-interaction-patterns` §2.2)。行全体をクリック可能にしつつ、
- * `role="button"`/`tabIndex`/Enter・Spaceでキーボードからも同じ操作ができるようにする。
+ * `tabIndex`/Enter・Spaceでキーボードからも同じ操作ができるようにする。
+ *
+ * `role="button"`は付与しない。`<tr>`が本来持つ暗黙の`role="row"`を上書きしてしまうと、
+ * テーブルとしての読み上げ・`getByRole('row')`でのテスト/操作が壊れるため
+ * (Radix Table自体は素の`<table>`要素を使っており、行の意味を保つ必要がある)。
  * 行内に個別のButton/Linkを置く場合は、その要素側で`onClick`に`event.stopPropagation()`を
  * 呼び、行クリックとの二重発火を防ぐこと。
  */
@@ -47,7 +51,6 @@ export function ClickableTableRow({
   return (
     <TableRow
       className={cn('cursor-pointer', className)}
-      role="button"
       tabIndex={0}
       aria-label={rowLabel}
       onClick={onRowClick}

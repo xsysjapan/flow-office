@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
@@ -70,6 +70,13 @@ function draftClaim(overrides: Partial<ExpenseClaim> = {}): ExpenseClaim {
   }
 }
 
+/** テスト検証専用: 現在のURLクエリ文字列を表示する。`MemoryRouter`は`window.location`を
+ *  更新しないため、`?category=`の書き込みは`useSearchParams`経由でこの表示を通じて確認する。 */
+function LocationSearchProbe() {
+  const [searchParams] = useSearchParams()
+  return <div data-testid="location-search">{searchParams.toString()}</div>
+}
+
 function renderPage(
   categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
   initialPath = '/expenses/new',
@@ -120,8 +127,24 @@ function renderPage(
         <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
             <Route path="/expenses" element={<p>経費精算一覧</p>} />
-            <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
-            <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
+            <Route
+              path="/expenses/new"
+              element={
+                <>
+                  <ExpenseClaimNewPage />
+                  <LocationSearchProbe />
+                </>
+              }
+            />
+            <Route
+              path="/expenses/:id/edit"
+              element={
+                <>
+                  <ExpenseClaimNewPage />
+                  <LocationSearchProbe />
+                </>
+              }
+            />
             <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
           </Routes>
         </MemoryRouter>
@@ -698,6 +721,21 @@ describe('ExpenseClaimNewPage', () => {
 
     expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
+  })
+
+  it('reflects the selected category into ?category= so a reload/URL share keeps the same category', async () => {
+    renderPage([transportCategory, lodgingCategory])
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+    await screen.findByLabelText('利用日')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('category=lodging'))
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).toHaveTextContent('')
   })
 
   it('lets the applicant set an optional title for the claim', async () => {

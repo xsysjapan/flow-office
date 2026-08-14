@@ -167,7 +167,7 @@ describe('DeviceListPage', () => {
     renderPage()
 
     await screen.findByText('本社1階受付')
-    screen.getByRole('button', { name: '本社1階受付の詳細を開く' }).focus()
+    screen.getByRole('row', { name: '本社1階受付の詳細を開く' }).focus()
     await user.keyboard('{Enter}')
 
     expect(await screen.findByRole('heading', { name: '本社1階受付' })).toBeInTheDocument()

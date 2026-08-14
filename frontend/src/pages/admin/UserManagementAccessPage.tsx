@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
+import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableTableRow";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { AuthenticationKeysPanel } from "../../components/AuthenticationKeysPanel/AuthenticationKeysPanel";
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
@@ -48,6 +49,7 @@ export function UserManagementAccessPage({
 }: {
   section?: "groups" | "membershipChanges" | "hr" | "identities" | "access";
 }) {
+  const navigate = useNavigate();
   const groups = userManagement.useManagedGroups(),
     types = userManagement.useGroupTypes(),
     features = access.useFeatures(section === "access"),
@@ -366,12 +368,17 @@ export function UserManagementAccessPage({
               </TableHeader>
               <TableBody>
                 {visibleGroups?.map((g) => (
-                  <TableRow key={g.id}>
+                  <ClickableTableRow
+                    key={g.id}
+                    onRowClick={() => navigate(`/admin/groups/${g.id}`)}
+                    rowLabel={`${g.name}の詳細を開く`}
+                  >
                     <TableCell>{g.type.name}</TableCell>
                     <TableCell>
                       <Link
                         className="font-medium text-foreground hover:text-primary hover:underline"
                         to={`/admin/groups/${g.id}`}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {g.name}
                       </Link>
@@ -389,7 +396,7 @@ export function UserManagementAccessPage({
                         {g.status}
                       </Badge>
                     </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 ))}
               </TableBody>
             </Table>

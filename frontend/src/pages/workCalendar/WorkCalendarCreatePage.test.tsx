@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as holidayCalendarSourcesApi from '../../api/holidayCalendarSources'
 import * as workCalendarsApi from '../../api/workCalendars'
 import type { HolidayCalendarSource, WorkCalendar } from '../../api/types'
-import { CreateCompanyCalendarModal } from './CreateCompanyCalendarModal'
+import { WorkCalendarCreatePage } from './WorkCalendarCreatePage'
 
 const calendar: WorkCalendar = {
   id: 'calendar-1',
@@ -41,25 +42,28 @@ const source: HolidayCalendarSource = {
   last_sync_summary: null,
 }
 
-function renderModal() {
+function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const onOpenChange = vi.fn()
 
-  render(
+  return render(
     <QueryClientProvider client={queryClient}>
-      <CreateCompanyCalendarModal open onOpenChange={onOpenChange} />
+      <MemoryRouter initialEntries={['/admin/work-calendars/new']}>
+        <Routes>
+          <Route path="/admin/work-calendars/new" element={<WorkCalendarCreatePage />} />
+          <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
+          <Route path="/admin/work-calendars" element={<p>カレンダー一覧ページ</p>} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>,
   )
-
-  return { onOpenChange }
 }
 
-describe('CreateCompanyCalendarModal', () => {
-  it('creates a calendar with only the name when no optional field is touched', async () => {
+describe('WorkCalendarCreatePage', () => {
+  it('creates a calendar and navigates to the created calendar detail page', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
-    const { onOpenChange } = renderModal()
+    renderPage()
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
@@ -82,14 +86,15 @@ describe('CreateCompanyCalendarModal', () => {
         allow_daily_holiday_override: false,
       }),
     )
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+
+    expect(await screen.findByText('カレンダー詳細ページ')).toBeInTheDocument()
   })
 
   it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
-    renderModal()
+    renderPage()
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.selectOptions(screen.getByLabelText('月曜日'), 'company_holiday')
@@ -115,36 +120,6 @@ describe('CreateCompanyCalendarModal', () => {
     )
   })
 
-  it('does not send the override-lock flag as true when the checkbox is unchecked', async () => {
-    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
-    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
-
-    renderModal()
-
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.click(screen.getByLabelText('曜日ごとの休日設定を日ごとに個別変更できるようにする'))
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
-
-    await waitFor(() =>
-      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2027年度カレンダー',
-        week_starts_on: undefined,
-        fiscal_year_start_month: undefined,
-        fiscal_year_start_day: undefined,
-        weekday_holiday_pattern: {
-          '1': 'working',
-          '2': 'working',
-          '3': 'working',
-          '4': 'working',
-          '5': 'working',
-          '6': 'company_holiday',
-          '7': 'legal_holiday',
-        },
-        allow_daily_holiday_override: true,
-      }),
-    )
-  })
-
   it('registers a brand-new holiday calendar source inline and auto-selects it for creation', async () => {
     const createdSource: HolidayCalendarSource = {
       id: 'source-2',
@@ -164,7 +139,7 @@ describe('CreateCompanyCalendarModal', () => {
     vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
     vi.spyOn(holidayCalendarSourcesApi, 'createHolidayCalendarSource').mockResolvedValue(createdSource)
 
-    renderModal()
+    renderPage()
 
     await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
     await userEvent.click(screen.getByRole('button', { name: '新しいiCalendarを登録する' }))
@@ -180,9 +155,7 @@ describe('CreateCompanyCalendarModal', () => {
       }),
     )
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('休日iCalendarソース')).toHaveValue(createdSource.id),
-    )
+    await waitFor(() => expect(screen.getByLabelText('休日iCalendarソース')).toHaveValue(createdSource.id))
 
     await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
@@ -207,34 +180,28 @@ describe('CreateCompanyCalendarModal', () => {
     )
   })
 
-  it('sends the selected holiday calendar source', async () => {
+  it('shows the disabled reason when no calendar name is entered', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
-    vi.spyOn(workCalendarsApi, 'createWorkCalendar').mockResolvedValue(calendar)
 
-    renderModal()
+    renderPage()
 
-    await userEvent.type(await screen.findByLabelText('カレンダー名'), '2027年度カレンダー')
-    await userEvent.selectOptions(await screen.findByLabelText('休日iCalendarソース'), source.id)
-    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
+    expect(await screen.findByText('カレンダー名を入力してください。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '作成する' })).toBeDisabled()
 
-    await waitFor(() =>
-      expect(workCalendarsApi.createWorkCalendar).toHaveBeenCalledWith({
-        name: '2027年度カレンダー',
-        week_starts_on: undefined,
-        fiscal_year_start_month: undefined,
-        fiscal_year_start_day: undefined,
-        weekday_holiday_pattern: {
-          '1': 'working',
-          '2': 'working',
-          '3': 'working',
-          '4': 'working',
-          '5': 'working',
-          '6': 'company_holiday',
-          '7': 'legal_holiday',
-        },
-        allow_daily_holiday_override: false,
-        holiday_calendar_source_id: source.id,
-      }),
-    )
+    await userEvent.type(screen.getByLabelText('カレンダー名'), '2027年度カレンダー')
+
+    expect(screen.queryByText('カレンダー名を入力してください。')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '作成する' })).toBeEnabled()
+  })
+
+  it('navigates to the list page when cancelled', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([source])
+
+    renderPage()
+
+    await screen.findByLabelText('カレンダー名')
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(await screen.findByText('カレンダー一覧ページ')).toBeInTheDocument()
   })
 })

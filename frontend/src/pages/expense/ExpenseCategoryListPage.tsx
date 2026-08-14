@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -19,6 +20,7 @@ const evidenceTypeLabels: Record<ExpenseEvidenceType, string> = {
  * UC-X001: 管理者が経費区分マスタを一覧・管理する。
  */
 export function ExpenseCategoryListPage() {
+  const navigate = useNavigate()
   const { data: categories, isLoading, error } = useExpenseCategories(true)
 
   if (isLoading) return <LoadingState />
@@ -59,11 +61,16 @@ export function ExpenseCategoryListPage() {
           </TableHeader>
           <TableBody>
             {items.map((category) => (
-              <TableRow key={category.id}>
+              <ClickableTableRow
+                key={category.id}
+                onRowClick={() => navigate(`/admin/expense-categories/${category.id}`)}
+                rowLabel={`${category.name}の詳細を開く`}
+              >
                 <TableCell>
                   <Link
                     to={`/admin/expense-categories/${category.id}`}
                     className="font-medium text-foreground hover:text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {category.name}
                   </Link>
@@ -83,7 +90,7 @@ export function ExpenseCategoryListPage() {
                     {category.is_active ? '有効' : '無効'}
                   </Badge>
                 </TableCell>
-              </TableRow>
+              </ClickableTableRow>
             ))}
           </TableBody>
         </Table>
