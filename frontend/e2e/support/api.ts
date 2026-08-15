@@ -349,7 +349,7 @@ export async function createWorkStyleViaApi(
       prescribed_weekly_minutes: input.prescribedWeeklyMinutes,
       deemed_daily_minutes: input.deemedDailyMinutes,
       variable_period_start_day: input.variablePeriodStartDay,
-      calendar_id: input.calendarId,
+      company_calendar_id: input.calendarId,
       is_shift_based: input.isShiftBased ?? false,
       legal_holiday_rule: input.legalHolidayRule,
       employment_category_id: input.employmentCategoryId,
