@@ -66,7 +66,7 @@ async function submitPaidLeaveRequest(
     const targetDate = randomWorkingDate()
 
     try {
-      await pickDate(page, '対象日', targetDate)
+      await pickDate(page, '対象日', targetDate, { exact: true })
       await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 30000 })
       await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 30000 })
       await page.getByRole('button', { name: '申請する' }).click({ timeout: 30000 })
