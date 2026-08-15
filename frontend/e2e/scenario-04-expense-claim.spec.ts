@@ -95,18 +95,20 @@ test('経費精算(交通費)の新規作成〜申請〜承認〜経理タスク
     await startIndividualClaim(applicantPage)
     await applicantPage.getByRole('button', { name: '交通費' }).click()
 
-    await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await pickDate(applicantPage, '1行目の日付', usageDateStr)
-    await applicantPage.getByLabel('1行目の金額').fill(amount)
+    // 交通費(entry_mode='batch')は「まとめて登録」でのみ表形式入力になり、「個別に登録」
+    // では他の単発経費と同様に1件入力で完結するフォームになる(ExpenseClaimNewPage.tsx
+    // 参照)。ここは「個別に経費登録」の流れのため、単一明細フォームを使う。
+    await pickDate(applicantPage, '利用日', usageDateStr)
+    await applicantPage.getByLabel('金額').fill(amount)
     // UC-X004a: 出発地・到着地を専用欄に入力すると「出発地 → 到着地」の形式で内容欄に
     // 自動的に反映される(交通費特有の構造化入力補助)。
-    await applicantPage.getByLabel('1行目の出発地').fill('自宅')
-    await applicantPage.getByLabel('1行目の到着地').fill('本社')
-    await expect(applicantPage.getByLabel('1行目の内容')).toHaveValue('自宅 → 本社')
-    // 明細の保存より前に、表形式入力の行ごとの領収書欄でファイルを選択できることを確認する。
-    await selectReceiptOnBatchRow(applicantPage, 1)
+    await applicantPage.getByLabel('出発地').fill('自宅')
+    await applicantPage.getByLabel('到着地').fill('本社')
+    await expect(applicantPage.getByLabel('内容')).toHaveValue('自宅 → 本社')
+    // 明細の保存より前に、単一明細フォームの領収書欄でファイルを選択できることを確認する。
+    await selectReceiptOnSingleItemForm(applicantPage)
 
-    await applicantPage.getByRole('button', { name: /明細を保存する/ }).click()
+    await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
 
     await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
     await expect(applicantPage.getByText('dummy-receipt.png')).toBeVisible()
