@@ -269,15 +269,21 @@ test("§5-3: 月次締め後は日次実績が編集できない", async ({ brow
 test("§5-4: 打刻ログと日次実績の不一致確認", async ({ page }) => {
   test.setTimeout(300000);
 
-  // 週送りの操作を1回で済ませるため、月曜起点の週が必ず1つ先になる、次週の水曜日を対象日に
-  // する(土日だと法定休日/所定休日バッジが優先表示され、勤務中バッジの確認にならないため
-  // 平日を選ぶ。「7日後」だと今日が土日の場合に次週も土日になってしまう)。
-  const isoDow = (new Date().getDay() + 6) % 7; // 0=月 ... 6=日
-  const mondayThisWeek = new Date();
-  mondayThisWeek.setDate(mondayThisWeek.getDate() - isoDow);
-  const nextWeekWednesday = new Date(mondayThisWeek);
-  nextWeekWednesday.setDate(mondayThisWeek.getDate() + 7 + 2);
-  const futureDate = nextWeekWednesday.toISOString().slice(0, 10);
+  // 対象日は必ず翌月の平日にする(土日だと法定休日/所定休日バッジが優先表示され、勤務中
+  // バッジの確認にならない)。当月は他のテスト(§5-3・§5-8等)が月次締めまで進めることが
+  // あり、締め済み月の日は打刻を記録しても日次実績に反映されなくなる
+  // (`AttendanceEditGuard`)ため、翌月であれば実行順序に関わらず必ず未締めであることを
+  // 保証できる。週次画面へは`次週`クリックの代わりに`?start=`で直接その週へ遷移する。
+  const nextMonthFirstDay = new Date();
+  nextMonthFirstDay.setMonth(nextMonthFirstDay.getMonth() + 1, 1);
+  while (nextMonthFirstDay.getDay() !== 3 /* 水曜日 */) {
+    nextMonthFirstDay.setDate(nextMonthFirstDay.getDate() + 1);
+  }
+  const futureDate = nextMonthFirstDay.toISOString().slice(0, 10);
+  const isoDow = (nextMonthFirstDay.getDay() + 6) % 7; // 0=月 ... 6=日
+  const mondayOfWeek = new Date(nextMonthFirstDay);
+  mondayOfWeek.setDate(nextMonthFirstDay.getDate() - isoDow);
+  const weekStart = mondayOfWeek.toISOString().slice(0, 10);
 
   await loginAs(page, SCENARIO_USERS.punchEmployee);
 
@@ -301,8 +307,7 @@ test("§5-4: 打刻ログと日次実績の不一致確認", async ({ page }) =>
   // ただし最初の出勤打刻自体は矛盾なく記録された時点で既に反映済みのため、日次実績は
   // 「未入力」ではなく、退勤前の状態(勤務中)のまま据え置かれる
   // (`AttendanceDayPunchSyncer`のInProgress/Contradictoryの扱いを参照)。
-  await page.goto("/attendance/week");
-  await page.getByRole("button", { name: "次週" }).click();
+  await page.goto(`/attendance/week?start=${weekStart}`);
   const futureRow = page.getByRole("listitem").filter({ hasText: futureDate });
   await expect(futureRow).toBeVisible();
   await expect(futureRow.getByRole("status", { name: "勤務中" })).toBeVisible();
