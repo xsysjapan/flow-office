@@ -188,8 +188,8 @@ export async function setUserHireDate(page: Page, userId: string, hireDate: stri
 export async function recordAttendancePunch(
   page: Page,
   input: { workDate: string; punchType: 'clock_in' | 'break_start' | 'break_end' | 'clock_out'; punchedAt: string },
-): Promise<void> {
-  await apiFetch(page, '/attendance-punches', {
+): Promise<{ id: string }> {
+  return apiFetch(page, '/attendance-punches', {
     method: 'POST',
     body: {
       work_date: input.workDate,
@@ -198,6 +198,11 @@ export async function recordAttendancePunch(
       source: 'e2e_test_device',
     },
   })
+}
+
+/** UC-A014: 打刻ログを削除する(テスト用に記録した打刻ログを後始末する用途)。 */
+export async function deleteAttendancePunch(page: Page, id: string, reason: string): Promise<void> {
+  await apiFetch(page, `/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
 export async function fetchAttendancePunches(page: Page, from: string, to: string): Promise<unknown[]> {
