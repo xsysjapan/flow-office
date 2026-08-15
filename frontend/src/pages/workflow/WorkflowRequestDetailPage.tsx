@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { useAuth } from '../../auth/useAuth'
 import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPanel'
 import { Badge } from '../../components/Badge/Badge'
@@ -9,6 +10,7 @@ import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/Confir
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
 import { Separator } from '../../components/ui/separator'
 import {
@@ -50,7 +52,10 @@ export function WorkflowRequestDetailPage() {
   const [cancelError, setCancelError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorMessage error={error} fallback="申請の取得に失敗しました。" />
+  if (error) {
+    if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
+    return <ErrorMessage error={error} fallback="申請の取得に失敗しました。" />
+  }
   if (!request) return null
 
   const { label, tone } = workflowRequestStatusLabel(request.status)
@@ -77,10 +82,15 @@ export function WorkflowRequestDetailPage() {
   }
 
   return (
-    <Card title={request.title} actions={<Badge tone={tone}>{label}</Badge>}>
-      {actionError && <ErrorMessage error={actionError} />}
+    <div className="flex flex-col gap-4">
+      <Link to="/requests" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+        ← 一覧へ戻る
+      </Link>
 
-      <div className="flex flex-col gap-6">
+      <Card title={request.title} actions={<Badge tone={tone}>{label}</Badge>}>
+        {actionError && <ErrorMessage error={actionError} />}
+
+        <div className="flex flex-col gap-6">
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
           <dt className="font-medium text-muted-foreground">申請種別</dt>
           <dd className="text-foreground">{request.request_type?.name}</dd>
@@ -185,5 +195,6 @@ export function WorkflowRequestDetailPage() {
         </div>
       </div>
     </Card>
+    </div>
   )
 }

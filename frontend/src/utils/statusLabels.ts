@@ -110,6 +110,13 @@ export function isExpenseClaimDeletable(status: ExpenseClaimStatus): boolean {
   return status === 'draft'
 }
 
+const CANCELLABLE_EXPENSE_CLAIM_STATUSES: ExpenseClaimStatus[] = ['draft', 'in_review', 'returned']
+
+/** 申請者が取り消せる状態か(まだ確定していない下書き・申請中・差戻し)。 */
+export function isExpenseClaimCancellable(status: ExpenseClaimStatus): boolean {
+  return CANCELLABLE_EXPENSE_CLAIM_STATUSES.includes(status)
+}
+
 const paymentBearerLabels: Record<ExpensePaymentBearer, string> = {
   employee: '個人立替',
   company: '会社支払い',

@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
@@ -286,7 +287,6 @@ function MySpecialLeaveRequestList() {
 
   return (
     <ul className="divide-y divide-border">
-      {cancelRequest.error && <ErrorMessage error={cancelRequest.error} />}
       {requests.map((req) => {
         const { label, tone } = paidLeaveRequestStatusLabel(req.status)
         return (
@@ -299,9 +299,18 @@ function MySpecialLeaveRequestList() {
               <Badge tone={tone}>{label}</Badge>
             </div>
             {req.status === 'submitted' && (
-              <Button variant="secondary" isLoading={cancelRequest.isPending} onClick={() => cancelRequest.mutate(req.id)}>
-                取消
-              </Button>
+              // 取消は元に戻せない操作(SKILL.md §2.12)のため、ConfirmActionDialogで結果を確認させる
+              // (WorkflowRequestDetailPageの取消確認と同じ扱い)。
+              <ConfirmActionDialog
+                triggerLabel="取消"
+                triggerVariant="secondary"
+                title={`${req.target_date}の特別休暇申請を取り消しますか?`}
+                description="この操作は元に戻せません。申請は取消状態になります。"
+                confirmLabel="取消する"
+                isPending={cancelRequest.isPending && cancelRequest.variables === req.id}
+                error={cancelRequest.variables === req.id ? cancelRequest.error : undefined}
+                onConfirm={() => cancelRequest.mutateAsync(req.id)}
+              />
             )}
           </li>
         )

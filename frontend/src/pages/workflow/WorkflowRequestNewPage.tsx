@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -53,72 +54,88 @@ export function WorkflowRequestNewPage() {
   }
 
   return (
-    <Card title="新規申請">
-      {error && <ErrorMessage error={error} />}
-
-      <FormField label="申請種別" htmlFor="request-type" required>
-        <NativeSelect
-          id="request-type"
-          value={requestTypeCode}
-          onChange={(e) => {
-            setRequestTypeCode(e.target.value)
-            setFormValues({})
-          }}
-        >
-          <option value="">選択してください</option>
-          {requestTypes?.map((type) => (
-            <option key={type.code} value={type.code}>
-              {type.name}
-            </option>
-          ))}
-        </NativeSelect>
-      </FormField>
-
-      <FormField label="タイトル" htmlFor="title" required>
-        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </FormField>
-
-      {selectedType?.form_schema.map((field) => (
-        <FormField key={field.key} label={field.label} htmlFor={`field-${field.key}`} required={field.required}>
-          <Input
-            id={`field-${field.key}`}
-            type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-            value={formValues[field.key] ?? ''}
-            onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
-          />
-        </FormField>
-      ))}
-
-      <FormField label="承認者" htmlFor="approver" required>
-        <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
-      </FormField>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/requests')}>
-          キャンセル
-        </Button>
-        <Button
-          variant="secondary"
-          isLoading={isBusy}
-          disabled={!requestTypeCode || !title}
-          onClick={() => void handleSave(false)}
-        >
-          下書き保存
-        </Button>
-        <Button
-          isLoading={isBusy}
-          disabled={!requestTypeCode || !title || !approverUserId}
-          onClick={() => void handleSave(true)}
-        >
-          提出する
-        </Button>
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link to="/requests" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+          ← 一覧に戻る
+        </Link>
       </div>
-      {(!requestTypeCode || !title) && (
-        <p className="mt-2 text-xs text-muted-foreground">申請種別とタイトルを入力すると保存できます。</p>
-      )}
-      {requestTypeCode && title && !approverUserId && (
-        <p className="mt-2 text-xs text-muted-foreground">提出するには承認者を選択してください。</p>
-      )}
-    </Card>
+
+      <Card title="新規申請">
+        {error && <ErrorMessage error={error} />}
+
+        <FormField label="申請種別" htmlFor="request-type" required>
+          <NativeSelect
+            id="request-type"
+            value={requestTypeCode}
+            onChange={(e) => {
+              setRequestTypeCode(e.target.value)
+              setFormValues({})
+            }}
+          >
+            <option value="">選択してください</option>
+            {requestTypes?.map((type) => (
+              <option key={type.code} value={type.code}>
+                {type.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField label="タイトル" htmlFor="title" required>
+          <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </FormField>
+
+        {selectedType?.form_schema.map((field) => (
+          <FormField key={field.key} label={field.label} htmlFor={`field-${field.key}`} required={field.required}>
+            {field.type === 'date' ? (
+              <DatePicker
+                id={`field-${field.key}`}
+                value={formValues[field.key] || undefined}
+                onChange={(date) => setFormValues((prev) => ({ ...prev, [field.key]: date ?? '' }))}
+              />
+            ) : (
+              <Input
+                id={`field-${field.key}`}
+                type={field.type === 'number' ? 'number' : 'text'}
+                value={formValues[field.key] ?? ''}
+                onChange={(e) => setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              />
+            )}
+          </FormField>
+        ))}
+
+        <FormField label="承認者" htmlFor="approver" required>
+          <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
+        </FormField>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/requests')}>
+            キャンセル
+          </Button>
+          <Button
+            variant="secondary"
+            isLoading={isBusy}
+            disabled={!requestTypeCode || !title}
+            onClick={() => void handleSave(false)}
+          >
+            下書き保存
+          </Button>
+          <Button
+            isLoading={isBusy}
+            disabled={!requestTypeCode || !title || !approverUserId}
+            onClick={() => void handleSave(true)}
+          >
+            提出する
+          </Button>
+        </div>
+        {(!requestTypeCode || !title) && (
+          <p className="mt-2 text-xs text-muted-foreground">申請種別とタイトルを入力すると保存できます。</p>
+        )}
+        {requestTypeCode && title && !approverUserId && (
+          <p className="mt-2 text-xs text-muted-foreground">提出するには承認者を選択してください。</p>
+        )}
+      </Card>
+    </div>
   )
 }

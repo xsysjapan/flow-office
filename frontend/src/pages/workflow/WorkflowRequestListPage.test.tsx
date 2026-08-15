@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as workflowRequestsApi from '../../api/workflowRequests'
+import { ApiError } from '../../api/client'
 import type { Paginated, WorkflowRequest } from '../../api/types'
 import { WorkflowRequestListPage } from './WorkflowRequestListPage'
 
@@ -162,5 +163,13 @@ describe('WorkflowRequestListPage', () => {
 
     expect(await screen.findByText('取消理由を入力してください。')).toBeInTheDocument()
     expect(cancelSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows a permission denied state instead of a generic error on 403', async () => {
+    vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockRejectedValue(new ApiError(403, 'Forbidden'))
+
+    renderPage()
+
+    expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
   })
 })

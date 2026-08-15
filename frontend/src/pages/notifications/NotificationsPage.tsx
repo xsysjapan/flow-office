@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -15,9 +15,26 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'read', label: '既読' },
 ]
 
+function isStatusFilter(value: string | null): value is StatusFilter {
+  return value === 'all' || value === 'unread' || value === 'read'
+}
+
 /** UC-N001: 自分宛て通知の一覧・既読管理。 */
 export function NotificationsPage() {
-  const [status, setStatus] = useState<StatusFilter>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const statusParam = searchParams.get('status')
+  const status: StatusFilter = isStatusFilter(statusParam) ? statusParam : 'all'
+  function setStatus(next: StatusFilter) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next === 'all') params.delete('status')
+        else params.set('status', next)
+        return params
+      },
+      { replace: true },
+    )
+  }
   const { data, isLoading, error } = useMyNotifications(status === 'all' ? undefined : status)
   const confirmNotification = useConfirmNotification()
 

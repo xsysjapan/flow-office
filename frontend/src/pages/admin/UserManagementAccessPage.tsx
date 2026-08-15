@@ -11,6 +11,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
@@ -781,14 +782,13 @@ export function UserManagementAccessPage({
                     />
                   )}
                   <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       disabled={roleForm.scope_type !== "group"}
                       checked={roleForm.include_descendants}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         setRoleForm({
                           ...roleForm,
-                          include_descendants: e.target.checked,
+                          include_descendants: checked === true,
                         })
                       }
                     />
@@ -978,12 +978,11 @@ export function UserManagementAccessPage({
                         </legend>
                         {items?.map((p) => (
                           <label className="flex gap-2 text-sm" key={p.id}>
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={selectedPermissions.includes(p.id)}
-                              onChange={(e) =>
+                              onCheckedChange={(checked) =>
                                 setSelectedPermissions(
-                                  e.target.checked
+                                  checked === true
                                     ? [...selectedPermissions, p.id]
                                     : selectedPermissions.filter(
                                         (id) => id !== p.id,

@@ -25,6 +25,8 @@ import {
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import {
   expenseClaimStatusLabel,
+  isExpenseClaimCancellable,
+  isExpenseClaimEditable,
   workLocationTypeLabel,
   workflowRequestHistoryActionLabel,
 } from '../../utils/statusLabels'
@@ -191,13 +193,13 @@ export function ExpenseClaimDetailPage() {
           <Separator />
 
           <div className="flex flex-wrap items-center gap-3">
-            {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
+            {isApplicant && isExpenseClaimEditable(claim.status) && (
               <Button asChild variant="secondary">
                 <Link to={`/expenses/${claim.id}/edit`}>明細を編集する</Link>
               </Button>
             )}
 
-            {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
+            {isApplicant && isExpenseClaimEditable(claim.status) && (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <UserPicker id="approver" value={approverUserId ?? claim.approver_user_id ?? undefined} onChange={setApproverUserId} />
@@ -215,7 +217,7 @@ export function ExpenseClaimDetailPage() {
               </div>
             )}
 
-            {isApplicant && ['draft', 'in_review', 'returned'].includes(claim.status) && (
+            {isApplicant && isExpenseClaimCancellable(claim.status) && (
               <ConfirmActionDialog
                 triggerLabel="取り消す"
                 title="この経費精算を取り消しますか?"

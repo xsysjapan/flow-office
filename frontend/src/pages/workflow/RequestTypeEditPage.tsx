@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -116,176 +116,187 @@ export function RequestTypeEditPage() {
   }
 
   return (
-    <Card title={isCreate ? '申請種別の新規作成' : '申請種別の編集'}>
-      {error && <ErrorMessage error={error} />}
+    <div className="flex flex-col gap-6">
+      <div>
+        <Link
+          to="/admin/request-types"
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          ← 申請種別一覧へ戻る
+        </Link>
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="コード" htmlFor="code" required>
-          <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
+      <Card title={isCreate ? '申請種別の新規作成' : '申請種別の編集'}>
+        {error && <ErrorMessage error={error} />}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="コード" htmlFor="code" required>
+            <Input id="code" value={code} disabled={!isCreate} onChange={(e) => setCode(e.target.value)} />
+          </FormField>
+
+          <FormField label="名称" htmlFor="name" required>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+          </FormField>
+        </div>
+
+        <FormField label="説明" htmlFor="description">
+          <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </FormField>
 
-        <FormField label="名称" htmlFor="name" required>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+        <FormField label="申請可能な対象者(ロールコード、カンマ区切り。空欄なら全員)" htmlFor="eligible-role-codes">
+          <Input
+            id="eligible-role-codes"
+            placeholder="admin, hr_staff"
+            value={eligibleRoleCodes}
+            onChange={(e) => setEligibleRoleCodes(e.target.value)}
+          />
         </FormField>
-      </div>
 
-      <FormField label="説明" htmlFor="description">
-        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </FormField>
-
-      <FormField label="申請可能な対象者(ロールコード、カンマ区切り。空欄なら全員)" htmlFor="eligible-role-codes">
-        <Input
-          id="eligible-role-codes"
-          placeholder="admin, hr_staff"
-          value={eligibleRoleCodes}
-          onChange={(e) => setEligibleRoleCodes(e.target.value)}
-        />
-      </FormField>
-
-      <div className="mb-4 flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Checkbox
-            id="requires-attachment"
-            checked={requiresAttachment}
-            onCheckedChange={(checked) => setRequiresAttachment(checked === true)}
-          />
-          添付ファイルを必須にする
-        </label>
-
-        {requiresAttachment && (
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
-            <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb">
-              <Input
-                id="attachment-max-size-kb"
-                type="number"
-                min={1}
-                value={attachmentMaxSizeKb}
-                onChange={(e) => setAttachmentMaxSizeKb(e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="許可する拡張子(カンマ区切り)" htmlFor="attachment-allowed-extensions">
-              <Input
-                id="attachment-allowed-extensions"
-                placeholder="pdf, jpg, png"
-                value={attachmentAllowedExtensions}
-                onChange={(e) => setAttachmentAllowedExtensions(e.target.value)}
-              />
-            </FormField>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-4 flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Checkbox
-            id="requires-backoffice-task"
-            checked={requiresBackOfficeTask}
-            onCheckedChange={(checked) => setRequiresBackOfficeTask(checked === true)}
-          />
-          バックオフィス処理を発生させる
-        </label>
-
-        {requiresBackOfficeTask && (
-          <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
-            <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
-              <Input
-                id="backoffice-task-type"
-                value={backOfficeTaskType}
-                onChange={(e) => setBackOfficeTaskType(e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="初期処理部署" htmlFor="backoffice-department">
-              <Input
-                id="backoffice-department"
-                value={backOfficeDepartment}
-                onChange={(e) => setBackOfficeDepartment(e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="会計/振込CSVの金額項目(form_dataのキー。空欄ならCSV対象外)" htmlFor="export-amount-field">
-              <Input
-                id="export-amount-field"
-                value={exportAmountField}
-                onChange={(e) => setExportAmountField(e.target.value)}
-              />
-            </FormField>
-
-            <FormField label="ステータス遷移(JSON、任意)" htmlFor="allowed-status-transitions">
-              <Textarea
-                id="allowed-status-transitions"
-                placeholder={'{"not_started": ["in_review"], "in_review": ["payment_scheduled"]}'}
-                value={allowedStatusTransitionsJson}
-                onChange={(e) => setAllowedStatusTransitionsJson(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。
-              </p>
-              {allowedStatusTransitionsError && <p className="mt-1 text-xs text-destructive">{allowedStatusTransitionsError}</p>}
-            </FormField>
-          </div>
-        )}
-
-        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Checkbox id="is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
-          有効
-        </label>
-      </div>
-
-      <h3 className="mb-3 text-sm font-semibold text-foreground">入力項目</h3>
-      <ul className="mb-3 flex flex-col gap-2">
-        {rows.map((row) => (
-          <li key={row.rowId} className="flex flex-wrap items-center gap-2">
-            <Input
-              className="w-auto"
-              placeholder="キー"
-              value={row.key}
-              onChange={(e) => updateRow(row.rowId, { key: e.target.value })}
+        <div className="mb-4 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox
+              id="requires-attachment"
+              checked={requiresAttachment}
+              onCheckedChange={(checked) => setRequiresAttachment(checked === true)}
             />
-            <Input
-              className="w-auto"
-              placeholder="ラベル"
-              value={row.label}
-              onChange={(e) => updateRow(row.rowId, { label: e.target.value })}
-            />
-            <NativeSelect
-              className="w-auto"
-              value={row.type}
-              onChange={(e) => updateRow(row.rowId, { type: e.target.value as RequestFormFieldSchema['type'] })}
-            >
-              <option value="text">テキスト</option>
-              <option value="number">数値</option>
-              <option value="date">日付</option>
-            </NativeSelect>
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                checked={row.required ?? false}
-                onCheckedChange={(checked) => updateRow(row.rowId, { required: checked === true })}
-              />
-              必須
-            </label>
-            <Button variant="danger" onClick={() => removeRow(row.rowId)}>
-              削除
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <Button variant="secondary" onClick={() => addRow({ key: '', label: '', type: 'text' })}>
-        項目を追加
-      </Button>
+            添付ファイルを必須にする
+          </label>
 
-      <div className="mt-5 flex items-center gap-3">
-        <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/admin/request-types')}>
-          キャンセル
+          {requiresAttachment && (
+            <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+              <FormField label="添付ファイルの上限サイズ(KB)" htmlFor="attachment-max-size-kb">
+                <Input
+                  id="attachment-max-size-kb"
+                  type="number"
+                  min={1}
+                  value={attachmentMaxSizeKb}
+                  onChange={(e) => setAttachmentMaxSizeKb(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="許可する拡張子(カンマ区切り)" htmlFor="attachment-allowed-extensions">
+                <Input
+                  id="attachment-allowed-extensions"
+                  placeholder="pdf, jpg, png"
+                  value={attachmentAllowedExtensions}
+                  onChange={(e) => setAttachmentAllowedExtensions(e.target.value)}
+                />
+              </FormField>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox
+              id="requires-backoffice-task"
+              checked={requiresBackOfficeTask}
+              onCheckedChange={(checked) => setRequiresBackOfficeTask(checked === true)}
+            />
+            バックオフィス処理を発生させる
+          </label>
+
+          {requiresBackOfficeTask && (
+            <div className="grid grid-cols-1 gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
+              <FormField label="バックオフィスタスク種別" htmlFor="backoffice-task-type">
+                <Input
+                  id="backoffice-task-type"
+                  value={backOfficeTaskType}
+                  onChange={(e) => setBackOfficeTaskType(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="初期処理部署" htmlFor="backoffice-department">
+                <Input
+                  id="backoffice-department"
+                  value={backOfficeDepartment}
+                  onChange={(e) => setBackOfficeDepartment(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="会計/振込CSVの金額項目(form_dataのキー。空欄ならCSV対象外)" htmlFor="export-amount-field">
+                <Input
+                  id="export-amount-field"
+                  value={exportAmountField}
+                  onChange={(e) => setExportAmountField(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="ステータス遷移(JSON、任意)" htmlFor="allowed-status-transitions">
+                <Textarea
+                  id="allowed-status-transitions"
+                  placeholder={'{"not_started": ["in_review"], "in_review": ["payment_scheduled"]}'}
+                  value={allowedStatusTransitionsJson}
+                  onChange={(e) => setAllowedStatusTransitionsJson(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  未設定なら遷移制限なし。設定するとUC-B003のステータス変更がこの定義に従う。
+                </p>
+                {allowedStatusTransitionsError && <p className="mt-1 text-xs text-destructive">{allowedStatusTransitionsError}</p>}
+              </FormField>
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox id="is-active" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
+            有効
+          </label>
+        </div>
+
+        <h3 className="mb-3 text-sm font-semibold text-foreground">入力項目</h3>
+        <ul className="mb-3 flex flex-col gap-2">
+          {rows.map((row) => (
+            <li key={row.rowId} className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-auto"
+                placeholder="キー"
+                value={row.key}
+                onChange={(e) => updateRow(row.rowId, { key: e.target.value })}
+              />
+              <Input
+                className="w-auto"
+                placeholder="ラベル"
+                value={row.label}
+                onChange={(e) => updateRow(row.rowId, { label: e.target.value })}
+              />
+              <NativeSelect
+                className="w-auto"
+                value={row.type}
+                onChange={(e) => updateRow(row.rowId, { type: e.target.value as RequestFormFieldSchema['type'] })}
+              >
+                <option value="text">テキスト</option>
+                <option value="number">数値</option>
+                <option value="date">日付</option>
+              </NativeSelect>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <Checkbox
+                  checked={row.required ?? false}
+                  onCheckedChange={(checked) => updateRow(row.rowId, { required: checked === true })}
+                />
+                必須
+              </label>
+              <Button variant="danger" onClick={() => removeRow(row.rowId)}>
+                削除
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <Button variant="secondary" onClick={() => addRow({ key: '', label: '', type: 'text' })}>
+          項目を追加
         </Button>
-        <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
-          保存する
-        </Button>
-      </div>
-      {(!code || !name) && (
-        <p className="mt-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
-      )}
-    </Card>
+
+        <div className="mt-5 flex items-center gap-3">
+          <Button variant="secondary" disabled={isBusy} onClick={() => navigate('/admin/request-types')}>
+            キャンセル
+          </Button>
+          <Button isLoading={isBusy} disabled={!code || !name} onClick={() => void handleSave()}>
+            保存する
+          </Button>
+        </div>
+        {(!code || !name) && (
+          <p className="mt-2 text-xs text-muted-foreground">コードと名称を入力すると保存できます。</p>
+        )}
+      </Card>
+    </div>
   )
 }

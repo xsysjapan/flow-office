@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import * as userManagement from "../../hooks/useUserManagement";
@@ -124,13 +125,12 @@ export function GroupTypeManagementPage() {
             />
           </FormField>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={createForm.primary_membership_required}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 setCreateForm({
                   ...createForm,
-                  primary_membership_required: event.target.checked,
+                  primary_membership_required: checked === true,
                 })
               }
             />
@@ -310,14 +310,13 @@ export function GroupTypeManagementPage() {
             />
           </FormField>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               disabled={editForm.is_system}
               checked={editForm.primary_membership_required}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 setEditForm({
                   ...editForm,
-                  primary_membership_required: event.target.checked,
+                  primary_membership_required: checked === true,
                 })
               }
             />

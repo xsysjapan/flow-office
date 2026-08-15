@@ -13,6 +13,7 @@ import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Input } from "../../components/ui/input";
+import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -816,38 +817,33 @@ export function UserRoleEditPage() {
         </h3>
 
         <div className="mb-4 flex flex-col gap-2">
-          <label className="flex items-start gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="work-style-mode"
-              className="mt-1"
-              checked={workStyleMode === "default"}
-              onChange={() => setWorkStyleMode("default")}
-            />
-            <span>
-              会社のデフォルトを使用
-              {defaultWorkStyle && (
-                <span className="block text-xs text-muted-foreground">
-                  {defaultWorkStyle.name}
-                  {defaultWorkStyle.default_start_time &&
-                  defaultWorkStyle.default_end_time
-                    ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
-                    : ""}
-                </span>
-              )}
-            </span>
-          </label>
+          <RadioGroup
+            value={workStyleMode}
+            onValueChange={(value) =>
+              setWorkStyleMode(value as typeof workStyleMode)
+            }
+          >
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="default" className="mt-1" />
+              <span>
+                会社のデフォルトを使用
+                {defaultWorkStyle && (
+                  <span className="block text-xs text-muted-foreground">
+                    {defaultWorkStyle.name}
+                    {defaultWorkStyle.default_start_time &&
+                    defaultWorkStyle.default_end_time
+                      ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
+                      : ""}
+                  </span>
+                )}
+              </span>
+            </label>
 
-          <label className="flex items-start gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="work-style-mode"
-              className="mt-1"
-              checked={workStyleMode === "specify"}
-              onChange={() => setWorkStyleMode("specify")}
-            />
-            <span>別の働き方を指定</span>
-          </label>
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="specify" className="mt-1" />
+              <span>別の働き方を指定</span>
+            </label>
+          </RadioGroup>
 
           {workStyleMode === "specify" && (
             <NativeSelect

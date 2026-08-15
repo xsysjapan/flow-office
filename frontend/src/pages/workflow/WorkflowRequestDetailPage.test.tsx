@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
+import { ApiError } from '../../api/client'
 import * as workflowRequestsApi from '../../api/workflowRequests'
 import type { Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
@@ -77,6 +78,29 @@ describe('WorkflowRequestDetailPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     currentUser = applicant
+  })
+
+  it('shows a back link to the request list', async () => {
+    renderPage(submittedRequest)
+
+    expect(await screen.findByRole('link', { name: '← 一覧へ戻る' })).toHaveAttribute('href', '/requests')
+  })
+
+  it('shows a permission denied state instead of a generic error on 403', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockRejectedValue(new ApiError(403, 'Forbidden'))
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/requests/workflow-request-1']}>
+          <Routes>
+            <Route path="/requests/:id" element={<WorkflowRequestDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
   })
 
   it('shows submit and cancel actions for the applicant on a draft request', async () => {

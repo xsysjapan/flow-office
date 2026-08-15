@@ -35,7 +35,7 @@ import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
 import { useUploadAttachment } from '../../hooks/useAttachments'
 import { mondayOf, formatDate } from '../../utils/weekDates'
-import { workLocationTypeLabel } from '../../utils/statusLabels'
+import { isExpenseClaimEditable, workLocationTypeLabel } from '../../utils/statusLabels'
 import { fieldSetForCategory } from '../../utils/expenseItemFieldSet'
 
 function emptyItem(categoryId?: number): SaveExpenseItemInput {
@@ -373,10 +373,6 @@ function suggestIndividualTitle(categoryName: string | undefined, usageDate: str
   return usageDate ? `${categoryName ?? '経費精算'}(${usageDate})` : (categoryName ?? '経費精算')
 }
 
-/** 明細の追加・修正・削除ができる(=編集を再開できる)ステータス。backendの
- *  `ExpenseClaimStatus::editable()`と一致させる。 */
-const EDITABLE_STATUSES = ['draft', 'returned']
-
 /**
  * UC-X002/X004〜X013: 経費精算の新規作成・下書き編集。対象期間は入力させず、まず経費区分を
  * 選ぶ。区分の`entry_mode`が`batch`(交通費)なら表形式入力・移動経路入力・テンプレート一括
@@ -581,7 +577,7 @@ export function ExpenseClaimNewPage() {
   if (claimId && isLoadingClaim) return <LoadingState />
   if (claimId && claimError) return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
 
-  if (claimId && claim && !EDITABLE_STATUSES.includes(claim.status)) {
+  if (claimId && claim && !isExpenseClaimEditable(claim.status)) {
     return (
       <Card title="この経費精算は編集できません">
         <p className="text-sm text-muted-foreground">
@@ -628,8 +624,8 @@ export function ExpenseClaimNewPage() {
             approverUserId={approverUserId}
             approvalRequired={approvalRequired}
             onApproverChange={setApproverUserId}
-            onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
-            onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
+            updateItem={updateItem}
+            deleteItem={deleteItem}
             onSubmit={() => void handleSubmit()}
             onDeleteClaim={() => {
               deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
@@ -732,8 +728,8 @@ export function ExpenseClaimNewPage() {
           approverUserId={approverUserId}
           approvalRequired={approvalRequired}
           onApproverChange={setApproverUserId}
-          onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
-          onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
+          updateItem={updateItem}
+          deleteItem={deleteItem}
           onSubmit={() => void handleSubmit()}
           submitClaim={submitClaim}
           onDeleteClaim={() => {
@@ -754,8 +750,8 @@ function SavedItemsAndSubmit({
   approverUserId,
   approvalRequired,
   onApproverChange,
-  onUpdateItem,
-  onDeleteItem,
+  updateItem,
+  deleteItem,
   onSubmit,
   submitClaim,
   onDeleteClaim,
@@ -765,8 +761,8 @@ function SavedItemsAndSubmit({
   approverUserId: string | undefined
   approvalRequired: boolean
   onApproverChange: (userId: string | undefined) => void
-  onUpdateItem: (itemId: string, input: SaveExpenseItemInput) => void
-  onDeleteItem: (itemId: string) => void
+  updateItem: ReturnType<typeof useUpdateExpenseItem>
+  deleteItem: ReturnType<typeof useDeleteExpenseItem>
   onSubmit: () => void
   onDeleteClaim: () => void
   deleteClaimMutation: ReturnType<typeof useDeleteExpenseClaim>
@@ -814,6 +810,8 @@ function SavedItemsAndSubmit({
       </Card>
 
       <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
+        {updateItem.error && <ErrorMessage error={updateItem.error} />}
+        {deleteItem.error && <ErrorMessage error={deleteItem.error} />}
         {claim.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のフォームから追加してください。</p>
         ) : (
@@ -851,13 +849,17 @@ function SavedItemsAndSubmit({
                         <Checkbox
                           checked={deductionAmount > 0}
                           onCheckedChange={(checked) =>
-                            onUpdateItem(item.id, {
-                              category_id: item.category_id,
-                              usage_date: item.usage_date,
-                              description: item.description ?? undefined,
-                              amount: item.amount,
-                              project_id: item.project_id ?? undefined,
-                              commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                            updateItem.mutate({
+                              claimId: claim.id,
+                              itemId: item.id,
+                              input: {
+                                category_id: item.category_id,
+                                usage_date: item.usage_date,
+                                description: item.description ?? undefined,
+                                amount: item.amount,
+                                project_id: item.project_id ?? undefined,
+                                commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                              },
                             })
                           }
                         />
@@ -870,13 +872,17 @@ function SavedItemsAndSubmit({
                           aria-label={`${item.usage_date}の定期区間控除額`}
                           value={deductionAmount}
                           onChange={(e) =>
-                            onUpdateItem(item.id, {
-                              category_id: item.category_id,
-                              usage_date: item.usage_date,
-                              description: item.description ?? undefined,
-                              amount: item.amount,
-                              project_id: item.project_id ?? undefined,
-                              commuting_deduction_amount: Number(e.target.value),
+                            updateItem.mutate({
+                              claimId: claim.id,
+                              itemId: item.id,
+                              input: {
+                                category_id: item.category_id,
+                                usage_date: item.usage_date,
+                                description: item.description ?? undefined,
+                                amount: item.amount,
+                                project_id: item.project_id ?? undefined,
+                                commuting_deduction_amount: Number(e.target.value),
+                              },
                             })
                           }
                         />
@@ -886,9 +892,15 @@ function SavedItemsAndSubmit({
                       <AttachmentPanel ownerType="expense_item" ownerId={item.id} required={requiresReceipt} compact />
                     </TableCell>
                     <TableCell>
-                      <Button variant="danger" size="sm" onClick={() => onDeleteItem(item.id)}>
-                        削除
-                      </Button>
+                      <ConfirmActionDialog
+                        triggerLabel="削除"
+                        triggerVariant="danger"
+                        title={`${item.category?.name ?? '経費品目'}(${item.usage_date})の明細を削除しますか?`}
+                        description="削除すると元に戻せません。"
+                        confirmLabel="削除する"
+                        isPending={deleteItem.isPending && deleteItem.variables?.itemId === item.id}
+                        onConfirm={() => deleteItem.mutateAsync({ claimId: claim.id, itemId: item.id })}
+                      />
                     </TableCell>
                   </TableRow>
                 )

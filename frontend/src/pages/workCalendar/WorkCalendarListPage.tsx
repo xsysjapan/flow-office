@@ -55,22 +55,22 @@ export function WorkCalendarListPage() {
           <>
             <ul className="divide-y divide-border">
               {calendars.map((calendar) => (
-                <li key={calendar.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <div className="flex flex-1 flex-col">
-                    <Link
-                      to={`/admin/work-calendars/${calendar.id}`}
-                      className="text-sm font-medium text-foreground hover:text-primary hover:underline"
-                    >
-                      {calendar.name}
-                    </Link>
-                    <span className="text-sm text-muted-foreground">
-                      週開始: {calendar.week_starts_on} / 年度開始: {calendar.fiscal_year_start_month}月
-                      {calendar.fiscal_year_start_day}日
-                    </span>
-                  </div>
-                  <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
-                    {calendar.is_default ? 'デフォルト' : '非デフォルト'}
-                  </Badge>
+                <li key={calendar.id} className="flex flex-wrap items-center gap-3 py-1">
+                  <Link
+                    to={`/admin/work-calendars/${calendar.id}`}
+                    className="flex flex-1 flex-wrap items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent"
+                  >
+                    <div className="flex flex-1 flex-col">
+                      <span className="text-sm font-medium text-foreground">{calendar.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        週開始: {calendar.week_starts_on} / 年度開始: {calendar.fiscal_year_start_month}月
+                        {calendar.fiscal_year_start_day}日
+                      </span>
+                    </div>
+                    <Badge tone={calendar.is_default ? 'success' : 'neutral'}>
+                      {calendar.is_default ? 'デフォルト' : '非デフォルト'}
+                    </Badge>
+                  </Link>
                   <ConfirmActionDialog
                     triggerLabel="削除"
                     triggerVariant="danger"

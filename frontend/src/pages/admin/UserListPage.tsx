@@ -8,6 +8,7 @@ import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { Pagination } from "../../components/Pagination/Pagination";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
@@ -138,6 +139,12 @@ export function UserListPage() {
       }
     >
       <div className="mb-4">
+        {/* Pattern exception: ユーザー作成をDialog/Sheet/Pageではなく、一覧のCard内に
+            展開するインラインフォームで実装する(ui-interaction-patterns SKILL.md §2.11は
+            Dialog/Sheet/Pageの3種のみを標準としている)。
+            Reason: 入力項目が氏名・メールアドレス・社員番号・部署・役職の5項目のみで、かつ
+            管理者にとって頻度の高い操作であるため、Dialog/Pageへの遷移コストを避け、
+            一覧のコンテキストを保ったまま作成できる価値を優先した。 */}
         <Button
           variant="secondary"
           onClick={() => setShowCreate((value) => !value)}
@@ -273,19 +280,17 @@ export function UserListPage() {
             </option>
           ))}
         </NativeSelect>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
             checked={externalUnlinked}
-            onChange={(e) => updateParam("external_unlinked", e.target.checked ? "1" : "")}
+            onCheckedChange={(checked) => updateParam("external_unlinked", checked === true ? "1" : "")}
           />
           Microsoft未連携
         </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <Checkbox
             checked={externalHr}
-            onChange={(e) => updateParam("external_hr", e.target.checked ? "1" : "")}
+            onCheckedChange={(checked) => updateParam("external_hr", checked === true ? "1" : "")}
           />
           外部HR管理
         </label>

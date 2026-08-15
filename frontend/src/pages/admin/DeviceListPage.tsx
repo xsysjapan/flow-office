@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -77,8 +78,10 @@ function isHeartbeatStale(device: Device): boolean {
  * DeviceDetailModal(詳細画面)に集約する。
  */
 export function DeviceListPage() {
-  const [page, setPage] = useState(1)
-  const [showDeleted, setShowDeleted] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pageParam = Number(searchParams.get('page'))
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const showDeleted = searchParams.get('show_deleted') === '1'
   const { data: devices, isLoading, error } = useDevices({
     ownerType: 'organization_shared',
     page,
@@ -96,8 +99,28 @@ export function DeviceListPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
 
   const toggleShowDeleted = () => {
-    setShowDeleted((v) => !v)
-    setPage(1)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!showDeleted) next.set('show_deleted', '1')
+        else next.delete('show_deleted')
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function changePage(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage > 1) next.set('page', String(nextPage))
+        else next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const toggleRoleType = (roleType: DeviceRoleType) => {
@@ -300,7 +323,7 @@ export function DeviceListPage() {
               currentPage={devices.meta.current_page}
               lastPage={devices.meta.last_page}
               total={devices.meta.total}
-              onPageChange={setPage}
+              onPageChange={changePage}
             />
           )}
         </>

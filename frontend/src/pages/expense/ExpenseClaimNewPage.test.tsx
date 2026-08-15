@@ -930,4 +930,65 @@ describe('ExpenseClaimNewPage', () => {
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
     expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()
   })
+
+  it('asks for confirmation before deleting a saved expense item, and deletes it once confirmed', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteItem = vi.spyOn(expenseClaimsApi, 'deleteExpenseItem').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    expect(deleteItem).not.toHaveBeenCalled()
+    expect(await screen.findByText(/元に戻せません/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+    await waitFor(() => expect(deleteItem).toHaveBeenCalledWith('claim-1', 'item-1'))
+  })
+
+  it('does not delete a saved expense item when the delete confirmation is cancelled', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteItem = vi.spyOn(expenseClaimsApi, 'deleteExpenseItem').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    expect(deleteItem).not.toHaveBeenCalled()
+  })
 })

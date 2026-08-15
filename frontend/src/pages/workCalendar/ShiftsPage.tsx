@@ -1181,19 +1181,19 @@ function ShiftScheduleBoardCard() {
             ) : (
               <>
                 {review.legal_holiday_shortages.map((warning, index) => (
-                  <p key={`legal-${index}`} className="text-amber-600">
+                  <p key={`legal-${index}`} className="text-warning">
                     社員ID{warning.user_id}: {warning.period_start}〜{warning.period_end}
                     に法定休日が不足しています({warning.legal_holiday_count}/{warning.required_count})。
                   </p>
                 ))}
                 {review.consecutive_work_violations.map((warning, index) => (
-                  <p key={`consecutive-${index}`} className="text-amber-600">
+                  <p key={`consecutive-${index}`} className="text-warning">
                     社員ID{warning.user_id}: {warning.period_start}〜{warning.period_end}
                     に{warning.consecutive_days}日連続勤務(上限{warning.max_allowed}日)。
                   </p>
                 ))}
                 {review.monthly_hours_over_cap.map((warning, index) => (
-                  <p key={`monthly-${index}`} className="text-amber-600">
+                  <p key={`monthly-${index}`} className="text-warning">
                     社員ID{warning.user_id}: {warning.year_month}
                     の所定労働時間合計が法定労働時間の総枠を超えています({warning.planned_minutes}分/
                     {warning.statutory_cap_minutes}分)。

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -9,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -31,6 +33,7 @@ export function WorkflowRequestListPage() {
   const [bulkError, setBulkError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
+  if (error instanceof ApiError && error.status === 403) return <PermissionDenied />
   if (error) return <ErrorMessage error={error} fallback="申請一覧の取得に失敗しました。" />
 
   const requests = data?.data ?? []
