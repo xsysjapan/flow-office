@@ -83,7 +83,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: false,
+        allow_daily_holiday_override: true,
       }),
     )
 
@@ -115,7 +115,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: false,
+        allow_daily_holiday_override: true,
       }),
     )
   })
@@ -174,7 +174,7 @@ describe('WorkCalendarCreatePage', () => {
           '6': 'company_holiday',
           '7': 'legal_holiday',
         },
-        allow_daily_holiday_override: false,
+        allow_daily_holiday_override: true,
         holiday_calendar_source_id: createdSource.id,
       }),
     )

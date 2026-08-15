@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
-import { pickDate } from "./support/ui";
+import { pickDate, pickTime } from "./support/ui";
 
 /**
  * docs/testing/scenario-tests.md シナリオ12(会社カレンダーのライフサイクル)。
@@ -11,15 +11,18 @@ import { pickDate } from "./support/ui";
  * 手動で1件設定して確認する(祝日iCalendarソース自体の登録・一覧永続化・直前同期取消は
  * 別途 `HolidayCalendarSourcesPage.test.tsx` の単体テストでカバーする)。
  *
- * scenario-00・scenario-08と衝突しない未来年度(西暦8000年台)をランダムに選ぶ
- * (scenario-00と同じ考え方)。
+ * scenario-00(実行時年+2の単一固定値)・scenario-08(実在の近い年度)と衝突しない
+ * 未来年度をランダムに選ぶ。DatePickerの年送りは1年ずつのボタン操作のため、あまり遠い
+ * 未来(例: 西暦8000年台)を選ぶと対象期間(開始)/(終了)の選択だけで一回あたり数分かかり
+ * 現実的なテスト時間を超えてしまう。衝突を避けつつ実用上十分な範囲として、実行時年+40〜
+ * +139の100年間からランダムに選ぶ。
  */
 test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公開〜一括適用〜取消〜年度複製", async ({
   page,
 }) => {
   test.setTimeout(180000);
 
-  const fiscalYear = 8000 + Math.floor(Math.random() * 900);
+  const fiscalYear = new Date().getFullYear() + 40 + Math.floor(Math.random() * 100);
   const calendarName = `E2Eテスト用カレンダー(ライフサイクル)${fiscalYear}`;
   const workStyleCode = `e2e_lifecycle_${fiscalYear}`;
   const workDate = `${fiscalYear}-04-01`;
@@ -27,37 +30,39 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
 
   await loginAs(page, SCENARIO_USERS.admin);
 
-  // --- UC-C009 手順1〜2: 会社カレンダー本体作成〜カレンダー年度作成 ---
-  await page.goto("/admin/work-calendars");
-  await page.getByRole("button", { name: "新規作成" }).click();
-  await page.getByLabel("カレンダー名").fill(calendarName);
-  await page.getByRole("button", { name: "作成する" }).click();
-
+  // 一覧画面(/admin/work-calendars)へ戻った際に、このカレンダーの行を再度探すのに使う
+  // (行全体が1つのLinkになっているため、getByRole("link", { name: calendarName })は
+  // 部分一致でこの行のLinkにもヒットする)。
   const calendarRow = page.locator("li", {
     has: page.getByRole("link", { name: calendarName }),
   });
-  await expect(calendarRow).toBeVisible();
 
-  // --- デフォルトに設定する ---
-  await expect(calendarRow.getByText("非デフォルト")).toBeVisible();
-  await calendarRow
-    .getByRole("button", { name: "デフォルトに設定する" })
-    .click();
-  await expect(calendarRow.getByText("デフォルト", { exact: true })).toBeVisible();
-  await expect(
-    calendarRow.getByRole("button", { name: "デフォルトに設定する" }),
-  ).toHaveCount(0);
+  // --- UC-C009 手順1〜2: 会社カレンダー本体作成〜カレンダー年度作成 ---
+  // WorkCalendarCreatePageは作成後に作成したカレンダー自身の詳細画面へ遷移する
+  // (SKILL.md §2.5)ため、一覧画面へ戻って行を探し直す必要はない。
+  await page.goto("/admin/work-calendars");
+  await page.getByRole("link", { name: "新規作成" }).click();
+  await page.getByLabel("カレンダー名").fill(calendarName);
+  await page.getByRole("button", { name: "作成する" }).click();
 
-  await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
     page.getByRole("heading", { name: calendarName, level: 1 }),
   ).toBeVisible();
+
+  // --- デフォルトに設定する(詳細画面自身のアクション) ---
+  await expect(page.getByText("非デフォルト")).toBeVisible();
+  await page.getByRole("button", { name: "デフォルトに設定する" }).click();
+  await expect(page.getByText("デフォルト", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "デフォルトに設定する" }),
+  ).toHaveCount(0);
+
   await expect(
     page.getByRole("heading", { name: "カレンダー年度" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "新規作成" }).click();
-  await page.getByLabel("年度").fill(String(fiscalYear));
+  await page.getByLabel("年度", { exact: true }).fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
   await page.getByRole("button", { name: "年度を作成する" }).click();
@@ -74,16 +79,17 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
 
-  // 勤務日を1件確認する(自動生成された初期値のまま、勤務区分をWORKに設定し直す)。
-  await page.getByRole("button", { name: `${workDate} 勤務日`, exact: false }).click();
+  // 勤務日を1件設定する(fiscalYearはランダムな年度のため、月4/1が必ず平日になるとは
+  // 限らない。曜日ごとの休日設定の初期値がどうであれ、明示的にworkingへ設定し直す)。
+  await page.getByRole("button", { name: workDate, exact: false }).click();
   await page.getByLabel(`${workDate}の勤務区分`).selectOption({ value: "working" });
   await page.keyboard.press("Escape");
 
   // 祝日を1件手動設定する。
   await page.getByRole("button", { name: `${holidayDate}`, exact: false }).click();
   await page.getByLabel(`${holidayDate}の勤務区分`).selectOption({ value: "company_holiday" });
-  await page.getByLabel(`${holidayDate}の祝日`).click();
-  await page.getByLabel(`${holidayDate}の祝日名`).fill("E2Eテスト祝日");
+  await page.getByLabel(`${holidayDate}の休日`).click();
+  await page.getByLabel(`${holidayDate}の休日名`).fill("E2Eテスト祝日");
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "保存する" }).click();
@@ -103,8 +109,8 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await page.getByLabel("労働時間制").selectOption({ value: "fixed" });
   await page.getByLabel("所定労働時間(分/日)").fill("480");
   await page.getByLabel("所定労働時間(分/週)").fill("2400");
-  await page.getByLabel("標準開始時刻").fill("09:00");
-  await page.getByLabel("標準終了時刻").fill("18:00");
+  await pickTime(page, "標準開始時刻", "09:00");
+  await pickTime(page, "標準終了時刻", "18:00");
   await page.getByLabel("カレンダー").selectOption({ label: calendarName });
   await page.getByRole("button", { name: "登録する" }).click();
   await expect(page.getByText(workStyleCode)).toBeVisible();
@@ -143,8 +149,9 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   });
   await expect(historyRow.getByText("適用済み")).toBeVisible();
 
-  // --- UC-C042: 一括操作の履歴から取消す ---
+  // --- UC-C042: 一括操作の履歴から取消す(ConfirmActionDialog: トリガー→確認の2段階)。 ---
   await historyRow.getByRole("button", { name: "取消す" }).click();
+  await page.getByRole("button", { name: "取り消す" }).click();
   await expect(historyRow.getByText("取消済み")).toBeVisible();
   await expect(historyRow.getByRole("button", { name: "取消す" })).toHaveCount(0);
 
@@ -158,7 +165,11 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await expect(
     page.getByRole("heading", { name: "カレンダー年度の日別編集" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "複製して翌年度を作成" }).click();
+  const duplicateYearButton = page.getByRole("button", { name: "複製して翌年度を作成" });
+  await duplicateYearButton.click();
+  // ミューテーション完了を待たずに一覧へ遷移すると、複製がまだサーバ側で終わっておらず
+  // 翌年度の行が見つからないことがあるため、isLoadingが解けるまで待つ。
+  await expect(duplicateYearButton).not.toBeDisabled();
 
   await page.goto("/admin/work-calendars");
   await calendarRow.getByRole("link", { name: calendarName }).click();

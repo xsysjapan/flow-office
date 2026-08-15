@@ -62,7 +62,10 @@ function emptyFormState() {
     fiscalYearStartMonth: '',
     fiscalYearStartDay: '',
     weekdayPattern: DEFAULT_PATTERN,
-    allowDailyHolidayOverride: false,
+    // バックエンドのデフォルト(省略時true)に合わせる。ロックした状態で作成すると、
+    // 作成直後に日別編集で祝日等を個別設定できず(UC-C010)、そのために毎回この
+    // チェックボックスを操作する追加手順が必要になってしまうため。
+    allowDailyHolidayOverride: true,
     holidaySourceId: NONE_OPTION_VALUE,
   }
 }

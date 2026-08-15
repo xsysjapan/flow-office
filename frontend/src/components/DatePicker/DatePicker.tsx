@@ -143,6 +143,7 @@ export function DatePicker({
             )}
             <Calendar
               mode="single"
+              required
               locale={ja}
               labels={{
                 labelPrevious: () => "前の月へ",
@@ -155,9 +156,7 @@ export function DatePicker({
                 ...(minDate ? [{ before: minDate }] : []),
                 ...(maxDate ? [{ after: maxDate }] : []),
               ]}
-              onSelect={(date) =>
-                selectDate(date ? formatDate(date) : undefined)
-              }
+              onSelect={(date) => selectDate(formatDate(date))}
               components={{
                 CaptionLabel: ({
                   children,

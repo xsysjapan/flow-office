@@ -46,17 +46,13 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await loginAs(page, SCENARIO_USERS.admin);
 
   // --- UC-C009: 会社カレンダー本体作成〜カレンダー年度作成〜日別属性登録〜公開 ---
+  // WorkCalendarCreatePageは作成後に作成したカレンダー自身の詳細画面へ遷移する
+  // (SKILL.md §2.5)ため、一覧画面へ戻って行を探し直す必要はない。
   await page.goto("/admin/work-calendars");
-  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByRole("link", { name: "新規作成" }).click();
   await page.getByLabel("カレンダー名").fill(calendarName);
   await page.getByRole("button", { name: "作成する" }).click();
 
-  const calendarRow = page.locator("li", {
-    has: page.getByRole("link", { name: calendarName }),
-  });
-  await expect(calendarRow).toBeVisible();
-
-  await calendarRow.getByRole("link", { name: calendarName }).click();
   await expect(
     page.getByRole("heading", { name: calendarName, level: 1 }),
   ).toBeVisible();
@@ -65,7 +61,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   ).toBeVisible();
 
   await page.getByRole("button", { name: "新規作成" }).click();
-  await page.getByLabel("年度").fill(String(fiscalYear));
+  await page.getByLabel("年度", { exact: true }).fill(String(fiscalYear));
   await pickDate(page, "開始日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "終了日", `${fiscalYear + 1}-03-31`, { exact: true });
   await page.getByRole("button", { name: "年度を作成する" }).click();
