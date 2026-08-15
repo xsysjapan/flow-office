@@ -338,6 +338,10 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   // 不可逆な月次締め処理を確認する画面順になっていることも合わせて確認する。
   const attendanceTaskTitle = `月次勤怠確認: ${SCENARIO_USERS.punchEmployee} (${yearMonth})`
   await adminPage.goto('/backoffice-tasks')
+  // 開発DBには他シナリオ実行分のバックオフィスタスクが蓄積しており、デフォルト一覧の
+  // 1ページ目に収まらないことがあるため、タイトルで検索して絞り込む。
+  await adminPage.getByLabel('タスクを検索').fill(attendanceTaskTitle)
+  await adminPage.getByRole('button', { name: '検索' }).click()
   const attendanceTaskRow = adminPage.getByRole('row', { name: attendanceTaskTitle })
   await expect(attendanceTaskRow).toBeVisible()
   await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
@@ -398,13 +402,14 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await applicantPage.getByRole('button', { name: '個別に登録する' }).click()
     await applicantPage.getByRole('button', { name: '交通費' }).click()
 
-    await applicantPage.getByRole('button', { name: '行を追加' }).click()
-    await pickDate(applicantPage, '1行目の日付', usageDateStr)
-    await applicantPage.getByLabel('1行目の金額').fill(amount)
-    await applicantPage.getByLabel('1行目の出発地').fill('自宅最寄駅')
-    await applicantPage.getByLabel('1行目の到着地').fill('本社最寄駅')
+    // 交通費(entry_mode='batch')は「まとめて登録」でのみ表形式入力になり、「個別に登録」
+    // では他の単発経費と同様に1件入力で完結するフォームになる(ExpenseClaimNewPage.tsx参照)。
+    await pickDate(applicantPage, '利用日', usageDateStr)
+    await applicantPage.getByLabel('金額').fill(amount)
+    await applicantPage.getByLabel('出発地').fill('自宅最寄駅')
+    await applicantPage.getByLabel('到着地').fill('本社最寄駅')
 
-    await applicantPage.getByRole('button', { name: /明細を保存する/ }).click()
+    await applicantPage.getByRole('button', { name: '明細を保存して続けて入力する' }).click()
     await expect(applicantPage.getByText(/保存済みの明細\(1件/)).toBeVisible()
 
     await pickUser(applicantPage, '承認者', SCENARIO_USERS.approver, 'naoki.watanabe@example.com')
@@ -426,7 +431,11 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     // タイトルは「経費精算: 高橋 健太 (期間)」形式で金額を含まないため、同じ社員が
     // 他のテスト(scenario-04等)で作成した経費精算タスクと区別できるよう、
     // 明細のusage_dateを含む対象期間の年月で絞り込む(strict modeの複数該当エラー回避)。
+    // 開発DBには他シナリオ実行分のバックオフィスタスクが蓄積しており、デフォルト一覧の
+    // 1ページ目に収まらないことがあるため、担当者名で検索して絞り込む。
     await accountingPage.goto('/backoffice-tasks')
+    await accountingPage.getByLabel('タスクを検索').fill(SCENARIO_USERS.punchEmployee)
+    await accountingPage.getByRole('button', { name: '検索' }).click()
     const expenseTaskRow = accountingPage.getByRole('row', { name: new RegExp(`経費精算.*高橋 健太.*${usageDateStr.slice(0, 7)}`) })
     await expect(expenseTaskRow).toBeVisible()
     await expenseTaskRow.getByRole('link').click()
@@ -465,6 +474,8 @@ test('§5-16: 月次締め後もバックオフィス処理(交通費精算・�
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     await generalAffairsPage.goto('/backoffice-tasks')
+    await generalAffairsPage.getByLabel('タスクを検索').fill(cardTitle)
+    await generalAffairsPage.getByRole('button', { name: '検索' }).click()
     const cardTaskRow = generalAffairsPage.getByRole('row', { name: cardTitle })
     await expect(cardTaskRow).toBeVisible()
     await cardTaskRow.getByRole('link', { name: cardTitle }).click()
