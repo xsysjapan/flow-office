@@ -348,10 +348,13 @@ async function createCalendarWithOneRestDay(
           days: [
             {
               date: restDate,
-              day_type: 'legal_holiday',
+              // 「決めない方式」は法定休日を手動指定せず自動推定に委ねるテストのため、
+              // ここでは単に「休みの日」(company_holiday)として設定する。is_legal_holiday
+              // を手動でtrueにしてしまうと、LegalHolidayResolverの自動推定を検証できなくなる。
+              day_type: 'company_holiday',
               is_working_day: false,
               is_legal_holiday: false,
-              is_company_holiday: false,
+              is_company_holiday: true,
             },
           ],
         }),
