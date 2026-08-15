@@ -62,7 +62,7 @@ async function submitPaidLeaveRequest(
   page: Page,
   options: { leaveTypeLabel: string; approverName: string; approverEmail: string },
 ): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const targetDate = randomWorkingDate()
 
     try {
@@ -92,7 +92,7 @@ async function submitPaidLeaveRequest(
     }
   }
 
-  throw new Error('有給申請に5回試行しても成功しなかった(重複日との衝突が続いた可能性)')
+  throw new Error('有給申請に20回試行しても成功しなかった(重複日との衝突が続いた可能性)')
 }
 
 test('終日有給を申請〜承認し、勤怠日に反映される', async ({ browser }) => {
