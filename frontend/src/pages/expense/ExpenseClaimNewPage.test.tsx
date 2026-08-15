@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as attachmentsApi from '../../api/attachments'
 import * as attendanceApi from '../../api/attendance'
@@ -70,6 +70,13 @@ function draftClaim(overrides: Partial<ExpenseClaim> = {}): ExpenseClaim {
   }
 }
 
+/** テスト検証専用: 現在のURLクエリ文字列を表示する。`MemoryRouter`は`window.location`を
+ *  更新しないため、`?category=`の書き込みは`useSearchParams`経由でこの表示を通じて確認する。 */
+function LocationSearchProbe() {
+  const [searchParams] = useSearchParams()
+  return <div data-testid="location-search">{searchParams.toString()}</div>
+}
+
 function renderPage(
   categories: ExpenseCategory[] = [transportCategory, lodgingCategory],
   initialPath = '/expenses/new',
@@ -120,8 +127,24 @@ function renderPage(
         <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
             <Route path="/expenses" element={<p>経費精算一覧</p>} />
-            <Route path="/expenses/new" element={<ExpenseClaimNewPage />} />
-            <Route path="/expenses/:id/edit" element={<ExpenseClaimNewPage />} />
+            <Route
+              path="/expenses/new"
+              element={
+                <>
+                  <ExpenseClaimNewPage />
+                  <LocationSearchProbe />
+                </>
+              }
+            />
+            <Route
+              path="/expenses/:id/edit"
+              element={
+                <>
+                  <ExpenseClaimNewPage />
+                  <LocationSearchProbe />
+                </>
+              }
+            />
             <Route path="/expenses/:id" element={<p>経費精算詳細ページ</p>} />
           </Routes>
         </MemoryRouter>
@@ -700,6 +723,60 @@ describe('ExpenseClaimNewPage', () => {
     expect(screen.getByRole('button', { name: '宿泊費' })).toBeInTheDocument()
   })
 
+  it('reflects the selected category into ?category= so a reload/URL share keeps the same category', async () => {
+    renderPage([transportCategory, lodgingCategory])
+    await selectIndividualEntryMode()
+
+    await userEvent.click(await screen.findByRole('button', { name: '宿泊費' }))
+    await screen.findByLabelText('利用日')
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('category=lodging'))
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('category=')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual')
+  })
+
+  it('reflects the selected entry mode into ?mode= so a reload/URL share keeps the same mode', async () => {
+    renderPage([transportCategory, lodgingCategory])
+
+    await selectIndividualEntryMode()
+
+    await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual'))
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    await screen.findByLabelText('利用日')
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+    await screen.findByRole('button', { name: '交通費' })
+
+    expect(screen.getByTestId('location-search')).toHaveTextContent('mode=individual')
+  })
+
+  it('skips the entry mode selection step when a ?mode= shortcut param matches a valid mode', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual')
+
+    expect(await screen.findByRole('button', { name: '交通費' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '個別に登録する' })).not.toBeInTheDocument()
+  })
+
+  it('clears ?mode= from the URL when the user goes back to entry mode selection', async () => {
+    renderPage([transportCategory, lodgingCategory], '/expenses/new?mode=individual')
+
+    await userEvent.click(await screen.findByRole('button', { name: '交通費' }))
+    await screen.findByLabelText('利用日')
+
+    await userEvent.click(screen.getByRole('button', { name: '区分を変更する' }))
+    await screen.findByRole('button', { name: '交通費' })
+
+    await userEvent.click(screen.getByRole('button', { name: '登録方法の選択に戻る' }))
+
+    expect(await screen.findByRole('button', { name: '個別に登録する' })).toBeInTheDocument()
+    expect(screen.getByTestId('location-search')).not.toHaveTextContent('mode=')
+  })
+
   it('lets the applicant set an optional title for the claim', async () => {
     vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
       draftClaim({
@@ -852,5 +929,66 @@ describe('ExpenseClaimNewPage', () => {
 
     await waitFor(() => expect(deleteClaim).toHaveBeenCalledWith('claim-1'))
     expect(await screen.findByText('経費精算一覧')).toBeInTheDocument()
+  })
+
+  it('asks for confirmation before deleting a saved expense item, and deletes it once confirmed', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteItem = vi.spyOn(expenseClaimsApi, 'deleteExpenseItem').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    expect(deleteItem).not.toHaveBeenCalled()
+    expect(await screen.findByText(/元に戻せません/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+    await waitFor(() => expect(deleteItem).toHaveBeenCalledWith('claim-1', 'item-1'))
+  })
+
+  it('does not delete a saved expense item when the delete confirmation is cancelled', async () => {
+    vi.spyOn(expenseClaimsApi, 'fetchExpenseClaim').mockResolvedValue(
+      draftClaim({
+        items: [
+          {
+            id: 'item-1',
+            category_id: 2,
+            usage_date: '2026-07-10',
+            description: 'ホテルABC',
+            amount: 12000,
+            project_id: null,
+            evidence_type: 'receipt_required',
+            fact_reference_type: null,
+            fact_reference_id: null,
+            commuting_deduction_amount: null,
+          },
+        ],
+      }),
+    )
+    const deleteItem = vi.spyOn(expenseClaimsApi, 'deleteExpenseItem').mockResolvedValue(undefined)
+
+    renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit')
+
+    await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
+
+    expect(deleteItem).not.toHaveBeenCalled()
   })
 })

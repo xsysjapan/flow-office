@@ -28,13 +28,40 @@ class UpdateCompanyCalendarDaysHandler implements CommandHandler
 
         $companyCalendarYear = CompanyCalendarYear::query()->findOrFail($command->companyCalendarYearId);
 
-        $days = $this->applyOverrideLock($companyCalendarYear, $command->days);
+        $days = $this->makePublicHolidaysNonWorking(
+            $this->applyOverrideLock($companyCalendarYear, $command->days),
+        );
 
         CompanyCalendarYearAggregate::retrieve($command->companyCalendarYearId)
             ->updateDays(days: $days, updatedByUserId: $command->updatedByUserId)
             ->persist();
 
         return $companyCalendarYear->days()->orderBy('date')->get();
+    }
+
+    /**
+     * A day marked as a holiday is also a non-working day.  Keep an existing legal-holiday
+     * designation; otherwise classify it as a prescribed (company) holiday.
+     *
+     * @param  list<array<string, mixed>>  $days
+     * @return list<array<string, mixed>>
+     */
+    private function makePublicHolidaysNonWorking(array $days): array
+    {
+        return array_map(function (array $day): array {
+            if (! ($day['is_public_holiday'] ?? false)) {
+                return $day;
+            }
+
+            $isLegalHoliday = (bool) ($day['is_legal_holiday'] ?? false);
+
+            return array_merge($day, [
+                'day_type' => $isLegalHoliday ? 'legal_holiday' : 'company_holiday',
+                'is_working_day' => false,
+                'is_company_holiday' => ! $isLegalHoliday,
+                'schedule_state' => 'OFF',
+            ]);
+        }, $days);
     }
 
     /**
@@ -65,10 +92,10 @@ class UpdateCompanyCalendarDaysHandler implements CommandHandler
 
             $isWorkingDay = $type === 'working';
             $isLegalHoliday = $type === 'legal_holiday';
-            $isCompanyHoliday = ! $isWorkingDay;
+            $isCompanyHoliday = $type === 'company_holiday';
 
             return array_merge($day, [
-                'day_type' => $isWorkingDay ? 'weekday' : 'company_holiday',
+                'day_type' => $type === 'working' ? 'weekday' : $type,
                 'is_working_day' => $isWorkingDay,
                 'is_legal_holiday' => $isLegalHoliday,
                 'is_company_holiday' => $isCompanyHoliday,

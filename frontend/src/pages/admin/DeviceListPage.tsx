@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -75,8 +78,10 @@ function isHeartbeatStale(device: Device): boolean {
  * DeviceDetailModal(詳細画面)に集約する。
  */
 export function DeviceListPage() {
-  const [page, setPage] = useState(1)
-  const [showDeleted, setShowDeleted] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pageParam = Number(searchParams.get('page'))
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const showDeleted = searchParams.get('show_deleted') === '1'
   const { data: devices, isLoading, error } = useDevices({
     ownerType: 'organization_shared',
     page,
@@ -94,8 +99,28 @@ export function DeviceListPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
 
   const toggleShowDeleted = () => {
-    setShowDeleted((v) => !v)
-    setPage(1)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!showDeleted) next.set('show_deleted', '1')
+        else next.delete('show_deleted')
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function changePage(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (nextPage > 1) next.set('page', String(nextPage))
+        else next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
   }
 
   const toggleRoleType = (roleType: DeviceRoleType) => {
@@ -216,11 +241,23 @@ export function DeviceListPage() {
           >
             登録する
           </Button>
+          {(!name || roleTypes.length === 0) && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {!name ? '名称を入力してください。' : '役割を1つ以上選択してください。'}
+            </p>
+          )}
         </div>
       )}
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">登録済みの共有端末はまだありません。</p>
+        <EmptyState
+          title={showDeleted ? '削除済みの共有端末はありません。' : '登録済みの共有端末はまだありません。'}
+          description={
+            showDeleted
+              ? '「削除済みを非表示」に切り替えると稼働中の端末が表示されます。'
+              : '右上の「新規登録」から打刻リーダー等の共有端末を登録できます。'
+          }
+        />
       ) : (
         <>
           <Table>
@@ -239,12 +276,11 @@ export function DeviceListPage() {
               {list.map((device) => {
                 const isDeleted = device.deleted_at !== null
                 return (
-                  <TableRow
+                  <ClickableTableRow
                     key={device.id}
-                    className={isDeleted ? undefined : 'cursor-pointer'}
-                    onClick={() => {
-                      if (!isDeleted) setSelectedDeviceId(device.id)
-                    }}
+                    onRowClick={() => setSelectedDeviceId(device.id)}
+                    rowLabel={`${device.name}の詳細を開く`}
+                    disabled={isDeleted}
                   >
                     <TableCell className="font-medium text-foreground">{device.name}</TableCell>
                     <TableCell className="text-muted-foreground">{DEVICE_TYPE_LABELS[device.device_type]}</TableCell>
@@ -277,7 +313,7 @@ export function DeviceListPage() {
                         </div>
                       )}
                     </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 )
               })}
             </TableBody>
@@ -287,7 +323,7 @@ export function DeviceListPage() {
               currentPage={devices.meta.current_page}
               lastPage={devices.meta.last_page}
               total={devices.meta.total}
-              onPageChange={setPage}
+              onPageChange={changePage}
             />
           )}
         </>

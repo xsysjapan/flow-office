@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -15,10 +16,11 @@ import type {
   WorkCalendarDay,
   WorkCalendarYearStatus,
 } from '../../api/types'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
-  useCompanyCalendarYearById,
+  useCompanyCalendarYearByFiscalYear,
   useCompanyCalendarYearDays,
   useDeleteWorkCalendarYear,
   useDuplicateWorkCalendarYear,
@@ -175,6 +177,7 @@ interface DayCellProps {
   inRange: boolean
   /** falseの場合、勤務区分は読み取り専用表示になる(カレンダー本体側でロックされている)。 */
   allowOverride: boolean
+  weekdayClassification: DayClassification
   onChange: (next: DayState) => void
 }
 
@@ -185,7 +188,7 @@ const CLASSIFICATION_CELL_CLASSES: Record<DayClassification, string> = {
   legal_holiday: 'border-destructive/40 bg-destructive/15 text-destructive hover:bg-destructive/25',
 }
 
-function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps) {
+function DayCell({ date, state, inRange, allowOverride, weekdayClassification, onChange }: DayCellProps) {
   const dayOfMonth = Number(date.slice(8, 10))
 
   if (!inRange) {
@@ -197,7 +200,7 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
   }
 
   const statusLabel = state.is_public_holiday
-    ? `祝日${state.public_holiday_name ? `(${state.public_holiday_name})` : ''}`
+    ? `休日${state.public_holiday_name ? `(${state.public_holiday_name})` : ''}`
     : CLASSIFICATION_LABELS[state.classification]
 
   return (
@@ -216,7 +219,7 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
           <span>{dayOfMonth}</span>
           {state.is_public_holiday && (
             <span className="w-full truncate px-0.5 text-center text-[10px] leading-none text-warning">
-              祝{state.public_holiday_name ? `:${state.public_holiday_name}` : ''}
+              {state.public_holiday_name || '休日'}
             </span>
           )}
         </button>
@@ -252,17 +255,26 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
 
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox
-              aria-label={`${date}の祝日`}
+              aria-label={`${date}の休日`}
               checked={state.is_public_holiday}
-              onCheckedChange={(checked) => onChange({ ...state, is_public_holiday: checked === true })}
+              onCheckedChange={(checked) => {
+                const isHoliday = checked === true
+                onChange({
+                  ...state,
+                  is_public_holiday: isHoliday,
+                  classification: isHoliday
+                    ? (state.classification === 'working' ? 'company_holiday' : state.classification)
+                    : (allowOverride ? state.classification : weekdayClassification),
+                })
+              }}
             />
-            祝日
+            休日
           </label>
 
           {state.is_public_holiday && (
             <Input
-              aria-label={`${date}の祝日名`}
-              placeholder="祝日名"
+              aria-label={`${date}の休日名`}
+              placeholder="休日名"
               value={state.public_holiday_name}
               onChange={(e) => onChange({ ...state, public_holiday_name: e.target.value })}
             />
@@ -288,12 +300,13 @@ function DayCell({ date, state, inRange, allowOverride, onChange }: DayCellProps
  * 刷新する。保存は編集内容をまとめて`PUT .../days`に送る点は変わらない。
  */
 export function WorkCalendarDaysPage() {
-  const { yearId } = useParams<{ yearId: string }>()
+  const { calendarId = '', fiscalYear = '' } = useParams<{ calendarId: string; fiscalYear: string }>()
   const navigate = useNavigate()
   const putDays = usePutWorkCalendarDays()
 
-  const { year, calendar, isLoading: isLoadingYear, error: yearError } = useCompanyCalendarYearById(yearId ?? '')
-  const daysQuery = useCompanyCalendarYearDays(yearId ?? '')
+  const { year, calendar, isLoading: isLoadingYear, error: yearError } = useCompanyCalendarYearByFiscalYear(calendarId, fiscalYear)
+  const resolvedYearId = year?.id ?? ''
+  const daysQuery = useCompanyCalendarYearDays(resolvedYearId)
 
   const publishYear = usePublishWorkCalendarYear(calendar?.id ?? '')
   const unpublishYear = useUnpublishWorkCalendarYear(calendar?.id ?? '')
@@ -309,15 +322,20 @@ export function WorkCalendarDaysPage() {
   const [hoursPerDay, setHoursPerDay] = useState(8)
 
   useEffect(() => {
-    if (!daysQuery.data || loadedForYearId === yearId) return
+    if (!daysQuery.data || loadedForYearId === resolvedYearId) return
 
     const map = new Map<string, DayState>()
     for (const day of daysQuery.data) {
       map.set(day.date, toDayState(day))
     }
     setDaysMap(map)
-    setLoadedForYearId(yearId ?? null)
-  }, [daysQuery.data, yearId, loadedForYearId])
+    setLoadedForYearId(resolvedYearId || null)
+  }, [daysQuery.data, resolvedYearId, loadedForYearId])
+
+  const isDirty = Boolean(
+    daysQuery.data?.some((day) => JSON.stringify(daysMap.get(day.date)) !== JSON.stringify(toDayState(day))),
+  )
+  useUnsavedChangesGuard(isDirty)
 
   const dates = useMemo(() => (year ? allDatesInRange(year.starts_on, year.ends_on) : []), [year])
   const months = useMemo(() => (year ? monthsInRange(year.starts_on, year.ends_on) : []), [year])
@@ -349,10 +367,11 @@ export function WorkCalendarDaysPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dates, daysMap, hoursPerDay])
 
-  if (!yearId) return <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
+  if (!calendarId || !fiscalYear) return <p className="text-sm text-muted-foreground">カレンダー年度が見つかりません。</p>
 
   const handleSyncYear = () => {
-    syncYearHolidayCalendar.mutate(yearId, {
+    if (!resolvedYearId) return
+    syncYearHolidayCalendar.mutate(resolvedYearId, {
       onSuccess: (updatedSource) => {
         if (updatedSource.last_sync_summary) {
           setSyncSummary(updatedSource.last_sync_summary)
@@ -376,10 +395,10 @@ export function WorkCalendarDaysPage() {
     regenerateYear.error
 
   const handleSave = () => {
-    if (!yearId) return
+    if (!resolvedYearId) return
 
     putDays.mutate({
-      id: yearId,
+      id: resolvedYearId,
       days: dates.map((date) => {
         const state = getDay(date)
         const flags = classificationToFlags(state.classification)
@@ -399,25 +418,15 @@ export function WorkCalendarDaysPage() {
   }
 
   const handleDeleteYear = () => {
-    if (!calendar || !year) return
-    if (!window.confirm(`「${year.fiscal_year}年度」を削除します。よろしいですか?`)) return
-
-    deleteYear.mutate(year.id, {
+    if (!calendar || !year) return Promise.resolve()
+    return deleteYear.mutateAsync(year.id, {
       onSuccess: () => navigate(`/admin/work-calendars/${calendar.id}`),
     })
   }
 
   const handleRegenerateYear = () => {
-    if (!yearId) return
-    if (
-      !window.confirm(
-        'この年度の日別データを、カレンダーの現在の曜日ごとの休日設定から作り直します。これまでの手動編集はすべて破棄されます。よろしいですか?',
-      )
-    ) {
-      return
-    }
-
-    regenerateYear.mutate(yearId, {
+    if (!resolvedYearId) return Promise.resolve()
+    return regenerateYear.mutateAsync(resolvedYearId, {
       onSuccess: () => {
         // 再作成でサーバ側の日別データが総入れ替えされるため、編集中のローカル状態を破棄して
         // 再読み込みさせる(祝日iCalendar同期後の再読み込みと同じパターン)。
@@ -466,7 +475,7 @@ export function WorkCalendarDaysPage() {
               disabled={!hasHolidaySource || syncYearHolidayCalendar.isPending}
               onClick={handleSyncYear}
             >
-              この年度を祝日と同期する
+              この年度を休日と同期する
             </Button>
             {year.status === 'draft' && (
               <Button variant="secondary" isLoading={publishYear.isPending} onClick={() => publishYear.mutate(year.id)}>
@@ -482,30 +491,40 @@ export function WorkCalendarDaysPage() {
                 公開を取消す
               </Button>
             )}
-            <Button variant="danger" isLoading={deleteYear.isPending} onClick={handleDeleteYear}>
-              削除する
-            </Button>
+            <ConfirmActionDialog
+              triggerLabel="削除"
+              triggerVariant="danger"
+              title={`「${year.fiscal_year}年度」を削除しますか?`}
+              description="削除すると元に戻せません。"
+              confirmLabel="削除する"
+              isPending={deleteYear.isPending}
+              error={deleteYear.error}
+              onConfirm={handleDeleteYear}
+            />
             <Button variant="secondary" isLoading={duplicateYear.isPending} onClick={() => duplicateYear.mutate(year.id)}>
               複製して翌年度を作成
             </Button>
-            <Button
-              variant="secondary"
-              isLoading={regenerateYear.isPending}
-              disabled={year.status !== 'draft' || regenerateYear.isPending}
-              onClick={handleRegenerateYear}
-            >
-              年度を再作成する
-            </Button>
+            {year.status === 'draft' && (
+              <ConfirmActionDialog
+                triggerLabel="年度を再作成する"
+                title="この年度の日別データを作り直しますか?"
+                description="カレンダーの現在の曜日ごとの休日設定から日別データを作り直します。これまでの手動編集はすべて破棄され、元に戻せません。"
+                confirmLabel="作り直す"
+                isPending={regenerateYear.isPending}
+                error={regenerateYear.error}
+                onConfirm={handleRegenerateYear}
+              />
+            )}
           </div>
 
           {!hasHolidaySource && calendar && (
             <p className="text-xs text-muted-foreground">
-              祝日iCalendarソースが未設定のため、同期は行えません。
+              休日iCalendarソースが未設定のため、同期は行えません。
               <Link
                 to={`/admin/work-calendars/${calendar.id}#${HOLIDAY_SOURCE_MANAGEMENT_ANCHOR}`}
                 className="ml-1 underline hover:text-foreground"
               >
-                祝日iCalendarソース管理
+                休日iCalendarソース管理
               </Link>
               から設定してください。
             </p>
@@ -534,7 +553,7 @@ export function WorkCalendarDaysPage() {
             <span className="text-lg font-semibold text-foreground">{stats.workCount}日</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">休日日数(うち祝日)</span>
+            <span className="text-xs text-muted-foreground">休日日数(うち外部カレンダー連携)</span>
             <span className="text-lg font-semibold text-foreground">
               {stats.offCount}日({stats.publicHolidayCount}日)
             </span>
@@ -584,7 +603,7 @@ export function WorkCalendarDaysPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="size-3 rounded-sm ring-1 ring-warning/70" />
-                祝日
+                休日
               </span>
             </div>
 
@@ -619,6 +638,9 @@ export function WorkCalendarDaysPage() {
                               state={getDay(date)}
                               inRange={year ? date >= year.starts_on && date <= year.ends_on : true}
                               allowOverride={allowDailyHolidayOverride}
+                              weekdayClassification={calendar?.weekday_holiday_pattern[
+                                String(new Date(`${date}T00:00:00Z`).getUTCDay() || 7) as '1' | '2' | '3' | '4' | '5' | '6' | '7'
+                              ] ?? 'working'}
                               onChange={(next) => updateDay(date, next)}
                             />
                           ),

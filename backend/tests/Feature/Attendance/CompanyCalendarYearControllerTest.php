@@ -148,6 +148,39 @@ class CompanyCalendarYearControllerTest extends TestCase
         ]);
     }
 
+    public function test_marking_a_working_day_as_a_public_holiday_also_makes_it_a_prescribed_holiday(): void
+    {
+        $admin = $this->makeAdmin();
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => 'Holiday calendar', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->firstOrFail();
+
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [[
+                'date' => '2026-08-11',
+                'day_type' => 'weekday',
+                'is_working_day' => true,
+                'is_legal_holiday' => false,
+                'is_company_holiday' => false,
+                'is_public_holiday' => true,
+                'public_holiday_name' => 'Mountain Day',
+                'schedule_state' => 'WORK',
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'date' => '2026-08-11 00:00:00',
+            'is_public_holiday' => true,
+            'day_type' => 'company_holiday',
+            'is_working_day' => false,
+            'is_company_holiday' => true,
+            'schedule_state' => 'OFF',
+        ]);
+    }
+
     public function test_unpublishing_and_archiving_a_draft_year_succeeds_without_closed_months(): void
     {
         $admin = $this->makeAdmin();
@@ -463,6 +496,41 @@ class CompanyCalendarYearControllerTest extends TestCase
             'day_type' => 'legal_holiday',
             'is_working_day' => false,
             'is_legal_holiday' => true,
+            'schedule_state' => 'OFF',
+        ]);
+    }
+
+    public function test_removing_public_holiday_on_locked_calendar_restores_weekday_holiday_classification(): void
+    {
+        $admin = $this->makeAdmin();
+        $pattern = ['1' => 'working', '2' => 'working', '3' => 'working', '4' => 'working', '5' => 'working', '6' => 'company_holiday', '7' => 'legal_holiday'];
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => 'Locked calendar', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'weekday_holiday_pattern' => $pattern,
+            'allow_daily_holiday_override' => false,
+        ])->assertCreated()->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->firstOrFail();
+
+        // 2026-05-03 is Sunday. The submitted working-day flags represent the stale
+        // state left after clearing the public-holiday checkbox in the editor.
+        $this->actingAs($admin)->putJson("/api/company-calendar-years/{$year->id}/days", [
+            'days' => [[
+                'date' => '2026-05-03', 'day_type' => 'weekday',
+                'is_working_day' => true, 'is_legal_holiday' => false,
+                'is_company_holiday' => false, 'is_public_holiday' => false,
+                'schedule_state' => 'WORK',
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id,
+            'date' => '2026-05-03 00:00:00',
+            'day_type' => 'legal_holiday',
+            'is_working_day' => false,
+            'is_legal_holiday' => true,
+            'is_company_holiday' => false,
+            'is_public_holiday' => false,
             'schedule_state' => 'OFF',
         ]);
     }

@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as backOfficeTasksApi from '../../api/backOfficeTasks'
 import * as attendanceApi from '../../api/attendance'
+import { ApiError } from '../../api/client'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import type { AttendanceMonth, BackOfficeTask, Paginated, User } from '../../api/types'
@@ -49,6 +50,23 @@ function renderPage(task: BackOfficeTask) {
 }
 
 describe('BackOfficeTaskDetailPage', () => {
+  it('shows a permission denied state instead of a generic error on 403', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(backOfficeTasksApi, 'fetchBackOfficeTask').mockRejectedValue(new ApiError(403, 'Forbidden'))
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/backoffice-tasks/backoffice-task-1']}>
+          <Routes>
+            <Route path="/backoffice-tasks/:id" element={<BackOfficeTaskDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
+  })
+
   it('shows task details and the status change control', async () => {
     renderPage(baseTask)
 
@@ -57,6 +75,7 @@ describe('BackOfficeTaskDetailPage', () => {
     expect(screen.getByText('workflow_request #10')).toBeInTheDocument()
     expect(screen.getByText('未着手', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '更新する' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '← タスク一覧に戻る' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
   it('shows the assignee picker when the task has no assignee', async () => {
@@ -145,13 +164,15 @@ describe('BackOfficeTaskDetailPage', () => {
       expect(screen.queryByText(/締め処理済みのため修正できません/)).not.toBeInTheDocument()
     })
 
-    it('closes the month and refetches when 締める is clicked', async () => {
+    it('closes the month and refetches after confirming in the dialog', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
       vi.spyOn(attendanceApi, 'closeMonth').mockResolvedValue({ ...baseMonth, status: 'closed' })
 
       renderPage(attendanceMonthTask)
 
       await userEvent.click(await screen.findByRole('button', { name: '締める' }))
+      expect(screen.getByText(/この操作は元に戻せません/)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: '締めを確定する' }))
 
       await waitFor(() => expect(attendanceApi.closeMonth).toHaveBeenCalledWith('attendance-month-1'))
     })

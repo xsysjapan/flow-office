@@ -313,6 +313,11 @@ export function SystemSettingsPage() {
       >
         保存する
       </Button>
+      {(!defaultTimezone || !submissionDeadlineDay || !monthCloseDeadlineDay) && (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          既定タイムゾーン・勤怠未提出の警告基準日・月次締め前警告の基準日をすべて入力してください。
+        </p>
+      )}
     </Card>
   )
 }

@@ -213,6 +213,50 @@ class HolidayCalendarSourceControllerTest extends TestCase
         ]);
     }
 
+    public function test_removing_a_synced_holiday_restores_the_weekday_classification(): void
+    {
+        $admin = $this->makeAdmin();
+        $icsBody = $this->ics('uid-remove', '20260505', 'Children Day');
+        Http::fake([
+            'https://example.com/removable.ics' => function () use (&$icsBody) {
+                return Http::response($icsBody, 200);
+            },
+        ]);
+
+        $sourceId = $this->actingAs($admin)->postJson('/api/holiday-calendar-sources', [
+            'name' => 'Removable holidays', 'ics_url' => 'https://example.com/removable.ics',
+        ])->assertCreated()->json('id');
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => 'Locked calendar', 'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+            'holiday_calendar_source_id' => $sourceId,
+            'weekday_holiday_pattern' => [
+                '1' => 'working', '2' => 'working', '3' => 'working', '4' => 'working',
+                '5' => 'working', '6' => 'company_holiday', '7' => 'legal_holiday',
+            ],
+            'allow_daily_holiday_override' => false,
+        ])->assertCreated()->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->firstOrFail();
+
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/sync-holiday-calendar")->assertOk();
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-05-05 00:00:00',
+            'is_public_holiday' => true, 'is_company_holiday' => true, 'schedule_state' => 'OFF',
+        ]);
+
+        $icsBody = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n";
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/sync-holiday-calendar")->assertOk();
+
+        // 2026-05-05 is Tuesday, so removing the synced holiday restores a working day.
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-05-05 00:00:00',
+            'day_type' => 'weekday', 'is_working_day' => true,
+            'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'is_public_holiday' => false, 'public_holiday_name' => null,
+            'schedule_state' => 'WORK',
+        ]);
+    }
+
     public function test_manually_overridden_day_is_protected_from_auto_holiday_sync(): void
     {
         $admin = $this->makeAdmin();

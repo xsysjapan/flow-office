@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { useConfirmNotification, useMyNotifications } from '../../hooks/useNotifications'
@@ -14,9 +15,26 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'read', label: '既読' },
 ]
 
+function isStatusFilter(value: string | null): value is StatusFilter {
+  return value === 'all' || value === 'unread' || value === 'read'
+}
+
 /** UC-N001: 自分宛て通知の一覧・既読管理。 */
 export function NotificationsPage() {
-  const [status, setStatus] = useState<StatusFilter>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const statusParam = searchParams.get('status')
+  const status: StatusFilter = isStatusFilter(statusParam) ? statusParam : 'all'
+  function setStatus(next: StatusFilter) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next === 'all') params.delete('status')
+        else params.set('status', next)
+        return params
+      },
+      { replace: true },
+    )
+  }
   const { data, isLoading, error } = useMyNotifications(status === 'all' ? undefined : status)
   const confirmNotification = useConfirmNotification()
 
@@ -44,7 +62,19 @@ export function NotificationsPage() {
       {confirmNotification.error && <ErrorMessage error={confirmNotification.error} />}
 
       {!isLoading && !error && notifications.length === 0 && (
-        <p className="text-sm text-muted-foreground">通知はありません。</p>
+        status === 'all' ? (
+          <EmptyState title="通知はありません。" description="新しい通知が届くとここに表示されます。" />
+        ) : (
+          <EmptyState
+            title="条件に一致する通知がありません。"
+            description="フィルターを変更すると他の通知が表示されることがあります。"
+            action={
+              <Button variant="secondary" onClick={() => setStatus('all')}>
+                すべて表示する
+              </Button>
+            }
+          />
+        )
       )}
 
       <ul className="divide-y divide-border">

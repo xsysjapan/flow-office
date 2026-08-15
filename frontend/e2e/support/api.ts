@@ -188,8 +188,8 @@ export async function setUserHireDate(page: Page, userId: string, hireDate: stri
 export async function recordAttendancePunch(
   page: Page,
   input: { workDate: string; punchType: 'clock_in' | 'break_start' | 'break_end' | 'clock_out'; punchedAt: string },
-): Promise<void> {
-  await apiFetch(page, '/attendance-punches', {
+): Promise<{ id: string }> {
+  return apiFetch(page, '/attendance-punches', {
     method: 'POST',
     body: {
       work_date: input.workDate,
@@ -198,6 +198,11 @@ export async function recordAttendancePunch(
       source: 'e2e_test_device',
     },
   })
+}
+
+/** UC-A014: 打刻ログを削除する(テスト用に記録した打刻ログを後始末する用途)。 */
+export async function deleteAttendancePunch(page: Page, id: string, reason: string): Promise<void> {
+  await apiFetch(page, `/attendance-punches/${id}`, { method: 'DELETE', body: { reason } })
 }
 
 export async function fetchAttendancePunches(page: Page, from: string, to: string): Promise<unknown[]> {
@@ -282,7 +287,7 @@ export async function generateShiftAssignments(
   page: Page,
   input: { userId: string; workStyleId: string; from: string; to: string },
 ): Promise<void> {
-  await apiFetch(page, '/employee-shift-assignments/generate', {
+  await apiFetch(page, '/employee-calendar-entries/generate', {
     method: 'POST',
     body: { user_id: input.userId, work_style_id: input.workStyleId, from: input.from, to: input.to },
   })
@@ -349,7 +354,7 @@ export async function createWorkStyleViaApi(
       prescribed_weekly_minutes: input.prescribedWeeklyMinutes,
       deemed_daily_minutes: input.deemedDailyMinutes,
       variable_period_start_day: input.variablePeriodStartDay,
-      calendar_id: input.calendarId,
+      company_calendar_id: input.calendarId,
       is_shift_based: input.isShiftBased ?? false,
       legal_holiday_rule: input.legalHolidayRule,
       employment_category_id: input.employmentCategoryId,
@@ -366,7 +371,7 @@ export async function editEmployeeShiftAssignment(
   assignmentId: string,
   input: { plannedStartAt?: string; plannedEndAt?: string; plannedBreakMinutes: number; reason: string },
 ): Promise<void> {
-  await apiFetch(page, `/employee-shift-assignments/${assignmentId}`, {
+  await apiFetch(page, `/employee-calendar-entries/${assignmentId}`, {
     method: 'PUT',
     body: {
       planned_start_at: input.plannedStartAt,
@@ -382,11 +387,11 @@ export async function fetchShiftAssignment(
   userId: string,
   workDate: string,
 ): Promise<{ id: string } | undefined> {
-  const assignments = await apiFetch<Array<{ id: string; work_date: string }>>(
+  const response = await apiFetch<{ data: Array<{ id: string; work_date: string }> }>(
     page,
-    `/employee-shift-assignments?user_id=${userId}&from=${workDate}&to=${workDate}`,
+    `/employee-calendar-entries?user_id=${userId}&from=${workDate}&to=${workDate}`,
   )
-  return assignments[0]
+  return response.data[0]
 }
 
 /**

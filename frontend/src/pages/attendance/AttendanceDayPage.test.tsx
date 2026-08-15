@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import * as employeeShiftAssignmentsApi from '../../api/employeeShiftAssignments'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as shiftSwapApi from '../../api/shiftSwap'
@@ -109,6 +110,7 @@ const recordedDay: AttendanceDay = {
 function renderPage(days: AttendanceDay[] = [recordedDay], routeDate = date, shiftSwapRequiresApproval = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
+  vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -847,7 +849,24 @@ describe('AttendanceDayPage', () => {
       links: { next: null, prev: null },
     }
 
-    it('applies for paid leave as part of saving the day edit, without a free-text work_type', async () => {
+    it('does not show the duplicated inline leave field and keeps leave requests in the kebab menu', async () => {
+      vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
+      vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
+      vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
+      vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
+      renderPage([recordedDay])
+
+      await userEvent.click(await screen.findByRole('button', { name: '編集' }))
+      expect(screen.queryByLabelText('休暇')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+      await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
+      expect(await screen.findByRole('menuitem', { name: '有給休暇を申請する' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: '特別休暇を申請する' })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: '代休を申請する' })).toBeInTheDocument()
+    })
+
+    it.skip('applies for paid leave as part of saving the day edit, without a free-text work_type', async () => {
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([])
       vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
@@ -894,7 +913,7 @@ describe('AttendanceDayPage', () => {
       )
     })
 
-    it('cancels an approved paid leave by switching the day back to no leave designation', async () => {
+    it.skip('cancels an approved paid leave by switching the day back to no leave designation', async () => {
       const approvedPaidLeaveRequest: PaidLeaveRequest = {
         id: 'paid-leave-request-3',
         user_id: 'user-1',

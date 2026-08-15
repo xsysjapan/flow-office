@@ -55,15 +55,24 @@ async function ensureAccessScenarioGroup(page: Page): Promise<string> {
     return existing.id;
   }
 
-  await apiFetch(page, "/admin/user-management/group-types", {
-    method: "POST",
-    body: {
-      code: groupTypeCode,
-      name: groupTypeName,
-      membership_limit_type: "unlimited",
-      primary_membership_required: false,
-    },
-  });
+  // groupが存在しない場合でも、group_type自体は前回の実行(このtestの途中で失敗した
+  // 場合等)で既に作成済みのことがあるため、コード重複エラーを避けて既存があれば
+  // 再利用する。
+  const existingTypes = await apiFetch<Array<{ id: number; code: string }>>(
+    page,
+    "/admin/user-management/group-types",
+  );
+  if (!existingTypes.some((type) => type.code === groupTypeCode)) {
+    await apiFetch(page, "/admin/user-management/group-types", {
+      method: "POST",
+      body: {
+        code: groupTypeCode,
+        name: groupTypeName,
+        membership_limit_type: "unlimited",
+        primary_membership_required: false,
+      },
+    });
+  }
   const types = await apiFetch<Array<{ id: number; code: string }>>(
     page,
     "/admin/user-management/group-types",
@@ -199,7 +208,7 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
     .fill(groupTypeCode);
   await groupTypeCard.getByPlaceholder("グループ種別名").fill(groupTypeName);
   await groupTypeCard
-    .getByRole("button", { name: "グループ種別を追加" })
+    .getByRole("button", { name: "グループ種別を作成" })
     .click();
   await expect(
     groupTypeCard.getByText(`${groupTypeName} (${groupTypeCode})`, {
@@ -217,6 +226,16 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
     .selectOption({ label: groupTypeName });
   await page.getByLabel("名称", { exact: true }).fill(groupName);
   await page.getByRole("button", { name: "作成する" }).click();
+  // 作成後は一覧ではなく作成されたグループ自身の詳細画面へ遷移する(更新時に同ページへ
+  // 留まる挙動と揃える)。
+  await expect(
+    page.getByRole("heading", { name: `${groupName}の詳細` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "所属メンバー" }),
+  ).toBeVisible();
+
+  await page.goto("/admin/groups");
   const groupCard = card(page, "グループ一覧");
   const groupRow = groupCard.getByRole("row").filter({ hasText: groupName });
   await expect(groupRow).not.toContainText(groupCode);
@@ -231,9 +250,6 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   await groupRow.getByRole("link", { name: groupName }).click();
   await expect(
     page.getByRole("heading", { name: `${groupName}の詳細` }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "所属メンバー" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "所属を追加" }).click();
   await page
@@ -402,7 +418,7 @@ test("GroupへのFeature・Role付与と個別停止が有効アクセスへ即�
     await roleCard
       .getByRole("textbox", { name: "Role名", exact: true })
       .fill(roleName);
-    const addRoleButton = roleCard.getByRole("button", { name: "Role追加" });
+    const addRoleButton = roleCard.getByRole("button", { name: "Roleを作成" });
     await Promise.all([
       adminPage.waitForResponse(
         (response) =>

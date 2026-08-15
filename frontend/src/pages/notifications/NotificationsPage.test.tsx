@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '../../api/notifications'
 import type { Notification, Paginated } from '../../api/types'
@@ -20,11 +21,13 @@ const unreadNotification: Notification = {
   confirmed_at: null,
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/notifications']) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <NotificationsPage />
+      <MemoryRouter initialEntries={initialEntries}>
+        <NotificationsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

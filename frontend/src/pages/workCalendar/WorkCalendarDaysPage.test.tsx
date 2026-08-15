@@ -67,9 +67,9 @@ function renderPage(calendars: WorkCalendar[] = [calendar], years: WorkCalendarY
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
+      <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/2026/days']}>
         <Routes>
-          <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
+          <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<WorkCalendarDaysPage />} />
           <Route path="/admin/work-calendars/:id" element={<p>カレンダー詳細ページ</p>} />
         </Routes>
       </MemoryRouter>
@@ -102,7 +102,7 @@ describe('WorkCalendarDaysPage', () => {
     const workCell = await screen.findByRole('button', { name: '2026-04-01 勤務日' })
     expect(workCell).toBeInTheDocument()
 
-    const holidayCell = screen.getByRole('button', { name: '2026-04-04 祝日(昭和の日改め)' })
+    const holidayCell = screen.getByRole('button', { name: '2026-04-04 休日(昭和の日改め)' })
     expect(holidayCell).toBeInTheDocument()
 
     expect(await screen.findByText('29日')).toBeInTheDocument()
@@ -121,8 +121,8 @@ describe('WorkCalendarDaysPage', () => {
 
     await user.click(await screen.findByRole('button', { name: '2026-04-05 勤務日' }))
     await user.selectOptions(screen.getByLabelText('2026-04-05の勤務区分'), 'company_holiday')
-    await user.click(screen.getByLabelText('2026-04-05の祝日'))
-    await user.type(screen.getByLabelText('2026-04-05の祝日名'), 'こどもの日')
+    await user.click(screen.getByLabelText('2026-04-05の休日'))
+    await user.type(screen.getByLabelText('2026-04-05の休日名'), 'こどもの日')
     await user.keyboard('{Escape}')
 
     expect(await screen.findByText('29日')).toBeInTheDocument()
@@ -146,6 +146,44 @@ describe('WorkCalendarDaysPage', () => {
     })
   })
 
+  it('warns before leaving the tab once a day is edited, and stops warning after saving', async () => {
+    const days = buildAprilDays()
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(days)
+    vi.spyOn(workCalendarsApi, 'putWorkCalendarDays').mockResolvedValue([])
+
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('30日')
+
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+      window.dispatchEvent(event)
+      return event
+    }
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+
+    await user.click(await screen.findByRole('button', { name: '2026-04-05 勤務日' }))
+    await user.selectOptions(screen.getByLabelText('2026-04-05の勤務区分'), 'company_holiday')
+    await user.keyboard('{Escape}')
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true)
+
+    // 保存後、一覧の再取得(invalidateQueries)で反映される値をここで差し替える。
+    const editedDays = days.map((d) =>
+      d.date === '2026-04-05'
+        ? { ...d, day_type: 'company_holiday' as const, is_working_day: false, is_company_holiday: true, schedule_state: 'OFF' as const }
+        : d,
+    )
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(editedDays)
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByRole('button', { name: '2026-04-05 所定休日' })).toBeInTheDocument())
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+  })
+
   it('shows the classification read-only and hints at the lock when the calendar disallows daily override', async () => {
     const lockedCalendar: WorkCalendar = { ...calendar, allow_daily_holiday_override: false }
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([lockedCalendar])
@@ -154,9 +192,9 @@ describe('WorkCalendarDaysPage', () => {
 
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/year-1/days']}>
+        <MemoryRouter initialEntries={['/admin/work-calendars/calendar-1/years/2026/days']}>
           <Routes>
-            <Route path="/admin/work-calendars/:calendarId/years/:yearId/days" element={<WorkCalendarDaysPage />} />
+            <Route path="/admin/work-calendars/:calendarId/years/:fiscalYear/days" element={<WorkCalendarDaysPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -173,7 +211,7 @@ describe('WorkCalendarDaysPage', () => {
     ).toBeInTheDocument()
 
     // 祝日・メモはロック中でも編集できる。
-    expect(screen.getByLabelText('2026-04-01の祝日')).toBeEnabled()
+    expect(screen.getByLabelText('2026-04-01の休日')).toBeEnabled()
   })
 
   it('shows an empty grid without blocking when the year has no days yet', async () => {
@@ -212,10 +250,11 @@ describe('WorkCalendarDaysPage', () => {
     it('deletes a year when the delete button is confirmed, then navigates back to the calendar', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
-      vi.spyOn(window, 'confirm').mockReturnValue(true)
 
       renderPage()
 
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      expect(await screen.findByText('「2026年度」を削除しますか?')).toBeInTheDocument()
       await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
 
       await waitFor(() => expect(workCalendarsApi.deleteWorkCalendarYear).toHaveBeenCalledWith('year-1'))
@@ -225,11 +264,11 @@ describe('WorkCalendarDaysPage', () => {
     it('does not delete a year when the confirmation is dismissed', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'deleteWorkCalendarYear').mockResolvedValue(undefined)
-      vi.spyOn(window, 'confirm').mockReturnValue(false)
 
       renderPage()
 
-      await userEvent.click(await screen.findByRole('button', { name: '削除する' }))
+      await userEvent.click(await screen.findByRole('button', { name: '削除' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
       expect(workCalendarsApi.deleteWorkCalendarYear).not.toHaveBeenCalled()
     })
@@ -255,15 +294,14 @@ describe('WorkCalendarDaysPage', () => {
         .mockResolvedValue(buildAprilDays())
       const regenerated = buildAprilDays()
       vi.spyOn(workCalendarsApi, 'regenerateCompanyCalendarYear').mockResolvedValue(regenerated)
-      vi.spyOn(window, 'confirm').mockReturnValue(true)
 
       renderPage()
 
       const regenerateButton = await screen.findByRole('button', { name: '年度を再作成する' })
       expect(regenerateButton).toBeEnabled()
       await userEvent.click(regenerateButton)
+      await userEvent.click(await screen.findByRole('button', { name: '作り直す' }))
 
-      expect(window.confirm).toHaveBeenCalled()
       await waitFor(() =>
         expect(workCalendarsApi.regenerateCompanyCalendarYear).toHaveBeenCalledWith('year-1'),
       )
@@ -272,25 +310,23 @@ describe('WorkCalendarDaysPage', () => {
     it('does not regenerate when the confirmation is declined', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
       vi.spyOn(workCalendarsApi, 'regenerateCompanyCalendarYear').mockResolvedValue(buildAprilDays())
-      vi.spyOn(window, 'confirm').mockReturnValue(false)
 
       renderPage()
 
       await userEvent.click(await screen.findByRole('button', { name: '年度を再作成する' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'キャンセル' }))
 
       expect(workCalendarsApi.regenerateCompanyCalendarYear).not.toHaveBeenCalled()
     })
 
-    it('disables the regenerate button for a published year', async () => {
+    it('hides the regenerate button for a published year', async () => {
       const publishedYear: WorkCalendarYear = { ...year, status: 'published' }
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
 
       renderPage([calendar], [publishedYear])
 
-      expect(await screen.findByRole('button', { name: '年度を再作成する' })).toBeDisabled()
-      expect(
-        screen.getByText('公開済み・廃止済みの年度は再作成できません(未公開の年度のみ再作成できます)。'),
-      ).toBeInTheDocument()
+      await screen.findByText('公開済み・廃止済みの年度は再作成できません(未公開の年度のみ再作成できます)。')
+      expect(screen.queryByRole('button', { name: '年度を再作成する' })).not.toBeInTheDocument()
     })
 
     it('disables the sync button and hints at source management when no source is set', async () => {
@@ -298,8 +334,8 @@ describe('WorkCalendarDaysPage', () => {
 
       renderPage()
 
-      expect(await screen.findByRole('button', { name: 'この年度を祝日と同期する' })).toBeDisabled()
-      expect(screen.getByRole('link', { name: '祝日iCalendarソース管理' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'この年度を休日と同期する' })).toBeDisabled()
+      expect(screen.getByRole('link', { name: '休日iCalendarソース管理' })).toBeInTheDocument()
     })
 
     it('syncs the year holiday calendar and shows the reflected summary', async () => {
@@ -321,7 +357,7 @@ describe('WorkCalendarDaysPage', () => {
 
       renderPage([calendarWithSource])
 
-      const syncButton = await screen.findByRole('button', { name: 'この年度を祝日と同期する' })
+      const syncButton = await screen.findByRole('button', { name: 'この年度を休日と同期する' })
       expect(syncButton).toBeEnabled()
       await userEvent.click(syncButton)
 
@@ -377,10 +413,10 @@ describe('WorkCalendarDaysPage', () => {
       // 同期前は全日勤務日(祝日セルは存在しない)。
       expect(await screen.findByRole('button', { name: '2026-04-29 勤務日' })).toBeInTheDocument()
 
-      await userEvent.click(await screen.findByRole('button', { name: 'この年度を祝日と同期する' }))
+      await userEvent.click(await screen.findByRole('button', { name: 'この年度を休日と同期する' }))
 
       // 同期後、グリッドが再取得され祝日が反映されている。
-      expect(await screen.findByRole('button', { name: '2026-04-29 祝日(昭和の日)' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: '2026-04-29 休日(昭和の日)' })).toBeInTheDocument()
       expect(fetchDays.mock.calls.length).toBeGreaterThan(1)
 
       // その状態で保存すると、同期結果(祝日)が保持されたまま送信される。

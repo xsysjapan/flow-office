@@ -57,8 +57,15 @@ class CalendarDayScheduleResolver
      */
     public function resolve(WorkStyle $workStyle, Carbon $date, ?CompanyCalendarDay $calendarDay): array
     {
-        $isWorkingDay = $calendarDay?->is_working_day ?? true;
-        $scheduleState = $calendarDay?->schedule_state ?? ($isWorkingDay ? 'WORK' : 'OFF');
+        // Holiday metadata and the work classification used to be independent.  Treat a
+        // holiday as non-working defensively so already-published legacy rows are reflected
+        // in attendance without requiring the calendar year to be recreated.
+        $isWorkingDay = $calendarDay?->is_public_holiday
+            ? false
+            : ($calendarDay?->is_working_day ?? true);
+        $scheduleState = $calendarDay?->is_public_holiday
+            ? 'OFF'
+            : ($calendarDay?->schedule_state ?? ($isWorkingDay ? 'WORK' : 'OFF'));
 
         $plannedStartAt = $isWorkingDay && $workStyle->default_start_time
             ? $date->copy()->setTimeFromTimeString($workStyle->default_start_time) : null;
@@ -70,10 +77,14 @@ class CalendarDayScheduleResolver
             ? $date->copy()->setTimeFromTimeString($workStyle->default_break_end_time) : null;
 
         return [
-            'day_type' => $calendarDay?->day_type ?? 'weekday',
+            'day_type' => $calendarDay?->is_public_holiday && ! $calendarDay->is_legal_holiday
+                ? 'company_holiday'
+                : ($calendarDay?->day_type ?? 'weekday'),
             'is_working_day' => $isWorkingDay,
             'is_legal_holiday' => $calendarDay?->is_legal_holiday ?? false,
-            'is_company_holiday' => $calendarDay?->is_company_holiday ?? false,
+            'is_company_holiday' => $calendarDay?->is_public_holiday && ! $calendarDay->is_legal_holiday
+                ? true
+                : ($calendarDay?->is_company_holiday ?? false),
             'planned_start_at' => $plannedStartAt,
             'planned_end_at' => $plannedEndAt,
             'planned_break_minutes' => $isWorkingDay ? $workStyle->default_break_minutes : 0,

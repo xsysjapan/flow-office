@@ -34,7 +34,10 @@ class WeeklyOvertimeCalculator
 {
     private const WEEKLY_STATUTORY_LIMIT_MINUTES = 2400; // 労基法32条: 1週40時間
 
-    public function __construct(private readonly LegalHolidayResolver $legalHolidayResolver) {}
+    public function __construct(
+        private readonly LegalHolidayResolver $legalHolidayResolver,
+        private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
+    ) {}
 
     /**
      * @return list<array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}>
@@ -88,7 +91,13 @@ class WeeklyOvertimeCalculator
 
             $legalHolidayWorkMinutes += $calculation->legal_holiday_work_minutes;
 
-            if ($day->calendarEntry !== null && $this->legalHolidayResolver->isLegalHoliday($day->calendarEntry)) {
+            $schedule = $this->effectiveScheduleResolver->resolve(
+                $day->user_id,
+                $day->work_date->copy(),
+                $day->calendarEntry,
+            );
+
+            if ($schedule !== null && $this->legalHolidayResolver->isLegalHoliday($schedule)) {
                 continue;
             }
 
@@ -96,8 +105,8 @@ class WeeklyOvertimeCalculator
             $dailyStatutoryOvertimeMinutes += $calculation->statutory_excess_overtime_minutes;
             $withinDailyLimitMinutes += $calculation->work_minutes - $calculation->statutory_excess_overtime_minutes;
 
-            if ($day->calendarEntry?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
-                $plannedMinutesForMonthlyVariable += $day->calendarEntry->plannedWorkMinutes();
+            if ($schedule?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
+                $plannedMinutesForMonthlyVariable += $schedule->plannedWorkMinutes();
             }
         }
 

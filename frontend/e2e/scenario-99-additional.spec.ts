@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
 import {
+  deleteAttendancePunch,
   fetchAttendancePunches,
   recordAttendancePunch,
   submitApproveAndCloseCurrentMonth,
@@ -101,6 +102,8 @@ test("§5-2: 申請取消(提出後)", async ({ page }) => {
   await page.getByRole("button", { name: "提出する" }).click();
   await expect(page.getByRole("status", { name: "提出済み" })).toBeVisible();
 
+  // 取消はConfirmActionDialog(トリガー→確認の2段階)。
+  await page.getByRole("button", { name: "取消" }).click();
   await page.getByPlaceholder("取消理由").fill("申請内容の誤りのため");
   await page.getByRole("button", { name: "取り消す" }).click();
   await expect(page.getByRole("status", { name: "取消" })).toBeVisible();
@@ -126,27 +129,49 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
     await loginAs(adminPage, SCENARIO_USERS.admin);
 
     // このテストを何度も実行しても前提が同じになるよう、まずemployeeのみの状態に戻す
-    // (このテストで hr_staff を付与した結果が残っていることがあるため)。
-    await adminPage.goto("/admin/access-control");
-    await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
-    const directRoleCard = adminPage
-      .getByRole("heading", { name: "システムロール直接付与" })
-      .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
-    await directRoleCard
-      .getByLabel("対象ユーザー")
-      .selectOption({ label: SCENARIO_USERS.approver });
-    const hrCheckbox = directRoleCard.getByRole("checkbox", {
-      name: "人事担当者",
+    // (このテストで hr_staff を付与した結果が残っていることがあるため)。UI上の割当一覧は
+    // 対象ユーザー名を表示せず(Role名/付与先種別/対象範囲のみ)特定の割当を探しづらいため、
+    // 事前状態の確認・削除はAPIで行い、UI操作は「ロールを付与する」本題の手順に絞る。
+    const hrRoleId = await adminPage.evaluate(async () => {
+      const token = localStorage.getItem("flow-office.token");
+      const res = await fetch(
+        "http://localhost:8000/api/admin/access-control/roles",
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
+      );
+      const roles: Array<{ id: number; code: string }> = await res.json();
+      return roles.find((r) => r.code === "hr_staff")!.id;
     });
-    if (await hrCheckbox.isChecked()) {
-      await hrCheckbox.uncheck();
-      await directRoleCard
-        .getByRole("button", { name: "直接ロールを保存" })
-        .click();
-      await expect(
-        directRoleCard.getByRole("status", { name: "保存しました" }),
-      ).toBeVisible();
-    }
+    await adminPage.evaluate(
+      async ({ userId, hrRoleId }) => {
+        const token = localStorage.getItem("flow-office.token");
+        const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+        const res = await fetch(
+          "http://localhost:8000/api/admin/access-control/role-assignments",
+          { headers },
+        );
+        const assignments: Array<{
+          id: string;
+          subject_type: string;
+          subject_id: string;
+          role_id: number;
+          status: string;
+        }> = await res.json();
+        const existing = assignments.filter(
+          (a) =>
+            a.status === "active" &&
+            a.subject_type === "user" &&
+            a.subject_id === userId &&
+            a.role_id === hrRoleId,
+        );
+        for (const a of existing) {
+          await fetch(
+            `http://localhost:8000/api/admin/access-control/role-assignments/${a.id}`,
+            { method: "DELETE", headers },
+          );
+        }
+      },
+      { userId, hrRoleId },
+    );
 
     // 対象社員は現状employeeロールのみのため、管理メニューへのリンクがナビゲーションに
     // 出ないことを確認する。
@@ -156,21 +181,33 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
     );
 
     // 管理者がhr_staffロールを追加する(ログインし直しではなくロールを都度DBに反映する)。
-    await hrCheckbox.check();
-    await directRoleCard
-      .getByRole("button", { name: "直接ロールを保存" })
-      .click();
-    await expect(
-      directRoleCard.getByRole("status", { name: "保存しました" }),
-    ).toBeVisible();
+    await adminPage.goto("/admin/access-control");
+    await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
+    await adminPage
+      .getByLabel("付与先ユーザー")
+      .selectOption({ label: SCENARIO_USERS.approver });
+    await adminPage.getByLabel("Role", { exact: true }).selectOption({ label: "人事担当者" });
+    await adminPage.getByLabel("対象範囲").selectOption({ label: "全社" });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (res) =>
+          res.url().includes("/admin/access-control/role-assignments") &&
+          res.request().method() === "POST",
+      ),
+      adminPage.getByRole("button", { name: "Roleを割当" }).click(),
+    ]);
 
     // §5-7: この操作が監査ログに記録されていることを確認する。
     await adminPage.goto("/admin/audit-log");
-    await adminPage.getByLabel("対象タイプ").fill("user");
-    await adminPage.getByLabel("対象ID").fill(String(userId));
-    await expect(
-      adminPage.getByText("user.roles_changed").first(),
-    ).toBeVisible();
+    await adminPage.getByLabel("対象タイプ").fill("role_assignment");
+    await adminPage.getByLabel("イベント種別").fill("role_assignment.created");
+    const auditRow = adminPage
+      .getByRole("listitem")
+      .filter({ hasText: "role_assignment.created" })
+      .first();
+    await expect(auditRow).toBeVisible();
+    await auditRow.getByText("詳細").click();
+    await expect(auditRow.getByText(new RegExp(userId))).toBeVisible();
   } finally {
     await adminContext.close();
   }
@@ -232,11 +269,21 @@ test("§5-3: 月次締め後は日次実績が編集できない", async ({ brow
 test("§5-4: 打刻ログと日次実績の不一致確認", async ({ page }) => {
   test.setTimeout(300000);
 
-  // 週送りの操作を1回で済ませるため、月曜起点の週が必ず1つ先になる7日後を対象日にする
-  // (今日がどの曜日でも、7日後は常に「次週」の同じ曜日になる)。
-  const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  // 対象日は必ず翌月の平日にする(土日だと法定休日/所定休日バッジが優先表示され、勤務中
+  // バッジの確認にならない)。当月は他のテスト(§5-3・§5-8等)が月次締めまで進めることが
+  // あり、締め済み月の日は打刻を記録しても日次実績に反映されなくなる
+  // (`AttendanceEditGuard`)ため、翌月であれば実行順序に関わらず必ず未締めであることを
+  // 保証できる。週次画面へは`次週`クリックの代わりに`?start=`で直接その週へ遷移する。
+  const nextMonthFirstDay = new Date();
+  nextMonthFirstDay.setMonth(nextMonthFirstDay.getMonth() + 1, 1);
+  while (nextMonthFirstDay.getDay() !== 3 /* 水曜日 */) {
+    nextMonthFirstDay.setDate(nextMonthFirstDay.getDate() + 1);
+  }
+  const futureDate = nextMonthFirstDay.toISOString().slice(0, 10);
+  const isoDow = (nextMonthFirstDay.getDay() + 6) % 7; // 0=月 ... 6=日
+  const mondayOfWeek = new Date(nextMonthFirstDay);
+  mondayOfWeek.setDate(nextMonthFirstDay.getDate() - isoDow);
+  const weekStart = mondayOfWeek.toISOString().slice(0, 10);
 
   await loginAs(page, SCENARIO_USERS.punchEmployee);
 
@@ -247,26 +294,32 @@ test("§5-4: 打刻ログと日次実績の不一致確認", async ({ page }) =>
     punchType: "clock_in",
     punchedAt: `${futureDate}T09:00:00+09:00`,
   });
-  await recordAttendancePunch(page, {
+  const duplicateClockIn = await recordAttendancePunch(page, {
     workDate: futureDate,
     punchType: "clock_in",
     punchedAt: `${futureDate}T09:05:00+09:00`,
   });
 
-  // 打刻ログの削除API(UC-A014)はあるが、このテストでは使わずに残したままにしている。
-  // 同一日に再実行すると前回分の打刻ログが残ったままになるため、矛盾の有無を見たいだけの
-  // このテストでは正確な件数ではなく2件以上あることだけ確認する。
   const punches = await fetchAttendancePunches(page, futureDate, futureDate);
   expect(punches.length).toBeGreaterThanOrEqual(2);
 
-  // 矛盾があるためattendance_daysには反映されず、週次画面でもその日は未入力のままになる
-  // (専用の「要確認」バッジ等のUIはまだ無いため、ステータスバッジが「未入力」のままで
-  // あることで確認する)。
-  await page.goto("/attendance/week");
-  await page.getByRole("button", { name: "次週" }).click();
+  // 出勤打刻の重複という矛盾があるため、以降の打刻(退勤等)は日次実績に反映されなくなる。
+  // ただし最初の出勤打刻自体は矛盾なく記録された時点で既に反映済みのため、日次実績は
+  // 「未入力」ではなく、退勤前の状態(勤務中)のまま据え置かれる
+  // (`AttendanceDayPunchSyncer`のInProgress/Contradictoryの扱いを参照)。
+  await page.goto(`/attendance/week?start=${weekStart}`);
   const futureRow = page.getByRole("listitem").filter({ hasText: futureDate });
   await expect(futureRow).toBeVisible();
-  await expect(futureRow.getByRole("status", { name: "未入力" })).toBeVisible();
+  await expect(futureRow.getByRole("status", { name: "勤務中" })).toBeVisible();
+
+  // 後続のテスト(当月の月次締め等)が同じ利用者を使うため、重複打刻を削除し退勤打刻を
+  // 追加して、この対象日を矛盾のない退勤済み状態に戻しておく(UC-A014)。
+  await deleteAttendancePunch(page, duplicateClockIn.id, "E2Eテストの重複打刻を後始末");
+  await recordAttendancePunch(page, {
+    workDate: futureDate,
+    punchType: "clock_out",
+    punchedAt: `${futureDate}T18:00:00+09:00`,
+  });
 });
 
 // §5-5: 有給の自動失効警告・年5日取得義務警告バッチ(WarnExpiringPaidLeave /
@@ -341,8 +394,10 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
     });
     return res.json();
   });
-  // 初回ログインでは自動的にemployeeロールが付与される(UC-001)。
-  expect(me.roles).toContain("employee");
+  // 初回ログインでは自動的にemployeeロールが付与される(UC-001)。roleはUserResourceに
+  // 直接は出ないため、EMPLOYEE Roleに割り当てられているPermission(勤怠閲覧・更新)が
+  // 有効化されていることで確認する(ALL_USERSグループ経由のRoleAssignment)。
+  expect(me.effective_permissions).toContain("attendance.read");
   const userId = me.id;
 
   // 管理者が入社日を設定し(UC-P002)、hr_staffロールを追加する(UC-M001)。
@@ -360,19 +415,19 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
 
     await adminPage.goto("/admin/access-control");
     await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
-    const directRoleCard = adminPage
-      .getByRole("heading", { name: "システムロール直接付与" })
-      .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
-    await directRoleCard
-      .getByLabel("対象ユーザー")
-      .selectOption({ label: me.name });
-    await directRoleCard.getByRole("checkbox", { name: "人事担当者" }).check();
-    await directRoleCard
-      .getByRole("button", { name: "直接ロールを保存" })
-      .click();
-    await expect(
-      directRoleCard.getByRole("status", { name: "保存しました" }),
-    ).toBeVisible();
+    await adminPage
+      .getByLabel("付与先ユーザー")
+      .selectOption({ label: newHireName });
+    await adminPage.getByLabel("Role", { exact: true }).selectOption({ label: "人事担当者" });
+    await adminPage.getByLabel("対象範囲").selectOption({ label: "全社" });
+    await Promise.all([
+      adminPage.waitForResponse(
+        (res) =>
+          res.url().includes("/admin/access-control/role-assignments") &&
+          res.request().method() === "POST",
+      ),
+      adminPage.getByRole("button", { name: "Roleを割当" }).click(),
+    ]);
   } finally {
     await adminContext.close();
   }

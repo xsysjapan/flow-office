@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Projectors;
 
+use App\Domain\Attendance\Services\CalendarWeekdayPatternDayGenerator;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDeleted;
 use App\Domain\Attendance\Events\HolidayCalendarSourceDisabled;
 use App\Domain\Attendance\Events\HolidayCalendarSourceRegistered;
@@ -23,6 +24,10 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  */
 class HolidayCalendarSourceProjector extends Projector
 {
+    public function __construct(
+        private readonly CalendarWeekdayPatternDayGenerator $weekdayPatternDayGenerator,
+    ) {}
+
     public function onHolidayCalendarSourceRegistered(HolidayCalendarSourceRegistered $event): void
     {
         HolidayCalendarSource::query()->updateOrCreate(
@@ -87,9 +92,25 @@ class HolidayCalendarSourceProjector extends Projector
                 continue;
             }
 
+            if ($dayChange['is_public_holiday']) {
+                $holidaySchedule = [
+                    'day_type' => $day->is_legal_holiday ? 'legal_holiday' : 'company_holiday',
+                    'is_working_day' => false,
+                    'is_company_holiday' => ! $day->is_legal_holiday,
+                    'schedule_state' => CompanyCalendarDay::SCHEDULE_OFF,
+                ];
+            } else {
+                $companyCalendar = $day->year?->companyCalendar;
+                $holidaySchedule = $companyCalendar === null ? [] : $this->weekdayPatternDayGenerator->resolveForDate(
+                    $day->date->copy(),
+                    $companyCalendar->effectiveWeekdayHolidayPattern(),
+                );
+            }
+
             $day->update([
                 'is_public_holiday' => $dayChange['is_public_holiday'],
                 'public_holiday_name' => $dayChange['public_holiday_name'],
+                ...$holidaySchedule,
             ]);
 
             CompanyCalendarDaySource::query()->create([

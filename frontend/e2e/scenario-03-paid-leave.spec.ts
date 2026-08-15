@@ -62,11 +62,11 @@ async function submitPaidLeaveRequest(
   page: Page,
   options: { leaveTypeLabel: string; approverName: string; approverEmail: string },
 ): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const targetDate = randomWorkingDate()
 
     try {
-      await pickDate(page, '対象日', targetDate)
+      await pickDate(page, '対象日', targetDate, { exact: true })
       await page.getByLabel('取得単位').selectOption({ label: options.leaveTypeLabel }, { timeout: 30000 })
       await pickUser(page, '承認者', options.approverName, options.approverEmail, { timeout: 30000 })
       await page.getByRole('button', { name: '申請する' }).click({ timeout: 30000 })
@@ -92,7 +92,7 @@ async function submitPaidLeaveRequest(
     }
   }
 
-  throw new Error('有給申請に5回試行しても成功しなかった(重複日との衝突が続いた可能性)')
+  throw new Error('有給申請に20回試行しても成功しなかった(重複日との衝突が続いた可能性)')
 }
 
 test('終日有給を申請〜承認し、勤怠日に反映される', async ({ browser }) => {

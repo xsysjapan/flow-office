@@ -76,4 +76,23 @@ describe('ExpenseCategoryListPage', () => {
       '/admin/expense-categories/1',
     )
   })
+
+  it('shows an empty state with a create action when there are no categories', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(expenseCategoriesApi, 'fetchExpenseCategories').mockResolvedValue([])
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ExpenseCategoryListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('経費区分はまだありません。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '経費区分を作成' })).toHaveAttribute(
+      'href',
+      '/admin/expense-categories/new',
+    )
+  })
 })

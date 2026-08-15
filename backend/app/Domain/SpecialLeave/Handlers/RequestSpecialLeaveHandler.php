@@ -55,13 +55,8 @@ class RequestSpecialLeaveHandler implements CommandHandler
             throw new DomainRuleException('無効な特別休暇種別です。');
         }
 
-        $calendarEntry = EmployeeCalendarEntry::query()
-            ->with('workStyle')
-            ->where('user_id', $command->userId)
-            ->whereDate('work_date', $command->targetDate)
-            ->first();
-
         $targetDate = Carbon::parse($command->targetDate);
+        $calendarEntry = $this->scheduledWorkingDayResolver->resolveSchedule($command->userId, $targetDate);
         $workStyle = $calendarEntry?->workStyle;
 
         if ($calendarEntry !== null) {

@@ -54,10 +54,7 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         $targetDate = Carbon::parse($command->targetDate);
 
-        $calendarEntry = EmployeeCalendarEntry::query()
-            ->where('user_id', $command->userId)
-            ->whereDate('work_date', $command->targetDate)
-            ->first();
+        $calendarEntry = $this->scheduledWorkingDayResolver->resolveSchedule($command->userId, $targetDate);
 
         if ($calendarEntry !== null) {
             if (! $calendarEntry->is_working_day) {

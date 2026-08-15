@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "../../components/Badge/Badge";
 import { Button } from "../../components/Button/Button";
 import { Card } from "../../components/Card/Card";
+import { ClickableTableRow } from "../../components/ClickableTableRow/ClickableTableRow";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { AuthenticationKeysPanel } from "../../components/AuthenticationKeysPanel/AuthenticationKeysPanel";
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import {
@@ -47,6 +50,7 @@ export function UserManagementAccessPage({
 }: {
   section?: "groups" | "membershipChanges" | "hr" | "identities" | "access";
 }) {
+  const navigate = useNavigate();
   const groups = userManagement.useManagedGroups(),
     types = userManagement.useGroupTypes(),
     features = access.useFeatures(section === "access"),
@@ -332,6 +336,27 @@ export function UserManagementAccessPage({
                 </option>
               ))}
             </NativeSelect>
+            {visibleGroups?.length === 0 ? (
+              <EmptyState
+                title={
+                  groupTypeFilter
+                    ? "条件に一致するグループがありません。"
+                    : "グループがまだありません。"
+                }
+                description={
+                  groupTypeFilter
+                    ? "グループ種別の絞り込みを変更してください。"
+                    : "「新規グループ」からグループを作成すると、社員を組織単位で管理できます。"
+                }
+                action={
+                  groupTypeFilter ? (
+                    <Button variant="secondary" onClick={() => setGroupTypeFilter("")}>
+                      絞り込みをクリア
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -344,12 +369,17 @@ export function UserManagementAccessPage({
               </TableHeader>
               <TableBody>
                 {visibleGroups?.map((g) => (
-                  <TableRow key={g.id}>
+                  <ClickableTableRow
+                    key={g.id}
+                    onRowClick={() => navigate(`/admin/groups/${g.id}`)}
+                    rowLabel={`${g.name}の詳細を開く`}
+                  >
                     <TableCell>{g.type.name}</TableCell>
                     <TableCell>
                       <Link
                         className="font-medium text-foreground hover:text-primary hover:underline"
                         to={`/admin/groups/${g.id}`}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {g.name}
                       </Link>
@@ -367,10 +397,11 @@ export function UserManagementAccessPage({
                         {g.status}
                       </Badge>
                     </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 ))}
               </TableBody>
             </Table>
+            )}
           </Card>
         </>
       )}
@@ -436,6 +467,11 @@ export function UserManagementAccessPage({
                   >
                     Featureを割当
                   </Button>
+                  {(!featureForm.groupId || !featureForm.featureId) && (
+                    <p className="text-xs text-muted-foreground md:col-span-3">
+                      対象グループとFeatureを選択してください。
+                    </p>
+                  )}
                 </div>
                 <div className="mt-4 space-y-2">
                   {groups.data
@@ -517,7 +553,7 @@ export function UserManagementAccessPage({
                       })
                     }
                   >
-                    Role追加
+                    Roleを作成
                   </Button>
                   <Button
                     variant="secondary"
@@ -538,8 +574,19 @@ export function UserManagementAccessPage({
                   >
                     選択Roleを複製
                   </Button>
+                  {(!newRole.code || !newRole.name) && (
+                    <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-5">
+                      Roleコードと名称を入力してください(複製する場合は複製元のRoleも選択してください)。
+                    </p>
+                  )}
                 </div>
                 <div className="mb-4 flex flex-wrap gap-2">
+                  {roles.data?.length === 0 && (
+                    <EmptyState
+                      title="Roleはまだありません。"
+                      description="上のフォームからRoleを作成できます。"
+                    />
+                  )}
                   {roles.data?.map((role) => (
                     <span
                       key={role.id}
@@ -735,14 +782,13 @@ export function UserManagementAccessPage({
                     />
                   )}
                   <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       disabled={roleForm.scope_type !== "group"}
                       checked={roleForm.include_descendants}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         setRoleForm({
                           ...roleForm,
-                          include_descendants: e.target.checked,
+                          include_descendants: checked === true,
                         })
                       }
                     />
@@ -830,6 +876,12 @@ export function UserManagementAccessPage({
                   )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {(assignments.data?.filter((a) => a.status === "active") ?? []).length === 0 && (
+                    <EmptyState
+                      title="有効なRole割当はまだありません。"
+                      description="上のフォームからユーザーまたはグループにRoleを割り当てられます。"
+                    />
+                  )}
                   {assignments.data
                     ?.filter((a) => a.status === "active")
                     .map((a) => (
@@ -926,12 +978,11 @@ export function UserManagementAccessPage({
                         </legend>
                         {items?.map((p) => (
                           <label className="flex gap-2 text-sm" key={p.id}>
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={selectedPermissions.includes(p.id)}
-                              onChange={(e) =>
+                              onCheckedChange={(checked) =>
                                 setSelectedPermissions(
-                                  e.target.checked
+                                  checked === true
                                     ? [...selectedPermissions, p.id]
                                     : selectedPermissions.filter(
                                         (id) => id !== p.id,
@@ -1046,8 +1097,21 @@ export function UserManagementAccessPage({
                   >
                     停止
                   </Button>
+                  {(!suspensionForm.user_id ||
+                    !suspensionForm.feature_id ||
+                    !suspensionForm.reason) && (
+                    <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3 2xl:col-span-6">
+                      対象ユーザー・Feature・停止理由を入力してください。
+                    </p>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {suspensions.data?.length === 0 && (
+                    <EmptyState
+                      title="個別停止中のFeatureはありません。"
+                      description="上のフォームから特定ユーザーのFeatureを個別に停止できます。"
+                    />
+                  )}
                   {suspensions.data?.map((s) => (
                     <span
                       className="inline-flex items-center gap-2 rounded border p-2 text-sm"
@@ -1150,8 +1214,21 @@ export function UserManagementAccessPage({
               >
                 リンク
               </Button>
+              {(!identityForm.user_id ||
+                !identityForm.provider ||
+                !identityForm.external_subject_id) && (
+                <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4 2xl:col-span-7">
+                  対象ユーザー・Provider・Subject IDを入力してください。
+                </p>
+              )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
+              {(identities.data?.filter((i) => i.status === "active") ?? []).length === 0 && (
+                <EmptyState
+                  title="連携済みの外部IDはありません。"
+                  description="上のフォームから外部IDを紐付けられます。"
+                />
+              )}
               {identities.data
                 ?.filter((i) => i.status === "active")
                 .map((i) => (
@@ -1463,6 +1540,12 @@ export function UserManagementAccessPage({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            {changeSets.data?.length === 0 ? (
+              <EmptyState
+                title="所属変更の予約はまだありません。"
+                description="「変更予約作成」から所属変更を即時または日時指定で予約できます。"
+              />
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1556,6 +1639,7 @@ export function UserManagementAccessPage({
                 ))}
               </TableBody>
             </Table>
+            )}
           </Card>
         </>
       )}
@@ -1586,6 +1670,16 @@ export function UserManagementAccessPage({
                 >
                   確認した差分を適用
                 </Button>
+              )}
+              {!csvFile && (
+                <p className="text-xs text-muted-foreground">
+                  CSVファイルを選択してください。
+                </p>
+              )}
+              {previewCsv.data && previewCsv.data.summary.changed === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  適用が必要な差分はありません。
+                </p>
               )}
             </div>
             {previewCsv.data && (

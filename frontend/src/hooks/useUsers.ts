@@ -21,19 +21,14 @@ export function useUsers(
   query?: string,
   perPage?: number,
   filters: UserFilters = {},
+  page?: number,
 ) {
   const activeFilters = Object.fromEntries(
     Object.entries(filters).filter(([, value]) => value !== undefined),
   ) as UserFilters;
-  const hasFilters = Object.keys(activeFilters).length > 0;
   return useQuery({
-    queryKey: ["users", query ?? "", perPage ?? "default", activeFilters],
-    queryFn: () =>
-      hasFilters
-        ? fetchUsers(query, perPage, activeFilters)
-        : perPage === undefined
-          ? fetchUsers(query)
-          : fetchUsers(query, perPage),
+    queryKey: ["users", query ?? "", perPage ?? "default", activeFilters, page ?? 1],
+    queryFn: () => fetchUsers(query, perPage, activeFilters, page),
     placeholderData: keepPreviousData,
   });
 }

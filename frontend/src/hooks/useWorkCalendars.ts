@@ -254,3 +254,17 @@ export function useCompanyCalendarYearById(yearId: string) {
 
   return { year, calendar, isLoading, error }
 }
+
+export function useCompanyCalendarYearByFiscalYear(companyCalendarId: string, fiscalYear: string) {
+  const calendarsQuery = useWorkCalendars()
+  const yearsQuery = useWorkCalendarYears(companyCalendarId)
+  const calendar = calendarsQuery.data?.find((item) => item.id === companyCalendarId) ?? null
+  const year = yearsQuery.data?.find((item) => item.fiscal_year === Number(fiscalYear)) ?? null
+
+  return {
+    year,
+    calendar,
+    isLoading: calendarsQuery.isLoading || yearsQuery.isLoading,
+    error: calendarsQuery.error ?? yearsQuery.error ?? null,
+  }
+}

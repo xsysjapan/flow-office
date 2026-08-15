@@ -4,6 +4,8 @@ import { ApprovalDetailPanel } from '../../components/ApprovalDetailPanel/Approv
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -115,27 +117,37 @@ function formatSubmittedAt(value: string | null): string {
  * 切り替える(オブジェクト指向UI: どの種別の申請かをまず選び、その後で内容確認・操作する)。
  */
 export function ApprovalsPage() {
-  const [status, setStatus] = useState<NonNullable<FetchWorkflowRequestsToApproveOptions['status']>>(DEFAULT_STATUS)
-  const [yearMonth, setYearMonth] = useState<string | undefined>(undefined)
-  const [page, setPage] = useState(1)
-  const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedId, setSelectedIdState] = useState<string | null>(() => searchParams.get('requestId'))
 
-  /** 詳細モーダルの開閉をURLの`requestId`クエリパラメータにも反映させる。`/approvals?requestId=<id>`
-   *  へ直接アクセスした場合に初期値としてもクエリパラメータを読む(useState初期化子側)ため、
-   *  行クリック・モーダルクローズの両方でこの関数を経由させて両者を同期させる。 */
-  function setSelectedId(id: string | null) {
-    setSelectedIdState(id)
+  /** フィルター・ページ・詳細パネル対象IDはすべてURLに載せる(SKILL.md §2.10)。ローカルstateを
+   *  正にせず、URLを唯一の正として都度読み出すことで、Browser Back・リロード・URL共有で状態が
+   *  壊れないようにする。 */
+  const status = (searchParams.get('status') as NonNullable<FetchWorkflowRequestsToApproveOptions['status']> | null) ?? DEFAULT_STATUS
+  const yearMonth = searchParams.get('yearMonth') ?? undefined
+  const pageParam = Number(searchParams.get('page'))
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+  const selectedId = searchParams.get('requestId')
+
+  const { data, isLoading, error } = useWorkflowRequestsToApprove({ status, yearMonth, page })
+
+  /** 指定したキーだけをURLクエリパラメータへ反映する(他のキーはそのまま維持)。値`null`は
+   *  パラメータの削除を意味する。 */
+  function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (id) next.set('requestId', id)
-        else next.delete('requestId')
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) next.delete(key)
+          else next.set(key, value)
+        }
         return next
       },
       { replace: true },
     )
+  }
+
+  function setSelectedId(id: string | null) {
+    updateParams({ requestId: id })
   }
   const {
     data: selectedRequest,
@@ -159,21 +171,20 @@ export function ApprovalsPage() {
   }
 
   function handleFilterChange(next: { status?: NonNullable<FetchWorkflowRequestsToApproveOptions['status']>; yearMonth?: string }) {
-    if (next.status !== undefined) setStatus(next.status)
-    if (next.yearMonth !== undefined) setYearMonth(next.yearMonth || undefined)
-    setPage(1)
+    const patch: Record<string, string | null> = { page: null }
+    if (next.status !== undefined) patch.status = next.status
+    if (next.yearMonth !== undefined) patch.yearMonth = next.yearMonth || null
+    updateParams(patch)
     setSelectedIds(new Set())
   }
 
   function clearFilters() {
-    setStatus(DEFAULT_STATUS)
-    setYearMonth(undefined)
-    setPage(1)
+    updateParams({ status: null, yearMonth: null, page: null })
     setSelectedIds(new Set())
   }
 
   function handlePageChange(nextPage: number) {
-    setPage(nextPage)
+    updateParams({ page: String(nextPage) })
     setSelectedIds(new Set())
   }
 
@@ -260,9 +271,19 @@ export function ApprovalsPage() {
       </div>
 
       {requests.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {isFiltered ? '条件に一致する申請はありません。' : '承認待ちの申請はありません。'}
-        </p>
+        isFiltered ? (
+          <EmptyState
+            title="条件に一致する申請はありません。"
+            description="状態や年月の条件を変えると表示される場合があります。"
+            action={
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                フィルターをクリア
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState title="承認待ちの申請はありません。" />
+        )
       ) : (
         <Table>
           <TableHeader>
@@ -281,8 +302,13 @@ export function ApprovalsPage() {
               const subtitle = subjectSubtitle(request)
               const selected = selectedIds.has(request.id)
               return (
-                <TableRow key={request.id} data-state={selected ? 'selected' : undefined}>
-                  <TableCell>
+                <ClickableTableRow
+                  key={request.id}
+                  data-state={selected ? 'selected' : undefined}
+                  onRowClick={() => setSelectedId(request.id)}
+                  rowLabel={`${request.title}の詳細を開く`}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {isRowActionable(request) && (
                       <Checkbox
                         checked={selected}
@@ -296,10 +322,15 @@ export function ApprovalsPage() {
                     <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
                   </TableCell>
                   <TableCell>
+                    {/* 行全体をクリック可能にした上で、タイトル自体もbuttonのままにしてキーボード
+                        (Tab→Enter/Space)から詳細を開けるようにする(SKILL.md §2.2)。 */}
                     <button
                       type="button"
                       className="font-medium text-foreground hover:text-primary hover:underline"
-                      onClick={() => setSelectedId(request.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedId(request.id)
+                      }}
                     >
                       {request.title}
                     </button>
@@ -310,7 +341,7 @@ export function ApprovalsPage() {
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatSubmittedAt(request.submitted_at)}</TableCell>
-                </TableRow>
+                </ClickableTableRow>
               )
             })}
           </TableBody>

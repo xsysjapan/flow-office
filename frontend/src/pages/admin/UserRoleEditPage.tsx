@@ -6,12 +6,14 @@ import { Card } from "../../components/Card/Card";
 import { ConfirmActionDialog } from "../../components/ConfirmActionDialog/ConfirmActionDialog";
 import { DatePicker } from "../../components/DatePicker/DatePicker";
 import { DateTimePicker } from "../../components/DateTimePicker/DateTimePicker";
+import { EmptyState } from "../../components/EmptyState/EmptyState";
 import { ErrorMessage } from "../../components/ErrorMessage/ErrorMessage";
 import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Input } from "../../components/ui/input";
+import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -392,6 +394,11 @@ export function UserRoleEditPage() {
         >
           基本情報を保存する
         </Button>
+        {(!profile.name || !profile.email) && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            氏名とメールアドレスを入力してください。
+          </p>
+        )}
       </div>
       <div className="mb-6 rounded border p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -411,7 +418,10 @@ export function UserRoleEditPage() {
 
         <h3 className="mb-2 text-sm font-semibold">現在の所属</h3>
         {(user.memberships ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">所属はありません。</p>
+          <EmptyState
+            title="所属はありません。"
+            description="「所属を追加」からグループへの所属を追加できます。"
+          />
         ) : (
           <div className="space-y-2">
             {user.memberships?.map((membership) => (
@@ -508,9 +518,7 @@ export function UserRoleEditPage() {
             </div>
           ))}
           {(user.membership_change_sets ?? []).length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              変更履歴はありません。
-            </p>
+            <EmptyState title="変更履歴はありません。" />
           )}
         </div>
       </div>
@@ -659,23 +667,37 @@ export function UserRoleEditPage() {
             >
               キャンセル
             </Button>
-            <Button
-              disabled={
-                (["add", "replace"].includes(membershipChange.operation) &&
-                  !membershipChange.to_group_id) ||
-                (membershipChange.timing === "scheduled" &&
-                  !membershipChange.effective_at)
-              }
-              isLoading={
-                scheduleMembershipChange.isPending ||
-                applyMembershipChangeNow.isPending
-              }
-              onClick={submitMembershipChange}
-            >
-              {membershipChange.timing === "scheduled"
-                ? "変更を予約"
-                : "変更を実行"}
-            </Button>
+            <div>
+              <Button
+                disabled={
+                  (["add", "replace"].includes(membershipChange.operation) &&
+                    !membershipChange.to_group_id) ||
+                  (membershipChange.timing === "scheduled" &&
+                    !membershipChange.effective_at)
+                }
+                isLoading={
+                  scheduleMembershipChange.isPending ||
+                  applyMembershipChangeNow.isPending
+                }
+                onClick={submitMembershipChange}
+              >
+                {membershipChange.timing === "scheduled"
+                  ? "変更を予約"
+                  : "変更を実行"}
+              </Button>
+              {["add", "replace"].includes(membershipChange.operation) &&
+                !membershipChange.to_group_id && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    変更先グループを選択してください。
+                  </p>
+                )}
+              {membershipChange.timing === "scheduled" &&
+                !membershipChange.effective_at && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    適用日時を指定してください。
+                  </p>
+                )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -714,15 +736,22 @@ export function UserRoleEditPage() {
           </FormField>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            isLoading={updateHireDate.isPending}
-            disabled={!hireDate}
-            onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
-          >
-            入社日を保存する
-          </Button>
+        <div className="flex flex-wrap items-start gap-2">
+          <div>
+            <Button
+              variant="secondary"
+              isLoading={updateHireDate.isPending}
+              disabled={!hireDate}
+              onClick={() => updateHireDate.mutate({ id: userId, hireDate })}
+            >
+              入社日を保存する
+            </Button>
+            {!hireDate && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                入社日を入力してください。
+              </p>
+            )}
+          </div>
           <Button
             variant="secondary"
             isLoading={updateTerminationDate.isPending}
@@ -788,38 +817,33 @@ export function UserRoleEditPage() {
         </h3>
 
         <div className="mb-4 flex flex-col gap-2">
-          <label className="flex items-start gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="work-style-mode"
-              className="mt-1"
-              checked={workStyleMode === "default"}
-              onChange={() => setWorkStyleMode("default")}
-            />
-            <span>
-              会社のデフォルトを使用
-              {defaultWorkStyle && (
-                <span className="block text-xs text-muted-foreground">
-                  {defaultWorkStyle.name}
-                  {defaultWorkStyle.default_start_time &&
-                  defaultWorkStyle.default_end_time
-                    ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
-                    : ""}
-                </span>
-              )}
-            </span>
-          </label>
+          <RadioGroup
+            value={workStyleMode}
+            onValueChange={(value) =>
+              setWorkStyleMode(value as typeof workStyleMode)
+            }
+          >
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="default" className="mt-1" />
+              <span>
+                会社のデフォルトを使用
+                {defaultWorkStyle && (
+                  <span className="block text-xs text-muted-foreground">
+                    {defaultWorkStyle.name}
+                    {defaultWorkStyle.default_start_time &&
+                    defaultWorkStyle.default_end_time
+                      ? `(${defaultWorkStyle.default_start_time}〜${defaultWorkStyle.default_end_time})`
+                      : ""}
+                  </span>
+                )}
+              </span>
+            </label>
 
-          <label className="flex items-start gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="work-style-mode"
-              className="mt-1"
-              checked={workStyleMode === "specify"}
-              onChange={() => setWorkStyleMode("specify")}
-            />
-            <span>別の働き方を指定</span>
-          </label>
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="specify" className="mt-1" />
+              <span>別の働き方を指定</span>
+            </label>
+          </RadioGroup>
 
           {workStyleMode === "specify" && (
             <NativeSelect
@@ -848,6 +872,11 @@ export function UserRoleEditPage() {
         >
           働き方を保存する
         </Button>
+        {workStyleMode === "specify" && !selectedWorkStyleId && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            指定する働き方を選択してください。
+          </p>
+        )}
 
         {(workStyleHistory ?? []).length > 0 && (
           <div className="mt-4">

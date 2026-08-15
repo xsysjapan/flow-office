@@ -4,7 +4,7 @@ import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPane
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
-import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { ExpenseItemsTable } from '../../components/ExpenseItemsTable/ExpenseItemsTable'
@@ -35,7 +35,7 @@ import { useEditableRows } from '../../hooks/useEditableRows'
 import { useApplyExpenseEntryPreset, useExpenseEntryPresets } from '../../hooks/useExpenseEntryPresets'
 import { useUploadAttachment } from '../../hooks/useAttachments'
 import { mondayOf, formatDate } from '../../utils/weekDates'
-import { workLocationTypeLabel } from '../../utils/statusLabels'
+import { isExpenseClaimEditable, workLocationTypeLabel } from '../../utils/statusLabels'
 import { fieldSetForCategory } from '../../utils/expenseItemFieldSet'
 
 function emptyItem(categoryId?: number): SaveExpenseItemInput {
@@ -373,10 +373,6 @@ function suggestIndividualTitle(categoryName: string | undefined, usageDate: str
   return usageDate ? `${categoryName ?? '経費精算'}(${usageDate})` : (categoryName ?? '経費精算')
 }
 
-/** 明細の追加・修正・削除ができる(=編集を再開できる)ステータス。backendの
- *  `ExpenseClaimStatus::editable()`と一致させる。 */
-const EDITABLE_STATUSES = ['draft', 'returned']
-
 /**
  * UC-X002/X004〜X013: 経費精算の新規作成・下書き編集。対象期間は入力させず、まず経費区分を
  * 選ぶ。区分の`entry_mode`が`batch`(交通費)なら表形式入力・移動経路入力・テンプレート一括
@@ -386,17 +382,28 @@ const EDITABLE_STATUSES = ['draft', 'returned']
  * URLに`:id`が含まれる場合(下書きの編集を再開する`/expenses/:id/edit`)は、既存のclaimIdを
  * そのまま使う。また`?category=<区分コード>`が付いている場合(メニューのよく使う区分への
  * ショートカット)は、新規作成時に限り区分選択ステップを飛ばしてそのまま該当区分の入力
- * フォームを表示する。
+ * フォームを表示する。選択中の区分・登録方法(個別/まとめて)は逆方向にも`?category=`/
+ * `?mode=`へ書き込み(SKILL.md §2.10)、リロード・URL共有で状態を維持できるようにする
+ * (読み取りと同じく下書き編集時は対象外)。ただし、まだ何も保存していない新規作成の間
+ * (claimId確定前)に限る。明細を1件でも保存してclaimIdが確定した後は、そのclaimId自体が
+ * URLに反映されないため(`/expenses/new`のまま)、以降のステップ(タイトル入力・区分の
+ * 追加選択等)はURL化していない。claimId確定後も`/expenses/:id/edit`へ遷移させれば
+ * リロード耐性を持たせられるが、既存の`/expenses/:id/edit`ルート(下書き編集の再開)と
+ * 動作を揃えるための状態構造の見直しが必要になるため、大規模な構造変更を避ける方針のもと
+ * 今回は見送っている(`known-gaps.md`参照)。
  */
 export function ExpenseClaimNewPage() {
   const { systemSettings } = useAppSettings()
   const approvalRequired = systemSettings.expense_claim_requires_approval
   const navigate = useNavigate()
   const { id: routeClaimId } = useParams<{ id?: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const categoryCodeParam = searchParams.get('category')
+  const modeParam = searchParams.get('mode')
   const [claimId, setClaimId] = useState<string | undefined>(routeClaimId)
-  const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(undefined)
+  const [entryMode, setEntryMode] = useState<ExpenseClaimEntryMode | undefined>(
+    !routeClaimId && (modeParam === 'individual' || modeParam === 'bulk') ? modeParam : undefined,
+  )
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined)
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   // 単票入力へ適用中のプリセット明細。同じプリセットを続けて選び直しても反映されるよう
@@ -412,22 +419,58 @@ export function ExpenseClaimNewPage() {
   // ?category=のショートカットはページ表示時に1回だけ適用する。「区分を変更する」で
   // 選択を解除した後にこのeffectが再実行され、同じ区分へ戻されてしまわないようにする。
   // メニューからのショートカットは「個別に経費登録」相当として扱い、登録方法選択を省略する。
+  // 初期表示時の値をrefで固定して使う(選択中の区分をこの後`?category=`へ書き戻すため、
+  // 生の`categoryCodeParam`を依存に使うと、その書き戻し自体でこのeffectが再度走ってしまう)。
   const appliedCategoryShortcut = useRef(false)
+  const initialCategoryCodeParam = useRef(categoryCodeParam).current
   useEffect(() => {
-    if (routeClaimId || appliedCategoryShortcut.current || !categoryCodeParam || !categories) return
+    if (routeClaimId || appliedCategoryShortcut.current || !initialCategoryCodeParam || !categories) return
     appliedCategoryShortcut.current = true
-    const shortcutCategory = categories.find((category) => category.code === categoryCodeParam && category.is_active)
+    const shortcutCategory = categories.find(
+      (category) => category.code === initialCategoryCodeParam && category.is_active,
+    )
     if (shortcutCategory) {
       setEntryMode('individual')
       setSelectedCategoryId(shortcutCategory.id)
     }
-  }, [routeClaimId, categoryCodeParam, categories])
+  }, [routeClaimId, initialCategoryCodeParam, categories])
 
   // 区分を切り替えたら、前の区分向けに選んだプリセットを次の区分の入力へ持ち越さない。
   useEffect(() => {
     setSinglePresetItem(null)
     setSinglePresetToken(0)
   }, [selectedCategoryId])
+
+  /** 選択中の経費区分・登録方法(個別/まとめて)を`?category=`/`?mode=`へ書き込む
+   *  (既存の読み取りと対称にする。SKILL.md §2.10)。下書き編集(`/expenses/:id/edit`)では、
+   *  そもそも読み取り側もこのショートカットを使わないため、URLも書き換えない。claimIdが
+   *  一度作成された後(保存済み明細がある状態)のURL化は、状態構造の見直しが必要になるため
+   *  見送っている(`known-gaps.md`参照)。 */
+  function setCategoryParam(code: string | null) {
+    if (routeClaimId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (code) next.set('category', code)
+        else next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function setModeParam(mode: ExpenseClaimEntryMode | null) {
+    if (routeClaimId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (mode) next.set('mode', mode)
+        else next.delete('mode')
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const { rows, addRow, updateRow, removeRow, duplicateRow, moveRow, appendRows, reset } =
     useEditableRows<SaveExpenseItemInput>([])
@@ -459,6 +502,13 @@ export function ExpenseClaimNewPage() {
 
   const handleSelectEntryMode = (mode: ExpenseClaimEntryMode) => {
     setEntryMode(mode)
+    setModeParam(mode)
+  }
+
+  /** 登録方法選択ステップへ戻る(まだ何も保存していない新規作成のみ)。 */
+  const handleClearEntryMode = () => {
+    setEntryMode(undefined)
+    setModeParam(null)
   }
 
   /** 「まとめて経費登録」: 先にタイトルを確定させてから下書きを作成する。 */
@@ -469,6 +519,14 @@ export function ExpenseClaimNewPage() {
 
   const handleSelectCategory = (category: ExpenseCategory) => {
     setSelectedCategoryId(category.id)
+    setCategoryParam(category.code)
+  }
+
+  /** 区分選択ステップへ戻る(区分を変更する/別の区分の明細を追加する)。URLの`?category=`も
+   *  合わせてクリアし、リロード・URL共有時に古い区分へ戻らないようにする。 */
+  const handleClearSelectedCategory = () => {
+    setSelectedCategoryId(undefined)
+    setCategoryParam(null)
   }
 
   const handleSaveItems = async () => {
@@ -519,7 +577,7 @@ export function ExpenseClaimNewPage() {
   if (claimId && isLoadingClaim) return <LoadingState />
   if (claimId && claimError) return <ErrorMessage error={claimError} fallback="経費精算の取得に失敗しました。" />
 
-  if (claimId && claim && !EDITABLE_STATUSES.includes(claim.status)) {
+  if (claimId && claim && !isExpenseClaimEditable(claim.status)) {
     return (
       <Card title="この経費精算は編集できません">
         <p className="text-sm text-muted-foreground">
@@ -541,7 +599,7 @@ export function ExpenseClaimNewPage() {
   if (!claimId && entryMode === 'bulk') {
     return (
       <BulkTitleStep
-        onBack={() => setEntryMode(undefined)}
+        onBack={handleClearEntryMode}
         onSubmit={(title) => void handleStartBulkClaim(title)}
         isSubmitting={createClaim.isPending || startClaimTitle.isPending}
         error={createClaim.error ?? startClaimTitle.error}
@@ -557,7 +615,7 @@ export function ExpenseClaimNewPage() {
         <CategorySelectionStep
           categories={categories ?? []}
           onSelect={handleSelectCategory}
-          onBack={!claimId ? () => setEntryMode(undefined) : undefined}
+          onBack={!claimId ? handleClearEntryMode : undefined}
         />
 
         {claim && (
@@ -566,8 +624,8 @@ export function ExpenseClaimNewPage() {
             approverUserId={approverUserId}
             approvalRequired={approvalRequired}
             onApproverChange={setApproverUserId}
-            onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
-            onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
+            updateItem={updateItem}
+            deleteItem={deleteItem}
             onSubmit={() => void handleSubmit()}
             onDeleteClaim={() => {
               deleteClaimMutation.mutate(claim.id, { onSuccess: () => navigate('/expenses') })
@@ -591,7 +649,7 @@ export function ExpenseClaimNewPage() {
       <Card
         title={`${selectedCategory.name}の明細を入力`}
         actions={
-          <Button variant="secondary" size="sm" onClick={() => setSelectedCategoryId(undefined)}>
+          <Button variant="secondary" size="sm" onClick={handleClearSelectedCategory}>
             {(claim?.items.length ?? 0) > 0 ? '別の区分の明細を追加する' : '区分を変更する'}
           </Button>
         }
@@ -670,8 +728,8 @@ export function ExpenseClaimNewPage() {
           approverUserId={approverUserId}
           approvalRequired={approvalRequired}
           onApproverChange={setApproverUserId}
-          onUpdateItem={(itemId, input) => updateItem.mutate({ claimId: claim.id, itemId, input })}
-          onDeleteItem={(itemId) => deleteItem.mutate({ claimId: claim.id, itemId })}
+          updateItem={updateItem}
+          deleteItem={deleteItem}
           onSubmit={() => void handleSubmit()}
           submitClaim={submitClaim}
           onDeleteClaim={() => {
@@ -692,8 +750,8 @@ function SavedItemsAndSubmit({
   approverUserId,
   approvalRequired,
   onApproverChange,
-  onUpdateItem,
-  onDeleteItem,
+  updateItem,
+  deleteItem,
   onSubmit,
   submitClaim,
   onDeleteClaim,
@@ -703,8 +761,8 @@ function SavedItemsAndSubmit({
   approverUserId: string | undefined
   approvalRequired: boolean
   onApproverChange: (userId: string | undefined) => void
-  onUpdateItem: (itemId: string, input: SaveExpenseItemInput) => void
-  onDeleteItem: (itemId: string) => void
+  updateItem: ReturnType<typeof useUpdateExpenseItem>
+  deleteItem: ReturnType<typeof useDeleteExpenseItem>
   onSubmit: () => void
   onDeleteClaim: () => void
   deleteClaimMutation: ReturnType<typeof useDeleteExpenseClaim>
@@ -752,6 +810,8 @@ function SavedItemsAndSubmit({
       </Card>
 
       <Card title={`保存済みの明細(${claim.items.length}件・対象期間: ${period})`}>
+        {updateItem.error && <ErrorMessage error={updateItem.error} />}
+        {deleteItem.error && <ErrorMessage error={deleteItem.error} />}
         {claim.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">保存済みの明細はまだありません。上のフォームから追加してください。</p>
         ) : (
@@ -789,13 +849,17 @@ function SavedItemsAndSubmit({
                         <Checkbox
                           checked={deductionAmount > 0}
                           onCheckedChange={(checked) =>
-                            onUpdateItem(item.id, {
-                              category_id: item.category_id,
-                              usage_date: item.usage_date,
-                              description: item.description ?? undefined,
-                              amount: item.amount,
-                              project_id: item.project_id ?? undefined,
-                              commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                            updateItem.mutate({
+                              claimId: claim.id,
+                              itemId: item.id,
+                              input: {
+                                category_id: item.category_id,
+                                usage_date: item.usage_date,
+                                description: item.description ?? undefined,
+                                amount: item.amount,
+                                project_id: item.project_id ?? undefined,
+                                commuting_deduction_amount: checked === true ? deductionAmount : 0,
+                              },
                             })
                           }
                         />
@@ -808,13 +872,17 @@ function SavedItemsAndSubmit({
                           aria-label={`${item.usage_date}の定期区間控除額`}
                           value={deductionAmount}
                           onChange={(e) =>
-                            onUpdateItem(item.id, {
-                              category_id: item.category_id,
-                              usage_date: item.usage_date,
-                              description: item.description ?? undefined,
-                              amount: item.amount,
-                              project_id: item.project_id ?? undefined,
-                              commuting_deduction_amount: Number(e.target.value),
+                            updateItem.mutate({
+                              claimId: claim.id,
+                              itemId: item.id,
+                              input: {
+                                category_id: item.category_id,
+                                usage_date: item.usage_date,
+                                description: item.description ?? undefined,
+                                amount: item.amount,
+                                project_id: item.project_id ?? undefined,
+                                commuting_deduction_amount: Number(e.target.value),
+                              },
                             })
                           }
                         />
@@ -824,9 +892,15 @@ function SavedItemsAndSubmit({
                       <AttachmentPanel ownerType="expense_item" ownerId={item.id} required={requiresReceipt} compact />
                     </TableCell>
                     <TableCell>
-                      <Button variant="danger" size="sm" onClick={() => onDeleteItem(item.id)}>
-                        削除
-                      </Button>
+                      <ConfirmActionDialog
+                        triggerLabel="削除"
+                        triggerVariant="danger"
+                        title={`${item.category?.name ?? '経費品目'}(${item.usage_date})の明細を削除しますか?`}
+                        description="削除すると元に戻せません。"
+                        confirmLabel="削除する"
+                        isPending={deleteItem.isPending && deleteItem.variables?.itemId === item.id}
+                        onConfirm={() => deleteItem.mutateAsync({ claimId: claim.id, itemId: item.id })}
+                      />
                     </TableCell>
                   </TableRow>
                 )
@@ -861,11 +935,13 @@ function SavedItemsAndSubmit({
           </Button>
           <Badge tone="neutral">下書き</Badge>
           {claim.status === 'draft' && (
-            <ConfirmDialog
-              trigger={<Button variant="danger">この下書きを削除する</Button>}
+            <ConfirmActionDialog
+              triggerLabel="この下書きを削除する"
+              triggerVariant="danger"
               title="この経費精算を削除しますか?"
               description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
-              isConfirming={deleteClaimMutation.isPending}
+              confirmLabel="削除する"
+              isPending={deleteClaimMutation.isPending}
               onConfirm={onDeleteClaim}
             />
           )}

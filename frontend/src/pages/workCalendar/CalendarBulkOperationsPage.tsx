@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -283,6 +285,13 @@ export function CalendarBulkOperationsPage() {
         <Button isLoading={preview.isPending} disabled={!canPreview} onClick={handlePreview}>
           プレビューする
         </Button>
+        {!canPreview && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isEntryBased
+              ? '対象社員・対象日を1件以上入力してください。'
+              : `対象社員を1名以上、対象期間(開始・終了)を入力してください${operationType === 'calendar_apply' ? '(会社カレンダー適用は勤務形態も必須)' : ''}。`}
+          </p>
+        )}
       </Card>
 
       {preview.data && (
@@ -336,6 +345,15 @@ export function CalendarBulkOperationsPage() {
           >
             この内容で確定適用する
           </Button>
+          {(!preview.data.executable || !reason) && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {!preview.data.executable && !reason
+                ? '競合があり実行不可のため確定適用できません。理由を入力してください。'
+                : !preview.data.executable
+                  ? '競合があり実行不可のため確定適用できません。競合ポリシーを見直すか対象を変更してください。'
+                  : '理由を入力してください。'}
+            </p>
+          )}
         </Card>
       )}
 
@@ -343,7 +361,7 @@ export function CalendarBulkOperationsPage() {
         {isLoadingHistory && <LoadingState />}
         {historyError && <ErrorMessage error={historyError} fallback="履歴の取得に失敗しました。" />}
         {!isLoadingHistory && !historyError && (history ?? []).length === 0 && (
-          <p className="text-sm text-muted-foreground">一括操作の履歴はまだありません。</p>
+          <EmptyState title="一括操作の履歴はまだありません。" />
         )}
         {!isLoadingHistory && !historyError && (history ?? []).length > 0 && (
           <ul className="divide-y divide-border">
@@ -360,9 +378,15 @@ export function CalendarBulkOperationsPage() {
                   {STATUS_LABEL[operation.status] ?? operation.status}
                 </Badge>
                 {operation.status === 'applied' && (
-                  <Button variant="danger" isLoading={revert.isPending} onClick={() => revert.mutate(operation.id)}>
-                    取消す
-                  </Button>
+                  <ConfirmActionDialog
+                    triggerLabel="取消す"
+                    title="この一括操作を取り消しますか?"
+                    description="この操作で適用した予定・カレンダー設定がすべて元に戻ります。取消は元に戻せません。"
+                    confirmLabel="取り消す"
+                    isPending={revert.isPending && revert.variables === operation.id}
+                    error={revert.variables === operation.id ? revert.error : undefined}
+                    onConfirm={() => revert.mutateAsync(operation.id)}
+                  />
                 )}
               </li>
             ))}

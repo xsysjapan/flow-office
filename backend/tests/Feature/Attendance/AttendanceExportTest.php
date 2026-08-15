@@ -4,11 +4,14 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
+use App\Models\CompanyCalendar;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
 use App\Models\Role;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
@@ -22,6 +25,78 @@ use Tests\TestCase;
 class AttendanceExportTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_excel_note_contains_the_holiday_name_without_an_attendance_day(): void
+    {
+        $employee = User::factory()->create();
+        $calendar = CompanyCalendar::query()->create(['name' => 'Head office', 'week_starts_on' => 1, 'is_default' => true]);
+        $year = $calendar->years()->create([
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published',
+        ]);
+        $year->days()->create([
+            'date' => '2026-08-11', 'day_type' => 'company_holiday', 'is_working_day' => false,
+            'is_legal_holiday' => false, 'is_company_holiday' => true, 'is_public_holiday' => true,
+            'public_holiday_name' => '山の日', 'schedule_state' => 'OFF',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'standard', 'name' => 'Standard', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+        $month = AttendanceMonth::query()->create([
+            'user_id' => $employee->id, 'year_month' => '2026-08', 'status' => 'approved',
+        ]);
+
+        $spreadsheet = app(\App\Domain\Export\Services\AttendanceExcelBuilder::class)->buildForMonth($month, '2026-08');
+
+        $this->assertSame('山の日', $spreadsheet->getActiveSheet()->getCell('K23')->getValue());
+    }
+
+    public function test_excel_includes_holiday_work_performed_on_the_last_day_of_a_31_day_month(): void
+    {
+        $employee = User::factory()->create();
+        $month = AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-07',
+            'status' => 'closed',
+            'snapshot_json' => [
+                'work_minutes' => 480,
+                'prescribed_work_minutes' => 0,
+                'weekday_regular_work_minutes' => 0,
+                'statutory_within_overtime_minutes' => 0,
+                'statutory_excess_overtime_minutes' => 0,
+                'prescribed_holiday_work_minutes' => 480,
+                'legal_holiday_work_minutes' => 0,
+            ],
+        ]);
+        $day = AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => '2026-07-31',
+            'status' => 'clocked_out',
+            'actual_start_at' => '2026-07-31 09:00:00',
+            'actual_end_at' => '2026-07-31 18:00:00',
+            'day_classification' => 'prescribed_holiday',
+        ]);
+        $day->calculation()->create([
+            'work_minutes' => 480,
+            'prescribed_work_minutes' => 0,
+            'statutory_within_overtime_minutes' => 0,
+            'statutory_excess_overtime_minutes' => 0,
+            'legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 480,
+        ]);
+
+        $sheet = app(\App\Domain\Export\Services\AttendanceExcelBuilder::class)
+            ->buildForMonth($month, '2026-07')
+            ->getActiveSheet();
+
+        // Header is row 12, therefore July 31 is row 43.
+        $this->assertSame('09:00', $sheet->getCell('C43')->getValue());
+        $this->assertSame('18:00', $sheet->getCell('D43')->getValue());
+        $this->assertContains($sheet->getCell('E43')->getValue(), [null, 0, 0.0]);
+        $this->assertEqualsWithDelta(480 / 1440, $sheet->getCell('F43')->getValue(), 0.000001);
+    }
 
     public function test_admin_can_export_a_csv_of_approved_or_closed_months(): void
     {

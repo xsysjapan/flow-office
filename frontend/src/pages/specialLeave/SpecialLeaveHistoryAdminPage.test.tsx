@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
@@ -17,12 +18,14 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage() {
+function renderPage(initialPath = '/special-leave/history') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <SpecialLeaveHistoryAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <SpecialLeaveHistoryAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -35,6 +38,7 @@ describe('SpecialLeaveHistoryAdminPage', () => {
 
     expect(fetchHistory).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('特別休暇履歴')).not.toBeInTheDocument()
+    expect(screen.getByText('対象社員を選択してください。')).toBeInTheDocument()
   })
 
   it('shows the selected users history', async () => {
@@ -63,6 +67,15 @@ describe('SpecialLeaveHistoryAdminPage', () => {
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
 
     expect(await screen.findByText('3日を付与(有効期限なし)')).toBeInTheDocument()
+    expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
+  })
+
+  it('reads the selected user from the ?userId= URL query param', async () => {
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveHistoryForUser').mockResolvedValue([])
+
+    renderPage('/special-leave/history?userId=user-3')
+
+    expect(await screen.findByText('特別休暇履歴はまだありません。')).toBeInTheDocument()
     expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

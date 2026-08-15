@@ -338,6 +338,7 @@ describe('MyPaidLeavePage', () => {
     expect(screen.getByText('申請中')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '取消' }))
+    await userEvent.click(await screen.findByRole('button', { name: '取消する' }))
 
     await waitFor(() => expect(paidLeaveApi.cancelPaidLeaveRequest).toHaveBeenCalledWith(submittedRequest.id))
   })

@@ -1,18 +1,21 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
-import { ConfirmDialog } from '../../components/ConfirmDialog/ConfirmDialog'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useDeleteExpenseClaim, useMyExpenseClaims } from '../../hooks/useExpenseClaims'
-import { expenseClaimStatusLabel } from '../../utils/statusLabels'
+import { expenseClaimStatusLabel, isExpenseClaimDeletable, isExpenseClaimEditable } from '../../utils/statusLabels'
 
 /**
  * UC-X010: 自分の経費精算一覧。まだ申請していない不要な下書きはここから削除できる。
  */
 export function ExpenseClaimListPage() {
+  const navigate = useNavigate()
   const { data, isLoading, error } = useMyExpenseClaims()
   const deleteClaim = useDeleteExpenseClaim()
 
@@ -30,10 +33,16 @@ export function ExpenseClaimListPage() {
         </Button>
       }
     >
-      {deleteClaim.error && <ErrorMessage error={deleteClaim.error} />}
-
       {claims.length === 0 ? (
-        <p className="text-sm text-muted-foreground">経費精算はまだありません。</p>
+        <EmptyState
+          title="経費精算はまだありません。"
+          description="経費を使ったら新規作成から精算を申請できます。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/expenses/new">経費精算を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>
@@ -50,15 +59,20 @@ export function ExpenseClaimListPage() {
           <TableBody>
             {claims.map((claim) => {
               const { label, tone } = expenseClaimStatusLabel(claim.status)
-              const isEditable = claim.status === 'draft' || claim.status === 'returned'
-              const isDeletable = claim.status === 'draft'
+              const isEditable = isExpenseClaimEditable(claim.status)
+              const isDeletable = isExpenseClaimDeletable(claim.status)
               return (
-                <TableRow key={claim.id}>
+                <ClickableTableRow
+                  key={claim.id}
+                  onRowClick={() => navigate(`/expenses/${claim.id}`)}
+                  rowLabel={`${claim.title ?? '経費精算'}の詳細を開く`}
+                >
                   <TableCell className="text-foreground">{claim.title ?? '-'}</TableCell>
                   <TableCell>
                     <Link
                       to={`/expenses/${claim.id}`}
                       className="font-medium text-foreground hover:text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '-'}
                     </Link>
@@ -69,7 +83,7 @@ export function ExpenseClaimListPage() {
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{claim.approver?.name ?? '-'}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       {isEditable && (
                         <Button asChild variant="secondary" size="sm">
@@ -77,21 +91,20 @@ export function ExpenseClaimListPage() {
                         </Button>
                       )}
                       {isDeletable && (
-                        <ConfirmDialog
-                          trigger={
-                            <Button variant="danger" size="sm">
-                              削除
-                            </Button>
-                          }
-                          title="この下書きを削除しますか?"
+                        <ConfirmActionDialog
+                          triggerLabel="削除"
+                          triggerVariant="danger"
+                          title={`「${claim.title ?? '無題の下書き'}」を削除しますか?`}
                           description="削除すると元に戻せません。保存済みの明細もすべて削除されます。"
-                          isConfirming={deleteClaim.isPending && deleteClaim.variables === claim.id}
-                          onConfirm={() => deleteClaim.mutate(claim.id)}
+                          confirmLabel="削除する"
+                          isPending={deleteClaim.isPending && deleteClaim.variables === claim.id}
+                          error={deleteClaim.variables === claim.id ? deleteClaim.error : undefined}
+                          onConfirm={() => deleteClaim.mutateAsync(claim.id)}
                         />
                       )}
                     </div>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               )
             })}
           </TableBody>

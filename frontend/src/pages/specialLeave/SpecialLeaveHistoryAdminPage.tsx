@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { FormField } from '../../components/FormField/FormField'
 import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -7,20 +9,48 @@ import { useSpecialLeaveHistoryForUser } from '../../hooks/useSpecialLeave'
 
 /**
  * 管理者・人事担当者が対象社員を選んで特別休暇履歴を確認する。
+ * 対象社員(表示対象の絞り込み)はURLに反映し、リロード・共有時も選択状態を保つ。
  */
 export function SpecialLeaveHistoryAdminPage() {
-  const [userId, setUserId] = useState<string | undefined>(undefined)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get('userId') ?? undefined
   const { data, isLoading, error } = useSpecialLeaveHistoryForUser(userId ?? '')
+
+  const handleUserChange = (value: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) {
+      next.set('userId', value)
+    } else {
+      next.delete('userId')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0
 
   return (
     <Card title="特別休暇履歴">
       <div className="max-w-sm">
         <FormField label="対象社員" htmlFor="special-leave-history-user">
-          <UserPicker id="special-leave-history-user" value={userId} onChange={setUserId} />
+          <UserPicker id="special-leave-history-user" value={userId} onChange={handleUserChange} />
         </FormField>
       </div>
 
-      {userId !== undefined && <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />}
+      {userId === undefined ? (
+        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の特別休暇履歴を確認できます。" />
+      ) : isEmpty ? (
+        <EmptyState
+          title="特別休暇履歴はまだありません。"
+          description="対象社員が特別休暇を申請・付与されると、ここに履歴が表示されます。"
+          action={
+            <Button variant="secondary" onClick={() => handleUserChange(undefined)}>
+              社員選択をクリア
+            </Button>
+          }
+        />
+      ) : (
+        <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />
+      )}
     </Card>
   )
 }

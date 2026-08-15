@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -33,6 +35,7 @@ import {
   useWorkCalendarYears,
   useWorkCalendars,
 } from '../../hooks/useWorkCalendars'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
   pending: '未同期',
@@ -119,6 +122,10 @@ function formatSyncSummary(summary: HolidayCalendarSyncSummary): string {
  * 「ソースの登録・割当」(このカードで行う)と「年度ごとの同期実行」(年度一覧の各行で行う)に
  * 役割を分離している。年度ごとの同期はその年度の期間だけを対象にするため、カレンダー全体を
  * 一括で同期していた旧仕様(意図しない年度まで同期されてしまう)の課題に対応する。
+ *
+ * Pattern exception: 祝日iCalendarソースの追加ボタン文言に「登録する」を使う。
+ * Reason: 外部iCalendarソースの取り込み自体が「登録」と呼ばれる業務用語のため
+ * (ui-interaction-patterns SKILL.md §2.7の例外)。
  */
 export function WorkCalendarDetailPage() {
   const { id: companyCalendarId } = useParams<{ id: string }>()
@@ -150,7 +157,6 @@ export function WorkCalendarDetailPage() {
   const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState('')
   const [fiscalYearStartDay, setFiscalYearStartDay] = useState('')
   const [allowDailyHolidayOverride, setAllowDailyHolidayOverride] = useState(true)
-  const [isWeekdayPatternOpen, setIsWeekdayPatternOpen] = useState(false)
   const [weekdayPattern, setWeekdayPattern] = useState<WeekdayHolidayPattern | null>(null)
 
   useEffect(() => {
@@ -160,10 +166,20 @@ export function WorkCalendarDetailPage() {
     setFiscalYearStartMonth(String(calendar.fiscal_year_start_month))
     setFiscalYearStartDay(String(calendar.fiscal_year_start_day))
     setAllowDailyHolidayOverride(calendar.allow_daily_holiday_override)
-    setIsWeekdayPatternOpen(false)
     setWeekdayPattern(calendar.weekday_holiday_pattern)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.id])
+
+  const isSettingsDirty = Boolean(
+    calendar &&
+      (name !== calendar.name ||
+        weekStartsOn !== String(calendar.week_starts_on) ||
+        fiscalYearStartMonth !== String(calendar.fiscal_year_start_month) ||
+        fiscalYearStartDay !== String(calendar.fiscal_year_start_day) ||
+        allowDailyHolidayOverride !== calendar.allow_daily_holiday_override ||
+        JSON.stringify(weekdayPattern) !== JSON.stringify(calendar.weekday_holiday_pattern)),
+  )
+  useUnsavedChangesGuard(isSettingsDirty)
 
   const [selectedSourceId, setSelectedSourceId] = useState<string>(NONE_OPTION_VALUE)
 
@@ -195,10 +211,6 @@ export function WorkCalendarDetailPage() {
   if (error) return <ErrorMessage error={error} fallback="カレンダー一覧の取得に失敗しました。" />
   if (!calendar) return <p className="text-sm text-muted-foreground">カレンダーが見つかりません。</p>
 
-  const handleOpenWeekdayPattern = () => {
-    setIsWeekdayPatternOpen(true)
-  }
-
   const handleSaveSettings = () => {
     updateCalendar.mutate({
       id: calendar.id,
@@ -208,7 +220,7 @@ export function WorkCalendarDetailPage() {
         fiscal_year_start_month: Number(fiscalYearStartMonth),
         fiscal_year_start_day: Number(fiscalYearStartDay),
         holiday_calendar_source_id: calendar.holiday_calendar_source_id,
-        weekday_holiday_pattern: isWeekdayPatternOpen && weekdayPattern ? weekdayPattern : undefined,
+        weekday_holiday_pattern: weekdayPattern ? weekdayPattern : undefined,
         allow_daily_holiday_override: allowDailyHolidayOverride,
       },
     })
@@ -323,9 +335,9 @@ export function WorkCalendarDetailPage() {
     deleteSource.error ??
     updateCalendar.error
 
-  const handleDeleteSource = (id: string) => {
-    if (!window.confirm('この祝日iCalendarソースを削除します。よろしいですか?')) return
-    deleteSource.mutate(id, {
+  const handleDeleteSource = () => {
+    if (!selectedSource) return Promise.resolve()
+    return deleteSource.mutateAsync(selectedSource.id, {
       onSuccess: () => {
         setSelectedSourceId(NONE_OPTION_VALUE)
       },
@@ -401,57 +413,55 @@ export function WorkCalendarDetailPage() {
             </FormField>
           </div>
 
-          {!isWeekdayPatternOpen ? (
-            <Button variant="secondary" onClick={handleOpenWeekdayPattern}>
-              曜日ごとの休日設定を変更する
-            </Button>
-          ) : (
-            <div className="flex flex-col gap-3 rounded-md border border-border p-4">
-              <p className="text-xs text-muted-foreground">
-                未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
-              </p>
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <Checkbox
-                  aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
-                  checked={allowDailyHolidayOverride}
-                  onCheckedChange={(checked) => setAllowDailyHolidayOverride(checked === true)}
-                />
-                曜日ごとの休日設定を日ごとに個別変更できるようにする
-              </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {WEEKDAY_KEYS.map((weekdayKey) => (
-                  <FormField
-                    key={weekdayKey}
-                    label={WEEKDAY_LABELS[weekdayKey]}
-                    htmlFor={`company-calendar-weekday-pattern-${weekdayKey}`}
+          <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+            <p className="text-xs text-muted-foreground">
+              未変更の曜日は既定値のままです。ここで設定した内容がこのカレンダーの曜日ごとの休日区分になります。
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {WEEKDAY_KEYS.map((weekdayKey) => (
+                <FormField
+                  key={weekdayKey}
+                  label={WEEKDAY_LABELS[weekdayKey]}
+                  htmlFor={`company-calendar-weekday-pattern-${weekdayKey}`}
+                >
+                  <NativeSelect
+                    id={`company-calendar-weekday-pattern-${weekdayKey}`}
+                    value={weekdayPattern?.[weekdayKey] ?? 'working'}
+                    onChange={(e) =>
+                      setWeekdayPattern((prev) => ({
+                        ...(prev ?? calendar.weekday_holiday_pattern),
+                        [weekdayKey]: e.target.value as WeekdayHolidayPatternDayType,
+                      }))
+                    }
                   >
-                    <NativeSelect
-                      id={`company-calendar-weekday-pattern-${weekdayKey}`}
-                      value={weekdayPattern?.[weekdayKey] ?? 'working'}
-                      onChange={(e) =>
-                        setWeekdayPattern((prev) => ({
-                          ...(prev ?? calendar.weekday_holiday_pattern),
-                          [weekdayKey]: e.target.value as WeekdayHolidayPatternDayType,
-                        }))
-                      }
-                    >
-                      {DAY_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </FormField>
-                ))}
-              </div>
+                    {DAY_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              ))}
             </div>
-          )}
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                aria-label="曜日ごとの休日設定を日ごとに個別変更できるようにする"
+                checked={allowDailyHolidayOverride}
+                onCheckedChange={(checked) => setAllowDailyHolidayOverride(checked === true)}
+              />
+              曜日ごとの休日設定を日ごとに個別変更できるようにする
+            </label>
+            <p className="text-xs text-muted-foreground">
+              この設定を有効にすると、会社カレンダーの各日ごとに休日区分を個別に変更できるようになります。
+            </p>
+          </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-col items-end gap-1">
           <Button isLoading={updateCalendar.isPending} disabled={!name} onClick={handleSaveSettings}>
             保存する
           </Button>
+          {!name && <p className="text-xs text-muted-foreground">カレンダー名を入力してください。</p>}
         </div>
       </Card>
 
@@ -520,14 +530,22 @@ export function WorkCalendarDetailPage() {
         ) : (
           <div className="flex flex-col gap-6">
             {yearList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">年度はまだありません。</p>
+              <EmptyState
+                title="年度はまだありません。"
+                description="カレンダー年度を作成すると、日別の勤務区分・休日を設定できます。"
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => handleYearModalOpenChange(true)}>
+                    カレンダー年度を作成
+                  </Button>
+                }
+              />
             ) : (
               <ul className="divide-y divide-border">
                 {yearList.map((year) => (
                   <li key={year.id} className="flex flex-wrap items-center gap-3 py-3">
                     <div className="flex flex-1 flex-col gap-1">
                       <Link
-                        to={`/admin/work-calendars/${calendar.id}/years/${year.id}/days`}
+                        to={`/admin/work-calendars/${calendar.id}/years/${year.fiscal_year}/days`}
                         className="text-sm font-medium text-foreground hover:text-primary hover:underline"
                       >
                         {year.fiscal_year}年度
@@ -545,16 +563,16 @@ export function WorkCalendarDetailPage() {
         )}
       </Card>
 
-      <Card id={HOLIDAY_SOURCE_MANAGEMENT_ANCHOR} title="祝日iCalendarソース管理">
+      <Card id={HOLIDAY_SOURCE_MANAGEMENT_ANCHOR} title="休日iCalendarソース管理">
         {sourceActionError && <ErrorMessage error={sourceActionError} />}
 
         {isLoadingSources ? (
           <LoadingState />
         ) : sourcesError ? (
-          <ErrorMessage error={sourcesError} fallback="祝日iCalendarソース一覧の取得に失敗しました。" />
+          <ErrorMessage error={sourcesError} fallback="休日iCalendarソース一覧の取得に失敗しました。" />
         ) : (
           <div className="flex flex-col gap-4">
-            <FormField label="使用する祝日iCalendarソース" htmlFor="holiday-source-select">
+            <FormField label="使用する休日iCalendarソース" htmlFor="holiday-source-select">
               <NativeSelect
                 id="holiday-source-select"
                 value={selectedSourceId}
@@ -713,13 +731,16 @@ export function WorkCalendarDetailPage() {
                         </Button>
                       </>
                     )}
-                    <Button
-                      variant="danger"
-                      isLoading={deleteSource.isPending}
-                      onClick={() => handleDeleteSource(selectedSource.id)}
-                    >
-                      削除する
-                    </Button>
+                    <ConfirmActionDialog
+                      triggerLabel="削除"
+                      triggerVariant="danger"
+                      title={`「${selectedSource.name}」を削除しますか?`}
+                      description="削除すると元に戻せません。このソースを使用しているカレンダーの割当も解除されます。"
+                      confirmLabel="削除する"
+                      isPending={deleteSource.isPending}
+                      error={deleteSource.error}
+                      onConfirm={handleDeleteSource}
+                    />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 rounded-md border border-border p-4">

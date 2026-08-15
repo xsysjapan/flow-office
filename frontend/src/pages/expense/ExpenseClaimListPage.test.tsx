@@ -181,7 +181,7 @@ describe('ExpenseClaimListPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: '削除' }))
-    expect(await screen.findByText('この下書きを削除しますか?')).toBeInTheDocument()
+    expect(await screen.findByText('「無題の下書き」を削除しますか?')).toBeInTheDocument()
     expect(deleteClaim).not.toHaveBeenCalled()
 
     await userEvent.click(await screen.findByRole('button', { name: '削除する' }))

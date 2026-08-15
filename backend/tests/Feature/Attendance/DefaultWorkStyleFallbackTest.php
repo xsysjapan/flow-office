@@ -66,6 +66,9 @@ class DefaultWorkStyleFallbackTest extends TestCase
 
     public function test_falls_back_to_the_system_default_work_style_when_nothing_else_is_assigned(): void
     {
+        // 会社カレンダーが紐づかない働き方は、土日を所定休日として扱う
+        // (`EffectiveScheduleResolver`)ため、平日に固定して検証する。
+        Carbon::setTestNow(Carbon::parse('2026-08-17'));
         $employee = User::factory()->create();
         $workStyle = $this->createWorkStyle('standard', 480);
         SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
@@ -79,6 +82,9 @@ class DefaultWorkStyleFallbackTest extends TestCase
 
     public function test_the_users_monthly_work_style_assignment_takes_priority_over_the_system_default(): void
     {
+        // 会社カレンダーが紐づかない働き方は、土日を所定休日として扱う
+        // (`EffectiveScheduleResolver`)ため、平日に固定して検証する。
+        Carbon::setTestNow(Carbon::parse('2026-08-17'));
         $employee = User::factory()->create();
         $defaultWorkStyle = $this->createWorkStyle('standard', 480);
         $shiftWorkStyle = $this->createWorkStyle('shift', 420);

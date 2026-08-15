@@ -92,6 +92,7 @@ class AttendanceCalculator
     public function __construct(
         private readonly LegalHolidayResolver $legalHolidayResolver,
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+        private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
     ) {}
 
     /**
@@ -142,7 +143,11 @@ class AttendanceCalculator
             ->where('usage_type', PaidLeaveType::HOURLY)
             ->sum('used_minutes');
 
-        $shift = $day->calendarEntry;
+        $shift = $this->effectiveScheduleResolver->resolve(
+            $day->user_id,
+            $day->work_date->copy(),
+            $day->calendarEntry,
+        );
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
         $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 
@@ -261,7 +266,8 @@ class AttendanceCalculator
             'work_minutes' => $workMinutes,
             'deemed_work_minutes' => $deemedWorkMinutes > 0 ? $deemedWorkMinutes : null,
             'payroll_work_minutes' => $payrollWorkMinutes,
-            'prescribed_work_minutes' => $prescribedWorkMinutes,
+            // 休日労働は休日区分へだけ計上し、所定労働時間には重複計上しない。
+            'prescribed_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $prescribedWorkMinutes,
             'statutory_within_overtime_minutes' => $statutoryWithinOvertimeMinutes,
             'statutory_excess_overtime_minutes' => $statutoryExcessOvertimeMinutes,
             'late_night_work_minutes' => ($isLegalHoliday || $isCompanyHoliday) ? 0 : $lateNightWorkMinutes,

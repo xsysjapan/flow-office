@@ -198,29 +198,34 @@ export function AttendanceExportPage() {
         従業員番号列には、flow-office内部の社員ID(UUID)を出力します。給与計算ソフト側の従業員番号と直接一致しない場合は、事前にマッピングを確認してください。
       </p>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          isLoading={downloadCsv.isPending}
-          disabled={yearMonths.length === 0}
-          onClick={() => {
-            downloadCsv.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined, format })
-          }}
-        >
-          CSVダウンロード
-        </Button>
-        <Button
-          variant="secondary"
-          isLoading={downloadExcel.isPending}
-          disabled={yearMonths.length === 0}
-          onClick={() => {
-            downloadExcel.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined })
-          }}
-        >
-          Excelダウンロード
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
-        </p>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            isLoading={downloadCsv.isPending}
+            disabled={yearMonths.length === 0}
+            onClick={() => {
+              downloadCsv.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined, format })
+            }}
+          >
+            CSVダウンロード
+          </Button>
+          <Button
+            variant="secondary"
+            isLoading={downloadExcel.isPending}
+            disabled={yearMonths.length === 0}
+            onClick={() => {
+              downloadExcel.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined })
+            }}
+          >
+            Excelダウンロード
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
+          </p>
+        </div>
+        {yearMonths.length === 0 && (
+          <p className="text-xs text-muted-foreground">対象月を1つ以上追加するとダウンロードできます。</p>
+        )}
       </div>
     </Card>
   )

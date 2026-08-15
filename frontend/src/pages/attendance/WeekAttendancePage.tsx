@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { Button } from '../../components/Button/Button'
@@ -14,6 +15,7 @@ import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useWeek } from '../../hooks/useAttendance'
+import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
 import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
 import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
@@ -28,6 +30,7 @@ import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
  * `?start=`(週初め)で指定できる(未指定なら今週)。
  */
 export function WeekAttendancePage() {
+  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const startParam = searchParams.get('start')
@@ -43,7 +46,9 @@ export function WeekAttendancePage() {
   const today = formatDate(new Date())
   const currentWeekStart = formatDate(mondayOf(new Date()))
   const dates = weekDates(weekStart)
+  const { data: schedule } = useShiftAssignments(user?.id ?? '', dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
   const { totals: weeklyTotals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
 
   const approvedRequestFor = (requests: { target_date: string; status: string; id: string }[] | undefined, date: string) =>
@@ -102,6 +107,7 @@ export function WeekAttendancePage() {
                 key={date}
                 date={date}
                 day={daysByDate.get(date)}
+                schedule={scheduleByDate.get(date)}
                 warnings={dayWarnings(date, daysByDate.get(date), today)}
                 approvedPaidLeaveRequestId={approvedRequestFor(paidLeaveRequests, date)}
                 approvedSpecialLeaveRequestId={approvedRequestFor(specialLeaveRequests, date)}

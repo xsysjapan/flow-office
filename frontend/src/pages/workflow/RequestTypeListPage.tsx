@@ -1,7 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -11,6 +13,7 @@ import { useRequestTypes } from '../../hooks/useRequestTypes'
  * UC-M002 / UC-W001: 管理者が申請種別を一覧・管理する。
  */
 export function RequestTypeListPage() {
+  const navigate = useNavigate()
   const { data: requestTypes, isLoading, error } = useRequestTypes(true)
 
   if (isLoading) return <LoadingState />
@@ -28,7 +31,15 @@ export function RequestTypeListPage() {
       }
     >
       {types.length === 0 ? (
-        <p className="text-sm text-muted-foreground">申請種別はまだありません。</p>
+        <EmptyState
+          title="申請種別はまだありません。"
+          description="申請種別を作成すると、社員が申請フォームからその種別で申請できるようになります。"
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/admin/request-types/new">申請種別を作成</Link>
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <TableHeader>
@@ -41,11 +52,16 @@ export function RequestTypeListPage() {
           </TableHeader>
           <TableBody>
             {types.map((type) => (
-              <TableRow key={type.id}>
+              <ClickableTableRow
+                key={type.id}
+                onRowClick={() => navigate(`/admin/request-types/${type.id}`)}
+                rowLabel={`${type.name}の詳細を開く`}
+              >
                 <TableCell>
                   <Link
                     to={`/admin/request-types/${type.id}`}
                     className="font-medium text-foreground hover:text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {type.name}
                   </Link>
@@ -57,7 +73,7 @@ export function RequestTypeListPage() {
                 <TableCell>
                   <Badge tone={type.is_active ? 'success' : 'neutral'}>{type.is_active ? '有効' : '無効'}</Badge>
                 </TableCell>
-              </TableRow>
+              </ClickableTableRow>
             ))}
           </TableBody>
         </Table>

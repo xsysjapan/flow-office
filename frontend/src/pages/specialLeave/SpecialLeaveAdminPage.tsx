@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -45,9 +46,12 @@ function SpecialLeaveTypesCard() {
       {isLoading ? (
         <LoadingState />
       ) : (types ?? []).length === 0 ? (
-        <p className="mb-5 text-sm text-muted-foreground">
-          特別休暇の種類はまだありません。作成するまで特別休暇メニューは表示されません。
-        </p>
+        <div className="mb-5">
+          <EmptyState
+            title="特別休暇の種類はまだありません。作成するまで特別休暇メニューは表示されません。"
+            description="下のフォームから種類名を入力して追加してください。"
+          />
+        </div>
       ) : (
         <ul className="mb-5 divide-y divide-border">
           {(types ?? []).map((type) => (
@@ -98,6 +102,7 @@ function SpecialLeaveTypesCard() {
           追加する
         </Button>
       </div>
+      {!name && <p className="mt-1 text-xs text-muted-foreground">種類名を入力してください。</p>}
       <label className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground">
         <Checkbox checked={requiresGrant} onCheckedChange={(checked) => setRequiresGrant(checked === true)} />
         事前の付与(残数)が必要
@@ -167,7 +172,9 @@ function SpecialLeaveGrantRulesCard() {
       {isLoading ? (
         <LoadingState />
       ) : (rules ?? []).length === 0 ? (
-        <p className="mb-5 text-sm text-muted-foreground">自動付与ルールはまだありません。</p>
+        <div className="mb-5">
+          <EmptyState title="自動付与ルールはまだありません。" description="ルールを作成すると、対象社員へ自動的に特別休暇が付与されます。" />
+        </div>
       ) : (
         <ul className="mb-5 divide-y divide-border">
           {(rules ?? []).map((rule) => (
@@ -300,9 +307,16 @@ function SpecialLeaveGrantRulesCard() {
         </ul>
       )}
 
-      <Button isLoading={createRule.isPending} disabled={!specialLeaveTypeId || !ruleName} onClick={handleCreateRule}>
-        ルールを作成
-      </Button>
+      <div className="flex flex-col items-start gap-1">
+        <Button isLoading={createRule.isPending} disabled={!specialLeaveTypeId || !ruleName} onClick={handleCreateRule}>
+          ルールを作成
+        </Button>
+        {!specialLeaveTypeId ? (
+          <p className="text-xs text-muted-foreground">特別休暇の種類を選択してください。</p>
+        ) : !ruleName ? (
+          <p className="text-xs text-muted-foreground">ルール名を入力してください。</p>
+        ) : null}
+      </div>
     </Card>
   )
 }
@@ -377,14 +391,24 @@ function ManualGrantCard() {
         </FormField>
       </div>
 
-      <Button
-        className="mt-4"
-        isLoading={grantSpecialLeave.isPending}
-        disabled={!userId || !specialLeaveTypeId || !grantedOn || !grantedDays}
-        onClick={handleGrant}
-      >
-        付与する
-      </Button>
+      <div className="mt-4 flex flex-col items-start gap-1">
+        <Button
+          isLoading={grantSpecialLeave.isPending}
+          disabled={!userId || !specialLeaveTypeId || !grantedOn || !grantedDays}
+          onClick={handleGrant}
+        >
+          付与する
+        </Button>
+        {!userId ? (
+          <p className="text-xs text-muted-foreground">対象社員を選択してください。</p>
+        ) : !specialLeaveTypeId ? (
+          <p className="text-xs text-muted-foreground">特別休暇の種類を選択してください。</p>
+        ) : !grantedOn ? (
+          <p className="text-xs text-muted-foreground">付与日を選択してください。</p>
+        ) : !grantedDays ? (
+          <p className="text-xs text-muted-foreground">付与日数を入力してください。</p>
+        ) : null}
+      </div>
 
       {userId !== undefined && (
         <div className="mt-6">
@@ -392,7 +416,7 @@ function ManualGrantCard() {
           {isLoadingUserGrants ? (
             <LoadingState />
           ) : (userGrants ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">特別休暇の付与はまだありません。</p>
+            <EmptyState title="特別休暇の付与はまだありません。" description="上のフォームから付与すると、ここに一覧が表示されます。" />
           ) : (
             <ul className="divide-y divide-border">
               {(userGrants ?? []).map((grant) => (

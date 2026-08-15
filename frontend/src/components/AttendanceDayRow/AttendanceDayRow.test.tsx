@@ -85,6 +85,63 @@ describe('AttendanceDayRow', () => {
     expect(screen.getByText('未入力')).toBeInTheDocument()
   })
 
+  it('shows the effective legal holiday classification without an attendance record', () => {
+    renderRow({
+      day: undefined,
+      schedule: {
+        id: null,
+        user_id: day.user_id,
+        work_date: day.work_date,
+        work_style_id: 'work-style-1',
+        shift_pattern_id: null,
+        day_type: 'legal_holiday',
+        is_working_day: false,
+        is_legal_holiday: true,
+        is_company_holiday: false,
+        planned_start_at: null,
+        planned_end_at: null,
+        planned_break_minutes: 0,
+        planned_break_start_at: null,
+        planned_break_end_at: null,
+        is_published: true,
+        is_manually_overridden: false,
+        schedule_source: 'company_calendar',
+      },
+    })
+
+    expect(screen.getByText('法定休日')).toBeInTheDocument()
+  })
+
+  it('shows the holiday name while preserving the legal-holiday classification', () => {
+    renderRow({
+      day: undefined,
+      schedule: {
+        id: null,
+        user_id: day.user_id,
+        work_date: day.work_date,
+        work_style_id: 'work-style-1',
+        shift_pattern_id: null,
+        day_type: 'legal_holiday',
+        is_working_day: false,
+        is_legal_holiday: true,
+        is_company_holiday: false,
+        is_public_holiday: true,
+        public_holiday_name: '山の日',
+        planned_start_at: null,
+        planned_end_at: null,
+        planned_break_minutes: 0,
+        planned_break_start_at: null,
+        planned_break_end_at: null,
+        is_published: true,
+        is_manually_overridden: false,
+      },
+    })
+
+    expect(screen.getByText('法定休日')).toBeInTheDocument()
+    expect(screen.getByText('山の日')).toBeInTheDocument()
+    expect(screen.queryByText('所定休日')).not.toBeInTheDocument()
+  })
+
   it('shows extra warning badges', () => {
     renderRow({ day: undefined, warnings: ['打刻漏れ'] })
     expect(screen.getByText('打刻漏れ')).toBeInTheDocument()

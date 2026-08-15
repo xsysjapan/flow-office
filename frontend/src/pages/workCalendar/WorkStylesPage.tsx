@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -168,7 +169,7 @@ function WorkStyleListCard() {
     <Card
       title="勤務形態"
       actions={
-        <Button onClick={() => setIsCreateOpen(true)}>新規登録</Button>
+        <Button onClick={() => setIsCreateOpen(true)}>新規作成</Button>
       }
     >
       {error && <ErrorMessage error={error} fallback="勤務形態の取得に失敗しました。" />}
@@ -177,7 +178,10 @@ function WorkStyleListCard() {
       {isLoading ? (
         <LoadingState />
       ) : list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">勤務形態はまだありません。</p>
+        <EmptyState
+          title="勤務形態はまだありません。"
+          action={<Button size="sm" onClick={() => setIsCreateOpen(true)}>勤務形態を作成</Button>}
+        />
       ) : (
         <>
           <Table>
@@ -412,7 +416,7 @@ function MonthlyWorkStyleAssignmentCard() {
           {isLoadingHistory ? (
             <LoadingState />
           ) : (history ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">まだ割り当てられていません。</p>
+            <EmptyState title="まだ割り当てられていません。" />
           ) : (
             <ul className="divide-y divide-border">
               {history?.map((assignment) => (

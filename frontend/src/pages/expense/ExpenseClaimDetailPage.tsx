@@ -5,6 +5,7 @@ import { AttachmentPanel } from '../../components/AttachmentPanel/AttachmentPane
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -24,6 +25,8 @@ import {
 import { mondayOf, formatDate } from '../../utils/weekDates'
 import {
   expenseClaimStatusLabel,
+  isExpenseClaimCancellable,
+  isExpenseClaimEditable,
   workLocationTypeLabel,
   workflowRequestHistoryActionLabel,
 } from '../../utils/statusLabels'
@@ -80,6 +83,7 @@ export function ExpenseClaimDetailPage() {
   const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
   const [comment, setComment] = useState('')
   const [reason, setReason] = useState('')
+  const [cancelValidationError, setCancelValidationError] = useState<Error | null>(null)
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="経費精算の取得に失敗しました。" />
@@ -93,150 +97,183 @@ export function ExpenseClaimDetailPage() {
   const periodLabel = claim.period_from && claim.period_to ? `${claim.period_from} 〜 ${claim.period_to}` : '対象期間未確定'
 
   return (
-    <Card
-      title={claim.title ? `${claim.title}(${periodLabel})` : `経費精算(${periodLabel})`}
-      actions={<Badge tone={tone}>{label}</Badge>}
-    >
-      {actionError && <ErrorMessage error={actionError} />}
+    <div className="flex flex-col gap-4">
+      <Link to="/expenses" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+        ← 経費精算一覧へ戻る
+      </Link>
 
-      <div className="flex flex-col gap-6">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-          <dt className="font-medium text-muted-foreground">申請者</dt>
-          <dd className="text-foreground">{claim.employee?.name}</dd>
-          <dt className="font-medium text-muted-foreground">承認者</dt>
-          <dd className="text-foreground">{claim.approver?.name ?? '未指定'}</dd>
-          <dt className="font-medium text-muted-foreground">合計金額</dt>
-          <dd className="text-foreground">{claim.total_amount.toLocaleString()}円</dd>
-        </dl>
+      <Card
+        title={claim.title ? `${claim.title}(${periodLabel})` : `経費精算(${periodLabel})`}
+        actions={<Badge tone={tone}>{label}</Badge>}
+      >
+        {actionError && <ErrorMessage error={actionError} />}
 
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{`明細(${claim.items.length}件)`}</SectionHeading>
-          {claim.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">明細はありません。</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>日付</TableHead>
-                  <TableHead>経費区分</TableHead>
-                  <TableHead>内容</TableHead>
-                  <TableHead>金額</TableHead>
-                  <TableHead>勤怠実績との突合せ</TableHead>
-                  <TableHead>領収書</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {claim.items.map((item) => {
-                  const deductionAmount = item.commuting_deduction_amount ?? 0
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
-                      <TableCell className="text-muted-foreground">{item.category?.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{item.description}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.amount.toLocaleString()}円
-                        {deductionAmount > 0 && (
-                          <span className="block text-xs">
-                            定期区間控除 {deductionAmount.toLocaleString()}円・会社負担額{' '}
-                            {(item.amount - deductionAmount).toLocaleString()}円
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <ItemReconciliation employeeId={claim.employee_id} item={item} />
-                      </TableCell>
-                      <TableCell>
-                        <AttachmentPanel
-                          ownerType="expense_item"
-                          ownerId={item.id}
-                          readOnly={!isApplicant}
-                          required={item.evidence_type === 'receipt_required'}
-                          compact
-                        />
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+        <div className="flex flex-col gap-6">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+            <dt className="font-medium text-muted-foreground">申請者</dt>
+            <dd className="text-foreground">{claim.employee?.name}</dd>
+            <dt className="font-medium text-muted-foreground">承認者</dt>
+            <dd className="text-foreground">{claim.approver?.name ?? '未指定'}</dd>
+            <dt className="font-medium text-muted-foreground">合計金額</dt>
+            <dd className="text-foreground">{claim.total_amount.toLocaleString()}円</dd>
+          </dl>
 
-        <div className="flex flex-col gap-2">
-          <SectionHeading>履歴</SectionHeading>
-          {isLoadingHistory ? (
-            <LoadingState />
-          ) : (
-            <ul className="flex flex-col gap-1" aria-label="履歴">
-              {history?.map((entry) => (
-                <li key={entry.id} className="flex gap-3 text-sm">
-                  <span className="min-w-[10rem] text-muted-foreground">{formatDateTime(entry.occurred_at)}</span>
-                  <span className="text-foreground">
-                    {workflowRequestHistoryActionLabel(entry.action)}
-                    {entry.comment ? `: ${entry.comment}` : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          <div className="flex flex-col gap-2">
+            <SectionHeading>{`明細(${claim.items.length}件)`}</SectionHeading>
+            {claim.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">明細はありません。</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>日付</TableHead>
+                    <TableHead>経費区分</TableHead>
+                    <TableHead>内容</TableHead>
+                    <TableHead>金額</TableHead>
+                    <TableHead>勤怠実績との突合せ</TableHead>
+                    <TableHead>領収書</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {claim.items.map((item) => {
+                    const deductionAmount = item.commuting_deduction_amount ?? 0
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-muted-foreground">{item.usage_date}</TableCell>
+                        <TableCell className="text-muted-foreground">{item.category?.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{item.description}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {item.amount.toLocaleString()}円
+                          {deductionAmount > 0 && (
+                            <span className="block text-xs">
+                              定期区間控除 {deductionAmount.toLocaleString()}円・会社負担額{' '}
+                              {(item.amount - deductionAmount).toLocaleString()}円
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <ItemReconciliation employeeId={claim.employee_id} item={item} />
+                        </TableCell>
+                        <TableCell>
+                          <AttachmentPanel
+                            ownerType="expense_item"
+                            ownerId={item.id}
+                            readOnly={!isApplicant}
+                            required={item.evidence_type === 'receipt_required'}
+                            compact
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
 
-        <Separator />
+          <div className="flex flex-col gap-2">
+            <SectionHeading>履歴</SectionHeading>
+            {isLoadingHistory ? (
+              <LoadingState />
+            ) : (
+              <ul className="flex flex-col gap-1" aria-label="履歴">
+                {history?.map((entry) => (
+                  <li key={entry.id} className="flex gap-3 text-sm">
+                    <span className="min-w-[10rem] text-muted-foreground">{formatDateTime(entry.occurred_at)}</span>
+                    <span className="text-foreground">
+                      {workflowRequestHistoryActionLabel(entry.action)}
+                      {entry.comment ? `: ${entry.comment}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
-            <Button asChild variant="secondary">
-              <Link to={`/expenses/${claim.id}/edit`}>明細を編集する</Link>
-            </Button>
-          )}
+          <Separator />
 
-          {isApplicant && (claim.status === 'draft' || claim.status === 'returned') && (
-            <div className="flex items-center gap-2">
-              <UserPicker id="approver" value={approverUserId ?? claim.approver_user_id ?? undefined} onChange={setApproverUserId} />
-              <Button
-                isLoading={submitClaim.isPending}
-                disabled={!(approverUserId ?? claim.approver_user_id)}
-                onClick={() => submitClaim.mutate((approverUserId ?? claim.approver_user_id) as string)}
-              >
-                申請する
+          <div className="flex flex-wrap items-center gap-3">
+            {isApplicant && isExpenseClaimEditable(claim.status) && (
+              <Button asChild variant="secondary">
+                <Link to={`/expenses/${claim.id}/edit`}>明細を編集する</Link>
               </Button>
-            </div>
-          )}
+            )}
 
-          {isApplicant && ['draft', 'in_review', 'returned'].includes(claim.status) && (
-            <div className="flex items-center gap-2">
-              <Input placeholder="取消理由" value={reason} onChange={(e) => setReason(e.target.value)} />
-              <Button
-                variant="danger"
-                isLoading={cancelClaim.isPending}
-                disabled={!reason}
-                onClick={() => cancelClaim.mutate(reason)}
-              >
-                取り消す
-              </Button>
-            </div>
-          )}
-
-          {isApprover && claim.status === 'in_review' && (
-            <>
-              <Button isLoading={approveClaim.isPending} onClick={() => approveClaim.mutate()}>
-                承認する
-              </Button>
-              <div className="flex items-center gap-2">
-                <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
-                <Button
-                  variant="secondary"
-                  isLoading={returnClaim.isPending}
-                  disabled={!comment}
-                  onClick={() => returnClaim.mutate(comment)}
-                >
-                  差戻す
-                </Button>
+            {isApplicant && isExpenseClaimEditable(claim.status) && (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <UserPicker id="approver" value={approverUserId ?? claim.approver_user_id ?? undefined} onChange={setApproverUserId} />
+                  <Button
+                    isLoading={submitClaim.isPending}
+                    disabled={!(approverUserId ?? claim.approver_user_id)}
+                    onClick={() => submitClaim.mutate((approverUserId ?? claim.approver_user_id) as string)}
+                  >
+                    申請する
+                  </Button>
+                </div>
+                {!(approverUserId ?? claim.approver_user_id) && (
+                  <p className="text-xs text-muted-foreground">承認者を選択してください</p>
+                )}
               </div>
-            </>
-          )}
+            )}
+
+            {isApplicant && isExpenseClaimCancellable(claim.status) && (
+              <ConfirmActionDialog
+                triggerLabel="取り消す"
+                title="この経費精算を取り消しますか?"
+                description="取り消すと、この経費精算は取消済みの状態になり元に戻せません。再度申請する場合は最初から作成し直してください。"
+                confirmLabel="取り消しを確定する"
+                isPending={cancelClaim.isPending}
+                error={cancelValidationError ?? cancelClaim.error}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setReason('')
+                    setCancelValidationError(null)
+                    cancelClaim.reset()
+                  }
+                }}
+                onConfirm={() => {
+                  if (!reason) {
+                    setCancelValidationError(new Error('取消理由を入力してください'))
+                    throw new Error('取消理由を入力してください')
+                  }
+                  setCancelValidationError(null)
+                  return cancelClaim.mutateAsync(reason)
+                }}
+              >
+                <Input
+                  aria-label="取消理由"
+                  placeholder="取消理由"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </ConfirmActionDialog>
+            )}
+
+            {isApprover && claim.status === 'in_review' && (
+              <>
+                <Button isLoading={approveClaim.isPending} onClick={() => approveClaim.mutate()}>
+                  承認する
+                </Button>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Input placeholder="差戻しコメント" value={comment} onChange={(e) => setComment(e.target.value)} />
+                    <Button
+                      variant="secondary"
+                      isLoading={returnClaim.isPending}
+                      disabled={!comment}
+                      onClick={() => returnClaim.mutate(comment)}
+                    >
+                      差戻す
+                    </Button>
+                  </div>
+                  {!comment && <p className="text-xs text-muted-foreground">差戻しコメントを入力してください</p>}
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   )
 }

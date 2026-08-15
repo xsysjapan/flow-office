@@ -27,6 +27,7 @@ use Illuminate\Support\Collection;
 class AttendanceDayDefaultsResolver
 {
     public function __construct(
+        private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
         private readonly AttendanceTimeRounder $timeRounder,
     ) {}
@@ -49,12 +50,9 @@ class AttendanceDayDefaultsResolver
             return $this->resolveFromPunches($userId, $workDateCarbon, $punches);
         }
 
-        $shift = EmployeeCalendarEntry::query()
-            ->where('user_id', $userId)
-            ->whereDate('work_date', $workDate)
-            ->first();
+        $shift = $this->effectiveScheduleResolver->resolve($userId, $workDateCarbon);
 
-        if ($shift !== null && ($shift->planned_start_at !== null || $shift->planned_end_at !== null)) {
+        if ($shift !== null) {
             return $this->resolveFromShift($shift, $workDateCarbon);
         }
 
@@ -67,12 +65,7 @@ class AttendanceDayDefaultsResolver
      */
     private function resolveFromPunches(string $userId, Carbon $workDate, $punches): array
     {
-        $shift = EmployeeCalendarEntry::query()
-            ->where('user_id', $userId)
-            ->whereDate('work_date', $workDate->toDateString())
-            ->first();
-
-        $workStyle = $shift?->workStyle ?? $this->workStyleFallbackResolver->resolveForUser($userId, $workDate);
+        $workStyle = $this->effectiveScheduleResolver->resolve($userId, $workDate)?->workStyle;
         $roundingUnitMinutes = $workStyle?->rounding_unit_minutes ?: 1;
         $roundingMode = $workStyle?->rounding_mode ?? WorkStyle::ROUNDING_MODE_NEAREST;
         $offsetMinutes = $punches->first()->utc_offset_minutes;
@@ -122,7 +115,7 @@ class AttendanceDayDefaultsResolver
         }
 
         return [
-            'source' => 'schedule',
+            'source' => $shift->schedule_source ?? 'schedule',
             'actual_start_at' => LocalDateTime::toIso8601($shift->planned_start_at, $timezone),
             'actual_end_at' => LocalDateTime::toIso8601($shift->planned_end_at, $timezone),
             'breaks' => $breaks,

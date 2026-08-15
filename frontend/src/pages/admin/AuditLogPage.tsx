@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { Input } from '../../components/ui/input'
 import { downloadAuditLogCsv, type AuditLogFilters } from '../../api/auditLog'
 import { useAuditLog } from '../../hooks/useAuditLog'
+
+const FILTER_KEYS = ['aggregate_type', 'aggregate_id', 'event_type', 'user_id', 'from', 'to'] as const
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
@@ -15,15 +19,49 @@ function formatDateTime(value: string): string {
 
 /**
  * UC-M003: 管理者がイベントストアの操作履歴を検索・CSV出力する。
+ * 検索条件・ページはURL(`?aggregate_type=...&page=2`)へ反映し、ブラウザの戻る/リロード/URL
+ * 共有で状態が壊れないようにする(SKILL.md §2.10)。
  */
 export function AuditLogPage() {
-  const [searchParams] = useState(() => new URLSearchParams(window.location.search))
-  const [aggregateType, setAggregateType] = useState(()=>searchParams.get('aggregate_type')??'')
-  const [aggregateId, setAggregateId] = useState(()=>searchParams.get('aggregate_id')??'')
-  const [eventType, setEventType] = useState(()=>searchParams.get('event_type')??'')
-  const [userId, setUserId] = useState(()=>searchParams.get('user_id')??'')
-  const [from, setFrom] = useState(()=>searchParams.get('from')??'')
-  const [to, setTo] = useState(()=>searchParams.get('to')??'')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const aggregateType = searchParams.get('aggregate_type') ?? ''
+  const aggregateId = searchParams.get('aggregate_id') ?? ''
+  const eventType = searchParams.get('event_type') ?? ''
+  const userId = searchParams.get('user_id') ?? ''
+  const from = searchParams.get('from') ?? ''
+  const to = searchParams.get('to') ?? ''
+  const page = Number(searchParams.get('page') ?? '1') || 1
+
+  const isFiltered = FILTER_KEYS.some((key) => Boolean(searchParams.get(key)))
+
+  function updateParam(key: (typeof FILTER_KEYS)[number], value: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (value) next.set(key, value)
+        else next.delete(key)
+        next.delete('page')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function handlePageChange(nextPage: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('page', String(nextPage))
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function clearFilters() {
+    setSearchParams({}, { replace: true })
+  }
 
   const filters: AuditLogFilters = {
     aggregate_type: aggregateType || undefined,
@@ -34,7 +72,7 @@ export function AuditLogPage() {
     to: to || undefined,
   }
 
-  const { data, isLoading, error } = useAuditLog(filters)
+  const { data, isLoading, error } = useAuditLog({ ...filters, page })
 
   return (
     <Card
@@ -51,25 +89,36 @@ export function AuditLogPage() {
             id="audit-aggregate-type"
             placeholder="workflow_request"
             value={aggregateType}
-            onChange={(e) => setAggregateType(e.target.value)}
+            onChange={(e) => updateParam('aggregate_type', e.target.value)}
           />
         </FormField>
         <FormField label="対象ID" htmlFor="audit-aggregate-id">
-          <Input id="audit-aggregate-id" value={aggregateId} onChange={(e) => setAggregateId(e.target.value)} />
+          <Input
+            id="audit-aggregate-id"
+            value={aggregateId}
+            onChange={(e) => updateParam('aggregate_id', e.target.value)}
+          />
         </FormField>
         <FormField label="イベント種別" htmlFor="audit-event-type">
-          <Input id="audit-event-type" value={eventType} onChange={(e) => setEventType(e.target.value)} />
+          <Input id="audit-event-type" value={eventType} onChange={(e) => updateParam('event_type', e.target.value)} />
         </FormField>
         <FormField label="ユーザーID" htmlFor="audit-user-id">
-          <Input id="audit-user-id" value={userId} onChange={(e) => setUserId(e.target.value)} />
+          <Input id="audit-user-id" value={userId} onChange={(e) => updateParam('user_id', e.target.value)} />
         </FormField>
         <FormField label="期間(開始)" htmlFor="audit-from">
-          <DatePicker id="audit-from" value={from || undefined} onChange={(date) => setFrom(date ?? '')} />
+          <DatePicker id="audit-from" value={from || undefined} onChange={(date) => updateParam('from', date ?? '')} />
         </FormField>
         <FormField label="期間(終了)" htmlFor="audit-to">
-          <DatePicker id="audit-to" value={to || undefined} onChange={(date) => setTo(date ?? '')} />
+          <DatePicker id="audit-to" value={to || undefined} onChange={(date) => updateParam('to', date ?? '')} />
         </FormField>
       </div>
+      {isFiltered && (
+        <div className="mb-4">
+          <Button variant="secondary" onClick={clearFilters}>
+            フィルターをクリア
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <LoadingState />
@@ -81,7 +130,14 @@ export function AuditLogPage() {
             全{data?.meta.total ?? 0}件 ({data?.meta.current_page ?? 1}/{data?.meta.last_page ?? 1}ページ)
           </p>
           {(data?.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">該当するログはありません。</p>
+            <EmptyState
+              title={isFiltered ? '条件に一致するログはありません。' : '監査ログはまだありません。'}
+              description={
+                isFiltered
+                  ? '検索条件を変更するか、上の「フィルターをクリア」から条件を解除してください。'
+                  : '操作(作成・更新・削除など)が行われると、ここに記録されます。'
+              }
+            />
           ) : (
             <ul className="divide-y divide-border">
               {data?.data.map((event) => (
@@ -103,6 +159,14 @@ export function AuditLogPage() {
                 </li>
               ))}
             </ul>
+          )}
+          {data && (
+            <Pagination
+              currentPage={data.meta.current_page}
+              lastPage={data.meta.last_page}
+              total={data.meta.total}
+              onPageChange={handlePageChange}
+            />
           )}
         </>
       )}

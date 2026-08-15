@@ -113,7 +113,7 @@ describe('ExpenseEntryPresetListPage', () => {
   it('shows an empty state when there are no presets', async () => {
     renderPage([])
 
-    expect(await screen.findByText('条件に一致するプリセットはありません。')).toBeInTheDocument()
+    expect(await screen.findByText('入力プリセットはまだありません。')).toBeInTheDocument()
   })
 
   it('lists presets and lets the owner edit or delete their own personal preset', async () => {
@@ -142,7 +142,7 @@ describe('ExpenseEntryPresetListPage', () => {
   it('shows the new-preset link', async () => {
     renderPage([])
 
-    await screen.findByText('条件に一致するプリセットはありません。')
+    await screen.findByText('入力プリセットはまだありません。')
     expect(screen.getByRole('link', { name: '新規作成' })).toHaveAttribute('href', '/expenses/presets/new')
   })
 

@@ -3,6 +3,17 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$sqliteDatabase = env('DB_DATABASE', database_path('database.sqlite'));
+
+// DB_DATABASE is commonly configured as database/database.sqlite for local and E2E use.
+// Resolve that relative to the Laravel application root, not the shell's current working
+// directory (for example when the server is started with `php backend/artisan serve`).
+if ($sqliteDatabase !== ':memory:'
+    && is_string($sqliteDatabase)
+    && preg_match('/^(?:[A-Za-z]:[\\\\\/]|[\\\\\/]{1,2})/', $sqliteDatabase) !== 1) {
+    $sqliteDatabase = base_path($sqliteDatabase);
+}
+
 return [
 
     /*
@@ -35,7 +46,7 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'database' => $sqliteDatabase,
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,

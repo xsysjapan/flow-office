@@ -154,7 +154,14 @@ export function ExpenseEntryPresetEditPage() {
   }
 
   return (
-    <Card title={isCreate ? 'プリセットの新規作成' : 'プリセットの編集'}>
+    <Card
+      title={isCreate ? 'プリセットの新規作成' : 'プリセットの編集'}
+      actions={
+        <Button variant="secondary" onClick={() => navigate('/expenses/presets')}>
+          キャンセル
+        </Button>
+      }
+    >
       {error && <ErrorMessage error={error} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -224,10 +231,19 @@ export function ExpenseEntryPresetEditPage() {
         有効
       </label>
 
-      <div className="mt-5">
-        <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave()}>
-          保存する
-        </Button>
+      <div className="mt-5 flex flex-col gap-1">
+        <div>
+          <Button isLoading={isBusy} disabled={!canSave} onClick={() => void handleSave()}>
+            {isCreate ? '作成する' : '保存する'}
+          </Button>
+        </div>
+        {!canSave && (
+          <p className="text-xs text-muted-foreground">
+            {name.trim() === ''
+              ? '名称を入力してください。'
+              : '各明細の経費区分を選択してください。'}
+          </p>
+        )}
       </div>
     </Card>
   )

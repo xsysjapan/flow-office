@@ -64,7 +64,7 @@ describe('ExpenseCategoryEditPage', () => {
 
     await userEvent.type(await screen.findByLabelText('コード'), 'supplies')
     await userEvent.type(screen.getByLabelText('名称'), '消耗品費')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(expenseCategoriesApi.createExpenseCategory).toHaveBeenCalledWith({
@@ -96,7 +96,7 @@ describe('ExpenseCategoryEditPage', () => {
     await userEvent.type(screen.getByLabelText('1番目の項目のキー'), 'origin')
     await userEvent.type(screen.getByLabelText('1番目の項目の表示名'), '出発地')
 
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成' }))
 
     await waitFor(() =>
       expect(expenseCategoriesApi.createExpenseCategory).toHaveBeenCalledWith(
@@ -112,7 +112,7 @@ describe('ExpenseCategoryEditPage', () => {
     renderPage('/admin/expense-categories/1')
 
     await screen.findByDisplayValue('交通費')
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() =>
       expect(expenseCategoriesApi.updateExpenseCategory).toHaveBeenCalledWith(1, {
@@ -127,5 +127,17 @@ describe('ExpenseCategoryEditPage', () => {
         is_active: true,
       }),
     )
+  })
+
+  it('navigates back to the list without saving when cancel is clicked', async () => {
+    const updateSpy = vi.spyOn(expenseCategoriesApi, 'updateExpenseCategory')
+    updateSpy.mockClear()
+    renderPage('/admin/expense-categories/1')
+
+    await screen.findByDisplayValue('交通費')
+    await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+
+    expect(await screen.findByText('経費区分一覧ページ')).toBeInTheDocument()
+    expect(updateSpy).not.toHaveBeenCalled()
   })
 })

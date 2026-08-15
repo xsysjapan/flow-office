@@ -1,22 +1,25 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { Duration } from '../../components/Duration/Duration'
+import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
-import type { AttendanceDay } from '../../api/types'
+import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { useAttendanceMonth, usePunches, useWeek } from '../../hooks/useAttendance'
+import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
-  attendanceDayDisplayLabel,
   attendanceMonthStatusLabel,
+  attendanceRowDisplayLabel,
   legalHolidayWarningLabel,
   punchStatusLabel,
   punchTypeLabel,
@@ -43,13 +46,15 @@ function weekdayLabel(date: string): string {
 function ReadOnlyDayRow({
   date,
   day,
+  schedule,
   onSelect,
 }: {
   date: string
   day: AttendanceDay | undefined
+  schedule?: EmployeeShiftAssignment
   onSelect?: (date: string) => void
 }) {
-  const { label, tone } = day ? attendanceDayDisplayLabel(day) : { label: '未入力', tone: 'neutral' as const }
+  const { label, tone } = attendanceRowDisplayLabel(day, schedule)
   const warnings = dayWarnings(date, day, formatDate(new Date()))
 
   const content = (
@@ -59,6 +64,9 @@ function ReadOnlyDayRow({
           {date}({weekdayLabel(date)})
         </span>
         <Badge tone={tone}>{label}</Badge>
+        {schedule?.public_holiday_name && (
+          <span className="text-xs text-muted-foreground">{schedule.public_holiday_name}</span>
+        )}
       </div>
       <div className="col-start-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:contents">
         {day && (day.actual_start_at || day.actual_end_at) && (
@@ -122,6 +130,7 @@ export function MonthlyReferenceView({
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
   const daysByDate = new Map((data?.days ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((data?.schedule ?? []).map((entry) => [entry.work_date, entry]))
   const dates = datesInMonth(yearMonth)
 
   return (
@@ -184,7 +193,7 @@ export function MonthlyReferenceView({
         <Card title="日別の内訳">
           <ul className="divide-y divide-border">
             {dates.map((date) => (
-              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} onSelect={onSelectDate} />
+              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} onSelect={onSelectDate} />
             ))}
           </ul>
         </Card>
@@ -209,7 +218,9 @@ export function WeeklyReferenceView({
   const { data, isLoading, error } = useWeek(weekStart, userId)
 
   const dates = weekDates(weekStart)
+  const { data: schedule } = useShiftAssignments(userId, dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
+  const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
   const { totals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
 
   return (
@@ -271,7 +282,7 @@ export function WeeklyReferenceView({
         <Card title="日別の内訳">
           <ul className="divide-y divide-border">
             {dates.map((date) => (
-              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} />
+              <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} />
             ))}
           </ul>
         </Card>
@@ -290,7 +301,7 @@ function ReadOnlyPunchLogCard({ date, userId }: { date: string; userId: string }
       {isLoading ? (
         <LoadingState />
       ) : !activePunches || activePunches.length === 0 ? (
-        <p className="text-sm text-muted-foreground">この日の打刻ログはありません。</p>
+        <EmptyState title="この日の打刻ログはありません。" />
       ) : (
         <ul className="divide-y divide-border">
           {activePunches.map((punch) => {
@@ -327,8 +338,10 @@ export function DailyReferenceView({
   const today = formatDate(new Date())
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
   const { data, isLoading, error } = useWeek(monday, userId)
+  const { data: scheduleDays } = useShiftAssignments(userId, monday, addDays(monday, 6))
   const day = data?.find((d) => d.work_date === date)
-  const statusMeta = day ? attendanceDayDisplayLabel(day) : null
+  const schedule = scheduleDays?.find((entry) => entry.work_date === date)
+  const statusMeta = day || schedule ? attendanceRowDisplayLabel(day, schedule) : null
 
   return (
     <>
@@ -374,13 +387,16 @@ export function DailyReferenceView({
       <p className="mb-3 text-sm text-muted-foreground">
         {date}({weekdayLabel(date)})
       </p>
+      {schedule?.public_holiday_name && (
+        <p className="mb-3 text-sm text-muted-foreground">{schedule.public_holiday_name}</p>
+      )}
 
       {isLoading ? (
         <LoadingState />
       ) : error ? (
         <ErrorMessage error={error} fallback="日次勤怠の取得に失敗しました。" />
       ) : !day ? (
-        <p className="text-sm text-muted-foreground">この日の勤怠記録はありません。</p>
+        <EmptyState title="この日の勤怠記録はありません。" />
       ) : (
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <dl className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-1.5 text-sm">
@@ -452,13 +468,80 @@ export function DailyReferenceView({
   )
 }
 
+/** Read-only month/week/day drill-down shared by approval and back-office reviews. */
+export function AttendanceMonthReferenceTabs({ userId, yearMonth }: { userId: string; yearMonth: string }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const dates = datesInMonth(yearMonth)
+  const dateRange = { min: dates[0], max: dates[dates.length - 1] }
+  const weekRange = {
+    min: formatDate(mondayOf(new Date(`${dates[0]}T00:00:00`))),
+    max: formatDate(mondayOf(new Date(`${dates[dates.length - 1]}T00:00:00`))),
+  }
+
+  function selectDate(date: string) {
+    setSelectedDate(date)
+    setViewMode('day')
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        {VIEW_MODES.map((mode) => (
+          <Button
+            key={mode.key}
+            type="button"
+            variant={viewMode === mode.key ? 'primary' : 'secondary'}
+            onClick={() => setViewMode(mode.key)}
+          >
+            {mode.label}
+          </Button>
+        ))}
+      </div>
+      {viewMode === 'month' && (
+        <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={selectDate} />
+      )}
+      {viewMode === 'week' && (
+        <WeeklyReferenceView userId={userId} initialWeekStart={weekRange.min} weekRange={weekRange} />
+      )}
+      {viewMode === 'day' && (
+        <DailyReferenceView
+          key={selectedDate ?? dates[0]}
+          userId={userId}
+          initialDate={selectedDate ?? dates[0]}
+          dateRange={dateRange}
+          onBack={() => setViewMode('month')}
+        />
+      )}
+    </div>
+  )
+}
+
 /**
  * 管理者が自分以外の社員の勤怠を月次・週次・日次で参照する画面(閲覧専用。編集は行わない)。
- * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。
+ * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。対象社員・
+ * 表示モードはURLに反映し、Browser Back・リロード・URL共有で状態を維持する
+ * (`ui-interaction-patterns` §2.10)。年月・週・日といった各ビュー内部のナビゲーションは
+ * `ui-interaction-patterns`の指示に沿い、既存のナビゲーション的な状態としてURL化しない。
  */
 export function AttendanceReferencePage() {
-  const [userId, setUserId] = useState<string | undefined>(undefined)
-  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get('user') ?? undefined
+  const viewModeParam = searchParams.get('view')
+  const viewMode: ViewMode = VIEW_MODES.some((mode) => mode.key === viewModeParam) ? (viewModeParam as ViewMode) : 'month'
+
+  const setUserId = (id: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (id) next.set('user', id)
+    else next.delete('user')
+    setSearchParams(next)
+  }
+
+  const setViewMode = (mode: ViewMode) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('view', mode)
+    setSearchParams(next)
+  }
 
   return (
     <div className="flex flex-col gap-6">

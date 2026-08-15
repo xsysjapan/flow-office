@@ -32,6 +32,10 @@ function nthOfMonthsAhead(monthsAhead: number, dayOfMonth: number, jitterDays = 
   const now = new Date()
   const jitter = Math.floor(Math.random() * (jitterDays * 2 + 1)) - jitterDays
   const date = new Date(now.getFullYear(), now.getMonth() + monthsAhead, dayOfMonth + jitter)
+  // 土日は所定休日バッジが実績(退勤済み等)より優先表示され(`AttendanceDayRow`)、
+  // 実績があってもテストの期待するステータステキストが表示されないため平日にずらす。
+  if (date.getDay() === 6) date.setDate(date.getDate() + 2)
+  else if (date.getDay() === 0) date.setDate(date.getDate() + 1)
   return date.toISOString().slice(0, 10)
 }
 

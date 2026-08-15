@@ -4,10 +4,44 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as usersApi from '../../api/users'
+import * as userManagementApi from '../../api/userManagement'
 import type { Paginated, User } from '../../api/types'
 import { UserListPage } from './UserListPage'
 
 function renderPage() {
+  vi.spyOn(userManagementApi, 'fetchManagedGroups').mockResolvedValue([
+    {
+      id: 'group-1',
+      group_type_id: 1,
+      name: '総務部',
+      code: 'GENERAL_AFFAIRS',
+      status: 'active',
+      parent_group_id: null,
+      memberships_count: 0,
+      type: { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+      features: [],
+      memberships: [],
+      role_assignments: [],
+    },
+    {
+      id: 'group-2',
+      group_type_id: 2,
+      name: '安全衛生委員会',
+      code: 'SAFETY_COMMITTEE',
+      status: 'active',
+      parent_group_id: null,
+      memberships_count: 0,
+      type: { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+      features: [],
+      memberships: [],
+      role_assignments: [],
+    },
+  ])
+  vi.spyOn(userManagementApi, 'fetchGroupTypes').mockResolvedValue([
+    { id: 1, code: 'ORGANIZATION', name: '組織', display_order: 0, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+    { id: 2, code: 'COMMITTEE', name: '委員会', display_order: 1, status: 'active', is_system: true, membership_limit_type: 'unlimited', max_memberships_per_user: null, primary_membership_required: false, max_primary_memberships: null },
+  ])
+
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
@@ -102,6 +136,6 @@ describe('UserListPage', () => {
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '山田')
     await screen.findByDisplayValue('山田')
 
-    await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenCalledWith('山田'))
+    await waitFor(() => expect(usersApi.fetchUsers).toHaveBeenCalledWith('山田', 20, {}, 1))
   })
 })

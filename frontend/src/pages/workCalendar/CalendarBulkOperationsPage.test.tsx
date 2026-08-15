@@ -149,6 +149,7 @@ describe('CalendarBulkOperationsPage', () => {
     renderPage([appliedOperation])
 
     await userEvent.click(await screen.findByRole('button', { name: '取消す' }))
+    await userEvent.click(await screen.findByRole('button', { name: '取り消す' }))
 
     await waitFor(() => expect(calendarBulkOperationsApi.revertCalendarBulkOperation).toHaveBeenCalledWith('bulk-op-1'))
   })

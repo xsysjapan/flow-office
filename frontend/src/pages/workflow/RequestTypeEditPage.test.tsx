@@ -49,6 +49,13 @@ describe('RequestTypeEditPage', () => {
     expect(screen.getByLabelText('コード')).not.toBeDisabled()
   })
 
+  it('shows a back link to the request type list', async () => {
+    renderPage('/admin/request-types/new')
+
+    const backLink = await screen.findByRole('link', { name: '← 申請種別一覧へ戻る' })
+    expect(backLink).toHaveAttribute('href', '/admin/request-types')
+  })
+
   it('prefills the form and disables the code field in edit mode', async () => {
     renderPage('/admin/request-types/1')
 

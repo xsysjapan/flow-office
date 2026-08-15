@@ -5,6 +5,7 @@ namespace Tests\Feature\Attendance;
 use App\Models\AttendanceDay;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -74,6 +75,7 @@ class PrescribedHolidayWorkTest extends TestCase
         $calculation = $response->json('calculation');
 
         $this->assertSame(420, $calculation['work_minutes']);
+        $this->assertSame(0, $calculation['prescribed_work_minutes']);
         $this->assertSame(420, $calculation['prescribed_holiday_work_minutes']);
         $this->assertSame(0, $calculation['statutory_within_overtime_minutes']);
         $this->assertSame(0, $calculation['statutory_excess_overtime_minutes']);
@@ -184,6 +186,7 @@ class PrescribedHolidayWorkTest extends TestCase
         ])->assertCreated();
 
         $calculation = $response->json('calculation');
+        $this->assertSame(0, $calculation['prescribed_work_minutes']);
         $this->assertSame(420, $calculation['legal_holiday_work_minutes']);
         $this->assertSame(0, $calculation['prescribed_holiday_work_minutes']);
 
@@ -222,5 +225,86 @@ class PrescribedHolidayWorkTest extends TestCase
         $this->assertSame(60, $calculation['late_night_prescribed_holiday_work_minutes']);
         // 所定休日の深夜労働はlate_night_work_minutesには計上しない(二重計上防止)。
         $this->assertSame(0, $calculation['late_night_work_minutes']);
+    }
+
+    public function test_edit_uses_published_company_calendar_prescribed_holiday_without_employee_entry(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-08-11';
+        $calendar = CompanyCalendar::query()->create(['name' => 'Head office', 'week_starts_on' => 1]);
+        $year = $calendar->years()->create([
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published',
+        ]);
+        $year->days()->create([
+            'date' => $dateString, 'day_type' => 'company_holiday', 'is_working_day' => false,
+            'is_legal_holiday' => false, 'is_company_holiday' => true, 'schedule_state' => 'OFF',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'company-calendar-prescribed', 'name' => 'Standard', 'work_time_system' => 'fixed',
+            'legal_holiday_rule' => 'weekly', 'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400, 'default_start_time' => '09:00',
+            'default_end_time' => '18:00', 'default_break_minutes' => 60,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id, 'work_date' => $dateString, 'reason' => 'Create day',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T17:00:00+09:00",
+            'breaks' => [['start' => "{$dateString}T12:00:00+09:00", 'end' => "{$dateString}T13:00:00+09:00"]],
+            'reason' => 'Edit prescribed holiday work',
+        ])->assertOk();
+
+        $response->assertJsonPath('calculation.work_minutes', 420);
+        $response->assertJsonPath('calculation.prescribed_work_minutes', 0);
+        $response->assertJsonPath('calculation.prescribed_holiday_work_minutes', 420);
+        $response->assertJsonPath('calculation.legal_holiday_work_minutes', 0);
+        $this->assertSame('prescribed_holiday', AttendanceDay::query()->findOrFail($dayId)->day_classification);
+        $this->assertDatabaseMissing('employee_calendar_entries', [
+            'user_id' => $employee->id, 'work_date' => $dateString,
+        ]);
+    }
+
+    public function test_edit_uses_published_company_calendar_legal_holiday_with_priority_without_employee_entry(): void
+    {
+        $employee = User::factory()->create();
+        $dateString = '2026-08-09';
+        $calendar = CompanyCalendar::query()->create(['name' => 'Head office', 'week_starts_on' => 1]);
+        $year = $calendar->years()->create([
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published',
+        ]);
+        $year->days()->create([
+            'date' => $dateString, 'day_type' => 'legal_holiday', 'is_working_day' => false,
+            'is_legal_holiday' => true, 'is_company_holiday' => true, 'schedule_state' => 'OFF',
+        ]);
+        $workStyle = WorkStyle::query()->create([
+            'code' => 'company-calendar-legal', 'name' => 'Standard', 'work_time_system' => 'fixed',
+            'legal_holiday_rule' => 'weekly', 'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400, 'default_start_time' => '09:00',
+            'default_end_time' => '18:00', 'default_break_minutes' => 60,
+            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+        SystemSetting::current()->update(['default_work_style_id' => $workStyle->id]);
+
+        $dayId = $this->actingAs($employee)->postJson('/api/attendance/days', [
+            'user_id' => $employee->id, 'work_date' => $dateString, 'reason' => 'Create day',
+        ])->assertCreated()->json('id');
+
+        $response = $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T17:00:00+09:00",
+            'breaks' => [['start' => "{$dateString}T12:00:00+09:00", 'end' => "{$dateString}T13:00:00+09:00"]],
+            'reason' => 'Edit legal holiday work',
+        ])->assertOk();
+
+        $response->assertJsonPath('calculation.work_minutes', 420);
+        $response->assertJsonPath('calculation.prescribed_work_minutes', 0);
+        $response->assertJsonPath('calculation.legal_holiday_work_minutes', 420);
+        $response->assertJsonPath('calculation.prescribed_holiday_work_minutes', 0);
+        $this->assertSame('legal_holiday', AttendanceDay::query()->findOrFail($dayId)->day_classification);
     }
 }

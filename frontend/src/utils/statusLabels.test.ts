@@ -4,6 +4,7 @@ import {
   attendanceDayDisplayLabel,
   attendanceDayStatusLabel,
   attendanceMonthStatusLabel,
+  attendanceRowDisplayLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
   workflowRequestStatusLabel,
@@ -50,6 +51,38 @@ describe('statusLabels', () => {
       label: '勤務中',
       tone: 'info',
     })
+  })
+
+  it('shows the schedule holiday badge when there is no actual attendance record yet (attendanceRowDisplayLabel)', () => {
+    expect(
+      attendanceRowDisplayLabel(undefined, { is_legal_holiday: true, is_company_holiday: false, is_working_day: false }),
+    ).toEqual({ label: '法定休日', tone: 'danger' })
+    expect(
+      attendanceRowDisplayLabel(
+        { status: 'not_started', work_type: null, actual_start_at: null, actual_end_at: null },
+        { is_legal_holiday: false, is_company_holiday: true, is_working_day: false },
+      ),
+    ).toEqual({ label: '所定休日', tone: 'warning' })
+  })
+
+  it('prefers the actual attendance record over a scheduled holiday once the employee has worked (attendanceRowDisplayLabel)', () => {
+    // 休日出勤で実績があるのに、休日バッジに隠れて「退勤済み」等が見えなくなっていた不具合の回帰確認。
+    expect(
+      attendanceRowDisplayLabel(
+        { status: 'clocked_out', work_type: null, actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: '2026-08-15T18:00:00+09:00' },
+        { is_legal_holiday: true, is_company_holiday: false, is_working_day: false },
+      ),
+    ).toEqual({ label: '退勤済み', tone: 'success' })
+    expect(
+      attendanceRowDisplayLabel(
+        { status: 'working', work_type: null, actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: null },
+        { is_legal_holiday: false, is_company_holiday: true, is_working_day: false },
+      ),
+    ).toEqual({ label: '勤務中', tone: 'info' })
+  })
+
+  it('falls back to 未入力 when there is neither a schedule holiday nor an attendance record (attendanceRowDisplayLabel)', () => {
+    expect(attendanceRowDisplayLabel(undefined, undefined)).toEqual({ label: '未入力', tone: 'neutral' })
   })
 
   it('shows a leave-specific label instead of the clocked_out override (attendanceDayDisplayLabel)', () => {

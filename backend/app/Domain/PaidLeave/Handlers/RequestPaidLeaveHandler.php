@@ -46,13 +46,8 @@ class RequestPaidLeaveHandler implements CommandHandler
     {
         assert($command instanceof RequestPaidLeave);
 
-        $calendarEntry = EmployeeCalendarEntry::query()
-            ->with('workStyle')
-            ->where('user_id', $command->userId)
-            ->whereDate('work_date', $command->targetDate)
-            ->first();
-
         $targetDate = Carbon::parse($command->targetDate);
+        $calendarEntry = $this->scheduledWorkingDayResolver->resolveSchedule($command->userId, $targetDate);
         $workStyle = $calendarEntry?->workStyle;
 
         if ($calendarEntry !== null) {

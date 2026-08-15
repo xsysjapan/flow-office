@@ -13,9 +13,10 @@ export function fetchUsers(
   query?: string,
   perPage?: number,
   filters: UserFilters = {},
+  page?: number,
 ): Promise<Paginated<User>> {
   return apiFetch("/users", {
-    query: { q: query, per_page: perPage, ...filters },
+    query: { q: query, per_page: perPage, page, ...filters },
   });
 }
 

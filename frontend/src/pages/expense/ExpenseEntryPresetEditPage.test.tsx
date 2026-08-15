@@ -80,7 +80,7 @@ describe('ExpenseEntryPresetEditPage', () => {
     renderPage('/expenses/presets/new')
 
     expect(await screen.findByLabelText('名称')).toHaveValue('')
-    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '作成する' })).toBeDisabled()
   })
 
   it('prefills the form in edit mode, including the per-category assist fields', async () => {
@@ -123,7 +123,7 @@ describe('ExpenseEntryPresetEditPage', () => {
     await userEvent.type(screen.getByLabelText('1番目の明細の到着地の初期値'), 'A社')
     await userEvent.type(screen.getByLabelText('1番目の明細の金額の初期値'), '400')
 
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(createPreset).toHaveBeenCalledWith(
@@ -159,7 +159,7 @@ describe('ExpenseEntryPresetEditPage', () => {
     await userEvent.type(screen.getByLabelText('1番目の明細の宿泊先名の初期値'), 'ホテルABC')
     await userEvent.type(screen.getByLabelText('1番目の明細の内容の初期値'), '素泊まり')
 
-    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await userEvent.click(screen.getByRole('button', { name: '作成する' }))
 
     await waitFor(() =>
       expect(createPreset).toHaveBeenCalledWith(
