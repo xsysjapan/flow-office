@@ -55,15 +55,24 @@ async function ensureAccessScenarioGroup(page: Page): Promise<string> {
     return existing.id;
   }
 
-  await apiFetch(page, "/admin/user-management/group-types", {
-    method: "POST",
-    body: {
-      code: groupTypeCode,
-      name: groupTypeName,
-      membership_limit_type: "unlimited",
-      primary_membership_required: false,
-    },
-  });
+  // groupが存在しない場合でも、group_type自体は前回の実行(このtestの途中で失敗した
+  // 場合等)で既に作成済みのことがあるため、コード重複エラーを避けて既存があれば
+  // 再利用する。
+  const existingTypes = await apiFetch<Array<{ id: number; code: string }>>(
+    page,
+    "/admin/user-management/group-types",
+  );
+  if (!existingTypes.some((type) => type.code === groupTypeCode)) {
+    await apiFetch(page, "/admin/user-management/group-types", {
+      method: "POST",
+      body: {
+        code: groupTypeCode,
+        name: groupTypeName,
+        membership_limit_type: "unlimited",
+        primary_membership_required: false,
+      },
+    });
+  }
   const types = await apiFetch<Array<{ id: number; code: string }>>(
     page,
     "/admin/user-management/group-types",

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
-import { pickDate, pickTime } from "./support/ui";
+import { findTextAcrossPages, pickDate, pickTime } from "./support/ui";
 
 /**
  * docs/testing/scenario-tests.md シナリオ12(会社カレンダーのライフサイクル)。
@@ -113,7 +113,9 @@ test("会社カレンダー作成〜デフォルト設定〜祝日設定〜公�
   await pickTime(page, "標準終了時刻", "18:00");
   await page.getByLabel("カレンダー").selectOption({ label: calendarName });
   await page.getByRole("button", { name: "登録する" }).click();
-  await expect(page.getByText(workStyleCode)).toBeVisible();
+  // 開発DBには過去のE2E実行で作成済みの勤務形態が蓄積し、新規作成した項目が
+  // 1ページ目に収まらないことがあるため、ページ送りしながら探す。
+  await findTextAcrossPages(page, workStyleCode);
 
   // --- UC-C013: 会社カレンダー基準の一括操作(calendar_apply)をプレビュー→確定適用 ---
   await page.goto("/admin/calendar-bulk-operations");

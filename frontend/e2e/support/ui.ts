@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { formatDate, mondayOf } from "../../src/utils/weekDates";
 
 /**
@@ -102,4 +102,20 @@ export async function goToAttendanceWeekContaining(
 ): Promise<void> {
   const targetMonday = mondayOf(new Date(`${targetDateStr}T00:00:00`));
   await page.goto(`/attendance/week?start=${formatDate(targetMonday)}`);
+}
+
+/**
+ * クライアント側ページング(例: WorkStylesPage)の一覧で、目的のテキストが現在ページに
+ * 無い場合に「次のページ」を辿って探す。E2Eシナリオを繰り返し実行する開発DBでは、
+ * 過去の実行で作成済みのE2Eテスト用データが蓄積し、新規作成した項目が1ページ目に
+ * 収まらないことがあるため。
+ */
+export async function findTextAcrossPages(page: Page, text: string, maxPages = 20): Promise<void> {
+  for (let i = 0; i < maxPages; i++) {
+    if (await page.getByText(text).isVisible().catch(() => false)) return
+    const nextButton = page.getByRole("button", { name: "次のページ" })
+    if (!(await nextButton.isEnabled().catch(() => false))) break
+    await nextButton.click()
+  }
+  await expect(page.getByText(text)).toBeVisible()
 }
