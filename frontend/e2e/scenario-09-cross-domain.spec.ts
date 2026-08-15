@@ -322,38 +322,43 @@ test('§5-17: 締め済み月次勤怠をバックオフィス詳細から引き
   const applicantContext = await browser.newContext()
   const approverContext = await browser.newContext()
   const adminContext = await browser.newContext()
+  const hrStaffContext = await browser.newContext()
   const applicantPage = await applicantContext.newPage()
   const approverPage = await approverContext.newPage()
   const adminPage = await adminContext.newPage()
+  const hrStaffPage = await hrStaffContext.newPage()
 
   await loginAs(applicantPage, SCENARIO_USERS.punchEmployee)
   await loginAs(approverPage, SCENARIO_USERS.approver)
   await loginAs(adminPage, SCENARIO_USERS.admin)
+  await loginAs(hrStaffPage, SCENARIO_USERS.hrStaff)
 
   const { yearMonth } = await submitApproveAndCloseCurrentMonth(applicantPage, approverPage, adminPage)
   expect(await fetchMonthStatus(applicantPage, yearMonth)).toBe('closed')
 
-  // 締め済みの月次勤怠タスクを開いても、締め前と同じ月次サマリー・日別内訳を
-  // 引き続き参照できる。バックオフィス業務の状態変更を先に判断してから、下段で
-  // 不可逆な月次締め処理を確認する画面順になっていることも合わせて確認する。
+  // 月次勤怠確認タスクの担当部署は人事部(CreateBackOfficeTaskFromAttendanceMonthApprovalHandler
+  // のASSIGNED_DEPARTMENT)のため、/backoffice-tasksの閲覧はadminPageではなく人事担当者で行う
+  // (admin@example.comはSYSTEM_ADMINISTRATORSグループのみに属し、BACKOFFICE_USERSグループの
+  // backoffice.tasks featureを持たないため、adminPageで開くとAppLayoutに/accountへ
+  // リダイレクトされてしまう)。
   const attendanceTaskTitle = `月次勤怠確認: ${SCENARIO_USERS.punchEmployee} (${yearMonth})`
-  await adminPage.goto('/backoffice-tasks')
+  await hrStaffPage.goto('/backoffice-tasks')
   // 開発DBには他シナリオ実行分のバックオフィスタスクが蓄積しており、デフォルト一覧の
   // 1ページ目に収まらないことがあるため、タイトルで検索して絞り込む。
-  await adminPage.getByLabel('タスクを検索').fill(attendanceTaskTitle)
-  await adminPage.getByRole('button', { name: '検索' }).click()
-  const attendanceTaskRow = adminPage.getByRole('row', { name: attendanceTaskTitle })
+  await hrStaffPage.getByLabel('タスクを検索').fill(attendanceTaskTitle)
+  await hrStaffPage.getByRole('button', { name: '検索' }).click()
+  const attendanceTaskRow = hrStaffPage.getByRole('row', { name: attendanceTaskTitle })
   await expect(attendanceTaskRow).toBeVisible()
   await attendanceTaskRow.getByRole('link', { name: attendanceTaskTitle }).click()
 
   await expect(
-    adminPage.getByText('締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。'),
+    hrStaffPage.getByText('締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。'),
   ).toBeVisible()
-  await expect(adminPage.getByText('日別の内訳')).toBeVisible()
-  await expect(adminPage.getByText(yearMonth, { exact: true })).toBeVisible()
+  await expect(hrStaffPage.getByText('日別の内訳')).toBeVisible()
+  await expect(hrStaffPage.getByText(yearMonth, { exact: true })).toBeVisible()
 
-  const statusHeadingBox = await adminPage.getByRole('heading', { name: '状態を変更する' }).boundingBox()
-  const closeHeadingBox = await adminPage.getByRole('heading', { name: '月次勤怠の締め処理' }).boundingBox()
+  const statusHeadingBox = await hrStaffPage.getByRole('heading', { name: '状態を変更する' }).boundingBox()
+  const closeHeadingBox = await hrStaffPage.getByRole('heading', { name: '月次勤怠の締め処理' }).boundingBox()
   expect(statusHeadingBox).not.toBeNull()
   expect(closeHeadingBox).not.toBeNull()
   expect(statusHeadingBox!.y).toBeLessThan(closeHeadingBox!.y)
