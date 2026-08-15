@@ -282,7 +282,7 @@ export async function generateShiftAssignments(
   page: Page,
   input: { userId: string; workStyleId: string; from: string; to: string },
 ): Promise<void> {
-  await apiFetch(page, '/employee-shift-assignments/generate', {
+  await apiFetch(page, '/employee-calendar-entries/generate', {
     method: 'POST',
     body: { user_id: input.userId, work_style_id: input.workStyleId, from: input.from, to: input.to },
   })
@@ -366,7 +366,7 @@ export async function editEmployeeShiftAssignment(
   assignmentId: string,
   input: { plannedStartAt?: string; plannedEndAt?: string; plannedBreakMinutes: number; reason: string },
 ): Promise<void> {
-  await apiFetch(page, `/employee-shift-assignments/${assignmentId}`, {
+  await apiFetch(page, `/employee-calendar-entries/${assignmentId}`, {
     method: 'PUT',
     body: {
       planned_start_at: input.plannedStartAt,
@@ -382,11 +382,11 @@ export async function fetchShiftAssignment(
   userId: string,
   workDate: string,
 ): Promise<{ id: string } | undefined> {
-  const assignments = await apiFetch<Array<{ id: string; work_date: string }>>(
+  const response = await apiFetch<{ data: Array<{ id: string; work_date: string }> }>(
     page,
-    `/employee-shift-assignments?user_id=${userId}&from=${workDate}&to=${workDate}`,
+    `/employee-calendar-entries?user_id=${userId}&from=${workDate}&to=${workDate}`,
   )
-  return assignments[0]
+  return response.data[0]
 }
 
 /**
