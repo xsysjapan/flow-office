@@ -23,13 +23,13 @@ class WorkStyleResource extends JsonResource
             'prescribed_weekly_minutes' => $this->prescribed_weekly_minutes,
             'deemed_daily_minutes' => $this->deemed_daily_minutes,
             'variable_period_start_day' => $this->variable_period_start_day,
-            'default_start_time' => $this->default_start_time,
-            'default_end_time' => $this->default_end_time,
+            'default_start_time' => $this->formatTime($this->default_start_time),
+            'default_end_time' => $this->formatTime($this->default_end_time),
             'default_break_minutes' => $this->default_break_minutes,
             'rounding_unit_minutes' => $this->rounding_unit_minutes,
             'rounding_mode' => $this->rounding_mode,
-            'default_break_start_time' => $this->default_break_start_time,
-            'default_break_end_time' => $this->default_break_end_time,
+            'default_break_start_time' => $this->formatTime($this->default_break_start_time),
+            'default_break_end_time' => $this->formatTime($this->default_break_end_time),
             'auto_break_enabled' => $this->auto_break_enabled,
             'company_calendar_id' => $this->company_calendar_id,
             'is_shift_based' => $this->is_shift_based,
@@ -40,10 +40,10 @@ class WorkStyleResource extends JsonResource
             'max_consecutive_work_days' => $this->max_consecutive_work_days,
             'settlement_start_day' => $this->settlement_start_day,
             'core_time_enabled' => $this->core_time_enabled,
-            'core_time_start' => $this->core_time_start,
-            'core_time_end' => $this->core_time_end,
-            'flexible_time_start' => $this->flexible_time_start,
-            'flexible_time_end' => $this->flexible_time_end,
+            'core_time_start' => $this->formatTime($this->core_time_start),
+            'core_time_end' => $this->formatTime($this->core_time_end),
+            'flexible_time_start' => $this->formatTime($this->flexible_time_start),
+            'flexible_time_end' => $this->formatTime($this->flexible_time_end),
             // 指示書16.1節: 一覧画面の管理者向け集計列。WorkStyleController::indexでのみ
             // 設定される(WorkStyleUsageSummaryCalculator参照)。他の経路ではnull/空配列。
             'applied_employee_count' => $this->applied_employee_count,
@@ -51,5 +51,11 @@ class WorkStyleResource extends JsonResource
             'configuration_warnings' => $this->configuration_warnings ?? [],
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    /** MySQL TIME columns are returned as H:i:s, while the API accepts and exposes H:i. */
+    private function formatTime(?string $time): ?string
+    {
+        return $time === null ? null : substr($time, 0, 5);
     }
 }

@@ -56,6 +56,41 @@ class WorkStyleControllerTest extends TestCase
         $response->assertJsonPath('default_break_end_time', '13:00');
     }
 
+    public function test_work_style_time_fields_are_returned_without_seconds_for_editing(): void
+    {
+        $user = $this->makeAdmin();
+        WorkStyle::query()->create([
+            'code' => 'fixed-with-seconds',
+            'name' => 'Fixed with seconds',
+            'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+            'prescribed_daily_minutes' => 480,
+            'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '09:00:00',
+            'default_end_time' => '18:00:00',
+            'default_break_start_time' => '12:00:00',
+            'default_break_end_time' => '13:00:00',
+            'core_time_start' => '10:00:00',
+            'core_time_end' => '15:00:00',
+            'flexible_time_start' => '07:00:00',
+            'flexible_time_end' => '22:00:00',
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/work-styles');
+
+        $response->assertOk();
+        $response->assertJsonFragment([
+            'code' => 'fixed-with-seconds',
+            'default_start_time' => '09:00',
+            'default_end_time' => '18:00',
+            'default_break_start_time' => '12:00',
+            'default_break_end_time' => '13:00',
+            'core_time_start' => '10:00',
+            'core_time_end' => '15:00',
+            'flexible_time_start' => '07:00',
+            'flexible_time_end' => '22:00',
+        ]);
+    }
+
     public function test_an_invalid_rounding_unit_is_rejected(): void
     {
         $calendar = $this->makeCalendar();
