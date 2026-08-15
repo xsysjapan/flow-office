@@ -182,6 +182,52 @@ export function attendanceDayDisplayLabel(day: {
   return attendanceDayStatusLabel(day.status)
 }
 
+interface ScheduleHolidayInfo {
+  is_legal_holiday?: boolean
+  is_company_holiday?: boolean
+  is_working_day?: boolean
+}
+
+/** 勤務予定(schedule)から、その日が休日として計画されているかどうかのバッジを返す。
+ *  休日でなければnull。 */
+export function attendanceScheduleHolidayLabel(schedule: ScheduleHolidayInfo | null | undefined): StatusMeta | null {
+  if (!schedule) return null
+  if (schedule.is_legal_holiday) return { label: '法定休日', tone: 'danger' }
+  if (schedule.is_company_holiday || schedule.is_working_day === false) return { label: '所定休日', tone: 'warning' }
+  return null
+}
+
+interface AttendanceDayRecordInfo {
+  status: AttendanceDayStatus
+  work_type: string | null | undefined
+  actual_start_at?: string | null
+  actual_end_at?: string | null
+}
+
+function hasActualAttendanceRecord(day: AttendanceDayRecordInfo | null | undefined): boolean {
+  if (!day) return false
+  return day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at)
+}
+
+/**
+ * 週次・月次・日次の各画面で共通の、勤怠日1行分の表示ラベル。休日出勤等で実績(day)が
+ * 既にある場合は、その実績の状態(退勤済み等)を優先する。休日出勤という区分そのものは
+ * 別途day_classification/公休名の表示で示すため、ここでは「勤務予定が休日だから」という
+ * 理由だけで実績の状態バッジを隠さない。実績がまだ無い日は、勤務予定(schedule)が休日かどうか
+ * を先に見せる(その日の予定が分かるようにする)。
+ */
+export function attendanceRowDisplayLabel(
+  day: AttendanceDayRecordInfo | null | undefined,
+  schedule?: ScheduleHolidayInfo | null,
+): StatusMeta {
+  if (!hasActualAttendanceRecord(day)) {
+    const holidayMeta = attendanceScheduleHolidayLabel(schedule)
+    if (holidayMeta) return holidayMeta
+  }
+  if (day) return attendanceDayDisplayLabel(day)
+  return { label: '未入力', tone: 'neutral' }
+}
+
 export function backOfficeTaskStatusLabel(status: BackOfficeTaskStatus): StatusMeta {
   return backOfficeTaskStatusMeta[status]
 }

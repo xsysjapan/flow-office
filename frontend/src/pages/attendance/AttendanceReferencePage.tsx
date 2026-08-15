@@ -18,8 +18,8 @@ import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
 import {
-  attendanceDayDisplayLabel,
   attendanceMonthStatusLabel,
+  attendanceRowDisplayLabel,
   legalHolidayWarningLabel,
   punchStatusLabel,
   punchTypeLabel,
@@ -54,14 +54,7 @@ function ReadOnlyDayRow({
   schedule?: EmployeeShiftAssignment
   onSelect?: (date: string) => void
 }) {
-  const holidayMeta = schedule?.is_legal_holiday
-    ? { label: '法定休日', tone: 'danger' as const }
-    : schedule?.is_company_holiday || schedule?.is_working_day === false
-      ? { label: '所定休日', tone: 'warning' as const }
-      : null
-  const { label, tone } = holidayMeta ?? (day
-    ? attendanceDayDisplayLabel(day)
-    : { label: '未入力', tone: 'neutral' as const })
+  const { label, tone } = attendanceRowDisplayLabel(day, schedule)
   const warnings = dayWarnings(date, day, formatDate(new Date()))
 
   const content = (
@@ -348,11 +341,7 @@ export function DailyReferenceView({
   const { data: scheduleDays } = useShiftAssignments(userId, monday, addDays(monday, 6))
   const day = data?.find((d) => d.work_date === date)
   const schedule = scheduleDays?.find((entry) => entry.work_date === date)
-  const statusMeta = schedule?.is_legal_holiday
-    ? { label: '法定休日', tone: 'danger' as const }
-    : schedule?.is_company_holiday || schedule?.is_working_day === false
-      ? { label: '所定休日', tone: 'warning' as const }
-      : day ? attendanceDayDisplayLabel(day) : null
+  const statusMeta = day || schedule ? attendanceRowDisplayLabel(day, schedule) : null
 
   return (
     <>

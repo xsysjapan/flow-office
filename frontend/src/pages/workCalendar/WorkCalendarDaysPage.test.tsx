@@ -146,6 +146,44 @@ describe('WorkCalendarDaysPage', () => {
     })
   })
 
+  it('warns before leaving the tab once a day is edited, and stops warning after saving', async () => {
+    const days = buildAprilDays()
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(days)
+    vi.spyOn(workCalendarsApi, 'putWorkCalendarDays').mockResolvedValue([])
+
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('30日')
+
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+      window.dispatchEvent(event)
+      return event
+    }
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+
+    await user.click(await screen.findByRole('button', { name: '2026-04-05 勤務日' }))
+    await user.selectOptions(screen.getByLabelText('2026-04-05の勤務区分'), 'company_holiday')
+    await user.keyboard('{Escape}')
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true)
+
+    // 保存後、一覧の再取得(invalidateQueries)で反映される値をここで差し替える。
+    const editedDays = days.map((d) =>
+      d.date === '2026-04-05'
+        ? { ...d, day_type: 'company_holiday' as const, is_working_day: false, is_company_holiday: true, schedule_state: 'OFF' as const }
+        : d,
+    )
+    vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(editedDays)
+    await user.click(screen.getByRole('button', { name: '保存する' }))
+    await waitFor(() => expect(workCalendarsApi.putWorkCalendarDays).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByRole('button', { name: '2026-04-05 所定休日' })).toBeInTheDocument())
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+  })
+
   it('shows the classification read-only and hints at the lock when the calendar disallows daily override', async () => {
     const lockedCalendar: WorkCalendar = { ...calendar, allow_daily_holiday_override: false }
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([lockedCalendar])

@@ -2,7 +2,7 @@ import { ChevronRight, MoreVertical } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
-import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
+import { attendanceRowDisplayLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
 import { Button } from '../Button/Button'
 import type { ApprovedLeaveTarget } from '../CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
@@ -49,14 +49,7 @@ export function AttendanceDayRow({
   approvedCompensatoryLeaveRequestId,
   onRequestCancelApprovedLeave,
 }: AttendanceDayRowProps) {
-  const holidayMeta = schedule?.is_legal_holiday
-    ? { label: '法定休日', tone: 'danger' as const }
-    : schedule?.is_company_holiday || schedule?.is_working_day === false
-      ? { label: '所定休日', tone: 'warning' as const }
-      : null
-  const { label, tone } = holidayMeta ?? (day
-    ? attendanceDayDisplayLabel(day)
-    : { label: '未入力', tone: 'neutral' as const })
+  const { label, tone } = attendanceRowDisplayLabel(day, schedule)
   const hasApprovedLeaveToCancel =
     !!approvedPaidLeaveRequestId || !!approvedSpecialLeaveRequestId || !!approvedCompensatoryLeaveRequestId
 

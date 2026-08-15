@@ -16,6 +16,7 @@ import type {
   WorkCalendarDay,
   WorkCalendarYearStatus,
 } from '../../api/types'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import { cn } from '../../lib/utils'
 import { addDays, addMonths, datesInMonth } from '../../utils/weekDates'
 import {
@@ -330,6 +331,11 @@ export function WorkCalendarDaysPage() {
     setDaysMap(map)
     setLoadedForYearId(resolvedYearId || null)
   }, [daysQuery.data, resolvedYearId, loadedForYearId])
+
+  const isDirty = Boolean(
+    daysQuery.data?.some((day) => JSON.stringify(daysMap.get(day.date)) !== JSON.stringify(toDayState(day))),
+  )
+  useUnsavedChangesGuard(isDirty)
 
   const dates = useMemo(() => (year ? allDatesInRange(year.starts_on, year.ends_on) : []), [year])
   const months = useMemo(() => (year ? monthsInRange(year.starts_on, year.ends_on) : []), [year])
