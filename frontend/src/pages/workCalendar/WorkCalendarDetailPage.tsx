@@ -35,6 +35,7 @@ import {
   useWorkCalendarYears,
   useWorkCalendars,
 } from '../../hooks/useWorkCalendars'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 
 const SYNC_STATUS_LABEL: Record<string, string> = {
   pending: '未同期',
@@ -168,6 +169,17 @@ export function WorkCalendarDetailPage() {
     setWeekdayPattern(calendar.weekday_holiday_pattern)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.id])
+
+  const isSettingsDirty = Boolean(
+    calendar &&
+      (name !== calendar.name ||
+        weekStartsOn !== String(calendar.week_starts_on) ||
+        fiscalYearStartMonth !== String(calendar.fiscal_year_start_month) ||
+        fiscalYearStartDay !== String(calendar.fiscal_year_start_day) ||
+        allowDailyHolidayOverride !== calendar.allow_daily_holiday_override ||
+        JSON.stringify(weekdayPattern) !== JSON.stringify(calendar.weekday_holiday_pattern)),
+  )
+  useUnsavedChangesGuard(isSettingsDirty)
 
   const [selectedSourceId, setSelectedSourceId] = useState<string>(NONE_OPTION_VALUE)
 

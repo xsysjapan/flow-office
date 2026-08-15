@@ -136,6 +136,40 @@ describe('WorkCalendarDetailPage', () => {
     )
   })
 
+  it('warns before leaving the tab once the fiscal year settings are edited, and stops warning after saving', async () => {
+    vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])
+    vi.spyOn(workCalendarsApi, 'updateWorkCalendar').mockResolvedValue({
+      ...calendar,
+      fiscal_year_start_month: 1,
+    })
+
+    renderPage()
+
+    await screen.findByLabelText('カレンダー名')
+
+    const dispatchBeforeUnload = () => {
+      const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+      window.dispatchEvent(event)
+      return event
+    }
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+
+    await userEvent.clear(screen.getByLabelText('年度開始月'))
+    await userEvent.type(screen.getByLabelText('年度開始月'), '1')
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(true)
+
+    // 保存後、一覧の再取得(invalidateQueries)で反映される値をここで差し替える。
+    vi.spyOn(workCalendarsApi, 'fetchWorkCalendars').mockResolvedValue([{ ...calendar, fiscal_year_start_month: 1 }])
+    await userEvent.click(screen.getByRole('button', { name: '保存する' }))
+    await waitFor(() => expect(workCalendarsApi.updateWorkCalendar).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByLabelText('年度開始月')).toHaveValue(1))
+
+    expect(dispatchBeforeUnload().defaultPrevented).toBe(false)
+  })
+
   it('sends the full weekday pattern once the disclosure is opened and edited', async () => {
     vi.spyOn(holidayCalendarSourcesApi, 'fetchHolidayCalendarSources').mockResolvedValue([])
     vi.spyOn(workCalendarsApi, 'fetchWorkCalendarYears').mockResolvedValue([])

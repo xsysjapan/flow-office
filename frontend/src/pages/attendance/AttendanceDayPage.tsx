@@ -56,6 +56,7 @@ import {
   useMyCompensatoryLeaveRequests,
 } from '../../hooks/useCompensatoryLeave'
 import { useEditableRows } from '../../hooks/useEditableRows'
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard'
 import {
   useAdjustAttendanceDailyCalculation,
   useAttendanceDayDefaults,
@@ -120,25 +121,6 @@ function MonthLockedNotice() {
       月次勤怠が提出済みのため、この日は編集できません。修正が必要な場合は修正申請を利用してください。
     </p>
   )
-}
-
-/**
- * 編集中に変更が失われるおそれがある間、タブを閉じる・リロードする操作に対してブラウザ標準の
- * 確認を出す(`ui-interaction-patterns` §2.9)。react-router-domはBrowserRouter(データ
- * ルーターではない)構成のため`useBlocker`が使えず、アプリ内Link遷移(前日・翌日・週次等)を
- * 個別にブロックする仕組みは今回のスコープでは追加しない(大掛かりなルーティング変更が
- * 必要になるため見送り。完了報告に記載)。
- */
-function useUnsavedChangesGuard(active: boolean) {
-  useEffect(() => {
-    if (!active) return
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [active])
 }
 
 function weekdayLabel(date: string): string {
