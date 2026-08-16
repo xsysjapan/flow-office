@@ -12,6 +12,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
 import { useWeek } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
+import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { addDays, formatDate, mondayOf, weekDates } from '../../utils/weekDates'
@@ -37,6 +38,10 @@ export function WeekAttendancePage() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useWeek(weekStart)
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes(
+    user?.effective_features === undefined || user.effective_features.includes('paid_leave.requests'),
+  )
+  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
 
   const today = formatDate(new Date())
   const currentWeekStart = formatDate(mondayOf(new Date()))
@@ -122,9 +127,11 @@ export function WeekAttendancePage() {
                     <Button asChild variant="secondary" size="sm">
                       <Link to={`/paid-leave?dates=${datesQuery}`}>有給休暇を申請する</Link>
                     </Button>
-                    <Button asChild variant="secondary" size="sm">
-                      <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
-                    </Button>
+                    {hasSpecialLeaveTypes && (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
+                      </Button>
+                    )}
                     <Button asChild variant="secondary" size="sm">
                       <Link to={`/compensatory-leave?dates=${datesQuery}`}>代休を申請する</Link>
                     </Button>
@@ -134,9 +141,11 @@ export function WeekAttendancePage() {
                     <Button variant="secondary" size="sm" disabled>
                       有給休暇を申請する
                     </Button>
-                    <Button variant="secondary" size="sm" disabled>
-                      特別休暇を申請する
-                    </Button>
+                    {hasSpecialLeaveTypes && (
+                      <Button variant="secondary" size="sm" disabled>
+                        特別休暇を申請する
+                      </Button>
+                    )}
                     <Button variant="secondary" size="sm" disabled>
                       代休を申請する
                     </Button>

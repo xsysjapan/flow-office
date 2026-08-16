@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
+import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
@@ -155,11 +156,16 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
  * `?dates=`にカンマ区切りで渡し、各申請画面側でプレフィルする)。
  */
 export function AttendanceMonthDetailPage() {
+  const { user } = useAuth()
   const { yearMonth } = useParams<{ yearMonth: string }>()
   const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
+  const { data: specialLeaveTypes } = useSpecialLeaveTypes(
+    user?.effective_features === undefined || user.effective_features.includes('paid_leave.requests'),
+  )
+  const hasSpecialLeaveTypes = (specialLeaveTypes ?? []).some((type) => type.is_active)
 
   if (!yearMonth) return null
 
@@ -258,9 +264,11 @@ export function AttendanceMonthDetailPage() {
                     <Button asChild variant="secondary" size="sm">
                       <Link to={`/paid-leave?dates=${datesQuery}`}>有給休暇を申請する</Link>
                     </Button>
-                    <Button asChild variant="secondary" size="sm">
-                      <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
-                    </Button>
+                    {hasSpecialLeaveTypes && (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
+                      </Button>
+                    )}
                     <Button asChild variant="secondary" size="sm">
                       <Link to={`/compensatory-leave?dates=${datesQuery}`}>代休を申請する</Link>
                     </Button>
@@ -270,9 +278,11 @@ export function AttendanceMonthDetailPage() {
                     <Button variant="secondary" size="sm" disabled>
                       有給休暇を申請する
                     </Button>
-                    <Button variant="secondary" size="sm" disabled>
-                      特別休暇を申請する
-                    </Button>
+                    {hasSpecialLeaveTypes && (
+                      <Button variant="secondary" size="sm" disabled>
+                        特別休暇を申請する
+                      </Button>
+                    )}
                     <Button variant="secondary" size="sm" disabled>
                       代休を申請する
                     </Button>
