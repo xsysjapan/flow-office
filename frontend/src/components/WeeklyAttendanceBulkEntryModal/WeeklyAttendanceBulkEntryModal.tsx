@@ -7,7 +7,6 @@ import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { FormField } from '../FormField/FormField'
 import {
-  buildWeeklyPatternFromSimpleState,
   defaultSimplePatternState,
   expandSimplePatternToWeekdayRows,
   SimplePatternFields,
