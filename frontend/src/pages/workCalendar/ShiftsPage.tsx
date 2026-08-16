@@ -642,7 +642,7 @@ function ShiftPatternFormCard() {
   }
 
   return (
-    <Card title="シフトパターン(UC-C004)">
+    <Card title="シフトパターン">
       {error && <ErrorMessage error={error} fallback="シフトパターンの取得に失敗しました。" />}
       {createShiftPattern.error && <ErrorMessage error={createShiftPattern.error} />}
 
@@ -777,7 +777,7 @@ function RotationPatternFormCard() {
   const canCreate = workStyleId !== '' && name !== '' && items.length > 0 && items.every((item) => item !== '')
 
   return (
-    <Card title="ローテーションパターン(指示書8.4節)">
+    <Card title="ローテーションパターン">
       {createRotationPattern.error && <ErrorMessage error={createRotationPattern.error} />}
 
       {(rotationPatterns ?? []).length === 0 ? (
@@ -921,7 +921,7 @@ function RotationAssignmentCard() {
   }
 
   return (
-    <Card title="ローテーションの割当・生成(指示書8.5節〜8.8節)">
+    <Card title="ローテーションの割当・生成">
       {assignRotation.error && <ErrorMessage error={assignRotation.error} />}
       {previewRotation.error && <ErrorMessage error={previewRotation.error} />}
       {generateShifts.error && <ErrorMessage error={generateShifts.error} />}
@@ -1096,7 +1096,7 @@ function ShiftScheduleBoardCard() {
   }
 
   return (
-    <Card title="3交代制シフト表(UC-C004)">
+    <Card title="3交代制シフト表">
       {assignPattern.error && <ErrorMessage error={assignPattern.error} />}
 
       <h3 className="mb-3 text-sm font-semibold text-foreground">日別にシフトパターンを割り当てる</h3>

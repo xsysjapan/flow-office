@@ -162,6 +162,7 @@ export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()
   const queryClient = useQueryClient()
   const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
+  const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
   const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
   const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
@@ -237,7 +238,19 @@ export function AttendanceMonthDetailPage() {
       </Card>
 
       {!isLoading && !error && (
-        <Card title="日別の内訳" actions={<MonthlyAttendanceBulkEntryModal yearMonth={yearMonth} disabled={bulkEntryLocked} />}>
+        <Card
+          title="日別の内訳"
+          actions={
+            <div className="flex items-center gap-3">
+              {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
+              <MonthlyAttendanceBulkEntryModal
+                yearMonth={yearMonth}
+                disabled={bulkEntryLocked}
+                onCompleted={setBulkEntryMessage}
+              />
+            </div>
+          }
+        >
           <ul className="divide-y divide-border">
             {dates.map((date) => (
               <AttendanceDayRow

@@ -6,6 +6,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { NativeSelect } from '../../components/ui/native-select'
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import { useDownloadAttendanceCsv, useDownloadAttendanceExcel } from '../../hooks/useAttendance'
@@ -83,9 +84,9 @@ function SelectedUserBadge({ userId, onRemove }: { userId: string; onRemove: () 
  */
 export function AttendanceExportPage() {
   const [yearMonths, setYearMonths] = useState<string[]>([])
-  const [pendingYearMonth, setPendingYearMonth] = useState<string | undefined>(undefined)
   const [userIds, setUserIds] = useState<string[]>([])
   const [pendingUserId, setPendingUserId] = useState<string | undefined>(undefined)
+  const [outputType, setOutputType] = useState<'csv' | 'excel'>('csv')
   const [format, setFormat] = useState<AttendanceExportFormat>('generic')
 
   const downloadCsv = useDownloadAttendanceCsv()
@@ -93,10 +94,9 @@ export function AttendanceExportPage() {
 
   const selectedFormat = FORMAT_OPTIONS.find((option) => option.value === format) ?? FORMAT_OPTIONS[0]
 
-  const addYearMonth = () => {
-    if (!pendingYearMonth || yearMonths.includes(pendingYearMonth)) return
-    setYearMonths(sortedYearMonths([...yearMonths, pendingYearMonth]))
-    setPendingYearMonth(undefined)
+  const addYearMonth = (yearMonth: string | undefined) => {
+    if (!yearMonth || yearMonths.includes(yearMonth)) return
+    setYearMonths(sortedYearMonths([...yearMonths, yearMonth]))
   }
 
   const addUser = (id: string | undefined) => {
@@ -106,7 +106,7 @@ export function AttendanceExportPage() {
   }
 
   return (
-    <Card title="勤怠CSV出力">
+    <Card title="勤怠データ出力">
       <p className="mb-4 text-sm text-muted-foreground">
         承認済み・締め処理済みの月次勤怠がCSVに含まれます。対象社員を指定しない場合は全社員が対象です。
         対象月・対象社員はいずれも複数指定できます。
@@ -117,18 +117,7 @@ export function AttendanceExportPage() {
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="対象月(複数可)" htmlFor="attendance-export-year-month" required>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <YearMonthPicker
-                id="attendance-export-year-month"
-                value={pendingYearMonth}
-                onChange={setPendingYearMonth}
-              />
-            </div>
-            <Button type="button" variant="secondary" onClick={addYearMonth} disabled={!pendingYearMonth}>
-              追加
-            </Button>
-          </div>
+          <YearMonthPicker id="attendance-export-year-month" value={undefined} onChange={addYearMonth} />
           {yearMonths.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {yearMonths.map((yearMonth) => (
@@ -164,67 +153,106 @@ export function AttendanceExportPage() {
             </div>
           )}
         </FormField>
-        <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format">
-          <NativeSelect
-            id="attendance-export-format"
-            value={format}
-            onChange={(event) => setFormat(event.target.value as AttendanceExportFormat)}
+        <FormField label="出力形式" htmlFor="attendance-export-output-type">
+          <RadioGroup
+            id="attendance-export-output-type"
+            value={outputType}
+            onValueChange={(value) => setOutputType(value as 'csv' | 'excel')}
+            className="flex flex-col gap-2"
           >
-            {FORMAT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </NativeSelect>
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="csv" className="mt-1" />
+              <span>
+                CSV
+                <span className="block text-xs text-muted-foreground">
+                  給与計算ソフトへの取込用。ソフトに合わせて出力フォーマットを選べます。
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-foreground">
+              <RadioGroupItem value="excel" className="mt-1" />
+              <span>
+                Excel
+                <span className="block text-xs text-muted-foreground">
+                  目視確認・提出用。フォーマット選択はありません。
+                </span>
+              </span>
+            </label>
+          </RadioGroup>
         </FormField>
       </div>
 
-      <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-        <p>{selectedFormat.description}</p>
-        {selectedFormat.links && (
-          <ul className="mt-2 list-inside list-disc">
-            {selectedFormat.links.map((link) => (
-              <li key={link.href}>
-                <a href={link.href} target="_blank" rel="noreferrer" className="underline">
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {outputType === 'csv' && (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="CSV出力フォーマット" htmlFor="attendance-export-format">
+              <NativeSelect
+                id="attendance-export-format"
+                value={format}
+                onChange={(event) => setFormat(event.target.value as AttendanceExportFormat)}
+              >
+                {FORMAT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          </div>
 
-      <p className="mb-4 text-xs text-muted-foreground">
-        従業員番号列には、flow-office内部の社員ID(UUID)を出力します。給与計算ソフト側の従業員番号と直接一致しない場合は、事前にマッピングを確認してください。
-      </p>
+          <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p>{selectedFormat.description}</p>
+            {selectedFormat.links && (
+              <ul className="mt-2 list-inside list-disc">
+                {selectedFormat.links.map((link) => (
+                  <li key={link.href}>
+                    <a href={link.href} target="_blank" rel="noreferrer" className="underline">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <p className="mb-4 text-xs text-muted-foreground">
+            従業員番号列には、flow-office内部の社員ID(UUID)を出力します。給与計算ソフト側の従業員番号と直接一致しない場合は、事前にマッピングを確認してください。
+          </p>
+        </>
+      )}
+
+      {outputType === 'excel' && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            isLoading={downloadCsv.isPending}
-            disabled={yearMonths.length === 0}
-            onClick={() => {
-              downloadCsv.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined, format })
-            }}
-          >
-            CSVダウンロード
-          </Button>
-          <Button
-            variant="secondary"
-            isLoading={downloadExcel.isPending}
-            disabled={yearMonths.length === 0}
-            onClick={() => {
-              downloadExcel.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined })
-            }}
-          >
-            Excelダウンロード
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            対象(月×社員)の組み合わせが1件の場合は.xlsxが、2件以上の場合は全件をまとめたZIPがダウンロードされます。
-          </p>
+          {outputType === 'csv' ? (
+            <Button
+              isLoading={downloadCsv.isPending}
+              disabled={yearMonths.length === 0}
+              onClick={() => {
+                downloadCsv.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined, format })
+              }}
+            >
+              CSVダウンロード
+            </Button>
+          ) : (
+            <Button
+              isLoading={downloadExcel.isPending}
+              disabled={yearMonths.length === 0}
+              onClick={() => {
+                downloadExcel.mutate({ year_month: yearMonths, user_id: userIds.length > 0 ? userIds : undefined })
+              }}
+            >
+              Excelダウンロード
+            </Button>
+          )}
         </div>
         {yearMonths.length === 0 && (
-          <p className="text-xs text-muted-foreground">対象月を1つ以上追加するとダウンロードできます。</p>
+          <p className="text-xs text-muted-foreground">対象月を1つ以上選択するとダウンロードできます。</p>
         )}
       </div>
     </Card>

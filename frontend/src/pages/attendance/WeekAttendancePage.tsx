@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
+import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import {
   CancelApprovedLeaveDialog,
@@ -38,6 +39,7 @@ export function WeekAttendancePage() {
     formatDate(mondayOf(startParam ? new Date(`${startParam}T00:00:00`) : new Date())),
   )
   const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
+  const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
   const { data, isLoading, error } = useWeek(weekStart)
   const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
   const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
@@ -100,7 +102,19 @@ export function WeekAttendancePage() {
       </Card>
 
       {!isLoading && !error && (
-        <Card title="日別の内訳" actions={<WeeklyAttendanceBulkEntryModal defaultFrom={dates[0]} defaultTo={dates[6]} />}>
+        <Card
+          title="日別の内訳"
+          actions={
+            <div className="flex items-center gap-3">
+              {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
+              <WeeklyAttendanceBulkEntryModal
+                defaultFrom={dates[0]}
+                defaultTo={dates[6]}
+                onCompleted={setBulkEntryMessage}
+              />
+            </div>
+          }
+        >
           <ul className="divide-y divide-border">
             {dates.map((date) => (
               <AttendanceDayRow

@@ -358,7 +358,7 @@ export function ApprovalsPage() {
       )}
 
       <Dialog open={selectedId !== null} onOpenChange={(open) => !open && closePanel()}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="large" className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{selectedRequest?.title ?? '申請の詳細'}</DialogTitle>
           </DialogHeader>

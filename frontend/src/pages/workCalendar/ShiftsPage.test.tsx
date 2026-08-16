@@ -146,7 +146,7 @@ describe('ShiftsPage', () => {
     }
     vi.spyOn(shiftPatternsApi, 'createShiftPattern').mockResolvedValue(pattern)
     renderPage()
-    await screen.findByRole('heading', { name: 'シフトパターン(UC-C004)' })
+    await screen.findByRole('heading', { name: 'シフトパターン' })
 
     await userEvent.type(screen.getByLabelText('パターンコード'), 'night_shift')
     await userEvent.type(screen.getByLabelText('パターン名称'), '深夜勤')
@@ -218,7 +218,7 @@ describe('ShiftsPage', () => {
     })
 
     renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [pattern] })
-    await screen.findByRole('heading', { name: '3交代制シフト表(UC-C004)' })
+    await screen.findByRole('heading', { name: '3交代制シフト表' })
 
     await userEvent.click(screen.getByRole('combobox', { name: '対象社員(シフト表)' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
@@ -273,7 +273,7 @@ describe('ShiftsPage', () => {
       items: [],
     })
     renderPage({ workStyles: [workStyle, shiftWorkStyle], shiftPatterns: [aShift, offShift] })
-    await screen.findByRole('heading', { name: 'ローテーションパターン(指示書8.4節)' })
+    await screen.findByRole('heading', { name: 'ローテーションパターン' })
     const workStyleSelect = screen.getByLabelText('対象の働き方(シフト制のみ)')
     await within(workStyleSelect).findByRole('option', { name: '3交代制' })
 
@@ -333,7 +333,7 @@ describe('ShiftsPage', () => {
       skipped_dates: [],
     })
     renderPage({ rotationPatterns: [pattern] })
-    await screen.findByRole('heading', { name: 'ローテーションの割当・生成(指示書8.5節〜8.8節)' })
+    await screen.findByRole('heading', { name: 'ローテーションの割当・生成' })
 
     await userEvent.click(screen.getByRole('combobox', { name: '対象社員(ローテーション)' }))
     await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
