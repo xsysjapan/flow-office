@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
@@ -8,10 +7,6 @@ import { AttendanceCalculationSummary } from '../../components/AttendanceCalcula
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
-import {
-  CancelApprovedLeaveDialog,
-  type ApprovedLeaveTarget,
-} from '../../components/CancelApprovedLeaveDialog/CancelApprovedLeaveDialog'
 import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -26,9 +21,6 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { useAttendanceMonth, useSubmitMonth } from '../../hooks/useAttendance'
-import { useMyCompensatoryLeaveRequests } from '../../hooks/useCompensatoryLeave'
-import { useMyPaidLeaveRequests } from '../../hooks/usePaidLeave'
-import { useMySpecialLeaveRequests } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { employmentYearMonths } from '../../utils/employmentPeriod'
 import { attendanceMonthStatusLabel, legalHolidayWarningLabel } from '../../utils/statusLabels'
@@ -157,16 +149,17 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
  * UC-A007: 月次勤怠を確認する。日別の内訳を一覧表示し、問題がある日は行を選んで
  * 日次画面(実績の作成・編集・打刻履歴)に遷移できる(オブジェクト指向UI)。
  * 前月・次月への移動は在籍期間内の全月で行える。
+ *
+ * 「選択」ボタンでiOS Mailライクな選択モードに入ると、各行がチェックボックス表示になり、
+ * 複数日を選んで有給休暇・特別休暇・代休の申請へまとめて遷移できる(選択した日は
+ * `?dates=`にカンマ区切りで渡し、各申請画面側でプレフィルする)。
  */
 export function AttendanceMonthDetailPage() {
   const { yearMonth } = useParams<{ yearMonth: string }>()
-  const queryClient = useQueryClient()
-  const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
   const [bulkEntryMessage, setBulkEntryMessage] = useState<string | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useAttendanceMonth(yearMonth ?? '')
-  const { data: paidLeaveRequests } = useMyPaidLeaveRequests()
-  const { data: specialLeaveRequests } = useMySpecialLeaveRequests()
-  const { data: compensatoryLeaveRequests } = useMyCompensatoryLeaveRequests()
 
   if (!yearMonth) return null
 
@@ -186,8 +179,22 @@ export function AttendanceMonthDetailPage() {
   const dates = datesInMonth(yearMonth)
   const today = formatDate(new Date())
 
-  const approvedRequestFor = (requests: { target_date: string; status: string; id: string }[] | undefined, date: string) =>
-    requests?.find((r) => r.target_date === date && r.status === 'approved')?.id
+  function toggleDate(date: string) {
+    setSelectedDates((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false)
+    setSelectedDates(new Set())
+  }
+
+  const sortedSelectedDates = Array.from(selectedDates).sort()
+  const datesQuery = sortedSelectedDates.join(',')
 
   return (
     <div className="flex flex-col gap-6">
@@ -241,14 +248,53 @@ export function AttendanceMonthDetailPage() {
         <Card
           title="日別の内訳"
           actions={
-            <div className="flex items-center gap-3">
-              {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
-              <MonthlyAttendanceBulkEntryModal
-                yearMonth={yearMonth}
-                disabled={bulkEntryLocked}
-                onCompleted={setBulkEntryMessage}
-              />
-            </div>
+            selectionMode ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm whitespace-nowrap text-muted-foreground">
+                  {selectedDates.size}件を選択中
+                </span>
+                {selectedDates.size > 0 ? (
+                  <>
+                    <Button asChild variant="secondary" size="sm">
+                      <Link to={`/paid-leave?dates=${datesQuery}`}>有給休暇を申請する</Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="sm">
+                      <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="sm">
+                      <Link to={`/compensatory-leave?dates=${datesQuery}`}>代休を申請する</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="secondary" size="sm" disabled>
+                      有給休暇を申請する
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled>
+                      特別休暇を申請する
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled>
+                      代休を申請する
+                    </Button>
+                  </>
+                )}
+                <Button variant="secondary" size="sm" onClick={exitSelectionMode}>
+                  キャンセル
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
+                <Button variant="secondary" onClick={() => setSelectionMode(true)}>
+                  選択
+                </Button>
+                <MonthlyAttendanceBulkEntryModal
+                  yearMonth={yearMonth}
+                  disabled={bulkEntryLocked}
+                  onCompleted={setBulkEntryMessage}
+                />
+              </div>
+            )
           }
         >
           <ul className="divide-y divide-border">
@@ -259,24 +305,14 @@ export function AttendanceMonthDetailPage() {
                 day={daysByDate.get(date)}
                 schedule={scheduleByDate.get(date)}
                 warnings={dayWarnings(date, daysByDate.get(date), today)}
-                approvedPaidLeaveRequestId={approvedRequestFor(paidLeaveRequests, date)}
-                approvedSpecialLeaveRequestId={approvedRequestFor(specialLeaveRequests, date)}
-                approvedCompensatoryLeaveRequestId={approvedRequestFor(compensatoryLeaveRequests, date)}
-                onRequestCancelApprovedLeave={setCancelTarget}
+                selectionMode={selectionMode}
+                selected={selectedDates.has(date)}
+                onToggleSelected={toggleDate}
               />
             ))}
           </ul>
         </Card>
       )}
-
-      <CancelApprovedLeaveDialog
-        target={cancelTarget}
-        onOpenChange={(open) => !open && setCancelTarget(null)}
-        onCancelled={() => {
-          setCancelTarget(null)
-          void queryClient.invalidateQueries({ queryKey: ['attendance'] })
-        }}
-      />
     </div>
   )
 }

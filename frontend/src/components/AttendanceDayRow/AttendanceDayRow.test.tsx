@@ -155,50 +155,31 @@ describe('AttendanceDayRow', () => {
     expect(screen.getByText('09:00 〜 18:00').parentElement).toHaveClass('col-start-1', 'sm:contents')
   })
 
-  it('offers request links to paid/special/compensatory leave from the kebab menu', async () => {
+  it('does not show a checkbox or link when not in selection mode', () => {
     renderRow()
-
-    await userEvent.click(screen.getByRole('button', { name: '2026-07-06の操作' }))
-
-    expect(await screen.findByRole('menuitem', { name: '有給休暇を申請する' })).toHaveAttribute(
-      'href',
-      '/paid-leave?date=2026-07-06',
-    )
-    expect(screen.getByRole('menuitem', { name: '特別休暇を申請する' })).toHaveAttribute(
-      'href',
-      '/special-leave?date=2026-07-06',
-    )
-    expect(screen.getByRole('menuitem', { name: '代休を申請する' })).toHaveAttribute(
-      'href',
-      '/compensatory-leave?date=2026-07-06',
-    )
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('link')).toBeInTheDocument()
   })
 
-  it('does not show a cancel item when there is no approved leave that day', async () => {
-    renderRow({ onRequestCancelApprovedLeave: vi.fn() })
-
-    await userEvent.click(screen.getByRole('button', { name: '2026-07-06の操作' }))
-
-    expect(await screen.findByRole('menuitem', { name: '有給休暇を申請する' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '有給休暇の承認を取り消す' })).not.toBeInTheDocument()
+  it('shows a checkbox instead of a link in selection mode', () => {
+    renderRow({ selectionMode: true })
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '2026-07-06を選択' })).not.toBeChecked()
   })
 
-  it('calls onRequestCancelApprovedLeave when an approved-leave cancel item is selected', async () => {
-    const onRequestCancelApprovedLeave = vi.fn()
-    renderRow({
-      approvedPaidLeaveRequestId: 'paid-leave-request-1',
-      approvedSpecialLeaveRequestId: 'special-leave-request-1',
-      approvedCompensatoryLeaveRequestId: 'compensatory-leave-request-1',
-      onRequestCancelApprovedLeave,
-    })
+  it('reflects the selected state in selection mode', () => {
+    renderRow({ selectionMode: true, selected: true })
+    expect(screen.getByRole('checkbox', { name: '2026-07-06を選択' })).toBeChecked()
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: '2026-07-06の操作' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: '特別休暇の承認を取り消す' }))
+  it('calls onToggleSelected when the row or checkbox is clicked in selection mode', async () => {
+    const onToggleSelected = vi.fn()
+    renderRow({ selectionMode: true, onToggleSelected })
 
-    expect(onRequestCancelApprovedLeave).toHaveBeenCalledWith({
-      kind: 'special',
-      id: 'special-leave-request-1',
-      label: '特別休暇',
-    })
+    await userEvent.click(screen.getByRole('checkbox', { name: '2026-07-06を選択' }))
+    expect(onToggleSelected).toHaveBeenCalledWith('2026-07-06')
+
+    await userEvent.click(screen.getByRole('button', { name: '2026-07-06を選択' }))
+    expect(onToggleSelected).toHaveBeenCalledTimes(2)
   })
 })

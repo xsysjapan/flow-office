@@ -61,9 +61,19 @@ function CompensatoryLeaveRequestForm() {
   const [searchParams] = useSearchParams()
   const dateParam = searchParams.get('date')
   const initialDate = dateParam && ISO_DATE_PATTERN.test(dateParam) ? dateParam : undefined
+  const datesParam = searchParams.get('dates')
+  const initialDates = datesParam
+    ? Array.from(
+        new Set(
+          [...datesParam.split(','), ...(initialDate ? [initialDate] : [])].filter((d) => ISO_DATE_PATTERN.test(d)),
+        ),
+      ).sort()
+    : initialDate
+      ? [initialDate]
+      : []
 
   const [targetMode, setTargetMode] = useState<TargetDateMode>('dates')
-  const [selectedDates, setSelectedDates] = useState<string[]>(() => (initialDate ? [initialDate] : []))
+  const [selectedDates, setSelectedDates] = useState<string[]>(() => initialDates)
   const [range, setRange] = useState<DateRangeValue | undefined>(undefined)
   const [leaveType, setLeaveType] = useState<PaidLeaveType>('full')
   const [hours, setHours] = useState('')
