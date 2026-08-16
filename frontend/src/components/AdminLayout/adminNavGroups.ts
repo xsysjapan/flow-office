@@ -126,8 +126,8 @@ export const adminNavGroups: AdminNavGroup[] = [
       },
       {
         to: "/admin/attendance-export",
-        label: "勤怠CSV出力",
-        description: "給与計算連携用の勤怠CSVを出力する",
+        label: "勤怠データ出力",
+        description: "給与計算連携用のCSV、確認・提出用のExcelを出力する",
         feature: "attendance.timesheet",
         permission: "attendance.export",
       },

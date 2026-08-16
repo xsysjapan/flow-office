@@ -1,7 +1,7 @@
 import { Badge } from '../Badge/Badge'
 import { Checkbox } from '../ui/checkbox'
 import { TimePicker } from '../TimePicker/TimePicker'
-import { WEEKDAYS, weekdayEntry } from '../WeekdayScheduleFields/WeekdayScheduleFields'
+import { WEEKDAYS, weekdayEntry, type WeekdayRowState } from '../WeekdayScheduleFields/WeekdayScheduleFields'
 import type { WeeklyAttendancePattern } from '../../api/attendance'
 
 export interface SimplePatternState {
@@ -38,6 +38,22 @@ export function buildWeeklyPatternFromSimpleState(state: SimplePatternState): We
     pattern[iso] = state.weekdays[iso] ? entry : null
   }
   return pattern
+}
+
+/** 「まとめて設定」の内容を曜日ごとの行(週次一括入力の「曜日ごとに設定」タブの状態)に展開する。 */
+export function expandSimplePatternToWeekdayRows(state: SimplePatternState): Record<number, WeekdayRowState> {
+  const rows: Record<number, WeekdayRowState> = {}
+  for (const { iso } of WEEKDAYS) {
+    rows[iso] = {
+      enabled: state.weekdays[iso] ?? false,
+      startTime: state.startTime,
+      endTime: state.endTime,
+      breakEnabled: state.breakEnabled,
+      breakStartTime: state.breakStartTime,
+      breakEndTime: state.breakEndTime,
+    }
+  }
+  return rows
 }
 
 /**

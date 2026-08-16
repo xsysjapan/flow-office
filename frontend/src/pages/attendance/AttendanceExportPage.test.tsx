@@ -19,7 +19,6 @@ function renderPage() {
 
 async function addYearMonth(user: ReturnType<typeof userEvent.setup>, yearMonth: string) {
   await pickYearMonth(user, '対象月(複数可)', yearMonth)
-  await user.click(screen.getByRole('button', { name: '追加' }))
 }
 
 describe('AttendanceExportPage', () => {
@@ -146,6 +145,7 @@ describe('AttendanceExportPage', () => {
 
     await addYearMonth(user, '2026-06')
     await addYearMonth(user, '2026-07')
+    await user.click(screen.getByRole('radio', { name: /^Excel/ }))
     await user.click(screen.getByRole('button', { name: 'Excelダウンロード' }))
 
     await waitFor(() =>

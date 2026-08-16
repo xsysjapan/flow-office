@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
-import { useGenerateAttendancePattern, usePreviewAttendancePattern } from '../../hooks/useAttendance'
+import { useGenerateAttendancePattern } from '../../hooks/useAttendance'
+import { attendancePatternResultMessage } from '../../utils/attendancePatternResultMessage'
 import { browserOffsetString } from '../../utils/offsetDateTime'
 import { Button } from '../Button/Button'
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
@@ -8,6 +9,7 @@ import { FormField } from '../FormField/FormField'
 import {
   buildWeeklyPatternFromSimpleState,
   defaultSimplePatternState,
+  expandSimplePatternToWeekdayRows,
   SimplePatternFields,
   type SimplePatternState,
 } from '../SimplePatternFields/SimplePatternFields'
@@ -24,19 +26,23 @@ export interface WeeklyAttendanceBulkEntryModalProps {
   /** 一覧から個別にトリガーボタンを描画したくない場合(制御されたopen/onOpenChange)向け。省略時は自前のトリガーボタンを表示する。 */
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** 確定完了時に呼び出し元画面へ完了メッセージを渡す(モーダル自身は結果を表示せず閉じる)。 */
+  onCompleted?: (message: string) => void
 }
 
 /**
  * 週次勤怠画面(WeekAttendancePage)から開く一括入力モーダル。対象は常に本人。
  * 「まとめて設定」(開始/終了時刻を1組だけ入力し、適用する曜日を選ぶだけの簡易入力)を
  * 既定タブとし、曜日ごとに個別の時刻を指定したい場合向けに従来の詳細入力をもう1つの
- * タブとして残す。
+ * タブとして残す。「まとめて設定」タブではそのまま確定させず、必ず「曜日ごとに設定」
+ * タブへ内容を展開してから確定させる(誤って複数曜日を一括で確定してしまう事故を防ぐ)。
  */
 export function WeeklyAttendanceBulkEntryModal({
   defaultFrom,
   defaultTo,
   open: controlledOpen,
   onOpenChange,
+  onCompleted,
 }: WeeklyAttendanceBulkEntryModalProps) {
   const { user } = useAuth()
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -52,15 +58,16 @@ export function WeeklyAttendanceBulkEntryModal({
   )
   const [overwriteMode, setOverwriteMode] = useState<'skip_existing' | 'overwrite_existing'>('skip_existing')
 
-  const previewPattern = usePreviewAttendancePattern()
   const generatePattern = useGenerateAttendancePattern()
 
   const handleOpenChange = (next: boolean) => {
     if (!isControlled) setUncontrolledOpen(next)
     onOpenChange?.(next)
     if (next) {
+      setActiveTab('simple')
       setReason('')
-      previewPattern.reset()
+      setSimplePatternState(defaultSimplePatternState())
+      setDetailedPatternState(defaultWeeklyPatternState())
       generatePattern.reset()
     }
   }
@@ -69,26 +76,30 @@ export function WeeklyAttendanceBulkEntryModal({
     setDetailedPatternState((prev) => ({ ...prev, [iso]: { ...prev[iso], ...patch } }))
   }
 
-  const weeklyPattern =
-    activeTab === 'simple'
-      ? buildWeeklyPatternFromSimpleState(simplePatternState)
-      : buildWeeklyPattern(detailedPatternState)
-
-  const handlePreview = () => {
-    previewPattern.mutate({ from: defaultFrom, to: defaultTo, utc_offset: offset, weekly_pattern: weeklyPattern })
+  const handleExpandToDetailed = () => {
+    setDetailedPatternState(expandSimplePatternToWeekdayRows(simplePatternState))
+    setActiveTab('detailed')
   }
 
   const handleGenerate = () => {
     if (!user || !reason) return
-    generatePattern.mutate({
-      user_id: user.id,
-      from: defaultFrom,
-      to: defaultTo,
-      utc_offset: offset,
-      weekly_pattern: weeklyPattern,
-      overwrite_mode: overwriteMode,
-      reason,
-    })
+    generatePattern.mutate(
+      {
+        user_id: user.id,
+        from: defaultFrom,
+        to: defaultTo,
+        utc_offset: offset,
+        weekly_pattern: buildWeeklyPattern(detailedPatternState),
+        overwrite_mode: overwriteMode,
+        reason,
+      },
+      {
+        onSuccess: (data) => {
+          onCompleted?.(attendancePatternResultMessage(data))
+          handleOpenChange(false)
+        },
+      },
+    )
   }
 
   return (
@@ -98,7 +109,7 @@ export function WeeklyAttendanceBulkEntryModal({
           一括入力
         </Button>
       )}
-      <DialogContent className="max-w-3xl">
+      <DialogContent size="large" className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>週次の一括入力</DialogTitle>
           <DialogDescription>出退勤・休憩時刻を指定して一括で確定する。</DialogDescription>
@@ -106,7 +117,6 @@ export function WeeklyAttendanceBulkEntryModal({
 
         <p className="text-sm text-muted-foreground">適用期間: {defaultFrom} 〜 {defaultTo}</p>
 
-        {previewPattern.error && <ErrorMessage error={previewPattern.error} />}
         {generatePattern.error && <ErrorMessage error={generatePattern.error} />}
 
         <FormField label="タイムゾーンオフセット" htmlFor="weekly-attendance-offset" required>
@@ -129,29 +139,14 @@ export function WeeklyAttendanceBulkEntryModal({
               state={simplePatternState}
               onChange={(patch) => setSimplePatternState((prev) => ({ ...prev, ...patch }))}
             />
+            <p className="mt-3 text-xs text-muted-foreground">
+              内容を確認のうえ確定するため、「次へ(曜日ごとの内容を確認)」を押すと「曜日ごとに設定」タブに展開されます。ここではまだ確定されません。
+            </p>
           </TabsContent>
           <TabsContent value="detailed">
             <WeekdayScheduleFields state={detailedPatternState} onChange={handleDetailedWeekdayChange} />
           </TabsContent>
         </Tabs>
-
-        <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" isLoading={previewPattern.isPending} onClick={handlePreview}>
-            プレビューする
-          </Button>
-        </div>
-
-        {previewPattern.data && (
-          <ul className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-            {previewPattern.data.days.map((day) => (
-              <li key={day.date} className="text-foreground">
-                {day.date}: {day.start_time}〜{day.end_time}
-                {day.has_existing_day && <span className="ml-1 text-xs text-muted-foreground">(既存実績あり)</span>}
-                {day.is_locked && <span className="ml-1 text-xs text-destructive">(締め済み)</span>}
-              </li>
-            ))}
-          </ul>
-        )}
 
         <FormField label="確定理由" htmlFor="weekly-attendance-reason" required>
           <Input id="weekly-attendance-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -169,16 +164,12 @@ export function WeeklyAttendanceBulkEntryModal({
           <p className="mt-1 text-xs text-muted-foreground">締め済み・承認済みの月に属する日はどちらを選んでも変更されない。</p>
         </FormField>
 
-        <Button isLoading={generatePattern.isPending} disabled={!user || !reason} onClick={handleGenerate}>
-          確定する
-        </Button>
-
-        {generatePattern.data && (
-          <p className="text-sm text-foreground">
-            {generatePattern.data.created_count}件作成・{generatePattern.data.updated_count}件更新しました。
-            {generatePattern.data.skipped_count > 0 && `既存実績のため${generatePattern.data.skipped_count}件をスキップしました。`}
-            {generatePattern.data.rejected_count > 0 && `締め済み等のため${generatePattern.data.rejected_count}件は反映できませんでした。`}
-          </p>
+        {activeTab === 'simple' ? (
+          <Button onClick={handleExpandToDetailed}>次へ(曜日ごとの内容を確認)</Button>
+        ) : (
+          <Button isLoading={generatePattern.isPending} disabled={!user || !reason} onClick={handleGenerate}>
+            確定する
+          </Button>
         )}
       </DialogContent>
     </Dialog>

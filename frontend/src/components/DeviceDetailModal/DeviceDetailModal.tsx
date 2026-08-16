@@ -207,7 +207,7 @@ export function DeviceDetailModal({ device, open: controlledOpen, onOpenChange }
           詳細
         </Button>
       )}
-      <DialogContent className="max-w-2xl">
+      <DialogContent size="large" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{device.name}</DialogTitle>
         </DialogHeader>

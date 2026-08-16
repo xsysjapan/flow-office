@@ -59,7 +59,9 @@ export function UserManagementAccessPage({
     assignments = access.useRoleAssignments(section === "access"),
     suspensions = access.useFeatureSuspensions(section === "access"),
     identities = userManagement.useExternalIdentities(section === "identities"),
-    authorities = userManagement.useFieldAuthorities(section === "identities"),
+    authorities = userManagement.useFieldAuthorities(
+      section === "identities" || section === "hr",
+    ),
     changeSets = userManagement.useMembershipChangeSets(
       section === "membershipChanges",
     ),
@@ -142,6 +144,12 @@ export function UserManagementAccessPage({
   const [editingChangeSet, setEditingChangeSet] = useState("");
   const [changeDialogOpen, setChangeDialogOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvInputKey, setCsvInputKey] = useState(0);
+  const [csvApplySummary, setCsvApplySummary] = useState<{
+    total: number;
+    new: number;
+    changed: number;
+  } | null>(null);
   const [groupTypeFilter, setGroupTypeFilter] = useState("");
   const queries =
     section === "access"
@@ -1304,7 +1312,7 @@ export function UserManagementAccessPage({
                 if (!open) closeChangeDialog();
               }}
             >
-              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+              <DialogContent size="large" className="sm:max-h-[90vh] sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle>
                     {editingChangeSet ? "所属変更予約を変更" : "変更予約作成"}
@@ -1647,13 +1655,88 @@ export function UserManagementAccessPage({
       {section === "hr" && (
         <>
           <Card title="外部HR CSV差分取込">
+            <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <p className="mb-2">
+                取り込めるCSVの列構成は次のとおりです。1行目はヘッダー行として扱われ、文字コードはUTF-8(BOMあり・なしどちらも可)を想定しています。
+              </p>
+              <div className="min-w-0 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>列名</TableHead>
+                      <TableHead>必須</TableHead>
+                      <TableHead>内容</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>external_subject_id</TableCell>
+                      <TableCell>必須</TableCell>
+                      <TableCell>
+                        外部HRシステム側の社員ID。空の行は取り込み対象から除外されます。
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>employee_number</TableCell>
+                      <TableCell>任意</TableCell>
+                      <TableCell>
+                        社員番号。external_subject_idで既存社員に一致しない場合の照合キーとして使われます。
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>email</TableCell>
+                      <TableCell>任意</TableCell>
+                      <TableCell>
+                        メールアドレス。employee_numberでも一致しない場合の照合キーとして使われます。
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>group_code</TableCell>
+                      <TableCell>任意</TableCell>
+                      <TableCell>所属グループのコード。</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>effective_at</TableCell>
+                      <TableCell>任意</TableCell>
+                      <TableCell>
+                        反映日時(未指定の場合は取込実行時点が使われます)。
+                      </TableCell>
+                    </TableRow>
+                    {authorities.data
+                      ?.filter((a) => a.authority_type === "EXTERNAL_HR")
+                      .map((a) => (
+                        <TableRow key={a.field_key}>
+                          <TableCell>{a.field_key}</TableCell>
+                          <TableCell>任意</TableCell>
+                          <TableCell>
+                            「外部ID・項目管理責任」で外部HR管理に設定されている項目。
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="mt-2">
+                上記以外の項目(氏名など)を外部HRから取り込みたい場合は、先に
+                <Link to="/admin/identity-settings" className="underline">
+                  外部ID・項目管理責任
+                </Link>
+                の画面で対象項目を「外部HR管理」に設定してください。設定していない項目はCSVに列があっても反映されません。
+              </p>
+            </div>
             <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
               <Input
+                key={csvInputKey}
                 aria-label="外部HR CSVファイル"
                 className="min-w-0"
                 type="file"
                 accept=".csv,text/csv"
-                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  setCsvFile(e.target.files?.[0] ?? null);
+                  setCsvApplySummary(null);
+                  previewCsv.reset();
+                  applyCsv.reset();
+                }}
               />
               <Button
                 disabled={!csvFile}
@@ -1666,7 +1749,17 @@ export function UserManagementAccessPage({
                 <Button
                   disabled={previewCsv.data.summary.changed === 0}
                   isLoading={applyCsv.isPending}
-                  onClick={() => applyCsv.mutate(previewCsv.data.rows)}
+                  onClick={() => {
+                    const summary = previewCsv.data.summary;
+                    applyCsv.mutate(previewCsv.data.rows, {
+                      onSuccess: () => {
+                        setCsvApplySummary(summary);
+                        setCsvFile(null);
+                        setCsvInputKey((key) => key + 1);
+                        previewCsv.reset();
+                      },
+                    });
+                  }}
                 >
                   確認した差分を適用
                 </Button>
@@ -1682,6 +1775,22 @@ export function UserManagementAccessPage({
                 </p>
               )}
             </div>
+            {applyCsv.error && (
+              <ErrorMessage
+                error={applyCsv.error}
+                fallback="差分の適用に失敗しました。"
+              />
+            )}
+            {csvApplySummary && (
+              <p className="mt-3 text-sm text-foreground">
+                適用しました(新規{csvApplySummary.new}件・変更
+                {csvApplySummary.changed}件)。反映結果は
+                <Link to="/admin/users" className="underline">
+                  ユーザー一覧
+                </Link>
+                から確認できます。
+              </p>
+            )}
             {previewCsv.data && (
               <div className="mt-4 min-w-0">
                 <p className="mb-3 text-sm">

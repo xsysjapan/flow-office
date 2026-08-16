@@ -147,7 +147,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent size="large" className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEditing ? `勤務形態を編集(${workStyle?.name})` : '勤務形態を登録'}</DialogTitle>
         </DialogHeader>
