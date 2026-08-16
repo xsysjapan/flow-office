@@ -3,6 +3,7 @@
 namespace App\Domain\PaidLeave\Projectors;
 
 use App\Domain\PaidLeave\Events\PaidLeaveGranted;
+use App\Domain\PaidLeave\Events\PaidLeaveGrantRevoked;
 use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
@@ -33,6 +34,16 @@ class PaidLeaveGrantProjector extends Projector
                 'grant_reason' => $event->grantReason,
             ],
         );
+    }
+
+    public function onPaidLeaveGrantRevoked(PaidLeaveGrantRevoked $event): void
+    {
+        PaidLeaveGrant::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => 'revoked',
+            'revoked_at' => $event->createdAt(),
+            'revoked_by_user_id' => $event->revokedByUserId,
+            'revoke_reason' => $event->reason,
+        ]);
     }
 
     public function onPaidLeaveUsed(PaidLeaveUsed $event): void

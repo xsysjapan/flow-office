@@ -4,6 +4,7 @@ namespace App\Domain\CompensatoryLeave\Handlers;
 
 use App\Domain\CompensatoryLeave\Aggregates\CompensatoryLeaveGrantAggregate;
 use App\Domain\CompensatoryLeave\Commands\SyncCompensatoryLeaveGrant;
+use App\Domain\CompensatoryLeave\Services\CompensatoryLeaveGrantCalculator;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Models\AttendanceDay;
@@ -55,7 +56,7 @@ class SyncCompensatoryLeaveGrantHandler implements CommandHandler
             return null;
         }
 
-        [$grantedDays, $grantedMinutes] = $this->resolveGrantedAmount($settings, (int) $day->calculation->work_minutes);
+        [$grantedDays, $grantedMinutes] = CompensatoryLeaveGrantCalculator::resolveGrantedAmount($settings, (int) $day->calculation->work_minutes);
 
         $grantId = $existingGrant->id ?? (string) Str::uuid();
 
@@ -70,19 +71,5 @@ class SyncCompensatoryLeaveGrantHandler implements CommandHandler
             ->persist();
 
         return null;
-    }
-
-    /**
-     * @return array{0: float, 1: ?int}
-     */
-    private function resolveGrantedAmount(SystemSetting $settings, int $workMinutes): array
-    {
-        return match ($settings->compensatory_leave_unit) {
-            'half_day' => $workMinutes > ($settings->compensatory_leave_half_day_threshold_minutes ?? 0)
-                ? [1.0, null]
-                : [0.5, null],
-            'hourly' => [0.0, $workMinutes],
-            default => [1.0, null], // daily
-        };
     }
 }

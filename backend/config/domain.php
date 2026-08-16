@@ -159,6 +159,7 @@ use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
 use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
 use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
 use App\Domain\CompensatoryLeave\Commands\ConfirmCompensatoryLeaveGrantsForMonth;
+use App\Domain\CompensatoryLeave\Commands\GrantCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeave\Commands\ReturnCompensatoryLeaveRequest;
@@ -168,6 +169,7 @@ use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveRequestHandler
 use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveGrantHandler;
 use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveRequestHandler;
 use App\Domain\CompensatoryLeave\Handlers\ConfirmCompensatoryLeaveGrantsForMonthHandler;
+use App\Domain\CompensatoryLeave\Handlers\GrantCompensatoryLeaveHandler;
 use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveGrantCancellationHandler;
 use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveHandler;
 use App\Domain\CompensatoryLeave\Handlers\ReturnCompensatoryLeaveRequestHandler;
@@ -234,6 +236,7 @@ use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
+use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
@@ -242,6 +245,7 @@ use App\Domain\PaidLeave\Handlers\GrantPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\GrantScheduledPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
+use App\Domain\PaidLeave\Handlers\RevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
@@ -258,12 +262,14 @@ use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
+use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeave\Handlers\ApproveSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\CancelSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
+use App\Domain\SpecialLeave\Handlers\RevokeSpecialLeaveGrantHandler;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\ApplyExternalHrImport;
 use App\Domain\UserManagement\Commands\ApplyMembershipChange;
@@ -502,6 +508,7 @@ return [
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
         CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
+        RevokePaidLeaveGrant::class => RevokePaidLeaveGrantHandler::class,
 
         GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
         GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,
@@ -509,6 +516,7 @@ return [
         ApproveSpecialLeaveRequest::class => ApproveSpecialLeaveRequestHandler::class,
         ReturnSpecialLeaveRequest::class => ReturnSpecialLeaveRequestHandler::class,
         CancelSpecialLeaveRequest::class => CancelSpecialLeaveRequestHandler::class,
+        RevokeSpecialLeaveGrant::class => RevokeSpecialLeaveGrantHandler::class,
 
         RequestShiftSwap::class => RequestShiftSwapHandler::class,
         ApproveShiftSwapRequest::class => ApproveShiftSwapRequestHandler::class,
@@ -516,6 +524,7 @@ return [
         CancelShiftSwapRequest::class => CancelShiftSwapRequestHandler::class,
 
         SyncCompensatoryLeaveGrant::class => SyncCompensatoryLeaveGrantHandler::class,
+        GrantCompensatoryLeave::class => GrantCompensatoryLeaveHandler::class,
         ConfirmCompensatoryLeaveGrantsForMonth::class => ConfirmCompensatoryLeaveGrantsForMonthHandler::class,
         RequestCompensatoryLeave::class => RequestCompensatoryLeaveHandler::class,
         ApproveCompensatoryLeaveRequest::class => ApproveCompensatoryLeaveRequestHandler::class,

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest as ApproveCompensatoryLeaveRequestCommand;
+use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
 use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\GrantCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\EventSourcing\CommandBus;
@@ -55,6 +57,86 @@ class CompensatoryLeaveController extends Controller
             ->get();
 
         return CompensatoryLeaveGrantResource::collection($grants);
+    }
+
+    #[OA\Get(
+        path: '/compensatory-leave/grants/user/{userId}',
+        operationId: 'compensatoryLeave.grants.forUser',
+        summary: '社員の代休残数を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function grantsForUser(string $userId): AnonymousResourceCollection
+    {
+        $grants = CompensatoryLeaveGrant::query()
+            ->where('user_id', $userId)
+            ->orderByRaw('expires_on is null')
+            ->orderBy('expires_on')
+            ->get();
+
+        return CompensatoryLeaveGrantResource::collection($grants);
+    }
+
+    /**
+     * 管理者が、休日出勤の対象日(workDate)を指定して代休を手動付与する
+     * (App\Domain\CompensatoryLeave\Handlers\GrantCompensatoryLeaveHandler参照。
+     * 付与日数は勤怠実績からの自動導出と同じルールで算出され、承認不要でstatus=confirmedの
+     * まま作成される)。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/grants',
+        operationId: 'compensatoryLeave.grants.store',
+        summary: '代休を手動付与する',
+        tags: ['代休'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date', description: '実際に休日出勤した日'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function grant(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            'work_date' => ['required', 'date'],
+            'expires_on' => ['nullable', 'date', 'after:work_date'],
+            'grant_reason' => ['nullable', 'string'],
+        ]);
+
+        $grant = $commandBus->dispatch(new GrantCompensatoryLeave(
+            userId: $data['user_id'],
+            workDate: $data['work_date'],
+            expiresOn: $data['expires_on'] ?? null,
+            grantReason: $data['grant_reason'] ?? null,
+        ));
+
+        return (new CompensatoryLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が代休Grantを直接取り消す(承認フローを経由しない)。source(attendance/manual)を
+     * 問わず利用できる。既存のrequest-cancellation→approve(社員起点の申請→承認)フローは
+     * そのまま残し、こちらは管理者起点の別経路として提供する。既存の
+     * CancelCompensatoryLeaveGrantHandlerがused_days>0の場合にDomainRuleExceptionを投げる。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/grants/{grant}/revoke',
+        operationId: 'compensatoryLeave.grants.revoke',
+        summary: '代休付与を直接取り消す(承認不要)',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(content: new OA\JsonContent(properties: [new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function revoke(Request $request, CompensatoryLeaveGrant $grant, CommandBus $commandBus): CompensatoryLeaveGrantResource
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string']]);
+
+        $grant = $commandBus->dispatch(new CancelCompensatoryLeaveGrant(
+            grantId: $grant->id,
+            cancelledByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new CompensatoryLeaveGrantResource($grant);
     }
 
     #[OA\Post(

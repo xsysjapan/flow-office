@@ -17,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * CompensatoryLeaveGrantProjectorがstored_eventsから作成・更新する。
  */
 #[Fillable([
-    'id', 'user_id', 'attendance_day_id', 'work_date', 'granted_days', 'granted_minutes',
+    'id', 'user_id', 'source', 'attendance_day_id', 'work_date', 'granted_days', 'granted_minutes',
     'used_days', 'used_minutes', 'remaining_days', 'remaining_minutes',
-    'status', 'confirmed_at', 'expires_on',
+    'status', 'confirmed_at', 'expires_on', 'grant_reason',
 ])]
 class CompensatoryLeaveGrant extends Model
 {

@@ -938,7 +938,14 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - grant_reason
 - expiry_warned_at (UC-P005: 消滅警告を通知済みの日時。重複通知防止用)
 - five_day_obligation_warned_at (UC-P006: 年5日取得義務警告を通知済みの日時。重複通知防止用)
+- status (`active` / `revoked`。UC-P008: 管理者による付与取消。デフォルト`active`)
+- revoked_at (nullable)
+- revoked_by_user_id (nullable)
+- revoke_reason (nullable)
 - created_at / updated_at
+
+`special_leave_grants`も同じ`status`/`revoked_at`/`revoked_by_user_id`/`revoke_reason`を持つ
+(UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ)。
 
 ## paid_leave_requests (有給申請の正)
 
@@ -988,6 +995,16 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 Projectorが直接この行を削除する(grant消化がまだ発生していないため`usage_reversed`は
 発行されない)。`special_leave_usages`・`compensatory_leave_usages`も同じ構造・同じ
 ライフサイクル・同じ取消時の挙動を持つ。
+
+## compensatory_leave_grants (代休付与。追加カラムのみ抜粋)
+
+休日出勤の勤怠実績からの自動導出に加えて、管理者による手動付与を区別するため
+以下を追加する(docs/09-usecases-paid-leave.md「代休の手動付与・管理者直接取消」参照)。
+
+- source (`attendance` / `manual`。デフォルト`attendance`。既存行はすべて`attendance`)
+- grant_reason (nullable。手動付与時の理由)
+- attendance_day_id (手動付与では紐づく実績行が無いためnullable。自動導出分は従来通り
+  ユニーク制約付きで必須)
 
 ## attachments
 

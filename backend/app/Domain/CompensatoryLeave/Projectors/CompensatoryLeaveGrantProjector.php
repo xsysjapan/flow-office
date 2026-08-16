@@ -6,6 +6,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveManuallyGranted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageDesignated;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
@@ -44,6 +45,34 @@ class CompensatoryLeaveGrantProjector extends Projector
                 'status' => CompensatoryLeaveGrantStatus::DRAFT,
                 'confirmed_at' => null,
                 'expires_on' => null,
+            ],
+        );
+    }
+
+    /**
+     * 管理者による手動付与(source=manual)。attendance_day_idは持たず、承認不要のため
+     * 作成と同時にstatus=confirmedとする(onCompensatoryLeaveGrantSynced→
+     * onCompensatoryLeaveGrantConfirmedの2段階を1イベントにまとめた形)。
+     */
+    public function onCompensatoryLeaveManuallyGranted(CompensatoryLeaveManuallyGranted $event): void
+    {
+        CompensatoryLeaveGrant::query()->updateOrCreate(
+            ['id' => $event->aggregateRootUuid()],
+            [
+                'user_id' => $event->userId,
+                'source' => 'manual',
+                'attendance_day_id' => null,
+                'work_date' => $event->workDate,
+                'granted_days' => $event->grantedDays,
+                'granted_minutes' => $event->grantedMinutes,
+                'used_days' => 0,
+                'used_minutes' => $event->grantedMinutes !== null ? 0 : null,
+                'remaining_days' => $event->grantedDays,
+                'remaining_minutes' => $event->grantedMinutes,
+                'status' => CompensatoryLeaveGrantStatus::CONFIRMED,
+                'confirmed_at' => $event->createdAt(),
+                'expires_on' => $event->expiresOn,
+                'grant_reason' => $event->grantReason,
             ],
         );
     }

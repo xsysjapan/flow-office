@@ -9,6 +9,7 @@ use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveReq
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -154,6 +155,32 @@ class PaidLeaveController extends Controller
         ));
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が発行済みの有給付与を取り消す。既に消化された分がある場合は
+     * RevokePaidLeaveGrantHandlerがDomainRuleExceptionを投げる(422)。
+     */
+    #[OA\Post(
+        path: '/paid-leave/grants/{grant}/revoke',
+        operationId: 'paidLeave.grants.revoke',
+        summary: '有給付与を取り消す',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(content: new OA\JsonContent(properties: [new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function revoke(Request $request, PaidLeaveGrant $grant, CommandBus $commandBus): PaidLeaveGrantResource
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string']]);
+
+        $grant = $commandBus->dispatch(new RevokePaidLeaveGrant(
+            grantId: $grant->id,
+            revokedByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new PaidLeaveGrantResource($grant);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Domain\SpecialLeave\Projectors;
 
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
+use App\Domain\SpecialLeave\Events\SpecialLeaveGrantRevoked;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsageReversed;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use App\Models\SpecialLeaveGrant;
@@ -33,6 +34,16 @@ class SpecialLeaveGrantProjector extends Projector
                 'grant_reason' => $event->grantReason,
             ],
         );
+    }
+
+    public function onSpecialLeaveGrantRevoked(SpecialLeaveGrantRevoked $event): void
+    {
+        SpecialLeaveGrant::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => 'revoked',
+            'revoked_at' => $event->createdAt(),
+            'revoked_by_user_id' => $event->revokedByUserId,
+            'revoke_reason' => $event->reason,
+        ]);
     }
 
     public function onSpecialLeaveUsed(SpecialLeaveUsed $event): void
