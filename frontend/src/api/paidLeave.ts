@@ -39,6 +39,11 @@ export function grantPaidLeave(input: GrantPaidLeaveInput): Promise<PaidLeaveGra
   return apiFetch('/paid-leave/grants', { method: 'POST', body: input })
 }
 
+/** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
+export function revokePaidLeaveGrant(grantId: string, reason?: string): Promise<PaidLeaveGrant> {
+  return apiFetch(`/paid-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}
+
 export function fetchMyPaidLeaveRequests(): Promise<PaidLeaveRequest[]> {
   return apiFetch('/paid-leave/requests/mine')
 }

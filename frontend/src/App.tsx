@@ -43,6 +43,7 @@ import { ShiftsPage } from "./pages/workCalendar/ShiftsPage";
 import { PaidLeaveAdminPage } from "./pages/paidLeave/PaidLeaveAdminPage";
 import { PaidLeaveHistoryAdminPage } from "./pages/paidLeave/PaidLeaveHistoryAdminPage";
 import { SpecialLeaveAdminPage } from "./pages/specialLeave/SpecialLeaveAdminPage";
+import { CompensatoryLeaveAdminPage } from "./pages/compensatoryLeave/CompensatoryLeaveAdminPage";
 import { SpecialLeaveHistoryAdminPage } from "./pages/specialLeave/SpecialLeaveHistoryAdminPage";
 import { AttendanceReferencePage } from "./pages/attendance/AttendanceReferencePage";
 import { AuditLogPage } from "./pages/admin/AuditLogPage";
@@ -187,6 +188,10 @@ function App() {
           <Route
             path="special-leave/history"
             element={<SpecialLeaveHistoryAdminPage />}
+          />
+          <Route
+            path="compensatory-leave"
+            element={<CompensatoryLeaveAdminPage />}
           />
           <Route path="attendance" element={<AttendanceReferencePage />} />
           <Route path="devices" element={<DeviceListPage />} />

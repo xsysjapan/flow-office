@@ -30,3 +30,25 @@ export function createCompensatoryLeaveRequest(input: CreateCompensatoryLeaveReq
 export function cancelCompensatoryLeaveRequest(id: string): Promise<CompensatoryLeaveRequest> {
   return apiFetch(`/compensatory-leave/requests/${id}/cancel`, { method: 'POST' })
 }
+
+export interface GrantCompensatoryLeaveInput {
+  user_id: string
+  /** 休日出勤の実績日。この日が休日出勤でなければサーバー側で422になる。 */
+  work_date: string
+  expires_on?: string
+  grant_reason?: string
+}
+
+/** 管理者による代休の手動付与。日数はサーバーが実績から導出するため入力しない。 */
+export function grantCompensatoryLeave(input: GrantCompensatoryLeaveInput): Promise<CompensatoryLeaveGrant> {
+  return apiFetch('/compensatory-leave/grants', { method: 'POST', body: input })
+}
+
+export function fetchCompensatoryLeaveGrantsForUser(userId: string): Promise<CompensatoryLeaveGrant[]> {
+  return apiFetch(`/compensatory-leave/grants/user/${userId}`)
+}
+
+/** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。付与元(自動導出/手動)を問わず利用できる。 */
+export function revokeCompensatoryLeaveGrant(grantId: string, reason?: string): Promise<CompensatoryLeaveGrant> {
+  return apiFetch(`/compensatory-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}

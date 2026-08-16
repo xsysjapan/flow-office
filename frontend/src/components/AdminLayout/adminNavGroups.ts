@@ -118,6 +118,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "leave.manage",
       },
       {
+        to: "/admin/compensatory-leave",
+        label: "代休手動付与",
+        description: "休日出勤の実績日を指定して代休を手動付与する",
+        feature: "paid_leave.requests",
+        permission: "leave.manage",
+      },
+      {
         to: "/admin/attendance",
         label: "勤怠参照",
         description: "対象社員の月次・週次・日次の勤怠を確認する",

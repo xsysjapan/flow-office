@@ -68,6 +68,11 @@ export function grantSpecialLeave(input: GrantSpecialLeaveInput): Promise<Specia
   return apiFetch('/special-leave/grants', { method: 'POST', body: input })
 }
 
+/** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
+export function revokeSpecialLeaveGrant(grantId: string, reason?: string): Promise<SpecialLeaveGrant> {
+  return apiFetch(`/special-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}
+
 export function fetchMySpecialLeaveRequests(): Promise<SpecialLeaveRequest[]> {
   return apiFetch('/special-leave/requests/mine')
 }

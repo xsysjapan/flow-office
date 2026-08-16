@@ -117,18 +117,22 @@ describe('SpecialLeaveAdminPage', () => {
       used_days: 0,
       remaining_days: 3,
       grant_reason: null,
+      status: 'active',
+      revoked_at: null,
+      revoked_by_user_id: null,
+      revoke_reason: null,
     } as SpecialLeaveGrant)
 
     renderPage()
     await screen.findByText('誕生日休暇: 誕生日休暇ルール')
 
-    await userEvent.click(screen.getByLabelText('対象社員'))
+    await userEvent.click(screen.getByLabelText('付与対象'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[1], '誕生日休暇')
     await pickDate(userEvent.setup(), '付与日', '2026-07-01')
     await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
-    await userEvent.click(screen.getByRole('button', { name: '付与する' }))
+    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
 
     await waitFor(() =>
       expect(specialLeaveApi.grantSpecialLeave).toHaveBeenCalledWith({

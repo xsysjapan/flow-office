@@ -759,6 +759,8 @@ export interface BackOfficeTask {
   created_at: string | null;
 }
 
+export type LeaveGrantStatus = "active" | "revoked";
+
 export interface PaidLeaveGrant {
   id: string;
   user_id: string;
@@ -768,6 +770,23 @@ export interface PaidLeaveGrant {
   used_days: number;
   remaining_days: number;
   grant_reason: string | null;
+  status: LeaveGrantStatus;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoke_reason: string | null;
+}
+
+export interface GroupOption {
+  id: string;
+  name: string;
+}
+
+export interface GroupMember {
+  user_id: string;
+  name: string;
+  email: string;
+  membership_kind: string;
+  is_primary: boolean;
 }
 
 export interface PaidLeaveGrantRuleStep {
@@ -783,7 +802,8 @@ export interface PaidLeaveGrantRuleStep {
 export interface CompensatoryLeaveGrant {
   id: string;
   user_id: string;
-  attendance_day_id: string;
+  source: "attendance" | "manual";
+  attendance_day_id: string | null;
   work_date: string;
   status: "draft" | "confirmed" | "cancelled";
   granted_days: number;
@@ -794,6 +814,7 @@ export interface CompensatoryLeaveGrant {
   remaining_minutes: number | null;
   confirmed_at: string | null;
   expires_on: string | null;
+  grant_reason: string | null;
 }
 
 /** 代休の消化申請。ステータス・取得単位は有給申請と同じ概念のため型を再利用する。 */
@@ -871,6 +892,10 @@ export interface SpecialLeaveGrant {
   used_days: number;
   remaining_days: number;
   grant_reason: string | null;
+  status: LeaveGrantStatus;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoke_reason: string | null;
 }
 
 export interface SpecialLeaveGrantRuleStep {

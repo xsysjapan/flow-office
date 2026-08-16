@@ -10,6 +10,7 @@ import {
   fetchPaidLeaveGrantsForUser,
   fetchPaidLeaveHistoryForUser,
   grantPaidLeave,
+  revokePaidLeaveGrant,
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
   type GrantPaidLeaveInput,
@@ -53,6 +54,17 @@ export function useGrantPaidLeave() {
     mutationFn: (input: GrantPaidLeaveInput) => grantPaidLeave(input),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', input.user_id] })
+    },
+  })
+}
+
+export function useRevokePaidLeaveGrant() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ grantId, reason }: { grantId: string; reason?: string }) => revokePaidLeaveGrant(grantId, reason),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', data.user_id] })
     },
   })
 }

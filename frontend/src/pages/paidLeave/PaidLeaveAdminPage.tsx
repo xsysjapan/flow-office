@@ -1,19 +1,23 @@
 import { useState } from 'react'
+import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
+import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
-import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
   useCreatePaidLeaveGrantRule,
   useGrantPaidLeave,
   usePaidLeaveGrantRules,
   usePaidLeaveGrantsForUser,
+  useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
 
 interface StepInput {
@@ -175,36 +179,84 @@ function PaidLeaveGrantRulesCard() {
   )
 }
 
+function ResultSummary({ results, labels }: { results: BulkGrantResult[]; labels: Record<string, string> }) {
+  const failures = results.filter((r) => !r.success)
+  return (
+    <div className="mt-4 rounded-md border border-border p-3 text-sm">
+      <p className="font-medium text-foreground">
+        {results.length - failures.length}件成功 / {failures.length}件失敗
+      </p>
+      {failures.length > 0 && (
+        <ul className="mt-2 list-disc pl-4 text-destructive">
+          {failures.map((failure) => (
+            <li key={failure.userId}>
+              {labels[failure.userId] ?? failure.userId}: {failure.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function ManualGrantCard() {
-  const [userId, setUserId] = useState<string | undefined>(undefined)
+  const [targetIds, setTargetIds] = useState<string[]>([])
+  const [targetMode, setTargetMode] = useState<GrantTargetMode>('individual')
+  const [targetLabels, setTargetLabels] = useState<Record<string, string>>({})
   const [grantedOn, setGrantedOn] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
   const [grantedDays, setGrantedDays] = useState('')
   const [grantReason, setGrantReason] = useState('')
+  const [results, setResults] = useState<BulkGrantResult[] | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const grantPaidLeave = useGrantPaidLeave()
-  const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(userId ?? '')
+  const revokeGrant = useRevokePaidLeaveGrant()
 
-  const handleGrant = () => {
-    if (!userId) return
-    grantPaidLeave.mutate({
-      user_id: userId,
-      granted_on: grantedOn,
-      expires_on: expiresOn,
-      granted_days: Number(grantedDays),
-      grant_reason: grantReason || undefined,
-    })
+  const singleTargetUserId = targetMode === 'individual' && targetIds.length === 1 ? targetIds[0] : undefined
+  const { data: userGrants, isLoading: isLoadingUserGrants } = usePaidLeaveGrantsForUser(singleTargetUserId ?? '')
+
+  const failedIds = results?.filter((r) => !r.success).map((r) => r.userId) ?? []
+
+  const handleGrant = async () => {
+    if (targetIds.length === 0 || !grantedOn || !expiresOn || !grantedDays) return
+    setIsSubmitting(true)
+    setResults(null)
+    const outcomes = await runBulkGrant(targetIds, (userId) =>
+      grantPaidLeave.mutateAsync({
+        user_id: userId,
+        granted_on: grantedOn,
+        expires_on: expiresOn,
+        granted_days: Number(grantedDays),
+        grant_reason: grantReason || undefined,
+      }),
+    )
+    setIsSubmitting(false)
+    setResults(outcomes)
+    if (outcomes.every((o) => o.success)) {
+      setGrantedOn('')
+      setExpiresOn('')
+      setGrantedDays('')
+      setGrantReason('')
+    }
   }
 
   return (
     <Card title="手動付与">
-      {grantPaidLeave.error && <ErrorMessage error={grantPaidLeave.error} />}
+      <FormField label="付与対象" htmlFor="grant-target-users" required>
+        <GrantTargetPicker
+          idPrefix="grant-target"
+          onResolvedChange={(ids, mode, labels) => {
+            setTargetMode(mode)
+            setTargetIds(ids)
+            setTargetLabels(labels)
+          }}
+          resetSignal={results}
+          resetIndividualIds={failedIds}
+        />
+      </FormField>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="対象社員" htmlFor="grant-target-user" required>
-          <UserPicker id="grant-target-user" value={userId} onChange={setUserId} />
-        </FormField>
-
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="付与日" htmlFor="grant-granted-on" required>
           <DatePicker id="grant-granted-on" value={grantedOn || undefined} onChange={(date) => setGrantedOn(date ?? '')} />
         </FormField>
@@ -229,14 +281,14 @@ function ManualGrantCard() {
 
       <div className="mt-4 flex flex-col items-start gap-1">
         <Button
-          isLoading={grantPaidLeave.isPending}
-          disabled={!userId || !grantedOn || !expiresOn || !grantedDays}
-          onClick={handleGrant}
+          isLoading={isSubmitting}
+          disabled={targetIds.length === 0 || !grantedOn || !expiresOn || !grantedDays}
+          onClick={() => void handleGrant()}
         >
-          付与する
+          {targetIds.length}名に付与する
         </Button>
-        {!userId ? (
-          <p className="text-xs text-muted-foreground">対象社員を選択してください。</p>
+        {targetIds.length === 0 ? (
+          <p className="text-xs text-muted-foreground">付与対象を選択してください。</p>
         ) : !grantedOn ? (
           <p className="text-xs text-muted-foreground">付与日を選択してください。</p>
         ) : !expiresOn ? (
@@ -246,7 +298,9 @@ function ManualGrantCard() {
         ) : null}
       </div>
 
-      {userId !== undefined && (
+      {results && <ResultSummary results={results} labels={targetLabels} />}
+
+      {singleTargetUserId !== undefined && (
         <div className="mt-6">
           <h3 className="mb-2 text-sm font-semibold text-foreground">対象社員の有給付与状況</h3>
           {isLoadingUserGrants ? (
@@ -256,8 +310,25 @@ function ManualGrantCard() {
           ) : (
             <ul className="divide-y divide-border">
               {(userGrants ?? []).map((grant) => (
-                <li key={grant.id} className="py-2 text-sm text-foreground">
-                  {grant.granted_on} 〜 {grant.expires_on} / 残{grant.remaining_days}日
+                <li key={grant.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-foreground">
+                  <span>
+                    {grant.granted_on} 〜 {grant.expires_on} / 残{grant.remaining_days}日
+                    {grant.status === 'revoked' && (
+                      <Badge tone="neutral">取消済み{grant.revoke_reason ? `(${grant.revoke_reason})` : ''}</Badge>
+                    )}
+                  </span>
+                  {grant.status === 'active' && (
+                    <RevokeGrantButton
+                      id={`revoke-reason-${grant.id}`}
+                      title="有給付与を取り消しますか?"
+                      description={`${grant.granted_on}付与分(${grant.granted_days}日)を取り消します。この操作は元に戻せません。`}
+                      isPending={revokeGrant.isPending}
+                      error={revokeGrant.error}
+                      onRevoke={(reason) => revokeGrant.mutateAsync({ grantId: grant.id, reason })}
+                      disabled={grant.used_days > 0}
+                      disabledReason="既に消化された分は取り消せません。"
+                    />
+                  )}
                 </li>
               ))}
             </ul>

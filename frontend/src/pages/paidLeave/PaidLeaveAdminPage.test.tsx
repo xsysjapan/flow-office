@@ -84,6 +84,10 @@ describe('PaidLeaveAdminPage', () => {
       used_days: 0,
       remaining_days: 10,
       grant_reason: null,
+      status: 'active',
+      revoked_at: null,
+      revoked_by_user_id: null,
+      revoke_reason: null,
     } as PaidLeaveGrant)
 
     renderPage()
@@ -94,7 +98,7 @@ describe('PaidLeaveAdminPage', () => {
     await pickDate(userEvent.setup(), '付与日', '2026-07-01')
     await pickDate(userEvent.setup(), '失効日', '2027-06-30')
     await userEvent.type(screen.getByLabelText('付与日数', { selector: '#grant-granted-days' }), '10')
-    await userEvent.click(screen.getByRole('button', { name: '付与する' }))
+    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
 
     await waitFor(() =>
       expect(paidLeaveApi.grantPaidLeave).toHaveBeenCalledWith({
@@ -105,5 +109,6 @@ describe('PaidLeaveAdminPage', () => {
         grant_reason: undefined,
       }),
     )
+    expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
   })
 })
