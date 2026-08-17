@@ -3,7 +3,9 @@ import {
   cancelCompensatoryLeaveRequest,
   createCompensatoryLeaveRequest,
   fetchCompensatoryLeaveGrantsForUser,
+  fetchCompensatoryLeaveHistoryForUser,
   fetchMyCompensatoryLeaveGrants,
+  fetchMyCompensatoryLeaveHistory,
   fetchMyCompensatoryLeaveRequests,
   grantCompensatoryLeave,
   revokeCompensatoryLeaveGrant,
@@ -76,5 +78,17 @@ export function useCancelCompensatoryLeaveRequest() {
   return useMutation({
     mutationFn: (id: string) => cancelCompensatoryLeaveRequest(id),
     onSuccess: () => invalidate(),
+  })
+}
+
+export function useMyCompensatoryLeaveHistory() {
+  return useQuery({ queryKey: ['compensatory-leave', 'history', 'mine'], queryFn: fetchMyCompensatoryLeaveHistory })
+}
+
+export function useCompensatoryLeaveHistoryForUser(userId: string) {
+  return useQuery({
+    queryKey: ['compensatory-leave', 'history', 'user', userId],
+    queryFn: () => fetchCompensatoryLeaveHistoryForUser(userId),
+    enabled: Boolean(userId),
   })
 }

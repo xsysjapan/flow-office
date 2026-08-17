@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, PaidLeaveType } from './types'
+import type { CompensatoryLeaveGrant, CompensatoryLeaveRequest, PaidLeaveType, StoredEvent } from './types'
 
 /** UC相当: 自分の代休残数(付与)を取得する。付与は休日出勤の勤怠実績から自動導出されるため、付与のCRUDは無い。 */
 export function fetchMyCompensatoryLeaveGrants(): Promise<CompensatoryLeaveGrant[]> {
@@ -51,4 +51,14 @@ export function fetchCompensatoryLeaveGrantsForUser(userId: string): Promise<Com
 /** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。付与元(自動導出/手動)を問わず利用できる。 */
 export function revokeCompensatoryLeaveGrant(grantId: string, reason?: string): Promise<CompensatoryLeaveGrant> {
   return apiFetch(`/compensatory-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}
+
+/** 自分の代休履歴(付与・申請・承認・差戻し・取消・消化)を新しい順に取得する。 */
+export function fetchMyCompensatoryLeaveHistory(): Promise<StoredEvent[]> {
+  return apiFetch('/compensatory-leave/history/mine')
+}
+
+/** 管理者・人事担当者が対象社員の代休履歴を取得する。 */
+export function fetchCompensatoryLeaveHistoryForUser(userId: string): Promise<StoredEvent[]> {
+  return apiFetch(`/compensatory-leave/history/user/${userId}`)
 }

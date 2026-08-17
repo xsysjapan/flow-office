@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as usersApi from '../../api/users'
-import type { CompensatoryLeaveGrant, Paginated, User } from '../../api/types'
+import type { CompensatoryLeaveGrant, Paginated, StoredEvent, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
 
@@ -18,12 +19,14 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage() {
+function renderPage(initialPath = '/admin/compensatory-leave') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <CompensatoryLeaveAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <CompensatoryLeaveAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -72,5 +75,24 @@ describe('CompensatoryLeaveAdminPage', () => {
       }),
     )
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+  })
+
+  it('shows the selected users history from the ?userId= URL query param', async () => {
+    const event: StoredEvent = {
+      id: 'evt-1',
+      event_id: 'evt-1',
+      aggregate_type: 'compensatory_leave_grant',
+      aggregate_id: '1',
+      version: 1,
+      event_type: 'compensatory_leave.manually_granted',
+      payload: { work_date: '2026-08-01', granted_days: 1, granted_minutes: 480, expires_on: null, grant_reason: null },
+      occurred_at: '2026-08-16T09:00:00+09:00',
+    }
+    vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveHistoryForUser').mockResolvedValue([event])
+
+    renderPage('/admin/compensatory-leave?userId=user-3')
+
+    expect(await screen.findByText('対象日 2026-08-01 の休日出勤分として1日を手動付与(有効期限なし)')).toBeInTheDocument()
+    expect(compensatoryLeaveApi.fetchCompensatoryLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

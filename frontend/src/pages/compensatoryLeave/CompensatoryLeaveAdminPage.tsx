@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -6,11 +7,14 @@ import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
+import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
+import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Input } from '../../components/ui/input'
 import {
   useCompensatoryLeaveGrantsForUser,
+  useCompensatoryLeaveHistoryForUser,
   useGrantCompensatoryLeave,
   useRevokeCompensatoryLeaveGrant,
 } from '../../hooks/useCompensatoryLeave'
@@ -170,15 +174,61 @@ function ManualGrantCard() {
   )
 }
 
+function CompensatoryLeaveHistoryCard() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get('userId') ?? undefined
+  const { data, isLoading, error } = useCompensatoryLeaveHistoryForUser(userId ?? '')
+
+  const handleUserChange = (value: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) {
+      next.set('userId', value)
+    } else {
+      next.delete('userId')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0
+
+  return (
+    <Card title="代休履歴">
+      <div className="max-w-sm">
+        <FormField label="対象社員" htmlFor="compensatory-leave-history-user">
+          <UserPicker id="compensatory-leave-history-user" value={userId} onChange={handleUserChange} />
+        </FormField>
+      </div>
+
+      {userId === undefined ? (
+        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の代休履歴を確認できます。" />
+      ) : isEmpty ? (
+        <EmptyState
+          title="代休履歴はまだありません。"
+          description="対象社員が代休を申請・付与されると、ここに履歴が表示されます。"
+          action={
+            <Button variant="secondary" onClick={() => handleUserChange(undefined)}>
+              社員選択をクリア
+            </Button>
+          }
+        />
+      ) : (
+        <LeaveHistoryList domain="compensatory_leave" events={data} isLoading={isLoading} error={error} />
+      )}
+    </Card>
+  )
+}
+
 /**
- * 代休の手動付与(管理者・人事向け)。有給・特別休暇と異なり自動付与ルール・種類マスタは
- * 無く、休日出勤の実績日を指定した手動付与のみを扱う。専用の履歴画面・履歴APIも無く、
- * 上記の付与状況一覧(対象社員選択時に表示される)が履歴表示を兼ねる。
+ * 代休の手動付与・履歴確認(管理者・人事向け)。有給・特別休暇と異なり自動付与ルール・
+ * 種類マスタは無く、休日出勤の実績日を指定した手動付与のみを扱う。付与状況一覧(対象社員
+ * 選択時に表示される、現在の残数確認用)に加え、対象社員を選んで付与・申請・承認・消化等の
+ * イベント履歴を時系列で確認できる履歴カードを提供する(有給・特別休暇の履歴カードと同じ形)。
  */
 export function CompensatoryLeaveAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <ManualGrantCard />
+      <CompensatoryLeaveHistoryCard />
     </div>
   )
 }

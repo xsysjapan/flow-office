@@ -3,6 +3,8 @@ import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
 import { LoadingState } from '../LoadingState/LoadingState'
 import type { StoredEvent } from '../../api/types'
 import {
+  compensatoryLeaveEventDetail,
+  compensatoryLeaveEventTypeLabel,
   paidLeaveEventDetail,
   paidLeaveEventTypeLabel,
   specialLeaveEventDetail,
@@ -27,6 +29,13 @@ const DOMAIN_TEXT = {
     errorFallback: '特別休暇履歴の取得に失敗しました。',
     eventTypeLabel: specialLeaveEventTypeLabel,
     eventDetail: specialLeaveEventDetail,
+  },
+  compensatory_leave: {
+    label: '代休履歴',
+    empty: '代休履歴はまだありません。',
+    errorFallback: '代休履歴の取得に失敗しました。',
+    eventTypeLabel: compensatoryLeaveEventTypeLabel,
+    eventDetail: compensatoryLeaveEventDetail,
   },
 } as const
 
