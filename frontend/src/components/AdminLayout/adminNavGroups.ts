@@ -97,23 +97,9 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "leave.manage",
       },
       {
-        to: "/admin/paid-leave/history",
-        label: "有給履歴",
-        description: "対象社員の有給履歴を確認する",
-        feature: "paid_leave.requests",
-        permission: "leave.manage",
-      },
-      {
         to: "/admin/special-leave",
         label: "特別休暇設定",
         description: "特別休暇の種類・付与ルールを管理する",
-        feature: "paid_leave.requests",
-        permission: "leave.manage",
-      },
-      {
-        to: "/admin/special-leave/history",
-        label: "特別休暇履歴",
-        description: "対象社員の特別休暇履歴を確認する",
         feature: "paid_leave.requests",
         permission: "leave.manage",
       },

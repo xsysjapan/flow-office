@@ -41,10 +41,8 @@ import { CalendarBulkOperationsPage } from "./pages/workCalendar/CalendarBulkOpe
 import { WorkStylesPage } from "./pages/workCalendar/WorkStylesPage";
 import { ShiftsPage } from "./pages/workCalendar/ShiftsPage";
 import { PaidLeaveAdminPage } from "./pages/paidLeave/PaidLeaveAdminPage";
-import { PaidLeaveHistoryAdminPage } from "./pages/paidLeave/PaidLeaveHistoryAdminPage";
 import { SpecialLeaveAdminPage } from "./pages/specialLeave/SpecialLeaveAdminPage";
 import { CompensatoryLeaveAdminPage } from "./pages/compensatoryLeave/CompensatoryLeaveAdminPage";
-import { SpecialLeaveHistoryAdminPage } from "./pages/specialLeave/SpecialLeaveHistoryAdminPage";
 import { AttendanceReferencePage } from "./pages/attendance/AttendanceReferencePage";
 import { AuditLogPage } from "./pages/admin/AuditLogPage";
 import { AttendanceExportPage } from "./pages/attendance/AttendanceExportPage";
@@ -180,15 +178,7 @@ function App() {
           <Route path="work-styles" element={<WorkStylesPage />} />
           <Route path="shifts" element={<ShiftsPage />} />
           <Route path="paid-leave" element={<PaidLeaveAdminPage />} />
-          <Route
-            path="paid-leave/history"
-            element={<PaidLeaveHistoryAdminPage />}
-          />
           <Route path="special-leave" element={<SpecialLeaveAdminPage />} />
-          <Route
-            path="special-leave/history"
-            element={<SpecialLeaveHistoryAdminPage />}
-          />
           <Route
             path="compensatory-leave"
             element={<CompensatoryLeaveAdminPage />}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -7,8 +8,10 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
+import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
+import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
@@ -20,6 +23,7 @@ import {
   useRevokeSpecialLeaveGrant,
   useSpecialLeaveGrantRules,
   useSpecialLeaveGrantsForUser,
+  useSpecialLeaveHistoryForUser,
   useSpecialLeaveTypes,
   useUpdateSpecialLeaveType,
 } from '../../hooks/useSpecialLeave'
@@ -504,8 +508,53 @@ function ManualGrantCard() {
   )
 }
 
+function SpecialLeaveHistoryCard() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const userId = searchParams.get('userId') ?? undefined
+  const { data, isLoading, error } = useSpecialLeaveHistoryForUser(userId ?? '')
+
+  const handleUserChange = (value: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) {
+      next.set('userId', value)
+    } else {
+      next.delete('userId')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0
+
+  return (
+    <Card title="特別休暇履歴">
+      <div className="max-w-sm">
+        <FormField label="対象社員" htmlFor="special-leave-history-user">
+          <UserPicker id="special-leave-history-user" value={userId} onChange={handleUserChange} />
+        </FormField>
+      </div>
+
+      {userId === undefined ? (
+        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の特別休暇履歴を確認できます。" />
+      ) : isEmpty ? (
+        <EmptyState
+          title="特別休暇履歴はまだありません。"
+          description="対象社員が特別休暇を申請・付与されると、ここに履歴が表示されます。"
+          action={
+            <Button variant="secondary" onClick={() => handleUserChange(undefined)}>
+              社員選択をクリア
+            </Button>
+          }
+        />
+      ) : (
+        <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />
+      )}
+    </Card>
+  )
+}
+
 /**
- * 特別休暇の種類・自動付与ルールの設定と手動付与(管理者・人事向け)。
+ * 特別休暇の種類・自動付与ルールの設定・手動付与・対象社員の履歴確認・付与取消を
+ * 1画面にまとめて管理者・人事向けに提供する。
  */
 export function SpecialLeaveAdminPage() {
   return (
@@ -513,6 +562,7 @@ export function SpecialLeaveAdminPage() {
       <SpecialLeaveTypesCard />
       <SpecialLeaveGrantRulesCard />
       <ManualGrantCard />
+      <SpecialLeaveHistoryCard />
     </div>
   )
 }

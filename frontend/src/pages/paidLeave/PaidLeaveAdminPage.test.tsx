@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
-import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, User } from '../../api/types'
+import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, StoredEvent, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
 
@@ -29,13 +30,15 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage(rules: PaidLeaveGrantRule[] = [rule]) {
+function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue(rules)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <PaidLeaveAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <PaidLeaveAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -92,7 +95,7 @@ describe('PaidLeaveAdminPage', () => {
 
     renderPage()
 
-    await userEvent.click(await screen.findByRole('combobox'))
+    await userEvent.click(document.getElementById('grant-target-users')!)
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await pickDate(userEvent.setup(), '付与日', '2026-07-01')
@@ -110,5 +113,24 @@ describe('PaidLeaveAdminPage', () => {
       }),
     )
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
+  })
+
+  it('shows the selected users history from the ?userId= URL query param', async () => {
+    const event: StoredEvent = {
+      id: 'evt-1',
+      event_id: 'evt-1',
+      aggregate_type: 'paid_leave_grant',
+      aggregate_id: '1',
+      version: 1,
+      event_type: 'paid_leave.granted',
+      payload: { granted_days: 10, expires_on: '2027-06-30' },
+      occurred_at: '2025-07-01T09:00:00+09:00',
+    }
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveHistoryForUser').mockResolvedValue([event])
+
+    renderPage([rule], '/admin/paid-leave?userId=user-3')
+
+    expect(await screen.findByText('10日を付与(有効期限 2027-06-30)')).toBeInTheDocument()
+    expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })

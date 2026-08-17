@@ -1,10 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
-import type { Paginated, SpecialLeaveGrant, SpecialLeaveGrantRule, SpecialLeaveType, User } from '../../api/types'
+import type {
+  Paginated,
+  SpecialLeaveGrant,
+  SpecialLeaveGrantRule,
+  SpecialLeaveType,
+  StoredEvent,
+  User,
+} from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
@@ -34,14 +42,20 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage(types: SpecialLeaveType[] = [birthdayType], rules: SpecialLeaveGrantRule[] = [rule]) {
+function renderPage(
+  types: SpecialLeaveType[] = [birthdayType],
+  rules: SpecialLeaveGrantRule[] = [rule],
+  initialPath = '/admin/special-leave',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(types)
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantRules').mockResolvedValue(rules)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <SpecialLeaveAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <SpecialLeaveAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -144,5 +158,24 @@ describe('SpecialLeaveAdminPage', () => {
         grant_reason: undefined,
       }),
     )
+  })
+
+  it('shows the selected users history from the ?userId= URL query param', async () => {
+    const event: StoredEvent = {
+      id: 'evt-1',
+      event_id: 'evt-1',
+      aggregate_type: 'special_leave_grant',
+      aggregate_id: '1',
+      version: 1,
+      event_type: 'special_leave.granted',
+      payload: { granted_days: 3, expires_on: null },
+      occurred_at: '2026-07-01T09:00:00+09:00',
+    }
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveHistoryForUser').mockResolvedValue([event])
+
+    renderPage([birthdayType], [rule], '/admin/special-leave?userId=user-3')
+
+    expect(await screen.findByText('3日を付与(有効期限なし)')).toBeInTheDocument()
+    expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
   })
 })
