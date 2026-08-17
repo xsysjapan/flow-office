@@ -275,3 +275,9 @@ Command/`GrantCompensatoryLeaveHandler`)。対象日に休日出勤の実績が�
 取消申請→承認フロー(上記、`request-cancellation`/`grant-cancellations/{id}/approve`)とは
 別の、承認を経ない管理者専用の即時取消経路であり、既存の`CancelCompensatoryLeaveGrant`
 Command/Handlerをそのまま再利用する(`used_days`が0より大きい場合は同様に取消不可)。
+
+有給・特別休暇のUC-P007と同様、`GET /compensatory-leave/history/mine`(本人)・
+`GET /compensatory-leave/history/user/{userId}`(`leave.manage` Permission)で
+代休の付与・申請・承認・差戻し・取消のstored_eventsを時系列(新しい順)で確認できる
+(`App\Domain\Leave\Support\LeaveHistoryQuery`共通実装。手動付与・自動導出のどちらの
+Grantも区別なく含まれる)。

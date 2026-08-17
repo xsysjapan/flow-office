@@ -381,6 +381,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // --- 代休の残数管理・消化申請・承認(付与は休日出勤の勤怠実績から自動導出される。
     //     ビジネスロジックはApp\Domain\CompensatoryLeaveとして完全に独立させる) ---
     Route::get('/compensatory-leave/grants/mine', [CompensatoryLeaveController::class, 'myGrants']);
+    Route::get('/compensatory-leave/history/mine', [CompensatoryLeaveController::class, 'myHistory']);
     Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
     Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
@@ -391,6 +392,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation'])->middleware('permission:approval.execute');
     Route::middleware('permission:leave.manage,any')->group(function () {
         Route::get('/compensatory-leave/grants/user/{userId}', [CompensatoryLeaveController::class, 'grantsForUser']);
+        Route::get('/compensatory-leave/history/user/{userId}', [CompensatoryLeaveController::class, 'historyForUser']);
         Route::post('/compensatory-leave/grants', [CompensatoryLeaveController::class, 'grant']);
         Route::post('/compensatory-leave/grants/{grant}/revoke', [CompensatoryLeaveController::class, 'revoke']);
     });

@@ -11,6 +11,7 @@ use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -18,6 +19,7 @@ use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompensatoryLeaveGrantResource;
 use App\Http\Resources\CompensatoryLeaveRequestResource;
+use App\Http\Resources\StoredEventResource;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
@@ -380,6 +382,40 @@ class CompensatoryLeaveController extends Controller
     }
 
     /**
+     * 自分の代休履歴を確認する。EventStore(stored_events)を正の記録として直接検索する
+     * (付与・申請・承認・差戻し・取消のすべてを時系列で表示するため、現残高スナップショット
+     * のみを返す`myGrants`とは別に用意する。paid-leave/special-leaveと同じ考え方)。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/history/mine',
+        operationId: 'compensatoryLeave.history.mine',
+        summary: '自分の代休履歴を取得する',
+        tags: ['代休'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function myHistory(Request $request): AnonymousResourceCollection
+    {
+        return $this->historyResponse($request->user()->id);
+    }
+
+    /**
+     * 管理者・人事担当者が対象社員の代休履歴を確認する。他の管理者向けエンドポイント
+     * (`grantsForUser`等)と同様、認可はルート側のPermissionで行う。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/history/user/{userId}',
+        operationId: 'compensatoryLeave.history.forUser',
+        summary: '社員の代休履歴を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function historyForUser(string $userId): AnonymousResourceCollection
+    {
+        return $this->historyResponse($userId);
+    }
+
+    /**
      * 承認・差戻し対象のworkflow_request(subject_type=compensatory_leave_request)を特定する。
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
@@ -398,5 +434,20 @@ class CompensatoryLeaveController extends Controller
         }
 
         return $workflowRequest->id;
+    }
+
+    /**
+     * `compensatory_leave_grant`/`compensatory_leave_request`それぞれの集約に属するイベントを
+     * 時系列で返す(LeaveHistoryQuery参照。有給・特別休暇で共通の読み取り専用Query)。
+     */
+    private function historyResponse(string $userId): AnonymousResourceCollection
+    {
+        $events = LeaveHistoryQuery::eventsForUser(
+            userId: $userId,
+            grantModelClass: CompensatoryLeaveGrant::class,
+            requestModelClass: CompensatoryLeaveRequest::class,
+        );
+
+        return StoredEventResource::collection($events);
     }
 }
