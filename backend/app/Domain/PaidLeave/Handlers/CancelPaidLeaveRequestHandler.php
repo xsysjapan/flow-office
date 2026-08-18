@@ -41,7 +41,7 @@ class CancelPaidLeaveRequestHandler implements CommandHandler
 
         $request = PaidLeaveRequest::query()->findOrFail($command->paidLeaveRequestId);
 
-        if ($request->user_id !== $command->cancelledByUserId) {
+        if (! $command->isAdminAction && $request->user_id !== $command->cancelledByUserId) {
             throw new DomainRuleException('自分の有給申請のみ取消できます。');
         }
 

@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest as ApproveCompensatoryLeaveRequestCommand;
+use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
 use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\GrantCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
+use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -16,9 +19,12 @@ use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompensatoryLeaveGrantResource;
 use App\Http\Resources\CompensatoryLeaveRequestResource;
+use App\Http\Resources\CompensatoryLeaveUsageResource;
+use App\Http\Resources\StoredEventResource;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
+use App\Models\CompensatoryLeaveUsage;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
@@ -55,6 +61,86 @@ class CompensatoryLeaveController extends Controller
             ->get();
 
         return CompensatoryLeaveGrantResource::collection($grants);
+    }
+
+    #[OA\Get(
+        path: '/compensatory-leave/grants/user/{userId}',
+        operationId: 'compensatoryLeave.grants.forUser',
+        summary: '社員の代休残数を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function grantsForUser(string $userId): AnonymousResourceCollection
+    {
+        $grants = CompensatoryLeaveGrant::query()
+            ->where('user_id', $userId)
+            ->orderByRaw('expires_on is null')
+            ->orderBy('expires_on')
+            ->get();
+
+        return CompensatoryLeaveGrantResource::collection($grants);
+    }
+
+    /**
+     * 管理者が、休日出勤の対象日(workDate)を指定して代休を手動付与する
+     * (App\Domain\CompensatoryLeave\Handlers\GrantCompensatoryLeaveHandler参照。
+     * 付与日数は勤怠実績からの自動導出と同じルールで算出され、承認不要でstatus=confirmedの
+     * まま作成される)。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/grants',
+        operationId: 'compensatoryLeave.grants.store',
+        summary: '代休を手動付与する',
+        tags: ['代休'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'work_date'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'work_date', type: 'string', format: 'date', description: '実際に休日出勤した日'), new OA\Property(property: 'expires_on', type: 'string', format: 'date', nullable: true), new OA\Property(property: 'grant_reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function grant(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            'work_date' => ['required', 'date'],
+            'expires_on' => ['nullable', 'date', 'after:work_date'],
+            'grant_reason' => ['nullable', 'string'],
+        ]);
+
+        $grant = $commandBus->dispatch(new GrantCompensatoryLeave(
+            userId: $data['user_id'],
+            workDate: $data['work_date'],
+            expiresOn: $data['expires_on'] ?? null,
+            grantReason: $data['grant_reason'] ?? null,
+        ));
+
+        return (new CompensatoryLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が代休Grantを直接取り消す(承認フローを経由しない)。source(attendance/manual)を
+     * 問わず利用できる。既存のrequest-cancellation→approve(社員起点の申請→承認)フローは
+     * そのまま残し、こちらは管理者起点の別経路として提供する。既存の
+     * CancelCompensatoryLeaveGrantHandlerがused_days>0の場合にDomainRuleExceptionを投げる。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/grants/{grant}/revoke',
+        operationId: 'compensatoryLeave.grants.revoke',
+        summary: '代休付与を直接取り消す(承認不要)',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(content: new OA\JsonContent(properties: [new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function revoke(Request $request, CompensatoryLeaveGrant $grant, CommandBus $commandBus): CompensatoryLeaveGrantResource
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string']]);
+
+        $grant = $commandBus->dispatch(new CancelCompensatoryLeaveGrant(
+            grantId: $grant->id,
+            cancelledByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new CompensatoryLeaveGrantResource($grant);
     }
 
     #[OA\Post(
@@ -241,6 +327,49 @@ class CompensatoryLeaveController extends Controller
         return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
     }
 
+    /**
+     * 管理者が対象社員の代休申請を取り消す(自分の申請のみ取消可能な`cancelRequest`とは別に、
+     * 管理者は他者の承認済み申請も取り消せる。cancelledByUserIdは申請者本人ではなく操作者
+     * (管理者)のIDを渡す)。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/requests/{compensatoryLeaveRequest}/admin-cancel',
+        operationId: 'compensatoryLeave.requests.adminCancel',
+        summary: '管理者が社員の代休申請を取り消す',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'compensatoryLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function adminCancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    {
+        $commandBus->dispatch(new CancelCompensatoryLeaveRequest($compensatoryLeaveRequest->id, $request->user()->id, isAdminAction: true));
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * 管理者が対象社員の代休消化明細(compensatory_leave_usages)を確認する。取消は明細単位
+     * ではできず、明細に紐づく申請を`adminCancelRequest`で取り消すことで反映される。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/usages/user/{userId}',
+        operationId: 'compensatoryLeave.usages.forUser',
+        summary: '社員の代休消化明細を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function usagesForUser(string $userId): AnonymousResourceCollection
+    {
+        $usages = CompensatoryLeaveUsage::query()
+            ->with('request')
+            ->where('user_id', $userId)
+            ->orderByDesc('used_on')
+            ->get();
+
+        return CompensatoryLeaveUsageResource::collection($usages);
+    }
+
     #[OA\Post(
         path: '/compensatory-leave/grants/{grant}/request-cancellation',
         operationId: 'compensatoryLeave.grants.requestCancellation',
@@ -298,6 +427,40 @@ class CompensatoryLeaveController extends Controller
     }
 
     /**
+     * 自分の代休履歴を確認する。EventStore(stored_events)を正の記録として直接検索する
+     * (付与・申請・承認・差戻し・取消のすべてを時系列で表示するため、現残高スナップショット
+     * のみを返す`myGrants`とは別に用意する。paid-leave/special-leaveと同じ考え方)。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/history/mine',
+        operationId: 'compensatoryLeave.history.mine',
+        summary: '自分の代休履歴を取得する',
+        tags: ['代休'],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function myHistory(Request $request): AnonymousResourceCollection
+    {
+        return $this->historyResponse($request->user()->id);
+    }
+
+    /**
+     * 管理者・人事担当者が対象社員の代休履歴を確認する。他の管理者向けエンドポイント
+     * (`grantsForUser`等)と同様、認可はルート側のPermissionで行う。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/history/user/{userId}',
+        operationId: 'compensatoryLeave.history.forUser',
+        summary: '社員の代休履歴を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function historyForUser(string $userId): AnonymousResourceCollection
+    {
+        return $this->historyResponse($userId);
+    }
+
+    /**
      * 承認・差戻し対象のworkflow_request(subject_type=compensatory_leave_request)を特定する。
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
@@ -316,5 +479,20 @@ class CompensatoryLeaveController extends Controller
         }
 
         return $workflowRequest->id;
+    }
+
+    /**
+     * `compensatory_leave_grant`/`compensatory_leave_request`それぞれの集約に属するイベントを
+     * 時系列で返す(LeaveHistoryQuery参照。有給・特別休暇で共通の読み取り専用Query)。
+     */
+    private function historyResponse(string $userId): AnonymousResourceCollection
+    {
+        $events = LeaveHistoryQuery::eventsForUser(
+            userId: $userId,
+            grantModelClass: CompensatoryLeaveGrant::class,
+            requestModelClass: CompensatoryLeaveRequest::class,
+        );
+
+        return StoredEventResource::collection($events);
     }
 }

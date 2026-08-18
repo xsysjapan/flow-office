@@ -143,7 +143,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   // --- UC-P002: 手動付与 ---
   await pickUser(
     page,
-    "対象社員",
+    "付与対象",
     SCENARIO_USERS.monthlyEmployee,
     "mai.ito@example.com",
     { exact: true },
@@ -151,7 +151,7 @@ test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜�
   await pickDate(page, "付与日", `${fiscalYear}-04-01`, { exact: true });
   await pickDate(page, "失効日", `${fiscalYear + 2}-03-31`, { exact: true });
   await page.locator("#grant-granted-days").fill("5");
-  await page.getByRole("button", { name: "付与する" }).click();
+  await page.getByRole("button", { name: /名に付与する$/ }).click();
   await expect(
     page.getByText(`${fiscalYear}-04-01 〜 ${fiscalYear + 2}-03-31`),
   ).toBeVisible();

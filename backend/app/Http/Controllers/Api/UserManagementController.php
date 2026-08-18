@@ -41,6 +41,38 @@ class UserManagementController extends Controller
         return response()->json(GroupType::query()->orderBy('display_order')->orderBy('id')->get());
     }
 
+    /**
+     * frontendのグループ対象指定ピッカー(申請の承認ルート指定・通知対象範囲の選択等)向けの
+     * 軽量なグループ一覧。`groups`(admin/user-management配下、フル情報付き)とは別に、
+     * id・nameのみを返す読み取り専用エンドポイントとして提供する。
+     */
+    public function groupsLite(): JsonResponse
+    {
+        return response()->json(
+            Group::query()->orderBy('name')->get(['id', 'name'])
+        );
+    }
+
+    /**
+     * 指定グループのメンバー一覧(ユーザーid・氏名)を返す読み取り専用エンドポイント。
+     * groupsLiteと同じピッカー用途で使う。
+     */
+    public function groupMembers(Group $group): JsonResponse
+    {
+        $members = $group->memberships()
+            ->with('user:id,name,email')
+            ->get()
+            ->map(fn ($membership) => [
+                'user_id' => $membership->user_id,
+                'name' => $membership->user?->name,
+                'email' => $membership->user?->email,
+                'membership_kind' => $membership->membership_kind,
+                'is_primary' => $membership->is_primary,
+            ]);
+
+        return response()->json($members);
+    }
+
     public function groups(Request $request): JsonResponse
     {
         $query = Group::query()->with(['type', 'parent', 'features', 'memberships.user:id,name,email', 'roleAssignments.role', 'roleAssignments.scopeGroup'])->withCount('memberships');

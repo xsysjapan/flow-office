@@ -3,6 +3,7 @@
 namespace App\Domain\SpecialLeave\Aggregates;
 
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
+use App\Domain\SpecialLeave\Events\SpecialLeaveGrantRevoked;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsageReversed;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsed;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -80,6 +81,16 @@ class SpecialLeaveGrantAggregate extends AggregateRoot
             usedMinutes: $usedMinutes,
             usageType: $usageType,
         ));
+
+        return $this;
+    }
+
+    /**
+     * 管理者が未消化の付与を取り消す。消化済み日数があるかどうかはHandler側で検証済み。
+     */
+    public function revoke(string $revokedByUserId, ?string $reason): self
+    {
+        $this->recordThat(new SpecialLeaveGrantRevoked(revokedByUserId: $revokedByUserId, reason: $reason));
 
         return $this;
     }

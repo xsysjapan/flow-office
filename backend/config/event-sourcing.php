@@ -76,6 +76,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveManuallyGranted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
@@ -117,6 +118,7 @@ use App\Domain\Notification\Events\NotificationConfirmed;
 use App\Domain\Notification\Events\NotificationQueued;
 use App\Domain\Notification\Events\NotificationSent;
 use App\Domain\PaidLeave\Events\PaidLeaveGranted;
+use App\Domain\PaidLeave\Events\PaidLeaveGrantRevoked;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestCancelled;
 use App\Domain\PaidLeave\Events\PaidLeaveRequested;
@@ -132,6 +134,7 @@ use App\Domain\ShiftSwap\Events\ShiftSwapRequested;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestReturned;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveGranted;
+use App\Domain\SpecialLeave\Events\SpecialLeaveGrantRevoked;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
@@ -430,6 +433,7 @@ return [
         'paid_leave.used' => PaidLeaveUsed::class,
         'paid_leave.usage_reversed' => PaidLeaveUsageReversed::class,
         'paid_leave.warning_raised' => PaidLeaveWarningRaised::class,
+        'paid_leave.grant_revoked' => PaidLeaveGrantRevoked::class,
 
         'special_leave.granted' => SpecialLeaveGranted::class,
         'special_leave.requested' => SpecialLeaveRequested::class,
@@ -440,8 +444,10 @@ return [
         'special_leave.usage_designated' => SpecialLeaveUsageDesignated::class,
         'special_leave.used' => SpecialLeaveUsed::class,
         'special_leave.usage_reversed' => SpecialLeaveUsageReversed::class,
+        'special_leave.grant_revoked' => SpecialLeaveGrantRevoked::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
+        'compensatory_leave.manually_granted' => CompensatoryLeaveManuallyGranted::class,
         'compensatory_leave.grant_removed' => CompensatoryLeaveGrantRemoved::class,
         'compensatory_leave.grant_confirmed' => CompensatoryLeaveGrantConfirmed::class,
         'compensatory_leave.grant_cancelled' => CompensatoryLeaveGrantCancelled::class,

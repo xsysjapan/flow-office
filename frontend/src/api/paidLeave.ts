@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType, StoredEvent } from './types'
+import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType, PaidLeaveUsage, StoredEvent } from './types'
 
 export function fetchMyPaidLeaveGrants(): Promise<PaidLeaveGrant[]> {
   return apiFetch('/paid-leave/grants/mine')
@@ -39,6 +39,11 @@ export function grantPaidLeave(input: GrantPaidLeaveInput): Promise<PaidLeaveGra
   return apiFetch('/paid-leave/grants', { method: 'POST', body: input })
 }
 
+/** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
+export function revokePaidLeaveGrant(grantId: string, reason?: string): Promise<PaidLeaveGrant> {
+  return apiFetch(`/paid-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}
+
 export function fetchMyPaidLeaveRequests(): Promise<PaidLeaveRequest[]> {
   return apiFetch('/paid-leave/requests/mine')
 }
@@ -62,6 +67,17 @@ export function createPaidLeaveRequest(input: CreatePaidLeaveRequestInput): Prom
 
 export function cancelPaidLeaveRequest(id: string): Promise<PaidLeaveRequest> {
   return apiFetch(`/paid-leave/requests/${id}/cancel`, { method: 'POST' })
+}
+
+/** 管理者・人事担当者が対象社員の有給消化記録(usage)一覧を取得する(使用日の新しい順)。 */
+export function fetchPaidLeaveUsagesForUser(userId: string): Promise<PaidLeaveUsage[]> {
+  return apiFetch(`/paid-leave/usages/user/${userId}`)
+}
+
+/** 管理者による有給申請の取消(本人以外も対象)。承認済み(approved)の申請のみ取消可能で、
+ *  紐づく消化記録(usage)をすべて一括で取り消す。 */
+export function adminCancelPaidLeaveRequest(requestId: string): Promise<PaidLeaveRequest> {
+  return apiFetch(`/paid-leave/requests/${requestId}/admin-cancel`, { method: 'POST' })
 }
 
 /** UC-P007: 自分の有給履歴(付与・申請・承認・差戻し・取消・消化)を新しい順に取得する。 */

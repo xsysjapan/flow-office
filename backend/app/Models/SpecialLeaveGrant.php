@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * expires_onはnullable(null=失効しない)。主キーはUUID(HasUuids)。理由はPaidLeaveGrantと
  * 同じ(この行自体もSpecialLeaveGrantProjectorがstored_eventsから作成・更新する)。
  */
-#[Fillable(['id', 'user_id', 'special_leave_type_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason'])]
+#[Fillable(['id', 'user_id', 'special_leave_type_id', 'granted_on', 'expires_on', 'granted_days', 'used_days', 'remaining_days', 'grant_reason', 'status', 'revoked_at', 'revoked_by_user_id', 'revoke_reason'])]
 class SpecialLeaveGrant extends Model
 {
     use HasUuids;
@@ -31,6 +31,7 @@ class SpecialLeaveGrant extends Model
             'granted_days' => 'decimal:1',
             'used_days' => 'decimal:1',
             'remaining_days' => 'decimal:1',
+            'revoked_at' => 'datetime',
         ];
     }
 

@@ -1,10 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as specialLeaveApi from '../../api/specialLeave'
 import * as usersApi from '../../api/users'
-import type { Paginated, SpecialLeaveGrant, SpecialLeaveGrantRule, SpecialLeaveType, User } from '../../api/types'
+import type {
+  Paginated,
+  SpecialLeaveGrant,
+  SpecialLeaveGrantRule,
+  SpecialLeaveType,
+  SpecialLeaveUsage,
+  User,
+} from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { SpecialLeaveAdminPage } from './SpecialLeaveAdminPage'
 
@@ -34,14 +42,20 @@ const targetUser: User = {
   last_login_at: null,
 }
 
-function renderPage(types: SpecialLeaveType[] = [birthdayType], rules: SpecialLeaveGrantRule[] = [rule]) {
+function renderPage(
+  types: SpecialLeaveType[] = [birthdayType],
+  rules: SpecialLeaveGrantRule[] = [rule],
+  initialPath = '/admin/special-leave',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveTypes').mockResolvedValue(types)
   vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantRules').mockResolvedValue(rules)
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <SpecialLeaveAdminPage />
+      <MemoryRouter initialEntries={[initialPath]}>
+        <SpecialLeaveAdminPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -117,18 +131,22 @@ describe('SpecialLeaveAdminPage', () => {
       used_days: 0,
       remaining_days: 3,
       grant_reason: null,
+      status: 'active',
+      revoked_at: null,
+      revoked_by_user_id: null,
+      revoke_reason: null,
     } as SpecialLeaveGrant)
 
     renderPage()
     await screen.findByText('誕生日休暇: 誕生日休暇ルール')
 
-    await userEvent.click(screen.getByLabelText('対象社員'))
+    await userEvent.click(screen.getByLabelText('付与対象'))
     await userEvent.type(await screen.findByPlaceholderText('氏名またはメールアドレスで検索'), '対象')
     await userEvent.click(await screen.findByRole('option', { name: '対象社員(taisho@example.com)' }))
     await userEvent.selectOptions(screen.getAllByLabelText('特別休暇の種類')[1], '誕生日休暇')
     await pickDate(userEvent.setup(), '付与日', '2026-07-01')
     await userEvent.type(screen.getAllByLabelText('付与日数')[1], '3')
-    await userEvent.click(screen.getByRole('button', { name: '付与する' }))
+    await userEvent.click(screen.getByRole('button', { name: '1名に付与する' }))
 
     await waitFor(() =>
       expect(specialLeaveApi.grantSpecialLeave).toHaveBeenCalledWith({
@@ -140,5 +158,27 @@ describe('SpecialLeaveAdminPage', () => {
         grant_reason: undefined,
       }),
     )
+  })
+
+  it('shows the selected users usage records from the ?userId= URL query param', async () => {
+    const usage: SpecialLeaveUsage = {
+      id: 'usage-1',
+      user_id: 'user-3',
+      used_on: '2026-07-10',
+      used_days: 1,
+      used_minutes: null,
+      usage_type: 'full',
+      is_confirmed: true,
+      special_leave_grant_id: 'grant-1',
+      special_leave_request_id: 'request-1',
+      request_status: 'approved',
+    }
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveUsagesForUser').mockResolvedValue([usage])
+
+    renderPage([birthdayType], [rule], '/admin/special-leave?userId=user-3')
+
+    expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(specialLeaveApi.fetchSpecialLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
   })
 })

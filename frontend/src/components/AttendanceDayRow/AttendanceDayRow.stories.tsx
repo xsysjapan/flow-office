@@ -46,3 +46,11 @@ export const NotEntered: Story = {
 export const WithWarnings: Story = {
   args: { date: '2026-07-08', day: undefined, warnings: ['未入力'] },
 }
+
+export const SelectionMode: Story = {
+  args: { date: '2026-07-06', day, selectionMode: true },
+}
+
+export const SelectionModeSelected: Story = {
+  args: { date: '2026-07-06', day, selectionMode: true, selected: true },
+}

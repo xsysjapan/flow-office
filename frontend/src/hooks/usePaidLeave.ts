@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  adminCancelPaidLeaveRequest,
   cancelPaidLeaveRequest,
   createPaidLeaveGrantRule,
   createPaidLeaveRequest,
@@ -9,7 +10,9 @@ import {
   fetchPaidLeaveGrantRules,
   fetchPaidLeaveGrantsForUser,
   fetchPaidLeaveHistoryForUser,
+  fetchPaidLeaveUsagesForUser,
   grantPaidLeave,
+  revokePaidLeaveGrant,
   type CreatePaidLeaveGrantRuleInput,
   type CreatePaidLeaveRequestInput,
   type GrantPaidLeaveInput,
@@ -57,6 +60,17 @@ export function useGrantPaidLeave() {
   })
 }
 
+export function useRevokePaidLeaveGrant() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ grantId, reason }: { grantId: string; reason?: string }) => revokePaidLeaveGrant(grantId, reason),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grants', 'user', data.user_id] })
+    },
+  })
+}
+
 export function useMyPaidLeaveRequests() {
   return useQuery({ queryKey: MY_REQUESTS_KEY, queryFn: fetchMyPaidLeaveRequests })
 }
@@ -99,5 +113,29 @@ export function usePaidLeaveHistoryForUser(userId: string) {
     queryKey: ['paid-leave', 'history', 'user', userId],
     queryFn: () => fetchPaidLeaveHistoryForUser(userId),
     enabled: Boolean(userId),
+  })
+}
+
+function paidLeaveUsagesForUserKey(userId: string) {
+  return ['paid-leave', 'usages', 'user', userId]
+}
+
+export function usePaidLeaveUsagesForUser(userId: string) {
+  return useQuery({
+    queryKey: paidLeaveUsagesForUserKey(userId),
+    queryFn: () => fetchPaidLeaveUsagesForUser(userId),
+    enabled: Boolean(userId),
+  })
+}
+
+/** 管理者による有給申請の取消。取消対象社員のusages一覧を再取得する。 */
+export function useAdminCancelPaidLeaveRequest(userId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (requestId: string) => adminCancelPaidLeaveRequest(requestId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: paidLeaveUsagesForUserKey(userId) })
+    },
   })
 }

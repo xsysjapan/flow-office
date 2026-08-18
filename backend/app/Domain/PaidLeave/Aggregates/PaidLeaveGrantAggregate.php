@@ -3,6 +3,7 @@
 namespace App\Domain\PaidLeave\Aggregates;
 
 use App\Domain\PaidLeave\Events\PaidLeaveGranted;
+use App\Domain\PaidLeave\Events\PaidLeaveGrantRevoked;
 use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
@@ -86,6 +87,16 @@ class PaidLeaveGrantAggregate extends AggregateRoot
     public function raiseWarning(string $userId, string $warningType, string $message): self
     {
         $this->recordThat(new PaidLeaveWarningRaised(userId: $userId, warningType: $warningType, message: $message));
+
+        return $this;
+    }
+
+    /**
+     * 管理者が未消化の付与を取り消す。消化済み日数があるかどうかはHandler側で検証済み。
+     */
+    public function revoke(string $revokedByUserId, ?string $reason): self
+    {
+        $this->recordThat(new PaidLeaveGrantRevoked(revokedByUserId: $revokedByUserId, reason: $reason));
 
         return $this;
     }

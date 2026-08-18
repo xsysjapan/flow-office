@@ -14,6 +14,10 @@ const grants: PaidLeaveGrant[] = [
     used_days: 3,
     remaining_days: 7,
     grant_reason: '法定付与',
+    status: 'active',
+    revoked_at: null,
+    revoked_by_user_id: null,
+    revoke_reason: null,
   },
   {
     id: 'grant-2',
@@ -24,6 +28,10 @@ const grants: PaidLeaveGrant[] = [
     used_days: 0,
     remaining_days: 11,
     grant_reason: null,
+    status: 'active',
+    revoked_at: null,
+    revoked_by_user_id: null,
+    revoke_reason: null,
   },
 ]
 

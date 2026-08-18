@@ -329,6 +329,15 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // (/system-settings、PublicSystemSettingController)に分離する。
     Route::get('/system-settings', [PublicSystemSettingController::class, 'show']);
 
+    // --- グループ対象指定ピッカー用の軽量グループ参照(docs/25-usecases-integrations-mcp.md等の
+    //     承認者・通知対象範囲の選択で使う)。admin/user-management/groups(フル情報付き)とは
+    //     別に、id・nameのみを返す読み取り専用エンドポイント。認可は既存の管理者向け一覧
+    //     エンドポイント(paid-leave/grants/user/{userId}等)と同じくPermissionで行う。 ---
+    Route::middleware('permission:group.view,any')->group(function () {
+        Route::get('/groups', [UserManagementController::class, 'groupsLite']);
+        Route::get('/groups/{group}/members', [UserManagementController::class, 'groupMembers']);
+    });
+
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
@@ -343,7 +352,10 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/paid-leave/grant-rules', [PaidLeaveController::class, 'storeRule']);
         Route::get('/paid-leave/grants/user/{userId}', [PaidLeaveController::class, 'grantsForUser']);
         Route::get('/paid-leave/history/user/{userId}', [PaidLeaveController::class, 'historyForUser']);
+        Route::get('/paid-leave/usages/user/{userId}', [PaidLeaveController::class, 'usagesForUser']);
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
+        Route::post('/paid-leave/grants/{grant}/revoke', [PaidLeaveController::class, 'revoke']);
+        Route::post('/paid-leave/requests/{paidLeaveRequest}/admin-cancel', [PaidLeaveController::class, 'adminCancelRequest']);
     });
 
     // --- 特別休暇の種別マスタ・残数管理・申請・承認(有給と同じUXだが、ビジネスロジックは
@@ -364,12 +376,16 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/special-leave/grant-rules', [SpecialLeaveController::class, 'storeRule']);
         Route::get('/special-leave/grants/user/{userId}', [SpecialLeaveController::class, 'grantsForUser']);
         Route::get('/special-leave/history/user/{userId}', [SpecialLeaveController::class, 'historyForUser']);
+        Route::get('/special-leave/usages/user/{userId}', [SpecialLeaveController::class, 'usagesForUser']);
         Route::post('/special-leave/grants', [SpecialLeaveController::class, 'grant']);
+        Route::post('/special-leave/grants/{grant}/revoke', [SpecialLeaveController::class, 'revoke']);
+        Route::post('/special-leave/requests/{specialLeaveRequest}/admin-cancel', [SpecialLeaveController::class, 'adminCancelRequest']);
     });
 
     // --- 代休の残数管理・消化申請・承認(付与は休日出勤の勤怠実績から自動導出される。
     //     ビジネスロジックはApp\Domain\CompensatoryLeaveとして完全に独立させる) ---
     Route::get('/compensatory-leave/grants/mine', [CompensatoryLeaveController::class, 'myGrants']);
+    Route::get('/compensatory-leave/history/mine', [CompensatoryLeaveController::class, 'myHistory']);
     Route::get('/compensatory-leave/requests/mine', [CompensatoryLeaveController::class, 'myRequests']);
     Route::get('/compensatory-leave/requests/to-approve', [CompensatoryLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::post('/compensatory-leave/requests', [CompensatoryLeaveController::class, 'storeRequest']);
@@ -378,6 +394,14 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/cancel', [CompensatoryLeaveController::class, 'cancelRequest']);
     Route::post('/compensatory-leave/grants/{grant}/request-cancellation', [CompensatoryLeaveController::class, 'requestGrantCancellation']);
     Route::post('/compensatory-leave/grant-cancellations/{cancellationId}/approve', [CompensatoryLeaveController::class, 'approveGrantCancellation'])->middleware('permission:approval.execute');
+    Route::middleware('permission:leave.manage,any')->group(function () {
+        Route::get('/compensatory-leave/grants/user/{userId}', [CompensatoryLeaveController::class, 'grantsForUser']);
+        Route::get('/compensatory-leave/history/user/{userId}', [CompensatoryLeaveController::class, 'historyForUser']);
+        Route::get('/compensatory-leave/usages/user/{userId}', [CompensatoryLeaveController::class, 'usagesForUser']);
+        Route::post('/compensatory-leave/grants', [CompensatoryLeaveController::class, 'grant']);
+        Route::post('/compensatory-leave/grants/{grant}/revoke', [CompensatoryLeaveController::class, 'revoke']);
+        Route::post('/compensatory-leave/requests/{compensatoryLeaveRequest}/admin-cancel', [CompensatoryLeaveController::class, 'adminCancelRequest']);
+    });
 
     // --- 振替休日申請(固定勤務の休日を別日の労働日と入れ替える。ビジネスロジックは
     //     App\Domain\ShiftSwapとして独立させる) ---

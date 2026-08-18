@@ -6,6 +6,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantSynced;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveManuallyGranted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsed;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -30,6 +31,31 @@ class CompensatoryLeaveGrantAggregate extends AggregateRoot
             workDate: $workDate,
             grantedDays: $grantedDays,
             grantedMinutes: $grantedMinutes,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 管理者が休日出勤の対象日を指定して代休を手動付与する。sync()と異なり
+     * attendance_day_idに紐づかず(nullのまま)、承認不要でこの1イベントのみで
+     * status=confirmedの行を作成する(GrantCompensatoryLeaveHandler参照)。
+     */
+    public function grantManually(
+        string $userId,
+        string $workDate,
+        float $grantedDays,
+        ?int $grantedMinutes,
+        ?string $expiresOn,
+        ?string $grantReason,
+    ): self {
+        $this->recordThat(new CompensatoryLeaveManuallyGranted(
+            userId: $userId,
+            workDate: $workDate,
+            grantedDays: $grantedDays,
+            grantedMinutes: $grantedMinutes,
+            expiresOn: $expiresOn,
+            grantReason: $grantReason,
         ));
 
         return $this;

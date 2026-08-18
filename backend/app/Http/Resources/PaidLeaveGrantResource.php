@@ -21,6 +21,10 @@ class PaidLeaveGrantResource extends JsonResource
             'used_days' => (float) $this->used_days,
             'remaining_days' => (float) $this->remaining_days,
             'grant_reason' => $this->grant_reason,
+            'status' => $this->status,
+            'revoked_at' => $this->revoked_at?->toIso8601String(),
+            'revoked_by_user_id' => $this->revoked_by_user_id,
+            'revoke_reason' => $this->revoke_reason,
         ];
     }
 }

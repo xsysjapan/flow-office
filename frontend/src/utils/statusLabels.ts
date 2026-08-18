@@ -297,6 +297,23 @@ const leaveEventSuffixMeta: Record<string, StatusMeta> = {
   request_cancelled: { label: '取消', tone: 'danger' },
   used: { label: '消化', tone: 'info' },
   warning_raised: { label: '警告', tone: 'warning' },
+  /** 有給・特別休暇の付与取消(RevokePaidLeaveGrant/RevokeSpecialLeaveGrant)。 */
+  grant_revoked: { label: '取消', tone: 'danger' },
+  /** 代休固有: 休日出勤実績からの自動計上(下書き)。付与payloadの形が違うため別suffixにする。 */
+  grant_synced: { label: '自動計上', tone: 'success' },
+  /** 代休固有: 管理者による手動付与。 */
+  manually_granted: { label: '付与', tone: 'success' },
+  /** 代休固有: 月次確定前の下書き付与の取消。 */
+  grant_removed: { label: '計上取消', tone: 'danger' },
+  /** 代休固有: 月次確定により付与が使用可能になった。 */
+  grant_confirmed: { label: '確定', tone: 'success' },
+  /** 代休固有: 確定後の付与取消(RevokeCompensatoryLeaveGrant相当)。paid/special leaveの
+   *  grant_revokedとはpayloadのフィールド名(cancelled_by_user_id/reason)が異なる別イベント。 */
+  grant_cancelled: { label: '取消', tone: 'danger' },
+  /** 代休固有: 消化日の指定・取消。 */
+  usage_designated: { label: '消化指定', tone: 'info' },
+  usage_reversed: { label: '消化取消', tone: 'warning' },
+  request_shared: { label: '連携', tone: 'neutral' },
 }
 
 function leaveEventTypeLabel(eventType: string): StatusMeta {
@@ -351,6 +368,56 @@ export function paidLeaveEventDetail(event: StoredEvent): string {
 
 export function specialLeaveEventDetail(event: StoredEvent): string {
   return leaveEventDetail(event, '特別休暇')
+}
+
+export function compensatoryLeaveEventTypeLabel(eventType: string): StatusMeta {
+  return leaveEventTypeLabel(eventType)
+}
+
+/**
+ * 代休履歴の各イベントを、payloadの内容を使って人が読める1行に整形する。代休は
+ * 有給・特別休暇と付与の仕組み(休日出勤実績からの自動計上→月次確定、または手動付与)が
+ * 異なり、payloadの形も別イベントごとに大きく違うため、共通のleaveEventDetail()には
+ * 寄せず専用の関数として実装する(docs/17-events.md参照)。
+ */
+export function compensatoryLeaveEventDetail(event: StoredEvent): string {
+  const payload = event.payload
+  const suffix = event.event_type.split('.').slice(1).join('.')
+
+  switch (suffix) {
+    case 'grant_synced':
+      return `対象日 ${payload.work_date} の休日出勤分として${payload.granted_days}日を自動計上`
+    case 'manually_granted': {
+      const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
+      return `対象日 ${payload.work_date} の休日出勤分として${payload.granted_days}日を手動付与(${expiry})`
+    }
+    case 'grant_confirmed': {
+      const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
+      return `代休の付与が確定しました(${expiry})`
+    }
+    case 'grant_removed':
+      return `付与前に取り消されました: ${payload.reason}`
+    case 'grant_cancelled':
+      return `付与が取り消されました${payload.reason ? `(${payload.reason})` : ''}`
+    case 'usage_designated':
+      return `対象日 ${payload.used_on} に${payload.used_days}日の消化を指定`
+    case 'usage_reversed':
+      return `対象日 ${payload.used_on} の${payload.used_days}日消化を取り消し`
+    case 'requested':
+      return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`
+    case 'request_approved':
+      return '代休申請が承認されました'
+    case 'request_returned':
+      return `代休申請が差し戻されました: ${payload.comment}`
+    case 'request_cancelled':
+      return '代休申請を取り消しました'
+    case 'request_shared':
+      return '申請がワークフローに連携されました'
+    case 'used':
+      return `対象日 ${payload.used_on} に${payload.used_days}日を消化`
+    default:
+      return event.event_type
+  }
 }
 
 const workflowRequestHistoryActionLabels: Record<string, string> = {

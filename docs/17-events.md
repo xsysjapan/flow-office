@@ -194,6 +194,8 @@
 - `paid_leave.usage_reversed`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`
+- `paid_leave.grant_revoked` (管理者による付与取消。UC-P008、消化済み日数がある付与は
+  取消不可)
 
 ## SpecialLeave
 
@@ -208,6 +210,7 @@ paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)
 - `special_leave.request_cancelled`
 - `special_leave.used`
 - `special_leave.usage_reversed`
+- `special_leave.grant_revoked` (管理者による付与取消。paid_leave.grant_revokedと同じ構造)
 
 ## CompensatoryLeave
 
@@ -227,6 +230,9 @@ paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)
 - `compensatory_leave.request_cancelled`
 - `compensatory_leave.used`
 - `compensatory_leave.usage_reversed`
+- `compensatory_leave.manually_granted` (管理者による手動付与。休日出勤の対象日を指定し、
+  勤怠実績からの自動導出と同じ換算ルールで日数を算出、承認不要でstatus=confirmedの行を
+  1イベントで作成する。docs/09-usecases-paid-leave.md「代休の手動付与・管理者直接取消」参照)
 
 ## Attachment / Notification / Export (横断)
 

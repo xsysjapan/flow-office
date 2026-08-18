@@ -9,5 +9,6 @@ class CancelSpecialLeaveRequest implements Command
     public function __construct(
         public readonly string $specialLeaveRequestId,
         public readonly string $cancelledByUserId,
+        public readonly bool $isAdminAction = false,
     ) {}
 }

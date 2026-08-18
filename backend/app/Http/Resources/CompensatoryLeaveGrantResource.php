@@ -15,6 +15,7 @@ class CompensatoryLeaveGrantResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
+            'source' => $this->source,
             'attendance_day_id' => $this->attendance_day_id,
             'work_date' => $this->work_date?->toDateString(),
             'status' => $this->status,
@@ -26,6 +27,7 @@ class CompensatoryLeaveGrantResource extends JsonResource
             'remaining_minutes' => $this->remaining_minutes,
             'confirmed_at' => $this->confirmed_at?->toIso8601String(),
             'expires_on' => $this->expires_on?->toDateString(),
+            'grant_reason' => $this->grant_reason,
         ];
     }
 }

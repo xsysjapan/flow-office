@@ -1,5 +1,13 @@
 import { apiFetch } from './client'
-import type { PaidLeaveType, SpecialLeaveGrant, SpecialLeaveGrantRule, SpecialLeaveRequest, SpecialLeaveType, StoredEvent } from './types'
+import type {
+  PaidLeaveType,
+  SpecialLeaveGrant,
+  SpecialLeaveGrantRule,
+  SpecialLeaveRequest,
+  SpecialLeaveType,
+  SpecialLeaveUsage,
+  StoredEvent,
+} from './types'
 
 export function fetchSpecialLeaveTypes(): Promise<SpecialLeaveType[]> {
   return apiFetch('/special-leave/types')
@@ -68,6 +76,11 @@ export function grantSpecialLeave(input: GrantSpecialLeaveInput): Promise<Specia
   return apiFetch('/special-leave/grants', { method: 'POST', body: input })
 }
 
+/** 使用日数が0の付与のみ取消可能(422で拒否される場合がある)。 */
+export function revokeSpecialLeaveGrant(grantId: string, reason?: string): Promise<SpecialLeaveGrant> {
+  return apiFetch(`/special-leave/grants/${grantId}/revoke`, { method: 'POST', body: { reason } })
+}
+
 export function fetchMySpecialLeaveRequests(): Promise<SpecialLeaveRequest[]> {
   return apiFetch('/special-leave/requests/mine')
 }
@@ -92,6 +105,17 @@ export function createSpecialLeaveRequest(input: CreateSpecialLeaveRequestInput)
 
 export function cancelSpecialLeaveRequest(id: string): Promise<SpecialLeaveRequest> {
   return apiFetch(`/special-leave/requests/${id}/cancel`, { method: 'POST' })
+}
+
+/** 管理者・人事担当者が対象社員の特別休暇消化記録(usage)一覧を取得する(使用日の新しい順)。 */
+export function fetchSpecialLeaveUsagesForUser(userId: string): Promise<SpecialLeaveUsage[]> {
+  return apiFetch(`/special-leave/usages/user/${userId}`)
+}
+
+/** 管理者による特別休暇申請の取消(本人以外も対象)。承認済み(approved)の申請のみ取消可能で、
+ *  紐づく消化記録(usage)をすべて一括で取り消す。 */
+export function adminCancelSpecialLeaveRequest(requestId: string): Promise<SpecialLeaveRequest> {
+  return apiFetch(`/special-leave/requests/${requestId}/admin-cancel`, { method: 'POST' })
 }
 
 /** 自分の特別休暇履歴(付与・申請・承認・差戻し・取消・消化)を新しい順に取得する。 */

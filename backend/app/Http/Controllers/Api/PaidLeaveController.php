@@ -9,6 +9,7 @@ use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveReq
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -17,12 +18,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
 use App\Http\Resources\PaidLeaveRequestResource;
+use App\Http\Resources\PaidLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
+use App\Models\PaidLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
@@ -154,6 +157,32 @@ class PaidLeaveController extends Controller
         ));
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
+    }
+
+    /**
+     * 管理者が発行済みの有給付与を取り消す。既に消化された分がある場合は
+     * RevokePaidLeaveGrantHandlerがDomainRuleExceptionを投げる(422)。
+     */
+    #[OA\Post(
+        path: '/paid-leave/grants/{grant}/revoke',
+        operationId: 'paidLeave.grants.revoke',
+        summary: '有給付与を取り消す',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'grant', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(content: new OA\JsonContent(properties: [new OA\Property(property: 'reason', type: 'string', nullable: true)])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function revoke(Request $request, PaidLeaveGrant $grant, CommandBus $commandBus): PaidLeaveGrantResource
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string']]);
+
+        $grant = $commandBus->dispatch(new RevokePaidLeaveGrant(
+            grantId: $grant->id,
+            revokedByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
+        ));
+
+        return new PaidLeaveGrantResource($grant);
     }
 
     /**
@@ -352,6 +381,51 @@ class PaidLeaveController extends Controller
         $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
 
         return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * 管理者が対象社員の有給申請を取り消す(自分の申請のみ取消可能な`cancelRequest`とは別に、
+     * 管理者は他者の承認済み申請も取り消せる。実際に取消操作をしたのは管理者自身のため、
+     * cancelledByUserIdは申請者本人ではなく操作者(管理者)のIDを渡す)。
+     */
+    #[OA\Post(
+        path: '/paid-leave/requests/{paidLeaveRequest}/admin-cancel',
+        operationId: 'paidLeave.requests.adminCancel',
+        summary: '管理者が社員の有給申請を取り消す',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function adminCancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    {
+        $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id, isAdminAction: true));
+
+        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * 管理者が対象社員の有給消化明細(paid_leave_usages)を確認する。取消は明細単位では
+     * できず、明細に紐づく申請(`paid_leave_request_id`)を`adminCancelRequest`で取り消すことで
+     * 反映される。フロント側で取消可否を判定できるよう、関連する申請の現在ステータス
+     * (`request_status`)も併せて返す。
+     */
+    #[OA\Get(
+        path: '/paid-leave/usages/user/{userId}',
+        operationId: 'paidLeave.usages.forUser',
+        summary: '社員の有給消化明細を取得する',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function usagesForUser(string $userId): AnonymousResourceCollection
+    {
+        $usages = PaidLeaveUsage::query()
+            ->with('request')
+            ->where('user_id', $userId)
+            ->orderByDesc('used_on')
+            ->get();
+
+        return PaidLeaveUsageResource::collection($usages);
     }
 
     /**

@@ -174,6 +174,47 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
 自分の履歴は誰でも閲覧できる。他の社員の履歴は`paid_leave.read` Permissionを持ち、対象Userを
 含むScopeが有効な場合だけ閲覧できる(`GET /paid-leave/grants/user/{userId}`等)。
 
+## UC-P008: 有給付与を取り消す
+
+1. 人事担当者・管理者(`leave.manage` Permission)が、発行済みの有給付与(`paid_leave_grants`)
+   の中から取り消す対象を選ぶ
+2. 取消理由を入力する(任意)
+3. 対象付与の`used_days`が0より大きい場合(1日でも消化済みの場合)は取消不可とし、
+   「既に消化された分は取り消せません。」というエラーを返す
+4. `used_days`が0の場合のみ`paid_leave.grant_revoked`イベントを記録し、`status`を
+   `revoked`に、`revoked_at`/`revoked_by_user_id`/`revoke_reason`を設定する
+
+`POST /paid-leave/grants/{grant}/revoke`(`RevokePaidLeaveGrant`
+Command/`RevokePaidLeaveGrantHandler`)。入力誤りによる付与の取消を想定し、消化前であれば
+何度でも取消・再付与ができるようにする一方、社員が既に消化した分の既得権は保護する。
+同じ構造の取消を特別休暇(`special_leave_grants`、`RevokeSpecialLeaveGrant`)にも実装する。
+
+## UC-P009: 管理者が社員の有給申請を取り消す・消化明細を確認する
+
+1. 人事担当者・管理者(`leave.manage` Permission)が対象社員の有給消化明細
+   (`paid_leave_usages`)を一覧で確認する(`GET /paid-leave/usages/user/{userId}`。
+   `used_on`の新しい順。関連する申請の現在の`status`(`request_status`)も併せて返し、
+   `approved`以外(既に取消・返却済み)の明細は取消不可であることを画面側で判別できる
+   ようにする)
+2. 承認済みの申請を選び、取消理由等を確認したうえで管理者が直接取り消す
+   (`POST /paid-leave/requests/{id}/admin-cancel`)
+
+明細(`paid_leave_usages`)は消化の結果生成される派生データであり、消化明細1件だけを
+独立して取消・巻き戻すという操作は存在しない(1件の承認済み申請が複数の付与にまたがって
+消化することがあり、取消は常に申請単位で行う。ドメインとしての取消は
+`CancelPaidLeaveRequestHandler`が対象申請の消化明細をすべて巻き戻す形で実装済み)。
+
+UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/{id}/cancel`)は
+`cancelledByUserId === 対象申請のuser_id`のみ許可する自己申請限定の経路のままとし、
+管理者向けにはそれとは別の`admin-cancel`エンドポイントを追加する。内部的には同じ
+`CancelPaidLeaveRequest` Command/`CancelPaidLeaveRequestHandler`を使うが、
+`isAdminAction: true`を渡すことで本人一致チェックをバイパスする(`cancelledByUserId`には
+取消操作を行った管理者自身のIDを渡し、監査上「誰が取り消したか」を正しく記録する)。
+承認済み申請のみ取消可能・締め済み月は取消不可等、既存の業務ルールはすべてそのまま適用される。
+同じ構造を特別休暇(`POST /special-leave/requests/{id}/admin-cancel`、
+`GET /special-leave/usages/user/{userId}`)・代休(`POST /compensatory-leave/requests/{id}/admin-cancel`、
+`GET /compensatory-leave/usages/user/{userId}`)にも実装する。
+
 ## 実装上のポイント
 
 - 付与ルール (`paid_leave_grant_rules` / `paid_leave_grant_rule_steps`) はマスタ化し、
@@ -238,3 +279,31 @@ Teamsが通知専用の単一チャンネル(webhook)である現在の実装上
 取消申請でき(`compensatory_leave_grant_cancellations`)、`compensatory_leave_requires_approval`
 の設定に応じて即時取消/承認要のいずれかになる。詳細は`docs/03-architecture.md`・
 `app/Domain/CompensatoryLeave/`を参照。
+
+### 代休の手動付与・管理者直接取消
+
+休日出勤の勤怠実績からの自動導出(上記)とは別に、人事担当者・管理者(`leave.manage`
+Permission)が管理者操作として代休を手動付与できる。付与理由の例: 自動導出漏れの事後対応、
+制度移行時の付与調整など。任意の日数を自由入力させるのではなく、実際に休日出勤した対象日
+(`work_date`)を指定させ、その日の`attendance_days`(実労働時間)から自動導出フローと
+**同じ換算ルール**(`system_settings.compensatory_leave_unit`等、
+`App\Domain\CompensatoryLeave\Services\CompensatoryLeaveGrantCalculator`)で付与日数を
+算出する(`POST /compensatory-leave/grants`、`GrantCompensatoryLeave`
+Command/`GrantCompensatoryLeaveHandler`)。対象日に休日出勤の実績が無い場合はエラーになる。
+
+手動付与は承認不要のため、作成と同時に`status=confirmed`となり(月次提出による確定
+ステップを経ない)、`compensatory_leave_grants.source`に`manual`を記録して自動導出分
+(`attendance`)と区別する。手動付与には元になった`attendance_days`行への1:1紐付けが
+無いため`attendance_day_id`はnullのままとなる。
+
+管理者は`POST /compensatory-leave/grants/{grant}/revoke`で代休Grantを直接取り消せる
+(`source`が`attendance`/`manual`のどちらでも利用可能)。既存の社員起点の
+取消申請→承認フロー(上記、`request-cancellation`/`grant-cancellations/{id}/approve`)とは
+別の、承認を経ない管理者専用の即時取消経路であり、既存の`CancelCompensatoryLeaveGrant`
+Command/Handlerをそのまま再利用する(`used_days`が0より大きい場合は同様に取消不可)。
+
+有給・特別休暇のUC-P007と同様、`GET /compensatory-leave/history/mine`(本人)・
+`GET /compensatory-leave/history/user/{userId}`(`leave.manage` Permission)で
+代休の付与・申請・承認・差戻し・取消のstored_eventsを時系列(新しい順)で確認できる
+(`App\Domain\Leave\Support\LeaveHistoryQuery`共通実装。手動付与・自動導出のどちらの
+Grantも区別なく含まれる)。

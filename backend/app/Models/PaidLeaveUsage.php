@@ -38,4 +38,12 @@ class PaidLeaveUsage extends Model
     {
         return $this->belongsTo(PaidLeaveGrant::class, 'paid_leave_grant_id');
     }
+
+    /**
+     * @return BelongsTo<PaidLeaveRequest, $this>
+     */
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(PaidLeaveRequest::class, 'paid_leave_request_id');
+    }
 }
