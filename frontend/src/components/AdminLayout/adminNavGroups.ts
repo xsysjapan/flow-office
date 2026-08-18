@@ -91,7 +91,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       },
       {
         to: "/admin/paid-leave",
-        label: "有給ルール",
+        label: "有給設定",
         description: "有給の付与・消化ルールを管理する",
         feature: "paid_leave.requests",
         permission: "leave.manage",
@@ -105,7 +105,7 @@ export const adminNavGroups: AdminNavGroup[] = [
       },
       {
         to: "/admin/compensatory-leave",
-        label: "代休手動付与",
+        label: "代休設定",
         description: "休日出勤の実績日を指定して代休を手動付与する",
         feature: "paid_leave.requests",
         permission: "leave.manage",
