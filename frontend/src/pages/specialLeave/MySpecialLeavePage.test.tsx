@@ -153,6 +153,10 @@ describe('MySpecialLeavePage', () => {
         used_days: 1,
         remaining_days: 2,
         grant_reason: '誕生月付与',
+        status: 'active',
+        revoked_at: null,
+        revoked_by_user_id: null,
+        revoke_reason: null,
       },
     ]
     vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveGrants').mockResolvedValue(grants)

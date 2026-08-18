@@ -21,6 +21,10 @@ const grants: SpecialLeaveGrant[] = [
     used_days: 1,
     remaining_days: 2,
     grant_reason: '誕生月付与',
+    status: 'active',
+    revoked_at: null,
+    revoked_by_user_id: null,
+    revoke_reason: null,
   },
   {
     id: 'grant-2',
@@ -33,6 +37,10 @@ const grants: SpecialLeaveGrant[] = [
     used_days: 0,
     remaining_days: 5,
     grant_reason: null,
+    status: 'active',
+    revoked_at: null,
+    revoked_by_user_id: null,
+    revoke_reason: null,
   },
 ]
 

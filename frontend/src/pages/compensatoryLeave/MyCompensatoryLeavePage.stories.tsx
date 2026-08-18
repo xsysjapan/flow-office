@@ -8,6 +8,7 @@ const grants: CompensatoryLeaveGrant[] = [
   {
     id: 'grant-1',
     user_id: '11111111-1111-1111-1111-111111111111',
+    source: 'attendance',
     attendance_day_id: 'day-1',
     work_date: '2026-07-05',
     status: 'confirmed',
@@ -19,10 +20,12 @@ const grants: CompensatoryLeaveGrant[] = [
     remaining_minutes: null,
     confirmed_at: '2026-07-06T00:00:00+09:00',
     expires_on: '2026-12-31',
+    grant_reason: null,
   },
   {
     id: 'grant-2',
     user_id: '11111111-1111-1111-1111-111111111111',
+    source: 'attendance',
     attendance_day_id: 'day-2',
     work_date: '2026-07-20',
     status: 'confirmed',
@@ -34,6 +37,7 @@ const grants: CompensatoryLeaveGrant[] = [
     remaining_minutes: 120,
     confirmed_at: '2026-07-21T00:00:00+09:00',
     expires_on: '2026-12-31',
+    grant_reason: null,
   },
 ]
 
