@@ -19,6 +19,7 @@ use App\Http\Resources\SpecialLeaveGrantResource;
 use App\Http\Resources\SpecialLeaveGrantRuleResource;
 use App\Http\Resources\SpecialLeaveRequestResource;
 use App\Http\Resources\SpecialLeaveTypeResource;
+use App\Http\Resources\SpecialLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveGrant;
@@ -26,6 +27,7 @@ use App\Models\SpecialLeaveGrantRule;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
+use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
@@ -435,6 +437,49 @@ class SpecialLeaveController extends Controller
         $commandBus->dispatch(new CancelSpecialLeaveRequest($specialLeaveRequest->id, $request->user()->id));
 
         return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+    }
+
+    /**
+     * 管理者が対象社員の特別休暇申請を取り消す(自分の申請のみ取消可能な`cancelRequest`とは
+     * 別に、管理者は他者の承認済み申請も取り消せる。cancelledByUserIdは申請者本人ではなく
+     * 操作者(管理者)のIDを渡す)。
+     */
+    #[OA\Post(
+        path: '/special-leave/requests/{specialLeaveRequest}/admin-cancel',
+        operationId: 'specialLeave.requests.adminCancel',
+        summary: '管理者が社員の特別休暇申請を取り消す',
+        tags: ['特別休暇'],
+        parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function adminCancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
+    {
+        $commandBus->dispatch(new CancelSpecialLeaveRequest($specialLeaveRequest->id, $request->user()->id, isAdminAction: true));
+
+        return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+    }
+
+    /**
+     * 管理者が対象社員の特別休暇消化明細(special_leave_usages)を確認する。取消は明細単位
+     * ではできず、明細に紐づく申請を`adminCancelRequest`で取り消すことで反映される。
+     */
+    #[OA\Get(
+        path: '/special-leave/usages/user/{userId}',
+        operationId: 'specialLeave.usages.forUser',
+        summary: '社員の特別休暇消化明細を取得する',
+        tags: ['特別休暇'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function usagesForUser(string $userId): AnonymousResourceCollection
+    {
+        $usages = SpecialLeaveUsage::query()
+            ->with('request')
+            ->where('user_id', $userId)
+            ->orderByDesc('used_on')
+            ->get();
+
+        return SpecialLeaveUsageResource::collection($usages);
     }
 
     #[OA\Get(

@@ -189,6 +189,32 @@ Command/`RevokePaidLeaveGrantHandler`)。入力誤りによる付与の取消を
 何度でも取消・再付与ができるようにする一方、社員が既に消化した分の既得権は保護する。
 同じ構造の取消を特別休暇(`special_leave_grants`、`RevokeSpecialLeaveGrant`)にも実装する。
 
+## UC-P009: 管理者が社員の有給申請を取り消す・消化明細を確認する
+
+1. 人事担当者・管理者(`leave.manage` Permission)が対象社員の有給消化明細
+   (`paid_leave_usages`)を一覧で確認する(`GET /paid-leave/usages/user/{userId}`。
+   `used_on`の新しい順。関連する申請の現在の`status`(`request_status`)も併せて返し、
+   `approved`以外(既に取消・返却済み)の明細は取消不可であることを画面側で判別できる
+   ようにする)
+2. 承認済みの申請を選び、取消理由等を確認したうえで管理者が直接取り消す
+   (`POST /paid-leave/requests/{id}/admin-cancel`)
+
+明細(`paid_leave_usages`)は消化の結果生成される派生データであり、消化明細1件だけを
+独立して取消・巻き戻すという操作は存在しない(1件の承認済み申請が複数の付与にまたがって
+消化することがあり、取消は常に申請単位で行う。ドメインとしての取消は
+`CancelPaidLeaveRequestHandler`が対象申請の消化明細をすべて巻き戻す形で実装済み)。
+
+UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/{id}/cancel`)は
+`cancelledByUserId === 対象申請のuser_id`のみ許可する自己申請限定の経路のままとし、
+管理者向けにはそれとは別の`admin-cancel`エンドポイントを追加する。内部的には同じ
+`CancelPaidLeaveRequest` Command/`CancelPaidLeaveRequestHandler`を使うが、
+`isAdminAction: true`を渡すことで本人一致チェックをバイパスする(`cancelledByUserId`には
+取消操作を行った管理者自身のIDを渡し、監査上「誰が取り消したか」を正しく記録する)。
+承認済み申請のみ取消可能・締め済み月は取消不可等、既存の業務ルールはすべてそのまま適用される。
+同じ構造を特別休暇(`POST /special-leave/requests/{id}/admin-cancel`、
+`GET /special-leave/usages/user/{userId}`)・代休(`POST /compensatory-leave/requests/{id}/admin-cancel`、
+`GET /compensatory-leave/usages/user/{userId}`)にも実装する。
+
 ## 実装上のポイント
 
 - 付与ルール (`paid_leave_grant_rules` / `paid_leave_grant_rule_steps`) はマスタ化し、

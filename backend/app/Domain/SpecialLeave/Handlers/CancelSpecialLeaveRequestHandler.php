@@ -41,7 +41,7 @@ class CancelSpecialLeaveRequestHandler implements CommandHandler
 
         $request = SpecialLeaveRequest::query()->findOrFail($command->specialLeaveRequestId);
 
-        if ($request->user_id !== $command->cancelledByUserId) {
+        if (! $command->isAdminAction && $request->user_id !== $command->cancelledByUserId) {
             throw new DomainRuleException('自分の特別休暇申請のみ取消できます。');
         }
 

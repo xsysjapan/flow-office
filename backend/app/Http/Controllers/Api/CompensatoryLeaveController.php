@@ -19,10 +19,12 @@ use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CompensatoryLeaveGrantResource;
 use App\Http\Resources\CompensatoryLeaveRequestResource;
+use App\Http\Resources\CompensatoryLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
+use App\Models\CompensatoryLeaveUsage;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
@@ -323,6 +325,49 @@ class CompensatoryLeaveController extends Controller
         $commandBus->dispatch(new CancelCompensatoryLeaveRequest($compensatoryLeaveRequest->id, $request->user()->id));
 
         return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * 管理者が対象社員の代休申請を取り消す(自分の申請のみ取消可能な`cancelRequest`とは別に、
+     * 管理者は他者の承認済み申請も取り消せる。cancelledByUserIdは申請者本人ではなく操作者
+     * (管理者)のIDを渡す)。
+     */
+    #[OA\Post(
+        path: '/compensatory-leave/requests/{compensatoryLeaveRequest}/admin-cancel',
+        operationId: 'compensatoryLeave.requests.adminCancel',
+        summary: '管理者が社員の代休申請を取り消す',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'compensatoryLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function adminCancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    {
+        $commandBus->dispatch(new CancelCompensatoryLeaveRequest($compensatoryLeaveRequest->id, $request->user()->id, isAdminAction: true));
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+    }
+
+    /**
+     * 管理者が対象社員の代休消化明細(compensatory_leave_usages)を確認する。取消は明細単位
+     * ではできず、明細に紐づく申請を`adminCancelRequest`で取り消すことで反映される。
+     */
+    #[OA\Get(
+        path: '/compensatory-leave/usages/user/{userId}',
+        operationId: 'compensatoryLeave.usages.forUser',
+        summary: '社員の代休消化明細を取得する',
+        tags: ['代休'],
+        parameters: [new OA\Parameter(name: 'userId', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function usagesForUser(string $userId): AnonymousResourceCollection
+    {
+        $usages = CompensatoryLeaveUsage::query()
+            ->with('request')
+            ->where('user_id', $userId)
+            ->orderByDesc('used_on')
+            ->get();
+
+        return CompensatoryLeaveUsageResource::collection($usages);
     }
 
     #[OA\Post(

@@ -42,7 +42,7 @@ class CancelCompensatoryLeaveRequestHandler implements CommandHandler
 
         $request = CompensatoryLeaveRequest::query()->findOrFail($command->compensatoryLeaveRequestId);
 
-        if ($request->user_id !== $command->cancelledByUserId) {
+        if (! $command->isAdminAction && $request->user_id !== $command->cancelledByUserId) {
             throw new DomainRuleException('自分の代休申請のみ取消できます。');
         }
 

@@ -38,4 +38,12 @@ class CompensatoryLeaveUsage extends Model
     {
         return $this->belongsTo(CompensatoryLeaveGrant::class, 'compensatory_leave_grant_id');
     }
+
+    /**
+     * @return BelongsTo<CompensatoryLeaveRequest, $this>
+     */
+    public function request(): BelongsTo
+    {
+        return $this->belongsTo(CompensatoryLeaveRequest::class, 'compensatory_leave_request_id');
+    }
 }
