@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  adminCancelCompensatoryLeaveRequest,
   cancelCompensatoryLeaveRequest,
   createCompensatoryLeaveRequest,
   fetchCompensatoryLeaveGrantsForUser,
   fetchCompensatoryLeaveHistoryForUser,
+  fetchCompensatoryLeaveUsagesForUser,
   fetchMyCompensatoryLeaveGrants,
   fetchMyCompensatoryLeaveHistory,
   fetchMyCompensatoryLeaveRequests,
@@ -90,5 +92,29 @@ export function useCompensatoryLeaveHistoryForUser(userId: string) {
     queryKey: ['compensatory-leave', 'history', 'user', userId],
     queryFn: () => fetchCompensatoryLeaveHistoryForUser(userId),
     enabled: Boolean(userId),
+  })
+}
+
+function compensatoryLeaveUsagesForUserKey(userId: string) {
+  return ['compensatory-leave', 'usages', 'user', userId]
+}
+
+export function useCompensatoryLeaveUsagesForUser(userId: string) {
+  return useQuery({
+    queryKey: compensatoryLeaveUsagesForUserKey(userId),
+    queryFn: () => fetchCompensatoryLeaveUsagesForUser(userId),
+    enabled: Boolean(userId),
+  })
+}
+
+/** 管理者による代休申請の取消。取消対象社員のusages一覧を再取得する。 */
+export function useAdminCancelCompensatoryLeaveRequest(userId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (requestId: string) => adminCancelCompensatoryLeaveRequest(requestId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: compensatoryLeaveUsagesForUserKey(userId) })
+    },
   })
 }

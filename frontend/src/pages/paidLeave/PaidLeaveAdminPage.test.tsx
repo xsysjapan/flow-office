@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
-import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, StoredEvent, User } from '../../api/types'
+import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveUsage, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
 
@@ -115,22 +115,25 @@ describe('PaidLeaveAdminPage', () => {
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
   })
 
-  it('shows the selected users history from the ?userId= URL query param', async () => {
-    const event: StoredEvent = {
-      id: 'evt-1',
-      event_id: 'evt-1',
-      aggregate_type: 'paid_leave_grant',
-      aggregate_id: '1',
-      version: 1,
-      event_type: 'paid_leave.granted',
-      payload: { granted_days: 10, expires_on: '2027-06-30' },
-      occurred_at: '2025-07-01T09:00:00+09:00',
+  it('shows the selected users usage records from the ?userId= URL query param', async () => {
+    const usage: PaidLeaveUsage = {
+      id: 'usage-1',
+      user_id: 'user-3',
+      used_on: '2026-07-10',
+      used_days: 1,
+      used_minutes: null,
+      usage_type: 'full',
+      is_confirmed: true,
+      paid_leave_grant_id: 'grant-1',
+      paid_leave_request_id: 'request-1',
+      request_status: 'approved',
     }
-    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveHistoryForUser').mockResolvedValue([event])
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveUsagesForUser').mockResolvedValue([usage])
 
     renderPage([rule], '/admin/paid-leave?userId=user-3')
 
-    expect(await screen.findByText('10日を付与(有効期限 2027-06-30)')).toBeInTheDocument()
-    expect(paidLeaveApi.fetchPaidLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
+    expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(paidLeaveApi.fetchPaidLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
   })
 })

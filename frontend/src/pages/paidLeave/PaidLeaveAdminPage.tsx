@@ -8,7 +8,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
-import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
+import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -16,11 +16,12 @@ import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
+  useAdminCancelPaidLeaveRequest,
   useCreatePaidLeaveGrantRule,
   useGrantPaidLeave,
   usePaidLeaveGrantRules,
   usePaidLeaveGrantsForUser,
-  usePaidLeaveHistoryForUser,
+  usePaidLeaveUsagesForUser,
   useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
 
@@ -343,10 +344,11 @@ function ManualGrantCard() {
   )
 }
 
-function PaidLeaveHistoryCard() {
+function PaidLeaveUsageCard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const userId = searchParams.get('userId') ?? undefined
-  const { data, isLoading, error } = usePaidLeaveHistoryForUser(userId ?? '')
+  const { data, isLoading, error } = usePaidLeaveUsagesForUser(userId ?? '')
+  const adminCancel = useAdminCancelPaidLeaveRequest(userId ?? '')
 
   const handleUserChange = (value: string | undefined) => {
     const next = new URLSearchParams(searchParams)
@@ -361,19 +363,19 @@ function PaidLeaveHistoryCard() {
   const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0
 
   return (
-    <Card title="有給履歴">
+    <Card title="使用状況">
       <div className="max-w-sm">
-        <FormField label="対象社員" htmlFor="paid-leave-history-user">
-          <UserPicker id="paid-leave-history-user" value={userId} onChange={handleUserChange} />
+        <FormField label="対象社員" htmlFor="paid-leave-usage-user">
+          <UserPicker id="paid-leave-usage-user" value={userId} onChange={handleUserChange} />
         </FormField>
       </div>
 
       {userId === undefined ? (
-        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の有給履歴を確認できます。" />
+        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の有給使用状況を確認できます。" />
       ) : isEmpty ? (
         <EmptyState
-          title="有給履歴はまだありません。"
-          description="対象社員が有給を申請・付与されると、ここに履歴が表示されます。"
+          title="有給の使用状況はまだありません。"
+          description="対象社員が有給を消化すると、ここに消化記録が表示されます。"
           action={
             <Button variant="secondary" onClick={() => handleUserChange(undefined)}>
               社員選択をクリア
@@ -381,22 +383,38 @@ function PaidLeaveHistoryCard() {
           }
         />
       ) : (
-        <LeaveHistoryList domain="paid_leave" events={data} isLoading={isLoading} error={error} />
+        <LeaveUsageList
+          usages={data?.map((usage) => ({
+            id: usage.id,
+            usedOn: usage.used_on,
+            usedDays: usage.used_days,
+            usedMinutes: usage.used_minutes,
+            usageType: usage.usage_type,
+            requestStatus: usage.request_status,
+            requestId: usage.paid_leave_request_id,
+          }))}
+          isLoading={isLoading}
+          error={error}
+          errorFallback="有給の使用状況の取得に失敗しました。"
+          onCancelRequest={(requestId) => adminCancel.mutateAsync(requestId)}
+          isCancelling={adminCancel.isPending}
+          cancelError={adminCancel.error}
+        />
       )}
     </Card>
   )
 }
 
 /**
- * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の履歴確認・付与取消を
- * 1画面にまとめて管理者・人事向けに提供する。
+ * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
+ * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する。
  */
 export function PaidLeaveAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <PaidLeaveGrantRulesCard />
       <ManualGrantCard />
-      <PaidLeaveHistoryCard />
+      <PaidLeaveUsageCard />
     </div>
   )
 }

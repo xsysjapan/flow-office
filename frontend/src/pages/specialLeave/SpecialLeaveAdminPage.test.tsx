@@ -10,7 +10,7 @@ import type {
   SpecialLeaveGrant,
   SpecialLeaveGrantRule,
   SpecialLeaveType,
-  StoredEvent,
+  SpecialLeaveUsage,
   User,
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
@@ -160,22 +160,25 @@ describe('SpecialLeaveAdminPage', () => {
     )
   })
 
-  it('shows the selected users history from the ?userId= URL query param', async () => {
-    const event: StoredEvent = {
-      id: 'evt-1',
-      event_id: 'evt-1',
-      aggregate_type: 'special_leave_grant',
-      aggregate_id: '1',
-      version: 1,
-      event_type: 'special_leave.granted',
-      payload: { granted_days: 3, expires_on: null },
-      occurred_at: '2026-07-01T09:00:00+09:00',
+  it('shows the selected users usage records from the ?userId= URL query param', async () => {
+    const usage: SpecialLeaveUsage = {
+      id: 'usage-1',
+      user_id: 'user-3',
+      used_on: '2026-07-10',
+      used_days: 1,
+      used_minutes: null,
+      usage_type: 'full',
+      is_confirmed: true,
+      special_leave_grant_id: 'grant-1',
+      special_leave_request_id: 'request-1',
+      request_status: 'approved',
     }
-    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveHistoryForUser').mockResolvedValue([event])
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveUsagesForUser').mockResolvedValue([usage])
 
     renderPage([birthdayType], [rule], '/admin/special-leave?userId=user-3')
 
-    expect(await screen.findByText('3日を付与(有効期限なし)')).toBeInTheDocument()
-    expect(specialLeaveApi.fetchSpecialLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
+    expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(specialLeaveApi.fetchSpecialLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
   })
 })

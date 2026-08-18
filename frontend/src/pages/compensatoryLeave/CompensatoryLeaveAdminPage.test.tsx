@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as compensatoryLeaveApi from '../../api/compensatoryLeave'
 import * as usersApi from '../../api/users'
-import type { CompensatoryLeaveGrant, Paginated, StoredEvent, User } from '../../api/types'
+import type { CompensatoryLeaveGrant, CompensatoryLeaveUsage, Paginated, User } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { CompensatoryLeaveAdminPage } from './CompensatoryLeaveAdminPage'
 
@@ -77,22 +77,25 @@ describe('CompensatoryLeaveAdminPage', () => {
     expect(await screen.findByText('1件成功 / 0件失敗')).toBeInTheDocument()
   })
 
-  it('shows the selected users history from the ?userId= URL query param', async () => {
-    const event: StoredEvent = {
-      id: 'evt-1',
-      event_id: 'evt-1',
-      aggregate_type: 'compensatory_leave_grant',
-      aggregate_id: '1',
-      version: 1,
-      event_type: 'compensatory_leave.manually_granted',
-      payload: { work_date: '2026-08-01', granted_days: 1, granted_minutes: 480, expires_on: null, grant_reason: null },
-      occurred_at: '2026-08-16T09:00:00+09:00',
+  it('shows the selected users usage records from the ?userId= URL query param', async () => {
+    const usage: CompensatoryLeaveUsage = {
+      id: 'usage-1',
+      user_id: 'user-3',
+      used_on: '2026-08-16',
+      used_days: 1,
+      used_minutes: null,
+      usage_type: 'full',
+      is_confirmed: true,
+      compensatory_leave_grant_id: 'grant-1',
+      compensatory_leave_request_id: 'request-1',
+      request_status: 'approved',
     }
-    vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveHistoryForUser').mockResolvedValue([event])
+    vi.spyOn(compensatoryLeaveApi, 'fetchCompensatoryLeaveUsagesForUser').mockResolvedValue([usage])
 
     renderPage('/admin/compensatory-leave?userId=user-3')
 
-    expect(await screen.findByText('対象日 2026-08-01 の休日出勤分として1日を手動付与(有効期限なし)')).toBeInTheDocument()
-    expect(compensatoryLeaveApi.fetchCompensatoryLeaveHistoryForUser).toHaveBeenCalledWith('user-3')
+    expect(await screen.findByText('2026-08-16')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(compensatoryLeaveApi.fetchCompensatoryLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
   })
 })

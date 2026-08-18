@@ -8,7 +8,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
-import { LeaveHistoryList } from '../../components/LeaveHistoryList/LeaveHistoryList'
+import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
@@ -17,14 +17,15 @@ import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
+  useAdminCancelSpecialLeaveRequest,
   useCreateSpecialLeaveGrantRule,
   useCreateSpecialLeaveType,
   useGrantSpecialLeave,
   useRevokeSpecialLeaveGrant,
   useSpecialLeaveGrantRules,
   useSpecialLeaveGrantsForUser,
-  useSpecialLeaveHistoryForUser,
   useSpecialLeaveTypes,
+  useSpecialLeaveUsagesForUser,
   useUpdateSpecialLeaveType,
 } from '../../hooks/useSpecialLeave'
 
@@ -508,10 +509,11 @@ function ManualGrantCard() {
   )
 }
 
-function SpecialLeaveHistoryCard() {
+function SpecialLeaveUsageCard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const userId = searchParams.get('userId') ?? undefined
-  const { data, isLoading, error } = useSpecialLeaveHistoryForUser(userId ?? '')
+  const { data, isLoading, error } = useSpecialLeaveUsagesForUser(userId ?? '')
+  const adminCancel = useAdminCancelSpecialLeaveRequest(userId ?? '')
 
   const handleUserChange = (value: string | undefined) => {
     const next = new URLSearchParams(searchParams)
@@ -526,19 +528,19 @@ function SpecialLeaveHistoryCard() {
   const isEmpty = userId !== undefined && !isLoading && !error && (data?.length ?? 0) === 0
 
   return (
-    <Card title="特別休暇履歴">
+    <Card title="使用状況">
       <div className="max-w-sm">
-        <FormField label="対象社員" htmlFor="special-leave-history-user">
-          <UserPicker id="special-leave-history-user" value={userId} onChange={handleUserChange} />
+        <FormField label="対象社員" htmlFor="special-leave-usage-user">
+          <UserPicker id="special-leave-usage-user" value={userId} onChange={handleUserChange} />
         </FormField>
       </div>
 
       {userId === undefined ? (
-        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の特別休暇履歴を確認できます。" />
+        <EmptyState title="対象社員を選択してください。" description="社員を選ぶと、その社員の特別休暇使用状況を確認できます。" />
       ) : isEmpty ? (
         <EmptyState
-          title="特別休暇履歴はまだありません。"
-          description="対象社員が特別休暇を申請・付与されると、ここに履歴が表示されます。"
+          title="特別休暇の使用状況はまだありません。"
+          description="対象社員が特別休暇を消化すると、ここに消化記録が表示されます。"
           action={
             <Button variant="secondary" onClick={() => handleUserChange(undefined)}>
               社員選択をクリア
@@ -546,7 +548,23 @@ function SpecialLeaveHistoryCard() {
           }
         />
       ) : (
-        <LeaveHistoryList domain="special_leave" events={data} isLoading={isLoading} error={error} />
+        <LeaveUsageList
+          usages={data?.map((usage) => ({
+            id: usage.id,
+            usedOn: usage.used_on,
+            usedDays: usage.used_days,
+            usedMinutes: usage.used_minutes,
+            usageType: usage.usage_type,
+            requestStatus: usage.request_status,
+            requestId: usage.special_leave_request_id,
+          }))}
+          isLoading={isLoading}
+          error={error}
+          errorFallback="特別休暇の使用状況の取得に失敗しました。"
+          onCancelRequest={(requestId) => adminCancel.mutateAsync(requestId)}
+          isCancelling={adminCancel.isPending}
+          cancelError={adminCancel.error}
+        />
       )}
     </Card>
   )
@@ -562,7 +580,7 @@ export function SpecialLeaveAdminPage() {
       <SpecialLeaveTypesCard />
       <SpecialLeaveGrantRulesCard />
       <ManualGrantCard />
-      <SpecialLeaveHistoryCard />
+      <SpecialLeaveUsageCard />
     </div>
   )
 }

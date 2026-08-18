@@ -776,6 +776,49 @@ export interface PaidLeaveGrant {
   revoke_reason: string | null;
 }
 
+/** 有給の消化記録(usage行)。1件の承認済み申請が複数の付与(grant)にまたがって消化された
+ *  場合、同一のrequest_idを持つ複数行として返る。管理者向けの取消操作はrequest単位で行う。 */
+export interface PaidLeaveUsage {
+  id: string;
+  user_id: string;
+  used_on: string;
+  used_days: number;
+  used_minutes: number | null;
+  usage_type: PaidLeaveType;
+  is_confirmed: boolean;
+  paid_leave_grant_id: string;
+  paid_leave_request_id: string | null;
+  request_status: PaidLeaveRequestStatus | null;
+}
+
+/** 特別休暇の消化記録(usage行)。PaidLeaveUsageと同じ形。 */
+export interface SpecialLeaveUsage {
+  id: string;
+  user_id: string;
+  used_on: string;
+  used_days: number;
+  used_minutes: number | null;
+  usage_type: PaidLeaveType;
+  is_confirmed: boolean;
+  special_leave_grant_id: string;
+  special_leave_request_id: string | null;
+  request_status: PaidLeaveRequestStatus | null;
+}
+
+/** 代休の消化記録(usage行)。PaidLeaveUsageと同じ形。 */
+export interface CompensatoryLeaveUsage {
+  id: string;
+  user_id: string;
+  used_on: string;
+  used_days: number;
+  used_minutes: number | null;
+  usage_type: PaidLeaveType;
+  is_confirmed: boolean;
+  compensatory_leave_grant_id: string;
+  compensatory_leave_request_id: string | null;
+  request_status: PaidLeaveRequestStatus | null;
+}
+
 export interface GroupOption {
   id: string;
   name: string;

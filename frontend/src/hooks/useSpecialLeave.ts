@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  adminCancelSpecialLeaveRequest,
   cancelSpecialLeaveRequest,
   createSpecialLeaveGrantRule,
   createSpecialLeaveRequest,
@@ -11,6 +12,7 @@ import {
   fetchSpecialLeaveGrantsForUser,
   fetchSpecialLeaveHistoryForUser,
   fetchSpecialLeaveTypes,
+  fetchSpecialLeaveUsagesForUser,
   grantSpecialLeave,
   revokeSpecialLeaveGrant,
   updateSpecialLeaveType,
@@ -144,5 +146,29 @@ export function useSpecialLeaveHistoryForUser(userId: string) {
     queryKey: ['special-leave', 'history', 'user', userId],
     queryFn: () => fetchSpecialLeaveHistoryForUser(userId),
     enabled: Boolean(userId),
+  })
+}
+
+function specialLeaveUsagesForUserKey(userId: string) {
+  return ['special-leave', 'usages', 'user', userId]
+}
+
+export function useSpecialLeaveUsagesForUser(userId: string) {
+  return useQuery({
+    queryKey: specialLeaveUsagesForUserKey(userId),
+    queryFn: () => fetchSpecialLeaveUsagesForUser(userId),
+    enabled: Boolean(userId),
+  })
+}
+
+/** 管理者による特別休暇申請の取消。取消対象社員のusages一覧を再取得する。 */
+export function useAdminCancelSpecialLeaveRequest(userId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (requestId: string) => adminCancelSpecialLeaveRequest(requestId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: specialLeaveUsagesForUserKey(userId) })
+    },
   })
 }
