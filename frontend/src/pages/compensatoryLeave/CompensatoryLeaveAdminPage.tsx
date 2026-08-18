@@ -50,6 +50,9 @@ function ManualGrantCard() {
   const [grantReason, setGrantReason] = useState('')
   const [results, setResults] = useState<BulkGrantResult[] | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // 対象選択(GrantTargetPicker)は、一部失敗があったときだけ失敗分だけに絞ってリセットする。
+  // 全件成功時は選択を保ったままにし、直後に付与状況が表示され続けるようにする。
+  const [resetSignal, setResetSignal] = useState<BulkGrantResult[] | null>(null)
 
   const grantCompensatoryLeave = useGrantCompensatoryLeave()
   const revokeGrant = useRevokeCompensatoryLeaveGrant()
@@ -77,6 +80,8 @@ function ManualGrantCard() {
       setWorkDate('')
       setExpiresOn('')
       setGrantReason('')
+    } else {
+      setResetSignal(outcomes)
     }
   }
 
@@ -90,7 +95,7 @@ function ManualGrantCard() {
             setTargetIds(ids)
             setTargetLabels(labels)
           }}
-          resetSignal={results}
+          resetSignal={resetSignal}
           resetIndividualIds={failedIds}
         />
       </FormField>
