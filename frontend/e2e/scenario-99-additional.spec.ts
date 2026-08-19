@@ -2,10 +2,14 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
 import {
+  createSpecialLeaveType,
   deleteAttendancePunch,
+  ensureTodayClockedOut,
   fetchAttendancePunches,
+  grantAdditionalPaidLeave,
   recordAttendancePunch,
   submitApproveAndCloseCurrentMonth,
+  updateSystemSettings,
 } from "./support/api";
 import { pickDate, pickUser, pickYearMonth } from "./support/ui";
 
@@ -431,4 +435,203 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
   } finally {
     await adminContext.close();
   }
+});
+
+/**
+ * ScenarioSeederのシフト予定期間(前後1か月)に収まる平日をランダムに選ぶ
+ * (scenario-03-paid-leave.spec.tsの`randomWorkingDate`と同じ規則。当月は他シナリオが
+ * 月次を承認・締めまで進めることがあるため翌月から選ぶ)。特別休暇・有給いずれの
+ * 申請テストからも使う共通ヘルパー。
+ */
+function randomNextMonthWorkingDate(): string {
+  const now = new Date();
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const daysInNextMonth = new Date(
+    nextMonthStart.getFullYear(),
+    nextMonthStart.getMonth() + 1,
+    0,
+  ).getDate();
+  const day = 1 + Math.floor(Math.random() * (daysInNextMonth - 3));
+  const date = new Date(nextMonthStart.getFullYear(), nextMonthStart.getMonth(), day);
+  while (date.getDay() === 0 || date.getDay() === 6) {
+    date.setDate(date.getDate() + 1);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * §5-19: 承認者に申請者本人を指定して汎用申請を提出した場合、承認待ちを経由せず
+ * 提出と同時に承認をスキップして確定すること(承認不要設定とは別の、承認ルート自体は
+ * あるが実質的な承認者がいないケース)。承認者への「承認してください」通知は発生せず、
+ * /approvalsで誰かの承認操作を待つことなく最初から「承認済み」状態になることを確認する。
+ */
+test("§5-19: 承認者に自分自身を指定した申請は提出と同時に承認をスキップする", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const title = `E2Eテスト自己承認確認_${Math.floor(Math.random() * 100000)}`;
+
+  await loginAs(page, SCENARIO_USERS.punchEmployee);
+  await page.goto("/requests/new");
+  await page.getByLabel("申請種別").selectOption({ label: "一般申請" });
+  await page.getByLabel("タイトル").fill(title);
+  await page.getByLabel("内容").fill("E2Eテスト用の自己承認確認申請");
+  await pickUser(
+    page,
+    "承認者",
+    SCENARIO_USERS.punchEmployee,
+    "kenta.takahashi@example.com",
+  );
+  await page.getByRole("button", { name: "提出する" }).click();
+
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+$/);
+  await expect(
+    page.getByRole("status", { name: "承認済み" }),
+  ).toBeVisible();
+
+  // 承認者操作を促すボタン(「承認する」「差し戻す」)は最初から出ない。
+  await expect(page.getByRole("button", { name: "承認する" })).toHaveCount(0);
+});
+
+/**
+ * §5-19: 「承認不要」にシステム設定されているドメインでは、申請フォームに承認者選択欄
+ * 自体を出さないこと(承認は不要であることが分かる説明文だけを表示する)。申請すると
+ * 同時に「承認済み」まで確定することも合わせて確認する(特別休暇で確認する。
+ * `requires_grant: false`の種別を使い、付与残高が無くても申請自体は成立させる)。
+ */
+test("§5-19: 承認不要設定のドメインでは申請フォームに承認者欄が表示されない", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const typeName = `E2Eテスト特別休暇種別_${Math.floor(Math.random() * 100000)}`;
+
+  const adminContext = await page.context().browser()!.newContext();
+  const adminPage = await adminContext.newPage();
+  try {
+    await loginAs(adminPage, SCENARIO_USERS.admin);
+    await createSpecialLeaveType(adminPage, { name: typeName, requiresGrant: false });
+    await updateSystemSettings(adminPage, { special_leave_requires_approval: false });
+
+    await loginAs(page, SCENARIO_USERS.punchEmployee);
+    await page.goto("/special-leave");
+    await expect(page.getByText("特別休暇を申請する")).toBeVisible();
+
+    // 承認不要設定のため、承認者選択欄(UserPicker)自体が表示されない。
+    await expect(page.getByLabel("承認者")).toHaveCount(0);
+    await expect(
+      page.getByText(/現在の設定では特別休暇申請に承認は不要です/),
+    ).toBeVisible();
+
+    const targetDate = randomNextMonthWorkingDate();
+    await page.getByLabel("特別休暇の種類").selectOption({ label: typeName });
+    await pickDate(page, "対象日", targetDate, { exact: true });
+    await page.getByRole("button", { name: "申請する" }).click();
+
+    await expect(
+      page
+        .locator("li", { hasText: targetDate })
+        .getByRole("status", { name: "承認済み" }),
+    ).toBeVisible();
+  } finally {
+    // 他のE2Eシナリオ・手動確認が「特別休暇は承認必須」の前提で動くため、必ず元に戻す。
+    await updateSystemSettings(adminPage, { special_leave_requires_approval: true });
+    await adminContext.close();
+  }
+});
+
+/**
+ * §5-19: 有給申請でも承認者に自分自身を指定した場合は提出と同時に承認をスキップし、
+ * `/paid-leave`一覧の時点で最初から「承認済み」になること(scenario-03-paid-leave.spec.ts
+ * の通常申請〜承認フローとは別に、自己承認の1件だけを確認する)。
+ */
+test("§5-19: 承認者に自分自身を指定した有給申請は提出と同時に承認をスキップする", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+
+  // grantAdditionalPaidLeaveはユーザー検索(GET /users)に管理者権限が必要なため、
+  // 専用のadminコンテキストから付与する(申請者本人のセッションには影響させない)。
+  const adminContext = await page.context().browser()!.newContext();
+  const adminPage = await adminContext.newPage();
+  await loginAs(adminPage, SCENARIO_USERS.admin);
+  await grantAdditionalPaidLeave(adminPage, "kenta.takahashi@example.com", 5);
+  await adminContext.close();
+
+  await loginAs(page, SCENARIO_USERS.punchEmployee);
+  await page.goto("/paid-leave");
+
+  // 対象日はランダムに選ぶため、他の実行と重複した場合(「この日は既に有給または特別休暇を
+  // 申請済みです。」)は日を変えて再試行する(scenario-03-paid-leave.spec.tsと同じ考え方)。
+  let approvedRow;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const targetDate = randomNextMonthWorkingDate();
+    await pickDate(page, "対象日", targetDate, { exact: true });
+    await pickUser(
+      page,
+      "承認者",
+      SCENARIO_USERS.punchEmployee,
+      "kenta.takahashi@example.com",
+    );
+    await page.getByRole("button", { name: "申請する" }).click();
+
+    const duplicateError = page.getByText("この日は既に有給を申請済みです。");
+    const row = page
+      .locator("li", { hasText: targetDate })
+      .getByRole("status", { name: "承認済み" });
+
+    const result = await Promise.race([
+      duplicateError
+        .waitFor({ state: "visible", timeout: 15000 })
+        .then(() => "duplicate" as const)
+        .catch(() => null),
+      row
+        .waitFor({ state: "visible", timeout: 15000 })
+        .then(() => "approved" as const)
+        .catch(() => null),
+    ]);
+
+    if (result === "approved") {
+      approvedRow = row;
+      break;
+    }
+  }
+
+  if (!approvedRow) {
+    throw new Error("有給申請(自己承認)に10回試行しても成功しなかった");
+  }
+  await expect(approvedRow).toBeVisible();
+});
+
+/**
+ * §5-19: 月次勤怠でも承認者に自分自身を指定した場合、提出と同時に承認をスキップして
+ * 確定すること。attendance_month集約はworkflow_requestとは別集約で、
+ * `attendance_requires_approval=false`による自動承認(承認者IDがnullのセンチネル)と
+ * 自己承認スキップ(承認者ID=申請者自身)の2つの経路を持つため、両者を混同していないかの
+ * 回帰確認を兼ねる。他シナリオが当月・前月の月次勤怠を提出〜締めまで進めることがある
+ * `punchEmployee`/`monthlyEmployee`とは衝突しないよう、`hrStaff`(加藤由美、他シナリオでは
+ * 承認者・閲覧者としてのみ登場し、自分の月次勤怠は提出しない)の当月分で確認する。
+ */
+test("§5-19: 承認者に自分自身を指定した月次勤怠提出は承認をスキップする", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+
+  await loginAs(page, SCENARIO_USERS.hrStaff);
+  const { workDate } = await ensureTodayClockedOut(page);
+  const yearMonth = workDate.slice(0, 7);
+
+  await page.goto(`/attendance/months/${yearMonth}`);
+  await page.getByRole("button", { name: "提出する" }).first().click();
+
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#approver").click();
+  await page
+    .getByPlaceholder("氏名またはメールアドレスで検索")
+    .fill(SCENARIO_USERS.hrStaff);
+  await page
+    .getByRole("option", { name: `${SCENARIO_USERS.hrStaff}(yumi.kato@example.com)` })
+    .click();
+  await dialog.getByRole("button", { name: "提出する" }).click();
+
+  await expect(page.getByRole("status", { name: "承認済み" })).toBeVisible();
 });
