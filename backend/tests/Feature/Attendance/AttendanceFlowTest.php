@@ -338,13 +338,14 @@ class AttendanceFlowTest extends TestCase
     }
 
     /**
-     * UC-A010関連: 申請者自身が承認者を自分自身に指定して提出した場合、提出済み・差戻し済みの
-     * 申請(workflow_request)を「取り消す」ことができる。取り消すと対象の月次勤怠も未提出へ戻り、
-     * 再提出できる(取り消し後もattendance_monthsが提出済み/差戻し済みのまま取り残されない)。
+     * UC-A010関連: 提出済み・差戻し済みの申請(workflow_request)を「取り消す」ことができる。
+     * 取り消すと対象の月次勤怠も未提出へ戻り、再提出できる(取り消し後もattendance_monthsが
+     * 提出済み/差戻し済みのまま取り残されない)。
      */
     public function test_cancelling_a_submitted_request_returns_the_month_to_not_submitted(): void
     {
         $employee = User::factory()->create();
+        $approver = User::factory()->create();
         $today = Carbon::today($employee->timezone);
         $yearMonth = $today->format('Y-m');
 
@@ -352,7 +353,7 @@ class AttendanceFlowTest extends TestCase
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
 
         $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
-            'approver_user_id' => $employee->id,
+            'approver_user_id' => $approver->id,
         ])->assertSuccessful()->assertJsonPath('status', 'submitted');
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
 
@@ -370,8 +371,27 @@ class AttendanceFlowTest extends TestCase
         $this->assertSame('not_submitted', $monthResponse->json('month.status'));
 
         $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
-            'approver_user_id' => $employee->id,
+            'approver_user_id' => $approver->id,
         ])->assertSuccessful()->assertJsonPath('status', 'submitted');
+    }
+
+    /**
+     * 承認者に自分自身を指定して月次勤怠を提出した場合、承認待ちのまま留め置かず
+     * 提出と同時に承認をスキップして確定させる(root CLAUDE.md「承認者は都度指定」の運用として、
+     * 自分を承認者に指定するケース自体は許容しつつ、実際には承認されない申請が残らないようにする)。
+     */
+    public function test_submitting_a_month_with_self_as_approver_skips_approval(): void
+    {
+        $employee = User::factory()->create();
+        $today = Carbon::today($employee->timezone);
+        $yearMonth = $today->format('Y-m');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+
+        $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
+            'approver_user_id' => $employee->id,
+        ])->assertSuccessful()->assertJsonPath('status', 'approved');
     }
 
     /**

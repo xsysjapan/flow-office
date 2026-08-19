@@ -890,8 +890,8 @@ describe('ExpenseClaimNewPage', () => {
 
     renderPage([transportCategory, lodgingCategory], '/expenses/claim-1/edit', [], false)
 
-    expect(await screen.findByLabelText('承認者(任意)')).toBeInTheDocument()
-    expect(screen.getByText(/現在の設定では経費精算の申請に承認は不要です/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('承認者')).not.toBeInTheDocument()
+    expect(await screen.findByText(/現在の設定では経費精算の申請に承認は不要です/)).toBeInTheDocument()
     const submitButton = screen.getByRole('button', { name: '申請する' })
     expect(submitButton).not.toBeDisabled()
 

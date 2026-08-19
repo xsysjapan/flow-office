@@ -913,18 +913,15 @@ function SavedItemsAndSubmit({
       <Card title="申請する">
         {submitClaim.error && <ErrorMessage error={submitClaim.error} />}
         {deleteClaimMutation.error && <ErrorMessage error={deleteClaimMutation.error} />}
-        <FormField
-          label={approvalRequired ? '承認者' : '承認者(任意)'}
-          htmlFor="approver"
-          required={approvalRequired}
-        >
-          <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
-          {!approvalRequired && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
-            </p>
-          )}
-        </FormField>
+        {approvalRequired ? (
+          <FormField label="承認者" htmlFor="approver" required>
+            <UserPicker id="approver" value={approverUserId} onChange={onApproverChange} />
+          </FormField>
+        ) : (
+          <p className="mb-3 text-xs text-muted-foreground">
+            現在の設定では経費精算の申請に承認は不要です。申請すると同時に確定します。
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <Button
             isLoading={submitClaim.isPending}

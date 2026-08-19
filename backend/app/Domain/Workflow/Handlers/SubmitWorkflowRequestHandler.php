@@ -44,22 +44,37 @@ class SubmitWorkflowRequestHandler implements CommandHandler
             throw ValidationException::withMessages(['approver_user_id' => ['承認者を指定してください。']]);
         }
 
-        WorkflowRequestAggregate::retrieve($workflowRequest->id)
-            ->submit(approverUserId: $approverUserId, submittedByUserId: $command->submittedByUserId)
-            ->persist();
+        // 承認者に申請者本人を指定した場合、承認待ちのまま自分の承認操作を待つ状態にはせず、
+        // 提出と同時に承認をスキップして確定させる(「承認不要」設定とは別物で、承認ルート
+        // 自体はあるが実質的な承認者がいないケースを指す)。approvedByUserIdには申請者自身の
+        // IDをそのまま使う(nullは経費精算・月次勤怠等のapproval_skip_threshold/
+        // requires_approval=falseによる自動承認の専用センチネルとして各Reactorが「対向ドメイン側で
+        // 既に承認済み」の判定に使っているため、ここで転用すると二重承認の抑止が誤作動する)。
+        $isSelfApproval = $approverUserId === $command->submittedByUserId;
+
+        $aggregate = WorkflowRequestAggregate::retrieve($workflowRequest->id)
+            ->submit(approverUserId: $approverUserId, submittedByUserId: $command->submittedByUserId);
+
+        if ($isSelfApproval) {
+            $aggregate->approve(approvedByUserId: $command->submittedByUserId);
+        }
+
+        $aggregate->persist();
 
         $workflowRequest->refresh();
 
-        $approver = User::find($approverUserId);
-        if ($approver !== null) {
-            $content = WorkflowRequestNotificationContent::forSubmitted($workflowRequest);
+        if (! $isSelfApproval) {
+            $approver = User::find($approverUserId);
+            if ($approver !== null) {
+                $content = WorkflowRequestNotificationContent::forSubmitted($workflowRequest);
 
-            SendNotificationJob::enqueue(
-                recipient: $approver,
-                title: $content->title,
-                summary: $content->summary,
-                detailUrl: $content->detailUrl,
-            );
+                SendNotificationJob::enqueue(
+                    recipient: $approver,
+                    title: $content->title,
+                    summary: $content->summary,
+                    detailUrl: $content->detailUrl,
+                );
+            }
         }
 
         return $workflowRequest;

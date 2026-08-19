@@ -230,14 +230,15 @@ function PaidLeaveRequestForm() {
           </FormField>
         )}
 
-        <FormField label={approvalRequired ? '承認者' : '承認者(任意)'} htmlFor="paid-leave-approver" required={approvalRequired}>
-          <UserPicker id="paid-leave-approver" value={approverUserId} onChange={setApproverUserId} />
-          {!approvalRequired && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              現在の設定では有給申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
-            </p>
-          )}
-        </FormField>
+        {approvalRequired ? (
+          <FormField label="承認者" htmlFor="paid-leave-approver" required>
+            <UserPicker id="paid-leave-approver" value={approverUserId} onChange={setApproverUserId} />
+          </FormField>
+        ) : (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            現在の設定では有給申請に承認は不要です。申請すると同時に確定します。
+          </p>
+        )}
 
         <FormField label="理由(任意)" htmlFor="paid-leave-reason">
           <Input id="paid-leave-reason" value={reason} onChange={(e) => setReason(e.target.value)} />

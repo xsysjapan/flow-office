@@ -115,16 +115,14 @@ function SubmitMonthDialog({ yearMonth }: { yearMonth: string }) {
         <DialogHeader>
           <DialogTitle>月次勤怠を提出しますか?</DialogTitle>
           <DialogDescription>
-            {yearMonth} の月次勤怠を提出します。提出先の承認者を選んでください。提出すると、承認・差戻しされるまでこの月の日次勤怠・打刻ログは編集できなくなります。
-            対象月に有給申請がある場合は、先に有給申請の承認を完了してください。
-            {!approvalRequired && '現在の設定では承認者の指定は不要です。提出すると同時に確定します。'}
+            {yearMonth} の月次勤怠を提出します。
+            {approvalRequired
+              ? '提出先の承認者を選んでください。提出すると、承認・差戻しされるまでこの月の日次勤怠・打刻ログは編集できなくなります。対象月に有給申請がある場合は、先に有給申請の承認を完了してください。'
+              : '現在の設定では承認者の指定は不要です。提出すると同時に確定します。'}
           </DialogDescription>
         </DialogHeader>
         {submitMonth.error && <ErrorMessage error={submitMonth.error} />}
-        <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />
-        {!approvalRequired && (
-          <p className="text-xs text-muted-foreground">承認者の指定は任意です。</p>
-        )}
+        {approvalRequired && <UserPicker id="approver" value={approverUserId} onChange={setApproverUserId} />}
         <DialogFooter>
           <Button variant="secondary" onClick={() => setIsOpen(false)}>
             キャンセル
