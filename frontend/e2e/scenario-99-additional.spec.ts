@@ -2,14 +2,12 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
 import {
-  createSpecialLeaveType,
   deleteAttendancePunch,
   ensureTodayClockedOut,
   fetchAttendancePunches,
   grantAdditionalPaidLeave,
   recordAttendancePunch,
   submitApproveAndCloseCurrentMonth,
-  updateSystemSettings,
 } from "./support/api";
 import { pickDate, pickUser, pickYearMonth } from "./support/ui";
 
@@ -493,51 +491,18 @@ test("§5-19: 承認者に自分自身を指定した申請は提出と同時に
   await expect(page.getByRole("button", { name: "承認する" })).toHaveCount(0);
 });
 
-/**
- * §5-19: 「承認不要」にシステム設定されているドメインでは、申請フォームに承認者選択欄
- * 自体を出さないこと(承認は不要であることが分かる説明文だけを表示する)。申請すると
- * 同時に「承認済み」まで確定することも合わせて確認する(特別休暇で確認する。
- * `requires_grant: false`の種別を使い、付与残高が無くても申請自体は成立させる)。
- */
-test("§5-19: 承認不要設定のドメインでは申請フォームに承認者欄が表示されない", async ({
-  page,
-}) => {
-  test.setTimeout(60000);
-  const typeName = `E2Eテスト特別休暇種別_${Math.floor(Math.random() * 100000)}`;
-
-  const adminContext = await page.context().browser()!.newContext();
-  const adminPage = await adminContext.newPage();
-  try {
-    await loginAs(adminPage, SCENARIO_USERS.admin);
-    await createSpecialLeaveType(adminPage, { name: typeName, requiresGrant: false });
-    await updateSystemSettings(adminPage, { special_leave_requires_approval: false });
-
-    await loginAs(page, SCENARIO_USERS.punchEmployee);
-    await page.goto("/special-leave");
-    await expect(page.getByText("特別休暇を申請する")).toBeVisible();
-
-    // 承認不要設定のため、承認者選択欄(UserPicker)自体が表示されない。
-    await expect(page.getByLabel("承認者")).toHaveCount(0);
-    await expect(
-      page.getByText(/現在の設定では特別休暇申請に承認は不要です/),
-    ).toBeVisible();
-
-    const targetDate = randomNextMonthWorkingDate();
-    await page.getByLabel("特別休暇の種類").selectOption({ label: typeName });
-    await pickDate(page, "対象日", targetDate, { exact: true });
-    await page.getByRole("button", { name: "申請する" }).click();
-
-    await expect(
-      page
-        .locator("li", { hasText: targetDate })
-        .getByRole("status", { name: "承認済み" }),
-    ).toBeVisible();
-  } finally {
-    // 他のE2Eシナリオ・手動確認が「特別休暇は承認必須」の前提で動くため、必ず元に戻す。
-    await updateSystemSettings(adminPage, { special_leave_requires_approval: true });
-    await adminContext.close();
-  }
-});
+// 注: 「承認不要」システム設定時に承認者欄が表示されないことのE2E確認は、
+// 意図的にここには置かない。system_settingsはアプリ全体で1行だけの真にグローバルな
+// 設定であり(ルートCLAUDE.md「法務判断が必要な値はマスタ化する」)、このE2Eスイートは
+// globalSetupで1回だけDBをリセットした後は状態をリセットせず使い回す前提(本ファイル
+// 冒頭のREADME参照)。値を変更するテストが1件でもあると、同じDBを共有する他の全シナリオ・
+// 手動確認・(将来的な)並列実行に影響する。実際、変更後は`finally`で元に戻しても、
+// テストプロセスが外部要因(タイムアウト・強制終了)で中断すればその瞬間に元へ戻せず、
+// 以降のシナリオが「特別休暇は承認必須」という前提のまま壊れる。
+// 承認者欄の非表示自体は`frontend/src/pages/{paidLeave,specialLeave,compensatoryLeave}/`・
+// `expense/ExpenseClaimNewPage`・`attendance/{AttendanceMonthDetailPage,AttendanceDayPage}`の
+// 各`*.test.tsx`(Vitest、system_settingsをモックするだけで実DBに触れない)で
+// ドメインごとに確認済みのため、E2Eでの重複確認はしない。
 
 /**
  * §5-19: 有給申請でも承認者に自分自身を指定した場合は提出と同時に承認をスキップし、

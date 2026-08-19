@@ -563,37 +563,3 @@ export async function closeMonth(adminPage: Page, employeePage: Page, yearMonth:
 
   await apiFetch(adminPage, `/attendance-months/${month.id}/close`, { method: 'POST' })
 }
-
-/** システム設定を取得する(管理者/人事担当者限定)。 */
-export async function fetchSystemSettings(page: Page): Promise<{ default_timezone: string; [key: string]: unknown }> {
-  return apiFetch(page, '/admin/system-settings')
-}
-
-/**
- * システム設定の一部フィールドだけを更新する(管理者/人事担当者限定でログイン済みの
- * `page`から呼び出す)。`PUT /admin/system-settings`は`default_timezone`必須のフル更新
- * エンドポイントのため、現在値を取得してから指定フィールドだけ上書きして送る。
- * 各申請ドメインの`requires_approval`設定をE2Eから一時的に切り替える用途(呼び出し後は
- * 必ずtry/finallyで元の値に戻すこと)。
- */
-export async function updateSystemSettings(page: Page, partial: Record<string, unknown>): Promise<void> {
-  const current = await fetchSystemSettings(page)
-  await apiFetch(page, '/admin/system-settings', {
-    method: 'PUT',
-    body: { default_timezone: current.default_timezone, ...partial },
-  })
-}
-
-/**
- * 特別休暇の種別を作成する(管理者限定)。E2Eでは`requiresGrant: false`にして、
- * 付与残高が無くても申請できるようにする用途で使う。
- */
-export async function createSpecialLeaveType(
-  page: Page,
-  input: { name: string; requiresGrant?: boolean },
-): Promise<{ id: number }> {
-  return apiFetch(page, '/special-leave/types', {
-    method: 'POST',
-    body: { name: input.name, is_active: true, requires_grant: input.requiresGrant ?? false },
-  })
-}
