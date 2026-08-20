@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
-import { attendanceRowDisplayLabel } from '../../utils/statusLabels'
+import { attendanceRowDisplayLabel, attendanceScheduleHolidayLabel } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
 import { Duration } from '../Duration/Duration'
 import { Checkbox } from '../ui/checkbox'
@@ -50,6 +50,9 @@ export function AttendanceDayRow({
   onToggleSelected,
 }: AttendanceDayRowProps) {
   const { label, tone } = attendanceRowDisplayLabel(day, schedule)
+  const holiday = attendanceScheduleHolidayLabel(schedule)
+  const showHolidayAlongsideStatus = holiday !== null && day !== undefined
+    && (day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at))
 
   const content = (
     <>
@@ -58,6 +61,7 @@ export function AttendanceDayRow({
           {date}({weekdayLabel(date)})
         </span>
         <Badge tone={tone}>{label}</Badge>
+        {showHolidayAlongsideStatus && <Badge tone={holiday.tone}>{holiday.label}</Badge>}
         {schedule?.public_holiday_name && (
           <span className="text-xs text-muted-foreground">{schedule.public_holiday_name}</span>
         )}

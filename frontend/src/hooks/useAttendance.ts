@@ -19,6 +19,7 @@ import {
   fetchPunches,
   fetchToday,
   fetchWeek,
+  fetchWeekOvertime,
   generateAttendancePattern,
   previewAttendancePattern,
   startBreak,
@@ -49,6 +50,13 @@ export function useWeek(startDate: string, userId?: string) {
   return useQuery({
     queryKey: userId === undefined ? [...WEEK_KEY, startDate] : [...WEEK_KEY, startDate, userId],
     queryFn: () => (userId === undefined ? fetchWeek(startDate) : fetchWeek(startDate, userId)),
+  })
+}
+
+export function useWeekOvertime(startDate: string, userId?: string) {
+  return useQuery({
+    queryKey: userId === undefined ? [...WEEK_KEY, startDate, 'overtime'] : [...WEEK_KEY, startDate, userId, 'overtime'],
+    queryFn: () => fetchWeekOvertime(startDate, userId),
   })
 }
 

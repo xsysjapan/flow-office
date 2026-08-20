@@ -209,6 +209,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         feature: "administration.settings",
         permission: "system_settings.read",
       },
+      {
+        to: "/admin/commands",
+        label: "運用コマンド",
+        description: "アプリケーション固有の保守処理を実行し、履歴を確認する",
+        feature: "administration.settings",
+        permission: "admin_command.view",
+      },
     ],
   },
 ];

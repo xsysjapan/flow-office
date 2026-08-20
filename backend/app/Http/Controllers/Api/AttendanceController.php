@@ -25,6 +25,7 @@ use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
 use App\Domain\Attendance\Services\WeeklyPatternResolver;
+use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -200,6 +201,30 @@ class AttendanceController extends Controller
             ->get();
 
         return AttendanceDayResource::collection($days);
+    }
+
+    public function weekOvertime(Request $request, WeeklyOvertimeCalculator $calculator): JsonResponse
+    {
+        $data = $request->validate([
+            'start_date' => ['required', 'date'],
+            'user_id' => ['nullable', 'string', 'exists:users,id'],
+        ]);
+        $requestedUserId = $data['user_id'] ?? $request->user()->id;
+        $requestedDate = Carbon::parse($data['start_date']);
+        $weekStartsOn = $this->resolveWeekStartsOn($requestedUserId, $requestedDate);
+        $start = $requestedDate->copy();
+        while ($start->isoWeekday() !== $weekStartsOn) {
+            $start->subDay();
+        }
+        $end = $start->copy()->addDays(6);
+        $targetUserId = $this->resolveViewableUserId(
+            $request,
+            $data['user_id'] ?? null,
+            array_unique([$start->format('Y-m'), $end->format('Y-m')]),
+            '他の社員の週次勤怠を閲覧する権限がありません。',
+        );
+
+        return response()->json($calculator->calculateWeek($targetUserId, $start->toDateString(), $end->toDateString()));
     }
 
     /**

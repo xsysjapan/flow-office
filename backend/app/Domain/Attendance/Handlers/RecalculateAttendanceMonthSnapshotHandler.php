@@ -2,8 +2,10 @@
 
 namespace App\Domain\Attendance\Handlers;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
+use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
@@ -30,6 +32,7 @@ class RecalculateAttendanceMonthSnapshotHandler implements CommandHandler
 
     public function __construct(
         private readonly MonthlyOvertimeCalculator $monthlyOvertimeCalculator,
+        private readonly AttendanceCalculator $attendanceCalculator,
     ) {}
 
     public function handle(Command $command): AttendanceMonth
@@ -40,6 +43,27 @@ class RecalculateAttendanceMonthSnapshotHandler implements CommandHandler
 
         if (! in_array($month->status, self::RECALCULATABLE_STATUSES, true)) {
             throw new DomainRuleException('この月次勤怠は現在のステータスからは再計算できません。');
+        }
+
+        // day_classification追加前の日次勤怠は区分がNULLのまま残っている。月次の区分別集計より
+        // 先に、当時の勤務予定・会社カレンダーを使って通常の日次計算処理を再実行し、区分だけで
+        // なく休日労働・残業を含む日次計算結果全体を現在のロジックで補正する。
+        $daysMissingClassification = AttendanceDay::query()
+            ->where('user_id', $month->user_id)
+            ->where('work_date', 'like', "{$month->year_month}%")
+            ->whereNull('day_classification')
+            ->with([
+                'breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages',
+                'calendarEntry.workStyle',
+            ])
+            ->get();
+
+        foreach ($daysMissingClassification as $day) {
+            $calculation = $this->attendanceCalculator->calculate($day);
+
+            AttendanceDayAggregate::retrieve($day->id)
+                ->calculate($calculation)
+                ->persist();
         }
 
         // SubmitAttendanceMonthHandler::buildSnapshot()と同じ形(day_count + 集計値)を保つ。

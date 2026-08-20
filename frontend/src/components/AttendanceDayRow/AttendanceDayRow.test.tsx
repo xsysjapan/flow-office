@@ -142,6 +142,36 @@ describe('AttendanceDayRow', () => {
     expect(screen.queryByText('所定休日')).not.toBeInTheDocument()
   })
 
+  it.each([
+    [{ is_legal_holiday: true, is_company_holiday: false }, '法定休日'],
+    [{ is_legal_holiday: false, is_company_holiday: true }, '所定休日'],
+  ])('shows the attendance status and %s classification independently when working on a holiday', (holidayFlags, holidayLabel) => {
+    renderRow({
+      day,
+      schedule: {
+        id: null,
+        user_id: day.user_id,
+        work_date: day.work_date,
+        work_style_id: 'work-style-1',
+        shift_pattern_id: null,
+        day_type: holidayFlags.is_legal_holiday ? 'legal_holiday' : 'prescribed_holiday',
+        is_working_day: false,
+        ...holidayFlags,
+        planned_start_at: null,
+        planned_end_at: null,
+        planned_break_minutes: 0,
+        planned_break_start_at: null,
+        planned_break_end_at: null,
+        is_published: true,
+        is_manually_overridden: false,
+        schedule_source: 'company_calendar',
+      },
+    })
+
+    expect(screen.getByText('退勤済み')).toBeInTheDocument()
+    expect(screen.getByText(holidayLabel)).toBeInTheDocument()
+  })
+
   it('shows extra warning badges', () => {
     renderRow({ day: undefined, warnings: ['打刻漏れ'] })
     expect(screen.getByText('打刻漏れ')).toBeInTheDocument()

@@ -57,6 +57,8 @@ class AccessControlSeeder extends Seeder
         'approval.route.change' => ['name' => '承認ルート変更', 'scopes' => ['global', 'group']],
         'system_settings.read' => ['name' => 'システム設定閲覧', 'scopes' => ['global']],
         'system_settings.update' => ['name' => 'システム設定更新', 'scopes' => ['global']],
+        'admin_command.view' => ['name' => '運用コマンド閲覧', 'scopes' => ['global']],
+        'admin_command.execute' => ['name' => '運用コマンド実行', 'scopes' => ['global']],
         // 旧APIとの移行互換。新しい画面・APIは上記の操作単位Permissionを使用する。
         'user.manage' => ['name' => 'ユーザー管理（互換）', 'scopes' => ['global', 'group']],
     ];
