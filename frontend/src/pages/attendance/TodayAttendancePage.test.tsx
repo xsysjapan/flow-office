@@ -152,10 +152,11 @@ describe('TodayAttendancePage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('法定外残業時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜所定労働時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜法定内残業時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜法定外残業時間')).toBeInTheDocument()
+    expect(await screen.findByText('所定外法定外労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定内法定内労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定外法定内労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定内法定外労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定外法定外労働時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜法定休日労働時間')).toBeInTheDocument()
   })
 

@@ -25,13 +25,12 @@ describe('AttendanceCalculationSummary', () => {
     )
 
     expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
-    expect(screen.getByText('所定労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
-    expect(screen.getByText('うち深夜所定労働時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜法定内残業時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜法定外残業時間')).toBeInTheDocument()
+    expect(screen.getByText('所定内法定内労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
+    expect(screen.getByText('うち深夜所定内法定内労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定外法定内労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定内法定外労働時間')).toBeInTheDocument()
+    expect(screen.getByText('うち深夜所定外法定外労働時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜法定休日労働時間')).toBeInTheDocument()
-    expect(screen.getByText('所定休日労働時間')).toBeInTheDocument()
-    expect(screen.getByText('うち深夜所定休日労働時間')).toBeInTheDocument()
   })
 
   it('can show month-specific and leave totals', () => {
