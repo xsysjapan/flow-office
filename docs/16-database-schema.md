@@ -812,6 +812,22 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - late_night_prescribed_statutory_excess_work_minutes / late_night_non_prescribed_statutory_excess_work_minutes
   (所定内外×法定内外の4区分と、それぞれの深夜内数。法定休日はこの4区分に入れず
   `legal_holiday_work_minutes`へ計上する。旧3区分列は画面・CSVの後方互換集計用に併存する)
+
+物理名では、`prescribed` / `non_prescribed` を「所定内 / 所定外」、
+`statutory_within` / `statutory_excess` を「法定内 / 法定外」として別々の軸に固定する。
+`prescribed_statutory_*`を「法定所定」のような一語として解釈しない。5区分の対応は次の通り。
+
+- 所定内法定内: `prescribed_statutory_within_work_minutes`
+- 所定外法定内: `non_prescribed_statutory_within_work_minutes`
+- 所定内法定外: `prescribed_statutory_excess_work_minutes`
+- 所定外法定外: `non_prescribed_statutory_excess_work_minutes`
+- 法定休日: `legal_holiday_work_minutes`
+
+既存データは管理画面の「勤怠5区分データ移行」
+(`attendance:migrate-work-classifications`)で移行する。未適用では対象件数だけを確認し、
+`apply`を有効にすると、イベントのバックアップ・5区分への履歴補正・勤怠計算Projection再構築・
+提出済み/承認済み/締め済み月次スナップショット再計算を順番に実行する。Projectionを旧集計値から
+SQLだけで推測変換しないため、日次実績とイベント履歴から再生成できる。
 - late_night_work_minutes
 - late_night_prescribed_work_minutes (深夜のうち所定労働にあたる分。late_night_work_minutesの内訳)
 - late_night_statutory_within_overtime_minutes (深夜のうち法定内残業にあたる分。late_night_work_minutesの
