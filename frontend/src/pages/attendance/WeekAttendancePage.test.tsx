@@ -41,6 +41,10 @@ const mondayRecord: AttendanceDay = {
     planned_work_minutes: 480,
     work_minutes: 480,
     prescribed_work_minutes: 480,
+    prescribed_statutory_within_work_minutes: 480,
+    non_prescribed_statutory_within_work_minutes: 0,
+    prescribed_statutory_excess_work_minutes: 0,
+    non_prescribed_statutory_excess_work_minutes: 0,
     statutory_within_overtime_minutes: 0,
     statutory_excess_overtime_minutes: 0,
     late_night_work_minutes: 0,
@@ -104,6 +108,7 @@ describe('WeekAttendancePage', () => {
         calculation: {
           ...mondayRecord.calculation!,
           prescribed_work_minutes: 240,
+          prescribed_statutory_within_work_minutes: 240,
           absence_minutes: 480,
           special_leave_days: 1,
         },
@@ -113,7 +118,7 @@ describe('WeekAttendancePage', () => {
     await screen.findByText(`${weekStart}(月)`)
     expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
     expect(screen.getByText('12時間')).toBeInTheDocument()
-    expect(screen.getByText('所定労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
+    expect(screen.getByText('所定内法定内労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
     expect(screen.getByText('うち週40時間超').nextElementSibling).toHaveTextContent('1時間')
     expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')

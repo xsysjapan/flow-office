@@ -164,6 +164,10 @@ describe('AttendanceMonthDetailPage', () => {
         ...zeroMonthlyCalculationTotals,
         work_minutes: 2820,
         prescribed_work_minutes: 2400,
+        prescribed_statutory_within_work_minutes: 2400,
+        non_prescribed_statutory_within_work_minutes: 60,
+        prescribed_statutory_excess_work_minutes: 0,
+        non_prescribed_statutory_excess_work_minutes: 360,
         statutory_within_overtime_minutes: 60,
         statutory_excess_overtime_minutes: 360,
         statutory_excess_overtime_over_60h_minutes: 30,
@@ -173,7 +177,7 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText('今月の集計')).toBeInTheDocument()
-    expect(screen.getByText('所定労働時間')).toBeInTheDocument()
+    expect(screen.getByText('所定内法定内労働時間')).toBeInTheDocument()
     expect(screen.getByText('40時間')).toBeInTheDocument()
     expect(screen.getByText('1時間')).toBeInTheDocument()
     expect(screen.getByText('6時間')).toBeInTheDocument()

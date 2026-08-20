@@ -585,6 +585,10 @@ export interface AttendanceMonthlyCalculationTotals {
   work_minutes: number;
   payroll_work_minutes: number;
   prescribed_work_minutes: number;
+  prescribed_statutory_within_work_minutes?: number;
+  non_prescribed_statutory_within_work_minutes?: number;
+  prescribed_statutory_excess_work_minutes?: number;
+  non_prescribed_statutory_excess_work_minutes?: number;
   statutory_within_overtime_minutes: number;
   statutory_excess_overtime_minutes: number;
   statutory_excess_overtime_within_60h_minutes: number;
@@ -595,6 +599,10 @@ export interface AttendanceMonthlyCalculationTotals {
   late_night_prescribed_work_minutes: number;
   late_night_statutory_within_overtime_minutes: number;
   late_night_statutory_excess_overtime_minutes: number;
+  late_night_prescribed_statutory_within_work_minutes?: number;
+  late_night_non_prescribed_statutory_within_work_minutes?: number;
+  late_night_prescribed_statutory_excess_work_minutes?: number;
+  late_night_non_prescribed_statutory_excess_work_minutes?: number;
   legal_holiday_work_minutes: number;
   prescribed_holiday_work_minutes: number;
   late_night_legal_holiday_work_minutes: number;

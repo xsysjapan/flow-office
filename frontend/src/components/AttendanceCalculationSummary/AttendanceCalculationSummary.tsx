@@ -16,11 +16,19 @@ export interface AttendanceCalculationSummaryData {
    *  (実際に異なる場合のみ本コンポーネント側でpayrollWorkMinutesを併記する)。 */
   work_minutes?: number
   prescribed_work_minutes: number
+  prescribed_statutory_within_work_minutes?: number
+  non_prescribed_statutory_within_work_minutes?: number
+  prescribed_statutory_excess_work_minutes?: number
+  non_prescribed_statutory_excess_work_minutes?: number
   statutory_within_overtime_minutes: number
   statutory_excess_overtime_minutes: number
   late_night_prescribed_work_minutes: number
   late_night_statutory_within_overtime_minutes: number
   late_night_statutory_excess_overtime_minutes: number
+  late_night_prescribed_statutory_within_work_minutes?: number
+  late_night_non_prescribed_statutory_within_work_minutes?: number
+  late_night_prescribed_statutory_excess_work_minutes?: number
+  late_night_non_prescribed_statutory_excess_work_minutes?: number
   legal_holiday_work_minutes: number
   late_night_legal_holiday_work_minutes: number
   prescribed_holiday_work_minutes: number
@@ -93,6 +101,10 @@ export function AttendanceCalculationSummary({
   // work_minutesと一致するため、異なる場合のみ別行で表示する(常に両方出すと大半のケースで
   // 同じ数字が並んで見づらいため)。
   const showPayrollWorkMinutes = payrollWorkMinutes !== undefined && payrollWorkMinutes !== totals.work_minutes
+  const prescribedWithin = totals.prescribed_statutory_within_work_minutes ?? totals.prescribed_work_minutes
+  const nonPrescribedWithin = totals.non_prescribed_statutory_within_work_minutes ?? totals.statutory_within_overtime_minutes
+  const prescribedExcess = totals.prescribed_statutory_excess_work_minutes ?? 0
+  const nonPrescribedExcess = totals.non_prescribed_statutory_excess_work_minutes ?? totals.statutory_excess_overtime_minutes
 
   return (
     <section aria-labelledby={`${title}-summary`}>
@@ -104,12 +116,14 @@ export function AttendanceCalculationSummary({
         {showPayrollWorkMinutes && (
           <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
         )}
-        <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜所定労働時間"><Duration minutes={totals.late_night_prescribed_work_minutes} /></SummaryItem>
-        <SummaryItem label="法定内残業時間"><Duration minutes={totals.statutory_within_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定内残業時間"><Duration minutes={totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="法定外残業時間"><Duration minutes={totals.statutory_excess_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定外残業時間"><Duration minutes={totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="所定内法定内労働時間"><Duration minutes={prescribedWithin} /></SummaryItem>
+        <SummaryItem label="うち深夜所定内法定内労働時間"><Duration minutes={totals.late_night_prescribed_statutory_within_work_minutes ?? totals.late_night_prescribed_work_minutes} /></SummaryItem>
+        <SummaryItem label="所定外法定内労働時間"><Duration minutes={nonPrescribedWithin} /></SummaryItem>
+        <SummaryItem label="うち深夜所定外法定内労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_within_work_minutes ?? totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
+        <SummaryItem label="所定内法定外労働時間"><Duration minutes={prescribedExcess} /></SummaryItem>
+        <SummaryItem label="うち深夜所定内法定外労働時間"><Duration minutes={totals.late_night_prescribed_statutory_excess_work_minutes ?? 0} /></SummaryItem>
+        <SummaryItem label="所定外法定外労働時間"><Duration minutes={nonPrescribedExcess} /></SummaryItem>
+        <SummaryItem label="うち深夜所定外法定外労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_excess_work_minutes ?? totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
         {statutoryExcessOver60hMinutes !== undefined && (
           <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
         )}
@@ -120,8 +134,6 @@ export function AttendanceCalculationSummary({
         )}
         <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
         <SummaryItem label="うち深夜法定休日労働時間"><Duration minutes={totals.late_night_legal_holiday_work_minutes} /></SummaryItem>
-        <SummaryItem label="所定休日労働時間"><Duration minutes={totals.prescribed_holiday_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜所定休日労働時間"><Duration minutes={totals.late_night_prescribed_holiday_work_minutes} /></SummaryItem>
       </dl>
 
       {hasLeaveTotals && (
