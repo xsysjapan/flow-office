@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\ShiftSwapRequestController;
 use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
+use App\Http\Controllers\Api\AdminCommandController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
@@ -448,6 +449,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // Feature / Permission による動的な付与を許可するシステム管理機能。
     // 実効Feature・Permissionだけを認可境界にする。
     Route::prefix('admin')->middleware('feature:administration.settings')->group(function () {
+        Route::get('/commands', [AdminCommandController::class, 'index'])->middleware('permission:admin_command.view,any');
+        Route::get('/command-runs', [AdminCommandController::class, 'runs'])->middleware('permission:admin_command.view,any');
+        Route::post('/commands/{command}/runs', [AdminCommandController::class, 'store'])->where('command', '.*')->middleware('permission:admin_command.execute,any');
         Route::get('/audit-log', [AuditLogController::class, 'index'])->middleware('permission:audit_log.view,any');
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('permission:audit_log.export,any');
         Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');

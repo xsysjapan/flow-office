@@ -61,6 +61,7 @@ import {
 } from "./pages/admin/UserManagementAccessPage";
 import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
+import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
 
 function App() {
   return (
@@ -188,6 +189,7 @@ function App() {
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />
+          <Route path="commands" element={<AdminCommandsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
