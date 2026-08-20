@@ -22,7 +22,9 @@ use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthConfirmationReverted;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
+use App\Domain\Attendance\Events\AttendanceMonthReopened;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
 use App\Domain\Attendance\Events\AttendanceMonthSnapshotRecalculated;
@@ -342,6 +344,8 @@ return [
         'attendance_month.returned' => AttendanceMonthReturned::class,
         'attendance_month.submission_cancelled' => AttendanceMonthSubmissionCancelled::class,
         'attendance_month.closed' => AttendanceMonthClosed::class,
+        'attendance.month_reopened' => AttendanceMonthReopened::class,
+        'attendance.month_confirmation_reverted' => AttendanceMonthConfirmationReverted::class,
         'attendance_month.locked' => AttendanceMonthLocked::class,
         'attendance_month.shared' => AttendanceMonthShared::class,
         'attendance_month.unlocked' => AttendanceMonthUnlocked::class,

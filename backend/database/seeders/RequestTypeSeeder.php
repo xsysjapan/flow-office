@@ -86,6 +86,18 @@ class RequestTypeSeeder extends Seeder
                 'backoffice_department' => '総務部',
             ],
             [
+                'code' => 'attendance_confirmation_revert',
+                'name' => '勤怠確定取消依頼',
+                'description' => '締め前(承認済み)の月次勤怠の確定を取り消し、日次実績を修正できる状態に戻す依頼',
+                'form_schema' => [
+                    ['key' => 'target_year_month', 'label' => '対象年月', 'type' => 'text', 'required' => true],
+                    ['key' => 'reason', 'label' => '取消理由', 'type' => 'text', 'required' => true],
+                ],
+                'requires_backoffice_task' => true,
+                'backoffice_task_type' => 'attendance_confirmation_revert',
+                'backoffice_department' => '人事部',
+            ],
+            [
                 'code' => 'general_request',
                 'name' => '一般申請',
                 'description' => 'その他一般的な申請',

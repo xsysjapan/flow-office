@@ -51,6 +51,8 @@ class AccessControlSeeder extends Seeder
         'audit_log.export' => ['name' => '監査ログ出力', 'scopes' => ['global']],
         'attendance.read' => ['name' => '勤怠閲覧', 'scopes' => ['global', 'group', 'self']],
         'attendance.update' => ['name' => '勤怠更新', 'scopes' => ['global', 'group', 'self']],
+        'attendance.month_reopen' => ['name' => '月次勤怠締め取消', 'scopes' => ['global']],
+        'attendance.confirmation_revert' => ['name' => '月次勤怠確定取消', 'scopes' => ['global']],
         'approval.execute' => ['name' => '承認実行', 'scopes' => ['global', 'approval_task']],
         'approval.route.change' => ['name' => '承認ルート変更', 'scopes' => ['global', 'group']],
         'system_settings.read' => ['name' => 'システム設定閲覧', 'scopes' => ['global']],
@@ -126,7 +128,7 @@ class AccessControlSeeder extends Seeder
 
         $rolePermissions = [
             Role::EMPLOYEE => ['attendance.read', 'attendance.update'],
-            Role::BACKOFFICE_STAFF => ['approval.execute', 'backoffice_task.execute'],
+            Role::BACKOFFICE_STAFF => ['approval.execute', 'backoffice_task.execute', 'attendance.confirmation_revert'],
             Role::ACCOUNTING_STAFF => ['approval.execute', 'backoffice_task.execute', 'expense.export', 'expense_preset.manage', 'expense_category.manage'],
             Role::GENERAL_AFFAIRS_STAFF => ['approval.execute', 'backoffice_task.execute'],
             Role::HR_STAFF => ['user.view', 'user.create', 'user.update', 'user.disable', 'group.view', 'group.create', 'group.update', 'group.disable', 'group.membership.update', 'group.change.schedule', 'group_type.view', 'external_hr.import', 'attendance.read', 'attendance.update', 'attendance.export', 'attendance.manage', 'leave.manage', 'approval.execute', 'backoffice_task.execute', 'user.manage'],

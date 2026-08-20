@@ -35,6 +35,8 @@ use App\Domain\Attendance\Commands\CancelSubmittedAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
+use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
+use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
@@ -93,6 +95,8 @@ use App\Domain\Attendance\Handlers\CancelSubmittedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\RevertApprovedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
@@ -495,6 +499,8 @@ return [
         ReturnAttendanceMonth::class => ReturnAttendanceMonthHandler::class,
         CancelSubmittedAttendanceMonth::class => CancelSubmittedAttendanceMonthHandler::class,
         CloseAttendanceMonth::class => CloseAttendanceMonthHandler::class,
+        ReopenClosedAttendanceMonth::class => ReopenClosedAttendanceMonthHandler::class,
+        RevertApprovedAttendanceMonth::class => RevertApprovedAttendanceMonthHandler::class,
         RecalculateAttendanceMonthSnapshot::class => RecalculateAttendanceMonthSnapshotHandler::class,
         WarnUnsubmittedAttendance::class => WarnUnsubmittedAttendanceHandler::class,
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
