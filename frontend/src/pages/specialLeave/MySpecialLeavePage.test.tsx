@@ -202,7 +202,8 @@ describe('MySpecialLeavePage', () => {
     renderPage([], [birthdayType], false)
     await screen.findByText('特別休暇申請はまだありません。')
 
-    expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+    expect(screen.queryByText('承認者')).not.toBeInTheDocument()
+    expect(screen.getByText(/承認は不要です/)).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByLabelText('特別休暇の種類'), '誕生日休暇')
     await pickDate(userEvent.setup(), '対象日', '2026-08-10')

@@ -225,7 +225,8 @@ describe('MyPaidLeavePage', () => {
     renderPage([], false)
     await screen.findByText('有給申請はまだありません。')
 
-    expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+    expect(screen.queryByText('承認者')).not.toBeInTheDocument()
+    expect(screen.getByText(/承認は不要です/)).toBeInTheDocument()
 
     await pickDate(userEvent.setup(), '対象日', '2026-08-10')
     await userEvent.click(screen.getByRole('button', { name: '申請する' }))

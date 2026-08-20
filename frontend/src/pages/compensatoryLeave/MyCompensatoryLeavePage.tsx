@@ -234,18 +234,15 @@ function CompensatoryLeaveRequestForm() {
           </FormField>
         )}
 
-        <FormField
-          label={approvalRequired ? '承認者' : '承認者(任意)'}
-          htmlFor="compensatory-leave-approver"
-          required={approvalRequired}
-        >
-          <UserPicker id="compensatory-leave-approver" value={approverUserId} onChange={setApproverUserId} />
-          {!approvalRequired && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              現在の設定では代休申請に承認は不要です。申請すると同時に確定します。承認者の指定は任意です。
-            </p>
-          )}
-        </FormField>
+        {approvalRequired ? (
+          <FormField label="承認者" htmlFor="compensatory-leave-approver" required>
+            <UserPicker id="compensatory-leave-approver" value={approverUserId} onChange={setApproverUserId} />
+          </FormField>
+        ) : (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            現在の設定では代休申請に承認は不要です。申請すると同時に確定します。
+          </p>
+        )}
 
         <FormField label="理由(任意)" htmlFor="compensatory-leave-reason">
           <Input id="compensatory-leave-reason" value={reason} onChange={(e) => setReason(e.target.value)} />

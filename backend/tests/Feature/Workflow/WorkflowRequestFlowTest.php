@@ -6,6 +6,7 @@ use App\Models\BackOfficeTask;
 use App\Models\RequestType;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WorkflowRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -90,6 +91,36 @@ class WorkflowRequestFlowTest extends TestCase
         $response = $this->actingAs($stranger)->postJson("/api/workflow-requests/{$draft['id']}/approve");
 
         $response->assertStatus(422);
+    }
+
+    public function test_submitting_with_self_as_approver_skips_approval(): void
+    {
+        $applicant = User::factory()->create();
+
+        $requestType = RequestType::query()->create([
+            'code' => 'general_request',
+            'name' => '一般申請',
+            'form_schema' => [],
+            'requires_backoffice_task' => false,
+            'is_active' => true,
+        ]);
+
+        $draft = $this->actingAs($applicant)->postJson('/api/workflow-requests', [
+            'request_type_code' => $requestType->code,
+            'title' => 'テスト申請',
+            'form_data' => [],
+            'approver_user_id' => $applicant->id,
+        ])->json();
+
+        $submitResponse = $this->actingAs($applicant)
+            ->postJson("/api/workflow-requests/{$draft['id']}/submit");
+
+        // 承認者に自分自身を指定した場合、承認待ちを経由せず提出と同時に承認済みになる。
+        $submitResponse->assertOk()->assertJsonPath('status', 'approved');
+
+        // 自分自身への「承認してください」通知は送られない。
+        $notifications = $this->actingAs($applicant)->getJson('/api/notifications/mine')->json('data');
+        $this->assertCount(0, $notifications);
     }
 
     public function test_show_includes_attachments(): void
@@ -242,10 +273,10 @@ class WorkflowRequestFlowTest extends TestCase
         ['applicant' => $applicant, 'approver' => $approver, 'requestType' => $requestType] = $this->makeApprovableRequestType();
 
         $matchingId = $this->createSubmittedRequest($applicant, $approver, $requestType, '対象月の申請');
-        \App\Models\WorkflowRequest::query()->whereKey($matchingId)->update(['submitted_at' => '2026-06-15 10:00:00']);
+        WorkflowRequest::query()->whereKey($matchingId)->update(['submitted_at' => '2026-06-15 10:00:00']);
 
         $otherId = $this->createSubmittedRequest($applicant, $approver, $requestType, '別月の申請');
-        \App\Models\WorkflowRequest::query()->whereKey($otherId)->update(['submitted_at' => '2026-07-15 10:00:00']);
+        WorkflowRequest::query()->whereKey($otherId)->update(['submitted_at' => '2026-07-15 10:00:00']);
 
         $response = $this->actingAs($approver)->getJson('/api/workflow-requests/to-approve?status=all&year_month=2026-06');
 

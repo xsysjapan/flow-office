@@ -419,6 +419,16 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     個別Feature停止で一時的に除外されること、操作イベントを`stored_events`から直接検索する
     監査画面で確認できることを検証する。人事担当者にはアクセス管理とID・管理元設定のメニューを
     表示せず、直URLと管理APIの直接呼出しも拒否されることを確認する。
+19. **承認者=申請者本人のスキップ承認**: 汎用申請・有給・月次勤怠のそれぞれで、承認者に
+    申請者本人を指定して提出すると、承認待ちを経由せず提出と同時に「承認済み」まで
+    確定すること(承認ルート自体はあるが実質的な承認者がいないケースであり、
+    「承認不要」システム設定とは別の仕組み。`frontend/e2e/scenario-99-additional.spec.ts`の
+    §5-19)。なお「承認不要」システム設定時に申請フォームの承認者選択欄が表示されないこと
+    自体は、`system_settings`がアプリ全体で1行だけのグローバル設定でありE2Eの共有DBを
+    書き換えてしまうため、E2Eではなく各ドメインのフロントエンド単体テスト
+    (`frontend/src/pages/{paidLeave,specialLeave,compensatoryLeave}/`・
+    `expense/ExpenseClaimNewPage`・`attendance/{AttendanceMonthDetailPage,AttendanceDayPage}`の
+    `*.test.tsx`)で確認する。
 
 ## 6. 実行方法の検討
 

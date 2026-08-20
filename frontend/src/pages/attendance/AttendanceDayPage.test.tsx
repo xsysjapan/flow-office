@@ -719,7 +719,8 @@ describe('AttendanceDayPage', () => {
       await screen.findByText('日次勤怠')
       await userEvent.click(screen.getByRole('button', { name: 'この日の操作' }))
       await userEvent.click(await screen.findByRole('menuitem', { name: '振替休日を申請する' }))
-      expect(screen.getByText('承認者(任意)')).toBeInTheDocument()
+      expect(screen.queryByText('承認者')).not.toBeInTheDocument()
+      expect(screen.getByText(/承認は不要です/)).toBeInTheDocument()
 
       await pickDate(userEvent.setup(), '振替先日(休みになる日)', '2026-07-13')
       await userEvent.click(screen.getByRole('button', { name: '申請する' }))
