@@ -220,6 +220,26 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $this->assertSame(480, $saturday->calculation->non_prescribed_statutory_excess_work_minutes);
         $this->assertSame(480, AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $saturday->id)->value('non_prescribed_minutes'));
 
+        // 配賦済みの日を再計算する場合も、日次Projectionを所定外法定内へ戻してから
+        // 週40時間超を再配賦する。イベント処理中に配賦すると旧値0から480分を減算し、
+        // unsigned列へ-480を書こうとして本番DBで失敗するため、その回帰を防ぐ。
+        $this->actingAs($user)->putJson("/api/attendance/days/{$saturday->id}", [
+            'actual_start_at' => '2026-07-18T09:00:00+09:00',
+            'actual_end_at' => '2026-07-18T18:00:00+09:00',
+            'breaks' => [[
+                'start' => '2026-07-18T12:00:00+09:00',
+                'end' => '2026-07-18T13:00:00+09:00',
+            ]],
+            'reason' => '再計算の回帰テスト',
+        ])->assertOk();
+
+        $saturday->refresh()->load('calculation');
+        $this->assertSame(0, $saturday->calculation->statutory_within_overtime_minutes);
+        $this->assertSame(480, $saturday->calculation->statutory_excess_overtime_minutes);
+        $this->assertSame(0, $saturday->calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(480, $saturday->calculation->non_prescribed_statutory_excess_work_minutes);
+        $this->assertSame(480, AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $saturday->id)->value('non_prescribed_minutes'));
+
         $week = app(WeeklyOvertimeCalculator::class)->calculateWeek($user->id, '2026-07-13', '2026-07-19');
         $this->assertSame(480, $week['weekly_statutory_excess_overtime_minutes']);
         $this->assertSame(0, $week['unallocated_weekly_statutory_excess_overtime_minutes']);
