@@ -81,6 +81,74 @@ class RecalculateAttendanceMonthSnapshotsTest extends TestCase
         $this->assertSame(1, $snapshot['day_count']);
     }
 
+    public function test_backfills_missing_classifications_before_recalculating_the_snapshot(): void
+    {
+        $user = User::factory()->create();
+        $workStyle = $this->makeWorkStyle();
+
+        $dates = [
+            '2026-07-18' => ['is_legal_holiday' => false, 'is_company_holiday' => true],  // 土曜日
+            '2026-07-19' => ['is_legal_holiday' => true, 'is_company_holiday' => false],  // 日曜日
+            '2026-07-20' => ['is_legal_holiday' => false, 'is_company_holiday' => true],  // 海の日
+            '2026-07-21' => ['is_legal_holiday' => false, 'is_company_holiday' => false], // 平日
+        ];
+
+        foreach ($dates as $workDate => $classification) {
+            $shift = EmployeeCalendarEntry::query()->create([
+                'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
+                'day_type' => $classification['is_company_holiday'] || $classification['is_legal_holiday']
+                    ? 'company_holiday' : 'weekday',
+                'is_working_day' => ! $classification['is_company_holiday'] && ! $classification['is_legal_holiday'],
+                'is_legal_holiday' => $classification['is_legal_holiday'],
+                'is_company_holiday' => $classification['is_company_holiday'],
+                'planned_break_minutes' => 60,
+            ]);
+
+            $day = AttendanceDay::query()->create([
+                'user_id' => $user->id, 'work_date' => $workDate, 'calendar_entry_id' => $shift->id,
+                'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
+            ]);
+
+            $this->actingAs($user)->putJson("/api/attendance/days/{$day->id}", [
+                'actual_start_at' => "{$workDate}T09:00:00+09:00",
+                'actual_end_at' => "{$workDate}T17:00:00+09:00",
+                'reason' => '旧データ作成',
+            ])->assertOk();
+
+            // day_classification追加前の本番データを再現する。
+            AttendanceDay::query()->whereKey($day->id)->update(['day_classification' => null]);
+        }
+
+        $month = AttendanceMonth::query()->create([
+            'id' => (string) Str::uuid(), 'user_id' => $user->id, 'year_month' => '2026-07',
+            'status' => 'closed', 'approver_user_id' => $user->id, 'submitted_at' => now(),
+            'snapshot_json' => ['work_minutes' => 1920],
+        ]);
+
+        $this->artisan('attendance:recalculate-month-snapshots --year-month=2026-07')->assertSuccessful();
+
+        $this->assertSame([
+            '2026-07-18' => 'prescribed_holiday',
+            '2026-07-19' => 'legal_holiday',
+            '2026-07-20' => 'prescribed_holiday',
+            '2026-07-21' => 'working_day',
+        ], AttendanceDay::query()
+            ->where('user_id', $user->id)
+            ->where('work_date', 'like', '2026-07%')
+            ->orderBy('work_date')
+            ->pluck('day_classification', 'work_date')
+            ->mapWithKeys(fn ($value, $key) => [substr((string) $key, 0, 10) => $value])
+            ->all());
+
+        $snapshot = $month->fresh()->snapshot_json;
+        $this->assertSame(1, $snapshot['work_days_weekday']);
+        $this->assertSame(2, $snapshot['work_days_prescribed_holiday']);
+        $this->assertSame(1, $snapshot['work_days_legal_holiday']);
+        $this->assertSame(480, $snapshot['weekday_regular_work_minutes']);
+        $this->assertSame(960, $snapshot['prescribed_holiday_work_minutes']);
+        $this->assertSame(480, $snapshot['legal_holiday_work_minutes']);
+    }
+
     public function test_dry_run_does_not_change_the_snapshot(): void
     {
         $user = User::factory()->create();
