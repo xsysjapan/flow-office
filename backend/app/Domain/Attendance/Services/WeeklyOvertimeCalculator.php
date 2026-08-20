@@ -135,6 +135,18 @@ class WeeklyOvertimeCalculator
         ];
     }
 
+    /** @return array{0: string, 1: string} */
+    public function weekPeriodForDate(string $userId, Carbon $date): array
+    {
+        $weekStartsOn = $this->resolveWeekStartsOn($userId, $date->copy()->startOfMonth(), $date->copy()->endOfMonth());
+        $start = $date->copy()->startOfDay();
+        while ($start->isoWeekday() !== $weekStartsOn) {
+            $start->subDay();
+        }
+
+        return [$start->toDateString(), $start->copy()->addDays(6)->toDateString()];
+    }
+
     private function resolveWeekStartsOn(string $userId, Carbon $monthStart, Carbon $monthEnd): int
     {
         $assignment = EmployeeCalendarEntry::query()

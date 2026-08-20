@@ -48,17 +48,17 @@ class RecalculateAttendanceMonthSnapshotHandler implements CommandHandler
         // day_classification追加前の日次勤怠は区分がNULLのまま残っている。月次の区分別集計より
         // 先に、当時の勤務予定・会社カレンダーを使って通常の日次計算処理を再実行し、区分だけで
         // なく休日労働・残業を含む日次計算結果全体を現在のロジックで補正する。
-        $daysMissingClassification = AttendanceDay::query()
+        $days = AttendanceDay::query()
             ->where('user_id', $month->user_id)
             ->where('work_date', 'like', "{$month->year_month}%")
-            ->whereNull('day_classification')
             ->with([
                 'breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages',
                 'calendarEntry.workStyle',
             ])
+            ->orderBy('work_date')
             ->get();
 
-        foreach ($daysMissingClassification as $day) {
+        foreach ($days as $day) {
             $calculation = $this->attendanceCalculator->calculate($day);
 
             AttendanceDayAggregate::retrieve($day->id)
