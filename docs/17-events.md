@@ -130,6 +130,11 @@
 - `attendance.month_approved`
 - `attendance.month_returned`
 - `attendance.month_closed`
+- `attendance.month_reopened` (救済コマンド: 管理者専用。締め済みの月次勤怠の締めを取り消し、
+  承認済み状態に戻す。docs/07-usecases-attendance.md UC-A017)
+- `attendance.month_confirmation_reverted` (救済コマンド: バックオフィス担当者専用。汎用申請
+  ワークフロー「勤怠確定取消依頼」の承認後、承認済みの月次勤怠の確定を取り消し未提出状態に
+  戻す。docs/07-usecases-attendance.md UC-A018)
 
 ## Device (docs/23-usecases-devices.md)
 

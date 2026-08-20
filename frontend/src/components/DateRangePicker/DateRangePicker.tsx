@@ -25,6 +25,11 @@ export interface DateRangePickerProps {
   min?: string
   /** この日付以前のみ選択可にする。"YYYY-MM-DD"形式。 */
   max?: string
+  /**
+   * 値が未選択のとき、最初に開くカレンダーの基準日("YYYY-MM-DD"形式)。選択を制限する
+   * `min`/`max`とは異なり、表示位置だけを決める。対象期間が文脈上自明な場合に指定する。
+   */
+  defaultDate?: string
   /** ラベル要素を使わずアクセシブルネームを付ける場合に指定する。 */
   'aria-label'?: string
 }
@@ -72,6 +77,7 @@ export function DateRangePicker({
   disabled,
   min,
   max,
+  defaultDate,
   'aria-label': ariaLabel,
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false)
@@ -79,12 +85,13 @@ export function DateRangePicker({
   const selected = toDateRange(value)
   const minDate = parseDateValue(min)
   const maxDate = parseDateValue(max)
-  const [month, setMonth] = useState<Date>(() => selected?.from ?? minDate ?? maxDate ?? new Date())
+  const fallbackDate = parseDateValue(defaultDate)
+  const [month, setMonth] = useState<Date>(() => selected?.from ?? minDate ?? maxDate ?? fallbackDate ?? new Date())
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       setMode('day')
-      setMonth(selected?.from ?? minDate ?? maxDate ?? new Date())
+      setMonth(selected?.from ?? minDate ?? maxDate ?? fallbackDate ?? new Date())
     }
     setOpen(nextOpen)
   }

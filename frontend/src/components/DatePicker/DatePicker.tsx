@@ -21,6 +21,13 @@ export interface DatePickerProps {
   min?: string;
   /** この日付以前のみ選択可にする(native input[type=date]のmaxと同じくmax自体も選択可)。"YYYY-MM-DD"形式。 */
   max?: string;
+  /**
+   * 値が未選択のとき、最初に開くカレンダーの基準日("YYYY-MM-DD"形式)。選択を制限する
+   * `min`/`max`とは異なり、表示位置だけを決める。対象日が文脈上自明な入力
+   * (例: 7/15の勤怠編集フォームの新規追加欄)で、今日ではなくその日のカレンダーを
+   * 開かせたい場合に指定する。
+   */
+  defaultDate?: string;
   /** ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native input[type=date]のaria-labelと同じ用途)。 */
   "aria-label"?: string;
 }
@@ -58,6 +65,7 @@ export function DatePicker({
   showRelativeShortcuts = true,
   min,
   max,
+  defaultDate,
   "aria-label": ariaLabel,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
@@ -65,8 +73,9 @@ export function DatePicker({
   const selected = parseDateValue(value);
   const minDate = parseDateValue(min);
   const maxDate = parseDateValue(max);
+  const fallbackDate = parseDateValue(defaultDate);
   const [month, setMonth] = useState<Date>(
-    () => selected ?? minDate ?? maxDate ?? new Date(),
+    () => selected ?? minDate ?? maxDate ?? fallbackDate ?? new Date(),
   );
 
   const selectDate = (date: string | undefined) => {
@@ -77,7 +86,7 @@ export function DatePicker({
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       setMode("day");
-      setMonth(selected ?? minDate ?? maxDate ?? new Date());
+      setMonth(selected ?? minDate ?? maxDate ?? fallbackDate ?? new Date());
     }
     setOpen(nextOpen);
   };

@@ -13,7 +13,9 @@ use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Commands\EndBreak;
 use App\Domain\Attendance\Commands\GeneratePatternAttendanceDays;
+use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
+use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
 use App\Domain\Attendance\Commands\StartBreak;
 use App\Domain\Attendance\Services\AttendanceApproverAccess;
 use App\Domain\Attendance\Services\AttendanceDayDefaultsResolver;
@@ -875,6 +877,58 @@ class AttendanceController extends Controller
     public function closeMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
     {
         $commandBus->dispatch(new CloseAttendanceMonth($attendanceMonth->id, $request->user()->id));
+
+        return new AttendanceMonthResource($attendanceMonth->refresh());
+    }
+
+    /**
+     * 救済コマンド: 管理者専用。締め済みの月次勤怠の締めを取り消す(closed→approved)。
+     */
+    #[OA\Post(
+        path: '/attendance-months/{attendanceMonth}/reopen',
+        operationId: 'attendanceMonths.reopen',
+        summary: '締め済みの月次勤怠の締めを取り消す(管理者専用)',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function reopenMonth(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
+    {
+        $data = $request->validate(['reason' => ['required', 'string']]);
+
+        $commandBus->dispatch(new ReopenClosedAttendanceMonth($attendanceMonth->id, $request->user()->id, $data['reason']));
+
+        return new AttendanceMonthResource($attendanceMonth->refresh());
+    }
+
+    /**
+     * 救済コマンド: バックオフィス担当者専用。汎用申請ワークフロー「勤怠確定取消依頼」が
+     * 承認され、バックオフィス担当者が処理する過程で、承認済みの月次勤怠の確定を取り消す
+     * (approved→not_submitted)。
+     */
+    #[OA\Post(
+        path: '/attendance-months/{attendanceMonth}/revert-confirmation',
+        operationId: 'attendanceMonths.revertConfirmation',
+        summary: '承認済みの月次勤怠の確定を取り消す(バックオフィス担当者専用)',
+        tags: ['勤怠'],
+        parameters: [new OA\Parameter(name: 'attendanceMonth', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason', 'workflow_request_id'], properties: [new OA\Property(property: 'reason', type: 'string'), new OA\Property(property: 'workflow_request_id', type: 'string', format: 'uuid')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function revertMonthConfirmation(Request $request, AttendanceMonth $attendanceMonth, CommandBus $commandBus): AttendanceMonthResource
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string'],
+            'workflow_request_id' => ['required', 'string', 'exists:workflow_requests,id'],
+        ]);
+
+        $commandBus->dispatch(new RevertApprovedAttendanceMonth(
+            $attendanceMonth->id,
+            $request->user()->id,
+            $data['reason'],
+            $data['workflow_request_id'],
+        ));
 
         return new AttendanceMonthResource($attendanceMonth->refresh());
     }

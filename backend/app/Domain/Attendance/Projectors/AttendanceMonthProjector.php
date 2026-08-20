@@ -4,7 +4,9 @@ namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthConfirmationReverted;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
+use App\Domain\Attendance\Events\AttendanceMonthReopened;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
 use App\Domain\Attendance\Events\AttendanceMonthSnapshotRecalculated;
@@ -74,6 +76,31 @@ class AttendanceMonthProjector extends Projector
         AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => AttendanceMonthStatus::CLOSED,
             'closed_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * 救済コマンド: 管理者が締め済みの月次勤怠の締めを取り消す。承認済み状態に戻す。
+     */
+    public function onAttendanceMonthReopened(AttendanceMonthReopened $event): void
+    {
+        AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => AttendanceMonthStatus::APPROVED,
+            'closed_at' => null,
+        ]);
+    }
+
+    /**
+     * 救済コマンド: 「勤怠確定取消依頼」の承認後、バックオフィス担当者が承認済みの月次勤怠の
+     * 確定を取り消す。未提出状態に戻し、以降は通常の日次編集→再提出フローに乗せる。
+     */
+    public function onAttendanceMonthConfirmationReverted(AttendanceMonthConfirmationReverted $event): void
+    {
+        AttendanceMonth::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => AttendanceMonthStatus::NOT_SUBMITTED,
+            'submitted_at' => null,
+            'approved_at' => null,
+            'return_comment' => null,
         ]);
     }
 

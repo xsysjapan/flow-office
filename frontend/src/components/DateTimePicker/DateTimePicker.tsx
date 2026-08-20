@@ -13,6 +13,12 @@ export interface DateTimePickerProps {
   /** 「今日」「明日」等の相対日付ショートカットを表示するか。既定は表示する。DatePickerへそのまま渡す。 */
   showRelativeShortcuts?: boolean
   /**
+   * 値が未選択のとき、最初に開くカレンダーの基準日("YYYY-MM-DD"形式)。DatePickerへ
+   * そのまま渡す。対象日が文脈上自明な入力(例: 特定の勤怠日に対する新規追加欄)で、
+   * 今日ではなくその日のカレンダーを開かせたい場合に指定する。
+   */
+  defaultDate?: string
+  /**
    * ラベル要素を使わずアクセシブルネームを付ける場合に指定する(native
    * input[type=datetime-local]のaria-labelと同じ用途)。日付側は"{ariaLabel}(日付)"、
    * 時刻側は"{ariaLabel}(時刻)"としてそれぞれのトリガーに付与する。
@@ -38,6 +44,7 @@ export function DateTimePicker({
   disabled,
   minuteStep,
   showRelativeShortcuts,
+  defaultDate,
   'aria-label': ariaLabel,
 }: DateTimePickerProps) {
   const { date, time } = splitValue(value)
@@ -67,6 +74,7 @@ export function DateTimePicker({
           onChange={handleDateChange}
           disabled={disabled}
           showRelativeShortcuts={showRelativeShortcuts}
+          defaultDate={defaultDate}
           aria-label={ariaLabel ? `${ariaLabel}(日付)` : undefined}
         />
       </div>

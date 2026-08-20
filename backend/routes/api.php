@@ -322,6 +322,13 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/{attendanceMonth}/return', [AttendanceController::class, 'returnMonth'])->middleware('permission:approval.execute');
         Route::post('/{attendanceMonth}/close', [AttendanceController::class, 'closeMonth'])
             ->middleware('permission:attendance.update,any');
+        // 救済コマンド(管理者専用): 締め済みの月次勤怠の締めを取り消す。
+        Route::post('/{attendanceMonth}/reopen', [AttendanceController::class, 'reopenMonth'])
+            ->middleware('permission:attendance.month_reopen,any');
+        // 救済コマンド(バックオフィス担当者専用): 「勤怠確定取消依頼」の承認後、承認済みの
+        // 月次勤怠の確定を取り消す。
+        Route::post('/{attendanceMonth}/revert-confirmation', [AttendanceController::class, 'revertMonthConfirmation'])
+            ->middleware('permission:attendance.confirmation_revert,any');
     });
 
     // フロントエンド起動時のブートストラップ設定(デフォルトタイムゾーン・デフォルト働き方・

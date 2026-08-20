@@ -83,7 +83,7 @@ export function YearMonthPicker({
         )}
         <YearMonthGrid
           key={open ? 'open' : 'closed'}
-          initialYearMonth={value ?? thisMonth}
+          initialYearMonth={value ?? min ?? max ?? thisMonth}
           selectedYearMonth={value}
           min={min}
           max={max}

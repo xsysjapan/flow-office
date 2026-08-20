@@ -4,6 +4,8 @@ namespace App\Domain\Attendance\Aggregates;
 
 use App\Domain\Attendance\Events\AttendanceMonthApproved;
 use App\Domain\Attendance\Events\AttendanceMonthClosed;
+use App\Domain\Attendance\Events\AttendanceMonthConfirmationReverted;
+use App\Domain\Attendance\Events\AttendanceMonthReopened;
 use App\Domain\Attendance\Events\AttendanceMonthLocked;
 use App\Domain\Attendance\Events\AttendanceMonthReturned;
 use App\Domain\Attendance\Events\AttendanceMonthShared;
@@ -128,6 +130,47 @@ class AttendanceMonthAggregate extends AggregateRoot
     public function close(string $closedByUserId): self
     {
         $this->recordThat(new AttendanceMonthClosed(closedByUserId: $closedByUserId));
+
+        return $this;
+    }
+
+    /**
+     * 救済コマンド: 管理者が締め済みの月次勤怠の締めを取り消す(closed→approved)。承認済み状態に
+     * 戻すだけで、承認済み状態が持つ日次のロックには手を加えない(締め時のロックはsubmit時の
+     * ロックと同じ対象範囲であるため、締め取消では変化しない)。
+     */
+    public function reopen(string $reopenedByUserId, string $reason): self
+    {
+        $this->recordThat(new AttendanceMonthReopened(reopenedByUserId: $reopenedByUserId, reason: $reason));
+
+        return $this;
+    }
+
+    /**
+     * 救済コマンド: 「勤怠確定取消依頼」の承認後、バックオフィス担当者が承認済みの月次勤怠の
+     * 確定を取り消す(approved→not_submitted)。差戻しと同様、対象月の日次勤怠一式のロックを
+     * 解除して再編集できるようにする。
+     */
+    public function revertConfirmation(
+        string $userId,
+        string $revertedByUserId,
+        string $reason,
+        string $workflowRequestId,
+        string $periodStartDate,
+        string $periodEndDate,
+    ): self {
+        $this->recordThat(new AttendanceMonthConfirmationReverted(
+            revertedByUserId: $revertedByUserId,
+            reason: $reason,
+            workflowRequestId: $workflowRequestId,
+        ));
+
+        $this->recordThat(new AttendanceMonthUnlocked(
+            userId: $userId,
+            periodStartDate: $periodStartDate,
+            periodEndDate: $periodEndDate,
+            unlockedByUserId: $revertedByUserId,
+        ));
 
         return $this;
     }
