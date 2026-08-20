@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\CompanyCalendar;
@@ -71,6 +72,36 @@ class MonthlyOvertimeCalculationTest extends TestCase
         ])->assertOk();
 
         return $day->refresh();
+    }
+
+    private function allocateAllWeeklyOvertime(User $user, string $yearMonth): void
+    {
+        foreach (app(WeeklyOvertimeCalculator::class)->calculateForMonth($user->id, $yearMonth) as $week) {
+            $minutes = $week['unallocated_weekly_statutory_excess_overtime_minutes'];
+            if ($minutes <= 0) {
+                continue;
+            }
+            $remaining = $minutes;
+            $allocations = AttendanceDay::query()->where('user_id', $user->id)
+                ->whereBetween('work_date', [$week['week_start_date'], $week['week_end_date']])
+                ->with('calculation')->orderBy('work_date')->get()
+                ->map(function (AttendanceDay $day) use (&$remaining) {
+                    $allocated = min($remaining, $day->calculation?->prescribed_statutory_within_work_minutes ?? 0);
+                    $remaining -= $allocated;
+
+                    return [
+                        'attendance_day_id' => $day->id,
+                        'prescribed_minutes' => $allocated,
+                        'non_prescribed_minutes' => 0,
+                        'late_night_prescribed_minutes' => 0,
+                        'late_night_non_prescribed_minutes' => 0,
+                    ];
+                })->filter(fn (array $allocation) => $allocation['prescribed_minutes'] > 0)->values()->all();
+            $this->assertSame(0, $remaining);
+            $this->actingAs($user)->putJson("/api/attendance/weeks/{$week['week_start_date']}/overtime-allocations", [
+                'allocations' => $allocations,
+            ])->assertOk();
+        }
     }
 
     public function test_statutory_overtime_over_60_hours_is_split_within_the_current_day(): void
@@ -196,6 +227,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
         foreach (range(1, 12) as $i) {
             $this->recordDay($user, $workStyle, sprintf('2026-06-%02d', $i), '09:00', '23:00');
         }
+        $this->allocateAllWeeklyOvertime($user, '2026-06');
 
         $approver = User::factory()->create();
         $response = $this->actingAs($user)->postJson('/api/attendance/months/2026-06/submit', [
@@ -204,9 +236,9 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $snapshot = $response->json('snapshot');
 
-        $this->assertSame(3600, $snapshot['statutory_excess_overtime_minutes'], '1日300分×12日');
+        $this->assertSame(4560, $snapshot['statutory_excess_overtime_minutes'], '日8時間超3,600分＋週40時間超からの振替960分');
         $this->assertSame(3600, $snapshot['statutory_excess_overtime_within_60h_minutes']);
-        $this->assertSame(0, $snapshot['statutory_excess_overtime_over_60h_minutes']);
+        $this->assertSame(960, $snapshot['statutory_excess_overtime_over_60h_minutes']);
         $this->assertSame(720, $snapshot['late_night_statutory_excess_overtime_minutes'], '1日60分×12日');
     }
 
@@ -230,6 +262,7 @@ class MonthlyOvertimeCalculationTest extends TestCase
 
         $monthResponse = $this->actingAs($user)->getJson('/api/attendance/months/2026-06')->assertOk();
         $this->assertSame(480, $monthResponse->json('monthly_calculation_totals.weekly_statutory_excess_overtime_minutes'));
+        $this->allocateAllWeeklyOvertime($user, '2026-06');
 
         $approver = User::factory()->create();
         $submitResponse = $this->actingAs($user)->postJson('/api/attendance/months/2026-06/submit', [

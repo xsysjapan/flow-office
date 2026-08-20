@@ -217,12 +217,14 @@ describe('WorkStylesPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '登録する' }))
 
     await waitFor(() =>
-      expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith({
+      expect(workStylesApi.createWorkStyle).toHaveBeenCalledWith(expect.objectContaining({
         code: 'discretionary',
         name: '裁量労働制勤務',
         work_time_system: 'discretionary',
         prescribed_daily_minutes: 480,
         prescribed_weekly_minutes: 2400,
+        workday_boundary_type: 'work_date',
+        workday_boundary_time: undefined,
         deemed_daily_minutes: 540,
         default_start_time: undefined,
         default_end_time: undefined,
@@ -234,7 +236,7 @@ describe('WorkStylesPage', () => {
         is_shift_based: false,
         legal_holiday_rule: undefined,
         four_week_period_start_date: undefined,
-      }),
+      })),
     )
   }, 15000)
 

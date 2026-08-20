@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccessControlController;
+use App\Http\Controllers\Api\AdminCommandController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceImportPreviewController;
@@ -41,7 +42,6 @@ use App\Http\Controllers\Api\ShiftPatternController;
 use App\Http\Controllers\Api\ShiftSwapRequestController;
 use App\Http\Controllers\Api\SpecialLeaveController;
 use App\Http\Controllers\Api\SystemSettingController;
-use App\Http\Controllers\Api\AdminCommandController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\UserWorkStyleMonthlyAssignmentController;
@@ -285,6 +285,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
         Route::get('/week', [AttendanceController::class, 'week'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::get('/week/overtime', [AttendanceController::class, 'weekOvertime'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::put('/weeks/{weekStartDate}/overtime-allocations', [AttendanceController::class, 'allocateWeekOvertime'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
         Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
         Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);

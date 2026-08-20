@@ -1,5 +1,8 @@
 # 17. 主要イベント
 
+勤怠の日別配賦イベントとして `attendance_day.weekly_overtime_allocated` を記録する。このイベントは
+週40時間超を対象日の所定内・所定外法定外労働へ移した絶対値を保持する。
+
 `stored_events.event_type` に記録するイベント種別の一覧。新しいイベントを追加する際は
 [add-domain-event スキル](../.claude/skills/add-domain-event/SKILL.md) を参照する。
 
@@ -265,3 +268,16 @@ StoredEventを復元するための履歴互換イベントである。旧機構
 ただし、本番カットオーバー処理が業務事実と異なる合成イベントや逆転した日時を作った場合に限り、
 承認済みの一回限りのデータ補正として、原本DBバックアップと専用バックアップテーブルを作成した上で
 履歴を再構成できる。通常のアプリケーション処理から既存イベントを更新してはならない。
+
+### 日次計算5区分への履歴補正
+
+カットオーバー時は、先にDB全体をバックアップしてから
+管理メニューの「運用コマンド」で「勤怠計算イベント履歴補正」を `apply` 無効で実行して
+対象件数を確認し、次に `apply` を有効にして一度だけ実行する（CLIでは
+`php artisan attendance:normalize-calculation-events`、続けて
+`php artisan attendance:normalize-calculation-events --apply`）。対象の
+`attendance_day.calculated`、`work_style.created`、`work_style.updated`を専用バックアップテーブルへ
+複製してから、5区分と作業日境界のメタデータを既存イベントへ追記する。バックアップテーブルが
+既に存在する場合は再実行を拒否する。完了後は同画面から「勤怠計算Projection再構築」、
+「月次勤怠スナップショット再計算」の順に実行する。DBマイグレーション自体はCI/CDで先に完了させ、
+これらのコマンドを処理するキューワーカーが稼働していることを確認する。

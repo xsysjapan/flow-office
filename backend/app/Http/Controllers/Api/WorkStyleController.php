@@ -63,6 +63,7 @@ class WorkStyleController extends Controller
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
         $data['rounding_mode'] ??= WorkStyle::ROUNDING_MODE_NEAREST;
+        $data['workday_boundary_type'] ??= WorkStyle::WORKDAY_BOUNDARY_WORK_DATE;
 
         if ($data['work_time_system'] === WorkStyle::WORK_TIME_SYSTEM_FLEX) {
             $this->validateFlexTimeFields($data);
@@ -97,6 +98,7 @@ class WorkStyleController extends Controller
 
         $data['legal_holiday_rule'] ??= WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY;
         $data['rounding_mode'] ??= WorkStyle::ROUNDING_MODE_NEAREST;
+        $data['workday_boundary_type'] ??= WorkStyle::WORKDAY_BOUNDARY_WORK_DATE;
 
         if ($data['work_time_system'] === WorkStyle::WORK_TIME_SYSTEM_FLEX) {
             $this->validateFlexTimeFields($data);
@@ -133,6 +135,16 @@ class WorkStyleController extends Controller
                 WorkStyle::WORK_TIME_SYSTEM_MANAGER_SUPERVISOR,
                 WorkStyle::WORK_TIME_SYSTEM_FLEX,
             ])],
+            'workday_boundary_type' => ['nullable', Rule::in([
+                WorkStyle::WORKDAY_BOUNDARY_MIDNIGHT,
+                WorkStyle::WORKDAY_BOUNDARY_WORK_DATE,
+                WorkStyle::WORKDAY_BOUNDARY_CUSTOM,
+            ])],
+            'workday_boundary_time' => [
+                'nullable',
+                'date_format:H:i',
+                Rule::requiredIf($request->input('workday_boundary_type') === WorkStyle::WORKDAY_BOUNDARY_CUSTOM),
+            ],
             'prescribed_daily_minutes' => ['required', 'integer', 'min:1'],
             'prescribed_weekly_minutes' => ['required', 'integer', 'min:1'],
             'deemed_daily_minutes' => ['nullable', 'integer', 'min:1'],

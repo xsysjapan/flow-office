@@ -48,6 +48,8 @@ function emptyFormState(workStyle: WorkStyle | undefined) {
     workTimeSystem: workStyle?.work_time_system ?? '',
     prescribedDailyMinutes: workStyle ? String(workStyle.prescribed_daily_minutes) : '',
     prescribedWeeklyMinutes: workStyle ? String(workStyle.prescribed_weekly_minutes) : '',
+    workdayBoundaryType: workStyle?.workday_boundary_type ?? 'work_date',
+    workdayBoundaryTime: workStyle?.workday_boundary_time ?? '',
     deemedDailyMinutes: workStyle?.deemed_daily_minutes != null ? String(workStyle.deemed_daily_minutes) : '',
     defaultStartTime: workStyle?.default_start_time ?? '',
     defaultEndTime: workStyle?.default_end_time ?? '',
@@ -112,6 +114,8 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
       work_time_system: form.workTimeSystem,
       prescribed_daily_minutes: Number(form.prescribedDailyMinutes),
       prescribed_weekly_minutes: Number(form.prescribedWeeklyMinutes),
+      workday_boundary_type: form.workdayBoundaryType,
+      workday_boundary_time: form.workdayBoundaryType === 'custom' ? form.workdayBoundaryTime : undefined,
       deemed_daily_minutes: isDiscretionary && form.deemedDailyMinutes ? Number(form.deemedDailyMinutes) : undefined,
       default_start_time: form.defaultStartTime || undefined,
       default_end_time: form.defaultEndTime || undefined,
@@ -195,6 +199,29 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               onChange={(e) => patch({ prescribedWeeklyMinutes: e.target.value })}
             />
           </FormField>
+
+          <FormField label="作業日の区切り" htmlFor="work-style-day-boundary" required>
+            <NativeSelect
+              id="work-style-day-boundary"
+              value={form.workdayBoundaryType}
+              onChange={(e) => patch({ workdayBoundaryType: e.target.value as 'work_date' | 'midnight' | 'custom' })}
+            >
+              <option value="work_date">作業日基準</option>
+              <option value="midnight">0時基準（暦日）</option>
+              <option value="custom">指定時刻基準</option>
+            </NativeSelect>
+            <p className="mt-1 text-xs text-muted-foreground">作業日基準でも1件の勤務実績は最大24時間です。</p>
+          </FormField>
+
+          {form.workdayBoundaryType === 'custom' && (
+            <FormField label="作業日の開始時刻" htmlFor="work-style-day-boundary-time" required>
+              <TimePicker
+                id="work-style-day-boundary-time"
+                value={form.workdayBoundaryTime}
+                onChange={(time) => patch({ workdayBoundaryTime: time ?? '' })}
+              />
+            </FormField>
+          )}
 
           <FormField label="標準開始時刻" htmlFor="work-style-start-time">
             <TimePicker
@@ -432,6 +459,7 @@ export function WorkStyleFormModal({ mode, workStyle, open, onOpenChange }: Work
               (isDiscretionary && !form.deemedDailyMinutes) ||
               (form.isShiftBased && form.legalHolidayRule === 'four_weeks_four_days' && !form.fourWeekPeriodStartDate) ||
               (isFlex && form.coreTimeEnabled && (!form.coreTimeStart || !form.coreTimeEnd))
+              || (form.workdayBoundaryType === 'custom' && !form.workdayBoundaryTime)
             }
             onClick={handleSubmit}
           >

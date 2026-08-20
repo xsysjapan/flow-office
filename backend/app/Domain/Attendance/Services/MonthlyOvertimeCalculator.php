@@ -91,7 +91,8 @@ class MonthlyOvertimeCalculator
 
         $calculations = $days->pluck('calculation')->filter()->values();
 
-        $statutoryOvertimeTotal = (int) $calculations->sum('statutory_excess_overtime_minutes');
+        $statutoryOvertimeTotal = (int) $calculations->sum('prescribed_statutory_excess_work_minutes')
+            + (int) $calculations->sum('non_prescribed_statutory_excess_work_minutes');
 
         $weeklyOvertimeMinutes = array_sum(array_column(
             $this->weeklyOvertimeCalculator->calculateForMonth($userId, $yearMonth),
@@ -145,11 +146,19 @@ class MonthlyOvertimeCalculator
                 - (int) $weekdayCalcs->sum('statutory_within_overtime_minutes')
                 - (int) $weekdayCalcs->sum('statutory_excess_overtime_minutes'),
             'weekday_statutory_within_overtime_minutes' => (int) $weekdayCalcs->sum('statutory_within_overtime_minutes'),
+            'weekday_prescribed_statutory_within_work_minutes' => (int) $weekdayCalcs->sum('prescribed_statutory_within_work_minutes'),
+            'weekday_non_prescribed_statutory_within_work_minutes' => (int) $weekdayCalcs->sum('non_prescribed_statutory_within_work_minutes'),
+            'weekday_prescribed_statutory_excess_work_minutes' => (int) $weekdayCalcs->sum('prescribed_statutory_excess_work_minutes'),
+            'weekday_non_prescribed_statutory_excess_work_minutes' => (int) $weekdayCalcs->sum('non_prescribed_statutory_excess_work_minutes'),
             'weekday_statutory_excess_overtime_minutes' => (int) $weekdayCalcs->sum('statutory_excess_overtime_minutes'),
             'weekday_late_night_prescribed_work_minutes' => (int) $weekdayCalcs->sum('late_night_prescribed_work_minutes'),
             'weekday_late_night_statutory_within_overtime_minutes' => (int) $weekdayCalcs->sum('late_night_statutory_within_overtime_minutes'),
             'weekday_late_night_statutory_excess_overtime_minutes' => (int) $weekdayCalcs->sum('late_night_statutory_excess_overtime_minutes'),
             'prescribed_holiday_statutory_within_overtime_minutes' => (int) $prescribedHolidayCalcs->sum('statutory_within_overtime_minutes'),
+            'prescribed_holiday_prescribed_statutory_within_work_minutes' => (int) $prescribedHolidayCalcs->sum('prescribed_statutory_within_work_minutes'),
+            'prescribed_holiday_non_prescribed_statutory_within_work_minutes' => (int) $prescribedHolidayCalcs->sum('non_prescribed_statutory_within_work_minutes'),
+            'prescribed_holiday_prescribed_statutory_excess_work_minutes' => (int) $prescribedHolidayCalcs->sum('prescribed_statutory_excess_work_minutes'),
+            'prescribed_holiday_non_prescribed_statutory_excess_work_minutes' => (int) $prescribedHolidayCalcs->sum('non_prescribed_statutory_excess_work_minutes'),
             'prescribed_holiday_statutory_excess_overtime_minutes' => (int) $prescribedHolidayCalcs->sum('statutory_excess_overtime_minutes'),
             'prescribed_holiday_late_night_prescribed_work_minutes' => (int) $prescribedHolidayCalcs->sum('late_night_prescribed_work_minutes'),
             'prescribed_holiday_late_night_statutory_excess_overtime_minutes' => (int) $prescribedHolidayCalcs->sum('late_night_statutory_excess_overtime_minutes'),
@@ -173,7 +182,7 @@ class MonthlyOvertimeCalculator
      * 合計は`AttendanceCalculator`が日次計算する`special_leave_days`/`special_leave_minutes`と
      * 一致する。SpecialLeaveUsage/SpecialLeaveGrant参照)。
      *
-    * @return list<array{special_leave_type_id: int|null, special_leave_type_name: string|null, days: float, minutes: int}>
+     * @return list<array{special_leave_type_id: int|null, special_leave_type_name: string|null, days: float, minutes: int}>
      */
     public function calculateSpecialLeaveBreakdown(string $userId, string $yearMonth): array
     {

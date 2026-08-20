@@ -11,6 +11,8 @@ export interface CreateWorkStyleInput {
   work_time_system: string
   prescribed_daily_minutes: number
   prescribed_weekly_minutes: number
+  workday_boundary_type?: 'work_date' | 'midnight' | 'custom'
+  workday_boundary_time?: string | null
   deemed_daily_minutes?: number | null
   default_start_time?: string
   default_end_time?: string

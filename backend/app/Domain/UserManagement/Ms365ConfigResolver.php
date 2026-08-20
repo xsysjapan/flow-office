@@ -53,7 +53,9 @@ class Ms365ConfigResolver
 
         try {
             if (! Schema::hasTable('system_settings')) {
-                return false;
+                // E2Eの初回migrate:fresh前は設定テーブル自体が無い。local/testingかつ
+                // 明示的な環境設定が有効な場合だけ、DB初期化エンドポイントを起動可能にする。
+                return (bool) config('services.azure.mock_enabled');
             }
 
             return (bool) SystemSetting::current()->m365_mock_enabled;

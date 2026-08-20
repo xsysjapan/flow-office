@@ -25,6 +25,7 @@ use App\Domain\AccessControl\Handlers\UpdateRoleHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
+use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
@@ -85,6 +86,7 @@ use App\Domain\Attendance\Commands\UpdateWorkStyle;
 use App\Domain\Attendance\Commands\WarnMonthCloseDeadline;
 use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
+use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
@@ -451,6 +453,7 @@ return [
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
+        AllocateAttendanceWeeklyOvertime::class => AllocateAttendanceWeeklyOvertimeHandler::class,
         EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
 

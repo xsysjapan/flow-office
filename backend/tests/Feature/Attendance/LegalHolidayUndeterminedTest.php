@@ -248,6 +248,17 @@ class LegalHolidayUndeterminedTest extends TestCase
         // 日曜(自動推定で法定休日)に5時間出勤。週40時間判定には含めない。
         $this->recordDay($user, '2026-06-07', '10:00', '15:00');
 
+        $target = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-06-06')->firstOrFail();
+        $this->actingAs($user)->putJson('/api/attendance/weeks/2026-06-01/overtime-allocations', [
+            'allocations' => [[
+                'attendance_day_id' => $target->id,
+                'prescribed_minutes' => 480,
+                'non_prescribed_minutes' => 0,
+                'late_night_prescribed_minutes' => 0,
+                'late_night_non_prescribed_minutes' => 0,
+            ]],
+        ])->assertOk();
+
         $response = $this->actingAs($user)->postJson('/api/attendance/months/2026-06/submit', [
             'approver_user_id' => $approver->id,
         ])->assertSuccessful();

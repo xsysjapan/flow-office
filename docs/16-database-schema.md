@@ -305,6 +305,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   `shortened`/`shift_based`はデータ移行済みで新規作成時は受け付けない)
 - prescribed_daily_minutes
 - prescribed_weekly_minutes
+- workday_boundary_type (`work_date`=AttendanceDayの作業日基準 / `midnight`=0時基準 /
+  `custom`=指定時刻基準。いずれも1件のAttendanceDayに保持できる実績は最大24時間)
+- workday_boundary_time (`workday_boundary_type=custom`の場合の作業日開始時刻。それ以外はnull)
 - deemed_daily_minutes (裁量労働制のみなし時間。`work_time_system=discretionary`のみ使用。
   8時間を超える設定の場合、超過分は毎稼働日の法定時間外として自動計上する)
 - default_start_time
@@ -803,6 +806,12 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 - prescribed_work_minutes
 - statutory_within_overtime_minutes
 - statutory_excess_overtime_minutes
+- prescribed_statutory_within_work_minutes / non_prescribed_statutory_within_work_minutes
+- prescribed_statutory_excess_work_minutes / non_prescribed_statutory_excess_work_minutes
+- late_night_prescribed_statutory_within_work_minutes / late_night_non_prescribed_statutory_within_work_minutes
+- late_night_prescribed_statutory_excess_work_minutes / late_night_non_prescribed_statutory_excess_work_minutes
+  (所定内外×法定内外の4区分と、それぞれの深夜内数。法定休日はこの4区分に入れず
+  `legal_holiday_work_minutes`へ計上する。旧3区分列は画面・CSVの後方互換集計用に併存する)
 - late_night_work_minutes
 - late_night_prescribed_work_minutes (深夜のうち所定労働にあたる分。late_night_work_minutesの内訳)
 - late_night_statutory_within_overtime_minutes (深夜のうち法定内残業にあたる分。late_night_work_minutesの
@@ -842,10 +851,22 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 `attendance.day_calculated`が再発生すると、以降のイベント再生ではその再計算結果で上書き
 されるため、手動補正はあくまで「直近の実績編集以降に加えられた最新の上書き」として扱われる。
 
-週40時間(労基法32条)判定は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
+週40時間(労基法32条)の超過量自体は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
 月のような集計単位ではないため、`App\Domain\Attendance\Services\WeeklyOvertimeCalculator` が
 月次確認画面の表示のたびに `attendance_daily_calculations` から都度計算する参考情報として扱う
 (docs/07-usecases-attendance.md「週40時間判定」、UC-C005の法定休日要件チェックと同じ考え方)。
+ユーザーが日別の法定外区分へ振り分けた結果だけは
+`attendance_weekly_overtime_allocations`へProjectionとして保持する。所定外法定内を優先し、
+所定内法定内を法定外へ移す必要がある場合は対象日をユーザーが選ぶ。未振分があれば、月を跨ぐ
+7日間の週も含めて月次提出・承認・確定を拒否する。日次を再計算した場合、その日の振分は解除する。
+
+## attendance_weekly_overtime_allocations (Projection: 週40時間超の日別振分)
+
+- attendance_day_id (unique)
+- week_start_date
+- prescribed_minutes / non_prescribed_minutes
+- late_night_prescribed_minutes / late_night_non_prescribed_minutes (各振分の内数)
+- allocated_by_user_id / created_at / updated_at
 同様に、フレックスタイム制の清算期間ダッシュボード(必要労働時間・残り労働時間等)も
 `App\Domain\Attendance\Services\FlexSettlementSummaryCalculator` が表示のたびに都度計算する
 参考情報であり、独立したProjectionを持たない。

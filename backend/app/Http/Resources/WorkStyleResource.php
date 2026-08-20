@@ -19,6 +19,8 @@ class WorkStyleResource extends JsonResource
             'employment_category_id' => $this->employment_category_id,
             'employment_category_code' => $this->whenLoaded('employmentCategory', fn () => $this->employmentCategory?->code),
             'work_time_system' => $this->work_time_system,
+            'workday_boundary_type' => $this->workday_boundary_type,
+            'workday_boundary_time' => $this->formatTime($this->workday_boundary_time),
             'prescribed_daily_minutes' => $this->prescribed_daily_minutes,
             'prescribed_weekly_minutes' => $this->prescribed_weekly_minutes,
             'deemed_daily_minutes' => $this->deemed_daily_minutes,
