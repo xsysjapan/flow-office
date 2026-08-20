@@ -273,7 +273,12 @@ function ManualGrantCard() {
         </FormField>
 
         <FormField label="失効日" htmlFor="grant-expires-on" required>
-          <DatePicker id="grant-expires-on" value={expiresOn || undefined} onChange={(date) => setExpiresOn(date ?? '')} />
+          <DatePicker
+            id="grant-expires-on"
+            value={expiresOn || undefined}
+            defaultDate={grantedOn || undefined}
+            onChange={(date) => setExpiresOn(date ?? '')}
+          />
         </FormField>
 
         <FormField label="付与日数" htmlFor="grant-granted-days" required>

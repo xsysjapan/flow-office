@@ -165,11 +165,14 @@ function useBreakShortfallWarning(actualStartAt: string, actualEndAt: string, ro
 }
 
 function BreakRowsEditor({
+  date,
   rows,
   onAdd,
   onUpdate,
   onRemove,
 }: {
+  /** 新規追加行の初期カレンダー表示に使う対象日("YYYY-MM-DD")。 */
+  date: string
   rows: ReturnType<typeof useEditableRows<BreakRowData>>['rows']
   onAdd: () => void
   onUpdate: (rowId: number, patch: Partial<BreakRowData>) => void
@@ -183,11 +186,13 @@ function BreakRowsEditor({
           <DateTimePicker
             aria-label="休憩開始"
             value={row.start || undefined}
+            defaultDate={date}
             onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
           />
           <DateTimePicker
             aria-label="休憩終了"
             value={row.end || undefined}
+            defaultDate={date}
             onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
           />
           <Button variant="danger" onClick={() => onRemove(row.rowId)}>
@@ -224,11 +229,14 @@ function buildLeaveSegmentsPayload(rows: LeaveSegmentRowData[], offset: string) 
  * 「不就労時間の処理区分」参照)。
  */
 function LeaveSegmentsEditor({
+  date,
   rows,
   onAdd,
   onUpdate,
   onRemove,
 }: {
+  /** 新規追加行の初期カレンダー表示に使う対象日("YYYY-MM-DD")。 */
+  date: string
   rows: ReturnType<typeof useEditableRows<LeaveSegmentRowData>>['rows']
   onAdd: () => void
   onUpdate: (rowId: number, patch: Partial<LeaveSegmentRowData>) => void
@@ -242,11 +250,13 @@ function LeaveSegmentsEditor({
           <DateTimePicker
             aria-label="遅刻・早退開始"
             value={row.start || undefined}
+            defaultDate={date}
             onChange={(value) => onUpdate(row.rowId, { start: value ?? '' })}
           />
           <DateTimePicker
             aria-label="遅刻・早退終了"
             value={row.end || undefined}
+            defaultDate={date}
             onChange={(value) => onUpdate(row.rowId, { end: value ?? '' })}
           />
           <Input
@@ -427,7 +437,12 @@ function PunchAddForm({ date }: { date: string }) {
             </option>
           ))}
         </NativeSelect>
-        <DateTimePicker aria-label="追加する日時" value={punchedAt || undefined} onChange={(value) => setPunchedAt(value ?? '')} />
+        <DateTimePicker
+          aria-label="追加する日時"
+          value={punchedAt || undefined}
+          defaultDate={date}
+          onChange={(value) => setPunchedAt(value ?? '')}
+        />
         <Input
           aria-label="追加するオフセット"
           className="w-24"
@@ -738,11 +753,21 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
 
       <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
-        <DateTimePicker aria-label="出勤" value={actualStartAt || undefined} onChange={(value) => setActualStartAt(value ?? '')} />
+        <DateTimePicker
+          aria-label="出勤"
+          value={actualStartAt || undefined}
+          defaultDate={day.work_date}
+          onChange={(value) => setActualStartAt(value ?? '')}
+        />
       </div>
       <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         退勤
-        <DateTimePicker aria-label="退勤" value={actualEndAt || undefined} onChange={(value) => setActualEndAt(value ?? '')} />
+        <DateTimePicker
+          aria-label="退勤"
+          value={actualEndAt || undefined}
+          defaultDate={day.work_date}
+          onChange={(value) => setActualEndAt(value ?? '')}
+        />
       </div>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         現地時刻オフセット(海外出張時などに変更)
@@ -774,11 +799,12 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         <Input value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
 
-      <BreakRowsEditor rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
+      <BreakRowsEditor date={day.work_date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
       {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
 
       <LeaveSegmentsEditor
+        date={day.work_date}
         rows={leaveSegmentRows}
         onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
@@ -899,11 +925,21 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
 
       <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         出勤
-        <DateTimePicker aria-label="出勤" value={actualStartAt || undefined} onChange={(value) => setActualStartAt(value ?? '')} />
+        <DateTimePicker
+          aria-label="出勤"
+          value={actualStartAt || undefined}
+          defaultDate={date}
+          onChange={(value) => setActualStartAt(value ?? '')}
+        />
       </div>
       <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         退勤
-        <DateTimePicker aria-label="退勤" value={actualEndAt || undefined} onChange={(value) => setActualEndAt(value ?? '')} />
+        <DateTimePicker
+          aria-label="退勤"
+          value={actualEndAt || undefined}
+          defaultDate={date}
+          onChange={(value) => setActualEndAt(value ?? '')}
+        />
       </div>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         現地時刻オフセット(海外出張時などに変更)
@@ -935,11 +971,12 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         <Input value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
 
-      <BreakRowsEditor rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
+      <BreakRowsEditor date={date} rows={rows} onAdd={() => addRow({ start: '', end: '' })} onUpdate={updateRow} onRemove={removeRow} />
 
       {breakWarning && <p className="text-sm text-warning">{breakWarning}</p>}
 
       <LeaveSegmentsEditor
+        date={date}
         rows={leaveSegmentRows}
         onAdd={() => addLeaveSegmentRow({ start: '', end: '', note: '' })}
         onUpdate={updateLeaveSegmentRow}
@@ -1158,7 +1195,12 @@ function ShiftSwapRequestDialog({
             htmlFor="shift-swap-substitute-date"
             required
           >
-            <DatePicker id="shift-swap-substitute-date" value={substituteDate} onChange={setSubstituteDate} />
+            <DatePicker
+              id="shift-swap-substitute-date"
+              value={substituteDate}
+              defaultDate={targetDate}
+              onChange={setSubstituteDate}
+            />
           </FormField>
 
           {approvalRequired ? (
