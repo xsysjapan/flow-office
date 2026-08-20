@@ -1626,3 +1626,38 @@ export interface CalendarBulkOperationPreview {
   conflict_count: number;
   executable: boolean;
 }
+
+export interface AdminCommandParameter {
+  name: string;
+  kind: "argument" | "option";
+  required: boolean;
+  array: boolean;
+  accepts_value?: boolean;
+  value_required?: boolean;
+  default: unknown;
+  description: string;
+  ui: { control?: "year-month" | "checkbox" | "text" };
+}
+
+export interface AdminCommandDefinition {
+  name: string;
+  label: string;
+  description: string;
+  parameters: AdminCommandParameter[];
+  without_overlapping: boolean;
+}
+
+export interface AdminCommandRun {
+  id: string;
+  command_name: string;
+  parameters: Record<string, unknown>;
+  status: "queued" | "running" | "succeeded" | "failed";
+  requested_by_user_id: string;
+  requested_by_user?: Pick<User, "id" | "name">;
+  started_at: string | null;
+  finished_at: string | null;
+  exit_code: number | null;
+  output: string | null;
+  error_message: string | null;
+  created_at: string;
+}

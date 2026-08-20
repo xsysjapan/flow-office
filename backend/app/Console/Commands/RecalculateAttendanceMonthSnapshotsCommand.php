@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AdminExecutable;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\EventSourcing\CommandBus;
 use App\Models\AttendanceMonth;
@@ -15,6 +16,17 @@ use Illuminate\Console\Command;
  * 再計算しても値が変わるのは集計結果のみで実績そのものは変わらない(安全に再実行できる)。
  * 差戻し中(returned)・未提出(not_submitted)は対象外(RecalculateAttendanceMonthSnapshotHandler参照)。
  */
+#[AdminExecutable(
+    label: '月次勤怠スナップショット再計算',
+    rules: [
+        'year-month' => ['nullable', 'date_format:Y-m'],
+        'dry-run' => ['nullable', 'boolean'],
+    ],
+    ui: [
+        'year-month' => ['control' => 'year-month'],
+        'dry-run' => ['control' => 'checkbox'],
+    ],
+)]
 class RecalculateAttendanceMonthSnapshotsCommand extends Command
 {
     protected $signature = 'attendance:recalculate-month-snapshots
