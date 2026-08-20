@@ -284,6 +284,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/break/end', [AttendanceController::class, 'endBreak'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
         Route::post('/clock-out', [AttendanceController::class, 'clockOut'])->middleware(['ability:attendance:self:clock', 'permission:attendance.update,self']);
         Route::get('/week', [AttendanceController::class, 'week'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
+        Route::get('/week/overtime', [AttendanceController::class, 'weekOvertime'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::get('/day-defaults', [AttendanceController::class, 'dayDefaults'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
         Route::post('/days', [AttendanceController::class, 'storeDay'])->middleware(['ability:attendance:self:update', 'permission:attendance.update,self']);
         Route::post('/days/preview-pattern', [AttendanceController::class, 'previewAttendancePattern'])->middleware(['ability:attendance:self:read', 'permission:attendance.read,self']);
