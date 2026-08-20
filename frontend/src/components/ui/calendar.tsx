@@ -10,10 +10,18 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker>
  * react-day-picker(shadcn/ui相当)のカレンダー本体。単体では使わず、
  * `DatePicker`(Popover + Button トリガー)経由で使うことを想定する。
  */
-export function Calendar({ className, classNames, showOutsideDays = true, components, ...props }: CalendarProps) {
+export function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  fixedWeeks = true,
+  components,
+  ...props
+}: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      fixedWeeks={fixedWeeks}
       className={cn('relative w-fit p-3', className)}
       classNames={{
         months: 'relative flex flex-col gap-4',
