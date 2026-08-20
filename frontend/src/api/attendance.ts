@@ -31,6 +31,16 @@ export function fetchWeek(startDate: string, userId?: string): Promise<Attendanc
   return apiFetch('/attendance/week', { query: { start_date: startDate, user_id: userId } })
 }
 
+export interface AttendanceWeekOvertime {
+  week_start_date: string
+  week_end_date: string
+  weekly_statutory_excess_overtime_minutes: number
+}
+
+export function fetchWeekOvertime(startDate: string, userId?: string): Promise<AttendanceWeekOvertime> {
+  return apiFetch('/attendance/week/overtime', { query: { start_date: startDate, user_id: userId } })
+}
+
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
 export function fetchAttendanceDayDefaults(userId: string, workDate: string): Promise<AttendanceDayDefaults> {
   return apiFetch('/attendance/day-defaults', { query: { user_id: userId, work_date: workDate } })

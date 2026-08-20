@@ -10,7 +10,7 @@ import { Card } from '../../components/Card/Card'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { WeeklyAttendanceBulkEntryModal } from '../../components/WeeklyAttendanceBulkEntryModal/WeeklyAttendanceBulkEntryModal'
-import { useWeek } from '../../hooks/useAttendance'
+import { useWeek, useWeekOvertime } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { useSpecialLeaveTypes } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
@@ -38,6 +38,7 @@ export function WeekAttendancePage() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const { data, isLoading, error } = useWeek(weekStart)
+  const { data: weeklyOvertime } = useWeekOvertime(weekStart)
   const { data: specialLeaveTypes } = useSpecialLeaveTypes(
     user?.effective_features === undefined || user.effective_features.includes('paid_leave.requests'),
   )
@@ -105,6 +106,7 @@ export function WeekAttendancePage() {
             <AttendanceCalculationSummary
               title="今週の集計"
               totals={weeklyTotals}
+              weeklyStatutoryExcessOvertimeMinutes={weeklyOvertime?.weekly_statutory_excess_overtime_minutes}
               absenceDays={absenceDays}
               specialLeaveBreakdown={specialLeaveBreakdown}
               showAllLeaveTotals

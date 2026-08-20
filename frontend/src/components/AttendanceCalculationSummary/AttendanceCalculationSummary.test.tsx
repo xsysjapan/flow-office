@@ -55,8 +55,34 @@ describe('AttendanceCalculationSummary', () => {
     const { rerender } = render(<AttendanceCalculationSummary title="今月の集計" totals={totals} />)
     expect(screen.queryByText('うち週40時間超')).not.toBeInTheDocument()
 
-    rerender(<AttendanceCalculationSummary title="今月の集計" totals={totals} weeklyStatutoryExcessOvertimeMinutes={45} />)
-    expect(screen.getByText('うち週40時間超')).toBeInTheDocument()
+    rerender(
+      <AttendanceCalculationSummary
+        title="今月の集計"
+        totals={totals}
+        statutoryExcessOver60hMinutes={30}
+        weeklyStatutoryExcessOvertimeMinutes={45}
+      />,
+    )
+    const over60Hours = screen.getByText('うち月60時間超')
+    const weeklyOvertime = screen.getByText('うち週40時間超')
+    const legalHoliday = screen.getByText('法定休日労働時間')
+
+    expect(weeklyOvertime).toBeInTheDocument()
+    expect(weeklyOvertime.nextElementSibling).not.toHaveClass('sm:col-span-3')
+    expect(over60Hours.compareDocumentPosition(weeklyOvertime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(weeklyOvertime.compareDocumentPosition(legalHoliday) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('puts the weekly 40h overtime on its own row when the monthly 60h item is absent', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今週の集計"
+        totals={totals}
+        weeklyStatutoryExcessOvertimeMinutes={45}
+      />,
+    )
+
+    expect(screen.getByText('うち週40時間超').nextElementSibling).toHaveClass('sm:col-span-3')
   })
 
   it('shows the total worked time when work_minutes is provided', () => {

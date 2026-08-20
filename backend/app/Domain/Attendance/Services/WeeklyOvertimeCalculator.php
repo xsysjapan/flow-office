@@ -68,7 +68,7 @@ class WeeklyOvertimeCalculator
     /**
      * @return array{week_start_date: string, week_end_date: string, work_minutes: int, daily_statutory_excess_overtime_minutes: int, weekly_statutory_excess_overtime_minutes: int, legal_holiday_work_minutes: int}
      */
-    private function calculateWeek(string $userId, string $weekStartDate, string $weekEndDate): array
+    public function calculateWeek(string $userId, string $weekStartDate, string $weekEndDate): array
     {
         $days = AttendanceDay::query()
             ->where('user_id', $userId)

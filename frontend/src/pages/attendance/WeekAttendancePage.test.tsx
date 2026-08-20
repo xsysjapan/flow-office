@@ -59,6 +59,11 @@ const mondayRecord: AttendanceDay = {
 function renderPage(days: AttendanceDay[] = [mondayRecord]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(attendanceApi, 'fetchWeek').mockResolvedValue(days)
+  vi.spyOn(attendanceApi, 'fetchWeekOvertime').mockResolvedValue({
+    week_start_date: weekStart,
+    week_end_date: addDays(weekStart, 6),
+    weekly_statutory_excess_overtime_minutes: 60,
+  })
   vi.spyOn(employeeShiftAssignmentsApi, 'fetchShiftAssignments').mockResolvedValue([])
 
   return render(
@@ -109,6 +114,7 @@ describe('WeekAttendancePage', () => {
     expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
     expect(screen.getByText('12時間')).toBeInTheDocument()
     expect(screen.getByText('所定労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
+    expect(screen.getByText('うち週40時間超').nextElementSibling).toHaveTextContent('1時間')
     expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')
   })
