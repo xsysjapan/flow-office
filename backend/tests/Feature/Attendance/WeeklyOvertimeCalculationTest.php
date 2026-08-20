@@ -5,6 +5,7 @@ namespace Tests\Feature\Attendance;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceWeeklyOvertimeAllocation;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
@@ -175,11 +176,53 @@ class WeeklyOvertimeCalculationTest extends TestCase
         $this->recordDay($user, $workStyle, '2026-06-06', '09:00', '19:00', isCompanyHoliday: true);
 
         $saturday = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-06-06')->firstOrFail();
-        $this->assertSame(60, $saturday->calculation->statutory_excess_overtime_minutes, '所定休日でも日8時間超は法定時間外になる');
+        $this->assertSame(540, $saturday->calculation->statutory_excess_overtime_minutes, '日8時間超1時間と週40時間超8時間を法定時間外にする');
+        $this->assertSame(0, $saturday->calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(540, $saturday->calculation->non_prescribed_statutory_excess_work_minutes);
 
         $week = $this->weekReference($this->submitMonth($user, '2026-06'), '2026-06-01');
         $this->assertSame(60, $week['daily_statutory_excess_overtime_minutes']);
         $this->assertSame(480, $week['weekly_statutory_excess_overtime_minutes'], '週40時間超過分(合計49時間-40時間-日次計上済み1時間)');
+        $this->assertSame(0, $week['unallocated_weekly_statutory_excess_overtime_minutes']);
+    }
+
+    public function test_non_prescribed_work_at_exactly_forty_hours_remains_statutory_within(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+        foreach (['06-01', '06-02', '06-03', '06-04'] as $day) {
+            $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', '18:00');
+        }
+        $this->recordDay($user, $workStyle, '2026-06-06', '09:00', '18:00', isCompanyHoliday: true);
+
+        $saturday = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-06-06')->firstOrFail();
+        $this->assertSame(480, $saturday->calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(0, $saturday->calculation->non_prescribed_statutory_excess_work_minutes);
+        $this->assertFalse(AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $saturday->id)->exists());
+    }
+
+    public function test_company_holiday_after_daily_overtime_is_automatically_allocated_to_weekly_excess(): void
+    {
+        $calendar = $this->makeCalendar();
+        $workStyle = $this->makeWorkStyle($calendar);
+        $user = User::factory()->create();
+        foreach ([
+            '07-13' => '18:30', '07-14' => '18:30', '07-15' => '18:30',
+            '07-16' => '19:30', '07-17' => '19:00',
+        ] as $day => $end) {
+            $this->recordDay($user, $workStyle, "2026-{$day}", '09:00', $end);
+        }
+        $this->recordDay($user, $workStyle, '2026-07-18', '09:00', '18:00', isCompanyHoliday: true);
+
+        $saturday = AttendanceDay::query()->where('user_id', $user->id)->whereDate('work_date', '2026-07-18')->firstOrFail();
+        $this->assertSame(0, $saturday->calculation->non_prescribed_statutory_within_work_minutes);
+        $this->assertSame(480, $saturday->calculation->non_prescribed_statutory_excess_work_minutes);
+        $this->assertSame(480, AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $saturday->id)->value('non_prescribed_minutes'));
+
+        $week = app(WeeklyOvertimeCalculator::class)->calculateWeek($user->id, '2026-07-13', '2026-07-19');
+        $this->assertSame(480, $week['weekly_statutory_excess_overtime_minutes']);
+        $this->assertSame(0, $week['unallocated_weekly_statutory_excess_overtime_minutes']);
     }
 
     public function test_legal_holiday_work_is_excluded_from_the_weekly_forty_hour_aggregation(): void

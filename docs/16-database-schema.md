@@ -855,8 +855,8 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
 月のような集計単位ではないため、`App\Domain\Attendance\Services\WeeklyOvertimeCalculator` が
 月次確認画面の表示のたびに `attendance_daily_calculations` から都度計算する参考情報として扱う
 (docs/07-usecases-attendance.md「週40時間判定」、UC-C005の法定休日要件チェックと同じ考え方)。
-ユーザーが日別の法定外区分へ振り分けた結果だけは
-`attendance_weekly_overtime_allocations`へProjectionとして保持する。所定外法定内を優先し、
+日別の法定外区分へ振り分けた結果だけは`attendance_weekly_overtime_allocations`へProjectionとして
+保持する。40時間を超えた所定外法定内は週後半の日から自動配賦し、40時間ちょうどなら配賦しない。
 所定内法定内を法定外へ移す必要がある場合は対象日をユーザーが選ぶ。未振分があれば、月を跨ぐ
 7日間の週も含めて月次提出・承認・確定を拒否する。日次を再計算した場合、その日の振分は解除する。
 
