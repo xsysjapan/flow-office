@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adjustAttendanceDailyCalculation,
+  allocateWeekOvertime,
   clockIn,
   clockOut,
   closeMonth,
@@ -57,6 +58,14 @@ export function useWeekOvertime(startDate: string, userId?: string) {
   return useQuery({
     queryKey: userId === undefined ? [...WEEK_KEY, startDate, 'overtime'] : [...WEEK_KEY, startDate, userId, 'overtime'],
     queryFn: () => fetchWeekOvertime(startDate, userId),
+  })
+}
+
+export function useAllocateWeekOvertime(startDate: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (allocations: Parameters<typeof allocateWeekOvertime>[1]) => allocateWeekOvertime(startDate, allocations),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...WEEK_KEY, startDate] }),
   })
 }
 

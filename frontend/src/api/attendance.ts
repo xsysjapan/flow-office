@@ -35,10 +35,27 @@ export interface AttendanceWeekOvertime {
   week_start_date: string
   week_end_date: string
   weekly_statutory_excess_overtime_minutes: number
+  allocated_weekly_statutory_excess_overtime_minutes?: number
+  unallocated_weekly_statutory_excess_overtime_minutes?: number
 }
 
 export function fetchWeekOvertime(startDate: string, userId?: string): Promise<AttendanceWeekOvertime> {
   return apiFetch('/attendance/week/overtime', { query: { start_date: startDate, user_id: userId } })
+}
+
+export interface WeeklyOvertimeAllocationInput {
+  attendance_day_id: string
+  prescribed_minutes: number
+  non_prescribed_minutes: number
+  late_night_prescribed_minutes: number
+  late_night_non_prescribed_minutes: number
+}
+
+export function allocateWeekOvertime(weekStartDate: string, allocations: WeeklyOvertimeAllocationInput[]): Promise<AttendanceWeekOvertime> {
+  return apiFetch(`/attendance/weeks/${weekStartDate}/overtime-allocations`, {
+    method: 'PUT',
+    body: { allocations },
+  })
 }
 
 /** 日次勤怠の入力画面(未入力の日)を開いた際の初期値(打刻→勤務予定→システム既定の優先順)。 */
@@ -227,6 +244,7 @@ export function fetchMonth(yearMonth: string, userId?: string): Promise<{
   month: AttendanceMonth | null
   flex_settlement_summary: FlexSettlementSummary | null
   monthly_calculation_totals: AttendanceMonthlyCalculationTotals
+  weekly_overtime_reference?: AttendanceWeekOvertime[]
   /** 特別休暇の種類ごとの内訳。バックエンドは常に返すが、既存のテストモック等との
    *  互換性のためoptionalにしておく(未指定時はAttendanceCalculationSummaryが従来通り
    *  合計のみを表示する)。 */

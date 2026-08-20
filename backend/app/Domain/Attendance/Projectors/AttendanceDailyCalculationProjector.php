@@ -31,6 +31,16 @@ class AttendanceDailyCalculationProjector extends Projector
         }
 
         $payload = $event->calculation;
+        $legacyPrescribedWithin = max(0,
+            (int) ($payload['work_minutes'] ?? 0)
+            - (int) ($payload['statutory_within_overtime_minutes'] ?? 0)
+            - (int) ($payload['statutory_excess_overtime_minutes'] ?? 0)
+            - (int) ($payload['legal_holiday_work_minutes'] ?? 0)
+            - (int) ($payload['prescribed_holiday_work_minutes'] ?? 0),
+        );
+        $legacyNonPrescribedWithin = (int) (($payload['prescribed_holiday_work_minutes'] ?? 0) > 0
+            ? $payload['prescribed_holiday_work_minutes']
+            : ($payload['statutory_within_overtime_minutes'] ?? 0));
 
         // day_classification(working_day/prescribed_holiday/legal_holiday)は
         // attendance_daily_calculationsではなくattendance_days側の派生列だが、
@@ -51,10 +61,18 @@ class AttendanceDailyCalculationProjector extends Projector
                 'prescribed_work_minutes' => $payload['prescribed_work_minutes'],
                 'statutory_within_overtime_minutes' => $payload['statutory_within_overtime_minutes'],
                 'statutory_excess_overtime_minutes' => $payload['statutory_excess_overtime_minutes'],
+                'prescribed_statutory_within_work_minutes' => $payload['prescribed_statutory_within_work_minutes'] ?? $legacyPrescribedWithin,
+                'non_prescribed_statutory_within_work_minutes' => $payload['non_prescribed_statutory_within_work_minutes'] ?? $legacyNonPrescribedWithin,
+                'prescribed_statutory_excess_work_minutes' => $payload['prescribed_statutory_excess_work_minutes'] ?? 0,
+                'non_prescribed_statutory_excess_work_minutes' => $payload['non_prescribed_statutory_excess_work_minutes'] ?? $payload['statutory_excess_overtime_minutes'],
                 'late_night_work_minutes' => $payload['late_night_work_minutes'],
                 'late_night_prescribed_work_minutes' => $payload['late_night_prescribed_work_minutes'] ?? 0,
                 'late_night_statutory_within_overtime_minutes' => $payload['late_night_statutory_within_overtime_minutes'] ?? 0,
                 'late_night_statutory_excess_overtime_minutes' => $payload['late_night_statutory_excess_overtime_minutes'] ?? 0,
+                'late_night_prescribed_statutory_within_work_minutes' => $payload['late_night_prescribed_statutory_within_work_minutes'] ?? ($payload['late_night_prescribed_work_minutes'] ?? 0),
+                'late_night_non_prescribed_statutory_within_work_minutes' => $payload['late_night_non_prescribed_statutory_within_work_minutes'] ?? ($payload['late_night_statutory_within_overtime_minutes'] ?? 0),
+                'late_night_prescribed_statutory_excess_work_minutes' => $payload['late_night_prescribed_statutory_excess_work_minutes'] ?? 0,
+                'late_night_non_prescribed_statutory_excess_work_minutes' => $payload['late_night_non_prescribed_statutory_excess_work_minutes'] ?? ($payload['late_night_statutory_excess_overtime_minutes'] ?? 0),
                 'legal_holiday_work_minutes' => $payload['legal_holiday_work_minutes'],
                 'prescribed_holiday_work_minutes' => $payload['prescribed_holiday_work_minutes'],
                 'late_night_legal_holiday_work_minutes' => $payload['late_night_legal_holiday_work_minutes'],
@@ -97,6 +115,12 @@ class AttendanceDailyCalculationProjector extends Projector
                 'prescribed_work_minutes' => $event->prescribedWorkMinutes,
                 'statutory_within_overtime_minutes' => $event->statutoryWithinOvertimeMinutes,
                 'statutory_excess_overtime_minutes' => $event->statutoryExcessOvertimeMinutes,
+                // 旧来の手動補正APIは3区分のみを受け取るため、互換変換では所定時間を
+                // 所定内法定内、法定内/外残業をそれぞれ所定外へ割り当てる。
+                'prescribed_statutory_within_work_minutes' => $event->prescribedWorkMinutes,
+                'non_prescribed_statutory_within_work_minutes' => $event->statutoryWithinOvertimeMinutes,
+                'prescribed_statutory_excess_work_minutes' => 0,
+                'non_prescribed_statutory_excess_work_minutes' => $event->statutoryExcessOvertimeMinutes,
                 'late_night_work_minutes' => $event->lateNightPrescribedWorkMinutes
                     + $event->lateNightStatutoryWithinOvertimeMinutes
                     + $event->lateNightStatutoryExcessOvertimeMinutes
@@ -105,6 +129,10 @@ class AttendanceDailyCalculationProjector extends Projector
                 'late_night_prescribed_work_minutes' => $event->lateNightPrescribedWorkMinutes,
                 'late_night_statutory_within_overtime_minutes' => $event->lateNightStatutoryWithinOvertimeMinutes,
                 'late_night_statutory_excess_overtime_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
+                'late_night_prescribed_statutory_within_work_minutes' => $event->lateNightPrescribedWorkMinutes,
+                'late_night_non_prescribed_statutory_within_work_minutes' => $event->lateNightStatutoryWithinOvertimeMinutes,
+                'late_night_prescribed_statutory_excess_work_minutes' => 0,
+                'late_night_non_prescribed_statutory_excess_work_minutes' => $event->lateNightStatutoryExcessOvertimeMinutes,
                 'legal_holiday_work_minutes' => $event->legalHolidayWorkMinutes,
                 'prescribed_holiday_work_minutes' => $event->prescribedHolidayWorkMinutes,
                 'payroll_work_minutes' => $payrollWorkMinutes,

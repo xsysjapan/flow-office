@@ -20,8 +20,13 @@ class AdminCommandTest extends TestCase
 
         $response = $this->actingAs($admin)->getJson('/api/admin/commands')->assertOk();
 
-        $response->assertJsonPath('data.0.name', 'attendance:recalculate-month-snapshots')
-            ->assertJsonPath('data.0.parameters.0.name', 'year-month');
+        $commands = collect($response->json('data'))->keyBy('name');
+        $this->assertSame(
+            ['attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-month-snapshots'],
+            $commands->keys()->sort()->values()->all(),
+        );
+        $this->assertSame('apply', $commands['attendance:normalize-calculation-events']['parameters'][0]['name']);
+        $this->assertSame('year-month', $commands['attendance:recalculate-month-snapshots']['parameters'][0]['name']);
         $this->assertNotContains('migrate:fresh', $response->json('data.*.name'));
     }
 
@@ -39,5 +44,16 @@ class AdminCommandTest extends TestCase
         $this->actingAs($admin)->postJson('/api/admin/commands/attendance:recalculate-month-snapshots/runs', [
             'parameters' => ['unexpected' => 'value'],
         ])->assertUnprocessable();
+
+        $this->actingAs($admin)->postJson('/api/admin/commands/attendance:normalize-calculation-events/runs', [
+            'parameters' => ['apply' => true, 'backup-table' => 'invalid-table-name'],
+        ])->assertUnprocessable();
+    }
+
+    public function test_attendance_calculation_projection_rebuild_command_completes(): void
+    {
+        $this->artisan('attendance:rebuild-calculation-projections')
+            ->expectsOutputToContain('勤怠計算Projectionの再構築が完了しました。')
+            ->assertSuccessful();
     }
 }

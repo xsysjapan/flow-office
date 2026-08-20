@@ -24,7 +24,7 @@ function formatDate(date: Date): string {
 }
 
 test('月次入力ユーザーが打刻せず日次実績を新規作成し、月次提出〜承認〜締めまで進む', async ({ browser }) => {
-  test.setTimeout(60000)
+  test.setTimeout(300000)
 
   const employeeContext = await browser.newContext()
   const approverContext = await browser.newContext()

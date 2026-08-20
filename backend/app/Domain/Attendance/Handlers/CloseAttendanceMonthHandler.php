@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
+use App\Domain\Attendance\Services\WeeklyOvertimeAllocationGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -24,6 +25,8 @@ use Illuminate\Support\Carbon;
  */
 class CloseAttendanceMonthHandler implements CommandHandler
 {
+    public function __construct(private readonly WeeklyOvertimeAllocationGuard $weeklyOvertimeAllocationGuard) {}
+
     public function handle(Command $command): AttendanceMonth
     {
         assert($command instanceof CloseAttendanceMonth);
@@ -33,6 +36,8 @@ class CloseAttendanceMonthHandler implements CommandHandler
         if ($month->status !== AttendanceMonthStatus::APPROVED) {
             throw new DomainRuleException('承認済みの月次勤怠のみ締めることができます。');
         }
+
+        $this->weeklyOvertimeAllocationGuard->ensureAllocated($month->user_id, $month->year_month);
 
         $now = Carbon::now();
         $periodStart = Carbon::createFromFormat('Y-m-d', "{$month->year_month}-01")->startOfMonth();

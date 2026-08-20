@@ -54,12 +54,12 @@ class MoneyForwardAttendanceCsvFormat implements AttendanceCsvFormat
             $snapshot['absence_days'] ?? 0,
             0, // 遅刻回数（平日）
             0, // 早退回数（平日）
-            $this->toDecimalHours($snapshot['weekday_regular_work_minutes'] ?? 0),
+            $this->toDecimalHours($this->value($snapshot, 'weekday_prescribed_statutory_within_work_minutes', 'weekday_regular_work_minutes') + $this->value($snapshot, 'weekday_prescribed_statutory_excess_work_minutes')),
             0, // 休憩時間（平日）
             $this->toDecimalHours($snapshot['weekday_late_night_prescribed_work_minutes'] ?? 0),
             0, // 深夜休憩時間（平日）
-            $this->toDecimalHours($snapshot['weekday_statutory_within_overtime_minutes'] ?? 0),
-            $this->toDecimalHours($snapshot['weekday_statutory_excess_overtime_minutes'] ?? 0),
+            $this->toDecimalHours($this->value($snapshot, 'weekday_non_prescribed_statutory_within_work_minutes', 'weekday_statutory_within_overtime_minutes')),
+            $this->toDecimalHours($this->value($snapshot, 'weekday_prescribed_statutory_excess_work_minutes') + $this->value($snapshot, 'weekday_non_prescribed_statutory_excess_work_minutes', 'weekday_statutory_excess_overtime_minutes')),
             $this->toDecimalHours($snapshot['weekday_late_night_statutory_within_overtime_minutes'] ?? 0),
             $this->toDecimalHours($snapshot['weekday_late_night_statutory_excess_overtime_minutes'] ?? 0),
             0, // 所定外休憩時間（平日）
@@ -68,10 +68,10 @@ class MoneyForwardAttendanceCsvFormat implements AttendanceCsvFormat
             0, // 深夜法定外休憩時間（平日）
             0, // 遅刻時間（平日）
             0, // 早退時間（平日）
-            $this->toDecimalHours($snapshot['prescribed_holiday_work_minutes'] ?? 0),
+            $this->toDecimalHours($this->value($snapshot, 'prescribed_holiday_prescribed_statutory_within_work_minutes', 'prescribed_holiday_work_minutes') + $this->value($snapshot, 'prescribed_holiday_prescribed_statutory_excess_work_minutes')),
             $this->toDecimalHours($snapshot['prescribed_holiday_late_night_prescribed_work_minutes'] ?? 0),
-            $this->toDecimalHours($snapshot['prescribed_holiday_statutory_within_overtime_minutes'] ?? 0),
-            $this->toDecimalHours($snapshot['prescribed_holiday_statutory_excess_overtime_minutes'] ?? 0),
+            $this->toDecimalHours($this->value($snapshot, 'prescribed_holiday_non_prescribed_statutory_within_work_minutes', 'prescribed_holiday_statutory_within_overtime_minutes')),
+            $this->toDecimalHours($this->value($snapshot, 'prescribed_holiday_prescribed_statutory_excess_work_minutes') + $this->value($snapshot, 'prescribed_holiday_non_prescribed_statutory_excess_work_minutes', 'prescribed_holiday_statutory_excess_overtime_minutes')),
             $this->toDecimalHours($snapshot['prescribed_holiday_late_night_statutory_excess_overtime_minutes'] ?? 0),
             0, // 所定時間（法定休日）: 法定休日に「所定」の概念が無いため常に0
             0, // 深夜所定時間（法定休日）: 同上
@@ -103,5 +103,14 @@ class MoneyForwardAttendanceCsvFormat implements AttendanceCsvFormat
     private function toDecimalHours(int $minutes): float
     {
         return round($minutes / 60, 2);
+    }
+
+    private function value(array $snapshot, string $key, ?string $legacyKey = null): int
+    {
+        if (array_key_exists($key, $snapshot)) {
+            return (int) $snapshot[$key];
+        }
+
+        return $legacyKey === null ? 0 : (int) ($snapshot[$legacyKey] ?? 0);
     }
 }

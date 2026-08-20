@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
+use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
@@ -22,9 +23,10 @@ use App\Domain\Attendance\Services\FlexSettlementSummaryCalculator;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
-use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
+use App\Domain\Attendance\Services\WeeklyPatternResolver;
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -47,6 +49,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -223,6 +226,45 @@ class AttendanceController extends Controller
         );
 
         return response()->json($calculator->calculateWeek($targetUserId, $start->toDateString(), $end->toDateString()));
+    }
+
+    public function allocateWeekOvertime(
+        Request $request,
+        string $weekStartDate,
+        CommandBus $commandBus,
+        WeeklyOvertimeCalculator $calculator,
+    ): JsonResponse {
+        $data = $request->validate([
+            'allocations' => ['required', 'array'],
+            'allocations.*.attendance_day_id' => ['required', 'uuid', 'exists:attendance_days,id'],
+            'allocations.*.prescribed_minutes' => ['required', 'integer', 'min:0'],
+            'allocations.*.non_prescribed_minutes' => ['required', 'integer', 'min:0'],
+            'allocations.*.late_night_prescribed_minutes' => ['required', 'integer', 'min:0'],
+            'allocations.*.late_night_non_prescribed_minutes' => ['required', 'integer', 'min:0'],
+        ]);
+        $start = Carbon::parse($weekStartDate)->startOfDay();
+        $end = $start->copy()->addDays(6);
+
+        DB::transaction(function () use ($data, $commandBus, $weekStartDate, $request, $calculator, $start, $end): void {
+            foreach ($data['allocations'] as $allocation) {
+                $commandBus->dispatch(new AllocateAttendanceWeeklyOvertime(
+                    attendanceDayId: $allocation['attendance_day_id'],
+                    weekStartDate: $weekStartDate,
+                    prescribedMinutes: $allocation['prescribed_minutes'],
+                    nonPrescribedMinutes: $allocation['non_prescribed_minutes'],
+                    lateNightPrescribedMinutes: $allocation['late_night_prescribed_minutes'],
+                    lateNightNonPrescribedMinutes: $allocation['late_night_non_prescribed_minutes'],
+                    allocatedByUserId: $request->user()->id,
+                ));
+            }
+
+            $week = $calculator->calculateWeek($request->user()->id, $start->toDateString(), $end->toDateString());
+            if ($week['allocated_weekly_statutory_excess_overtime_minutes'] > $week['weekly_statutory_excess_overtime_minutes']) {
+                throw new DomainRuleException('振分時間の合計が週40時間超の時間を超えています。');
+            }
+        });
+
+        return response()->json($calculator->calculateWeek($request->user()->id, $start->toDateString(), $end->toDateString()));
     }
 
     /**
@@ -677,6 +719,8 @@ class AttendanceController extends Controller
             // 法定内残業/法定外残業/月60時間超残業/週40時間超残業/深夜時間等の月合計。提出前でも
             // 進捗の目安として都度計算する(提出後はattendance_months.snapshot_jsonが確定値)。
             'monthly_calculation_totals' => app(MonthlyOvertimeCalculator::class)->calculateCategoryTotals($userId, $yearMonth),
+            // 月途中でも月跨ぎの週を含め、未振分を警告できるよう週別内訳も返す。
+            'weekly_overtime_reference' => app(WeeklyOvertimeCalculator::class)->calculateForMonth($userId, $yearMonth),
             // 特別休暇の種類ごとの内訳(special_leave_type_id別)。上記totals内のspecial_leave_days/
             // special_leave_minutesはこの内訳の合計と一致する(MonthlyOvertimeCalculator参照)。
             'special_leave_breakdown' => app(MonthlyOvertimeCalculator::class)->calculateSpecialLeaveBreakdown($userId, $yearMonth),

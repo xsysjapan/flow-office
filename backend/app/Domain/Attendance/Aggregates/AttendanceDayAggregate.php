@@ -10,6 +10,7 @@ use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
+use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -137,6 +138,26 @@ class AttendanceDayAggregate extends AggregateRoot
             lateNightPrescribedHolidayWorkMinutes: $lateNightPrescribedHolidayWorkMinutes,
             reason: $reason,
             adjustedByUserId: $adjustedByUserId,
+        ));
+
+        return $this;
+    }
+
+    public function allocateWeeklyOvertime(
+        string $weekStartDate,
+        int $prescribedMinutes,
+        int $nonPrescribedMinutes,
+        int $lateNightPrescribedMinutes,
+        int $lateNightNonPrescribedMinutes,
+        string $allocatedByUserId,
+    ): self {
+        $this->recordThat(new AttendanceWeeklyOvertimeAllocated(
+            $weekStartDate,
+            $prescribedMinutes,
+            $nonPrescribedMinutes,
+            $lateNightPrescribedMinutes,
+            $lateNightNonPrescribedMinutes,
+            $allocatedByUserId,
         ));
 
         return $this;

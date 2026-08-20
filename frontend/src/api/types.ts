@@ -489,6 +489,14 @@ export interface AttendanceBreak {
 }
 
 export interface AttendanceDailyCalculation {
+  prescribed_statutory_within_work_minutes?: number;
+  non_prescribed_statutory_within_work_minutes?: number;
+  prescribed_statutory_excess_work_minutes?: number;
+  non_prescribed_statutory_excess_work_minutes?: number;
+  late_night_prescribed_statutory_within_work_minutes?: number;
+  late_night_non_prescribed_statutory_within_work_minutes?: number;
+  late_night_prescribed_statutory_excess_work_minutes?: number;
+  late_night_non_prescribed_statutory_excess_work_minutes?: number;
   planned_work_minutes: number;
   work_minutes: number;
   /** 裁量労働制のみなし労働時間(work_styles.deemed_daily_minutes)。対象外の日はnull。 */
@@ -1059,6 +1067,9 @@ export interface WorkStyle {
   work_time_system: string;
   prescribed_daily_minutes: number;
   prescribed_weekly_minutes: number;
+  /** 実績をAttendanceDayへ帰属させる日の境界。work_dateは作業日、midnightは暦日、customは指定時刻。 */
+  workday_boundary_type?: "work_date" | "midnight" | "custom";
+  workday_boundary_time?: string | null;
   /** 裁量労働制(work_time_system='discretionary')のみなし労働時間(分/日)。
    *  対象日の給与計算上の労働時間(payroll_work_minutes)に採用される。対象外の勤務形態ではnull。 */
   deemed_daily_minutes: number | null;

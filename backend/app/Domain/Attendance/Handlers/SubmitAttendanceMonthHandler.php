@@ -6,6 +6,7 @@ use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\SubmitAttendanceMonth;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
 use App\Domain\Attendance\Services\PaidLeaveApprovalGuard;
+use App\Domain\Attendance\Services\WeeklyOvertimeAllocationGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -28,6 +29,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
     public function __construct(
         private readonly MonthlyOvertimeCalculator $monthlyOvertimeCalculator,
         private readonly PaidLeaveApprovalGuard $paidLeaveApprovalGuard,
+        private readonly WeeklyOvertimeAllocationGuard $weeklyOvertimeAllocationGuard,
     ) {}
 
     public function handle(Command $command): AttendanceMonth
@@ -48,6 +50,7 @@ class SubmitAttendanceMonthHandler implements CommandHandler
         }
 
         $this->paidLeaveApprovalGuard->ensureApproved($command->userId, $command->yearMonth);
+        $this->weeklyOvertimeAllocationGuard->ensureAllocated($command->userId, $command->yearMonth);
 
         // 月次勤怠申請(workflow_requestの下書きが先に作られる経路)では、subject_idとして
         // 確定済みの集約IDがコマンドに載ってくるのでそれを優先する。

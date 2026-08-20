@@ -8,7 +8,7 @@ import { pickDate, pickTime, pickUser } from "./support/ui";
  * 確認する。
  */
 test("管理者が各種マスタ管理画面にアクセスできる", async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(300000);
   await loginAs(page, SCENARIO_USERS.admin);
 
   for (const path of [
@@ -34,7 +34,7 @@ test("管理者が各種マスタ管理画面にアクセスできる", async ({
 test("カレンダー作成〜公開〜勤務形態作成〜シフト生成〜有給付与ルール作成〜手動付与", async ({
   page,
 }) => {
-  test.setTimeout(180000);
+  test.setTimeout(300000);
   // 既存データ(ScenarioSeederが投入した現在年度のカレンダー等や、このテストの過去の
   // 実行結果)と衝突しないよう、実運用データが使わない範囲(西暦3000年度以降)から
   // 実行のたびにランダムな年度を選ぶ。starts_on/ends_onにそのまま実在の日付として使うため

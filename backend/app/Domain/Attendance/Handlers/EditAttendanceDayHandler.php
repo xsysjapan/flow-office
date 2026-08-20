@@ -7,6 +7,8 @@ use App\Domain\Attendance\Commands\EditAttendanceDay;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\AttendanceStandardBreakInserter;
+use App\Domain\Attendance\Services\WorkdayBoundaryValidator;
+use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -34,6 +36,8 @@ class EditAttendanceDayHandler implements CommandHandler
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
         private readonly AttendanceStandardBreakInserter $standardBreakInserter,
+        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+        private readonly WorkdayBoundaryValidator $workdayBoundaryValidator,
     ) {}
 
     public function handle(Command $command): AttendanceDay
@@ -49,6 +53,10 @@ class EditAttendanceDayHandler implements CommandHandler
         $actualStartAt = $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null;
         $actualEndAt = $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null;
         $this->assertActualTimesValid($actualStartAt, $actualEndAt, $day->work_date->toDateString());
+        $day->loadMissing('calendarEntry.workStyle');
+        $workStyle = $day->calendarEntry?->workStyle
+            ?? $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date);
+        $this->workdayBoundaryValidator->assertWithinBoundary($workStyle, $day->work_date->toDateString(), $actualStartAt, $actualEndAt);
         $status = $command->actualEndAt !== null ? AttendanceDayStatus::CLOCKED_OUT : $day->status;
 
         $breaksPayload = [];
@@ -187,6 +195,9 @@ class EditAttendanceDayHandler implements CommandHandler
         }
         if ($actualStartAt !== null && $actualEndAt !== null && ! $actualEndAt->greaterThan($actualStartAt)) {
             throw new DomainRuleException('退勤時刻は出勤時刻より後にしてください。');
+        }
+        if ($actualStartAt !== null && $actualEndAt !== null && $actualStartAt->diffInMinutes($actualEndAt) > 1440) {
+            throw new DomainRuleException('1つの作業日に登録できる勤務時間は最大24時間です。');
         }
     }
 

@@ -6,6 +6,8 @@ use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Services\AttendanceCalculator;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
+use App\Domain\Attendance\Services\WorkdayBoundaryValidator;
+use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -31,6 +33,8 @@ class CreateAttendanceDayHandler implements CommandHandler
     public function __construct(
         private readonly AttendanceCalculator $calculator,
         private readonly AttendanceEditGuard $guard,
+        private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
+        private readonly WorkdayBoundaryValidator $workdayBoundaryValidator,
     ) {}
 
     public function handle(Command $command): AttendanceDay
@@ -58,6 +62,9 @@ class CreateAttendanceDayHandler implements CommandHandler
         $actualStartAt = $command->actualStartAt !== null ? LocalDateTime::splitOffset($command->actualStartAt)[0] : null;
         $actualEndAt = $command->actualEndAt !== null ? LocalDateTime::splitOffset($command->actualEndAt)[0] : null;
         $this->assertActualTimesValid($actualStartAt, $actualEndAt, $command->workDate);
+        $workStyle = $calendarEntry?->workStyle
+            ?? $this->workStyleFallbackResolver->resolveForUser($command->userId, Carbon::parse($command->workDate));
+        $this->workdayBoundaryValidator->assertWithinBoundary($workStyle, $command->workDate, $actualStartAt, $actualEndAt);
 
         $breaksPayload = [];
         $parsedBreaks = [];

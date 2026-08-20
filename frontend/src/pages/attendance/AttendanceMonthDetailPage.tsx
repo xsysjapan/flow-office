@@ -231,6 +231,15 @@ export function AttendanceMonthDetailPage() {
           </div>
         )}
 
+        {(data?.weekly_overtime_reference ?? []).filter((week) => (week.unallocated_weekly_statutory_excess_overtime_minutes ?? 0) > 0).map((week) => (
+          <div key={week.week_start_date} className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+            <p>週40時間超の法定外労働時間が{week.unallocated_weekly_statutory_excess_overtime_minutes}分未振分です（{week.week_start_date}〜{week.week_end_date}）。</p>
+            <Button asChild size="sm" variant="secondary" className="mt-2">
+              <Link to={`/attendance/week?start=${week.week_start_date}`}>週次勤怠で振り分ける</Link>
+            </Button>
+          </div>
+        ))}
+
         {data?.monthly_calculation_totals && (
           <div className="mt-4 border-t border-border pt-4">
             <AttendanceCalculationSummary

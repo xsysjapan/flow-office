@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Models\AttendanceDay;
+use App\Models\AttendanceWeeklyOvertimeAllocation;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
@@ -82,6 +83,10 @@ class WeeklyOvertimeCalculator
         $legalHolidayWorkMinutes = 0;
         $withinDailyLimitMinutes = 0;
         $plannedMinutesForMonthlyVariable = 0;
+        $allocations = AttendanceWeeklyOvertimeAllocation::query()
+            ->whereIn('attendance_day_id', $days->pluck('id'))
+            ->get();
+        $allocationsByDay = $allocations->keyBy('attendance_day_id');
 
         foreach ($days as $day) {
             $calculation = $day->calculation;
@@ -101,9 +106,13 @@ class WeeklyOvertimeCalculator
                 continue;
             }
 
+            $allocation = $allocationsByDay->get($day->id);
+            $weeklyAllocatedMinutes = (int) (($allocation?->prescribed_minutes ?? 0) + ($allocation?->non_prescribed_minutes ?? 0));
+            // 互換列には振分済み週40時間超も含めるため、日8時間超の元値へ戻して判定する。
+            $dailyExcessMinutes = max(0, $calculation->statutory_excess_overtime_minutes - $weeklyAllocatedMinutes);
             $workMinutes += $calculation->work_minutes;
-            $dailyStatutoryOvertimeMinutes += $calculation->statutory_excess_overtime_minutes;
-            $withinDailyLimitMinutes += $calculation->work_minutes - $calculation->statutory_excess_overtime_minutes;
+            $dailyStatutoryOvertimeMinutes += $dailyExcessMinutes;
+            $withinDailyLimitMinutes += $calculation->work_minutes - $dailyExcessMinutes;
 
             if ($schedule?->workStyle?->work_time_system === WorkStyle::WORK_TIME_SYSTEM_MONTHLY_VARIABLE) {
                 $plannedMinutesForMonthlyVariable += $schedule->plannedWorkMinutes();
@@ -111,13 +120,17 @@ class WeeklyOvertimeCalculator
         }
 
         $weeklyLimitMinutes = max(self::WEEKLY_STATUTORY_LIMIT_MINUTES, $plannedMinutesForMonthlyVariable);
+        $weeklyExcessMinutes = max(0, $withinDailyLimitMinutes - $weeklyLimitMinutes);
+        $allocatedMinutes = (int) $allocations->sum(fn ($allocation) => $allocation->prescribed_minutes + $allocation->non_prescribed_minutes);
 
         return [
             'week_start_date' => $weekStartDate,
             'week_end_date' => $weekEndDate,
             'work_minutes' => $workMinutes,
             'daily_statutory_excess_overtime_minutes' => $dailyStatutoryOvertimeMinutes,
-            'weekly_statutory_excess_overtime_minutes' => max(0, $withinDailyLimitMinutes - $weeklyLimitMinutes),
+            'weekly_statutory_excess_overtime_minutes' => $weeklyExcessMinutes,
+            'allocated_weekly_statutory_excess_overtime_minutes' => $allocatedMinutes,
+            'unallocated_weekly_statutory_excess_overtime_minutes' => max(0, $weeklyExcessMinutes - $allocatedMinutes),
             'legal_holiday_work_minutes' => $legalHolidayWorkMinutes,
         ];
     }

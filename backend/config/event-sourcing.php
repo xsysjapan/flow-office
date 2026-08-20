@@ -33,6 +33,7 @@ use App\Domain\Attendance\Events\AttendancePunchCorrected;
 use App\Domain\Attendance\Events\AttendancePunchDeleted;
 use App\Domain\Attendance\Events\AttendancePunchRecorded;
 use App\Domain\Attendance\Events\AttendanceSubmissionReminderExcluded;
+use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
 use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
 use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Domain\Attendance\Events\CompanyCalendarCreated;
@@ -328,6 +329,7 @@ return [
         'attendance_day.edited' => AttendanceDayEdited::class,
         'attendance_day.calculated' => AttendanceDayCalculated::class,
         'attendance_day.daily_calculation_adjusted' => AttendanceDailyCalculationAdjusted::class,
+        'attendance_day.weekly_overtime_allocated' => AttendanceWeeklyOvertimeAllocated::class,
         'attendance_day.deleted' => AttendanceDayDeleted::class,
         'attendance_day.live_status_synced' => AttendanceDayLiveStatusSynced::class,
         'attendance_day.synced_from_punches' => AttendanceDaySyncedFromPunches::class,

@@ -23,12 +23,13 @@ export type ScenarioUserKey = keyof typeof SCENARIO_USERS
  */
 export async function loginAs(page: Page, displayName: string): Promise<void> {
   const frontendOrigin = new URL(process.env.E2E_FRONTEND_URL ?? 'http://localhost:5173').origin
+  const mockOidcOrigin = new URL(process.env.E2E_MOCK_OIDC_URL ?? 'http://localhost:9000').origin
 
   await page.goto('/login')
   await page.getByRole('button', { name: 'Microsoftでログイン' }).click()
 
   // frontend が /api/auth/microsoft/redirect の結果でモックOIDCのログイン画面へ遷移する。
-  await page.waitForURL(/localhost:9000\/oauth2\/v2\.0\/authorize/)
+  await page.waitForURL((url) => url.origin === mockOidcOrigin && url.pathname === '/oauth2/v2.0/authorize')
   await page
     .locator('form', { has: page.locator(`strong:text-is("${displayName}")`) })
     .locator('button[type="submit"]')

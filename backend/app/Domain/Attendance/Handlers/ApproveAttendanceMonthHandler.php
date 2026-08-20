@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Handlers;
 
 use App\Domain\Attendance\Aggregates\AttendanceMonthAggregate;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
+use App\Domain\Attendance\Services\WeeklyOvertimeAllocationGuard;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -17,6 +18,8 @@ use App\Models\AttendanceMonthStatus;
  */
 class ApproveAttendanceMonthHandler implements CommandHandler
 {
+    public function __construct(private readonly WeeklyOvertimeAllocationGuard $weeklyOvertimeAllocationGuard) {}
+
     public function handle(Command $command): AttendanceMonth
     {
         assert($command instanceof ApproveAttendanceMonth);
@@ -30,6 +33,8 @@ class ApproveAttendanceMonthHandler implements CommandHandler
         if ($month->approver_user_id !== $command->approvedByUserId) {
             throw new DomainRuleException('指定された承認者のみ承認できます。');
         }
+
+        $this->weeklyOvertimeAllocationGuard->ensureAllocated($month->user_id, $month->year_month);
 
         AttendanceMonthAggregate::retrieve($month->id)->approve($command->approvedByUserId)->persist();
 
