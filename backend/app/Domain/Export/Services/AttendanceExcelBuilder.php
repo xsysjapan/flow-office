@@ -2,8 +2,8 @@
 
 namespace App\Domain\Export\Services;
 
-use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Domain\Attendance\Services\ProvisionalScheduleCalculator;
+use App\Domain\Attendance\Services\WorkStyleFallbackResolver;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\EmployeeCalendarEntry;
@@ -181,13 +181,17 @@ class AttendanceExcelBuilder
 
                 return (int) $break->break_start_at->diffInMinutes($break->break_end_at);
             }) ?? 0;
-            $overtime = ($calculation?->statutory_within_overtime_minutes ?? 0)
-                + ($calculation?->statutory_excess_overtime_minutes ?? 0)
-                + ($calculation?->prescribed_holiday_work_minutes ?? 0)
-                + ($calculation?->legal_holiday_work_minutes ?? 0);
-            $regularWorkMinutes = $calculation === null ? 0 : max(
+            // 所定休日労働は休日区分と所定内外×法定内外の両方の軸を持つ。週40時間超を
+            // 法定外へ配賦した後もprescribed_holiday_work_minutesには実労働全体が残るため、
+            // 旧区分を加算すると同じ時間を二重計上する。Excelの「所定内」は5区分の
+            // 所定内法定内、「時間外」は実労働との差分として排他的に算出する。
+            $regularWorkMinutes = $calculation === null ? 0 : min(
+                (int) $calculation->work_minutes,
+                (int) $calculation->prescribed_statutory_within_work_minutes,
+            );
+            $overtime = $calculation === null ? 0 : max(
                 0,
-                (int) $calculation->work_minutes - (int) $overtime,
+                (int) $calculation->work_minutes - $regularWorkMinutes,
             );
 
             $sheet->fromArray([
@@ -213,12 +217,19 @@ class AttendanceExcelBuilder
         $totalRow = $headerRow + $daysInMonth + 1;
         $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
         $sheet->setCellValue("A{$totalRow}", '労働時間合計');
-        $totalOutsideMinutes = (int) ($snapshot['statutory_within_overtime_minutes'] ?? 0)
-            + $overtimeMinutes
-            + (int) ($snapshot['prescribed_holiday_work_minutes'] ?? 0)
-            + (int) ($snapshot['legal_holiday_work_minutes'] ?? 0);
-        $totalRegularMinutes = (int) ($snapshot['weekday_regular_work_minutes']
-            ?? max(0, (int) ($snapshot['work_minutes'] ?? 0) - $totalOutsideMinutes));
+        $totalWorkMinutes = (int) ($snapshot['work_minutes'] ?? 0);
+        if (array_key_exists('prescribed_statutory_within_work_minutes', $snapshot)) {
+            $totalRegularMinutes = min($totalWorkMinutes, (int) $snapshot['prescribed_statutory_within_work_minutes']);
+            $totalOutsideMinutes = max(0, $totalWorkMinutes - $totalRegularMinutes);
+        } else {
+            // 5区分移行前の確定済みsnapshotに対する後方互換。
+            $totalOutsideMinutes = (int) ($snapshot['statutory_within_overtime_minutes'] ?? 0)
+                + $overtimeMinutes
+                + (int) ($snapshot['prescribed_holiday_work_minutes'] ?? 0)
+                + (int) ($snapshot['legal_holiday_work_minutes'] ?? 0);
+            $totalRegularMinutes = (int) ($snapshot['weekday_regular_work_minutes']
+                ?? max(0, $totalWorkMinutes - $totalOutsideMinutes));
+        }
         $sheet->setCellValue("E{$totalRow}", $this->minutesToExcelTime($totalRegularMinutes));
         $sheet->setCellValue("F{$totalRow}", $this->minutesToExcelTime($totalOutsideMinutes));
         $sheet->getStyle("A{$totalRow}:K{$totalRow}")->getFont()->setBold(true);
