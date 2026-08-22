@@ -38,7 +38,7 @@ function DashboardCard({
   title: string
   to: string
   icon: typeof CalendarClock
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <Card

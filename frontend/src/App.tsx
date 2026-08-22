@@ -7,6 +7,7 @@ import { AuthCallbackPage } from "./pages/auth/AuthCallbackPage";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { OnboardingPage } from "./pages/auth/OnboardingPage";
 import { TodayAttendancePage } from "./pages/attendance/TodayAttendancePage";
+import { HomeDashboardPage } from "./pages/home/HomeDashboardPage";
 import { WeekAttendancePage } from "./pages/attendance/WeekAttendancePage";
 import { AttendanceDayPage } from "./pages/attendance/AttendanceDayPage";
 import { AttendanceMonthDetailPage } from "./pages/attendance/AttendanceMonthDetailPage";
@@ -77,7 +78,13 @@ function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<TodayAttendancePage />} />
+        {/*
+          ログイン後の着地点は案C(画面遷移再設計)でホームダッシュボードに変更した。
+          今日の勤怠(旧: "/")はナビの「勤怠」グループの1項目として"/attendance"へ移設し、
+          コンポーネント自体・打刻の挙動は変更していない。
+        */}
+        <Route index element={<HomeDashboardPage />} />
+        <Route path="attendance" element={<TodayAttendancePage />} />
         <Route path="attendance/week" element={<WeekAttendancePage />} />
         <Route path="attendance/days/:date" element={<AttendanceDayPage />} />
         <Route path="requests" element={<WorkflowRequestListPage />} />

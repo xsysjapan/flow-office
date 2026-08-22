@@ -63,6 +63,15 @@
 
 ## 実装上のポイント
 
+- **「申請(ワークフロー)」と「業務」を分離する**: `workflow_requests`が扱うのは
+  誰が・何を・いつ申請し誰が承認するかという進行状況のみで、各ドメイン固有の未確定
+  ステート・金額計算・残高計算・確定処理などの業務ロジックは専用ドメイン
+  (`App\Domain\PaidLeave`/`CompensatoryLeave`/`ShiftSwap`/`Expense`等)側に持たせる。
+  両者は`subject_type`/`subject_id`のポリモーフィック関連で連携するに留め、
+  `workflow_requests`側に業務固有の詳細な計算結果を混入させない(docs/03-architecture.md
+  3.9節参照)。また、代休の付与のように承認ワークフローを経由せず自動導出・直接処理
+  される「申請不要」の業務データもあるため、`workflow_requests`は申請が実際に発生した
+  ケースのみを扱うものとして設計し、申請不要な業務データを無理に統合しない。
 - 申請種別 (`request_types`) はマスタ化し、フォーム項目は `form_schema` (JSON) で動的に定義する。
   新しい申請種別を追加する際にコード変更を必要最小限にする
   (スキル [add-workflow-request-type](../.claude/skills/add-workflow-request-type/SKILL.md) 参照)。
