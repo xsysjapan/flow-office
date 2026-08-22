@@ -17,6 +17,8 @@ import { loginAs, SCENARIO_USERS } from './support/auth'
 test('打刻ユーザーが出勤・休憩・退勤を打刻できる', async ({ page }) => {
   await loginAs(page, SCENARIO_USERS.punchEmployee)
 
+  // ログイン後の着地点はホームダッシュボードになったため、今日の勤怠ページ(/attendance)へ移動する。
+  await page.goto('/attendance')
   await expect(page.getByRole('heading', { name: '今日の勤怠' })).toBeVisible()
 
   const alreadyClockedOut = page.getByText('本日の勤怠は完了しています。')
