@@ -16,14 +16,15 @@ import {
 const LIST_KEY = ['workflow-requests', 'mine']
 const TO_APPROVE_KEY = ['workflow-requests', 'to-approve']
 
-export function useMyWorkflowRequests() {
-  return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyWorkflowRequests })
+export function useMyWorkflowRequests(enabled = true) {
+  return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyWorkflowRequests, enabled })
 }
 
-export function useWorkflowRequestsToApprove(options: FetchWorkflowRequestsToApproveOptions = {}) {
+export function useWorkflowRequestsToApprove(options: FetchWorkflowRequestsToApproveOptions = {}, enabled = true) {
   return useQuery({
     queryKey: [...TO_APPROVE_KEY, options.status ?? '', options.yearMonth ?? '', options.page ?? 1],
     queryFn: () => fetchWorkflowRequestsToApprove(options),
+    enabled,
     placeholderData: keepPreviousData,
   })
 }

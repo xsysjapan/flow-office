@@ -25,18 +25,22 @@ class RequestCenterItem extends Model
         'source_id',
         'status',
         'requester_id',
+        'approver_id',
         'title',
-        'amount_or_days',
         'submitted_at',
     ];
 
     protected $casts = [
-        'amount_or_days' => 'decimal:2',
         'submitted_at' => 'datetime',
     ];
 
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requester_id');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approver_id');
     }
 }

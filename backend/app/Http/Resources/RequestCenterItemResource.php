@@ -18,8 +18,8 @@ class RequestCenterItemResource extends JsonResource
             'source_id' => $this->source_id,
             'status' => $this->status,
             'requester_id' => $this->requester_id,
+            'approver_id' => $this->approver_id,
             'title' => $this->title,
-            'amount_or_days' => $this->amount_or_days !== null ? (float) $this->amount_or_days : null,
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

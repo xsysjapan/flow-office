@@ -22,8 +22,8 @@ const TO_APPROVE_KEY = ['expense-claims', 'to-approve']
 const detailKey = (id: string) => ['expense-claims', id]
 const historyKey = (id: string) => ['expense-claims', id, 'history']
 
-export function useMyExpenseClaims() {
-  return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyExpenseClaims })
+export function useMyExpenseClaims(enabled = true) {
+  return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyExpenseClaims, enabled })
 }
 
 export function useExpenseClaim(id: string | undefined) {

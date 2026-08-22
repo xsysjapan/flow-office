@@ -6,9 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * 「申請センター」画面向けの横断Projection。paid_leave_requests / compensatory_leave_requests /
- * expense_claims / workflow_requests の4ドメインの申請を、申請者本人の一覧としてステータス
- * 横断で参照するための非正規化テーブル(App\Domain\RequestCenter\Projectors\RequestCenterItemProjector
- * が対象イベントから再生成する。ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+ * expense_claims / workflow_requests の4ドメインの「申請(承認ワークフロー)」を、申請者本人の
+ * 一覧としてステータス横断で参照するための非正規化テーブル
+ * (App\Domain\RequestCenter\Projectors\RequestCenterItemProjector が対象イベントから
+ * 再生成する。ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
+ *
+ * ここに持たせるのは承認ワークフロー共通の情報(申請種別・ステータス・申請者・承認者・
+ * タイトル・提出日時)とdetailへのポインタ(request_type + source_id)のみで、各業務ドメイン
+ * 固有の未確定ステート・金額集計・残高計算等は持たない(既存の各業務Projectionの責務のまま)。
+ * 詳細が必要な画面はrequest_type + source_idを使って元の業務ドメインのAPI/画面へ遷移する。
+ *
+ * また、このテーブルは「申請(承認ワークフローに乗ったもの)が存在する場合のみのビュー」
+ * である。管理者による手動付与(compensatory_leave.manually_granted等、申請を経由しない
+ * 業務データ)は対象イベントに含めておらず、この一覧には現れない。
  */
 return new class extends Migration
 {
@@ -22,8 +32,8 @@ return new class extends Migration
             $table->uuid('source_id'); // 元テーブルの主キー(詳細画面へのリンクに使用)
             $table->string('status');
             $table->foreignUuid('requester_id')->constrained('users');
+            $table->foreignUuid('approver_id')->nullable()->constrained('users');
             $table->string('title');
-            $table->decimal('amount_or_days', 12, 2)->nullable(); // 種別に応じて金額 or 日数
             $table->timestamp('submitted_at')->nullable();
             $table->timestamps();
 

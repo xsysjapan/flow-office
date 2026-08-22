@@ -17,8 +17,8 @@ export function useUnassignedBackOfficeTasks(options: BackOfficeTaskListOptions 
   return useQuery({ queryKey: [...UNASSIGNED_KEY, options], queryFn: () => fetchUnassignedTasks(options) })
 }
 
-export function useMyBackOfficeTasks(options: BackOfficeTaskListOptions = {}) {
-  return useQuery({ queryKey: [...MINE_KEY, options], queryFn: () => fetchMyTasks(options) })
+export function useMyBackOfficeTasks(options: BackOfficeTaskListOptions = {}, enabled = true) {
+  return useQuery({ queryKey: [...MINE_KEY, options], queryFn: () => fetchMyTasks(options), enabled })
 }
 
 export function useBackOfficeTask(id: string) {
