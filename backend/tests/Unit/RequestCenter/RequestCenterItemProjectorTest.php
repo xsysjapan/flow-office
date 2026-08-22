@@ -127,6 +127,7 @@ class RequestCenterItemProjectorTest extends TestCase
 
         $submitted = new ExpenseClaimSubmitted(approverUserId: $approver->id, submittedByUserId: $requester->id);
         $submitted->setAggregateRootUuid($claimId);
+        $submitted->setCreatedAt(\Carbon\CarbonImmutable::now());
         $projector->onExpenseClaimSubmitted($submitted);
         $item->refresh();
         $this->assertSame(ExpenseClaimStatus::IN_REVIEW, $item->status);

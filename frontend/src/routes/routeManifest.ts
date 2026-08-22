@@ -132,9 +132,11 @@ export const routeManifest: RouteManifestEntry[] = [
     group: "mypage",
   },
   {
+    // 管理メニューへのアクセス可否は`effective_features`の単純な文字列一致ではなく、
+    // adminNavGroups側の各サブメニューがpermission込みで判定するcanAccessAdminItemに
+    // 委ねる(AdminLayoutと同じ判定)。ここではその結果(ctx.canAccessAdmin)だけを見る。
     label: "管理メニュー",
     to: "/admin",
-    feature: "administration",
     group: "mypage",
     show: (ctx) => ctx.canAccessAdmin,
   },
