@@ -43,7 +43,7 @@ const todayAttendance: AttendanceDay = {
 } as unknown as AttendanceDay
 
 function paginated<T>(data: T[]) {
-  return { data, meta: { current_page: 1, last_page: 1, total: data.length, per_page: 20 }, links: [] }
+  return { data, meta: { current_page: 1, last_page: 1, total: data.length, per_page: 20 }, links: { next: null, prev: null } }
 }
 
 function buildQueryClient() {
