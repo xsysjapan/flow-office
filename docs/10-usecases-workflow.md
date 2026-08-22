@@ -72,6 +72,12 @@
   3.9節参照)。また、代休の付与のように承認ワークフローを経由せず自動導出・直接処理
   される「申請不要」の業務データもあるため、`workflow_requests`は申請が実際に発生した
   ケースのみを扱うものとして設計し、申請不要な業務データを無理に統合しない。
+- 「申請センター」画面(自分の申請を有給・代休・経費精算・汎用申請の4ドメイン横断で
+  ステータス一覧表示する)向けに、`request_center_items`(Projection)と
+  `GET /api/request-center/items` を用意している。ここでも上記の分離方針を踏襲し、
+  ワークフロー共通の情報(申請種別・ステータス・申請者・承認者・提出日時)とdetailへの
+  ポインタのみを持たせ、業務固有の計算結果は複製しない(docs/16-database-schema.md
+  `request_center_items`参照)。
 - 申請種別 (`request_types`) はマスタ化し、フォーム項目は `form_schema` (JSON) で動的に定義する。
   新しい申請種別を追加する際にコード変更を必要最小限にする
   (スキル [add-workflow-request-type](../.claude/skills/add-workflow-request-type/SKILL.md) 参照)。

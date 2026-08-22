@@ -1094,6 +1094,38 @@ docs/20-implementation-notes.md と同様の注記)。
 イベントから再生成できるProjection (docs/13-usecases-notification.md)。`resolved_at`は
 対象ドメイン側の状態変化(日次編集の完了、申請の承認等)をトリガーに更新する。
 
+## request_center_items (Projection: 申請センター横断一覧)
+
+- id (uuid。元テーブルのid=source_idと同じ値)
+- request_type (`paid_leave` / `compensatory_leave` / `expense_claim` / `workflow`)
+- source_id (元テーブル `paid_leave_requests` / `compensatory_leave_requests` /
+  `expense_claims` / `workflow_requests` の主キー。詳細画面へのリンクに使用)
+- status (各ドメインのステータス値をそのまま格納。値の意味はドメインごとに異なるため
+  参照時は `request_type` と合わせて解釈する)
+- requester_id
+- approver_id (nullable。下書き段階では未確定)
+- title
+- submitted_at (nullable。下書き段階ではnull)
+- created_at / updated_at
+
+`App\Domain\RequestCenter\Projectors\RequestCenterItemProjector` が
+`paid_leave.requested` / `compensatory_leave.requested` / `expense_claim.drafted` /
+`workflow_request.drafted` 等の申請系イベントから作成・更新するProjection。「申請センター」
+画面(自分の申請をステータス横断で一覧表示)専用の参照用テーブルで、`GET
+/api/request-center/items` のみが参照する。
+
+このテーブルが持つのは承認ワークフロー共通の情報(申請種別・ステータス・申請者・承認者・
+タイトル・提出日時)と詳細画面へのポインタ(`request_type` + `source_id`)のみであり、
+各業務ドメイン固有の未確定ステート・金額集計(`expense_claims.total_amount`等)・残高計算
+(`paid_leave_grants`の残高等)は複製しない。詳細が必要な画面は `request_type` +
+`source_id` を使って元の業務ドメインのAPI/画面へ遷移する。
+
+また、このテーブルは「申請(承認ワークフローに乗ったもの)が存在する場合のみ」のビューで
+あり、管理者による手動付与(`compensatory_leave.manually_granted`等、承認ワークフローを
+経由しない業務データ)は対象イベントに含めていないため一覧には現れない(経費精算の
+`approval_skip_threshold`による承認者確認の自動省略は、submitted/approvedイベント自体は
+発生するため通常の申請として扱われる)。
+
 ## テーブル分類の考え方
 
 | 分類 | テーブル | 特徴 |
@@ -1102,7 +1134,7 @@ docs/20-implementation-notes.md と同様の注記)。
 | マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
 | 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications`, `request_center_items` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
 
 会社カレンダー・従業員予定関連(`company_calendars`/`company_calendar_years`/`company_calendar_days`/
 `employee_calendar_entries`/`calendar_bulk_operations`等)の状態変更は、既存の
