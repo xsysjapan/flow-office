@@ -36,7 +36,6 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
 use App\Http\Controllers\Api\PublicSystemSettingController;
-use App\Http\Controllers\Api\RequestCenterController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RotationPatternController;
 use App\Http\Controllers\Api\ShiftPatternController;
@@ -348,10 +347,6 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/groups', [UserManagementController::class, 'groupsLite']);
         Route::get('/groups/{group}/members', [UserManagementController::class, 'groupMembers']);
     });
-
-    // --- 申請センター: 自分の申請(有給・代休・経費精算・汎用申請)をステータス横断で一覧
-    //     表示する参照専用API(request_center_items Projectionのみ参照。承認処理はしない) ---
-    Route::get('/request-center/items', [RequestCenterController::class, 'index']);
 
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');

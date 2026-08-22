@@ -35,20 +35,42 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: '汎用申請', description: '申請の作成・提出・承認・差戻し・取消')]
 class WorkflowRequestController extends Controller
 {
+    /**
+     * 申請センター画面向け: 自分が申請者(applicant_user_id)である申請の一覧を、
+     * ステータス・申請種別(subject_type)で絞り込んでページネーション付きで返す。
+     * レスポンス形状はindexToApprove/showと同じWorkflowRequestResourceを使い、
+     * 各行に`subject_summary`(ドメインごとの要約)を含める(request_center_itemsの
+     * ような専用Projectionは持たず、既存のworkflow_requestsを正として参照する)。
+     * `status`を省略した場合はdraftを除く全件を返す(自分の申請一覧なのでdraftを
+     * 含めても支障はないが、他のto-approve系と挙動を揃えるため既定は絞り込みなしとする)。
+     */
     #[OA\Get(
         path: '/workflow-requests/mine',
         operationId: 'workflowRequests.mine',
         summary: '自分の申請一覧を取得する',
         tags: ['汎用申請'],
+        parameters: [
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['draft', 'submitted', 'approved', 'returned', 'cancelled'])),
+            new OA\Parameter(name: 'subject_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
     public function indexMine(Request $request): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'status' => ['nullable', Rule::in(['draft', 'submitted', 'approved', 'returned', 'cancelled'])],
+            'subject_type' => ['nullable', 'string'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $requests = WorkflowRequest::query()
             ->with(['requestType', 'applicant', 'approver'])
             ->where('applicant_user_id', $request->user()->id)
+            ->when($data['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($data['subject_type'] ?? null, fn ($query, $subjectType) => $query->where('subject_type', $subjectType))
             ->latest()
-            ->paginate(20);
+            ->paginate($data['per_page'] ?? 20);
 
         return WorkflowRequestResource::collection($requests);
     }
