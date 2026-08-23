@@ -135,7 +135,8 @@ function MobileMenu({ groups, user, onLogout }: MobileMenuProps) {
 export function AppLayout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
-  const currentYearMonth = formatDate(new Date()).slice(0, 7);
+  const today = formatDate(new Date());
+  const currentYearMonth = today.slice(0, 7);
   const { data: specialLeaveTypes } = useSpecialLeaveTypes(
     user?.effective_features === undefined ||
       user.effective_features.includes("paid_leave.requests"),
@@ -152,6 +153,7 @@ export function AppLayout() {
 
   const navContext: NavContext = {
     currentYearMonth,
+    todayDate: today,
     hasSpecialLeaveTypes,
     canSeeBackOfficeTasks,
     canAccessAdmin,

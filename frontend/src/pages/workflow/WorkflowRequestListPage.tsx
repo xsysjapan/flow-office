@@ -265,7 +265,7 @@ export function WorkflowRequestListPage() {
 
   return (
     <Card
-      title="申請センター"
+      title="申請一覧"
       actions={
         selectedIds.size > 0 ? (
           <div className="flex items-center gap-2">
