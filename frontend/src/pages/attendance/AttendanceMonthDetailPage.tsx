@@ -263,12 +263,17 @@ export function AttendanceMonthDetailPage() {
           title="日別の内訳"
           actions={
             selectionMode ? (
-              <AttendanceSelectionActionBar
-                selectedCount={selectedDates.size}
-                hasSpecialLeaveTypes={hasSpecialLeaveTypes}
-                datesQuery={datesQuery}
-                onCancel={exitSelectionMode}
-              />
+              // モバイル幅ではタイトルとの横並び(flex-wrap)に任せると、選択件数+ボタン群の
+              // 幅がタイトルを圧迫してタイトルの文字が中途半端に折り返される崩れが起きるため、
+              // `sm`未満ではここではなく直下(Cardの子要素側)に独立したブロックとして表示する。
+              <div className="hidden sm:block">
+                <AttendanceSelectionActionBar
+                  selectedCount={selectedDates.size}
+                  hasSpecialLeaveTypes={hasSpecialLeaveTypes}
+                  datesQuery={datesQuery}
+                  onCancel={exitSelectionMode}
+                />
+              </div>
             ) : (
               <div className="flex items-center gap-3">
                 {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}
@@ -284,6 +289,16 @@ export function AttendanceMonthDetailPage() {
             )
           }
         >
+          {selectionMode && (
+            <div className="mb-3 sm:hidden">
+              <AttendanceSelectionActionBar
+                selectedCount={selectedDates.size}
+                hasSpecialLeaveTypes={hasSpecialLeaveTypes}
+                datesQuery={datesQuery}
+                onCancel={exitSelectionMode}
+              />
+            </div>
+          )}
           <ul className="divide-y divide-border">
             {dates.map((date) => (
               <AttendanceDayRow
