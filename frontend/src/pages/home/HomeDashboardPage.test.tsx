@@ -68,6 +68,11 @@ describe('HomeDashboardPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(todayAttendance)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: null,
+      flex_settlement_summary: null,
+    } as unknown as Awaited<ReturnType<typeof attendanceApi.fetchMonth>>)
     vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(
       paginated([{ id: 'r1', status: 'submitted' } as WorkflowRequest]),
     )
@@ -82,17 +87,20 @@ describe('HomeDashboardPage', () => {
     )
   })
 
-  it('shows today’s attendance status', async () => {
+  it('shows today’s attendance panel', async () => {
     renderPage()
 
-    expect(await screen.findByText('今日の勤怠状況')).toBeInTheDocument()
+    expect(await screen.findByText('今日の勤怠')).toBeInTheDocument()
     expect(await screen.findByText('勤務中')).toBeInTheDocument()
   })
 
   it('shows the pending request count summing workflow requests and expense claims', async () => {
     renderPage()
 
-    expect(await screen.findByText('2', { exact: false })).toBeInTheDocument()
+    expect(await screen.findByText('自分の申請ステータス')).toBeInTheDocument()
+    expect(
+      await screen.findByText((_, element) => element?.tagName.toLowerCase() === 'p' && element.textContent === '2件 対応中'),
+    ).toBeInTheDocument()
   })
 
   it('shows the approvals-pending count', async () => {
@@ -112,7 +120,7 @@ describe('HomeDashboardPage', () => {
   it('hides cards for features the user does not have', async () => {
     renderPage({ ...mockUser, effective_features: ['attendance.entry'] })
 
-    expect(await screen.findByText('今日の勤怠状況')).toBeInTheDocument()
+    expect(await screen.findByText('今日の勤怠')).toBeInTheDocument()
     expect(screen.queryByText('自分の申請ステータス')).not.toBeInTheDocument()
     expect(screen.queryByText('承認待ち')).not.toBeInTheDocument()
     expect(screen.queryByText('バックオフィスタスク')).not.toBeInTheDocument()

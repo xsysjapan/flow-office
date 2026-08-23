@@ -49,6 +49,11 @@ function paginated<T>(data: T[]) {
 function buildQueryClient() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['attendance', 'today'], todayAttendance)
+  queryClient.setQueryData(['attendance', 'month', '2026-08'], {
+    days: [],
+    month: null,
+    flex_settlement_summary: null,
+  })
   queryClient.setQueryData(['workflow-requests', 'mine'], paginated([{ id: 'r1', status: 'submitted' } as WorkflowRequest]))
   queryClient.setQueryData(['expense-claims', 'mine'], paginated([{ id: 'e1', status: 'in_review' } as ExpenseClaim]))
   queryClient.setQueryData(

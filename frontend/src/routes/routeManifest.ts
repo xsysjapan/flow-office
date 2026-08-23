@@ -54,12 +54,6 @@ export interface RouteManifestEntry {
  */
 export const routeManifest: RouteManifestEntry[] = [
   {
-    label: "今日の勤怠",
-    to: "/attendance",
-    feature: "attendance.entry",
-    group: "attendance",
-  },
-  {
     label: "週次勤怠",
     to: "/attendance/week",
     feature: "attendance.entry",

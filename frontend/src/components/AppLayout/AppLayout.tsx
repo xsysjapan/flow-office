@@ -213,9 +213,13 @@ export function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col sm:flex-row">
       <aside className="hidden w-56 shrink-0 border-r border-border bg-card p-4 sm:block">
-        <span className="mb-5 block text-sm font-semibold text-foreground">
+        <Link
+          to={HOME_PATH}
+          aria-label="ホームに戻る"
+          className="mb-5 block text-sm font-semibold text-foreground hover:text-foreground/80"
+        >
           flow-office
-        </span>
+        </Link>
         <NavSections groups={visibleGroups} />
       </aside>
 
@@ -228,9 +232,13 @@ export function AppLayout() {
                 user={user}
                 onLogout={() => void logout()}
               />
-              <span className="text-sm font-semibold text-foreground sm:hidden">
+              <Link
+                to={HOME_PATH}
+                aria-label="ホームに戻る"
+                className="text-sm font-semibold text-foreground sm:hidden"
+              >
                 flow-office
-              </span>
+              </Link>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
