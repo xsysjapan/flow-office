@@ -1,13 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle2, Clock, Coffee, LogIn, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Badge, type BadgeTone } from '../../components/Badge/Badge'
-import { Button } from '../../components/Button/Button'
-import { Card } from '../../components/Card/Card'
-import { Duration } from '../../components/Duration/Duration'
-import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
-import { LoadingState } from '../../components/LoadingState/LoadingState'
-import { useAttendanceMonth, useClockIn, useClockOut, useEndBreak, useStartBreak, useTodayAttendance } from '../../hooks/useAttendance'
+import { Badge, type BadgeTone } from '../Badge/Badge'
+import { Button } from '../Button/Button'
+import { Card } from '../Card/Card'
+import { Duration } from '../Duration/Duration'
+import { ErrorMessage } from '../ErrorMessage/ErrorMessage'
+import { LoadingState } from '../LoadingState/LoadingState'
+import {
+  useAttendanceMonth,
+  useClockIn,
+  useClockOut,
+  useEndBreak,
+  useStartBreak,
+  useTodayAttendance,
+} from '../../hooks/useAttendance'
 import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
@@ -138,9 +145,11 @@ function FlexSettlementSummaryCard({ summary }: { summary: FlexSettlementSummary
 }
 
 /**
- * UC-A001〜UC-A004: 出勤・休憩開始・休憩終了・退勤。
+ * UC-A001〜UC-A004(出勤・休憩開始・休憩終了・退勤)を含む「今日の勤怠」の実体。
+ * 画面遷移再設計により、独立ページ(旧TodayAttendancePage/`/attendance`)からホーム
+ * ダッシュボード(`HomeDashboardPage`)に統合された。ロジック・表示は変更していない。
  */
-export function TodayAttendancePage() {
+export function TodayAttendancePanel() {
   const { data: day, isLoading, error } = useTodayAttendance()
   const clockIn = useClockIn()
   const startBreak = useStartBreak()

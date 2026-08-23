@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { MemoryRouter } from 'react-router-dom'
 import type { AttendanceDay } from '../../api/types'
 import { formatDate } from '../../utils/weekDates'
-import { TodayAttendancePage } from './TodayAttendancePage'
+import { TodayAttendancePanel } from './TodayAttendancePanel'
 
 function withSeededToday(day: AttendanceDay) {
   const queryClient = new QueryClient({
@@ -19,7 +20,9 @@ function withSeededToday(day: AttendanceDay) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <TodayAttendancePage />
+        <MemoryRouter>
+          <TodayAttendancePanel />
+        </MemoryRouter>
       </QueryClientProvider>
     )
   }
@@ -42,9 +45,9 @@ const baseDay: AttendanceDay = {
 }
 
 const meta = {
-  title: 'Pages/Attendance/TodayAttendancePage',
-  component: TodayAttendancePage,
-} satisfies Meta<typeof TodayAttendancePage>
+  title: 'Components/TodayAttendancePanel',
+  component: TodayAttendancePanel,
+} satisfies Meta<typeof TodayAttendancePanel>
 
 export default meta
 type Story = StoryObj<typeof meta>

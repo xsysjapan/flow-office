@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import type { AttendanceDay, AttendanceMonthlyCalculationTotals } from '../../api/types'
-import { TodayAttendancePage } from './TodayAttendancePage'
+import { TodayAttendancePanel } from './TodayAttendancePanel'
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
   work_minutes: 0,
@@ -40,18 +40,18 @@ const notStartedDay: AttendanceDay = {
   calculation: null,
 }
 
-function renderPage() {
+function renderPanel() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <TodayAttendancePage />
+        <TodayAttendancePanel />
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-describe('TodayAttendancePage', () => {
+describe('TodayAttendancePanel', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
@@ -59,7 +59,7 @@ describe('TodayAttendancePage', () => {
   it('shows a clock-in button when the day has not started', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByRole('button', { name: '出勤' })).toBeInTheDocument()
     expect(screen.getByText('未出勤')).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('TodayAttendancePage', () => {
   it('links to the current day attendance detail', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByRole('link', { name: '日次勤怠' })).toHaveAttribute('href', '/attendance/days/2026-07-09')
   })
@@ -81,7 +81,7 @@ describe('TodayAttendancePage', () => {
       actual_start_at: '2026-07-09T09:00:00+09:00',
     })
 
-    renderPage()
+    renderPanel()
     await userEvent.click(await screen.findByRole('button', { name: '出勤' }))
 
     await waitFor(() => expect(attendanceApi.clockIn).toHaveBeenCalledOnce())
@@ -94,7 +94,7 @@ describe('TodayAttendancePage', () => {
       actual_start_at: '2026-07-09T09:00:00+09:00',
     })
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByRole('button', { name: '休憩開始' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '退勤' })).toBeInTheDocument()
@@ -107,7 +107,7 @@ describe('TodayAttendancePage', () => {
       breaks: [{ id: 1, break_start_at: '2026-07-09T12:00:00+09:00', break_end_at: null }],
     })
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByRole('button', { name: '休憩終了' })).toBeInTheDocument()
   })
@@ -120,7 +120,7 @@ describe('TodayAttendancePage', () => {
       actual_end_at: '2026-07-09T18:00:00+09:00',
     })
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByText('本日の勤怠は完了しています。')).toBeInTheDocument()
   })
@@ -150,7 +150,7 @@ describe('TodayAttendancePage', () => {
       },
     })
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByText('所定外法定外労働時間')).toBeInTheDocument()
     expect(screen.getByText('うち深夜所定内法定内労働時間')).toBeInTheDocument()
@@ -163,7 +163,7 @@ describe('TodayAttendancePage', () => {
   it('shows an error message when the initial fetch fails', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockRejectedValue(new Error('network down'))
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
   })
@@ -188,7 +188,7 @@ describe('TodayAttendancePage', () => {
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
-    renderPage()
+    renderPanel()
 
     expect(await screen.findByText('今月の清算期間(フレックスタイム制)')).toBeInTheDocument()
     expect(screen.getByText('176時間')).toBeInTheDocument()
@@ -204,7 +204,7 @@ describe('TodayAttendancePage', () => {
       monthly_calculation_totals: zeroMonthlyCalculationTotals,
     })
 
-    renderPage()
+    renderPanel()
 
     await screen.findByRole('button', { name: '出勤' })
     expect(screen.queryByText('今月の清算期間(フレックスタイム制)')).not.toBeInTheDocument()
