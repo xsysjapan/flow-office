@@ -109,6 +109,14 @@ export function AttendanceCalculationSummary({
     + totals.late_night_legal_holiday_work_minutes
     + totals.late_night_prescribed_holiday_work_minutes
 
+  // 簡易表示にも「実労働時間」「有給日数」を追加する(ユーザー要望)。どちらも既存の
+  // totals(日次はattendance_daily_calculations、週次はattendanceWeeklyTotals.tsによる
+  // クライアント集計、月次はmonthly_calculation_totals)に既に含まれる値をそのまま使う
+  // (新規API呼び出しは追加しない)。有給消化は本来paid_leave_grants/paid_leaveドメインが正だが、
+  // ここで表示するpaid_leave_daysは各ページがattendance_days.work_type由来として既に持つ
+  // 日次内訳の合計であり、時間単位取得分はpaid_leave_minutes(欠勤同様「時間」表示)として
+  // 別枠のため単位を混同しない。値が未提供(undefined)の場合は行ごと非表示にする
+  // (実労働時間の既存パターンに合わせる)。
   const hasLeaveTotals = showAllLeaveTotals
     || !!totals.absence_minutes
     || !!totals.paid_leave_days
@@ -176,10 +184,16 @@ export function AttendanceCalculationSummary({
         </dl>
       ) : (
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+          {totals.work_minutes !== undefined && (
+            <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
+          )}
           <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
           <SummaryItem label="残業時間"><Duration minutes={overtimeMinutes} /></SummaryItem>
           <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
           <SummaryItem label="うち深夜作業時間"><Duration minutes={lateNightMinutes} /></SummaryItem>
+          {totals.paid_leave_days !== undefined && (
+            <SummaryItem label="有給日数">{totals.paid_leave_days}日</SummaryItem>
+          )}
         </dl>
       )}
 

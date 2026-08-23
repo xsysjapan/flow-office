@@ -116,7 +116,7 @@ describe('AttendanceCalculationSummary', () => {
     expect(screen.getByText('特別休暇日数')).toBeInTheDocument()
   })
 
-  it('does not show leave totals in the default (collapsed) view even when showAllLeaveTotals is set', () => {
+  it('does not show the absence/special-leave breakdown in the default (collapsed) view even when showAllLeaveTotals is set, but still shows the headline paid leave days total', () => {
     render(
       <AttendanceCalculationSummary
         title="今月の集計"
@@ -127,6 +127,28 @@ describe('AttendanceCalculationSummary', () => {
     )
 
     expect(screen.queryByText('欠勤日数')).not.toBeInTheDocument()
+    expect(screen.queryByText('特別休暇日数')).not.toBeInTheDocument()
+    expect(screen.getByText('有給日数')).toBeInTheDocument()
+    expect(screen.getByText('有給日数').nextElementSibling).toHaveTextContent('1日')
+  })
+
+  it('shows the headline actual worked time and paid leave days in the default (collapsed) view when provided', () => {
+    render(
+      <AttendanceCalculationSummary
+        title="今週の集計"
+        totals={{ ...totals, work_minutes: 9600, paid_leave_days: 0 }}
+      />,
+    )
+
+    expect(screen.getByText('実労働時間')).toBeInTheDocument()
+    expect(screen.getByText('有給日数')).toBeInTheDocument()
+    expect(screen.getByText('有給日数').nextElementSibling).toHaveTextContent('0日')
+  })
+
+  it('does not show the actual worked time or paid leave days rows in the default view when absent', () => {
+    render(<AttendanceCalculationSummary title="今週の集計" totals={totals} />)
+
+    expect(screen.queryByText('実労働時間')).not.toBeInTheDocument()
     expect(screen.queryByText('有給日数')).not.toBeInTheDocument()
   })
 
