@@ -63,6 +63,25 @@
 
 ## 実装上のポイント
 
+- **「申請(ワークフロー)」と「業務」を分離する**: `workflow_requests`が扱うのは
+  誰が・何を・いつ申請し誰が承認するかという進行状況のみで、各ドメイン固有の未確定
+  ステート・金額計算・残高計算・確定処理などの業務ロジックは専用ドメイン
+  (`App\Domain\PaidLeave`/`CompensatoryLeave`/`ShiftSwap`/`Expense`等)側に持たせる。
+  両者は`subject_type`/`subject_id`のポリモーフィック関連で連携するに留め、
+  `workflow_requests`側に業務固有の詳細な計算結果を混入させない(docs/03-architecture.md
+  3.9節参照)。また、代休の付与のように承認ワークフローを経由せず自動導出・直接処理
+  される「申請不要」の業務データもあるため、`workflow_requests`は申請が実際に発生した
+  ケースのみを扱うものとして設計し、申請不要な業務データを無理に統合しない。
+- 「申請センター」画面(自分の申請を有給・代休・特別休暇・振替休日・経費精算・月次勤怠承認
+  など全ドメイン横断でステータス一覧表示する)は、専用のProjectionを別途持たず、既存の
+  `workflow_requests`(全ドメインの承認ワークフローを`subject_type`/`subject_id`の
+  ポリモーフィック関連で横断管理する正データ)をそのまま参照する。参照用APIは
+  `GET /api/workflow-requests/mine`で、認証ユーザー本人が申請者
+  (`applicant_user_id`)である行を`status`・`subject_type`で絞り込んでページネーション
+  付きで返す(承認者視点の`GET /api/workflow-requests/to-approve`と対になるエンドポイント。
+  レスポンス形状は共通の`WorkflowRequestResource`を使い、両APIでフロントエンドが
+  同じ形として扱える。`subject_type`を持つ行には`subject_summary`として各ドメインの
+  要約が付与される)。
 - 申請種別 (`request_types`) はマスタ化し、フォーム項目は `form_schema` (JSON) で動的に定義する。
   新しい申請種別を追加する際にコード変更を必要最小限にする
   (スキル [add-workflow-request-type](../.claude/skills/add-workflow-request-type/SKILL.md) 参照)。
@@ -72,6 +91,13 @@
 - `requires_backoffice_task` が true の申請種別は、最終承認時に
   [11章 バックオフィス処理](./11-usecases-backoffice.md) の UC-B001 でタスクを自動生成する。
 - 添付ファイルは [12章](./12-usecases-attachment.md) の仕組みを共通利用する。
+- 申請詳細画面 (`WorkflowRequestDetailPage`) は、`subject_type`を持つ申請(有給・代休・
+  特別休暇・振替休日・経費精算・月次勤怠)については`GET /api/workflow-requests/{id}`が
+  返す`subject`(対象ドメインの実データ)を、承認者向け一覧画面(`ApprovalsPage`/
+  `ApprovalDetailPanel`)と同じ表示ロジック(`WorkflowRequestSubjectDetail`コンポーネントで
+  共有)により、対象日・日数・金額・理由等を読み取り専用の添付資料的セクションとして表示する。
+  これはドメイン専用詳細ページへの遷移を代替するものではなく、申請センターから開いた
+  詳細画面で内容を確認できるようにするための表示に留め、承認・却下等の操作は追加しない。
 - 有給休暇・特別休暇と同様、振替休日申請 (`App\Domain\ShiftSwap`) も承認とバックオフィス処理を
   別ステータス系列で管理する専用申請ドメインとして実装する(`shift_swap_request`)。固定勤務の
   社員のみ対象。対象日・振替先日のどちらを休日→労働日にし、どちらを労働日→休日にするかは

@@ -33,7 +33,7 @@ const sample: WorkflowRequest[] = [
 
 function withSeededList(data: Paginated<WorkflowRequest>) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
-  queryClient.setQueryData(['workflow-requests', 'mine'], data)
+  queryClient.setQueryData(['workflow-requests', 'mine', 'all', 'all', 1], data)
 
   return function Decorator() {
     return (
@@ -47,7 +47,7 @@ function withSeededList(data: Paginated<WorkflowRequest>) {
 }
 
 const meta = {
-  title: 'Pages/Workflow/WorkflowRequestListPage',
+  title: 'Pages/Workflow/RequestCenter',
   component: WorkflowRequestListPage,
 } satisfies Meta<typeof WorkflowRequestListPage>
 

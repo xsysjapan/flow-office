@@ -1,8 +1,25 @@
 import { apiFetch } from './client'
-import type { Paginated, WorkflowRequest, WorkflowRequestHistoryEntry, WorkflowRequestStatus } from './types'
+import type { Paginated, WorkflowRequest, WorkflowRequestHistoryEntry, WorkflowRequestStatus, WorkflowRequestSubjectType } from './types'
 
-export function fetchMyWorkflowRequests(): Promise<Paginated<WorkflowRequest>> {
-  return apiFetch('/workflow-requests/mine')
+export interface FetchMyWorkflowRequestsOptions {
+  status?: WorkflowRequestStatus | 'all'
+  subjectType?: WorkflowRequestSubjectType | 'all'
+  page?: number
+  perPage?: number
+}
+
+/** UC-W002: 申請センター(自分の申請の横断一覧)。status・subject_type・ページングで
+ *  絞り込める(いずれも省略時はバックエンド既定=絞り込みなしの全件)。 */
+export function fetchMyWorkflowRequests(options: FetchMyWorkflowRequestsOptions = {}): Promise<Paginated<WorkflowRequest>> {
+  const { status, subjectType, page, perPage } = options
+  return apiFetch('/workflow-requests/mine', {
+    query: {
+      status: status && status !== 'all' ? status : undefined,
+      subject_type: subjectType && subjectType !== 'all' ? subjectType : undefined,
+      page,
+      per_page: perPage,
+    },
+  })
 }
 
 export interface FetchWorkflowRequestsToApproveOptions {

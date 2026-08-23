@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +46,12 @@ function renderLayout(logout = vi.fn(), user: User = mockUser, specialLeaveTypes
   )
 }
 
+/** PC用の左サイドバー(<aside>)。モバイル用ハンバーガーメニューが開いていない限り、
+ *  ナビ項目はここにしか描画されない。 */
+function sidebar() {
+  return within(screen.getByRole('complementary'))
+}
+
 describe('AppLayout', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -62,64 +68,52 @@ describe('AppLayout', () => {
     expect(screen.getByText('開発部')).toBeInTheDocument()
   })
 
-  it('shows その他申請・経費精算 inside the 勤怠・申請 dropdown menu, without a separate 新規申請、新規作成 or 入力プリセット shortcut', async () => {
+  it('lists その他申請・経費精算 under the 申請 group in the sidebar', () => {
     renderLayout()
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
-    expect(await screen.findByRole('menuitem', { name: 'その他申請' })).toHaveAttribute('href', '/requests')
-    expect(screen.getByRole('menuitem', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
-    expect(screen.queryByRole('menuitem', { name: '新規申請' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '経費精算(新規作成)' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '経費精算一覧' })).not.toBeInTheDocument()
-    // 入力プリセット画面は、いきなり使う人が少ないと想定してメニューには置かない。
-    // 経費精算画面のプリセット表示箇所からのみ遷移できるようにする。
-    expect(screen.queryByRole('menuitem', { name: '入力プリセット' })).not.toBeInTheDocument()
+    expect(sidebar().getByRole('link', { name: '申請センター' })).toHaveAttribute('href', '/requests')
+    expect(sidebar().getByRole('link', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
   })
 
-  it('links 月次勤怠 to the current month detail page', async () => {
+  it('links 月次勤怠 to the current month detail page', () => {
     renderLayout()
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
-
-    expect(await screen.findByRole('menuitem', { name: '月次勤怠' })).toHaveAttribute(
+    expect(sidebar().getByRole('link', { name: '月次勤怠' })).toHaveAttribute(
       'href',
       `/attendance/months/${formatDate(new Date()).slice(0, 7)}`,
     )
   })
 
-  it('shows 承認 as a direct link to the unified approvals screen for a user without back-office roles', async () => {
+  it('shows 承認待ち as a direct link to the unified approvals screen', () => {
     renderLayout()
 
-    expect(await screen.findByRole('link', { name: '承認待ち' })).toHaveAttribute('href', '/approvals')
-    expect(screen.queryByRole('button', { name: '承認' })).not.toBeInTheDocument()
+    expect(sidebar().getByRole('link', { name: '承認待ち' })).toHaveAttribute('href', '/approvals')
   })
 
-  it('shows タスク一覧 when its feature is effective', async () => {
+  it('shows タスク一覧 when its feature is effective', () => {
     renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'backoffice.tasks'] })
 
-    expect(await screen.findByRole('link', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
+    expect(sidebar().getByRole('link', { name: 'タスク一覧' })).toHaveAttribute('href', '/backoffice-tasks')
   })
 
-  it('hides the 特別休暇 menu items when there is no active special leave type', async () => {
+  it('hides the 特別休暇 link when there is no active special leave type', async () => {
     renderLayout(vi.fn(), mockUser, [])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
-    expect(await screen.findByRole('menuitem', { name: '有給' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
+    expect(await sidebar().findByRole('link', { name: '有給' })).toBeInTheDocument()
+    expect(sidebar().queryByRole('link', { name: '特別休暇' })).not.toBeInTheDocument()
   })
 
-  it('shows the 特別休暇 menu item once an active special leave type exists', async () => {
+  it('shows the 特別休暇 link once an active special leave type exists', async () => {
     renderLayout(vi.fn(), mockUser, [{ id: 1, name: '誕生日休暇', is_active: true, requires_grant: true }])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
-    expect(await screen.findByRole('menuitem', { name: '特別休暇' })).toBeInTheDocument()
+    expect(await sidebar().findByRole('link', { name: '特別休暇' })).toBeInTheDocument()
   })
 
-  it('keeps the 特別休暇 menu items hidden when the only special leave type is inactive', async () => {
+  it('keeps the 特別休暇 link hidden when the only special leave type is inactive', async () => {
     renderLayout(vi.fn(), mockUser, [{ id: 1, name: '廃止済み休暇', is_active: false, requires_grant: true }])
 
-    await userEvent.click(screen.getByRole('button', { name: '勤怠・申請' }))
-    expect(screen.queryByRole('menuitem', { name: '特別休暇' })).not.toBeInTheDocument()
+    await screen.findByText('山田 太郎')
+    expect(sidebar().queryByRole('link', { name: '特別休暇' })).not.toBeInTheDocument()
   })
 
   it('calls logout when the logout button is clicked', async () => {
@@ -134,13 +128,13 @@ describe('AppLayout', () => {
   it('hides admin navigation for a user without effective admin access', () => {
     renderLayout(vi.fn(), { ...mockUser })
 
-    expect(screen.queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
+    expect(sidebar().queryByRole('link', { name: '管理メニュー' })).not.toBeInTheDocument()
   })
 
-  it('shows 管理メニュー as a direct link from effective access', async () => {
+  it('shows 管理メニュー as a direct link from effective access', () => {
     renderLayout(vi.fn(), { ...mockUser, effective_features: ['attendance.entry', 'administration.users'], effective_permissions: ['user.view'] })
 
-    expect(await screen.findByRole('link', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
+    expect(sidebar().getByRole('link', { name: '管理メニュー' })).toHaveAttribute('href', '/admin')
   })
 
   it('opens a mobile menu drawer listing every group and its links', async () => {
@@ -148,19 +142,21 @@ describe('AppLayout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
 
-    expect(await screen.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'その他申請' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(await dialog.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '申請センター' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
   })
 
   it('closes the mobile menu drawer after choosing a link', async () => {
     renderLayout()
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
-    await userEvent.click(await screen.findByRole('link', { name: 'その他申請' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialog.getByRole('link', { name: '申請センター' }))
 
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
@@ -170,11 +166,23 @@ describe('AppLayout', () => {
     renderLayout(logout)
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
-    await screen.findByRole('heading', { name: 'メニュー' })
+    const dialog = within(await screen.findByRole('dialog'))
+    await dialog.findByRole('heading', { name: 'メニュー' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+    await userEvent.click(dialog.getByRole('button', { name: 'ログアウト' }))
 
     expect(logout).toHaveBeenCalledOnce()
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
+  })
+
+  it('renders a mobile bottom nav with home/attendance/requests/approvals/mypage entries', () => {
+    renderLayout()
+
+    const bottomNav = within(screen.getByRole('navigation', { name: 'メインナビゲーション(モバイル)' }))
+    expect(bottomNav.getByRole('link', { name: 'ホーム' })).toHaveAttribute('href', '/')
+    expect(bottomNav.getByRole('link', { name: '勤怠' })).toHaveAttribute('href', '/attendance')
+    expect(bottomNav.getByRole('link', { name: '申請' })).toBeInTheDocument()
+    expect(bottomNav.getByRole('link', { name: '承認' })).toHaveAttribute('href', '/approvals')
+    expect(bottomNav.getByRole('link', { name: 'マイページ' })).toBeInTheDocument()
   })
 })

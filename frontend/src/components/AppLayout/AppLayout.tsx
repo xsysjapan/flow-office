@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
-import {
-  CalendarClock,
-  CheckCircle2,
-  ChevronDown,
-  Menu,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
+import { Menu } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { useSpecialLeaveTypes } from "../../hooks/useSpecialLeave";
 import { cn } from "../../lib/utils";
@@ -16,14 +9,17 @@ import {
   adminNavGroups,
   canAccessAdminItem,
 } from "../AdminLayout/adminNavGroups";
+import {
+  buildNavGroups,
+  HOME_PATH,
+  isPathActive,
+  navGroupMeta,
+  requiredFeaturesForPath,
+  type NavContext,
+  type ResolvedNavGroup,
+} from "../../routes/routeManifest";
 import { Button } from "../Button/Button";
 import { NotificationBell } from "../NotificationBell/NotificationBell";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -32,163 +28,67 @@ import {
   SheetTrigger,
 } from "../ui/sheet";
 
-interface NavItem {
-  to: string;
-  label: string;
-  feature?: string | string[];
+interface SidebarProps {
+  groups: ResolvedNavGroup[];
+  onNavigate?: () => void;
 }
 
-interface NavGroup {
-  label: string;
-  icon: LucideIcon;
-  items: NavItem[];
-}
-
-function navGroups(
-  currentYearMonth: string,
-  hasSpecialLeaveTypes: boolean,
-  canSeeBackOfficeTasks: boolean,
-): NavGroup[] {
-  return [
-    {
-      label: "勤怠・申請",
-      icon: CalendarClock,
-      items: [
-        { to: "/", label: "今日の勤怠", feature: "attendance.entry" },
-        {
-          to: "/attendance/week",
-          label: "週次勤怠",
-          feature: "attendance.entry",
-        },
-        {
-          to: `/attendance/months/${currentYearMonth}`,
-          label: "月次勤怠",
-          feature: "attendance.timesheet",
-        },
-        { to: "/paid-leave", label: "有給", feature: "paid_leave.requests" },
-        { to: "/compensatory-leave", label: "代休", feature: "paid_leave.requests" },
-        ...(hasSpecialLeaveTypes
-          ? [
-              {
-                to: "/special-leave",
-                label: "特別休暇",
-                feature: "paid_leave.requests",
-              },
-            ]
-          : []),
-        { to: "/expenses", label: "経費精算", feature: "backoffice.expenses" },
-        { to: "/requests", label: "その他申請", feature: "workflow.requests" },
-      ],
-    },
-    {
-      label: "承認",
-      icon: CheckCircle2,
-      items: [
-        {
-          to: "/approvals",
-          label: "承認待ち",
-          feature: [
-            "attendance.timesheet",
-            "paid_leave.requests",
-            "workflow.requests",
-            "backoffice.expenses",
-          ],
-        },
-        ...(canSeeBackOfficeTasks
-          ? [
-              {
-                to: "/backoffice-tasks",
-                label: "タスク一覧",
-                feature: "backoffice.tasks",
-              },
-            ]
-          : []),
-      ],
-    },
-    {
-      label: "設定・連携",
-      icon: Settings,
-      items: [
-        { to: "/account", label: "アカウント設定" },
-        { to: "/integrations", label: "API・MCP連携" },
-      ],
-    },
-    {
-      label: "管理",
-      icon: Settings,
-      items: [
-        { to: "/admin", label: "管理メニュー", feature: "administration" },
-      ],
-    },
-  ];
-}
-
-/** そのナビ項目(またはその配下のページ)を今表示しているか。前方一致するパス同士(有給/有給履歴等)が
- *  同時にアクティブにならないよう、"/"は完全一致、それ以外は自身か"to/"始まりのパスのみ一致させる。 */
-function isItemActive(pathname: string, to: string): boolean {
-  if (to === "/") return pathname === "/";
-  return pathname === to || pathname.startsWith(`${to}/`);
-}
-
-const navTriggerClass =
-  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground";
-
-function NavGroupMenu({ group }: { group: NavGroup }) {
+/** 左サイドバー(PC)・詳細メニューSheet(モバイル)共通のナビ本体。
+ *  グループ見出し+項目一覧を常時展開して表示する(AdminLayoutの構造を踏襲)。 */
+function NavSections({ groups, onNavigate }: SidebarProps) {
   const { pathname } = useLocation();
-  const active = group.items.some((item) => isItemActive(pathname, item.to));
-
-  if (group.items.length === 1) {
-    const item = group.items[0];
-    return (
-      <NavLink
-        to={item.to}
-        className={cn(navTriggerClass, active && "font-medium text-foreground")}
-      >
-        <group.icon className="size-4 shrink-0" aria-hidden="true" />
-        {item.label}
-      </NavLink>
-    );
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(navTriggerClass, active && "font-medium text-foreground")}
+    <nav className="flex flex-col gap-5" aria-label="メインナビゲーション">
+      <Link
+        to={HOME_PATH}
+        onClick={onNavigate}
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent",
+          pathname === HOME_PATH
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
       >
-        <group.icon className="size-4 shrink-0" aria-hidden="true" />
-        {group.label}
-        <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {group.items.map((item) => (
-          <DropdownMenuItem key={item.to} asChild>
-            {/* Radix の asChild は文字列でないclassName(NavLinkの関数形式)をそのまま
-                文字列連結してしまうため、LinkとisActiveの事前計算(exact一致)で対応する。 */}
-            <Link
-              to={item.to}
-              className={cn(
-                "w-full",
-                pathname === item.to && "font-medium text-primary",
-              )}
-            >
-              {item.label}
-            </Link>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <navGroupMeta.home.icon className="size-4 shrink-0" aria-hidden="true" />
+        ホーム
+      </Link>
+      {groups.map((group) => (
+        <div key={group.key} className="flex flex-col gap-1.5">
+          <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <group.icon className="size-3.5 shrink-0" aria-hidden="true" />
+            {group.label}
+          </span>
+          <div className="flex flex-col gap-0.5">
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={onNavigate}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                  isPathActive(pathname, item.to) &&
+                    "bg-accent font-medium text-foreground",
+                )}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
   );
 }
 
-interface MobileNavProps {
-  groups: NavGroup[];
+interface MobileMenuProps extends SidebarProps {
   user: { name: string; department: string | null; roles?: string[] } | null;
   onLogout: () => void;
 }
 
-function MobileNav({ groups, user, onLogout }: MobileNavProps) {
+/** モバイルのハンバーガーから開く詳細メニュー(全項目)。ボトムナビは5アイコンの
+ *  代表リンクのみのため、それ以外(月次勤怠・経費精算・アカウント設定等)はここに集約する。 */
+function MobileMenu({ groups, user, onLogout }: MobileMenuProps) {
   const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -201,39 +101,13 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
           <Menu className="size-5" aria-hidden="true" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="flex flex-col">
+      <SheetContent side="left" className="flex flex-col overflow-y-auto">
         <SheetHeader>
           <SheetTitle>メニュー</SheetTitle>
         </SheetHeader>
-        <nav
-          className="flex flex-1 flex-col gap-4 overflow-y-auto"
-          aria-label="メインナビゲーション(モバイル)"
-        >
-          {groups.map((group) => (
-            <div key={group.label} className="flex flex-col gap-1">
-              <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                <group.icon className="size-3.5 shrink-0" aria-hidden="true" />
-                {group.label}
-              </span>
-              <div className="flex flex-col gap-0.5">
-                {group.items.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                      isItemActive(pathname, item.to) &&
-                        "bg-accent font-medium text-foreground",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
+        <div className="flex-1 overflow-y-auto">
+          <NavSections groups={groups} onNavigate={() => setOpen(false)} />
+        </div>
         {user && (
           <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
             <div className="flex flex-col leading-tight">
@@ -258,6 +132,48 @@ function MobileNav({ groups, user, onLogout }: MobileNavProps) {
   );
 }
 
+/** モバイル下部の固定ボトムナビ。ホーム/勤怠/申請/承認/マイページの5アイコンで、
+ *  各グループの代表(先頭)項目へ直接遷移する。詳細な項目選択はハンバーガーメニューで行う。 */
+function BottomNav({ groups }: { groups: ResolvedNavGroup[] }) {
+  const { pathname } = useLocation();
+  const entries: { key: string; to: string; label: string; icon: ResolvedNavGroup["icon"] }[] = [
+    { key: "home", to: HOME_PATH, label: "ホーム", icon: navGroupMeta.home.icon },
+    ...groups
+      .filter((group) => group.items.length > 0)
+      .map((group) => ({
+        key: group.key,
+        to: group.items[0].to,
+        label: group.label,
+        icon: group.icon,
+      })),
+  ];
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-10 flex border-t border-border bg-card sm:hidden"
+      aria-label="メインナビゲーション(モバイル)"
+    >
+      {entries.map((entry) => {
+        const active = isPathActive(pathname, entry.to);
+        return (
+          <Link
+            key={entry.key}
+            to={entry.to}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
+              active ? "text-primary" : "text-muted-foreground",
+            )}
+            aria-current={active ? "page" : undefined}
+          >
+            <entry.icon className="size-5 shrink-0" aria-hidden="true" />
+            {entry.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function AppLayout() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
@@ -272,59 +188,20 @@ export function AppLayout() {
   const canSeeBackOfficeTasks = Boolean(
     user?.effective_features?.includes("backoffice.tasks"),
   );
-  const hasItemFeature = (item: NavItem) =>
-    !item.feature ||
-    user?.effective_features === undefined ||
-    (Array.isArray(item.feature)
-      ? item.feature.some((feature) =>
-          user.effective_features?.includes(feature),
-        )
-      : user.effective_features?.includes(item.feature));
-  const visibleGroups = navGroups(
+  const canAccessAdmin = adminNavGroups.some((adminGroup) =>
+    adminGroup.items.some((adminItem) => canAccessAdminItem(user, adminItem)),
+  );
+
+  const navContext: NavContext = {
     currentYearMonth,
     hasSpecialLeaveTypes,
     canSeeBackOfficeTasks,
-  )
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) =>
-        item.to === "/admin"
-          ? adminNavGroups.some((adminGroup) =>
-              adminGroup.items.some((adminItem) =>
-                canAccessAdminItem(user, adminItem),
-              ),
-            )
-          : hasItemFeature(item),
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
+    canAccessAdmin,
+  };
+  const visibleGroups = buildNavGroups(user?.effective_features, navContext);
 
   if (user?.effective_features !== undefined) {
-    const required =
-      pathname === "/" ||
-      pathname.startsWith("/attendance/week") ||
-      pathname.startsWith("/attendance/days")
-        ? ["attendance.entry"]
-        : pathname.startsWith("/attendance/months")
-          ? ["attendance.timesheet"]
-          : pathname.startsWith("/paid-leave") ||
-              pathname.startsWith("/special-leave")
-            ? ["paid_leave.requests"]
-            : pathname.startsWith("/expenses") ||
-                pathname.startsWith("/backoffice-tasks")
-              ? pathname.startsWith("/backoffice-tasks")
-                ? ["backoffice.tasks"]
-                : ["backoffice.expenses"]
-              : pathname.startsWith("/requests")
-                ? ["workflow.requests"]
-                : pathname.startsWith("/approvals")
-                  ? [
-                      "attendance.timesheet",
-                      "paid_leave.requests",
-                      "workflow.requests",
-                      "backoffice.expenses",
-                    ]
-                  : [];
+    const required = requiredFeaturesForPath(pathname);
     if (
       required.length > 0 &&
       !required.some((feature) => user.effective_features?.includes(feature))
@@ -334,17 +211,24 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border bg-card py-3">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-2 px-4 sm:px-6 lg:max-w-6xl lg:px-8">
-          <div className="flex items-center justify-between gap-4">
+    <div className="flex min-h-screen flex-col sm:flex-row">
+      <aside className="hidden w-56 shrink-0 border-r border-border bg-card p-4 sm:block">
+        <span className="mb-5 block text-sm font-semibold text-foreground">
+          flow-office
+        </span>
+        <NavSections groups={visibleGroups} />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-border bg-card py-3">
+          <div className="flex items-center justify-between gap-4 px-4 sm:px-6">
             <div className="flex items-center gap-2">
-              <MobileNav
+              <MobileMenu
                 groups={visibleGroups}
                 user={user}
                 onLogout={() => void logout()}
               />
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-sm font-semibold text-foreground sm:hidden">
                 flow-office
               </span>
             </div>
@@ -367,19 +251,12 @@ export function AppLayout() {
               </div>
             </div>
           </div>
-          <nav
-            className="hidden flex-wrap items-center gap-1 sm:flex"
-            aria-label="メインナビゲーション"
-          >
-            {visibleGroups.map((group) => (
-              <NavGroupMenu key={group.label} group={group} />
-            ))}
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6 lg:max-w-6xl lg:p-8">
-        <Outlet />
-      </main>
+        </header>
+        <main className="w-full flex-1 p-4 pb-20 sm:p-6 sm:pb-6 lg:p-8">
+          <Outlet />
+        </main>
+        <BottomNav groups={visibleGroups} />
+      </div>
     </div>
   );
 }
