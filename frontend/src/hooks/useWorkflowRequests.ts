@@ -10,14 +10,25 @@ import {
   returnWorkflowRequest,
   submitWorkflowRequest,
   type CreateWorkflowRequestInput,
+  type FetchMyWorkflowRequestsOptions,
   type FetchWorkflowRequestsToApproveOptions,
 } from '../api/workflowRequests'
 
 const LIST_KEY = ['workflow-requests', 'mine']
 const TO_APPROVE_KEY = ['workflow-requests', 'to-approve']
 
-export function useMyWorkflowRequests(enabled = true) {
-  return useQuery({ queryKey: LIST_KEY, queryFn: fetchMyWorkflowRequests, enabled })
+/**
+ * 申請センター(自分の申請の横断一覧)向け。statusとsubject_typeの絞り込み・ページングに
+ * 対応する(useWorkflowRequestsToApproveと同じパターン)。引数省略時は絞り込みなしの
+ * 全件・1ページ目を返す(既存呼び出し元との後方互換)。
+ */
+export function useMyWorkflowRequests(options: FetchMyWorkflowRequestsOptions = {}, enabled = true) {
+  return useQuery({
+    queryKey: [...LIST_KEY, options.status ?? '', options.subjectType ?? '', options.page ?? 1],
+    queryFn: () => fetchMyWorkflowRequests(options),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
 }
 
 export function useWorkflowRequestsToApprove(options: FetchWorkflowRequestsToApproveOptions = {}, enabled = true) {

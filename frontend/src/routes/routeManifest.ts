@@ -98,7 +98,7 @@ export const routeManifest: RouteManifestEntry[] = [
     group: "requests",
   },
   {
-    label: "その他申請",
+    label: "申請センター",
     to: "/requests",
     feature: "workflow.requests",
     group: "requests",

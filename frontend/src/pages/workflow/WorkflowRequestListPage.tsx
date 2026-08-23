@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
 import { ApiError } from '../../api/client'
+import type { FetchMyWorkflowRequestsOptions } from '../../api/workflowRequests'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -10,21 +12,117 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { useCancelWorkflowRequest, useMyWorkflowRequests } from '../../hooks/useWorkflowRequests'
-import { isWorkflowRequestCancellable, workflowRequestStatusLabel } from '../../utils/statusLabels'
+import {
+  attendanceMonthStatusLabel,
+  expenseClaimStatusLabel,
+  isWorkflowRequestCancellable,
+  workflowRequestStatusLabel,
+} from '../../utils/statusLabels'
+
+const DEFAULT_STATUS: NonNullable<FetchMyWorkflowRequestsOptions['status']> = 'all'
+const DEFAULT_SUBJECT_TYPE: NonNullable<FetchMyWorkflowRequestsOptions['subjectType']> = 'all'
+
+const STATUS_FILTER_OPTIONS: Array<{ value: NonNullable<FetchMyWorkflowRequestsOptions['status']>; label: string }> = [
+  { value: 'all', label: 'すべて' },
+  { value: 'draft', label: '下書き' },
+  { value: 'submitted', label: '提出済み' },
+  { value: 'approved', label: '承認済み' },
+  { value: 'returned', label: '差戻し' },
+  { value: 'cancelled', label: '取消' },
+]
+
+const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, string> = {
+  attendance_month: '勤怠',
+  expense_claim: '経費',
+  paid_leave_request: '有給',
+  special_leave_request: '特別休暇',
+  shift_swap_request: '振替休日',
+  compensatory_leave_request: '代休',
+}
+
+const SUBJECT_TYPE_FILTER_OPTIONS: Array<{ value: FetchMyWorkflowRequestsOptions['subjectType']; label: string }> = [
+  { value: 'all', label: 'すべての種別' },
+  { value: 'paid_leave_request', label: '有給' },
+  { value: 'compensatory_leave_request', label: '代休' },
+  { value: 'expense_claim', label: '経費精算' },
+  { value: null, label: 'その他申請' },
+]
+
+function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {
+  return subjectType ? SUBJECT_TYPE_LABELS[subjectType] : 'その他申請'
+}
+
+/** 一覧行の補足情報。`subject_summary`だけで組み立て、詳細取得を待たない
+ *  (ApprovalsPageのsubjectSubtitleと同じ考え方)。 */
+function subjectSubtitle(request: WorkflowRequest): string | null {
+  const summary = request.subject_summary
+  if (!summary) return null
+
+  if (request.subject_type === 'attendance_month' && 'year_month' in summary) {
+    return summary.year_month
+  }
+  if (request.subject_type === 'expense_claim' && 'total_amount' in summary) {
+    return `${summary.total_amount.toLocaleString()}円`
+  }
+  if (request.subject_type === 'paid_leave_request' && 'leave_type_label' in summary) {
+    return [summary.target_date, summary.leave_type_label].filter(Boolean).join(' ') || null
+  }
+  if (request.subject_type === 'compensatory_leave_request' && 'leave_type_label' in summary) {
+    return [summary.target_date, summary.leave_type_label].filter(Boolean).join(' ') || null
+  }
+  if (request.subject_type === 'special_leave_request' && 'special_leave_type_name' in summary) {
+    return [summary.target_date, summary.special_leave_type_name].filter(Boolean).join(' ') || null
+  }
+  if (request.subject_type === 'shift_swap_request' && 'substitute_date' in summary) {
+    return [summary.target_date, '→', summary.substitute_date].filter(Boolean).join(' ') || null
+  }
+  return null
+}
+
+/** 一覧行のステータスバッジ。subject種別ごとの独自ステータス(勤怠月次・経費精算)が
+ *  あればそちらを優先し、無ければワークフロー自体のstatusを使う(ApprovalsPageと同じ)。 */
+function rowStatusMeta(request: WorkflowRequest) {
+  if (request.subject_type === 'attendance_month' && request.subject_summary && 'year_month' in request.subject_summary) {
+    return attendanceMonthStatusLabel(request.subject_summary.status)
+  }
+  if (request.subject_type === 'expense_claim' && request.subject_summary && 'total_amount' in request.subject_summary) {
+    return expenseClaimStatusLabel(request.subject_summary.status)
+  }
+  return workflowRequestStatusLabel(request.status)
+}
 
 /**
- * UC-W002手順6周辺: 自分の申請一覧。
+ * 申請センター(UC-W002手順6周辺): 有給・代休・経費精算・その他申請を横断した
+ * 自分の申請一覧。status・種別で絞り込み、行クリックで各申請の詳細
+ * (`WorkflowRequestDetailPage`)へ遷移する。新規作成は各ドメインの既存フォームへの
+ * 入口をボタン群として提供し、フォーム自体はここに統合しない。
+ *
  * 取消可能な申請(下書き/提出済み/差戻し)は複数選択し、共通の取消理由でまとめて
  * 取り消せる(オブジェクトを選択してから操作を適用するUI)。
  */
 export function WorkflowRequestListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, error } = useMyWorkflowRequests()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const status = (searchParams.get('status') as NonNullable<FetchMyWorkflowRequestsOptions['status']> | null) ?? DEFAULT_STATUS
+  const subjectTypeParam = searchParams.get('subjectType')
+  const subjectType: FetchMyWorkflowRequestsOptions['subjectType'] =
+    subjectTypeParam === null
+      ? DEFAULT_SUBJECT_TYPE
+      : subjectTypeParam === 'none'
+        ? null
+        : (subjectTypeParam as NonNullable<FetchMyWorkflowRequestsOptions['subjectType']>)
+  const pageParam = Number(searchParams.get('page'))
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
+
+  const { data, isLoading, error } = useMyWorkflowRequests({ status, subjectType, page })
   const cancelRequest = useCancelWorkflowRequest()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -37,6 +135,41 @@ export function WorkflowRequestListPage() {
   if (error) return <ErrorMessage error={error} fallback="申請一覧の取得に失敗しました。" />
 
   const requests = data?.data ?? []
+  const isFiltered = status !== DEFAULT_STATUS || subjectType !== DEFAULT_SUBJECT_TYPE
+
+  /** 指定したキーだけをURLクエリパラメータへ反映する(他のキーはそのまま維持)。
+   *  値`null`はパラメータの削除、`'none'`は「その他申請」(subject_typeがnull)を表す。 */
+  function updateParams(patch: Record<string, string | null>) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) next.delete(key)
+          else next.set(key, value)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  function handleFilterChange(next: { status?: NonNullable<FetchMyWorkflowRequestsOptions['status']>; subjectType?: string }) {
+    const patch: Record<string, string | null> = { page: null }
+    if (next.status !== undefined) patch.status = next.status === DEFAULT_STATUS ? null : next.status
+    if (next.subjectType !== undefined) patch.subjectType = next.subjectType === 'all' ? null : next.subjectType
+    updateParams(patch)
+    setSelectedIds(new Set())
+  }
+
+  function clearFilters() {
+    updateParams({ status: null, subjectType: null, page: null })
+    setSelectedIds(new Set())
+  }
+
+  function handlePageChange(nextPage: number) {
+    updateParams({ page: String(nextPage) })
+    setSelectedIds(new Set())
+  }
 
   function toggleRow(id: string) {
     setSelectedIds((prev) => {
@@ -75,7 +208,7 @@ export function WorkflowRequestListPage() {
 
   return (
     <Card
-      title="その他申請"
+      title="申請センター"
       actions={
         selectedIds.size > 0 ? (
           <div className="flex items-center gap-2">
@@ -107,35 +240,99 @@ export function WorkflowRequestListPage() {
             </ConfirmActionDialog>
           </div>
         ) : (
-          <Button asChild>
-            <Link to="/requests/new">新規作成</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/paid-leave">有給申請</Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/compensatory-leave">代休申請</Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/expenses/new">経費精算</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/requests/new">その他申請</Link>
+            </Button>
+          </div>
         )
       }
     >
+      <div className="mb-4 flex flex-wrap items-end gap-4">
+        <div className="w-40">
+          <FormField label="状態" htmlFor="request-center-status">
+            <NativeSelect
+              id="request-center-status"
+              value={status}
+              onChange={(event) =>
+                handleFilterChange({ status: event.target.value as NonNullable<FetchMyWorkflowRequestsOptions['status']> })
+              }
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </div>
+        <div className="w-48">
+          <FormField label="種別" htmlFor="request-center-subject-type">
+            <NativeSelect
+              id="request-center-subject-type"
+              value={subjectType === null ? 'none' : (subjectType ?? 'all')}
+              onChange={(event) => handleFilterChange({ subjectType: event.target.value })}
+            >
+              {SUBJECT_TYPE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value ?? 'none'} value={option.value === null ? 'none' : option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </div>
+        {isFiltered && (
+          <Button variant="secondary" onClick={clearFilters}>
+            フィルターをクリア
+          </Button>
+        )}
+      </div>
+
       {requests.length === 0 ? (
-        <EmptyState
-          title="申請はまだありません。"
-          description="新規作成から名刺作成や証明書発行などの申請を行えます。"
-          action={
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/requests/new">申請を作成</Link>
-            </Button>
-          }
-        />
+        isFiltered ? (
+          <EmptyState
+            title="条件に一致する申請はありません。"
+            description="状態や種別の条件を変えると表示される場合があります。"
+            action={
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                フィルターをクリア
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="申請はまだありません。"
+            description="上のボタンから有給・代休・経費精算・その他申請を行えます。"
+            action={
+              <Button asChild variant="secondary" size="sm">
+                <Link to="/requests/new">その他申請を作成</Link>
+              </Button>
+            }
+          />
+        )
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead aria-hidden="true" />
-              <TableHead>タイトル</TableHead>
               <TableHead>種別</TableHead>
-              <TableHead>ステータス</TableHead>
+              <TableHead>タイトル</TableHead>
+              <TableHead>状態</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {requests.map((request) => {
-              const { label, tone } = workflowRequestStatusLabel(request.status)
+              const { label, tone } = rowStatusMeta(request)
+              const subtitle = subjectSubtitle(request)
               const cancellable = isWorkflowRequestCancellable(request.status)
               const selected = selectedIds.has(request.id)
               return (
@@ -155,6 +352,9 @@ export function WorkflowRequestListPage() {
                     )}
                   </TableCell>
                   <TableCell>
+                    <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
+                  </TableCell>
+                  <TableCell>
                     <Link
                       to={`/requests/${request.id}`}
                       className="font-medium text-foreground hover:text-primary hover:underline"
@@ -162,8 +362,8 @@ export function WorkflowRequestListPage() {
                     >
                       {request.title}
                     </Link>
+                    {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{request.request_type?.name}</TableCell>
                   <TableCell>
                     <Badge tone={tone}>{label}</Badge>
                   </TableCell>
@@ -172,6 +372,15 @@ export function WorkflowRequestListPage() {
             })}
           </TableBody>
         </Table>
+      )}
+
+      {data && (
+        <Pagination
+          currentPage={data.meta.current_page}
+          lastPage={data.meta.last_page}
+          total={data.meta.total}
+          onPageChange={handlePageChange}
+        />
       )}
     </Card>
   )

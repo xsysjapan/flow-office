@@ -95,7 +95,7 @@ export function HomeDashboardPage() {
   const canSeeBackOfficeTasks = has('backoffice.tasks')
 
   const { data: today, isLoading: isTodayLoading } = useTodayAttendance()
-  const { data: myRequests, isLoading: isRequestsLoading } = useMyWorkflowRequests(canSeeWorkflow)
+  const { data: myRequests, isLoading: isRequestsLoading } = useMyWorkflowRequests({}, canSeeWorkflow)
   const { data: myExpenses, isLoading: isExpensesLoading } = useMyExpenseClaims(canSeeExpense)
   const { data: toApprove, isLoading: isApprovalsLoading } = useWorkflowRequestsToApprove(
     { status: 'submitted' },
@@ -140,7 +140,7 @@ export function HomeDashboardPage() {
             <div className="flex flex-col gap-1">
               <BigNumber value={pendingRequestCount} unit="件 対応中" />
               <p className="text-sm text-muted-foreground">
-                その他申請・経費精算のうち、提出済み・差戻し中の件数の合計です。
+                申請センターのうち、提出済み・差戻し中の件数の合計です。
               </p>
             </div>
           )}

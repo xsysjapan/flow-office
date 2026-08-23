@@ -71,7 +71,7 @@ describe('AppLayout', () => {
   it('lists その他申請・経費精算 under the 申請 group in the sidebar', () => {
     renderLayout()
 
-    expect(sidebar().getByRole('link', { name: 'その他申請' })).toHaveAttribute('href', '/requests')
+    expect(sidebar().getByRole('link', { name: '申請センター' })).toHaveAttribute('href', '/requests')
     expect(sidebar().getByRole('link', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
   })
 
@@ -145,7 +145,7 @@ describe('AppLayout', () => {
     const dialog = within(await screen.findByRole('dialog'))
     expect(await dialog.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '今日の勤怠' })).toBeInTheDocument()
-    expect(dialog.getByRole('link', { name: 'その他申請' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '申請センター' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
@@ -156,7 +156,7 @@ describe('AppLayout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
     const dialog = within(await screen.findByRole('dialog'))
-    await userEvent.click(dialog.getByRole('link', { name: 'その他申請' }))
+    await userEvent.click(dialog.getByRole('link', { name: '申請センター' }))
 
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
