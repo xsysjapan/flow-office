@@ -360,9 +360,21 @@ Pagination
 - 採用理由: Material Designのbulk-action bar(選択時のみ表示、アクションを絞りoverflowへ逃がす)、
   iOS HIGのボトムToolbar(頻出操作をタップしやすい位置にまとめる)、主要SaaS(Gmail等)の
   モバイル多重選択でみられる横スクロール可能なアクション列、の3つに共通する要点を踏襲した。
+- **配置場所の注意**: `Card`の`title`と`actions`は同じ行で`flex-wrap`する実装になっており、
+  Bulk Action Barをそのまま`actions`スロットに渡すと、モバイル幅では「タイトルとBulk Action
+  Barの横幅がぶつかり合い、タイトル文字列(スペースを含まない日本語見出し)側が
+  `min-width:auto`により先に押し潰されて文字の途中で改行される」崩れが起きる
+  (`flex-basis`や`w-full`をBulk Action Bar側に付けても、`actions`側のコンテナ自体が
+  auto幅で確定していないため効果がない)。そのため、モバイル幅(`sm`未満)ではBulk Action
+  Barを`actions`スロットに渡さず、`Card`の子要素(コンテンツ側)の先頭に独立したブロックとして
+  置き、`hidden sm:block` / `sm:hidden`で表示箇所をPC/モバイルで出し分ける
+  (`Card`・`CardTitle`・`CardAction`自体は他画面へ影響するため変更しない)。
 - 実装例: `frontend/src/components/AttendanceSelectionActionBar/`(週次・月次勤怠の選択モード
-  一括操作バー)。**今後、同様の「複数選択→一括操作」UIをモバイル対応込みで新規実装する際は
-  このパターンに従う**(画面ごとに独自のラップ/縮小処理を発明しない)。
+  一括操作バー)と、その呼び出し側`frontend/src/pages/attendance/WeekAttendancePage.tsx`・
+  `AttendanceMonthDetailPage.tsx`(`actions`スロットには`hidden sm:block`で包んで渡し、
+  `Card`の子要素側先頭に`sm:hidden`で同じコンポーネントをもう一度描画している)。**今後、
+  同様の「複数選択→一括操作」UIをモバイル対応込みで新規実装する際はこのパターンに従う**
+  (画面ごとに独自のラップ/縮小処理を発明しない)。
 
 ### 2.22 Keyboard / Accessibility
 

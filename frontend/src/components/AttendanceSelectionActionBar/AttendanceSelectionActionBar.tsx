@@ -29,7 +29,7 @@ export function AttendanceSelectionActionBar({
   const hasSelection = selectedCount > 0
 
   return (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+    <div className="flex w-full basis-full flex-col gap-2 sm:w-auto sm:basis-auto sm:flex-row sm:items-center">
       <div className="flex items-center justify-between gap-2 sm:contents">
         <span className="text-sm whitespace-nowrap text-muted-foreground">{selectedCount}件を選択中</span>
         <Button variant="secondary" size="sm" className="sm:order-last" onClick={onCancel}>
