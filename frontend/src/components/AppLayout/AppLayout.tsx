@@ -85,8 +85,8 @@ interface MobileMenuProps extends SidebarProps {
   onLogout: () => void;
 }
 
-/** モバイルのハンバーガーから開く詳細メニュー(全項目)。ボトムナビは5アイコンの
- *  代表リンクのみのため、それ以外(月次勤怠・経費精算・アカウント設定等)はここに集約する。 */
+/** モバイルのハンバーガーから開く詳細メニュー(全項目)。モバイルではこのメニューが
+ *  唯一のナビ導線になる(ボトムナビは廃止済み)。 */
 function MobileMenu({ groups, user, onLogout }: MobileMenuProps) {
   const [open, setOpen] = useState(false);
 
@@ -129,48 +129,6 @@ function MobileMenu({ groups, user, onLogout }: MobileMenuProps) {
         )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-/** モバイル下部の固定ボトムナビ。ホーム/勤怠/申請/承認/マイページの5アイコンで、
- *  各グループの代表(先頭)項目へ直接遷移する。詳細な項目選択はハンバーガーメニューで行う。 */
-function BottomNav({ groups }: { groups: ResolvedNavGroup[] }) {
-  const { pathname } = useLocation();
-  const entries: { key: string; to: string; label: string; icon: ResolvedNavGroup["icon"] }[] = [
-    { key: "home", to: HOME_PATH, label: "ホーム", icon: navGroupMeta.home.icon },
-    ...groups
-      .filter((group) => group.items.length > 0)
-      .map((group) => ({
-        key: group.key,
-        to: group.items[0].to,
-        label: group.label,
-        icon: group.icon,
-      })),
-  ];
-
-  return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-10 flex border-t border-border bg-card sm:hidden"
-      aria-label="メインナビゲーション(モバイル)"
-    >
-      {entries.map((entry) => {
-        const active = isPathActive(pathname, entry.to);
-        return (
-          <Link
-            key={entry.key}
-            to={entry.to}
-            className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px]",
-              active ? "text-primary" : "text-muted-foreground",
-            )}
-            aria-current={active ? "page" : undefined}
-          >
-            <entry.icon className="size-5 shrink-0" aria-hidden="true" />
-            {entry.label}
-          </Link>
-        );
-      })}
-    </nav>
   );
 }
 
@@ -260,10 +218,9 @@ export function AppLayout() {
             </div>
           </div>
         </header>
-        <main className="w-full flex-1 p-4 pb-20 sm:p-6 sm:pb-6 lg:p-8">
+        <main className="w-full flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
-        <BottomNav groups={visibleGroups} />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { CalendarClock, ClipboardList, Receipt, Sunrise } from 'lucide-react'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
 import { ApiError } from '../../api/client'
 import type { FetchMyWorkflowRequestsOptions } from '../../api/workflowRequests'
@@ -15,6 +16,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Pagination } from '../../components/Pagination/Pagination'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Checkbox } from '../../components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -25,6 +27,58 @@ import {
   isWorkflowRequestCancellable,
   workflowRequestStatusLabel,
 } from '../../utils/statusLabels'
+
+/** 「新規申請」で選べる申請種別と、各ドメインの既存作成(または作成導線を持つ)ページへの
+ *  遷移先。作成ページ自体はドメインごとに既存のものをそのまま使う。 */
+const NEW_REQUEST_OPTIONS = [
+  { key: 'paid-leave', label: '有給申請', description: '有給休暇を申請します。', to: '/paid-leave', icon: Sunrise },
+  {
+    key: 'compensatory-leave',
+    label: '代休申請',
+    description: '代休の取得を申請します。',
+    to: '/compensatory-leave',
+    icon: CalendarClock,
+  },
+  { key: 'expense', label: '経費精算', description: '経費の精算を申請します。', to: '/expenses/new', icon: Receipt },
+  { key: 'other', label: 'その他申請', description: '上記以外の申請を行います。', to: '/requests/new', icon: ClipboardList },
+] as const
+
+/** 「新規申請」の入口。まず申請種別を選ばせ(Dialog)、選択後に各ドメインの既存
+ *  作成ページへ遷移する2段階フロー(§2.11: 短時間で完了する選択操作はDialog)。 */
+function NewRequestDialog() {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button onClick={() => setOpen(true)}>新規申請</Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>申請の種類を選択してください</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          {NEW_REQUEST_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate(option.to)
+              }}
+              className="flex items-start gap-3 rounded-md border border-border p-3 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <option.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.description}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 const DEFAULT_STATUS: NonNullable<FetchMyWorkflowRequestsOptions['status']> = 'all'
 const DEFAULT_SUBJECT_TYPE: NonNullable<FetchMyWorkflowRequestsOptions['subjectType']> = 'all'
@@ -103,6 +157,9 @@ function rowStatusMeta(request: WorkflowRequest) {
  * 自分の申請一覧。status・種別で絞り込み、行クリックで各申請の詳細
  * (`WorkflowRequestDetailPage`)へ遷移する。新規作成は各ドメインの既存フォームへの
  * 入口をボタン群として提供し、フォーム自体はここに統合しない。
+ *
+ * 新規作成は「新規申請」ボタン1つから申請種別選択(Dialog)を経て各ドメインの既存
+ * 作成ページへ遷移する2段階フローとし、フォーム自体はここに統合しない。
  *
  * 取消可能な申請(下書き/提出済み/差戻し)は複数選択し、共通の取消理由でまとめて
  * 取り消せる(オブジェクトを選択してから操作を適用するUI)。
@@ -240,20 +297,7 @@ export function WorkflowRequestListPage() {
             </ConfirmActionDialog>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/paid-leave">有給申請</Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/compensatory-leave">代休申請</Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/expenses/new">経費精算</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/requests/new">その他申請</Link>
-            </Button>
-          </div>
+          <NewRequestDialog />
         )
       }
     >
@@ -311,12 +355,7 @@ export function WorkflowRequestListPage() {
         ) : (
           <EmptyState
             title="申請はまだありません。"
-            description="上のボタンから有給・代休・経費精算・その他申請を行えます。"
-            action={
-              <Button asChild variant="secondary" size="sm">
-                <Link to="/requests/new">その他申請を作成</Link>
-              </Button>
-            }
+            description="「新規申請」から有給・代休・経費精算・その他申請を行えます。"
           />
         )
       ) : (

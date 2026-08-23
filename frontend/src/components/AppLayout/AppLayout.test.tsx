@@ -175,15 +175,10 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
 
-  it('renders a mobile bottom nav with home/attendance/requests/approvals/mypage entries', () => {
+  it('does not render a mobile bottom nav (removed in favor of the hamburger menu only)', () => {
     renderLayout()
 
-    const bottomNav = within(screen.getByRole('navigation', { name: 'メインナビゲーション(モバイル)' }))
-    expect(bottomNav.getByRole('link', { name: 'ホーム' })).toHaveAttribute('href', '/')
-    expect(bottomNav.getByRole('link', { name: '勤怠' })).toHaveAttribute('href', '/attendance/week')
-    expect(bottomNav.getByRole('link', { name: '申請' })).toBeInTheDocument()
-    expect(bottomNav.getByRole('link', { name: '承認' })).toHaveAttribute('href', '/approvals')
-    expect(bottomNav.getByRole('link', { name: 'マイページ' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'メインナビゲーション(モバイル)' })).not.toBeInTheDocument()
   })
 
   it('links the flow-office logo to the home page in both the sidebar and the mobile header', () => {
