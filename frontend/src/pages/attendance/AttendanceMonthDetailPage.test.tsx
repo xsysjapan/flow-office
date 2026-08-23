@@ -177,6 +177,7 @@ describe('AttendanceMonthDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText('今月の集計')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '詳しく表示' }))
     expect(screen.getByText('所定内法定内労働時間')).toBeInTheDocument()
     expect(screen.getByText('40時間')).toBeInTheDocument()
     expect(screen.getByText('1時間')).toBeInTheDocument()
@@ -202,6 +203,8 @@ describe('AttendanceMonthDetailPage', () => {
 
     renderPage()
 
+    await screen.findByText('今月の集計')
+    await userEvent.click(screen.getByRole('button', { name: '詳しく表示' }))
     expect(await screen.findByText('欠勤日数')).toBeInTheDocument()
   expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('1日')
     expect(screen.getByText('欠勤時間')).toBeInTheDocument()

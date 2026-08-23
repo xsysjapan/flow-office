@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
+import { Button } from '../Button/Button'
 import { Duration } from '../Duration/Duration'
 
 /** 特別休暇の種類ごとの内訳(月次はバックエンド算出、週次はフロントエンドでの
@@ -83,6 +85,30 @@ export function AttendanceCalculationSummary({
   specialLeaveBreakdown,
   payrollWorkMinutes,
 }: AttendanceCalculationSummaryProps) {
+  // デフォルトは主要4項目のみ表示し、五分類等の内訳は「詳しく表示」を押した場合のみ見せる
+  // (五分類化で表示項目が増え分かりにくいというフィードバックへの対応)。画面遷移でリセットされて
+  // よい表示上の切り替えのため、URL/localStorageには永続化せずコンポーネント内stateで持つ
+  // (ui-interaction-patterns スキル参照)。
+  const [showDetails, setShowDetails] = useState(false)
+
+  // 「残業時間」は法定内残業(statutory_within_overtime_minutes)と法定外残業
+  // (statutory_excess_overtime_minutes)の合計。五分類のうち「所定内法定内」を除いた
+  // 所定外労働(法定内・法定外の両方)を指し、prescribed_statutory_excess_work_minutes等の
+  // 所定/非所定内訳が渡された場合もこの2つのトップレベル値がその合計と一致するため
+  // (内訳フィールドはこの合計を所定/所定外にさらに分解したものであり、二重計上にはならない)。
+  const overtimeMinutes = totals.statutory_within_overtime_minutes + totals.statutory_excess_overtime_minutes
+  // 「うち深夜作業時間」は深夜時間帯(22:00-05:00)の労働をカテゴリ横断で合計したもの。
+  // late_night_prescribed_work_minutes + late_night_statutory_within_overtime_minutes +
+  // late_night_statutory_excess_overtime_minutes の3つで所定労働日の深夜時間の総量に一致し
+  // (docs/07-usecases-attendance.md「深夜時間帯の内訳」)、法定休日労働・所定休日労働の深夜分は
+  // 別枠のlate_night_legal_holiday_work_minutes/late_night_prescribed_holiday_work_minutesに
+  // 計上されるため、これらをすべて合算する。
+  const lateNightMinutes = totals.late_night_prescribed_work_minutes
+    + totals.late_night_statutory_within_overtime_minutes
+    + totals.late_night_statutory_excess_overtime_minutes
+    + totals.late_night_legal_holiday_work_minutes
+    + totals.late_night_prescribed_holiday_work_minutes
+
   const hasLeaveTotals = showAllLeaveTotals
     || !!totals.absence_minutes
     || !!totals.paid_leave_days
@@ -108,35 +134,56 @@ export function AttendanceCalculationSummary({
 
   return (
     <section aria-labelledby={`${title}-summary`}>
-      <h3 id={`${title}-summary`} className="mb-3 text-sm font-medium text-foreground">{title}</h3>
-      <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
-        {totals.work_minutes !== undefined && (
-          <SummaryItem label="実労働時間" fullWidth><Duration minutes={totals.work_minutes} /></SummaryItem>
-        )}
-        {showPayrollWorkMinutes && (
-          <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
-        )}
-        <SummaryItem label="所定内法定内労働時間"><Duration minutes={prescribedWithin} /></SummaryItem>
-        <SummaryItem label="うち深夜所定内法定内労働時間"><Duration minutes={totals.late_night_prescribed_statutory_within_work_minutes ?? totals.late_night_prescribed_work_minutes} /></SummaryItem>
-        <SummaryItem label="所定外法定内労働時間"><Duration minutes={nonPrescribedWithin} /></SummaryItem>
-        <SummaryItem label="うち深夜所定外法定内労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_within_work_minutes ?? totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
-        <SummaryItem label="所定内法定外労働時間"><Duration minutes={prescribedExcess} /></SummaryItem>
-        <SummaryItem label="うち深夜所定内法定外労働時間"><Duration minutes={totals.late_night_prescribed_statutory_excess_work_minutes ?? 0} /></SummaryItem>
-        <SummaryItem label="所定外法定外労働時間"><Duration minutes={nonPrescribedExcess} /></SummaryItem>
-        <SummaryItem label="うち深夜所定外法定外労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_excess_work_minutes ?? totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
-        {statutoryExcessOver60hMinutes !== undefined && (
-          <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
-        )}
-        {weeklyStatutoryExcessOvertimeMinutes !== undefined && (
-          <SummaryItem label="うち週40時間超" fullWidth={statutoryExcessOver60hMinutes === undefined}>
-            <Duration minutes={weeklyStatutoryExcessOvertimeMinutes} />
-          </SummaryItem>
-        )}
-        <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
-        <SummaryItem label="うち深夜法定休日労働時間"><Duration minutes={totals.late_night_legal_holiday_work_minutes} /></SummaryItem>
-      </dl>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 id={`${title}-summary`} className="text-sm font-medium text-foreground">{title}</h3>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          aria-expanded={showDetails}
+          onClick={() => setShowDetails((prev) => !prev)}
+        >
+          {showDetails ? '簡易表示に戻す' : '詳しく表示'}
+        </Button>
+      </div>
 
-      {hasLeaveTotals && (
+      {showDetails ? (
+        <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+          {totals.work_minutes !== undefined && (
+            <SummaryItem label="実労働時間" fullWidth><Duration minutes={totals.work_minutes} /></SummaryItem>
+          )}
+          {showPayrollWorkMinutes && (
+            <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
+          )}
+          <SummaryItem label="所定内法定内労働時間"><Duration minutes={prescribedWithin} /></SummaryItem>
+          <SummaryItem label="うち深夜所定内法定内労働時間"><Duration minutes={totals.late_night_prescribed_statutory_within_work_minutes ?? totals.late_night_prescribed_work_minutes} /></SummaryItem>
+          <SummaryItem label="所定外法定内労働時間"><Duration minutes={nonPrescribedWithin} /></SummaryItem>
+          <SummaryItem label="うち深夜所定外法定内労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_within_work_minutes ?? totals.late_night_statutory_within_overtime_minutes} /></SummaryItem>
+          <SummaryItem label="所定内法定外労働時間"><Duration minutes={prescribedExcess} /></SummaryItem>
+          <SummaryItem label="うち深夜所定内法定外労働時間"><Duration minutes={totals.late_night_prescribed_statutory_excess_work_minutes ?? 0} /></SummaryItem>
+          <SummaryItem label="所定外法定外労働時間"><Duration minutes={nonPrescribedExcess} /></SummaryItem>
+          <SummaryItem label="うち深夜所定外法定外労働時間"><Duration minutes={totals.late_night_non_prescribed_statutory_excess_work_minutes ?? totals.late_night_statutory_excess_overtime_minutes} /></SummaryItem>
+          {statutoryExcessOver60hMinutes !== undefined && (
+            <SummaryItem label="うち月60時間超"><Duration minutes={statutoryExcessOver60hMinutes} /></SummaryItem>
+          )}
+          {weeklyStatutoryExcessOvertimeMinutes !== undefined && (
+            <SummaryItem label="うち週40時間超" fullWidth={statutoryExcessOver60hMinutes === undefined}>
+              <Duration minutes={weeklyStatutoryExcessOvertimeMinutes} />
+            </SummaryItem>
+          )}
+          <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
+          <SummaryItem label="うち深夜法定休日労働時間"><Duration minutes={totals.late_night_legal_holiday_work_minutes} /></SummaryItem>
+        </dl>
+      ) : (
+        <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
+          <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
+          <SummaryItem label="残業時間"><Duration minutes={overtimeMinutes} /></SummaryItem>
+          <SummaryItem label="法定休日労働時間"><Duration minutes={totals.legal_holiday_work_minutes} /></SummaryItem>
+          <SummaryItem label="うち深夜作業時間"><Duration minutes={lateNightMinutes} /></SummaryItem>
+        </dl>
+      )}
+
+      {showDetails && hasLeaveTotals && (
         <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t border-border pt-3 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
           {absenceDays !== undefined && <SummaryItem label="欠勤日数">{absenceDays}日</SummaryItem>}
           {(showAllLeaveTotals || !!totals.absence_minutes) && <SummaryItem label="欠勤時間"><Duration minutes={totals.absence_minutes ?? 0} /></SummaryItem>}

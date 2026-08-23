@@ -117,6 +117,7 @@ describe('WeekAttendancePage', () => {
 
     await screen.findByText(`${weekStart}(月)`)
     expect(screen.getByRole('heading', { name: '今週の集計' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '詳しく表示' }))
     expect(screen.getByText('12時間')).toBeInTheDocument()
     expect(screen.getByText('所定内法定内労働時間').closest('dl')).toHaveClass('grid-cols-[minmax(0,1fr)_auto]', 'sm:grid-cols-[auto_1fr_auto_1fr]')
     expect(screen.getByText('うち週40時間超').nextElementSibling).toHaveTextContent('1時間')

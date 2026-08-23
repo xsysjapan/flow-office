@@ -16,7 +16,7 @@ export function Card({ id, title, actions, navigation, children }: CardProps) {
         <CardHeader className="flex-col items-stretch md:flex-row md:items-center">
           {navigation && <CardAction className="mb-3 md:mb-0 md:order-3 md:w-auto">{navigation}</CardAction>}
           {(title || actions) && (
-            <div className="flex min-h-9 w-full items-center justify-between gap-3 md:flex-1">
+            <div className="flex min-h-9 w-full flex-wrap items-center justify-between gap-3 md:flex-1">
               {title && <CardTitle>{title}</CardTitle>}
               {actions && <CardAction>{actions}</CardAction>}
             </div>
