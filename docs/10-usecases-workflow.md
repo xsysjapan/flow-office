@@ -91,6 +91,13 @@
 - `requires_backoffice_task` が true の申請種別は、最終承認時に
   [11章 バックオフィス処理](./11-usecases-backoffice.md) の UC-B001 でタスクを自動生成する。
 - 添付ファイルは [12章](./12-usecases-attachment.md) の仕組みを共通利用する。
+- 申請詳細画面 (`WorkflowRequestDetailPage`) は、`subject_type`を持つ申請(有給・代休・
+  特別休暇・振替休日・経費精算・月次勤怠)については`GET /api/workflow-requests/{id}`が
+  返す`subject`(対象ドメインの実データ)を、承認者向け一覧画面(`ApprovalsPage`/
+  `ApprovalDetailPanel`)と同じ表示ロジック(`WorkflowRequestSubjectDetail`コンポーネントで
+  共有)により、対象日・日数・金額・理由等を読み取り専用の添付資料的セクションとして表示する。
+  これはドメイン専用詳細ページへの遷移を代替するものではなく、申請センターから開いた
+  詳細画面で内容を確認できるようにするための表示に留め、承認・却下等の操作は追加しない。
 - 有給休暇・特別休暇と同様、振替休日申請 (`App\Domain\ShiftSwap`) も承認とバックオフィス処理を
   別ステータス系列で管理する専用申請ドメインとして実装する(`shift_swap_request`)。固定勤務の
   社員のみ対象。対象日・振替先日のどちらを休日→労働日にし、どちらを労働日→休日にするかは

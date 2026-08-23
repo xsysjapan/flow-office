@@ -231,4 +231,91 @@ describe('WorkflowRequestDetailPage', () => {
 
     await waitFor(() => expect(attachmentsApi.downloadAttachment).toHaveBeenCalledWith('attachment-9', 'receipt.pdf'))
   })
+
+  it('shows the paid leave subject detail (approval-style, read only) for a paid_leave_request', async () => {
+    const paidLeaveRequest: WorkflowRequest = {
+      ...submittedRequest,
+      id: 'workflow-request-paid-leave',
+      title: '有給休暇申請',
+      subject_type: 'paid_leave_request',
+      subject: {
+        type: 'paid_leave_request',
+        id: 'paid-leave-1',
+        user_id: 'applicant-1',
+        status: 'submitted',
+        target_date: '2026-08-10',
+        leave_type: 'full',
+        leave_type_label: '全休',
+        hours: null,
+        requested_days: 1,
+        reason: '私用のため',
+        submitted_at: '2026-08-01T00:00:00+09:00',
+        approved_at: null,
+        returned_at: null,
+        cancelled_at: null,
+        request_group_dates: null,
+        used_days_last_year: 3,
+        pending_days_last_year: 1,
+        approved_days_last_year: 2,
+      },
+    }
+
+    renderPage(paidLeaveRequest)
+
+    expect(await screen.findByText('申請内容')).toBeInTheDocument()
+    expect(screen.getByText('2026-08-10')).toBeInTheDocument()
+    expect(screen.getByText('全休')).toBeInTheDocument()
+    expect(screen.getByText('1日')).toBeInTheDocument()
+    expect(screen.getByText('私用のため')).toBeInTheDocument()
+    // 添付資料としての読み取り専用表示であり、承認・却下のアクションは持たない。
+    expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '差戻す' })).not.toBeInTheDocument()
+  })
+
+  it('shows the expense claim subject detail (approval-style) for an expense_claim', async () => {
+    const expenseRequest: WorkflowRequest = {
+      ...submittedRequest,
+      id: 'workflow-request-expense',
+      title: '経費精算申請',
+      subject_type: 'expense_claim',
+      subject: {
+        type: 'expense_claim',
+        id: 'expense-claim-1',
+        employee_id: 'applicant-1',
+        title: '交通費',
+        status: 'in_review',
+        total_amount: 3400,
+        period_from: '2026-07-01',
+        period_to: '2026-07-31',
+        submitted_at: '2026-08-01T00:00:00+09:00',
+        approved_at: null,
+        items: [
+          {
+            id: 'item-1',
+            category_id: 1,
+            category_name: '交通費',
+            usage_date: '2026-07-10',
+            description: 'タクシー',
+            amount: 1200,
+            commuting_deduction_amount: null,
+            reimbursement_amount: 1200,
+            payment_bearer: 'employee',
+          },
+        ],
+      },
+    }
+
+    renderPage(expenseRequest)
+
+    expect(await screen.findByText('申請内容')).toBeInTheDocument()
+    expect(screen.getByText('3,400円')).toBeInTheDocument()
+    expect(screen.getByText('タクシー')).toBeInTheDocument()
+  })
+
+  it('does not show a subject detail section for a general request without subject_type', async () => {
+    renderPage(submittedRequest)
+
+    await screen.findByText('タクシー代')
+    expect(screen.queryByText('申請内容')).not.toBeInTheDocument()
+  })
 })

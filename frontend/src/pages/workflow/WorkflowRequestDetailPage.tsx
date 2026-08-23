@@ -13,6 +13,7 @@ import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { PermissionDenied } from '../../components/PermissionDenied/PermissionDenied'
 import { Input } from '../../components/ui/input'
 import { Separator } from '../../components/ui/separator'
+import { WorkflowRequestSubjectDetail } from '../../components/WorkflowRequestSubjectDetail/WorkflowRequestSubjectDetail'
 import {
   useApproveWorkflowRequest,
   useCancelWorkflowRequest,
@@ -99,6 +100,16 @@ export function WorkflowRequestDetailPage() {
           <dt className="font-medium text-muted-foreground">承認者</dt>
           <dd className="text-foreground">{request.approver?.name ?? '未指定'}</dd>
         </dl>
+
+        {request.subject_type && (
+          <div className="flex flex-col gap-2">
+            <SectionHeading>申請内容</SectionHeading>
+            {/* 有給・代休・特別休暇・振替休日・経費精算・月次勤怠の申請内容(対象日・日数・
+                金額・理由等)を、承認画面(ApprovalsPage/ApprovalDetailPanel)と同じ見た目で
+                添付資料的に表示する。承認・却下等の操作は持たない読み取り専用ブロック。 */}
+            <WorkflowRequestSubjectDetail request={request} />
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <SectionHeading>入力内容</SectionHeading>
