@@ -507,6 +507,7 @@ describe('AttendanceDayPage', () => {
     ])
 
     expect(await screen.findByText(/遅刻・早退 09:00 〜 11:00 \(寝坊のため\)/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '詳しく表示' }))
     expect(screen.getByText('欠勤時間')).toBeInTheDocument()
     expect(screen.getByText('欠勤日数').nextElementSibling).toHaveTextContent('0日')
     expect(screen.getByText('特別休暇日数').nextElementSibling).toHaveTextContent('1日')

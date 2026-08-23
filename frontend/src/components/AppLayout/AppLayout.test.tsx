@@ -71,7 +71,7 @@ describe('AppLayout', () => {
   it('lists その他申請・経費精算 under the 申請 group in the sidebar', () => {
     renderLayout()
 
-    expect(sidebar().getByRole('link', { name: '申請センター' })).toHaveAttribute('href', '/requests')
+    expect(sidebar().getByRole('link', { name: '申請一覧' })).toHaveAttribute('href', '/requests')
     expect(sidebar().getByRole('link', { name: '経費精算' })).toHaveAttribute('href', '/expenses')
   })
 
@@ -145,7 +145,7 @@ describe('AppLayout', () => {
     const dialog = within(await screen.findByRole('dialog'))
     expect(await dialog.findByRole('heading', { name: 'メニュー' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '週次勤怠' })).toBeInTheDocument()
-    expect(dialog.getByRole('link', { name: '申請センター' })).toBeInTheDocument()
+    expect(dialog.getByRole('link', { name: '申請一覧' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '承認待ち' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: 'タスク一覧' })).toBeInTheDocument()
     expect(dialog.getByRole('link', { name: '管理メニュー' })).toBeInTheDocument()
@@ -156,7 +156,7 @@ describe('AppLayout', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'メニューを開く' }))
     const dialog = within(await screen.findByRole('dialog'))
-    await userEvent.click(dialog.getByRole('link', { name: '申請センター' }))
+    await userEvent.click(dialog.getByRole('link', { name: '申請一覧' }))
 
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
@@ -175,15 +175,10 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('heading', { name: 'メニュー' })).not.toBeInTheDocument()
   })
 
-  it('renders a mobile bottom nav with home/attendance/requests/approvals/mypage entries', () => {
+  it('does not render a mobile bottom nav (removed in favor of the hamburger menu only)', () => {
     renderLayout()
 
-    const bottomNav = within(screen.getByRole('navigation', { name: 'メインナビゲーション(モバイル)' }))
-    expect(bottomNav.getByRole('link', { name: 'ホーム' })).toHaveAttribute('href', '/')
-    expect(bottomNav.getByRole('link', { name: '勤怠' })).toHaveAttribute('href', '/attendance/week')
-    expect(bottomNav.getByRole('link', { name: '申請' })).toBeInTheDocument()
-    expect(bottomNav.getByRole('link', { name: '承認' })).toHaveAttribute('href', '/approvals')
-    expect(bottomNav.getByRole('link', { name: 'マイページ' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'メインナビゲーション(モバイル)' })).not.toBeInTheDocument()
   })
 
   it('links the flow-office logo to the home page in both the sidebar and the mobile header', () => {

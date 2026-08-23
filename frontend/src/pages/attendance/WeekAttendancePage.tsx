@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { AttendanceDayRow } from '../../components/AttendanceDayRow/AttendanceDayRow'
+import { AttendanceSelectionActionBar } from '../../components/AttendanceSelectionActionBar/AttendanceSelectionActionBar'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -197,43 +198,12 @@ export function WeekAttendancePage() {
           title="日別の内訳"
           actions={
             selectionMode ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm whitespace-nowrap text-muted-foreground">
-                  {selectedDates.size}件を選択中
-                </span>
-                {selectedDates.size > 0 ? (
-                  <>
-                    <Button asChild variant="secondary" size="sm">
-                      <Link to={`/paid-leave?dates=${datesQuery}`}>有給休暇を申請する</Link>
-                    </Button>
-                    {hasSpecialLeaveTypes && (
-                      <Button asChild variant="secondary" size="sm">
-                        <Link to={`/special-leave?dates=${datesQuery}`}>特別休暇を申請する</Link>
-                      </Button>
-                    )}
-                    <Button asChild variant="secondary" size="sm">
-                      <Link to={`/compensatory-leave?dates=${datesQuery}`}>代休を申請する</Link>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="secondary" size="sm" disabled>
-                      有給休暇を申請する
-                    </Button>
-                    {hasSpecialLeaveTypes && (
-                      <Button variant="secondary" size="sm" disabled>
-                        特別休暇を申請する
-                      </Button>
-                    )}
-                    <Button variant="secondary" size="sm" disabled>
-                      代休を申請する
-                    </Button>
-                  </>
-                )}
-                <Button variant="secondary" size="sm" onClick={exitSelectionMode}>
-                  キャンセル
-                </Button>
-              </div>
+              <AttendanceSelectionActionBar
+                selectedCount={selectedDates.size}
+                hasSpecialLeaveTypes={hasSpecialLeaveTypes}
+                datesQuery={datesQuery}
+                onCancel={exitSelectionMode}
+              />
             ) : (
               <div className="flex items-center gap-3">
                 {bulkEntryMessage && <Badge tone="success">{bulkEntryMessage}</Badge>}

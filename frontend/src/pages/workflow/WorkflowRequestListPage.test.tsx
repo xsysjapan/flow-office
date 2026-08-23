@@ -8,6 +8,13 @@ import { ApiError } from '../../api/client'
 import type { Paginated, WorkflowRequest } from '../../api/types'
 import { WorkflowRequestListPage } from './WorkflowRequestListPage'
 
+const navigate = vi.fn()
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+  return { ...actual, useNavigate: () => navigate }
+})
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -22,6 +29,7 @@ function renderPage() {
 describe('WorkflowRequestListPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    navigate.mockClear()
   })
 
   it('shows an empty state when there are no requests', async () => {
@@ -213,17 +221,26 @@ describe('WorkflowRequestListPage', () => {
     expect(within(table).getByText('有給')).toBeInTheDocument()
   })
 
-  it('provides creation entry points for each domain', async () => {
+  it('opens a request-type selection dialog from a single 新規申請 button, then navigates to the chosen domain', async () => {
     const empty: Paginated<WorkflowRequest> = { data: [], meta: { current_page: 1, last_page: 1, total: 0 }, links: { next: null, prev: null } }
     vi.spyOn(workflowRequestsApi, 'fetchMyWorkflowRequests').mockResolvedValue(empty)
 
     renderPage()
 
     await screen.findByText('申請はまだありません。')
-    expect(screen.getByRole('link', { name: '有給申請' })).toHaveAttribute('href', '/paid-leave')
-    expect(screen.getByRole('link', { name: '代休申請' })).toHaveAttribute('href', '/compensatory-leave')
-    expect(screen.getByRole('link', { name: '経費精算' })).toHaveAttribute('href', '/expenses/new')
-    expect(screen.getByRole('link', { name: 'その他申請' })).toHaveAttribute('href', '/requests/new')
+    expect(screen.queryByRole('link', { name: '有給申請' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '新規申請' }))
+
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.getByRole('button', { name: /有給申請/ })).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: /代休申請/ })).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: /経費精算/ })).toBeInTheDocument()
+
+    await userEvent.click(dialog.getByRole('button', { name: /経費精算/ }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(navigate).toHaveBeenCalledWith('/expenses/new')
   })
 
   it('filters by status and subject type via URL params', async () => {

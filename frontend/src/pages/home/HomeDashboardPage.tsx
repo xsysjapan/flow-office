@@ -118,7 +118,7 @@ export function HomeDashboardPage() {
               <div className="flex flex-col gap-1">
                 <BigNumber value={pendingRequestCount} unit="件 対応中" />
                 <p className="text-sm text-muted-foreground">
-                  申請センターのうち、提出済み・差戻し中の件数の合計です。
+                  申請一覧のうち、提出済み・差戻し中の件数の合計です。
                 </p>
               </div>
             )}

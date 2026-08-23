@@ -47,3 +47,11 @@ export const MonthlyWithSpecialLeaveBreakdown: Story = {
     ],
   },
 }
+
+/** デフォルト表示: 所定労働時間・残業時間・法定休日労働時間・うち深夜作業時間の4項目のみ。
+ *  「詳しく表示」を押すと五分類の内訳(Monthly相当)に切り替わる。 */
+export const DefaultCollapsed: Story = {
+  args: {
+    ...Monthly.args,
+  },
+}

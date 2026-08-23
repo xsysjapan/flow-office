@@ -21,6 +21,8 @@ export type NavGroupKey =
 export interface NavContext {
   /** 月次勤怠リンクの遷移先に使う「今月」(YYYY-MM)。 */
   currentYearMonth: string;
+  /** 日次勤怠リンクの遷移先に使う「今日」(YYYY-MM-DD)。 */
+  todayDate: string;
   /** 有効な特別休暇種別が1件以上あるか(無ければ「特別休暇」リンク自体を出さない)。 */
   hasSpecialLeaveTypes: boolean;
   /** バックオフィスタスク一覧を見せてよいか(feature判定込み)。 */
@@ -54,6 +56,13 @@ export interface RouteManifestEntry {
  */
 export const routeManifest: RouteManifestEntry[] = [
   {
+    label: "日次勤怠",
+    to: "/attendance/days",
+    buildTo: (ctx) => `/attendance/days/${ctx.todayDate}`,
+    feature: "attendance.entry",
+    group: "attendance",
+  },
+  {
     label: "週次勤怠",
     to: "/attendance/week",
     feature: "attendance.entry",
@@ -65,6 +74,12 @@ export const routeManifest: RouteManifestEntry[] = [
     buildTo: (ctx) => `/attendance/months/${ctx.currentYearMonth}`,
     feature: "attendance.timesheet",
     group: "attendance",
+  },
+  {
+    label: "申請一覧",
+    to: "/requests",
+    feature: "workflow.requests",
+    group: "requests",
   },
   {
     label: "有給",
@@ -89,12 +104,6 @@ export const routeManifest: RouteManifestEntry[] = [
     label: "経費精算",
     to: "/expenses",
     feature: "backoffice.expenses",
-    group: "requests",
-  },
-  {
-    label: "申請センター",
-    to: "/requests",
-    feature: "workflow.requests",
     group: "requests",
   },
   {
