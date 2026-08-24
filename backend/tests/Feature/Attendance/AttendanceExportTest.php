@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\Export\Services\AttendanceExcelBuilder;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
@@ -48,7 +49,7 @@ class AttendanceExportTest extends TestCase
             'user_id' => $employee->id, 'year_month' => '2026-08', 'status' => 'approved',
         ]);
 
-        $spreadsheet = app(\App\Domain\Export\Services\AttendanceExcelBuilder::class)->buildForMonth($month, '2026-08');
+        $spreadsheet = app(AttendanceExcelBuilder::class)->buildForMonth($month, '2026-08');
 
         $this->assertSame('山の日', $spreadsheet->getActiveSheet()->getCell('K23')->getValue());
     }
@@ -87,7 +88,7 @@ class AttendanceExportTest extends TestCase
             'prescribed_holiday_work_minutes' => 480,
         ]);
 
-        $sheet = app(\App\Domain\Export\Services\AttendanceExcelBuilder::class)
+        $sheet = app(AttendanceExcelBuilder::class)
             ->buildForMonth($month, '2026-07')
             ->getActiveSheet();
 
@@ -96,6 +97,54 @@ class AttendanceExportTest extends TestCase
         $this->assertSame('18:00', $sheet->getCell('D43')->getValue());
         $this->assertContains($sheet->getCell('E43')->getValue(), [null, 0, 0.0]);
         $this->assertEqualsWithDelta(480 / 1440, $sheet->getCell('F43')->getValue(), 0.000001);
+    }
+
+    public function test_excel_does_not_double_count_prescribed_holiday_work_allocated_as_weekly_overtime(): void
+    {
+        $employee = User::factory()->create();
+        $month = AttendanceMonth::query()->create([
+            'user_id' => $employee->id,
+            'year_month' => '2026-07',
+            'status' => 'closed',
+            'snapshot_json' => [
+                'work_minutes' => 480,
+                'prescribed_statutory_within_work_minutes' => 0,
+                'non_prescribed_statutory_excess_work_minutes' => 480,
+                'statutory_excess_overtime_minutes' => 480,
+                'prescribed_holiday_work_minutes' => 480,
+                'legal_holiday_work_minutes' => 0,
+            ],
+        ]);
+        $day = AttendanceDay::query()->create([
+            'user_id' => $employee->id,
+            'work_date' => '2026-07-18',
+            'status' => 'clocked_out',
+            'actual_start_at' => '2026-07-18 09:00:00',
+            'actual_end_at' => '2026-07-18 18:00:00',
+            'day_classification' => 'prescribed_holiday',
+        ]);
+        $day->calculation()->create([
+            'work_minutes' => 480,
+            'prescribed_work_minutes' => 0,
+            'statutory_within_overtime_minutes' => 0,
+            'statutory_excess_overtime_minutes' => 480,
+            'prescribed_statutory_within_work_minutes' => 0,
+            'non_prescribed_statutory_within_work_minutes' => 0,
+            'prescribed_statutory_excess_work_minutes' => 0,
+            'non_prescribed_statutory_excess_work_minutes' => 480,
+            'legal_holiday_work_minutes' => 0,
+            'prescribed_holiday_work_minutes' => 480,
+        ]);
+
+        $sheet = app(AttendanceExcelBuilder::class)
+            ->buildForMonth($month, '2026-07')
+            ->getActiveSheet();
+
+        // Header is row 12, therefore July 18 is row 30.
+        $this->assertContains($sheet->getCell('E30')->getValue(), [null, 0, 0.0]);
+        $this->assertEqualsWithDelta(480 / 1440, $sheet->getCell('F30')->getValue(), 0.000001);
+        $this->assertContains($sheet->getCell('E44')->getValue(), [null, 0, 0.0]);
+        $this->assertEqualsWithDelta(480 / 1440, $sheet->getCell('F44')->getValue(), 0.000001);
     }
 
     public function test_admin_can_export_a_csv_of_approved_or_closed_months(): void
