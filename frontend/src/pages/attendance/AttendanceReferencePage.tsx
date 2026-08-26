@@ -171,12 +171,7 @@ export function MonthlyReferenceView({
     <>
       <Card
         title="月次勤怠"
-        actions={
-          <div className="flex items-center gap-2">
-            {monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
-            {canReopenMonth && month?.status === 'closed' && <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />}
-          </div>
-        }
+        actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
         navigation={
           restrictToYearMonth === undefined && (
             <div className="flex gap-2">
@@ -235,6 +230,14 @@ export function MonthlyReferenceView({
               <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} onSelect={onSelectDate} />
             ))}
           </ul>
+        </Card>
+      )}
+
+      {/* 参照専用の月次勤怠カードとは分離し、状態を変更する管理者操作であることを明示する
+       *  (UC-A017)。attendance.month_reopen権限を持ち、対象月が締め済みの場合のみ表示する。 */}
+      {!isLoading && !error && canReopenMonth && month?.status === 'closed' && (
+        <Card title="管理者操作">
+          <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />
         </Card>
       )}
     </>
