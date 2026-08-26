@@ -44,6 +44,15 @@ Feature付与先としてID参照し、Membershipの読み取り結果を利用�
 初期データ投入も同じ境界で分け、`UserManagementSeeder`を先に、`AccessControlSeeder`を後に実行する。
 期限到来済み所属変更の定期適用は`user-management:apply-membership-changes`で実行する。
 
+Feature・Permissionの定義自体の唯一の情報源は`AccessControlCatalog`
+(`app/Domain/AccessControl/AccessControlCatalog.php`)であり、`AccessControlSeeder`はここから
+`SyncAccessControlCatalog`経由で反映する(初回セットアップ用)。本番は`migrate --force`のみで
+`db:seed`は実行しないため、デプロイのたびに`access-control:sync-catalog`コマンドを自動実行し、
+`AccessControlCatalog`にFeature・Permissionを追加するだけで管理画面(アクセス管理)の一覧に
+反映されるようにしている(docs/27-release-runbook.md参照)。この同期は追加専用
+(`updateOrInsert`のみ)で、Roleへの初期Permission割当や標準グループへの初期Feature割当
+(`AccessControlSeeder`側にのみ残る、下記9件など)には触れない。
+
 製品初期状態(`AccessControlSeeder`実行直後)では、`ALL_USERS`に打刻・勤怠入力・勤務表提出
 (`attendance`/`attendance.clock`/`attendance.entry`/`attendance.timesheet`)、汎用申請
 (`workflow`/`workflow.requests`)、休暇申請(`paid_leave`/`paid_leave.requests`)、経費入力
