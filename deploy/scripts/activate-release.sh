@@ -101,6 +101,10 @@ chmod 600 "$BASE_DIR/shared/mcp/storage/oauth-private.key" "$BASE_DIR/shared/mcp
 echo "== backend: migrate & cache =="
 cd "$RELEASE_DIR/backend"
 run_migrate "$RELEASE_DIR/backend"
+# Feature・PermissionはAccessControlCatalogに追加するだけでよいようにするため、
+# seeder全体は実行しない本番デプロイでもこの同期だけは毎回自動実行する
+# (追加専用のupdateOrInsertのみで構成されており、既存のRole/Feature割当は変更しない)。
+"$PHP_BIN" artisan access-control:sync-catalog
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
 "$PHP_BIN" artisan view:cache

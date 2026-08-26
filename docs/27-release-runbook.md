@@ -71,12 +71,20 @@ composer install --no-dev --optimize-autoloader --no-interaction
 cp .env.example .env   # 値は下記「.env設定」参照
 php artisan key:generate
 php artisan migrate --force
+php artisan access-control:sync-catalog   # AccessControlCatalogに定義したFeature・Permissionを反映
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan storage:link
 php artisan l5-swagger:generate
 ```
+
+本番は`db:seed`を実行しないため、`AccessControlCatalog`
+(`app/Domain/AccessControl/AccessControlCatalog.php`)にFeature・Permissionを追加しただけでは
+本番DBへは反映されない。`access-control:sync-catalog`は追加専用(`updateOrInsert`のみ、既存の
+Role・Feature割当は変更しない)で毎デプロイ実行しても安全なため、`activate-release.sh`から
+`migrate --force`の直後に自動実行し、コードに追加するだけで管理画面(アクセス管理)の
+一覧に反映されるようにしている。
 
 ### .env設定(抜粋、本番差分のみ)
 
