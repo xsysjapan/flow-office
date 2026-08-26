@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
 import * as usersApi from '../../api/users'
-import type { AttendanceDay, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
+import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
 import { formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
@@ -18,6 +18,21 @@ const targetUser: User = {
   employment_status: 'active',
   last_login_at: null,
 }
+
+const adminUser: User = {
+  id: 'admin-1',
+  name: '管理者花子',
+  email: 'admin@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+  effective_permissions: ['attendance.month_reopen'],
+}
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: adminUser }),
+}))
 
 const paginatedUsers: Paginated<User> = {
   data: [targetUser],
@@ -162,5 +177,40 @@ describe('AttendanceReferencePage', () => {
     expect(await screen.findByText('退勤済み')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
+  })
+
+  it('lets an admin with attendance.month_reopen reopen a closed month', async () => {
+    const closedMonth: AttendanceMonth = {
+      id: 'month-1',
+      user_id: targetUser.id,
+      year_month: formatDate(new Date()).slice(0, 7),
+      status: 'closed',
+      submitted_at: null,
+      approved_at: null,
+      returned_at: null,
+      return_comment: null,
+      closed_at: `${formatDate(new Date())}T00:00:00+09:00`,
+      snapshot: null,
+      legal_holiday_warnings: [],
+    }
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: closedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    const reopenMonth = vi.spyOn(attendanceApi, 'reopenMonth').mockResolvedValue({ ...closedMonth, status: 'approved' })
+
+    renderPage()
+    await selectTargetUser()
+
+    const reopenButton = await screen.findByRole('button', { name: '締めを取り消す' })
+    await userEvent.click(reopenButton)
+
+    await userEvent.type(await screen.findByLabelText('取消理由'), '対象社員の取り違え')
+    await userEvent.click(screen.getByRole('button', { name: '締めを取り消す' }))
+
+    await waitFor(() => expect(reopenMonth).toHaveBeenCalledWith('month-1', '対象社員の取り違え'))
   })
 })

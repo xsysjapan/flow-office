@@ -1,18 +1,21 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../auth/useAuth'
 import { AttendanceCalculationSummary } from '../../components/AttendanceCalculationSummary/AttendanceCalculationSummary'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { Duration } from '../../components/Duration/Duration'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { Textarea } from '../../components/ui/textarea'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
-import { useAttendanceMonth, usePunches, useWeek } from '../../hooks/useAttendance'
+import { useAttendanceMonth, usePunches, useReopenMonth, useWeek } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
@@ -109,6 +112,36 @@ function ReadOnlyDayRow({
   )
 }
 
+/** 「締めを取り消す」押下で開き、取消理由を入力してから確定するダイアログ(UC-A017・管理者専用の
+ *  救済コマンド)。勤怠参照画面とバックオフィスタスク詳細画面の両方から呼べるようexportする。 */
+export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yearMonth: string }) {
+  const [reason, setReason] = useState('')
+  const reopenMonth = useReopenMonth()
+
+  return (
+    <ConfirmActionDialog
+      triggerLabel="締めを取り消す"
+      triggerVariant="danger"
+      title="月次勤怠の締めを取り消しますか?"
+      description={`${yearMonth}の月次勤怠の締めを取り消します。取消理由は必須です。締めを取り消しても、日次勤怠のロック状態(承認済み時点のロック)は変わりません。`}
+      confirmLabel="締めを取り消す"
+      isPending={reopenMonth.isPending}
+      error={reopenMonth.error}
+      onOpenChange={(open) => {
+        if (open) {
+          setReason('')
+          reopenMonth.reset()
+        }
+      }}
+      onConfirm={() => reopenMonth.mutateAsync({ id: monthId, reason })}
+    >
+      <FormField label="取消理由" htmlFor="reopen-month-reason">
+        <Textarea id="reopen-month-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
+      </FormField>
+    </ConfirmActionDialog>
+  )
+}
+
 export function MonthlyReferenceView({
   userId,
   initialYearMonth,
@@ -123,6 +156,8 @@ export function MonthlyReferenceView({
   /** 指定すると、日別の内訳の各行をクリックできるようにし、選んだ日付を通知する。 */
   onSelectDate?: (date: string) => void
 }) {
+  const { user } = useAuth()
+  const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
   const [yearMonth, setYearMonth] = useState(() => restrictToYearMonth ?? initialYearMonth ?? formatDate(new Date()).slice(0, 7))
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
@@ -196,6 +231,14 @@ export function MonthlyReferenceView({
               <ReadOnlyDayRow key={date} date={date} day={daysByDate.get(date)} schedule={scheduleByDate.get(date)} onSelect={onSelectDate} />
             ))}
           </ul>
+        </Card>
+      )}
+
+      {/* 参照専用の月次勤怠カードとは分離し、状態を変更する管理者操作であることを明示する
+       *  (UC-A017)。attendance.month_reopen権限を持ち、対象月が締め済みの場合のみ表示する。 */}
+      {!isLoading && !error && canReopenMonth && month?.status === 'closed' && (
+        <Card title="管理者操作">
+          <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />
         </Card>
       )}
     </>

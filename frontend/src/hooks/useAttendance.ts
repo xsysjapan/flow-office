@@ -23,6 +23,7 @@ import {
   fetchWeekOvertime,
   generateAttendancePattern,
   previewAttendancePattern,
+  reopenMonth,
   startBreak,
   submitMonth,
   updateAttendanceDay,
@@ -278,7 +279,7 @@ function useInvalidateMonths() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: MY_MONTHS_KEY })
     void queryClient.invalidateQueries({ queryKey: MONTHS_TO_APPROVE_KEY })
-    void queryClient.invalidateQueries({ queryKey: ['attendance', 'month', 'by-id'] })
+    void queryClient.invalidateQueries({ queryKey: ['attendance', 'month'] })
   }
 }
 
@@ -295,6 +296,16 @@ export function useCloseMonth() {
 
   return useMutation({
     mutationFn: (id: string) => closeMonth(id),
+    onSuccess: () => invalidate(),
+  })
+}
+
+/** UC-A017: 締め済みの月次勤怠の締めを取り消す(管理者専用)。 */
+export function useReopenMonth() {
+  const invalidate = useInvalidateMonths()
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => reopenMonth(id, reason),
     onSuccess: () => invalidate(),
   })
 }

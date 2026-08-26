@@ -299,6 +299,11 @@ export function closeMonth(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}/close`, { method: 'POST' })
 }
 
+/** UC-A017: 締め済みの月次勤怠の締めを取り消す(管理者専用の救済コマンド)。 */
+export function reopenMonth(id: string, reason: string): Promise<AttendanceMonth> {
+  return apiFetch(`/attendance-months/${id}/reopen`, { method: 'POST', body: { reason } })
+}
+
 /** idで単一の月次勤怠を取得する。バックオフィスタスク詳細から締め状態を確認する用途。 */
 export function fetchAttendanceMonthById(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}`)

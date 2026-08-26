@@ -19,7 +19,12 @@ const assignee: User = {
   job_title: null,
   employment_status: 'active',
   last_login_at: null,
+  effective_permissions: ['attendance.month_reopen'],
 }
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: assignee }),
+}))
 
 const baseTask: BackOfficeTask = {
   id: 'backoffice-task-1',
@@ -206,6 +211,23 @@ describe('BackOfficeTaskDetailPage', () => {
       expect(screen.getByText('月次勤怠')).toBeInTheDocument()
       expect(screen.getByText('2026-07')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '締める' })).not.toBeInTheDocument()
+    })
+
+    it('lets a user with attendance.month_reopen reopen an already-closed month from the task detail', async () => {
+      vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'closed' })
+      const reopenMonth = vi
+        .spyOn(attendanceApi, 'reopenMonth')
+        .mockResolvedValue({ ...baseMonth, status: 'approved' })
+
+      renderPage(attendanceMonthTask)
+
+      await userEvent.click(await screen.findByRole('button', { name: '締めを取り消す' }))
+      await userEvent.type(await screen.findByLabelText('取消理由'), 'タスク処理中に誤りに気づいたため')
+      await userEvent.click(screen.getByRole('button', { name: '締めを取り消す' }))
+
+      await waitFor(() =>
+        expect(reopenMonth).toHaveBeenCalledWith('attendance-month-1', 'タスク処理中に誤りに気づいたため'),
+      )
     })
 
     it('places the back-office status change above the attendance month closeout section', async () => {
