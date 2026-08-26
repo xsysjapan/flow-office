@@ -21,6 +21,10 @@ const assignee: User = {
   last_login_at: null,
 }
 
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: assignee }),
+}))
+
 const baseTask: BackOfficeTask = {
   id: 'backoffice-task-1',
   source_type: 'workflow_request',
