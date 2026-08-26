@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useAuth } from '../../auth/useAuth'
 import { ApiError } from '../../api/client'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -25,7 +26,7 @@ import {
   useDownloadAttendanceExcel,
 } from '../../hooks/useAttendance'
 import { backOfficeTaskStatusLabel } from '../../utils/statusLabels'
-import { AttendanceMonthReferenceTabs } from '../attendance/AttendanceReferencePage'
+import { AttendanceMonthReferenceTabs, ReopenMonthDialog } from '../attendance/AttendanceReferencePage'
 
 /**
  * 月次勤怠承認(attendance.month_approved)から自動生成されたバックオフィスタスク専用の
@@ -36,6 +37,8 @@ import { AttendanceMonthReferenceTabs } from '../attendance/AttendanceReferenceP
  * あった確認導線を統合)。
  */
 function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceMonthId: string }) {
+  const { user } = useAuth()
+  const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
   const { data: month, isLoading, error, refetch } = useAttendanceMonthById(attendanceMonthId)
   const closeMonth = useCloseMonth()
   const downloadCsv = useDownloadAttendanceCsv()
@@ -76,9 +79,12 @@ function AttendanceMonthConfirmationSection({ attendanceMonthId }: { attendanceM
             </Button>
           </div>
           {month.status === 'closed' ? (
-            <p className="text-sm text-muted-foreground">
-              締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。
-            </p>
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">
+                締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。
+              </p>
+              {canReopenMonth && <ReopenMonthDialog monthId={month.id} yearMonth={month.year_month} />}
+            </div>
           ) : (
             <ConfirmActionDialog
               triggerLabel="締める"

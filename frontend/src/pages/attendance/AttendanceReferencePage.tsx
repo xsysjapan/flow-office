@@ -112,8 +112,9 @@ function ReadOnlyDayRow({
   )
 }
 
-/** 「締めを取り消す」押下で開き、取消理由を入力してから確定するダイアログ(UC-A017・管理者専用)。 */
-function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yearMonth: string }) {
+/** 「締めを取り消す」押下で開き、取消理由を入力してから確定するダイアログ(UC-A017・管理者専用の
+ *  救済コマンド)。勤怠参照画面とバックオフィスタスク詳細画面の両方から呼べるようexportする。 */
+export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yearMonth: string }) {
   const [reason, setReason] = useState('')
   const reopenMonth = useReopenMonth()
 
