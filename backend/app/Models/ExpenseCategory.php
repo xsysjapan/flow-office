@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 #[Fillable([
     'code', 'name', 'description', 'entry_mode', 'field_definitions', 'evidence_type_default',
-    'receipt_required_threshold', 'approval_skip_threshold', 'is_active',
+    'receipt_required_threshold', 'approval_skip_threshold', 'is_active', 'account_code', 'tax_category',
 ])]
 class ExpenseCategory extends Model
 {

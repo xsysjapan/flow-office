@@ -206,7 +206,13 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         ->middleware('permission:attendance.export,any');
     Route::get('/exports/attendance.xlsx', [ExportController::class, 'attendanceExcel'])
         ->middleware('permission:attendance.export,any');
+    Route::post('/exports/attendance/external-publish', [ExportController::class, 'attendanceExternalPublish'])
+        ->middleware('permission:attendance.export,any');
     Route::get('/exports/expenses', [ExportController::class, 'expenses'])
+        ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
+    Route::get('/exports/expenses.xlsx', [ExportController::class, 'expensesExcel'])
+        ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
+    Route::post('/exports/expenses/external-publish', [ExportController::class, 'expensesExternalPublish'])
         ->middleware(['feature:backoffice.expenses', 'permission:expense.export,any']);
 
     // --- カレンダー・勤務形態 (docs/08-usecases-calendar-shift.md UC-C009〜UC-C013) ---

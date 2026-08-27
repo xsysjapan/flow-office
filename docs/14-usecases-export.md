@@ -83,16 +83,50 @@ AttendanceCsvFormat`実装群、`ExportController::resolveAttendanceCsvFormat()`
 
 1. 経理担当者が対象期間を選択する
 2. 承認済み・支払予定の精算を抽出する
-3. CSV出力する
+3. CSV出力する(`format`パラメータで`generic`(既定)・`moneyforward`・`freee`を切り替えられる)
 4. 出力履歴を記録する
+
+### 経費CSV出力フォーマット
+
+勤怠CSV(UC-E001)と同じ`ExpenseCsvFormat`インターフェースの形で、経費側にも
+`GenericExpenseCsvFormat`・`FreeeExpenseCsvFormat`・`MoneyForwardExpenseCsvFormat`の3実装を
+用意する(`ExportController::resolveExpenseCsvFormat()`)。`generic`は従来のタスク単位の出力
+(後方互換)、`freee`・`moneyforward`は明細(ExpenseItem)単位の仕訳行を出力し、
+`expense_categories.account_code`(勘定科目コード)・`tax_category`(税区分)をそのまま
+借方勘定科目・税区分として使う(値の妥当性検証・変換は行わず、取込先ソフト側の設定に委ねる)。
+
+### 経費証跡アーカイブExcel
+
+`GET /exports/expenses.xlsx`(`ExportController::expensesExcel()`)は、承認済み・支払予定/完了の
+経費精算を対象に、`ExpenseExcelBuilder`で証跡アーカイブExcelを生成する。
+- 明細一覧シート: 月次・申請者ごとに1シート(改ページ)。列は
+  No/日付/区分/内容/支払先/金額(`reimbursement_amount`)/証憑No/合計。
+- 証憑シート: 添付ファイル(`Attachment`, owner_type='expense_item')を貼付する。画像
+  (jpeg/png/gif/webp)はそのまま貼付するが、PDFラスタライズに必要なライブラリ(Imagick等)を
+  `backend/composer.json`に追加していないため、PDF証憑は画像化せずファイル名のみ記載する
+  (フェーズ1の既知の制約)。
+
+生成したExcelは`InternalArchivePublisher`(`ExternalPublisher`実装。詳細は下記)経由でローカル
+ストレージへ内部保存し、`internal_archive.created`イベントとしてstored_eventsへ記録する
+(冪等性キーは「対象データID+出力種別+実行回数」。`ExportAuditAggregate::idempotencyKeyFor()`)。
+外部システムへは送信しない。
+
+### 外部連携の抽象(ExternalPublisher)
+
+勤怠・経費の外部連携出力(CSV/API/内部証跡アーカイブ)は`App\Domain\Export\Contracts\ExternalPublisher`
+という共通インターフェース越しに扱う。フェーズ1で実装があるのは
+`CsvFilePublisher`(ダウンロード用CSV/TSVをそのまま返す)と
+`InternalArchivePublisher`(証跡アーカイブExcelをローカルストレージへ内部保存する)の2つのみ。
+freee/MoneyForward等の会計クラウドへ実際にAPI送信する`ExternalApiPublisher`は型のみのスタブ
+(呼び出すと例外を投げる)で、実送信ロジックの実装はフェーズ2以降とする。
 
 ## 実装上のポイント
 
-- 出力操作は `export.created` イベントとして記録し、誰がいつ何を出力したかを追跡できるようにする。
-- 勤怠CSV(`ExportController::attendance()`)は上記「CSV出力フォーマット」の通り、
-  給与計算ソフトの仕様に応じて`format`パラメータで出力形式を切り替えられる。
-  経費CSV(`expenses()`)は現時点では固定フォーマットのみで、フォーマット切り替えは
-  未対応(後続フェーズとする)。
+- 出力操作は `export.created` イベント(経費の証跡アーカイブは`internal_archive.created`
+  イベント)として記録し、誰がいつ何を出力したかを追跡できるようにする。
+- 勤怠CSV(`ExportController::attendance()`)・経費CSV(`ExportController::expenses()`)は
+  いずれも上記「CSV出力フォーマット」の通り、給与計算・会計ソフトの仕様に応じて`format`
+  パラメータで出力形式を切り替えられる。
 - 勤怠CSV(UC-E001)は [UC-A009 承認](./07-usecases-attendance.md#uc-a009-承認者が月次勤怠を承認する)
   済み以降であれば出力可能とする(締め前でもバックオフィス確認のためにCSV/帳票を出力できる
   必要があるため)。実装では対象月の `attendance_months` が `approved` または `closed`

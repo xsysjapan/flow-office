@@ -245,7 +245,20 @@ paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)
   `subjectId`/`title`/`summary`/`detailUrl`を持つ。docs/13-usecases-notification.md)
 - `notification.sent`
 - `notification.confirmed` (本人が通知一覧またはメール内リンクから確認した)
-- `export.created`
+- `export.created` (UC-E001/UC-E002: CSV/Excel出力の履歴。`exportType`で出力種別を区別する。
+  `idempotencyKey`はnullable(後方互換。経費の証跡アーカイブ以外では未使用))
+- `internal_archive.created` (UC-X012: 経費の証跡アーカイブExcelを`InternalArchivePublisher`で
+  内部保存したことを記録する。`idempotencyKey`は「対象データID+出力種別+実行回数」から
+  決定的に導出する。外部システムへの送信は行わない)
+- `external_integration.published` (docs/33-usecases-attendance-external-api.md: 勤怠月次確定
+  データ(`attendance_months`)をfreee/moneyforward等の外部APIへ`ExternalApiPublisher`経由で
+  送信したことを記録する。`idempotencyKey`は「対象データID(attendance_months.id)+連携先+
+  出力種別+実行回数」から決定的に導出する。送信に成功した場合のみ記録し、失敗はAPIレスポンスの
+  `failures`で通知する(イベントは記録しない)。フェーズ3(docs/30-usecases-expense.md UC-X012)
+  では経費申請(承認済み)の外部API送信でも同一イベントクラスをそのまま再利用する
+  (新規イベントは追加しない)。対象データIDフィールド(`attendanceMonthId`)には
+  `expense_claims.id`を渡し、`exportType`/`idempotencyKey`の接頭辞
+  (`attendance_external_api_*`/`expense_external_api_*`)で対象種別を区別する)
 
 ## 命名規則
 

@@ -179,11 +179,55 @@ UC-X013はそれとは別に、**異なる経費区分をまたいで**同じ申
 2. 領収書 (添付がある明細のみ)・金額・用途・勘定科目を確認する
 3. 不備があれば差戻す
 4. 問題なければ支払予定にする
-5. 会計CSVまたは振込CSVを出力する
+5. 会計CSV(`generic`/`moneyforward`/`freee`から選択)・証跡アーカイブExcel・
+   freee/MoneyForwardへの外部API送信のいずれかで出力する
 6. 支払後に完了にする
 
 `backoffice_tasks.task_type` は経費精算1種類のままでよく、区分ごとに種別を分けない
 (勘定科目のマッピングは区分マスタ側の設定で吸収する)。
+
+手順5の実装は`GET /exports/expenses`(会計CSV)・`GET /exports/expenses.xlsx`
+(証跡アーカイブExcel)・`POST /exports/expenses/external-publish`(外部API送信、フェーズ3)の
+3エンドポイント。会計CSVは`format`パラメータで`generic`(タスク単位・後方互換)・
+`moneyforward`・`freee`(いずれも明細=仕訳1行、`expense_categories.account_code`/`tax_category`
+をそのまま使用)を切り替えられる。証跡アーカイブExcelは`ExpenseExcelBuilder`が生成し、
+`InternalArchivePublisher`経由でローカルストレージへ内部保存した上で`internal_archive.created`を
+stored_eventsへ記録する。
+
+`POST /exports/expenses/external-publish`(freee/MoneyForwardへの実API送信)は`year_month`
+(対象月、複数可)・`provider`(`freee`/`moneyforward`)・任意の`employee_id`(複数可)を指定し、
+承認済み(`expense_claims.status = approved`)の経費精算のみを対象とする(未承認・差戻し中の
+申請は送信対象から除外)。対象月は確定基準の日付(承認日時→提出日時→精算期間開始日の順で
+最初に存在するもの)を基準に判定する。勤怠側の外部API連携(フェーズ2、
+[docs/33-usecases-attendance-external-api.md](./33-usecases-attendance-external-api.md))と
+同じ認可基盤(`ExternalIntegrationConnection`・`AuthStrategy`)と従業員マッピング
+(`ExternalEmployeeMapping`。申請者=`employee_id`をそのまま`user_id`として参照し、経費専用
+テーブルは追加しない)を再利用する。送信成功時のみ`external_integration.published`を
+stored_eventsへ記録し、対象データID(`expense_claims.id`)+連携先+出力種別+実行回数から
+導出した冪等性キーで重複送信を検知する(送信失敗した申請は自動リトライせず、手動で再実行する。
+実サーバーへの疎通確認は本フェーズでは行わずHttp::fake()でのテストに留める)。
+
+連携先ごとのペイロード構造・送信方式は次のように異なる(一次情報の調査結果、
+[docs/notes/moneyforward-api-investigation.md](./notes/moneyforward-api-investigation.md)参照)。
+
+- **freee**: `FreeeExpenseApiPayloadBuilder`が仕訳相当のペイロードを組み立て、通常の
+  `ExternalApiPublisher`が`POST /api/1/deals`へ1リクエストで送信する。`expense_categories.account_code`/
+  `tax_category`を勘定科目・税区分としてそのまま使う。
+- **MoneyForward**: MoneyForwardクラウド経費APIは仕訳を直接受け取らず、**経費明細
+  (ex_transaction)を1件ずつ作成する**モデルである。`MoneyForwardExpenseApiPayloadBuilder`が
+  経費明細(`ExpenseItem`)1件につきex_transaction 1件分のペイロードを組み立て、
+  `MoneyForwardExpensePublisher`(`app/Domain/Export/Services/Publishers/`)が
+  `POST /api/external/v1/offices/{office_id}/office_members/{office_member_id}/ex_transactions`
+  へ明細ごとに送信する。領収書が添付されている明細は、先に
+  `POST .../office_members/{office_member_id}/upload_receipt`で画像をアップロードし、
+  その結果(`receipt_input`)をex_transaction作成リクエストへ紐付けてから送信する。
+  `ex_item_id`(経費科目id)・`dr_excise_id`(税区分id)はコードではなくMoneyForward内部の
+  管理IDのため、`expense_categories.account_code`/`tax_category`をそのまま送らず、
+  `external_account_mappings`テーブル(`ExternalAccountMapping`モデル)経由でMoneyForward内部IDへ
+  変換する。事前に管理者が`account_code`/`tax_category`とMoneyForward内部IDの対応を
+  `external_account_mappings`へ登録しておく必要がある。またURLパスの`office_id`は
+  `external_integration_connections.external_office_id`(連携先ごとに1つ)、
+  `office_member_id`は`external_employee_mappings.external_employee_code`を流用する。
 
 ## 実装上のポイント
 
