@@ -23,7 +23,10 @@ return new class extends Migration
             $table->string('external_id'); // MoneyForward側の内部ID
             $table->timestamps();
 
-            $table->unique(['provider', 'mapping_type', 'source_code']);
+            $table->unique(
+                ['provider', 'mapping_type', 'source_code'],
+                'external_account_mappings_provider_type_code_unique'
+            );
         });
     }
 
