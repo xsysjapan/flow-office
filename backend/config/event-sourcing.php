@@ -114,6 +114,8 @@ use App\Domain\ExpenseClaim\Events\ExpenseItemAdded;
 use App\Domain\ExpenseClaim\Events\ExpenseItemRemoved;
 use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
 use App\Domain\Export\Events\ExportCreated;
+use App\Domain\Export\Events\ExternalIntegrationPublished;
+use App\Domain\Export\Events\InternalArchiveCreated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -326,6 +328,8 @@ return [
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
         'export.created' => ExportCreated::class,
+        'internal_archive.created' => InternalArchiveCreated::class,
+        'external_integration.published' => ExternalIntegrationPublished::class,
 
         'attendance_day.created' => AttendanceDayCreated::class,
         'attendance_day.edited' => AttendanceDayEdited::class,

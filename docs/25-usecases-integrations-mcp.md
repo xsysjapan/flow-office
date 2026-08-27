@@ -4,6 +4,11 @@
 (`application_integrations`、docs/16-database-schema.md)。ClaudeなどのAIアプリはMCPサーバーを
 経由してこの連携を利用する。
 
+`application_integrations`はAIアプリ・MCPクライアント等がflow-officeを「呼び出す側」の連携
+台帳(Sanctumトークンの発行元管理)であり、flow-office自身がfreee/moneyforward等の外部クラウド
+APIを「呼び出す側」として使う認可情報(`external_integration_connections`、
+docs/33-usecases-attendance-external-api.md)とは別概念・別テーブルである。混同しないこと。
+
 ## UC-I001: 個人API・MCP連携を登録する
 
 1. ユーザーが「アプリ・API連携」画面を開く

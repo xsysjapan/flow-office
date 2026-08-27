@@ -793,6 +793,56 @@ UC-D006の管理者モード(社員証NFCの現地登録)専用のスコープ�
   `leave:self:read` / `leave:self:create` / `schedule:self:read` / `report:self:import`)
 - created_at / updated_at
 
+### external_integration_connections (勤怠API連携の認可情報。正データ)
+
+docs/33-usecases-attendance-external-api.md参照。`application_integrations`(AIアプリ・MCPが
+flow-officeを「呼び出す側」の連携)とは別概念であり、本テーブルはflow-office自身がfreee/
+moneyforward等の外部クラウドAPIを「呼び出す側」として使う認可情報を保持する。
+
+- id
+- provider (`freee` / `moneyforward`。unique)
+- external_office_id (nullable。MoneyForwardクラウド経費APIのURLパスに含まれるオフィスID。
+  freeeでは未使用)
+- auth_type (`oauth2` / `api_key`)
+- status (`active` / `disconnected`)
+- access_token (encrypted。OAuth2のみ)
+- refresh_token (encrypted。OAuth2のみ)
+- api_key (encrypted。APIキー方式のみ)
+- client_id / client_secret (encrypted。OAuth2アプリ登録情報)
+- token_expires_at (nullable)
+- connected_by_user_id (nullable)
+- connected_at (nullable)
+- created_at / updated_at
+
+トークン・APIキーは平文で保存しない(Laravelの`encrypted`キャスト。`system_settings.m365_client_secret`
+と同じ方式)。
+
+### external_employee_mappings (勤怠API連携の従業員番号マッピング。正データ)
+
+flow-officeの`user_id`と、連携先(freee/moneyforward)側の従業員番号の対応表。連携先ごとに
+1レコード(`unique(provider, user_id)`)。MoneyForwardクラウド経費APIでは、この値が
+`ex_transactions`作成URLの`office_member_id`としてそのまま使われる。
+
+- id
+- provider (`freee` / `moneyforward`)
+- user_id
+- external_employee_code
+- created_at / updated_at
+
+### external_account_mappings (MoneyForward経費API向け科目・税区分マッピング。正データ)
+
+docs/30-usecases-expense.md参照。MoneyForwardクラウド経費APIの`ex_item_id`(経費科目id)・
+`dr_excise_id`(税区分id)はコードではなくMoneyForward内部の管理IDであるため、
+`expense_categories.account_code`/`tax_category`からMoneyForward内部IDへの対応を保持する。
+
+- id
+- provider (`moneyforward`。将来的に他連携先が増えても使える汎用マッピングとして持たせる)
+- mapping_type (`ex_item` / `dr_excise`)
+- source_code (`expense_categories.account_code` または `tax_category` の値)
+- external_id (MoneyForward側の内部ID)
+- created_at / updated_at
+- unique(provider, mapping_type, source_code)
+
 ## attendance_daily_calculations (Projection: 日次集計)
 
 - id
@@ -1043,6 +1093,66 @@ Projectorが直接この行を削除する(grant消化がまだ発生してい�
 - attendance_day_id (手動付与では紐づく実績行が無いためnullable。自動導出分は従来通り
   ユニーク制約付きで必須)
 
+## expense_categories (経費区分マスタ。イベントソーシング対象外の通常のEloquent CRUD)
+
+- id
+- code (一意)
+- name
+- description (nullable)
+- entry_mode (`batch` = 交通費専用のまとめ入力ツール / `single` = 区分専用の1件入力フォーム)
+- field_definitions (nullable, JSON。区分固有の入力項目定義
+  `[{key, label, type, required, options?}, ...]`。`expense_items.attributes`に保存できる
+  キーをここで定義したものだけに限定する)
+- evidence_type_default (`fact_reference_available` / `receipt_required` / `receipt_optional`)
+- account_code (nullable。freee/MoneyForward等の会計クラウドに取り込む際の勘定科目コード。
+  UC-X012の会計CSV出力で使用)
+- tax_category (nullable。税区分。インボイス制度の適格請求書等区分を含む。法務判断が必要な値の
+  ためマスタ側に持たせ、コードにハードコードしない)
+- receipt_required_threshold (nullable)
+- approval_skip_threshold (nullable)
+- is_active
+- created_at / updated_at
+
+## expense_claims (経費精算ヘッダー。正データ)
+
+UC-X010〜UC-X012: 通勤費・業務交通費・その他経費すべてを扱う単一ドメイン。主キーはUUID
+(`ExpenseClaimAggregate`が発番)。承認とバックオフィス処理は別ステータス系列
+(`backoffice_tasks`)で管理するため、ここでの`status`は承認フローのみを表す
+(docs/06〜/30-usecases-expense.md)。
+
+- id (UUID)
+- employee_id (→ users)
+- title (nullable)
+- period_from / period_to (明細の`usage_date`の最小値・最大値から算出する派生値)
+- status (承認フローの状態)
+- approver_user_id (nullable, → users)
+- total_amount
+- submitted_at / approved_at (nullable)
+- locked_at / unlocked_at (nullable。提出時ロック中かどうかの判定に使う)
+- created_at / updated_at
+
+## expense_items (経費明細。正データ)
+
+UC-X004〜UC-X009: 通勤費・業務交通費・その他経費(宿泊費・会食・消耗品等)を単一のデータ構造で
+表現する。添付ファイルは新規テーブルを持たず、`attachments`を`owner_type='expense_item'`として
+再利用する。
+
+- id (UUID)
+- claim_id (→ expense_claims)
+- category_id (→ expense_categories)
+- usage_date (nullable)
+- description (nullable)
+- amount
+- project_id (nullable)
+- evidence_type
+- fact_reference_type / fact_reference_id (nullable)
+- commuting_deduction_amount (定期区間との重複自己申告分の控除額)
+- payment_bearer (`employee` / `company` / `corporate_card` / `customer` / `other`)
+- reimbursement_amount (会社から社員への返金額。派生値。`payment_bearer`が`employee`の場合のみ)
+- attributes (nullable, JSON。区分固有の入力項目値。`expense_categories.field_definitions`で
+  許可されたキーのみ)
+- created_at / updated_at
+
 ## attachments
 
 - id
@@ -1099,8 +1209,8 @@ docs/20-implementation-notes.md と同様の注記)。
 | 分類 | テーブル | 特徴 |
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
-| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances` | Command経由でのみ更新。 |
+| マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules`, `expense_categories` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances`, `expense_claims`, `expense_items` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
 | Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
 

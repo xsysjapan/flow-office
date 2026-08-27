@@ -48,6 +48,7 @@ Teams通知に集中する。
 | 30 | [30-usecases-expense.md](./30-usecases-expense.md) | 経費精算ユースケース (UC-X001~) |
 | 31 | [31-user-group-access-foundation.md](./31-user-group-access-foundation.md) | ユーザー・グループ・権限・利用機能管理基盤 |
 | 32 | [32-stored-event-history-normalization.md](./32-stored-event-history-normalization.md) | StoredEvent履歴再構成・本番補正手順 |
+| 33 | [33-usecases-attendance-external-api.md](./33-usecases-attendance-external-api.md) | 勤怠API連携ユースケース(フェーズ2、freee/MoneyForward) |
 
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。
