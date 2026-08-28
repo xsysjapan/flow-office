@@ -12,6 +12,9 @@
  */
 return [
     'freee' => [
+        // OAuth2認可コードフロー(初回連携)の認可エンドポイント。
+        // ExternalIntegrationOAuthController::redirectUrl()参照。
+        'authorize_endpoint' => env('FREEE_AUTHORIZE_ENDPOINT', 'https://accounts.secure.freee.co.jp/public_api/authorize'),
         'token_endpoint' => env('FREEE_TOKEN_ENDPOINT', 'https://accounts.secure.freee.co.jp/public_api/token'),
         // フェーズ2: 勤怠API連携。freee人事労務「勤怠情報月次サマリの更新」API
         // (PUT /api/v1/employees/{employee_id}/work_record_summaries/{year}/{month})。

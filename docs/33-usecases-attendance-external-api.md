@@ -47,6 +47,15 @@ freee/freee-api-schemaリポジトリの公式OpenAPIスキーマ(`hr/open-api-3
    複数登録でき、登録後に有効化(`enabled`)することで利用を開始する
    (`ExternalIntegrationPublisherResolver`は`enabled=true`かつ`status=active`の行から
    最初に見つかった1件を使う。複数登録時に特定の1件を選ばせるUIは対象外)。
+   **freeeはOAuth2認可コードフローの画面操作で連携できる**: 管理画面でクライアントID・
+   クライアントシークレットを登録した後、一覧の「freeeと連携する」ボタンから
+   `GET /admin/external-integration-connections/{id}/oauth/redirect-url`で取得した
+   freeeの認可URLへ遷移し、freee側で許可するとバックエンドのコールバック
+   (`GET /admin/external-integration-connections/oauth/callback`、`state`の署名・
+   有効期限で改ざん・再利用を防ぐ)がcode→トークン交換まで行い、`access_token`/
+   `refresh_token`/`token_expires_at`を保存した上で管理画面へ結果(成功/失敗)とともに
+   戻る(`ExternalIntegrationOAuthController`参照)。マネーフォワードはAPIキー方式のため
+   このOAuthフローは対象外。
 2. 管理者がflow-office側の社員(`users.id`)と連携先の従業員番号を`external_employee_mappings`
    へ登録する(連携先ごとに1レコード)。
 3. 管理者が`POST /exports/attendance/external-publish`で対象月・対象社員・連携先を指定して送信する。

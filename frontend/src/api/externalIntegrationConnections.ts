@@ -49,3 +49,9 @@ export function updateExternalIntegrationConnection(
 export function deleteExternalIntegrationConnection(id: string): Promise<void> {
   return apiFetch(`/admin/external-integration-connections/${id}`, { method: 'DELETE' })
 }
+
+// freeeのOAuth2認可コードフロー(初回連携)。返ってきたurlへ画面遷移させると、
+// freee側の認可後にバックエンドのcallbackがトークン交換まで行い、この画面へ戻ってくる。
+export function getExternalIntegrationConnectionOAuthRedirectUrl(id: string): Promise<{ url: string }> {
+  return apiFetch(`/admin/external-integration-connections/${id}/oauth/redirect-url`)
+}

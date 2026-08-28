@@ -15,8 +15,10 @@ import {
 /**
  * 外部連携(freee/マネーフォワード)の送信フロー確認。
  *
- * 認可コードフローの実UI実装(対象外)は未実装のため、access_token/refresh_token/
- * token_expires_atはAPI直叩き(`ExternalIntegrationConnectionController`拡張分)で投入する。
+ * freeeはOAuth2認可コードフローの実画面操作(「freeeと連携する」ボタン→mock-freeeが
+ * 即時リダイレクト→バックエンドcallbackがトークン交換→画面に戻り成功表示)で
+ * access_token/refresh_tokenを取得させる。マネーフォワードはAPIキー方式のためAPI直叩きで
+ * api_keyを投入する。
  * `mock-freee`/`mock-moneyforward`(リポジトリルート、`docker compose up`で起動)へ実際に
  * HTTPリクエストが送られることを、各モックの`/_debug/last-request`で検証する。
  *
@@ -38,7 +40,8 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
 
   await loginAs(page, SCENARIO_USERS.admin)
 
-  // 1. freee用連携(OAuth2、access_token/refresh_token/token_expires_atを設定)を登録する。
+  // 1. freee用連携(OAuth2、client_id/client_secriptのみ)を登録する。access_token/
+  //    refresh_tokenは後続の画面操作でOAuth2認可コードフローを通じて取得させる。
   //    external_office_id はfreee側の事業所ID(company_id)として送信ペイロードに使われる。
   await createExternalIntegrationConnection(page, {
     provider: 'freee',
@@ -46,9 +49,6 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
     authType: 'oauth2',
     clientId: 'e2e-freee-client-id',
     clientSecret: 'e2e-freee-client-secret',
-    accessToken: 'e2e-initial-access-token',
-    refreshToken: 'e2e-initial-refresh-token',
-    tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     externalOfficeId: '999',
     enabled: true,
   })
@@ -72,6 +72,12 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
   await expect(moneyforwardRow).toBeVisible()
   await expect(freeeRow.getByText('有効', { exact: true })).toBeVisible()
   await expect(moneyforwardRow.getByText('有効', { exact: true })).toBeVisible()
+
+  // 3b. freeeのOAuth2認可コードフローを実際の画面操作で完了させる。「freeeと連携する」を
+  //     クリックするとmock-freeeの認可エンドポイントへ遷移し、即座にコールバックURLへ
+  //     リダイレクトされ、バックエンドがトークン交換した上でこの画面へ戻ってくる。
+  await freeeRow.getByRole('button', { name: 'freeeと連携する' }).click()
+  await expect(page.getByText('freeeとの連携が完了しました。')).toBeVisible({ timeout: 15000 })
 
   // 4. freee勤怠送信: 月次入力ユーザー(伊藤舞)の当月分を日次実績作成→提出→承認まで進め、
   //    freee向けの従業員番号マッピングを登録してから外部送信APIを呼び出す。
@@ -121,7 +127,7 @@ test('外部連携設定の登録〜freee勤怠送信〜マネーフォワード
   expect(freeeLastRequest.lastRequest.path).toBe(
     `/hr/api/v1/employees/4001/work_record_summaries/${expectedYear}/${Number(expectedMonth)}`,
   )
-  expect(freeeLastRequest.lastRequest.headers.authorization).toBe('Bearer e2e-initial-access-token')
+  expect(freeeLastRequest.lastRequest.headers.authorization).toBe('Bearer mock-freee-access-token')
   expect(freeeLastRequest.lastRequest.body).toMatchObject({ company_id: 999 })
 
   // 5. マネーフォワード経費送信: 承認スキップ閾値以下の交通費(自動承認)を作成し、
