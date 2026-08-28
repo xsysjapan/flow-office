@@ -171,6 +171,7 @@ describe('ExternalIntegrationConnectionsPage', () => {
       expect(window.location.href).toBe('https://accounts.secure.freee.co.jp/public_api/authorize?client_id=x')
     })
 
+    // @ts-expect-error -- 同上。
     window.location = originalLocation
   })
 
