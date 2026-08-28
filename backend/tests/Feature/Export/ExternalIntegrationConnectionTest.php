@@ -63,6 +63,66 @@ class ExternalIntegrationConnectionTest extends TestCase
         );
     }
 
+    public function test_admin_can_set_oauth2_access_and_refresh_tokens_on_create(): void
+    {
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin)->postJson('/api/admin/external-integration-connections', [
+            'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
+            'name' => 'freee本社事業所2',
+            'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
+            'client_id' => 'client-id',
+            'client_secret' => 'client-secret',
+            'access_token' => 'initial-access-token',
+            'refresh_token' => 'initial-refresh-token',
+            'token_expires_at' => '2027-01-01T00:00:00+09:00',
+            'enabled' => true,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('has_access_token', true);
+        $response->assertJsonPath('has_refresh_token', true);
+        $response->assertJsonMissing(['access_token' => 'initial-access-token']);
+        $response->assertJsonMissing(['refresh_token' => 'initial-refresh-token']);
+
+        $id = $response->json('id');
+        $connection = ExternalIntegrationConnection::query()->findOrFail($id);
+        $this->assertSame('initial-access-token', $connection->access_token);
+        $this->assertSame('initial-refresh-token', $connection->refresh_token);
+        $this->assertNotNull($connection->token_expires_at);
+    }
+
+    public function test_admin_can_update_oauth2_tokens_and_blank_tokens_keep_existing_value(): void
+    {
+        $admin = $this->admin();
+        $connection = ExternalIntegrationConnection::create([
+            'id' => (string) Uuid::uuid4(),
+            'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
+            'name' => 'freee',
+            'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
+            'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => false,
+            'client_id' => 'cid',
+            'client_secret' => 'csecret',
+            'access_token' => 'original-access-token',
+            'refresh_token' => 'original-refresh-token',
+            'token_expires_at' => now()->addHour(),
+        ]);
+
+        $response = $this->actingAs($admin)->patchJson("/api/admin/external-integration-connections/{$connection->id}", [
+            'access_token' => 'updated-access-token',
+            'refresh_token' => '',
+        ]);
+
+        $response->assertSuccessful();
+        $response->assertJsonPath('has_access_token', true);
+        $response->assertJsonPath('has_refresh_token', true);
+
+        $connection->refresh();
+        $this->assertSame('updated-access-token', $connection->access_token);
+        $this->assertSame('original-refresh-token', $connection->refresh_token);
+    }
+
     public function test_provider_can_have_multiple_connections(): void
     {
         $admin = $this->admin();

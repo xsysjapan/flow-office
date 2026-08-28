@@ -563,3 +563,133 @@ export async function closeMonth(adminPage: Page, employeePage: Page, yearMonth:
 
   await apiFetch(adminPage, `/attendance-months/${month.id}/close`, { method: 'POST' })
 }
+
+/**
+ * 外部連携(freee/マネーフォワード)設定を登録する(管理者限定、
+ * `ExternalIntegrationConnectionsPage`のUIにはaccess_token/refresh_token/token_expires_at
+ * の入力欄がまだ無いため、E2EからはAPI直叩きで前提データを作る。scenario-13参照)。
+ */
+export async function createExternalIntegrationConnection(
+  page: Page,
+  input: {
+    provider: 'freee' | 'moneyforward'
+    name: string
+    authType: 'oauth2' | 'api_key'
+    clientId?: string
+    clientSecret?: string
+    apiKey?: string
+    accessToken?: string
+    refreshToken?: string
+    tokenExpiresAt?: string
+    externalOfficeId?: string
+    enabled?: boolean
+  },
+): Promise<{ id: string }> {
+  return apiFetch(page, '/admin/external-integration-connections', {
+    method: 'POST',
+    body: {
+      provider: input.provider,
+      name: input.name,
+      auth_type: input.authType,
+      client_id: input.clientId,
+      client_secret: input.clientSecret,
+      api_key: input.apiKey,
+      access_token: input.accessToken,
+      refresh_token: input.refreshToken,
+      token_expires_at: input.tokenExpiresAt,
+      external_office_id: input.externalOfficeId,
+      enabled: input.enabled ?? true,
+    },
+  })
+}
+
+/**
+ * 外部連携先の従業員番号マッピングを登録する(勤怠・経費のfreee/MF送信対象に必要)。
+ * 管理者向けAPIがまだ無いため、`DevDatabaseResetController`と同じ開発専用エンドポイント
+ * (`POST /dev/external-employee-mappings`、`MICROSOFT_MOCK_ENABLED=true`の時のみ到達可能)
+ * 経由で登録する(backend/app/Http/Controllers/Api/DevCreateExternalEmployeeMappingController.php参照)。
+ */
+export async function createExternalEmployeeMapping(
+  page: Page,
+  input: { provider: 'freee' | 'moneyforward'; userId: string; externalEmployeeCode: string },
+): Promise<{ id: string }> {
+  return apiFetch(page, '/dev/external-employee-mappings', {
+    method: 'POST',
+    body: {
+      provider: input.provider,
+      user_id: input.userId,
+      external_employee_code: input.externalEmployeeCode,
+    },
+  })
+}
+
+/**
+ * フェーズ2: 勤怠月次確定データを外部API(freeeのみ)へ送信する
+ * (`POST /exports/attendance/external-publish`、管理者限定)。
+ */
+export async function publishAttendanceExternal(
+  page: Page,
+  input: { yearMonth: string; provider: 'freee' },
+): Promise<{ provider: string; successes: unknown[]; failures: unknown[] }> {
+  return apiFetch(page, '/exports/attendance/external-publish', {
+    method: 'POST',
+    body: { year_month: [input.yearMonth], provider: input.provider },
+  })
+}
+
+/** UC-X001: 経費区分一覧を取得する(承認スキップ閾値・証跡区分の既定値を確認する用途)。 */
+export async function fetchExpenseCategories(
+  page: Page,
+): Promise<Array<{ id: number; code: string; name: string; approval_skip_threshold: number | null }>> {
+  // AppServiceProviderがJsonResource::withoutWrapping()しているため、`{data: [...]}`ではなく
+  // 配列そのものが返る(他のResourceCollectionエンドポイントと同じ)。
+  return apiFetch(page, '/expense-categories')
+}
+
+/**
+ * UC-X004〜UC-X010: 経費精算を新規作成〜明細追加〜申請まで進める(APIを直接叩く版)。
+ * `承認スキップ閾値`以下の金額かつ`fact_reference_available`の明細のみで構成すれば
+ * 提出と同時に自動承認されるため、承認者ログインを経由せず「承認済み」の経費精算を
+ * 用意できる(scenario-13参照。外部送信の前提データ作りのみが目的で、承認フロー自体の
+ * 確認はscenario-04が担う)。
+ */
+export async function createAutoApprovedExpenseClaim(
+  page: Page,
+  input: { categoryCode: string; amount: number; usageDate: string; description: string; approverUserId: string },
+): Promise<{ id: string }> {
+  const categories = await fetchExpenseCategories(page)
+  const category = categories.find((c) => c.code === input.categoryCode)
+  if (!category) throw new Error(`E2E setup: expense category not found for code ${input.categoryCode}`)
+
+  const claim = await apiFetch<{ id: string }>(page, '/expense-claims', { method: 'POST' })
+  await apiFetch(page, `/expense-claims/${claim.id}/items`, {
+    method: 'POST',
+    body: {
+      category_id: category.id,
+      amount: input.amount,
+      usage_date: input.usageDate,
+      description: input.description,
+      evidence_type: 'fact_reference_available',
+    },
+  })
+  await apiFetch(page, `/expense-claims/${claim.id}/submit`, {
+    method: 'POST',
+    body: { approver_user_id: input.approverUserId },
+  })
+
+  return claim
+}
+
+/**
+ * フェーズ3: 経費確定データを外部API(freee/マネーフォワード)へ送信する
+ * (`POST /exports/expenses/external-publish`、経理担当者/管理者限定)。
+ */
+export async function publishExpensesExternal(
+  page: Page,
+  input: { yearMonth: string; provider: 'freee' | 'moneyforward' },
+): Promise<{ provider: string; successes: unknown[]; failures: unknown[] }> {
+  return apiFetch(page, '/exports/expenses/external-publish', {
+    method: 'POST',
+    body: { year_month: [input.yearMonth], provider: input.provider },
+  })
+}

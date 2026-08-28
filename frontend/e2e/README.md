@@ -37,6 +37,14 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
    (`firstOrCreate`/`updateOrCreate`のみを使うため何度実行しても安全))
 2. mock-oidc: `cd mock-oidc && node server.js`(ポート9000。`npm install`不要、
    Node標準ライブラリのみで動く)
+   - scenario-13(外部連携送信)を実行する場合は、同様に`node mock-freee/server.js`
+     (ポート9001)・`node mock-moneyforward/server.js`(ポート9002)も起動し、
+     `backend/.env`の`FREEE_TOKEN_ENDPOINT`・`FREEE_ATTENDANCE_API_ENDPOINT`・
+     `FREEE_EXPENSE_API_ENDPOINT`・`MF_EXPENSE_TOKEN_ENDPOINT`・
+     `MF_EXPENSE_EX_TRANSACTIONS_ENDPOINT`・`MF_EXPENSE_UPLOAD_RECEIPT_ENDPOINT`を
+     `http://localhost:9001/...`・`http://localhost:9002/...`へ向ける
+     (`backend/.env.example`のコメント参照)。`docker compose up`利用時は
+     `docker-compose.yml`の`app`サービスのenvironmentで自動的に向けられる。
 3. frontend: `cp .env.example .env` → `npm run dev`(ポート5173)
 4. E2E: `npx playwright install chromium`済みのバイナリと`@playwright/test`が期待する
    リビジョンが合わない場合は、下記のとおり`E2E_CHROMIUM_EXECUTABLE_PATH`を指定する。
@@ -73,6 +81,13 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
 - `scenario-10-user-management-access.spec.ts` — UserManagementを正本とするGroupType・Group・
   Membership・ExternalIdentity・所属変更・外部HR取込と、AccessControl側のFeature・Role・
   Permission・個別利用停止、有効アクセス、StoredEvent監査ログの統合確認
+- `scenario-13-external-integration.spec.ts` — 外部連携(freee/マネーフォワード)の送信フロー。
+  管理者が`/admin/external-integration-connections`にfreee(OAuth2)・マネーフォワード(APIキー)の
+  接続情報を登録すると一覧・有効化トグルに反映されること、freee向けの勤怠確定データ送信
+  (`POST /exports/attendance/external-publish`)・マネーフォワード向けの経費確定データ送信
+  (`POST /exports/expenses/external-publish`)が、リポジトリルートの`mock-freee/`・
+  `mock-moneyforward/`(`mock-oidc/`と同じNode標準ライブラリのみの軽量HTTPサーバー)へ
+  実際にHTTPリクエストとして送られることを、各モックの`GET /_debug/last-request`で検証する
 
 ## 実装状況
 
@@ -145,6 +160,18 @@ Dockerを一切使わずホストのPHP/Node/Composerだけで動かすことも
   User直接Role・Group Scope・配下・有効期間・Role複製、複数所属のFeature/Permission合成と
   付与元説明、所属変更の複数一括適用・競合時ロールバック・失敗理由、主要アクセス管理イベントの
   監査検索、外部HR管理項目の編集拒否・最終同期、無効化後のユーザー詳細・過去勤怠参照を確認
+- シナリオ13(外部連携送信): 管理者が外部連携設定画面(`ExternalIntegrationConnectionsPage`)で
+  freee(OAuth2、access_token/refresh_token/token_expires_at含む)・マネーフォワード(APIキー)の
+  接続を登録すると一覧・有効化トグルが実際のAPI状態を反映すること、月次入力ユーザーの
+  承認済み月次勤怠をfreeeへ(`POST /exports/attendance/external-publish`)、承認スキップ閾値以下で
+  自動承認された経費精算をマネーフォワードへ(`POST /exports/expenses/external-publish`)送信すると
+  `successes`に対象者が含まれ、`mock-freee`/`mock-moneyforward`(リポジトリルート、`mock-oidc`と
+  同じ軽量Node HTTPサーバー)が期待したパス・認可ヘッダー・ボディで受信することを確認。
+  OAuth2の認可コードフロー自体(実UI)は対象外で、`ExternalIntegrationConnectionController`を
+  拡張したaccess_token/refresh_token/token_expires_atの直接投入で代替している。また、外部連携先の
+  従業員番号マッピング(`external_employee_mappings`)を登録する管理者向けAPIがまだ無いため、
+  `POST /dev/external-employee-mappings`(`MICROSOFT_MOCK_ENABLED=true`時のみ到達可能な開発専用
+  エンドポイント、`DevDatabaseResetController`と同じ考え方)経由でブラックボックスのまま投入する
 
 §5-3の実装にあたり、`GET /attendance/months/to-approve`が「自分が承認者かつ
 `submitted`」のみを対象にしており、UC-A011が想定する「管理部(admin・hr_staff)が

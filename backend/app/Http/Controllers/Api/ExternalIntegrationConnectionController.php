@@ -47,6 +47,12 @@ class ExternalIntegrationConnectionController extends Controller
             'client_id' => ['nullable', 'string'],
             'client_secret' => ['nullable', 'string'],
             'api_key' => ['nullable', 'string'],
+            // OAuth2連携(freee)は認可コードフローの実UI実装が未対応のため、E2E/検証用に
+            // access_token/refresh_token/token_expires_atを直接投入できるようにする
+            // (未入力ならOAuth2Strategyがリフレッシュトークン欠如として初回送信時にエラーにする)。
+            'access_token' => ['nullable', 'string'],
+            'refresh_token' => ['nullable', 'string'],
+            'token_expires_at' => ['nullable', 'date'],
             'external_office_id' => ['nullable', 'string'],
             'enabled' => ['boolean'],
             'custom_settings' => ['nullable', 'array'],
@@ -74,6 +80,9 @@ class ExternalIntegrationConnectionController extends Controller
                 'client_id' => $data['client_id'] ?? null,
                 'client_secret' => $data['client_secret'] ?? null,
                 'api_key' => $data['api_key'] ?? null,
+                'access_token' => $data['access_token'] ?? null,
+                'refresh_token' => $data['refresh_token'] ?? null,
+                'token_expires_at' => $data['token_expires_at'] ?? null,
                 'external_office_id' => $data['external_office_id'] ?? null,
                 'custom_settings' => $data['custom_settings'] ?? null,
                 'connected_by_user_id' => $request->user()->id,
@@ -101,6 +110,9 @@ class ExternalIntegrationConnectionController extends Controller
             'client_id' => ['sometimes', 'nullable', 'string'],
             'client_secret' => ['sometimes', 'nullable', 'string'],
             'api_key' => ['sometimes', 'nullable', 'string'],
+            'access_token' => ['sometimes', 'nullable', 'string'],
+            'refresh_token' => ['sometimes', 'nullable', 'string'],
+            'token_expires_at' => ['sometimes', 'nullable', 'date'],
             'external_office_id' => ['sometimes', 'nullable', 'string'],
             'custom_settings' => ['sometimes', 'nullable', 'array'],
         ]);
@@ -172,6 +184,9 @@ class ExternalIntegrationConnectionController extends Controller
             'has_client_id' => filled($connection->client_id),
             'has_client_secret' => filled($connection->client_secret),
             'has_api_key' => filled($connection->api_key),
+            'has_access_token' => filled($connection->access_token),
+            'has_refresh_token' => filled($connection->refresh_token),
+            'token_expires_at' => $connection->token_expires_at?->toIso8601String(),
             'client_id_masked' => $this->mask($connection->client_id),
             'api_key_masked' => $this->mask($connection->api_key),
             'connected_by_user_id' => $connection->connected_by_user_id,

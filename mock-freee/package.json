@@ -1,0 +1,10 @@
+{
+  "name": "flow-office-mock-freee",
+  "private": true,
+  "version": "1.0.0",
+  "description": "E2E検証用のfreee APIモックサーバー",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

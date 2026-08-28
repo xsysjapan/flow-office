@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\CalendarBulkOperationController;
 use App\Http\Controllers\Api\CompanyCalendarController;
 use App\Http\Controllers\Api\CompensatoryLeaveController;
 use App\Http\Controllers\Api\DevApplyMembershipChangesController;
+use App\Http\Controllers\Api\DevCreateExternalEmployeeMappingController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
@@ -86,6 +87,10 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
 Route::post('/dev/apply-membership-changes', DevApplyMembershipChangesController::class);
+// 外部連携(freee/マネーフォワード)の従業員番号マッピングを登録する開発専用エンドポイント
+// (管理画面・管理者向けAPIが未実装のため、E2Eの前提データ投入用にDevDatabaseResetControllerと
+// 同じ考え方で用意する。DevCreateExternalEmployeeMappingController参照)。
+Route::post('/dev/external-employee-mappings', DevCreateExternalEmployeeMappingController::class);
 
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);

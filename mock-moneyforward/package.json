@@ -1,0 +1,10 @@
+{
+  "name": "flow-office-mock-moneyforward",
+  "private": true,
+  "version": "1.0.0",
+  "description": "E2E検証用のマネーフォワードクラウド経費APIモックサーバー",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

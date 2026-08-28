@@ -16,6 +16,14 @@ services:
       - "8090:8090"
     environment:
       - MICROSOFT_MOCK_INTERNAL_BASE_URL=http://mock-oidc:9000
+      # E2E/ローカル開発でfreee/マネーフォワードの外部送信先をモックサーバーへ向ける
+      # (backend/config/external_integrations.php参照。本番・検証環境では設定しないこと)。
+      - FREEE_TOKEN_ENDPOINT=http://mock-freee:9001/public_api/token
+      - FREEE_ATTENDANCE_API_ENDPOINT=http://mock-freee:9001/hr/api/v1/employees/{employee_id}/work_record_summaries/{year}/{month}
+      - FREEE_EXPENSE_API_ENDPOINT=http://mock-freee:9001/api/1/deals
+      - MF_EXPENSE_TOKEN_ENDPOINT=http://mock-moneyforward:9002/oauth/token
+      - MF_EXPENSE_EX_TRANSACTIONS_ENDPOINT=http://mock-moneyforward:9002/api/external/v1/offices/{office_id}/office_members/{office_member_id}/ex_transactions
+      - MF_EXPENSE_UPLOAD_RECEIPT_ENDPOINT=http://mock-moneyforward:9002/api/external/v1/offices/{office_id}/office_members/{office_member_id}/upload_receipt
       # 以下4つはscripts/start-ngrok.sh がホスト側のシェルでexportした状態で
       # `docker compose up`を起動した場合のみ渡される(値を書かない場合、docker composeは
       # ホスト側のシェルから同名の変数をそのまま渡す。ホスト側で未設定なら、空文字ではなく
@@ -30,6 +38,10 @@ services:
       - MCP_PUBLIC_APP_URL
     depends_on:
       mock-oidc:
+        condition: service_started
+      mock-freee:
+        condition: service_started
+      mock-moneyforward:
         condition: service_started
       db:
         condition: service_healthy
@@ -62,6 +74,20 @@ services:
       # ログイン画面のユーザー選択肢をbackendのDBから取得する(mock-oidc/server.js参照)。
       # 未設定/取得失敗時は静的な一覧にフォールバックする。
       MOCK_USERS_API_URL: http://app:8000/api/dev/mock-users
+
+  # E2E検証用のfreee APIモック(勤怠API・経費API送信の疎通確認用、mock-freee/server.js参照)。
+  mock-freee:
+    build:
+      context: ./mock-freee
+    ports:
+      - "9001:9001"
+
+  # E2E検証用のマネーフォワードクラウド経費APIモック(mock-moneyforward/server.js参照)。
+  mock-moneyforward:
+    build:
+      context: ./mock-moneyforward
+    ports:
+      - "9002:9002"
 
 volumes:
   mysql-data:
