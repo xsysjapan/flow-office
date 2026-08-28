@@ -62,6 +62,7 @@ class ExpenseExternalApiPublishTest extends TestCase
             'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'access_token' => 'valid-access-token',
             'refresh_token' => 'refresh-token',
             'token_expires_at' => now()->addHour(),
@@ -144,6 +145,7 @@ class ExpenseExternalApiPublishTest extends TestCase
             'external_office_id' => 'office-1',
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_API_KEY,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'api_key' => 'mf-secret-key',
             'connected_at' => now(),
         ]);
@@ -203,6 +205,7 @@ class ExpenseExternalApiPublishTest extends TestCase
             'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'access_token' => 'token',
             'token_expires_at' => now()->addHour(),
         ]);
@@ -244,6 +247,7 @@ class ExpenseExternalApiPublishTest extends TestCase
             'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'access_token' => 'token',
             'token_expires_at' => now()->addHour(),
         ]);

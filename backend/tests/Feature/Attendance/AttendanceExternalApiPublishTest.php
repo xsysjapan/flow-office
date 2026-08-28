@@ -58,6 +58,7 @@ class AttendanceExternalApiPublishTest extends TestCase
             'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'external_office_id' => '999',
             'access_token' => 'valid-access-token',
             'refresh_token' => 'refresh-token',
@@ -163,6 +164,7 @@ class AttendanceExternalApiPublishTest extends TestCase
             'provider' => ExternalIntegrationConnection::PROVIDER_FREEE,
             'auth_type' => ExternalIntegrationConnection::AUTH_TYPE_OAUTH2,
             'status' => ExternalIntegrationConnection::STATUS_ACTIVE,
+            'enabled' => true,
             'access_token' => 'token',
             'token_expires_at' => now()->addHour(),
         ]);

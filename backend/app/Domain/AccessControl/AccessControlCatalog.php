@@ -51,6 +51,7 @@ class AccessControlCatalog
         'expense_category.manage' => ['name' => '経費区分管理', 'scopes' => ['global']],
         'attendance_reminder_exclusion.manage' => ['name' => '勤怠未提出督促除外管理', 'scopes' => ['global']],
         'device.manage' => ['name' => '共有端末管理', 'scopes' => ['global']],
+        'external_integration_connection.manage' => ['name' => '外部連携設定管理', 'scopes' => ['global']],
         'audit_log.view' => ['name' => '監査ログ閲覧', 'scopes' => ['global']],
         'audit_log.export' => ['name' => '監査ログ出力', 'scopes' => ['global']],
         'attendance.read' => ['name' => '勤怠閲覧', 'scopes' => ['global', 'group', 'self']],

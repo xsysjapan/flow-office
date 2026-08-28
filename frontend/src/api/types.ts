@@ -1568,6 +1568,37 @@ export interface Paginated<T> {
   };
 }
 
+/** docs/25-usecases-integrations-mcp.md: freee/マネーフォワード等の外部会計サービス連携の
+ *  接続設定(認証情報)。同一providerで複数件登録できる。 */
+export type ExternalIntegrationProvider = "freee" | "moneyforward";
+
+export type ExternalIntegrationAuthType = "oauth2" | "api_key";
+
+export type ExternalIntegrationConnectionStatus =
+  | "unconfigured"
+  | "connected"
+  | "error";
+
+export interface ExternalIntegrationConnection {
+  id: string;
+  provider: ExternalIntegrationProvider;
+  name: string;
+  auth_type: ExternalIntegrationAuthType;
+  status: ExternalIntegrationConnectionStatus;
+  enabled: boolean;
+  external_office_id: string | null;
+  custom_settings: Record<string, unknown> | null;
+  has_client_id: boolean;
+  has_client_secret: boolean;
+  has_api_key: boolean;
+  client_id_masked: string | null;
+  api_key_masked: string | null;
+  connected_by_user_id: string | null;
+  connected_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** UC-C012: 祝日iCalendarソースの直近1回分の同期結果。同期実行前・未同期ならnull。 */
 export interface HolidayCalendarSyncSummary {
   added: number;

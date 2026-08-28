@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\CalendarBulkOperationController;
 use App\Http\Controllers\Api\CompanyCalendarController;
 use App\Http\Controllers\Api\CompensatoryLeaveController;
 use App\Http\Controllers\Api\DevApplyMembershipChangesController;
+use App\Http\Controllers\Api\DevCreateExternalEmployeeMappingController;
 use App\Http\Controllers\Api\DevDatabaseResetController;
 use App\Http\Controllers\Api\DeviceAdminController;
 use App\Http\Controllers\Api\DeviceController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Api\ExpenseCategoryController;
 use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\ExternalIntegrationConnectionController;
 use App\Http\Controllers\Api\HolidayCalendarSourceController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
@@ -85,6 +87,10 @@ Route::get('/dev/mock-users', [MockOidcUserController::class, 'index']);
 // MICROSOFT_MOCK_ENABLED=falseでは404を返す(DevDatabaseResetController参照)。
 Route::post('/dev/reset-database', DevDatabaseResetController::class);
 Route::post('/dev/apply-membership-changes', DevApplyMembershipChangesController::class);
+// 外部連携(freee/マネーフォワード)の従業員番号マッピングを登録する開発専用エンドポイント
+// (管理画面・管理者向けAPIが未実装のため、E2Eの前提データ投入用にDevDatabaseResetControllerと
+// 同じ考え方で用意する。DevCreateExternalEmployeeMappingController参照)。
+Route::post('/dev/external-employee-mappings', DevCreateExternalEmployeeMappingController::class);
 
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);
@@ -471,6 +477,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('permission:audit_log.export,any');
         Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');
         Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('permission:system_settings.update');
+
+        // 外部連携(freee/マネーフォワード)設定 (docs/33-usecases-attendance-external-api.md, docs/30-usecases-expense.md)
+        Route::get('/external-integration-connections', [ExternalIntegrationConnectionController::class, 'index'])->middleware('permission:external_integration_connection.manage,any');
+        Route::post('/external-integration-connections', [ExternalIntegrationConnectionController::class, 'store'])->middleware('permission:external_integration_connection.manage,any');
+        Route::patch('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'update'])->middleware('permission:external_integration_connection.manage,any');
+        Route::delete('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'destroy'])->middleware('permission:external_integration_connection.manage,any');
     });
 
     // --- システム管理エンドポイント。旧ユーザーロールではなく管理Featureと実効Permissionで制御する。 ---

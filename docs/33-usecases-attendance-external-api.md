@@ -43,7 +43,10 @@ freee/freee-api-schemaリポジトリの公式OpenAPIスキーマ(`hr/open-api-3
 ## 全体の流れ
 
 1. 事前に管理者が連携先(freee/moneyforward)ごとの認可情報を`external_integration_connections`
-   に登録する(本フェーズでは登録APIは対象外。シーダー/管理者が直接投入する運用を想定)。
+   に登録する。管理画面(`/admin/external-integration-connections`)から同一providerでも
+   複数登録でき、登録後に有効化(`enabled`)することで利用を開始する
+   (`ExternalIntegrationPublisherResolver`は`enabled=true`かつ`status=active`の行から
+   最初に見つかった1件を使う。複数登録時に特定の1件を選ばせるUIは対象外)。
 2. 管理者がflow-office側の社員(`users.id`)と連携先の従業員番号を`external_employee_mappings`
    へ登録する(連携先ごとに1レコード)。
 3. 管理者が`POST /exports/attendance/external-publish`で対象月・対象社員・連携先を指定して送信する。
