@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\ExpenseCategoryController;
 use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\ExternalIntegrationConnectionController;
 use App\Http\Controllers\Api\HolidayCalendarSourceController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
@@ -471,6 +472,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::get('/audit-log/export', [AuditLogController::class, 'exportCsv'])->middleware('permission:audit_log.export,any');
         Route::get('/system-settings', [SystemSettingController::class, 'show'])->middleware('permission:system_settings.read');
         Route::put('/system-settings', [SystemSettingController::class, 'update'])->middleware('permission:system_settings.update');
+
+        // 外部連携(freee/マネーフォワード)設定 (docs/33-usecases-attendance-external-api.md, docs/30-usecases-expense.md)
+        Route::get('/external-integration-connections', [ExternalIntegrationConnectionController::class, 'index'])->middleware('permission:external_integration_connection.manage,any');
+        Route::post('/external-integration-connections', [ExternalIntegrationConnectionController::class, 'store'])->middleware('permission:external_integration_connection.manage,any');
+        Route::patch('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'update'])->middleware('permission:external_integration_connection.manage,any');
+        Route::delete('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'destroy'])->middleware('permission:external_integration_connection.manage,any');
     });
 
     // --- システム管理エンドポイント。旧ユーザーロールではなく管理Featureと実効Permissionで制御する。 ---

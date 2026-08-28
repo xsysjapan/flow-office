@@ -116,6 +116,9 @@ use App\Domain\ExpenseClaim\Events\ExpenseItemUpdated;
 use App\Domain\Export\Events\ExportCreated;
 use App\Domain\Export\Events\ExternalIntegrationPublished;
 use App\Domain\Export\Events\InternalArchiveCreated;
+use App\Domain\ExternalIntegration\Events\ExternalIntegrationConnectionCreated;
+use App\Domain\ExternalIntegration\Events\ExternalIntegrationConnectionDeleted;
+use App\Domain\ExternalIntegration\Events\ExternalIntegrationConnectionUpdated;
 use App\Domain\Integration\Events\ApplicationIntegrationRegistered;
 use App\Domain\Integration\Events\ApplicationIntegrationRevoked;
 use App\Domain\Integration\Events\ApplicationIntegrationTokenReissued;
@@ -321,6 +324,9 @@ return [
         'user.field_authority_changed' => UserFieldAuthorityChanged::class,
         'role.permissions_changed' => RolePermissionsChanged::class,
         'system_settings.updated' => SystemSettingsUpdated::class,
+        'external_integration_connection.created' => ExternalIntegrationConnectionCreated::class,
+        'external_integration_connection.updated' => ExternalIntegrationConnectionUpdated::class,
+        'external_integration_connection.deleted' => ExternalIntegrationConnectionDeleted::class,
         'group.updated' => GroupUpdated::class,
         'group_type.created' => GroupTypeCreated::class,
         'role.created' => RoleCreated::class,

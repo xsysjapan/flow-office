@@ -98,8 +98,11 @@ class ExternalIntegrationPublisherResolver
 
     private function resolveActiveConnection(string $provider): ExternalIntegrationConnection
     {
+        // 同一providerで複数登録できるようになったため、有効化(enabled)されている行のみを対象にする。
+        // 複数登録時は最初に見つかった有効な1件を使う。特定の1件を選ばせるUIは今回のスコープ外。
         $connection = ExternalIntegrationConnection::query()
             ->where('provider', $provider)
+            ->where('enabled', true)
             ->where('status', ExternalIntegrationConnection::STATUS_ACTIVE)
             ->first();
 
