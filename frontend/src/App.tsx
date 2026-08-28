@@ -49,6 +49,7 @@ import { AttendanceExportPage } from "./pages/attendance/AttendanceExportPage";
 import { SystemSettingsPage } from "./pages/admin/SystemSettingsPage";
 import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { DeviceListPage } from "./pages/admin/DeviceListPage";
+import { ExternalIntegrationConnectionsPage } from "./pages/admin/ExternalIntegrationConnectionsPage";
 import { MyIntegrationsPage } from "./pages/integrations/MyIntegrationsPage";
 import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
@@ -198,6 +199,10 @@ function App() {
           <Route path="attendance-export" element={<AttendanceExportPage />} />
           <Route path="system-settings" element={<SystemSettingsPage />} />
           <Route path="commands" element={<AdminCommandsPage />} />
+          <Route
+            path="external-integration-connections"
+            element={<ExternalIntegrationConnectionsPage />}
+          />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -216,6 +216,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         feature: "administration.settings",
         permission: "admin_command.view",
       },
+      {
+        to: "/admin/external-integration-connections",
+        label: "外部連携設定",
+        description: "freee・マネーフォワード等の外部会計サービスとの接続情報を管理する",
+        feature: "administration.settings",
+        permission: "external_integration_connection.manage",
+      },
     ],
   },
 ];
