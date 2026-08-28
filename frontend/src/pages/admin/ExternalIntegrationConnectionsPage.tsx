@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -21,6 +21,7 @@ import { Textarea } from '../../components/ui/textarea'
 import {
   useCreateExternalIntegrationConnection,
   useDeleteExternalIntegrationConnection,
+  useExternalIntegrationConnectionOAuthRedirectUrl,
   useExternalIntegrationConnections,
   useUpdateExternalIntegrationConnection,
 } from '../../hooks/useExternalIntegrationConnections'
@@ -240,15 +241,49 @@ function ConnectionFormFields({
  * 対象外で、ここでは認証情報の登録・更新・有効化/無効化・削除のみを扱う。
  */
 export function ExternalIntegrationConnectionsPage() {
-  const { data, isLoading, error } = useExternalIntegrationConnections()
+  const { data, isLoading, error, refetch } = useExternalIntegrationConnections()
   const createConnection = useCreateExternalIntegrationConnection()
   const updateConnection = useUpdateExternalIntegrationConnection()
   const deleteConnection = useDeleteExternalIntegrationConnection()
+  const oauthRedirectUrl = useExternalIntegrationConnectionOAuthRedirectUrl()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [createValue, setCreateValue] = useState<ConnectionFormValue>(EMPTY_FORM)
   const [editingConnection, setEditingConnection] = useState<ExternalIntegrationConnection | null>(null)
   const [editValue, setEditValue] = useState<ConnectionFormValue>(EMPTY_FORM)
+  const [oauthNotice, setOauthNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+
+  // freeeの認可コードフロー完了後、バックエンドのcallbackがこの画面へ
+  // ?oauth=success/error のクエリパラメータ付きでリダイレクトしてくる。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauthResult = params.get('oauth')
+    if (!oauthResult) return
+
+    if (oauthResult === 'success') {
+      setOauthNotice({ tone: 'success', message: 'freeeとの連携が完了しました。' })
+      void refetch()
+    } else if (oauthResult === 'error') {
+      const message = params.get('message')
+      setOauthNotice({ tone: 'error', message: `freeeとの連携に失敗しました。${message ? `(${message})` : ''}` })
+    }
+
+    params.delete('oauth')
+    params.delete('provider')
+    params.delete('message')
+    const query = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''))
+    // 初回マウント時のみ処理する(依存配列は空)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const startFreeeOAuth = (connection: ExternalIntegrationConnection) => {
+    oauthRedirectUrl.mutate(connection.id, {
+      onSuccess: ({ url }) => {
+        window.location.href = url
+      },
+    })
+  }
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorMessage error={error} fallback="外部連携設定の取得に失敗しました。" />
@@ -337,8 +372,41 @@ export function ExternalIntegrationConnectionsPage() {
         送信実行は別画面で行う。
       </p>
 
+      <div className="mb-6 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <p className="mb-2 font-medium text-foreground">連携(送信)のタイミングについて</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <span className="font-medium text-foreground">freee</span>:
+            勤怠(月次確定後)・経費(承認後)いずれも、管理者が送信操作を行ったタイミングで送信される
+            (自動での定期送信は行わない)。
+          </li>
+          <li>
+            <span className="font-medium text-foreground">マネーフォワード</span>:
+            経費(承認後)のみAPI送信に対応する。勤怠はマネーフォワード側に外部データを受け付けるAPIが
+            無いため、CSV出力のみで連携する(API送信は非対応)。
+          </li>
+        </ul>
+        <p className="mt-2">
+          ※現時点では送信操作自体を行う専用画面(送信ボタン)は未実装のため、実際の送信はAPI経由の
+          運用になる。
+        </p>
+      </div>
+
+      {oauthNotice && (
+        <div
+          className={`mb-4 rounded-md border p-3 text-sm ${
+            oauthNotice.tone === 'success'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+              : 'border-destructive/40 bg-destructive/10 text-destructive'
+          }`}
+        >
+          {oauthNotice.message}
+        </div>
+      )}
+
       {createConnection.error && <ErrorMessage error={createConnection.error} />}
       {deleteConnection.error && <ErrorMessage error={deleteConnection.error} />}
+      {oauthRedirectUrl.error && <ErrorMessage error={oauthRedirectUrl.error} />}
 
       {isFormOpen && (
         <div className="mb-6 rounded-md border border-border p-4">
@@ -389,6 +457,22 @@ export function ExternalIntegrationConnectionsPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-start gap-2">
+                    {connection.provider === 'freee' && connection.auth_type === 'oauth2' && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        isLoading={oauthRedirectUrl.isPending}
+                        disabled={!connection.has_client_id || !connection.has_client_secret}
+                        title={
+                          !connection.has_client_id || !connection.has_client_secret
+                            ? 'クライアントID・クライアントシークレットを先に登録してください。'
+                            : undefined
+                        }
+                        onClick={() => startFreeeOAuth(connection)}
+                      >
+                        freeeと連携する
+                      </Button>
+                    )}
                     <Button size="sm" variant="secondary" onClick={() => openEditDialog(connection)}>
                       編集
                     </Button>

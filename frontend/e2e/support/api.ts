@@ -565,9 +565,10 @@ export async function closeMonth(adminPage: Page, employeePage: Page, yearMonth:
 }
 
 /**
- * 外部連携(freee/マネーフォワード)設定を登録する(管理者限定、
- * `ExternalIntegrationConnectionsPage`のUIにはaccess_token/refresh_token/token_expires_at
- * の入力欄がまだ無いため、E2EからはAPI直叩きで前提データを作る。scenario-13参照)。
+ * 外部連携(freee/マネーフォワード)設定を登録する(管理者限定)。freeeはOAuth2認可コード
+ * フローの実画面操作(scenario-13参照)でaccess_token/refresh_tokenを取得させるため、
+ * ここではclient_id/client_secretのみ登録する。マネーフォワードはAPIキー方式のため
+ * ここで直接api_keyを登録する。
  */
 export async function createExternalIntegrationConnection(
   page: Page,
