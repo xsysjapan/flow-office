@@ -14,4 +14,4 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20260829-backoffice-task-detail-cleanup](./20260829-backoffice-task-detail-cleanup/spec.md) | バックオフィスタスク詳細の提出系ボタン整理と勤怠参照画面の月別検索・レイアウト統一 | レビュー中 |
+| [20260829-backoffice-task-detail-cleanup](./20260829-backoffice-task-detail-cleanup/spec.md) | 月次勤怠表示コンポーネントの統一(申請詳細・バックオフィスタスク詳細・勤怠参照画面) | レビュー中 |
