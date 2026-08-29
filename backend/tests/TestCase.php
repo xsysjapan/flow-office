@@ -150,4 +150,41 @@ abstract class TestCase extends BaseTestCase
             'assigned_by' => $user->id,
         ]);
     }
+
+    /**
+     * Grant a single permission code (self scope) to a user via their existing Employee
+     * RoleAssignment (created by actingAs()'s automatic baseline assignment). Use this for
+     * permissions that are intentionally NOT part of the Employee baseline in assignRole()'s
+     * $rolePermissions map, so individual tests can opt a user into them without changing
+     * every other test that relies on the baseline Employee permission set.
+     */
+    protected function grantSelfPermission(User $user, string $code): void
+    {
+        $employeeRole = Role::query()->firstOrCreate(
+            ['code' => Role::EMPLOYEE],
+            ['name' => 'Employee', 'is_system' => true, 'status' => 'active'],
+        );
+        [$resource, $action] = explode('.', $code, 2);
+        DB::table('permissions')->updateOrInsert(['code' => $code], [
+            'resource' => $resource,
+            'action' => $action,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $permissionId = DB::table('permissions')->where('code', $code)->value('id');
+        DB::table('permission_role')->insertOrIgnore(['role_id' => $employeeRole->id, 'permission_id' => $permissionId]);
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'self']);
+
+        RoleAssignment::query()->firstOrCreate([
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'role_id' => $employeeRole->id,
+            'scope_type' => 'self',
+            'scope_group_id' => null,
+        ], [
+            'include_descendants' => false,
+            'status' => 'active',
+            'assigned_by' => $user->id,
+        ]);
+    }
 }
