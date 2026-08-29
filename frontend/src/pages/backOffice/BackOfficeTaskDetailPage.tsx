@@ -59,7 +59,10 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
   const { user } = useAuth()
   const canRevert = user?.effective_permissions?.includes('attendance.confirmation_revert') ?? false
   const { data: request, isLoading, error } = useWorkflowRequest(workflowRequestId)
-  const targetYearMonth = request?.form_data.target_year_month
+  const targetYearMonthValue = request?.form_data.target_year_month
+  const targetYearMonth = typeof targetYearMonthValue === 'string' ? targetYearMonthValue : undefined
+  const requestedReasonValue = request?.form_data.reason
+  const requestedReason = typeof requestedReasonValue === 'string' ? requestedReasonValue : undefined
   const applicantId = request?.applicant?.id
   const { data: monthData } = useAttendanceMonth(targetYearMonth ?? '', applicantId)
   const revertConfirmation = useRevertMonthConfirmation()
@@ -83,7 +86,7 @@ function AttendanceConfirmationRevertSection({ workflowRequestId }: { workflowRe
             <dt className="font-medium text-muted-foreground">対象年月</dt>
             <dd className="text-foreground">{targetYearMonth}</dd>
             <dt className="font-medium text-muted-foreground">取消理由(申請時)</dt>
-            <dd className="text-foreground">{request.form_data.reason ?? '-'}</dd>
+            <dd className="text-foreground">{requestedReason ?? '-'}</dd>
           </dl>
 
           <AttendanceMonthReferenceTabs userId={applicantId} yearMonth={targetYearMonth} />
