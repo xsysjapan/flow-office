@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type {
   WorkflowRequest,
   WorkflowRequestAttendanceMonthSubject,
@@ -8,8 +7,7 @@ import type {
   WorkflowRequestShiftSwapRequestSubject,
   WorkflowRequestSpecialLeaveRequestSubject,
 } from '../../api/types'
-import { DailyReferenceView, MonthlyReferenceView, WeeklyReferenceView } from '../../pages/attendance/AttendanceReferencePage'
-import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
+import { AttendanceMonthReferenceTabs } from '../../pages/attendance/AttendanceReferencePage'
 import {
   attendanceMonthStatusLabel,
   expenseClaimStatusLabel,
@@ -18,7 +16,6 @@ import {
   shiftSwapRequestStatusLabel,
 } from '../../utils/statusLabels'
 import { Badge } from '../Badge/Badge'
-import { Button } from '../Button/Button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
 
 function SectionHeading({ children }: { children: string }) {
@@ -46,35 +43,15 @@ function leaveRequestedAmountLabel(subject: { leave_type: string; hours: number 
   return `${subject.requested_days}日`
 }
 
-type AttendanceSubjectViewMode = 'month' | 'week' | 'day'
-
-const ATTENDANCE_SUBJECT_VIEW_MODES: Array<{ key: AttendanceSubjectViewMode; label: string }> = [
-  { key: 'month', label: '月次' },
-  { key: 'week', label: '週次' },
-  { key: 'day', label: '日次' },
-]
-
 /**
  * 承認者(または申請者自身)が月次勤怠申請の対象社員の実際の勤務表を月次・週次・日次で
- * 確認するためのタブ切り替え(AttendanceReferencePageのVIEW_MODESと同じ見た目に揃える)。
- * 月次一覧の行を選ぶと日次タブへ切り替わる(MonthAttendanceReview/旧MonthsToApprovePageと
- * 同じドリルダウン導線)。レビュー対象はこの申請の年月に限定し、他の月には遷移できない。
+ * 確認する。管理画面の勤怠参照機能(AttendanceReferencePage)・バックオフィスタスク詳細と
+ * 同一のAttendanceMonthReferenceTabsを使い、表示・CSV/Excel出力・状態変更(締める/締めを
+ * 取り消す、権限がある場合のみ)を揃える。レビュー対象はこの申請の年月に限定し、他の月には
+ * 遷移できない。
  */
 export function AttendanceMonthSubjectView({ subject }: { subject: WorkflowRequestAttendanceMonthSubject }) {
   const { label, tone } = attendanceMonthStatusLabel(subject.status)
-  const [viewMode, setViewMode] = useState<AttendanceSubjectViewMode>('month')
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const dates = datesInMonth(subject.year_month)
-  const dateRange = { min: dates[0], max: dates[dates.length - 1] }
-  const weekRange = {
-    min: formatDate(mondayOf(new Date(`${dates[0]}T00:00:00`))),
-    max: formatDate(mondayOf(new Date(`${dates[dates.length - 1]}T00:00:00`))),
-  }
-
-  function handleSelectDate(date: string) {
-    setSelectedDate(date)
-    setViewMode('day')
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,43 +66,7 @@ export function AttendanceMonthSubjectView({ subject }: { subject: WorkflowReque
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <SectionHeading>実際の勤務表</SectionHeading>
-        <div className="flex gap-2">
-          {ATTENDANCE_SUBJECT_VIEW_MODES.map((mode) => (
-            <Button
-              key={mode.key}
-              type="button"
-              variant={viewMode === mode.key ? 'primary' : 'secondary'}
-              onClick={() => setViewMode(mode.key)}
-            >
-              {mode.label}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-6 rounded-md border border-border p-3">
-          {viewMode === 'month' && (
-            <MonthlyReferenceView
-              userId={subject.user_id}
-              restrictToYearMonth={subject.year_month}
-              onSelectDate={handleSelectDate}
-            />
-          )}
-          {viewMode === 'week' && (
-            <WeeklyReferenceView userId={subject.user_id} initialWeekStart={weekRange.min} weekRange={weekRange} />
-          )}
-          {viewMode === 'day' && (
-            <DailyReferenceView
-              key={selectedDate ?? dates[0]}
-              userId={subject.user_id}
-              initialDate={selectedDate ?? dates[0]}
-              dateRange={dateRange}
-              onBack={() => setViewMode('month')}
-            />
-          )}
-        </div>
-      </div>
+      <AttendanceMonthReferenceTabs userId={subject.user_id} yearMonth={subject.year_month} />
     </div>
   )
 }

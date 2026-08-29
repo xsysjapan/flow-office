@@ -8,7 +8,7 @@ import * as attendanceApi from '../../api/attendance'
 import { ApiError } from '../../api/client'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
-import type { AttendanceMonth, BackOfficeTask, Paginated, User } from '../../api/types'
+import type { AttendanceMonth, AttendanceMonthlyCalculationTotals, BackOfficeTask, Paginated, User } from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee: User = {
@@ -19,7 +19,38 @@ const assignee: User = {
   job_title: null,
   employment_status: 'active',
   last_login_at: null,
-  effective_permissions: ['attendance.month_reopen'],
+  effective_permissions: ['attendance.month_reopen', 'backoffice_task.execute', 'attendance.export'],
+}
+
+const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
+  work_minutes: 0,
+  payroll_work_minutes: 0,
+  prescribed_work_minutes: 0,
+  statutory_within_overtime_minutes: 0,
+  statutory_excess_overtime_minutes: 0,
+  statutory_excess_overtime_within_60h_minutes: 0,
+  statutory_excess_overtime_over_60h_minutes: 0,
+  weekly_statutory_excess_overtime_minutes: 0,
+  late_night_work_minutes: 0,
+  late_night_prescribed_work_minutes: 0,
+  late_night_statutory_within_overtime_minutes: 0,
+  late_night_statutory_excess_overtime_minutes: 0,
+  legal_holiday_work_minutes: 0,
+  prescribed_holiday_work_minutes: 0,
+  late_night_legal_holiday_work_minutes: 0,
+  late_night_prescribed_holiday_work_minutes: 0,
+}
+
+/** AttendanceMonthConfirmationSectionはuseAttendanceMonthByIdで対象月を解決した後、
+ *  実際の表示・CSV/Excel出力・状態変更はAttendanceMonthReferenceTabs(useAttendanceMonth→
+ *  fetchMonth)に委譲するため、両方のAPIをモックする必要がある。 */
+function mockFetchMonth(month: AttendanceMonth) {
+  return vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+    days: [],
+    month,
+    flex_settlement_summary: null,
+    monthly_calculation_totals: zeroMonthlyCalculationTotals,
+  })
 }
 
 vi.mock('../../auth/useAuth', () => ({
@@ -162,15 +193,16 @@ describe('BackOfficeTaskDetailPage', () => {
 
     it('shows a 締める button when the attendance month is not closed', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      mockFetchMonth(baseMonth)
 
       renderPage(attendanceMonthTask)
 
       expect(await screen.findByRole('button', { name: '締める' })).toBeInTheDocument()
-      expect(screen.queryByText(/締め処理済みのため修正できません/)).not.toBeInTheDocument()
     })
 
     it('closes the month and refetches after confirming in the dialog', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      mockFetchMonth(baseMonth)
       vi.spyOn(attendanceApi, 'closeMonth').mockResolvedValue({ ...baseMonth, status: 'closed' })
 
       renderPage(attendanceMonthTask)
@@ -184,6 +216,7 @@ describe('BackOfficeTaskDetailPage', () => {
 
     it('downloads CSV and Excel for the attendance month from the task detail', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      mockFetchMonth(baseMonth)
       const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
       const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
 
@@ -204,17 +237,18 @@ describe('BackOfficeTaskDetailPage', () => {
 
     it('keeps the attendance month visible but hides the 締める button when already closed', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'closed' })
+      mockFetchMonth({ ...baseMonth, status: 'closed' })
 
       renderPage(attendanceMonthTask)
 
-      expect(await screen.findByText(/月次勤怠の内容は引き続き確認できます/)).toBeInTheDocument()
-      expect(screen.getByText('月次勤怠')).toBeInTheDocument()
+      expect(await screen.findByText('月次勤怠')).toBeInTheDocument()
       expect(screen.getByText('2026-07')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '締める' })).not.toBeInTheDocument()
     })
 
     it('lets a user with attendance.month_reopen reopen an already-closed month from the task detail', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue({ ...baseMonth, status: 'closed' })
+      mockFetchMonth({ ...baseMonth, status: 'closed' })
       const reopenMonth = vi
         .spyOn(attendanceApi, 'reopenMonth')
         .mockResolvedValue({ ...baseMonth, status: 'approved' })
@@ -232,6 +266,7 @@ describe('BackOfficeTaskDetailPage', () => {
 
     it('places the back-office status change above the attendance month closeout section', async () => {
       vi.spyOn(attendanceApi, 'fetchAttendanceMonthById').mockResolvedValue(baseMonth)
+      mockFetchMonth(baseMonth)
 
       const { container } = renderPage(attendanceMonthTask)
 

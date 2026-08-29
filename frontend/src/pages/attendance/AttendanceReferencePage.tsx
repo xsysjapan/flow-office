@@ -14,8 +14,17 @@ import { FormField } from '../../components/FormField/FormField'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Textarea } from '../../components/ui/textarea'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
+import { YearMonthPicker } from '../../components/YearMonthPicker/YearMonthPicker'
 import type { AttendanceDay, EmployeeShiftAssignment } from '../../api/types'
-import { useAttendanceMonth, usePunches, useReopenMonth, useWeek } from '../../hooks/useAttendance'
+import {
+  useAttendanceMonth,
+  useCloseMonth,
+  useDownloadAttendanceCsv,
+  useDownloadAttendanceExcel,
+  usePunches,
+  useReopenMonth,
+  useWeek,
+} from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
@@ -158,9 +167,14 @@ export function MonthlyReferenceView({
 }) {
   const { user } = useAuth()
   const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
+  const canCloseMonth = user?.effective_permissions?.includes('backoffice_task.execute') ?? false
+  const canExport = user?.effective_permissions?.includes('attendance.export') ?? false
   const [yearMonth, setYearMonth] = useState(() => restrictToYearMonth ?? initialYearMonth ?? formatDate(new Date()).slice(0, 7))
   const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
+  const closeMonth = useCloseMonth()
+  const downloadCsv = useDownloadAttendanceCsv()
+  const downloadExcel = useDownloadAttendanceExcel()
 
   const month = data?.month
   const monthMeta = month ? attendanceMonthStatusLabel(month.status) : null
@@ -179,6 +193,7 @@ export function MonthlyReferenceView({
               <Button variant="secondary" size="icon" title="前月" aria-label="前月" onClick={() => setYearMonth((ym) => addMonths(ym, -1))}>
                 <ChevronLeft aria-hidden="true" />
               </Button>
+              <YearMonthPicker id="attendance-reference-year-month" value={yearMonth} onChange={(ym) => ym && setYearMonth(ym)} />
               <Button variant="secondary" disabled={yearMonth === currentYearMonth} onClick={() => setYearMonth(currentYearMonth)}>
                 今月
               </Button>
@@ -234,11 +249,50 @@ export function MonthlyReferenceView({
         </Card>
       )}
 
+      {!isLoading && !error && month && canExport && (
+        <Card title="出力">
+          {downloadCsv.error && <ErrorMessage error={downloadCsv.error} fallback="勤怠CSVの取得に失敗しました。" />}
+          {downloadExcel.error && <ErrorMessage error={downloadExcel.error} fallback="勤怠Excelの取得に失敗しました。" />}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              isLoading={downloadCsv.isPending}
+              onClick={() => downloadCsv.mutate({ year_month: [month.year_month], user_id: [month.user_id], format: 'generic' })}
+            >
+              CSV出力
+            </Button>
+            <Button
+              variant="secondary"
+              isLoading={downloadExcel.isPending}
+              onClick={() => downloadExcel.mutate({ year_month: [month.year_month], user_id: [month.user_id] })}
+            >
+              Excel出力
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* 参照専用の月次勤怠カードとは分離し、状態を変更する管理者操作であることを明示する
-       *  (UC-A017)。attendance.month_reopen権限を持ち、対象月が締め済みの場合のみ表示する。 */}
-      {!isLoading && !error && canReopenMonth && month?.status === 'closed' && (
+       *  (UC-A011・UC-A017)。締めるにはbackoffice_task.execute権限、締めを取り消すには
+       *  専用の権限attendance.month_reopenが必要(月次勤怠締め取消は他の権限に流用しない)。 */}
+      {!isLoading && !error && month && (
+        (month.status === 'closed' && canReopenMonth) || (month.status !== 'closed' && canCloseMonth)
+      ) && (
         <Card title="管理者操作">
-          <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />
+          {month.status === 'closed' ? (
+            <ReopenMonthDialog monthId={month.id} yearMonth={yearMonth} />
+          ) : (
+            <ConfirmActionDialog
+              triggerLabel="締める"
+              triggerVariant="primary"
+              title="月次勤怠を締めますか?"
+              description={`${yearMonth}の月次勤怠を締めます。締めた後は日次実績を編集できなくなります。この操作は元に戻せません。`}
+              confirmLabel="締めを確定する"
+              isPending={closeMonth.isPending}
+              error={closeMonth.error}
+              onConfirm={() => closeMonth.mutateAsync(month.id)}
+            />
+          )}
         </Card>
       )}
     </>

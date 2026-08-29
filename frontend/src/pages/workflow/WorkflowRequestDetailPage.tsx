@@ -63,6 +63,12 @@ export function WorkflowRequestDetailPage() {
   const isApplicant = user?.id === request.applicant?.id
   const isApprover = user?.id === request.approver?.id
   const actionError = submitRequest.error ?? approveRequest.error ?? returnRequest.error
+  /** 月次勤怠申請(attendance_month)の取消(取り下げ)は専用権限attendance.submission_revoke
+   *  で個別に管理する(承認と別系列の権限。docs/07-usecases-attendance.md UC-A010参照)。
+   *  他のsubject_type(経費精算・有給等)は申請者本人であれば従来通り取消可能。 */
+  const canCancel =
+    request.subject_type !== 'attendance_month' ||
+    (user?.effective_permissions?.includes('attendance.submission_revoke') ?? false)
 
   /** 取消は元に戻せない操作(SKILL.md §2.12)のため、確認ダイアログ(ConfirmActionDialog)を
    *  経由させる。理由未入力の場合はダイアログを開いたまま留める。 */
@@ -162,7 +168,7 @@ export function WorkflowRequestDetailPage() {
             </Button>
           )}
 
-          {isApplicant && ['draft', 'submitted', 'returned'].includes(request.status) && (
+          {isApplicant && canCancel && ['draft', 'submitted', 'returned'].includes(request.status) && (
             <ConfirmActionDialog
               triggerLabel="取消"
               triggerVariant="danger"

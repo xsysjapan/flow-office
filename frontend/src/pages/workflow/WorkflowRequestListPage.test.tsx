@@ -15,6 +15,10 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => navigate }
 })
 
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: { id: 'user-1', effective_permissions: ['attendance.submission_revoke'] } }),
+}))
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(

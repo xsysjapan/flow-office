@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CalendarClock, ClipboardList, Receipt, Sunrise } from 'lucide-react'
 import type { WorkflowRequest, WorkflowRequestSubjectType } from '../../api/types'
 import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/useAuth'
 import type { FetchMyWorkflowRequestsOptions } from '../../api/workflowRequests'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
@@ -166,6 +167,7 @@ function rowStatusMeta(request: WorkflowRequest) {
  */
 export function WorkflowRequestListPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const status = (searchParams.get('status') as NonNullable<FetchMyWorkflowRequestsOptions['status']> | null) ?? DEFAULT_STATUS
@@ -372,7 +374,10 @@ export function WorkflowRequestListPage() {
             {requests.map((request) => {
               const { label, tone } = rowStatusMeta(request)
               const subtitle = subjectSubtitle(request)
-              const cancellable = isWorkflowRequestCancellable(request.status)
+              const cancellable =
+                isWorkflowRequestCancellable(request.status) &&
+                (request.subject_type !== 'attendance_month' ||
+                  (user?.effective_permissions?.includes('attendance.submission_revoke') ?? false))
               const selected = selectedIds.has(request.id)
               return (
                 <ClickableTableRow
