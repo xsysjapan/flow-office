@@ -24,6 +24,7 @@ import {
   generateAttendancePattern,
   previewAttendancePattern,
   reopenMonth,
+  revertMonthConfirmation,
   startBreak,
   submitMonth,
   updateAttendanceDay,
@@ -306,6 +307,17 @@ export function useReopenMonth() {
 
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => reopenMonth(id, reason),
+    onSuccess: () => invalidate(),
+  })
+}
+
+/** UC-A018: 承認済み(締め前)の月次勤怠の確定を取り消す(バックオフィス担当者専用)。 */
+export function useRevertMonthConfirmation() {
+  const invalidate = useInvalidateMonths()
+
+  return useMutation({
+    mutationFn: ({ id, reason, workflowRequestId }: { id: string; reason: string; workflowRequestId: string }) =>
+      revertMonthConfirmation(id, reason, workflowRequestId),
     onSuccess: () => invalidate(),
   })
 }

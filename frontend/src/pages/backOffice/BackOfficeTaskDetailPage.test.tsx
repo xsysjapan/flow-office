@@ -8,7 +8,15 @@ import * as attendanceApi from '../../api/attendance'
 import { ApiError } from '../../api/client'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
-import type { AttendanceMonth, AttendanceMonthlyCalculationTotals, BackOfficeTask, Paginated, User } from '../../api/types'
+import * as workflowRequestsApi from '../../api/workflowRequests'
+import type {
+  AttendanceMonth,
+  AttendanceMonthlyCalculationTotals,
+  BackOfficeTask,
+  Paginated,
+  User,
+  WorkflowRequest,
+} from '../../api/types'
 import { BackOfficeTaskDetailPage } from './BackOfficeTaskDetailPage'
 
 const assignee: User = {
@@ -19,7 +27,12 @@ const assignee: User = {
   job_title: null,
   employment_status: 'active',
   last_login_at: null,
-  effective_permissions: ['attendance.month_reopen', 'backoffice_task.execute', 'attendance.export'],
+  effective_permissions: [
+    'attendance.month_reopen',
+    'backoffice_task.execute',
+    'attendance.export',
+    'attendance.confirmation_revert',
+  ],
 }
 
 const zeroMonthlyCalculationTotals: AttendanceMonthlyCalculationTotals = {
@@ -282,6 +295,82 @@ describe('BackOfficeTaskDetailPage', () => {
 
       await screen.findByText('タクシー代の経理処理')
       expect(screen.queryByText('月次勤怠の締め処理')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('attendance_confirmation_revert task', () => {
+    const confirmationRevertTask: BackOfficeTask = {
+      ...baseTask,
+      task_type: 'attendance_confirmation_revert',
+      source_type: 'workflow_request',
+      source_id: 'workflow-request-1',
+    }
+
+    const applicant: User = {
+      id: 'user-1',
+      name: '申請者太郎',
+      email: 'taro@example.com',
+      department: null,
+      job_title: null,
+      employment_status: 'active',
+      last_login_at: null,
+    }
+
+    const revertRequest: WorkflowRequest = {
+      id: 'workflow-request-1',
+      title: '勤怠確定取消依頼: 2026-07',
+      status: 'approved',
+      form_data: { target_year_month: '2026-07', reason: '打刻の登録漏れがあったため' },
+      applicant,
+      submitted_at: '2026-08-01T00:00:00+09:00',
+      approved_at: '2026-08-02T00:00:00+09:00',
+      returned_at: null,
+      cancelled_at: null,
+      created_at: '2026-08-01T00:00:00+09:00',
+    }
+
+    const approvedMonth: AttendanceMonth = {
+      id: 'attendance-month-1',
+      user_id: 'user-1',
+      year_month: '2026-07',
+      status: 'approved',
+      approver: undefined,
+      submitted_at: '2026-07-31T00:00:00+09:00',
+      approved_at: '2026-08-01T00:00:00+09:00',
+      returned_at: null,
+      return_comment: null,
+      closed_at: null,
+      snapshot: null,
+      legal_holiday_warnings: [],
+    }
+
+    it('shows the applicant, target month, and reason from the approved request', async () => {
+      vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(revertRequest)
+      mockFetchMonth(approvedMonth)
+
+      renderPage(confirmationRevertTask)
+
+      expect(await screen.findByText('申請者太郎')).toBeInTheDocument()
+      expect(screen.getAllByText('2026-07').length).toBeGreaterThan(0)
+      expect(screen.getByText('打刻の登録漏れがあったため')).toBeInTheDocument()
+    })
+
+    it('reverts the confirmation when a user with attendance.confirmation_revert confirms the dialog', async () => {
+      vi.spyOn(workflowRequestsApi, 'fetchWorkflowRequest').mockResolvedValue(revertRequest)
+      mockFetchMonth(approvedMonth)
+      const revertConfirmation = vi
+        .spyOn(attendanceApi, 'revertMonthConfirmation')
+        .mockResolvedValue({ ...approvedMonth, status: 'not_submitted' })
+
+      renderPage(confirmationRevertTask)
+
+      await userEvent.click(await screen.findByRole('button', { name: '確定を取り消す' }))
+      await userEvent.type(await screen.findByLabelText('取消理由'), '手続きミスが判明したため')
+      await userEvent.click(screen.getByRole('button', { name: '確定取消を実行する' }))
+
+      await waitFor(() =>
+        expect(revertConfirmation).toHaveBeenCalledWith('attendance-month-1', '手続きミスが判明したため', 'workflow-request-1'),
+      )
     })
   })
 })
