@@ -141,4 +141,44 @@ describe('ExternalIntegrationConnectionsPage', () => {
 
     expect(await screen.findByText('外部連携を削除しますか?')).toBeInTheDocument()
   })
+
+  it('describes when each provider sends data', async () => {
+    renderPage()
+
+    await screen.findByText('freee本社経理')
+    expect(screen.getByText('連携(送信)のタイミングについて')).toBeInTheDocument()
+    expect(screen.getByText(/月次確定後/)).toBeInTheDocument()
+    expect(screen.getByText(/CSV出力のみで連携する/)).toBeInTheDocument()
+  })
+
+  it('starts the freee OAuth flow by navigating to the returned authorize url', async () => {
+    const user = userEvent.setup()
+    const redirectUrlSpy = vi
+      .spyOn(connectionsApi, 'getExternalIntegrationConnectionOAuthRedirectUrl')
+      .mockResolvedValue({ url: 'https://accounts.secure.freee.co.jp/public_api/authorize?client_id=x' })
+    const originalLocation = window.location
+    // @ts-expect-error -- jsdomのlocationはリードオンリーなので置き換えて検証する。
+    delete window.location
+    // @ts-expect-error -- 同上。
+    window.location = { ...originalLocation, href: '' }
+
+    renderPage()
+    await screen.findByText('freee本社経理')
+    await user.click(screen.getByRole('button', { name: 'freeeと連携する' }))
+
+    expect(redirectUrlSpy).toHaveBeenCalledWith('conn-1')
+    await vi.waitFor(() => {
+      expect(window.location.href).toBe('https://accounts.secure.freee.co.jp/public_api/authorize?client_id=x')
+    })
+
+    // @ts-expect-error -- 同上。
+    window.location = originalLocation
+  })
+
+  it('disables the freee OAuth button until client credentials are registered', async () => {
+    renderPage([{ ...connections[0], has_client_id: false, has_client_secret: false }, connections[1]])
+
+    await screen.findByText('freee本社経理')
+    expect(screen.getByRole('button', { name: 'freeeと連携する' })).toBeDisabled()
+  })
 })

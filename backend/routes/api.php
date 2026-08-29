@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\ExpenseClaimController;
 use App\Http\Controllers\Api\ExpenseEntryPresetController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\ExternalIntegrationConnectionController;
+use App\Http\Controllers\Api\ExternalIntegrationOAuthController;
 use App\Http\Controllers\Api\HolidayCalendarSourceController;
 use App\Http\Controllers\Api\IntegrationController;
 use App\Http\Controllers\Api\LegalHolidayDesignationController;
@@ -91,6 +92,11 @@ Route::post('/dev/apply-membership-changes', DevApplyMembershipChangesController
 // (管理画面・管理者向けAPIが未実装のため、E2Eの前提データ投入用にDevDatabaseResetControllerと
 // 同じ考え方で用意する。DevCreateExternalEmployeeMappingController参照)。
 Route::post('/dev/external-employee-mappings', DevCreateExternalEmployeeMappingController::class);
+
+// freeeからのOAuth2認可コードフローのコールバック。認証不要(freeeからのリダイレクトとして
+// 届くため、Sanctumトークンを持たない)。stateの署名・有効期限で改ざん・再利用を防ぐ
+// (ExternalIntegrationOAuthController参照)。
+Route::get('/admin/external-integration-connections/oauth/callback', [ExternalIntegrationOAuthController::class, 'callback']);
 
 Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(function () {
     Route::get('/access/me', EffectiveAccessController::class);
@@ -483,6 +489,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/external-integration-connections', [ExternalIntegrationConnectionController::class, 'store'])->middleware('permission:external_integration_connection.manage,any');
         Route::patch('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'update'])->middleware('permission:external_integration_connection.manage,any');
         Route::delete('/external-integration-connections/{externalIntegrationConnection}', [ExternalIntegrationConnectionController::class, 'destroy'])->middleware('permission:external_integration_connection.manage,any');
+        Route::get('/external-integration-connections/{externalIntegrationConnection}/oauth/redirect-url', [ExternalIntegrationOAuthController::class, 'redirectUrl'])->middleware('permission:external_integration_connection.manage,any');
     });
 
     // --- システム管理エンドポイント。旧ユーザーロールではなく管理Featureと実効Permissionで制御する。 ---

@@ -47,8 +47,8 @@ class ExternalIntegrationConnectionController extends Controller
             'client_id' => ['nullable', 'string'],
             'client_secret' => ['nullable', 'string'],
             'api_key' => ['nullable', 'string'],
-            // OAuth2連携(freee)は認可コードフローの実UI実装が未対応のため、E2E/検証用に
-            // access_token/refresh_token/token_expires_atを直接投入できるようにする
+            // OAuth2連携(freee)は通常`ExternalIntegrationOAuthController`の認可コードフロー経由で
+            // access_token/refresh_tokenが設定されるが、E2E/検証用に直接投入することも許可する
             // (未入力ならOAuth2Strategyがリフレッシュトークン欠如として初回送信時にエラーにする)。
             'access_token' => ['nullable', 'string'],
             'refresh_token' => ['nullable', 'string'],
