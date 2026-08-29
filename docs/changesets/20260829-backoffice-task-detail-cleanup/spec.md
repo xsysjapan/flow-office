@@ -1,6 +1,6 @@
 # 月次勤怠表示コンポーネントの統一(申請詳細・バックオフィスタスク詳細・勤怠参照画面)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -453,4 +453,47 @@ Storybookで以下を目視確認する:
 
 ## 実装結果
 
-未着手。
+実装済み。コミット(ブランチ`claude/attendance-resubmit-button-fix-f9h66r`):
+
+- `d402ae0` 月次勤怠表示を3画面で統一(申請詳細・バックオフィスタスク詳細・勤怠参照)
+  - `frontend/src/pages/attendance/AttendanceReferencePage.tsx`:
+    `AttendanceMonthReferenceTabs`(`MonthlyReferenceView`)にCSV/Excel出力
+    (`attendance.export`)・締める(`backoffice_task.execute`)・締めを取り消す
+    (既存の`attendance.month_reopen`、変更なし)・`YearMonthPicker`による月別検索を追加。
+  - `frontend/src/pages/backOffice/BackOfficeTaskDetailPage.tsx`:
+    `AttendanceMonthConfirmationSection`を「見出し+ローディング/エラー処理+
+    `AttendanceMonthReferenceTabs`呼び出し」だけの薄いラッパーに簡素化。これにより
+    「締めを取り消す」ボタンの二重描画バグを解消し、余分な`div.border`ラッパーも削除。
+  - `frontend/src/components/WorkflowRequestSubjectDetail/WorkflowRequestSubjectDetail.tsx`:
+    `AttendanceMonthSubjectView`の独自タブ実装を`AttendanceMonthReferenceTabs`呼び出しに
+    置き換え。
+  - `frontend/src/pages/workflow/WorkflowRequestDetailPage.tsx`・`WorkflowRequestListPage.tsx`:
+    「取消」の表示条件に、`subject_type === 'attendance_month'`の場合のみ
+    `attendance.submission_revoke`権限チェックを追加。
+  - テスト: `AttendanceReferencePage.test.tsx`(締める/CSV/Excel出力のテスト追加)・
+    `BackOfficeTaskDetailPage.test.tsx`(重複ボタン解消に伴う修正)・
+    `WorkflowRequestDetailPage.test.tsx`・`WorkflowRequestListPage.test.tsx`
+    (権限あり/なしのテスト追加)を更新。
+- `2506ba5` 月次勤怠の申請取消(取り下げ)に専用権限`attendance.submission_revoke`を追加
+  - `backend/app/Domain/AccessControl/AccessControlCatalog.php`: 新権限
+    `attendance.submission_revoke`(「月次勤怠提出取下げ」、スコープ`['self']`のみ)を追加。
+  - `backend/app/Domain/Workflow/Handlers/CancelWorkflowRequestHandler.php`:
+    既存のownership判定(申請者本人のみ)は維持し、`subject_type === 'attendance_month'`の
+    場合のみ本権限保有を追加要求(`EffectiveAccessResolver::hasPermission`)。他の
+    subject_typeは変更なし。
+  - `backend/tests/TestCase.php`: `grantSelfPermission()`ヘルパーを追加。
+  - `backend/tests/Feature/Workflow/AttendanceMonthCancelPermissionTest.php`(新規):
+    権限あり本人取消成功・権限なし本人取消失敗(422)・他subject_type(経費精算)は
+    権限不問で取消可能、の3パターンを検証。
+  - `backend/tests/Feature/Attendance/AttendanceFlowTest.php`・
+    `backend/tests/Feature/AccessControl/PermissionCatalogIntegrationTest.php`:
+    新権限追加に伴う既存テストの非破壊修正。
+
+テスト結果:
+- フロントエンド: `npm test`(vitest)全体 801 passed / 2 skipped / 6 failed
+  (失敗6件は`ApprovalsPage.test.tsx`・`ApprovalDetailPanel.test.tsx`の既存の
+  テスト間干渉によるもので、変更前のmainブランチでも同一の失敗が再現することを確認済み
+  (本changesetとは無関係)。
+- バックエンド: `php artisan test --filter=Workflow`(57件)・`--filter=AccessControl`
+  (8件)・`AttendanceFlowTest`(18件)いずれも成功。
+- `npx tsc --noEmit`・`npm run lint`(oxlint)ともにエラーなし。
