@@ -8,8 +8,14 @@
 > 加えてタスク詳細だとカードの中のカードの中のカードのようになっていて、領域が狭いです。もう少し広く表示されるように見直しをお願いします
 
 ユーザーへの確認により、「タスク詳細」= バックオフィスタスク詳細(`/backoffice-tasks/:id`、
-`BackOfficeTaskDetailPage`)であること、「二つ」は同一ラベルの重複ではなく
-「見た目・場所が異なる2つの提出系ボタン」であることを確認済み。
+`BackOfficeTaskDetailPage`)であること、「二つ」は
+「管理者操作という枠の中にあるもの」(`MonthlyReferenceView`の`Card title="管理者操作"`内の
+`ReopenMonthDialog`)と「バックオフィスタスクのExcel出力と同じところにあるもの」
+(`AttendanceMonthConfirmationSection`がCSV/Excel出力ボタンの下に直接出している
+`ReopenMonthDialog`)を指すことを特定済み。いずれも「締めを取り消す」という**同一操作**の
+`ReopenMonthDialog`コンポーネントであり、月が締め済み(`status === 'closed'`)かつ
+`attendance.month_reopen`権限を持つ場合に、同一タスク詳細ページ内へ二重に描画されていた
+(見た目が異なるのは、片方がCardの中、片方が素のdivの中に置かれているため)。
 
 ## 背景・目的
 
@@ -35,8 +41,20 @@
     データモデル上は正しく分離されているが、バックエンド側にも両者を連動させるReactor等は無く
     (`backend/app/Domain/Attendance/Reactors/CreateBackOfficeTaskOnAttendanceMonthApprovalReactor.php`
     がタスク生成のみを行う)、担当者は「締める」で月次勤怠を確定した後、別途「状態を変更する」で
-    タスク自体を完了にする必要がある。この2段階が同じ階層で並んでおり、見た目も配置も異なる
-    2つの「確定/提出」的ボタンとして視認されてしまっている。
+    タスク自体を完了にする必要がある(この2段階自体は仕様として妥当。論点1参照)。
+  - **実際の重複ボタンの原因(ユーザー再確認により特定)**:
+    `AttendanceMonthConfirmationSection`(81-87行目)は、`month.status === 'closed'`かつ
+    `canReopenMonth`の場合、CSV/Excel出力ボタンと同じ`div`の並びに直接
+    `<ReopenMonthDialog monthId={month.id} yearMonth={month.year_month} />`(「締めを取り消す」)
+    を描画している。一方、同じセクション内で呼んでいる`AttendanceMonthReferenceTabs`
+    (61行目)→`MonthlyReferenceView`は、`AttendanceReferencePage.tsx`の239-243行目で
+    `canReopenMonth && month?.status === 'closed'`のときに`Card title="管理者操作"`の中で
+    **同じ`ReopenMonthDialog`を同じpropsで**描画する。したがって月が締め済み・
+    かつ担当者が`attendance.month_reopen`権限を持つ場合、
+    「管理者操作」カードの中の「締めを取り消す」ボタンと、Excel出力ボタンの下にある
+    「締めを取り消す」ボタンが、同一タスク詳細ページ内に**同一操作として二重表示**される。
+    見た目(Card内かdiv内か)と場所(タブ群の中か下部の並びか)が異なるため、ユーザーには
+    「見た目・場所が異なる2つの提出系ボタン」に見えていた。
   - AttendanceMonthConfirmationSection内(60-62行目)は
     `<div className="flex flex-col gap-4 rounded-md border border-border p-3">` で
     `AttendanceMonthReferenceTabs` を囲んでおり、
@@ -60,24 +78,32 @@
 
 ## 仕様検討
 
-### 論点1: 「状態を変更する」(汎用)と「締める/締めを取り消す」(月次勤怠固有)の関係をどう整理するか
+### 論点1: 「管理者操作」カード内と、Excel出力ボタン下の、2つの`ReopenMonthDialog`(締めを取り消す)をどう一本化するか
 
 - 選択肢:
-  - A. 汎用「状態を変更する」セクションを`task_type === 'attendance_month_confirmation'`では
-    非表示にし、`AttendanceMonthConfirmationSection`側の「締める」操作だけを唯一の完了操作とする。
-  - B. 両方残すが、表示順序を「月次勤怠の締め処理」→「状態を変更する」に入れ替え、
-    「締め処理が完了したら下のステータスを更新してください」という注記を挟むことで、
-    2つが競合する選択肢ではなく直列の2ステップであることを明示する。
-  - C. 「締める」を押した時点で`backoffice_tasks.status`も自動的に`completed`へ連動させる
-    バックエンド改修(Reactor追加)を行い、汎用フォームを事実上不要にする。
-- 決定: B。
-- 理由: 設計原則6「バックオフィス処理は承認とは別ステータス系列で管理する」により、
-  `backoffice_tasks.status`(担当者・期限管理のための処理進行ステータス)と
-  `attendance_months.status`(月次勤怠の確定状態)は独立した系列として維持する必要があり、
-  AやCのように一方を消したり自動連動させたりすると、担当者が「割り当てのみ完了しタスク自体は
-  まだ人が確認中」といった中間状態(`in_review`/`needs_fix`等)を表現できなくなる。
-  よって両方の操作自体は残し、「見た目・場所が異なる2つの提出系ボタン」に見えてしまう問題は
-  表示順序と説明文で解消する(直列のステップだと分かれば、並んだ2つの独立ボタンには見えなくなる)。
+  - A. `AttendanceMonthConfirmationSection`(81-87行目)の`ReopenMonthDialog`を削除し、
+    「締め処理済みのため修正できません。」という説明文だけを残す。実際の「締めを取り消す」
+    操作は`AttendanceMonthReferenceTabs`→`MonthlyReferenceView`が出す「管理者操作」カードの
+    ものだけに一本化する。
+  - B. 逆に`MonthlyReferenceView`側(`AttendanceReferencePage.tsx`239-243行目)の
+    「管理者操作」カードを、`restrictToYearMonth`が指定されている(＝
+    `AttendanceMonthReferenceTabs`経由で呼ばれている)場合は表示しないようにし、
+    `AttendanceMonthConfirmationSection`側の`ReopenMonthDialog`だけを残す。
+  - C. どちらのボタンも残すが、片方を無効化(disabled)表示にする。
+- 決定: A。
+- 理由: 「管理者操作」カードは`AttendanceReferencePage`(管理画面の参照機能)が単独ページとして
+  開かれたとき(`/admin/attendance`)にも表示される、月次勤怠の閲覧・管理者操作の**唯一の場所**
+  として設計されている(`MonthlyReferenceView`のdocコメント「参照専用の月次勤怠カードとは分離し、
+  状態を変更する管理者操作であることを明示する」)。`AttendanceMonthConfirmationSection`側の
+  重複表示を消してこちらに一本化することが、まさにユーザー要望の「管理画面の参照機能と整合性を
+  合わせる」に直結する。Bのように`AttendanceMonthReferenceTabs`経由の呼び出し元で条件分岐を
+  増やすと、`WorkflowRequestSubjectDetail`(`AttendanceMonthSubjectView`)側の呼び出しにも
+  影響する条件付きpropsが必要になり複雑化する。Cは重複した見た目上のボタンが2つ残る点が
+  そもそもの問題を解消しない。
+  なお、`AttendanceMonthConfirmationSection`が締め済みでない場合に出している「締める」
+  (`ConfirmActionDialog`、89-102行目)は、`MonthlyReferenceView`側には対応するボタンが無い
+  (`MonthlyReferenceView`は閲覧専用+締め済み時の「取り消し」のみを持つ)ため、これは重複ではなく
+  そのまま残す。
 - 未確定・要確認事項: なし(確定)。
 
 ### 論点2: `AttendanceReferencePage`に月別検索UIをどう追加するか
@@ -130,19 +156,21 @@
 ## 仕様確定事項(まとめ)
 
 1. `BackOfficeTaskDetailPage.tsx`(`frontend/src/pages/backOffice/BackOfficeTaskDetailPage.tsx`):
-   - `task_type === 'attendance_month_confirmation'`の場合、表示順序を
-     「担当者を割り当てる(未割当時のみ、既存どおり)」→「月次勤怠の締め処理」
-     (`AttendanceMonthConfirmationSection`)→「状態を変更する」の順に変更する
-     (現状は「状態を変更する」が先、締め処理が最後)。
-   - `AttendanceMonthConfirmationSection`の見出し(`<h3>月次勤怠の締め処理</h3>`)の直下に、
-     「締め処理が完了したら、下部の「状態を変更する」でこのタスクのステータスを更新してください。」
-     という説明文(`<p className="text-sm text-muted-foreground">`)を追加する。
+   - `AttendanceMonthConfirmationSection`の`month.status === 'closed'`分岐(81-87行目)から
+     `{canReopenMonth && <ReopenMonthDialog monthId={month.id} yearMonth={month.year_month} />}`
+     を削除し、「締め処理済みのため修正できません。月次勤怠の内容は引き続き確認できます。」の
+     説明文だけを残す。実際の「締めを取り消す」操作は、直上の`AttendanceMonthReferenceTabs`が
+     表示する「管理者操作」カード(`MonthlyReferenceView`側)のものに一本化する。
+     ※このとき`canReopenMonth`変数はこの箇所では未使用になるが、`AttendanceMonthReferenceTabs`
+     配下の`MonthlyReferenceView`が同じ権限チェックを内部で独自に行うため、
+     `AttendanceMonthConfirmationSection`側の`canReopenMonth`宣言自体は削除してよい
+     (未使用importにならないよう`useAuth`の使用箇所も合わせて確認する)。
    - `AttendanceMonthConfirmationSection`内の`AttendanceMonthReferenceTabs`を囲んでいる
      `<div className="flex flex-col gap-4 rounded-md border border-border p-3">`
      (60-62行目)を削除し、`AttendanceMonthReferenceTabs`を直接配置する(前後の
      CSV/Excel出力ボタン・締める/締めを取り消すの`div`はそのまま残す)。
-   - 「状態を変更する」セクション自体・その表示条件(全task_typeで表示)は変更しない
-     (論点1決定Bにより両方残す)。
+   - 「状態を変更する」セクション・「締める」(`ConfirmActionDialog`、締め済みでない場合)は
+     重複ではないため変更しない。
 2. `AttendanceReferencePage.tsx`(`frontend/src/pages/attendance/AttendanceReferencePage.tsx`):
    - `MonthlyReferenceView`の`navigation`(`restrictToYearMonth === undefined`の分岐、
      176-190行目)内、前月ボタンと今月ボタンの間に`YearMonthPicker`
@@ -188,9 +216,10 @@ UC-B007)自体に変更はない。
 ## 実装対象
 
 - `frontend/src/pages/backOffice/BackOfficeTaskDetailPage.tsx`
-  - セクション表示順序の変更、説明文の追加、余分な`div.border`ラッパーの削除。
+  - `AttendanceMonthConfirmationSection`の締め済み分岐から重複する`ReopenMonthDialog`を削除、
+    余分な`div.border`ラッパーの削除。
   - 既存の`BackOfficeTaskDetailPage.test.tsx`・`BackOfficeTaskDetailPage.stories.tsx`が
-    表示順序に依存している場合は追随して更新する。
+    「締めを取り消す」ボタンの個数・位置に依存している場合は追随して更新する。
 - `frontend/src/pages/attendance/AttendanceReferencePage.tsx`
   - `MonthlyReferenceView`の`navigation`に`YearMonthPicker`を追加。
   - 既存の`AttendanceReferencePage.test.tsx`に月選択の動作確認テストを追加する。
@@ -207,7 +236,13 @@ npm run build   # 型チェック含む
 
 ## レビュー履歴
 
-初版。
+- 初版。
+- ユーザーから「管理者操作という枠の中にあるものと、バックオフィスタスクのExcel出力と同じ
+  ところにあるものです」との追加情報を得て、重複ボタンの実体を
+  `AttendanceMonthConfirmationSection`と`MonthlyReferenceView`(管理者操作カード)が
+  同じ`ReopenMonthDialog`を二重描画していたことと特定。論点1・現状(As-Is)・
+  仕様確定事項・実装対象を、「表示順序の入れ替え+説明文追加」案から
+  「重複描画の削除による一本化」案に修正。
 
 ## 実装結果
 
