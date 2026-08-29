@@ -111,22 +111,37 @@
 閲覧する画面)でも同じコンポーネントが使われるため、権限のない一般社員が管理者操作ボタンを
 見てしまわないようにする必要がある。
 
+**ユーザー指摘により修正**: 「締めを取り消す」には既に専用権限`attendance.month_reopen`
+(月次勤怠締め取消、`global`スコープ限定)が設計されており、「誰でも締めを取り消せるわけではない」
+ことを保証する意図で作られている(`docs/07-usecases-attendance.md` UC-A011「救済コマンド(管理者
+専用)」)。この専用権限を他の権限に置き換えたり流用したりせず、そのまま使う。「締める」
+(まだ締めていない月を確定する操作)には対応する専用権限が無いため、別途権限を選定する。
+
 - 選択肢:
-  - A. CSV/Excel出力は`attendance.export`権限、状態変更(締める/締めを取り消す)は
-    `backoffice_task.execute`権限を持つ場合のみ表示する(3画面共通)。
-  - B. 状態変更は`attendance.month_reopen`権限(締めを取り消すのみ元々ガードされていた権限)を
-    「締める」にも流用し、`backoffice_task.execute`は使わない。
+  - A. 「締めを取り消す」は既存の`attendance.month_reopen`権限のまま変更しない
+    (`canReopenMonth`変数・条件は現状の`AttendanceReferencePage.tsx`160行目・239行目のロジックを
+    そのまま維持する)。「締める」とCSV/Excel出力は別の権限で判定する
+    (「締める」は`backoffice_task.execute`、CSV/Excel出力は`attendance.export`)。
+  - B.(前回誤って決定した案)「締める」「締めを取り消す」を両方`backoffice_task.execute`に
+    一本化し、`attendance.month_reopen`は使わない。
   - C. 画面ごとに表示条件を変える(例: `BackOfficeTaskDetailPage`だけ無条件表示、他の2画面は
     権限チェック)。
 - 決定: A。
-- 理由: 「背景・目的」の権限の前提のとおり、`attendance.month_reopen`は`global`スコープのみで
-  安全だが、そもそも締め取消専用の権限であり「締める」側の権限として意味が合わない(B案は
-  権限名とドキュメント上の意味がずれる)。`backoffice_task.execute`はHR_STAFF・
-  BACKOFFICE_STAFFロールに付与されている「バックオフィスタスクを処理できるか」を表す権限で、
-  月次勤怠の締め/締め取消という管理者操作の実施者として意味が合致し、かつ`self`スコープを
-  持たない(一般社員には付与されない)ため、3画面共通でこれを使っても一般社員に誤って
-  管理者操作ボタンが見えることはない。Cは「コンポーネントを合わせる」という論点1の決定に反する
-  ため採用しない。
+- 理由: `attendance.month_reopen`は「締め済み(確定済み)の月次勤怠を取り消せるか」という、
+  他の権限とは意味が異なる専用の権限として既に設計・運用されている(締めた後のデータは
+  日次実績のロック解除を伴う不可逆性の高い操作のため、`backoffice_task.execute`を持つ全員より
+  さらに狭い範囲に限定する意図があったはず)。Bのように統一してしまうと、
+  `backoffice_task.execute`を持つがまだ`attendance.month_reopen`を付与されていない
+  ロール・ユーザーにも締め取消ができてしまい、権限設計を弱めてしまう。ユーザー指摘の通り
+  「確定状態も取り消せる権限が決まっていた」ことを尊重し、Aを採用する。Cは論点1の
+  「コンポーネントを合わせる」という決定に反するため不採用。
+  なお、「締める」(未確定→確定)には対応する専用権限が存在しない
+  (`AccessControlCatalog.php`には`attendance.month_reopen`のみが「月次勤怠の確定状態を
+  変更する」系の専用権限として存在し、「締める」用の専用権限は無い)。`backoffice_task.execute`は
+  HR_STAFF・BACKOFFICE_STAFFロールに付与されている「バックオフィスタスクを処理できるか」を表す
+  権限で、月次勤怠の締めという管理者操作の実施者として意味が合致し、かつ`self`スコープを
+  持たない(一般社員には付与されない)ため、CSV/Excel出力(`attendance.export`)と合わせて
+  3画面共通でこれを使っても一般社員に誤って管理者操作ボタンが見えることはない。
   なお、`closeMonth`のAPI自体は`attendance.update,any`でガードされているため、
   `backoffice_task.execute`を持つが`attendance.update`を`any`スコープで持たない
   ロールが万一存在する場合はボタン押下後にAPI側で403になる。現在の`AccessControlCatalog`上の
@@ -195,19 +210,22 @@
 1. **`AttendanceMonthReferenceTabs`(`frontend/src/pages/attendance/AttendanceReferencePage.tsx`
    515-561行目)を拡張する**:
    - `useAuth`から`user`を取得し、`canExport = effective_permissions.includes('attendance.export')`、
-     `canProcessBackOffice = effective_permissions.includes('backoffice_task.execute')`を算出する。
+     `canCloseMonth = effective_permissions.includes('backoffice_task.execute')`、
+     既存の`canReopenMonth = effective_permissions.includes('attendance.month_reopen')`
+     (160行目、変更しない)の3つを算出する。「締める」と「締めを取り消す」で権限チェックを
+     分けるのは、`attendance.month_reopen`が確定済み状態を取り消す専用権限として設計されており、
+     `backoffice_task.execute`を持つ全員に自動的に締め取消権限を広げてはならないため
+     (論点2参照)。
    - 月次タブ(`viewMode === 'month'`)表示中のみ、`MonthlyReferenceView`の下に以下を追加する
      (`MonthlyReferenceView`自体にpropsで渡すか、`AttendanceMonthReferenceTabs`側で並べて表示するかは
      実装時に`MonthlyReferenceView`のCard構成を崩さない形を選ぶ):
      - `canExport`のとき: CSV出力ボタン(`useDownloadAttendanceCsv`、`format: 'generic'`)・
        Excel出力ボタン(`useDownloadAttendanceExcel`)を表示する
        (`AttendanceMonthConfirmationSection`63-80行目と同じ呼び出し方)。
-     - `canProcessBackOffice`のとき:
-       - `month.status !== 'closed'`ならば「締める」(`ConfirmActionDialog`、
-         `AttendanceMonthConfirmationSection`89-102行目と同内容)を表示する。
-       - `month.status === 'closed'`ならば既存の`Card(管理者操作)`内の`ReopenMonthDialog`
-         (「締めを取り消す」)を表示する(既存の`canReopenMonth`変数は`canProcessBackOffice`に
-         置き換える)。
+     - `month.status !== 'closed' && canCloseMonth`のとき:「締める」
+       (`ConfirmActionDialog`、`AttendanceMonthConfirmationSection`89-102行目と同内容)を表示する。
+     - `month.status === 'closed' && canReopenMonth`のとき: 既存の`Card(管理者操作)`内の
+       `ReopenMonthDialog`(「締めを取り消す」)を表示する(既存条件・変数名は変更しない)。
    - `restrictToYearMonth === undefined`の場合(`AttendanceReferencePage`単独ページとして
      開かれた場合)のみ、`navigation`の前月ボタンと今月ボタンの間に`YearMonthPicker`
      (`frontend/src/components/YearMonthPicker/YearMonthPicker.tsx`)を追加し、`value`は現在の
@@ -233,8 +251,10 @@
    - 107行目の`<div className="rounded-md border border-border p-3">`ラッパーを削除する。
 4. 3画面とも、統一後は月次タブ表示時に「月次勤怠」「日別の内訳」カードに加え、権限があれば
    CSV/Excel出力ボタン・状態変更(締める/締めを取り消す)が同じ場所・同じ見た目で表示される。
-   一般社員(自分の申請を閲覧する場合等)は`attendance.export`・`backoffice_task.execute`を
-   持たないため、これらのボタンは表示されない。
+   一般社員(自分の申請を閲覧する場合等)は`attendance.export`・`backoffice_task.execute`・
+   `attendance.month_reopen`のいずれも持たないため、これらのボタンは表示されない。
+   `attendance.month_reopen`は「締めを取り消す」専用のまま維持し、`backoffice_task.execute`を
+   持つだけでは「締めを取り消す」ボタンは表示されない(論点2)。
 
 ## 対象外
 
@@ -298,6 +318,12 @@ Storybookで以下を目視確認する:
   `AttendanceMonthReferenceTabs`をCSV/Excel出力・状態変更を内包する形に拡張し、
   `WorkflowRequestSubjectDetail`の独自タブ実装も統一対象に含めた。権限ガード
   (`attendance.export`・`backoffice_task.execute`)の設計を新規に追加した(論点2)。
+- ユーザーから「締めを取り消す権限は専用で設計されているはず。誰でも締めを取り消せるわけでは
+  なく、確定状態を取り消せる権限が決まっていた」との指摘を受け、論点2を修正。前回誤って
+  「締める」「締めを取り消す」を両方`backoffice_task.execute`に一本化する案にしていたが、
+  既存の専用権限`attendance.month_reopen`(月次勤怠締め取消、`global`スコープ限定)を
+  「締めを取り消す」の判定にそのまま残し(`canReopenMonth`変数・条件は変更しない)、
+  「締める」(専用権限が存在しない操作)にのみ`backoffice_task.execute`を新たに使う形に修正した。
 
 ## 実装結果
 
