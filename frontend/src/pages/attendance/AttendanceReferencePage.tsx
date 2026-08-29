@@ -153,15 +153,12 @@ export function ReopenMonthDialog({ monthId, yearMonth }: { monthId: string; yea
 
 export function MonthlyReferenceView({
   userId,
-  initialYearMonth,
-  restrictToYearMonth,
+  yearMonth,
   onSelectDate,
 }: {
   userId: string
-  initialYearMonth?: string
-  /** 指定すると、この年月に固定し前月・次月への移動をできなくする(承認レビューの対象範囲を
-   *  限定する用途)。 */
-  restrictToYearMonth?: string
+  /** 表示対象の年月。前月・次月への移動は呼び出し側(ページ上部の年月選択)が担う。 */
+  yearMonth: string
   /** 指定すると、日別の内訳の各行をクリックできるようにし、選んだ日付を通知する。 */
   onSelectDate?: (date: string) => void
 }) {
@@ -169,8 +166,6 @@ export function MonthlyReferenceView({
   const canReopenMonth = user?.effective_permissions?.includes('attendance.month_reopen') ?? false
   const canCloseMonth = user?.effective_permissions?.includes('backoffice_task.execute') ?? false
   const canExport = user?.effective_permissions?.includes('attendance.export') ?? false
-  const [yearMonth, setYearMonth] = useState(() => restrictToYearMonth ?? initialYearMonth ?? formatDate(new Date()).slice(0, 7))
-  const currentYearMonth = formatDate(new Date()).slice(0, 7)
   const { data, isLoading, error } = useAttendanceMonth(yearMonth, userId)
   const closeMonth = useCloseMonth()
   const downloadCsv = useDownloadAttendanceCsv()
@@ -187,22 +182,6 @@ export function MonthlyReferenceView({
       <Card
         title="月次勤怠"
         actions={monthMeta && <Badge tone={monthMeta.tone}>{monthMeta.label}</Badge>}
-        navigation={
-          restrictToYearMonth === undefined && (
-            <div className="flex gap-2">
-              <Button variant="secondary" size="icon" title="前月" aria-label="前月" onClick={() => setYearMonth((ym) => addMonths(ym, -1))}>
-                <ChevronLeft aria-hidden="true" />
-              </Button>
-              <YearMonthPicker id="attendance-reference-year-month" value={yearMonth} onChange={(ym) => ym && setYearMonth(ym)} />
-              <Button variant="secondary" disabled={yearMonth === currentYearMonth} onClick={() => setYearMonth(currentYearMonth)}>
-                今月
-              </Button>
-              <Button variant="secondary" size="icon" title="次月" aria-label="次月" onClick={() => setYearMonth((ym) => addMonths(ym, 1))}>
-                <ChevronRight aria-hidden="true" />
-              </Button>
-            </div>
-          )
-        }
       >
         <p className="mb-3 text-sm text-muted-foreground">{yearMonth}</p>
 
@@ -596,7 +575,7 @@ export function AttendanceMonthReferenceTabs({ userId, yearMonth }: { userId: st
         ))}
       </div>
       {viewMode === 'month' && (
-        <MonthlyReferenceView userId={userId} restrictToYearMonth={yearMonth} onSelectDate={selectDate} />
+        <MonthlyReferenceView userId={userId} yearMonth={yearMonth} onSelectDate={selectDate} />
       )}
       {viewMode === 'week' && (
         <WeeklyReferenceView userId={userId} initialWeekStart={weekRange.min} weekRange={weekRange} />
@@ -616,16 +595,20 @@ export function AttendanceMonthReferenceTabs({ userId, yearMonth }: { userId: st
 
 /**
  * 管理者が自分以外の社員の勤怠を月次・週次・日次で参照する画面(閲覧専用。編集は行わない)。
- * 対象社員は`UserPicker`で選び、選択後は月次・週次・日次を切り替えて確認できる。対象社員・
- * 表示モードはURLに反映し、Browser Back・リロード・URL共有で状態を維持する
- * (`ui-interaction-patterns` §2.10)。年月・週・日といった各ビュー内部のナビゲーションは
- * `ui-interaction-patterns`の指示に沿い、既存のナビゲーション的な状態としてURL化しない。
+ * 対象社員・対象年月は`UserPicker`・`YearMonthPicker`で選び(画面上部に配置)、選択後は
+ * `AttendanceMonthReferenceTabs`(承認画面・バックオフィスタスク詳細・申請詳細と共通の
+ * 月次/週次/日次タブ切り替えコンポーネント)を表示する。週次・日次への切り替えやCSV/Excel出力・
+ * 状態変更(締める/締めを取り消す、権限がある場合)の挙動は他の画面と完全に同一になる。
+ * 対象社員・対象年月はURLに反映し、Browser Back・リロード・URL共有で状態を維持する
+ * (`ui-interaction-patterns` §2.10)。月次/週次/日次のタブ切り替え自体は他の画面と同様、
+ * 既存のナビゲーション的な状態としてURL化しない。
  */
 export function AttendanceReferencePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const userId = searchParams.get('user') ?? undefined
-  const viewModeParam = searchParams.get('view')
-  const viewMode: ViewMode = VIEW_MODES.some((mode) => mode.key === viewModeParam) ? (viewModeParam as ViewMode) : 'month'
+  const yearMonthParam = searchParams.get('yearMonth')
+  const currentYearMonth = formatDate(new Date()).slice(0, 7)
+  const yearMonth = yearMonthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonthParam) ? yearMonthParam : currentYearMonth
 
   const setUserId = (id: string | undefined) => {
     const next = new URLSearchParams(searchParams)
@@ -634,9 +617,9 @@ export function AttendanceReferencePage() {
     setSearchParams(next)
   }
 
-  const setViewMode = (mode: ViewMode) => {
+  const setYearMonth = (ym: string) => {
     const next = new URLSearchParams(searchParams)
-    next.set('view', mode)
+    next.set('yearMonth', ym)
     setSearchParams(next)
   }
 
@@ -650,23 +633,21 @@ export function AttendanceReferencePage() {
             </FormField>
           </div>
           <div className="mb-4 flex gap-2">
-            {VIEW_MODES.map((mode) => (
-              <Button
-                key={mode.key}
-                type="button"
-                variant={viewMode === mode.key ? 'primary' : 'secondary'}
-                onClick={() => setViewMode(mode.key)}
-              >
-                {mode.label}
-              </Button>
-            ))}
+            <Button variant="secondary" size="icon" title="前月" aria-label="前月" onClick={() => setYearMonth(addMonths(yearMonth, -1))}>
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <YearMonthPicker id="attendance-reference-year-month" value={yearMonth} onChange={(ym) => ym && setYearMonth(ym)} />
+            <Button variant="secondary" disabled={yearMonth === currentYearMonth} onClick={() => setYearMonth(currentYearMonth)}>
+              今月
+            </Button>
+            <Button variant="secondary" size="icon" title="次月" aria-label="次月" onClick={() => setYearMonth(addMonths(yearMonth, 1))}>
+              <ChevronRight aria-hidden="true" />
+            </Button>
           </div>
         </div>
       </Card>
 
-      {userId !== undefined && viewMode === 'month' && <MonthlyReferenceView userId={userId} />}
-      {userId !== undefined && viewMode === 'week' && <WeeklyReferenceView userId={userId} />}
-      {userId !== undefined && viewMode === 'day' && <DailyReferenceView userId={userId} />}
+      {userId !== undefined && <AttendanceMonthReferenceTabs userId={userId} yearMonth={yearMonth} />}
     </div>
   )
 }
