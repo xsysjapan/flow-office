@@ -53,6 +53,12 @@ Teams通知に集中する。
 設計ドキュメントとは別に、ローカル環境での動作確認のためのシナリオテスト計画を
 [testing/scenario-tests.md](./testing/scenario-tests.md) にまとめている。
 
+## 変更セット(仕様検討ドキュメント)
+
+規模のある変更は、実装前に [changesets/](./changesets/README.md) 配下へ変更要望・仕様検討・
+決定事項をまとめた変更セットを作成し、レビューを経てから実装する
+(`.claude/skills/changeset`)。
+
 ## 原則の要約
 
 - **EventStoreを正とする**: `stored_events` が真実の記録。Projection(画面表示用テーブル)は
