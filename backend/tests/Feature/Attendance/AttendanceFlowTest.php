@@ -351,6 +351,7 @@ class AttendanceFlowTest extends TestCase
 
         $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
         $this->actingAs($employee)->postJson('/api/attendance/clock-out')->assertSuccessful();
+        $this->grantSelfPermission($employee, 'attendance.submission_revoke');
 
         $this->actingAs($employee)->postJson("/api/attendance/months/{$yearMonth}/submit", [
             'approver_user_id' => $approver->id,

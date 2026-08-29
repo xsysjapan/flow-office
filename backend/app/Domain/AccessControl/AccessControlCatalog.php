@@ -57,6 +57,7 @@ class AccessControlCatalog
         'attendance.read' => ['name' => '勤怠閲覧', 'scopes' => ['global', 'group', 'self']],
         'attendance.update' => ['name' => '勤怠更新', 'scopes' => ['global', 'group', 'self']],
         'attendance.month_reopen' => ['name' => '月次勤怠締め取消', 'scopes' => ['global']],
+        'attendance.submission_revoke' => ['name' => '月次勤怠提出取下げ', 'scopes' => ['self']],
         'attendance.confirmation_revert' => ['name' => '月次勤怠確定取消', 'scopes' => ['global']],
         'approval.execute' => ['name' => '承認実行', 'scopes' => ['global', 'approval_task']],
         'approval.route.change' => ['name' => '承認ルート変更', 'scopes' => ['global', 'group']],

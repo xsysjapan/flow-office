@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as attendanceApi from '../../api/attendance'
+import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
 import { formatDate, mondayOf } from '../../utils/weekDates'
@@ -27,7 +28,7 @@ const adminUser: User = {
   job_title: null,
   employment_status: 'active',
   last_login_at: null,
-  effective_permissions: ['attendance.month_reopen'],
+  effective_permissions: ['attendance.month_reopen', 'backoffice_task.execute', 'attendance.export'],
 }
 
 vi.mock('../../auth/useAuth', () => ({
@@ -212,5 +213,77 @@ describe('AttendanceReferencePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '締めを取り消す' }))
 
     await waitFor(() => expect(reopenMonth).toHaveBeenCalledWith('month-1', '対象社員の取り違え'))
+  })
+
+  it('lets an admin with backoffice_task.execute close a not-yet-closed month', async () => {
+    const approvedMonth: AttendanceMonth = {
+      id: 'month-2',
+      user_id: targetUser.id,
+      year_month: formatDate(new Date()).slice(0, 7),
+      status: 'approved',
+      submitted_at: null,
+      approved_at: null,
+      returned_at: null,
+      return_comment: null,
+      closed_at: null,
+      snapshot: null,
+      legal_holiday_warnings: [],
+    }
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: approvedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    const closeMonth = vi.spyOn(attendanceApi, 'closeMonth').mockResolvedValue({ ...approvedMonth, status: 'closed' })
+
+    renderPage()
+    await selectTargetUser()
+
+    await userEvent.click(await screen.findByRole('button', { name: '締める' }))
+    await userEvent.click(screen.getByRole('button', { name: '締めを確定する' }))
+
+    await waitFor(() => expect(closeMonth).toHaveBeenCalledWith('month-2'))
+  })
+
+  it('lets an admin with attendance.export download CSV/Excel for the selected employee', async () => {
+    const approvedMonth: AttendanceMonth = {
+      id: 'month-3',
+      user_id: targetUser.id,
+      year_month: formatDate(new Date()).slice(0, 7),
+      status: 'approved',
+      submitted_at: null,
+      approved_at: null,
+      returned_at: null,
+      return_comment: null,
+      closed_at: null,
+      snapshot: null,
+      legal_holiday_warnings: [],
+    }
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+    vi.spyOn(attendanceApi, 'fetchMonth').mockResolvedValue({
+      days: [],
+      month: approvedMonth,
+      flex_settlement_summary: null,
+      monthly_calculation_totals: zeroMonthlyCalculationTotals,
+    })
+    const csvSpy = vi.spyOn(exportsApi, 'downloadAttendanceCsv').mockResolvedValue(undefined)
+    const excelSpy = vi.spyOn(exportsApi, 'downloadAttendanceExcel').mockResolvedValue(undefined)
+
+    renderPage()
+    await selectTargetUser()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'CSV出力' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Excel出力' }))
+
+    await waitFor(() =>
+      expect(csvSpy).toHaveBeenCalledWith({
+        year_month: [approvedMonth.year_month],
+        user_id: [targetUser.id],
+        format: 'generic',
+      }),
+    )
+    expect(excelSpy).toHaveBeenCalledWith({ year_month: [approvedMonth.year_month], user_id: [targetUser.id] })
   })
 })

@@ -111,6 +111,21 @@ describe('WorkflowRequestDetailPage', () => {
     expect(screen.queryByRole('button', { name: '承認する' })).not.toBeInTheDocument()
   })
 
+  it('hides the cancel button for an attendance_month request when the applicant lacks attendance.submission_revoke', async () => {
+    currentUser = applicant
+    renderPage({ ...submittedRequest, status: 'draft', submitted_at: null, subject_type: 'attendance_month' })
+
+    await screen.findByRole('button', { name: '提出する' })
+    expect(screen.queryByRole('button', { name: '取消' })).not.toBeInTheDocument()
+  })
+
+  it('shows the cancel button for an attendance_month request when the applicant has attendance.submission_revoke', async () => {
+    currentUser = { ...applicant, effective_permissions: ['attendance.submission_revoke'] }
+    renderPage({ ...submittedRequest, status: 'draft', submitted_at: null, subject_type: 'attendance_month' })
+
+    expect(await screen.findByRole('button', { name: '取消' })).toBeInTheDocument()
+  })
+
   it('shows approve and return actions for the approver on a submitted request', async () => {
     currentUser = approver
     renderPage(submittedRequest)

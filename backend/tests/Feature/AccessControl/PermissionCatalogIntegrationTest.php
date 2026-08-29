@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\AccessControl;
 
+use App\Domain\AccessControl\AccessControlCatalog;
 use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Models\User;
 use Database\Seeders\AccessControlSeeder;
@@ -70,9 +71,20 @@ class PermissionCatalogIntegrationTest extends TestCase
         ]);
 
         $resolver = app(EffectiveAccessResolver::class);
-        $catalogPermissions = DB::table('permissions')->pluck('code')->sort()->values()->all();
+        // SYSTEM_ADMINISTRATORSはADMINロールをglobalスコープで付与されるため、globalスコープ
+        // を持たない権限(例: `attendance.submission_revoke`、selfスコープ限定)はこの経路では
+        // 見えない。selfスコープ限定は代理取消を作らない設計判断そのものであり(changeset
+        // 20260829-backoffice-task-detail-cleanup 論点6)、admin側にglobalスコープを追加して
+        // この検証を通すのではなく、globalスコープを持つ権限のみを比較対象にする。
+        $catalogPermissions = DB::table('permissions')
+            ->pluck('code')
+            ->filter(fn (string $code) => in_array('global', AccessControlCatalog::PERMISSIONS[$code]['scopes'] ?? [], true))
+            ->sort()
+            ->values()
+            ->all();
 
         $this->assertSame($catalogPermissions, $resolver->permissions($user)->all());
+        $this->assertNotContains('attendance.submission_revoke', $resolver->permissions($user)->all());
         $this->assertContains('administration', $resolver->features($user)->all());
         $this->assertContains('administration.users', $resolver->features($user)->all());
         $this->assertContains('administration.settings', $resolver->features($user)->all());

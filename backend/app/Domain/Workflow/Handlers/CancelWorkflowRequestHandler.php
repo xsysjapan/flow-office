@@ -2,6 +2,7 @@
 
 namespace App\Domain\Workflow\Handlers;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -18,6 +19,10 @@ use App\Support\FrontendUrl;
  */
 class CancelWorkflowRequestHandler implements CommandHandler
 {
+    public function __construct(private readonly EffectiveAccessResolver $effectiveAccessResolver)
+    {
+    }
+
     public function handle(Command $command): WorkflowRequest
     {
         assert($command instanceof CancelWorkflowRequest);
@@ -26,6 +31,13 @@ class CancelWorkflowRequestHandler implements CommandHandler
 
         if ($workflowRequest->applicant_user_id !== $command->cancelledByUserId) {
             throw new DomainRuleException('自分が作成した申請のみ取り消せます。');
+        }
+
+        if ($workflowRequest->subject_type === 'attendance_month') {
+            $cancelledBy = User::query()->findOrFail($command->cancelledByUserId);
+            if (! $this->effectiveAccessResolver->hasPermission($cancelledBy, 'attendance.submission_revoke', null, $command->cancelledByUserId)) {
+                throw new DomainRuleException('月次勤怠の取消には権限が必要です。');
+            }
         }
 
         if (! in_array($workflowRequest->status, WorkflowRequestStatus::cancellable(), true)) {
