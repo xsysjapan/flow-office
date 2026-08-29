@@ -9,6 +9,12 @@
 
 > 月次勤怠の表示にあたり、申請詳細、バックオフィスタスク詳細、管理画面の勤怠参照で表示するコンポーネントを合わせてください。当該月内で週次、日次を表示し、Excel出力、CSV出力、状態変更ができるのが想定の挙動です。
 
+> 締めを取り消す権限を専用で設計しているはずなので確認してください。誰でも締めを取り消せるわけではなく、確定状態も取り消せる権限が決まっていたと思います。
+
+> 確定する権限は一般社員ですが、確定を取り消す権限は確定可能とは分けてください。一般社員は自身の勤怠を確定できるが、確定の取り消しは自分でできる場合もあるが、基本的には上長が行うので、個別の権限として管理したいです。
+
+> 逆に上長は確定できないという運用もできるようにしたいです。申請も申請取り下げができるようにして、連動させたいです。
+
 ユーザーへの確認・追加要望により、以下が確定した:
 - 「タスク詳細」= バックオフィスタスク詳細(`/backoffice-tasks/:id`、`BackOfficeTaskDetailPage`)。
 - 「二つのボタン」の実体は、`AttendanceMonthConfirmationSection`が独自に描画する
@@ -205,6 +211,49 @@
   の2階層になり、表示幅も余分な`div.border.p-3`のpadding分広がる。
 - 未確定・要確認事項: なし(確定)。
 
+### 論点6: 「提出取消」(申請の取消と連動した月次勤怠の未提出化)を専用権限で管理する
+
+ユーザーからの追加要望により判明した現状:
+- 月次勤怠申請(`subject_type = 'attendance_month'`)の`workflow_request`を「取消」すると、
+  `AttendanceMonthCancelOnWorkflowRequestCancelledReactor`が対象の`attendance_months`を
+  `not_submitted`へ戻す(`CancelSubmittedAttendanceMonth`コマンド)。これが実質的な
+  「提出取消」機能であり、既に実装・連動済み。
+- しかし取消の実行権限は`CancelWorkflowRequestHandler`27-28行目
+  (`workflowRequest->applicant_user_id !== $command->cancelledByUserId`)による
+  **申請者本人のみ**というハードコードのownershipチェックのみで、専用の権限チェックは無い。
+  さらに、申請者本人以外(上長・HR等)が代理で取り消す経路もそもそも存在しない。
+- 併せて確認した2点は現状のままで要件を満たすため変更不要と確定した:
+  - 承認(`approve`)を上長ロールから外す運用は、既存の`approval.execute`権限の付与有無で
+    既に可能(`permission:approval.execute`ミドルウェア+`approver_user_id`一致の両方が必要な
+    ため、`approval.execute`を持たないロールには承認自体を実行させない運用ができる)。
+  - 上長が部下の代わりに提出する(代理提出)機能はそもそも存在しない
+    (`/attendance/months/{yearMonth}/submit`は`permission:attendance.update,self`のみで、
+    他人の月次勤怠を対象にした提出APIが無い)。
+
+- 選択肢:
+  - A. 新権限`attendance.submission_revoke`(スコープ`global`/`group`/`self`)を追加する。
+    `CancelWorkflowRequestHandler`のownership判定を、
+    「申請者本人」**または**「`subject_type === 'attendance_month'`かつ、対象社員に対して
+    `attendance.submission_revoke`権限(self/group/globalいずれか、対象を包含するスコープ)を
+    持つ」の**いずれか**を満たせば取消可能、という条件に拡張する。他のsubject_type
+    (経費精算・有給等)は現状の申請者本人限定のまま変更しない。
+  - B. `CancelWorkflowRequestHandler`は変更せず、attendance_monthの取消だけを行う専用の新規
+    APIエンドポイント(`AttendanceController`側)を追加し、その中で`workflow_request`の取消と
+    `attendance_month`の取消を両方明示的に行う。
+  - C. 権限チェックは追加せず、申請者本人のみのまま(現状維持)。
+- 決定: A。
+- 理由: Bは`workflow_request`の取消という同じ操作に対して2つの入口(生成元の`workflow_request`
+  経由の取消と、新設のattendance専用エンドポイント)ができてしまい、「申請(ワークフロー)と業務は
+  分離する」という設計原則14の趣旨(進行状況はワークフロー側に統合する)にむしろ反する。
+  Aは既存の1つの入口(`CancelWorkflowRequestHandler`)のまま、
+  ownership判定に`subject_type`分岐を1つ追加するだけで済み、影響範囲を`attendance_month`型の
+  申請に限定できる。他のsubject_type(経費精算等)の取消は既存のまま変更されない。
+  Cはユーザー要望(「取消権限を個別に管理したい」)に反するため不採用。
+  権限判定は`EffectiveAccessResolver::hasPermission($user, 'attendance.submission_revoke',
+  $resourceGroupId, $resourceUserId)`(既存の`attendance.update`等と同じ仕組み)を用い、
+  対象社員(`attendance_months.user_id`)に対するself/group/globalスコープを判定する。
+- 未確定・要確認事項: なし(確定)。
+
 ## 仕様確定事項(まとめ)
 
 1. **`AttendanceMonthReferenceTabs`(`frontend/src/pages/attendance/AttendanceReferencePage.tsx`
@@ -255,6 +304,33 @@
    `attendance.month_reopen`のいずれも持たないため、これらのボタンは表示されない。
    `attendance.month_reopen`は「締めを取り消す」専用のまま維持し、`backoffice_task.execute`を
    持つだけでは「締めを取り消す」ボタンは表示されない(論点2)。
+5. **新権限`attendance.submission_revoke`を追加する**
+   (`backend/app/Domain/AccessControl/AccessControlCatalog.php`、名称例:「月次勤怠提出取消」、
+   スコープ`['global', 'group', 'self']`)。`access-control:sync`相当のコマンドで
+   `permissions`テーブルへ反映する(既存の権限追加手順と同じ)。
+6. **`backend/app/Domain/Workflow/Handlers/CancelWorkflowRequestHandler.php`のownership判定
+   (27-28行目)を拡張する**:
+   - 現行の`$workflowRequest->applicant_user_id !== $command->cancelledByUserId`による
+     早期`throw`を、「申請者本人」**または**
+     「`$workflowRequest->subject_type === 'attendance_month'`かつ、
+     `EffectiveAccessResolver::hasPermission($user, 'attendance.submission_revoke',
+     $resourceGroupId, $resourceUserId)`が対象の`attendance_months.user_id`に対して
+     true」のいずれかを満たせば通す、という条件に変更する。
+   - `attendance_month`以外の`subject_type`(経費精算・有給等)は、この分岐を通らず
+     従来通り申請者本人のみに制限される(既存のUnitテスト・Featureテストへの影響が
+     `attendance_month`関連のみであることを確認する)。
+   - `CancelWorkflowRequest`コマンド自体には`subject_type`が含まれていないため、
+     `WorkflowRequest`モデルから取得する(既に25行目で取得済みの`$workflowRequest`から
+     `subject_type`・`subject_id`を参照できる)。
+7. **フロントエンド`WorkflowRequestDetailPage.tsx`の「取消」表示条件を拡張する**
+   (159-183行目付近):
+   - 現行`isApplicant && ['draft', 'submitted', 'returned'].includes(request.status)`に加えて、
+     `request.subject_type === 'attendance_month' && !isApplicant &&
+     effective_permissions.includes('attendance.submission_revoke')`の場合も
+     取消ボタン(`ConfirmActionDialog`)を表示する。
+   - `WorkflowRequestListPage.tsx`の一覧からの「まとめて取消」(`isWorkflowRequestCancellable`)は
+     今回は対象外とする(一覧APIのレスポンスに`subject_type`ごとの権限判定結果を含める必要が
+     あり、影響範囲が広がるため。対象外参照)。
 
 ## 対象外
 
@@ -267,12 +343,19 @@
 - 週次・日次ビュー(`WeeklyReferenceView`・`DailyReferenceView`)への年月直接指定UIの追加
   (今回は月次ビューのみ)。
 - `AttendanceMonthReferenceTabs`という名称自体の変更(コンポーネント名はそのまま拡張する)。
+- 承認(`approval.execute`)権限の見直し・「代理提出」機能の新設。既存の設計で要件を満たすため
+  変更しない(論点6参照)。
+- `attendance_month`以外の`subject_type`(経費精算・有給・特別休暇・振替休日・代休)への
+  代理取消機能の拡張。今回は`attendance_month`のみを対象とする。
+- `WorkflowRequestListPage.tsx`の一覧・まとめて取消機能への代理取消権限の反映
+  (論点6・仕様確定事項7参照)。
 
 ## ドキュメントへの影響
 
-変更なし。今回の変更はUIレイアウト・操作導線の統一であり、ユースケースの手順・イベント名・
-状態遷移(`docs/07-usecases-attendance.md`のUC-A011、`docs/11-usecases-backoffice.md`の
-UC-B007)自体に変更はない。
+- `docs/07-usecases-attendance.md`: UC-A010(月次勤怠申請の取消)に、`attendance.submission_revoke`
+  権限を持つ者(申請者本人以外、例: 上長・HR)も代理で取消できる旨を追記する
+  (`attendance.month_reopen`が同章に明記されているのと同じ書き方に揃える)。
+- 上記以外(UC-A011・UC-B007等)は変更なし。
 
 ## モック・アセット
 
@@ -291,6 +374,22 @@ UC-B007)自体に変更はない。
   - `AttendanceMonthSubjectView`を`AttendanceMonthReferenceTabs`利用に置き換え。
   - `WorkflowRequestSubjectDetail.test.tsx`(存在すれば)・
     `WorkflowRequestDetailPage.test.tsx`/`.stories.tsx`を追随して更新。
+- `frontend/src/pages/workflow/WorkflowRequestDetailPage.tsx`
+  - 「取消」ボタンの表示条件に`attendance.submission_revoke`権限による代理取消の分岐を追加
+    (仕様確定事項7)。
+  - `WorkflowRequestDetailPage.test.tsx`に代理取消のテストケースを追加。
+- `backend/app/Domain/AccessControl/AccessControlCatalog.php`
+  - `attendance.submission_revoke`(スコープ`global`/`group`/`self`)を追加。
+- `backend/app/Domain/Workflow/Handlers/CancelWorkflowRequestHandler.php`
+  - ownership判定を、申請者本人 または (`subject_type === 'attendance_month'` かつ
+    `attendance.submission_revoke`保有)のいずれかに拡張(仕様確定事項6)。
+  - `EffectiveAccessResolver`をコンストラクタインジェクションで受け取る。
+- `backend/tests/Feature/Workflow/`または`backend/tests/Feature/Attendance/`
+  - 申請者本人による取消(既存動作の非破壊確認)・`attendance.submission_revoke`保有者による
+    代理取消(成功)・権限を持たない第三者による取消(403/DomainRuleException)の3パターンを
+    Featureテストで追加する。
+  - `backend/tests/Feature/AccessControl/PermissionCatalogIntegrationTest.php`等、権限一覧を
+    網羅的に検証している既存テストに`attendance.submission_revoke`が反映されるか確認する。
 
 ## 検証方法
 
@@ -298,13 +397,18 @@ UC-B007)自体に変更はない。
 cd frontend
 npm run test -- AttendanceReferencePage BackOfficeTaskDetailPage WorkflowRequestDetailPage WorkflowRequestSubjectDetail
 npm run build   # 型チェック含む
+
+cd ../backend
+php artisan test --filter=Workflow
+php artisan test --filter=AccessControl
 ```
 Storybookで以下を目視確認する:
 - `AttendanceReferencePage`: 権限あり/なしでのCSV/Excel出力・締める/締めを取り消すボタンの表示、
   `YearMonthPicker`での月移動。
 - `BackOfficeTaskDetailPage`: 締め処理あり/なしの両状態(重複ボタンが出ないこと)。
 - `WorkflowRequestDetailPage`(`subject_type='attendance_month'`): 週次/日次タブへの切り替え、
-  一般申請者には管理者操作ボタンが出ないこと。
+  一般申請者には管理者操作ボタンが出ないこと、`attendance.submission_revoke`保有者(申請者本人
+  以外)には「取消」ボタンが出ること。
 
 ## レビュー履歴
 
@@ -324,6 +428,16 @@ Storybookで以下を目視確認する:
   既存の専用権限`attendance.month_reopen`(月次勤怠締め取消、`global`スコープ限定)を
   「締めを取り消す」の判定にそのまま残し(`canReopenMonth`変数・条件は変更しない)、
   「締める」(専用権限が存在しない操作)にのみ`backoffice_task.execute`を新たに使う形に修正した。
+- ユーザーから「一般社員は自身の勤怠を確定できるが、確定の取り消しは自分でできる場合もあるが
+  基本的には上長が行うので、個別の権限として管理したい」との要望。確認の結果、「確定」は
+  提出(`attendance.update`, self)、「確定の取り消し」は申請(`workflow_request`)の「取消」と
+  連動する既存の`CancelSubmittedAttendanceMonth`(月次勤怠を`not_submitted`へ戻す)を指すと判明。
+  現状は申請者本人のみ取消可能(専用権限なし、上長による代理取消の経路も無し)だったため、
+  論点6として新設。新権限`attendance.submission_revoke`(スコープ`global`/`group`/`self`)を
+  追加し、`CancelWorkflowRequestHandler`のownership判定を
+  「申請者本人」または「`attendance_month`型かつ本権限保有」に拡張する方針とした。
+  併せて確認した「承認権限を上長から外す運用」「上長の代理提出」は、いずれも既存の設計
+  (`approval.execute`権限・代理提出機能が存在しない)で要件を満たすため変更不要と確定した。
 
 ## 実装結果
 
