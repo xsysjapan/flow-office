@@ -177,6 +177,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::get('/assets/{asset}', [AssetController::class, 'show']);
     Route::get('/assets/{asset}/history', [AssetController::class, 'history']);
     Route::get('/assets/{asset}/loan-eligibility', [AssetController::class, 'loanEligibility']);
+    // 貸与時の申請選択UI(spec 論点2-3)向け。asset.manage検証はController内で行う
+    // (対象資産に紐づく承認済み申請一覧の取得に限定するため他のasset.manage系と同列)。
+    Route::get('/assets/{asset}/loan-requests', [AssetController::class, 'loanRequests']);
     Route::post('/assets', [AssetController::class, 'store'])->middleware('permission:asset.manage,any');
     Route::patch('/assets/{asset}', [AssetController::class, 'update'])->middleware('permission:asset.manage,any');
     Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->middleware('permission:asset.manage,any');

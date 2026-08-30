@@ -4,6 +4,7 @@ import type {
   AssetInstallationStatus,
   AssetLendingMethod,
   AssetLendingStatus,
+  AssetLoanRequestStatus,
   AssetManagementType,
   AttendanceDayStatus,
   AttendanceMonthStatus,
@@ -32,6 +33,7 @@ const workflowRequestStatusMeta: Record<WorkflowRequestStatus, StatusMeta> = {
   approved: { label: '承認済み', tone: 'success' },
   returned: { label: '差戻し', tone: 'warning' },
   cancelled: { label: '取消', tone: 'danger' },
+  rejected: { label: '却下', tone: 'danger' },
 }
 
 const attendanceMonthStatusMeta: Record<AttendanceMonthStatus, StatusMeta> = {
@@ -480,6 +482,19 @@ const assetInstallationStatusMeta: Record<AssetInstallationStatus, StatusMeta> =
 
 export function assetInstallationStatusLabel(status: AssetInstallationStatus): StatusMeta {
   return assetInstallationStatusMeta[status]
+}
+
+const assetLoanRequestStatusMeta: Record<AssetLoanRequestStatus, StatusMeta> = {
+  pending: { label: '承認待ち', tone: 'info' },
+  approved: { label: '承認済み(未貸与)', tone: 'success' },
+  rejected: { label: '却下', tone: 'danger' },
+  withdrawn: { label: '取下げ', tone: 'neutral' },
+  cancelled: { label: '取消', tone: 'danger' },
+  lent: { label: '貸与済み', tone: 'success' },
+}
+
+export function assetLoanRequestStatusLabel(status: AssetLoanRequestStatus): StatusMeta {
+  return assetLoanRequestStatusMeta[status]
 }
 
 /** 一覧行の「現在の状況」1セル分の要約(spec「UI設計方針」相当: 貸出中なら誰へ、

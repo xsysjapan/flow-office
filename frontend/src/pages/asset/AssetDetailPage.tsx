@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import type { Asset } from '../../api/types'
@@ -20,6 +20,7 @@ import { Textarea } from '../../components/ui/textarea'
 import {
   useAsset,
   useAssetHistory,
+  useAssetLoanRequests,
   useChangeAssetLendingMethod,
   useChangeAssetManagementType,
   useCompleteAssetRepair,
@@ -36,6 +37,7 @@ import {
   useSetAssetDefaultLocation,
   useStartAssetRepair,
 } from '../../hooks/useAsset'
+import { useCreateWorkflowRequest, useSubmitWorkflowRequest } from '../../hooks/useWorkflowRequests'
 import {
   assetHistoryEventTypeLabel,
   assetInstallationStatusLabel,
@@ -57,17 +59,34 @@ const ASSET_MANAGE_PERMISSION = 'asset.manage'
 
 /**
  * 貸与フォーム(バックオフィス貸与)。借用者・返却予定日を指定する。承認制(approval)の場合は
- * サーバー側(LendAssetHandler)が承認済み申請の存在を検証し、なければDomainRuleExceptionを
- * 返す(spec「貸出方式とLendAsset呼び出し条件」)。
- *
- * Pattern exception: 承認済み申請から1件を選ぶUI(spec 論点2-3)は本フェーズの対象外
- * (タスク指示のAPIフック一覧に`asset_loan_requests`取得系が含まれていないため)とし、
- * 貸与自体はこの1画面から行い、承認済み申請が無い場合のエラーはErrorMessageで表示する。
+ * 対象borrowerUserIdに紐づく承認済み・未貸与の申請一覧から1件選ばせる(spec 論点2-3。
+ * 1件しかなければ自動選択、0件ならエラー表示)。サーバー側(LendAssetHandler)も改めて
+ * 存在・整合性を検証する(spec「貸出方式とLendAsset呼び出し条件」)。
  */
 function LendAssetDialog({ asset }: { asset: Asset }) {
   const lendAsset = useLendAsset()
   const [borrowerUserId, setBorrowerUserId] = useState<string | undefined>(undefined)
   const [expectedReturnAt, setExpectedReturnAt] = useState<string | undefined>(undefined)
+  const [loanRequestId, setLoanRequestId] = useState<string | undefined>(undefined)
+  const isApproval = asset.lending_method === 'approval'
+
+  const {
+    data: approvedLoanRequests,
+    isLoading: isLoadingLoanRequests,
+  } = useAssetLoanRequests(asset.id, { status: 'approved', borrowerUserId }, isApproval && Boolean(borrowerUserId))
+
+  // 承認済み申請が1件しかない場合は自動選択する(spec 論点2-3)。
+  useEffect(() => {
+    if (approvedLoanRequests?.length === 1) {
+      setLoanRequestId(approvedLoanRequests[0].id)
+    }
+  }, [approvedLoanRequests])
+
+  const resetSelection = () => {
+    setBorrowerUserId(undefined)
+    setExpectedReturnAt(undefined)
+    setLoanRequestId(undefined)
+  }
 
   return (
     <ConfirmActionDialog
@@ -80,25 +99,115 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
       error={lendAsset.error}
       onConfirm={async () => {
         if (!borrowerUserId) throw new Error('借用者を選択してください。')
+        if (isApproval && !loanRequestId) throw new Error('承認済みの貸出申請を選択してください。')
         await lendAsset.mutateAsync({
           id: asset.id,
-          input: { borrower_user_id: borrowerUserId, expected_return_at: expectedReturnAt || null },
+          input: {
+            borrower_user_id: borrowerUserId,
+            expected_return_at: expectedReturnAt || null,
+            loan_request_id: isApproval ? loanRequestId : null,
+          },
         })
-        setBorrowerUserId(undefined)
-        setExpectedReturnAt(undefined)
+        resetSelection()
       }}
       onOpenChange={(open) => {
-        if (open) {
-          setBorrowerUserId(undefined)
-          setExpectedReturnAt(undefined)
-        }
+        if (open) resetSelection()
       }}
     >
       <FormField label="借用者" htmlFor="lend-borrower" required>
-        <UserPicker id="lend-borrower" value={borrowerUserId} onChange={setBorrowerUserId} />
+        <UserPicker
+          id="lend-borrower"
+          value={borrowerUserId}
+          onChange={(userId) => {
+            setBorrowerUserId(userId)
+            setLoanRequestId(undefined)
+          }}
+        />
       </FormField>
       <FormField label="返却予定日" htmlFor="lend-expected-return">
         <DatePicker id="lend-expected-return" value={expectedReturnAt} onChange={setExpectedReturnAt} />
+      </FormField>
+
+      {isApproval && borrowerUserId && (
+        <FormField label="承認済みの貸出申請" htmlFor="lend-loan-request" required>
+          {isLoadingLoanRequests ? (
+            <LoadingState />
+          ) : !approvedLoanRequests || approvedLoanRequests.length === 0 ? (
+            <p className="text-sm text-destructive">この借用者に対する承認済み・未貸与の申請がありません。</p>
+          ) : approvedLoanRequests.length === 1 ? (
+            // 1件しかない場合は自動選択済み(上のuseEffect、spec 論点2-3)。
+            <p className="text-sm text-foreground">
+              {approvedLoanRequests[0].purpose ? `利用目的: ${approvedLoanRequests[0].purpose}` : '(利用目的の記載なし)'}
+            </p>
+          ) : (
+            <NativeSelect
+              id="lend-loan-request"
+              value={loanRequestId ?? ''}
+              onChange={(e) => setLoanRequestId(e.target.value || undefined)}
+            >
+              <option value="">選択してください({approvedLoanRequests.length}件の承認済み申請)</option>
+              {approvedLoanRequests.map((loanRequest) => (
+                <option key={loanRequest.id} value={loanRequest.id}>
+                  {loanRequest.purpose ? loanRequest.purpose : '(利用目的の記載なし)'} / 承認日:{' '}
+                  {loanRequest.approved_at ? formatDateTime(loanRequest.approved_at) : '-'}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
+        </FormField>
+      )}
+    </ConfirmActionDialog>
+  )
+}
+
+/**
+ * 貸出申請フォーム(UC-L07)。approval方式・available状態の資産に対し、利用目的と
+ * 承認者を指定して申請する。承認者はspec 論点10の通り本来asset.manage権限保有者に
+ * 絞るべきだが、権限別ユーザー一覧を返すAPIが無いため、全ユーザーから選択する
+ * (タスク指示の許容範囲。UserPicker自体の絞り込みは行わない)。
+ */
+function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
+  const createRequest = useCreateWorkflowRequest()
+  const submitRequest = useSubmitWorkflowRequest()
+  const [purpose, setPurpose] = useState('')
+  const [approverUserId, setApproverUserId] = useState<string | undefined>(undefined)
+
+  const isPending = createRequest.isPending || submitRequest.isPending
+  const error = createRequest.error ?? submitRequest.error
+
+  return (
+    <ConfirmActionDialog
+      triggerLabel="貸出申請"
+      triggerVariant="primary"
+      title={`${asset.name}の貸出を申請する`}
+      description="承認されると、承認者(または備品管理担当者)が貸与操作を行います。"
+      confirmLabel="申請する"
+      isPending={isPending}
+      error={error}
+      onConfirm={async () => {
+        if (!approverUserId) throw new Error('承認者を選択してください。')
+        const created = await createRequest.mutateAsync({
+          request_type_code: 'asset_loan',
+          title: `${asset.name}(${asset.asset_no})の貸出申請`,
+          form_data: { asset_id: asset.id, purpose },
+          approver_user_id: approverUserId,
+        })
+        await submitRequest.mutateAsync({ id: created.id, approverUserId })
+        setPurpose('')
+        setApproverUserId(undefined)
+      }}
+      onOpenChange={(open) => {
+        if (open) {
+          setPurpose('')
+          setApproverUserId(undefined)
+        }
+      }}
+    >
+      <FormField label="利用目的" htmlFor="asset-loan-purpose">
+        <Textarea id="asset-loan-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+      </FormField>
+      <FormField label="承認者" htmlFor="asset-loan-approver" required>
+        <UserPicker id="asset-loan-approver" value={approverUserId} onChange={setApproverUserId} />
       </FormField>
     </ConfirmActionDialog>
   )
@@ -427,6 +536,9 @@ export function AssetDetailPage() {
               {isLending && asset.lending_status === 'available' && (
                 <>
                   {isSelfServiceForSelf && user && <SelfBorrowButton asset={asset} borrowerUserId={user.id} />}
+                  {/* UC-L07: 承認制の資産は認証済みユーザーなら誰でも貸出申請できる
+                      (spec 論点10、asset.manage不要)。 */}
+                  {asset.lending_method === 'approval' && <AssetLoanRequestDialog asset={asset} />}
                   {canManage && <LendAssetDialog asset={asset} />}
                   {canManage && <ManagementTypeChangeDialog asset={asset} />}
                   {canManage && <LendingMethodChangeDialog asset={asset} />}

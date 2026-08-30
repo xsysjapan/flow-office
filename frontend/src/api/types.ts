@@ -249,7 +249,7 @@ export interface RequestFormFieldSchema {
 }
 
 export type WorkflowRequestStatus =
-  "draft" | "submitted" | "approved" | "returned" | "cancelled";
+  "draft" | "submitted" | "approved" | "returned" | "cancelled" | "rejected";
 
 /**
  * 統合承認画面(UC-W003/UC-W004・UC-A009・UC-X011)向け: この汎用申請が別ドメインの
@@ -469,6 +469,9 @@ export interface WorkflowRequest {
   approved_at: string | null;
   returned_at: string | null;
   cancelled_at: string | null;
+  /** 論点2-2: 却下(終端状態)。汎用機能だが現時点ではasset_loanのみ却下ボタンを露出する。 */
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   created_at: string | null;
   attachments?: Attachment[];
   /** 統合承認画面向け。一覧・詳細のいずれにも含まれる。未設定(古いレスポンス)はnull相当として扱う。 */
@@ -1776,6 +1779,36 @@ export interface Asset {
   current_placement?: AssetCurrentPlacement | null;
   created_at: string;
   updated_at: string;
+}
+
+export type AssetLoanRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "withdrawn"
+  | "cancelled"
+  | "lent";
+
+/**
+ * 貸出申請Projection(asset_loan_requests)。idはworkflow_requests.idと同一
+ * (UC-L07〜L11、spec 論点2-3)。
+ */
+export interface AssetLoanRequest {
+  id: string;
+  asset_id: string;
+  applicant_user_id: string;
+  applicant?: User | null;
+  approver_user_id: string | null;
+  approver?: User | null;
+  status: AssetLoanRequestStatus;
+  purpose: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  withdrawn_at: string | null;
+  cancelled_at: string | null;
+  lent_at: string | null;
 }
 
 export interface AssetLoanEligibility {

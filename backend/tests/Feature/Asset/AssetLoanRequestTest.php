@@ -18,8 +18,12 @@ use App\Models\AssetLoanRequest;
 use App\Models\AssetLoanRequestStatus;
 use App\Models\AssetManagementType;
 use App\Models\RequestType;
+use App\Models\Role;
+use App\Models\RoleAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -33,6 +37,31 @@ class AssetLoanRequestTest extends TestCase
     private function bus(): CommandBus
     {
         return app(CommandBus::class);
+    }
+
+    /** AssetApiTest::grantAssetManage()と同じ理由でEmployeeロールへは付与しない。 */
+    private function grantAssetManage(User $user): void
+    {
+        DB::table('permissions')->updateOrInsert(
+            ['code' => 'asset.manage'],
+            ['resource' => 'asset', 'action' => 'manage', 'created_at' => now(), 'updated_at' => now()],
+        );
+        $permissionId = DB::table('permissions')->where('code', 'asset.manage')->value('id');
+        DB::table('permission_scope_types')->insertOrIgnore(['permission_id' => $permissionId, 'scope_type' => 'global']);
+
+        $role = Role::query()->create(['code' => 'ASSET_MANAGER_'.Str::upper(Str::random(12)), 'name' => 'Asset Manager (test)']);
+        DB::table('permission_role')->insertOrIgnore(['role_id' => $role->id, 'permission_id' => $permissionId]);
+
+        RoleAssignment::query()->create([
+            'subject_type' => 'user',
+            'subject_id' => $user->id,
+            'role_id' => $role->id,
+            'scope_type' => 'global',
+            'scope_group_id' => null,
+            'include_descendants' => false,
+            'status' => 'active',
+            'assigned_by' => $user->id,
+        ]);
     }
 
     private function registerApprovalAsset(User $backoffice): Asset
@@ -205,6 +234,50 @@ class AssetLoanRequestTest extends TestCase
         $loanRequest = AssetLoanRequest::query()->findOrFail($id);
         $this->assertSame(AssetLoanRequestStatus::WITHDRAWN, $loanRequest->status);
         $this->assertNotNull($loanRequest->withdrawn_at);
+    }
+
+    /**
+     * spec 論点2-3: 承認済み・未貸与の申請が複数あるとき、貸与操作画面(フロント)が
+     * 1件選ばせるための一覧取得API。asset.manage権限保有者のみ取得できる。
+     */
+    public function test_asset_manage_permission_holder_can_list_approved_loan_requests_for_an_asset(): void
+    {
+        ['applicant' => $applicant1, 'approver' => $approver1, 'asset' => $asset, 'workflowRequestId' => $id1] = $this->submitLoanRequest('第1申請');
+        $this->bus()->dispatch(new ApproveWorkflowRequest($id1, $approver1->id));
+
+        // 同一資産・同一借用者へのもう1件の承認済み申請(spec論点2-3が許容する重複申請)。
+        RequestType::query()->firstOrCreate(['code' => 'asset_loan'], ['name' => '備品貸出申請', 'form_schema' => [], 'requires_backoffice_task' => false, 'is_active' => true]);
+        $approver2 = User::factory()->create();
+        $draft2 = $this->bus()->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: 'asset_loan',
+            applicantUserId: $applicant1->id,
+            title: 'タブレット貸出申請(2件目)',
+            formData: ['asset_id' => $asset->id, 'purpose' => '第2申請'],
+            approverUserId: $approver2->id,
+        ));
+        $this->bus()->dispatch(new SubmitWorkflowRequest($draft2->id, $applicant1->id, $approver2->id));
+        $this->bus()->dispatch(new ApproveWorkflowRequest($draft2->id, $approver2->id));
+
+        $backoffice = User::factory()->create();
+        $this->grantAssetManage($backoffice);
+
+        $response = $this->actingAs($backoffice)->getJson(
+            "/api/assets/{$asset->id}/loan-requests?status=approved&borrower_user_id={$applicant1->id}",
+        );
+
+        $response->assertOk();
+        $ids = collect($response->json())->pluck('id')->all();
+        $this->assertCount(2, $ids);
+        $this->assertContains($id1, $ids);
+        $this->assertContains($draft2->id, $ids);
+    }
+
+    public function test_a_non_asset_manage_user_cannot_list_loan_requests(): void
+    {
+        ['asset' => $asset] = $this->submitLoanRequest();
+        $other = User::factory()->create();
+
+        $this->actingAs($other)->getJson("/api/assets/{$asset->id}/loan-requests")->assertForbidden();
     }
 
     public function test_deleting_an_asset_with_a_pending_loan_request_is_rejected(): void

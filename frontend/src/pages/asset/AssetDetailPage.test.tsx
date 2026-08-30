@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../api/asset'
 import { ApiError } from '../../api/client'
+import * as usersApi from '../../api/users'
+import * as workflowRequestsApi from '../../api/workflowRequests'
 import type { Asset, StoredEvent } from '../../api/types'
 import { AssetDetailPage } from './AssetDetailPage'
 
@@ -215,5 +217,125 @@ describe('AssetDetailPage', () => {
     renderPage()
 
     expect(await screen.findByText('廃棄済みのため操作はありません。')).toBeInTheDocument()
+  })
+
+  const approvalAsset: Asset = {
+    ...lendingAsset,
+    id: 'asset-approval',
+    lending_method: 'approval',
+    lending_status: 'available',
+    current_loan_id: null,
+    current_loan: null,
+  }
+
+  const approver = {
+    id: 'approver-1',
+    name: '承認者花子',
+    email: 'hanako@example.com',
+    department: null,
+    job_title: null,
+    employment_status: 'active' as const,
+    last_login_at: null,
+  }
+
+  it('shows a loan request button for an approval-method available asset (UC-L07)', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage('asset-approval')
+
+    expect(await screen.findByRole('button', { name: '貸出申請' })).toBeInTheDocument()
+  })
+
+  it('submits an asset_loan workflow request with the asset_id/purpose form data', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+      data: [approver],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    })
+    const created = {
+      id: 'workflow-request-1',
+      title: `${approvalAsset.name}(${approvalAsset.asset_no})の貸出申請`,
+      status: 'draft' as const,
+      form_data: { asset_id: approvalAsset.id, purpose: 'リモート会議用' },
+      submitted_at: null,
+      approved_at: null,
+      returned_at: null,
+      cancelled_at: null,
+      created_at: null,
+    }
+    vi.spyOn(workflowRequestsApi, 'createWorkflowRequest').mockResolvedValue(created)
+    vi.spyOn(workflowRequestsApi, 'submitWorkflowRequest').mockResolvedValue({ ...created, status: 'submitted' })
+
+    renderPage('asset-approval')
+
+    await userEvent.click(await screen.findByRole('button', { name: '貸出申請' }))
+    await userEvent.type(screen.getByLabelText('利用目的'), 'リモート会議用')
+    await userEvent.click(screen.getByLabelText('承認者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+    await userEvent.click(screen.getByRole('button', { name: '申請する' }))
+
+    await waitFor(() =>
+      expect(workflowRequestsApi.createWorkflowRequest).toHaveBeenCalledWith({
+        request_type_code: 'asset_loan',
+        title: `${approvalAsset.name}(${approvalAsset.asset_no})の貸出申請`,
+        form_data: { asset_id: approvalAsset.id, purpose: 'リモート会議用' },
+        approver_user_id: 'approver-1',
+      }),
+    )
+    await waitFor(() =>
+      expect(workflowRequestsApi.submitWorkflowRequest).toHaveBeenCalledWith('workflow-request-1', 'approver-1'),
+    )
+  })
+
+  it('auto-selects the single approved loan request and includes it when lending an approval-method asset (spec 論点2-3)', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(approvalAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue({
+      data: [approver],
+      meta: { current_page: 1, last_page: 1, total: 1 },
+      links: { next: null, prev: null },
+    })
+    vi.spyOn(assetApi, 'getAssetLoanRequests').mockResolvedValue([
+      {
+        id: 'loan-request-1',
+        asset_id: approvalAsset.id,
+        applicant_user_id: 'approver-1',
+        applicant: null,
+        approver_user_id: 'user-1',
+        approver: null,
+        status: 'approved',
+        purpose: 'リモート会議用',
+        submitted_at: '2026-08-01T00:00:00+09:00',
+        approved_at: '2026-08-02T00:00:00+09:00',
+        rejected_at: null,
+        rejection_reason: null,
+        withdrawn_at: null,
+        cancelled_at: null,
+        lent_at: null,
+      },
+    ])
+    const lendSpy = vi.spyOn(assetApi, 'lendAsset').mockResolvedValue({ ...approvalAsset, lending_status: 'loaned' })
+
+    renderPage('asset-approval')
+
+    await userEvent.click(await screen.findByRole('button', { name: '貸与する' }))
+    await userEvent.click(screen.getByLabelText('借用者'))
+    await userEvent.type(screen.getByPlaceholderText('氏名またはメールアドレスで検索'), '承認者')
+    await userEvent.click(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' }))
+
+    await screen.findByText('利用目的: リモート会議用')
+    await userEvent.click(screen.getByRole('button', { name: '貸与する' }))
+
+    await waitFor(() =>
+      expect(lendSpy).toHaveBeenCalledWith('asset-approval', {
+        borrower_user_id: 'approver-1',
+        expected_return_at: null,
+        loan_request_id: 'loan-request-1',
+      }),
+    )
   })
 })

@@ -72,6 +72,14 @@ export function cancelWorkflowRequest(id: string, reason: string): Promise<Workf
   return apiFetch(`/workflow-requests/${id}/cancel`, { method: 'POST', body: { reason } })
 }
 
+/**
+ * UC-L09相当・spec論点2-2: 却下(編集・再提出不可の終端状態)。全申請種別で共通利用可能な
+ * 汎用APIだが、現時点ではフロントは備品貸出申請(asset_loan)のみ却下ボタンを露出する。
+ */
+export function rejectWorkflowRequest(id: string, reason: string): Promise<WorkflowRequest> {
+  return apiFetch(`/workflow-requests/${id}/reject`, { method: 'POST', body: { reason } })
+}
+
 /** UC-W003/UC-W004 コメント履歴。 */
 export function fetchWorkflowRequestHistory(id: string): Promise<WorkflowRequestHistoryEntry[]> {
   return apiFetch(`/workflow-requests/${id}/history`)

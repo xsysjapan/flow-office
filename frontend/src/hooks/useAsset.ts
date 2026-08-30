@@ -10,6 +10,7 @@ import {
   getAssetByQrToken,
   getAssetHistory,
   getAssetLoanEligibility,
+  getAssetLoanRequests,
   getUserAssetLoans,
   installAsset,
   lendAsset,
@@ -32,7 +33,7 @@ import {
   type SearchAssetsParams,
   type UpdateAssetDetailsInput,
 } from '../api/asset'
-import type { AssetLendingMethod, AssetManagementType } from '../api/types'
+import type { AssetLendingMethod, AssetLoanRequestStatus, AssetManagementType } from '../api/types'
 
 const ASSETS_KEY = ['assets']
 
@@ -84,6 +85,22 @@ export function useUserAssetLoans(userId: string | undefined) {
     queryKey: ['users', userId, 'asset-loans'],
     queryFn: () => getUserAssetLoans(userId as string),
     enabled: userId !== undefined,
+  })
+}
+
+/**
+ * 貸与時の申請選択UI(spec 論点2-3)向け。対象資産・借用者に紐づく承認済み・未貸与の
+ * 申請一覧を取得する(asset.manage権限保有者のみ呼べる)。
+ */
+export function useAssetLoanRequests(
+  assetId: string | undefined,
+  options: { status?: AssetLoanRequestStatus; borrowerUserId?: string } = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...ASSETS_KEY, assetId, 'loan-requests', options.status ?? '', options.borrowerUserId ?? ''],
+    queryFn: () => getAssetLoanRequests(assetId as string, options),
+    enabled: enabled && assetId !== undefined,
   })
 }
 

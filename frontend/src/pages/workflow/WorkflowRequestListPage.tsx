@@ -91,6 +91,7 @@ const STATUS_FILTER_OPTIONS: Array<{ value: NonNullable<FetchMyWorkflowRequestsO
   { value: 'approved', label: '承認済み' },
   { value: 'returned', label: '差戻し' },
   { value: 'cancelled', label: '取消' },
+  { value: 'rejected', label: '却下' },
 ]
 
 const SUBJECT_TYPE_LABELS: Record<Exclude<WorkflowRequestSubjectType, null>, string> = {
@@ -110,6 +111,13 @@ const SUBJECT_TYPE_FILTER_OPTIONS: Array<{ value: FetchMyWorkflowRequestsOptions
   { value: null, label: 'その他申請' },
 ]
 
+/** subject_type/subjectを持たない申請種別(asset_loan等)向けの種別ラベルの上書き。
+ *  request_type.codeで判定する(C: 備品貸出申請だと分かるようにする)。 */
+function requestTypeBadgeLabel(request: WorkflowRequest): string {
+  if (request.request_type?.code === 'asset_loan') return '備品貸出申請'
+  return subjectTypeLabel(request.subject_type ?? null)
+}
+
 function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {
   return subjectType ? SUBJECT_TYPE_LABELS[subjectType] : 'その他申請'
 }
@@ -117,6 +125,11 @@ function subjectTypeLabel(subjectType: WorkflowRequestSubjectType): string {
 /** 一覧行の補足情報。`subject_summary`だけで組み立て、詳細取得を待たない
  *  (ApprovalsPageのsubjectSubtitleと同じ考え方)。 */
 function subjectSubtitle(request: WorkflowRequest): string | null {
+  if (request.request_type?.code === 'asset_loan') {
+    const purpose = request.form_data.purpose
+    return typeof purpose === 'string' && purpose ? `利用目的: ${purpose}` : null
+  }
+
   const summary = request.subject_summary
   if (!summary) return null
 
@@ -396,7 +409,7 @@ export function WorkflowRequestListPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge tone="neutral">{subjectTypeLabel(request.subject_type ?? null)}</Badge>
+                    <Badge tone="neutral">{requestTypeBadgeLabel(request)}</Badge>
                   </TableCell>
                   <TableCell>
                     <Link

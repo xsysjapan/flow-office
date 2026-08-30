@@ -6,6 +6,8 @@ import type {
   AssetLendingMethod,
   AssetLoan,
   AssetLoanEligibility,
+  AssetLoanRequest,
+  AssetLoanRequestStatus,
   AssetManagementType,
   Paginated,
   StoredEvent,
@@ -55,6 +57,19 @@ export function getUserAssetLoans(userId: string): Promise<AssetLoan[]> {
 export function getAssetLoanEligibility(assetId: string, borrowerUserId?: string): Promise<AssetLoanEligibility> {
   return apiFetch(`/assets/${assetId}/loan-eligibility`, {
     query: borrowerUserId ? { borrower_user_id: borrowerUserId } : undefined,
+  })
+}
+
+/**
+ * 貸与時の申請選択UI(spec 論点2-3)。対象資産・借用者に紐づく貸出申請一覧を取得する
+ * (`asset.manage`権限保有者のみ呼び出せる。backend/.../Asset/AssetController::loanRequests)。
+ */
+export function getAssetLoanRequests(
+  assetId: string,
+  options: { status?: AssetLoanRequestStatus; borrowerUserId?: string } = {},
+): Promise<AssetLoanRequest[]> {
+  return apiFetch(`/assets/${assetId}/loan-requests`, {
+    query: { status: options.status, borrower_user_id: options.borrowerUserId },
   })
 }
 

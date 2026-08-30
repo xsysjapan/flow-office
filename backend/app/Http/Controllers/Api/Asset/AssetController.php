@@ -22,6 +22,7 @@ use App\Domain\Asset\Commands\UpdateAssetDetails;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AssetLoanRequestResource;
 use App\Http\Resources\AssetLoanResource;
 use App\Http\Resources\AssetResource;
 use App\Http\Resources\StoredEventResource;
@@ -243,6 +244,49 @@ class AssetController extends Controller
         $result['eligible'] = true;
 
         return response()->json($result);
+    }
+
+    /**
+     * spec 論点2-3(貸与時の申請選択UI): 対象資産・借用者に紐づく貸出申請一覧を返す。
+     * バックオフィス貸与画面(承認済み・未貸与の申請から1件選ばせる)向けの軽量参照API。
+     * asset.manage権限保有者のみ(貸与操作自体と同じ入口)。
+     */
+    #[OA\Get(
+        path: '/assets/{asset}/loan-requests',
+        operationId: 'assets.loanRequests',
+        summary: '備品に対する貸出申請一覧を取得する',
+        tags: ['備品管理'],
+        parameters: [
+            new OA\Parameter(name: 'asset', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'borrower_user_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 403, description: 'Forbidden')],
+    )]
+    public function loanRequests(Request $request, Asset $asset): AnonymousResourceCollection
+    {
+        $data = $request->validate([
+            'status' => ['nullable', 'string'],
+            'borrower_user_id' => ['nullable', 'string', 'exists:users,id'],
+        ]);
+
+        $this->authorizeAssetManage($request);
+
+        $query = AssetLoanRequest::query()
+            ->with(['applicant', 'approver'])
+            ->where('asset_id', $asset->id);
+
+        if (! empty($data['status'])) {
+            $query->where('status', $data['status']);
+        }
+
+        if (! empty($data['borrower_user_id'])) {
+            $query->where('applicant_user_id', $data['borrower_user_id']);
+        }
+
+        $loanRequests = $query->orderByDesc('submitted_at')->get();
+
+        return AssetLoanRequestResource::collection($loanRequests);
     }
 
     #[OA\Post(
