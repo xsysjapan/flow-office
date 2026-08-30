@@ -44,6 +44,9 @@
 - `workflow_request.approved`
 - `workflow_request.returned`
 - `workflow_request.cancelled`
+- `workflow_request.rejected` (編集・再提出不可の終端状態。`RejectWorkflowRequest`/
+  `WorkflowRequestRejected`。全申請種別で共通利用可能な汎用機能だが、現時点では備品貸出申請
+  (`asset_loan`)のみが却下ボタンをUIに露出する。docs/34-usecases-asset-management.md参照)
 
 
 ## BackOffice
@@ -268,6 +271,38 @@ paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)
   (新規イベントは追加しない)。対象データIDフィールド(`attendanceMonthId`)には
   `expense_claims.id`を渡し、`exportType`/`idempotencyKey`の接頭辞
   (`attendance_external_api_*`/`expense_external_api_*`)で対象種別を区別する)
+
+## Asset (docs/34-usecases-asset-management.md)
+
+`AssetAggregate`1つのみが発行する。貸出申請専用のイベントは持たず、申請の進行状況は
+上記`workflow_request.submitted`/`.approved`/`.rejected`/`.withdrawn`/`.cancelled`のみで
+表現する(`asset_loan_requests`Projectionはこれらを購読するReactorが更新する)。
+
+- `asset.registered` (`assetNo`/`name`/`category`/`serialNumber`/`managementType`/
+  `lendingMethod`/`defaultLocationText`/`qrToken`/`notes`/`registeredByUserId`)
+- `asset.details_updated` (`name`/`category`/`serialNumber`/`notes`/`updatedByUserId`)
+- `asset.deleted` (`deletedByUserId`。Projectionからは物理削除するが`stored_events`は削除しない)
+- `asset.management_type_changed` (`managementType`/`changedByUserId`)
+- `asset.lending_method_changed` (`lendingMethod`/`changedByUserId`)
+- `asset.qr_code_reissued` (`qrToken`/`reissuedByUserId`。`qr_token`のみ差し替え、`asset_no`・
+  履歴は変更しない)
+- `asset.default_location_set` (`locationText`/`setByUserId`。貸出品のみ)
+- `asset.loaned` (`loanId`/`borrowerUserId`/`lentByUserId`/`expectedReturnAt`(nullable)/
+  `loanRequestId`(nullable。`approval`方式で承認済み申請に基づく貸与の場合のみ)/`loanedAt`。
+  `self_service`/`backoffice`/`approval`いずれもこの1つのイベントで表現する)
+- `asset.returned` (`loanId`/`returnedByUserId`/`returnNote`(nullable)/`returnedAt`)
+- `asset.installed` (`locationText`/`installedByUserId`/`installedAt`。設置品のみ)
+- `asset.relocated` (`locationText`/`relocatedByUserId`/`relocatedAt`。設置済み状態での設置場所
+  変更、設置品のみ)
+- `asset.removed_from_installation` (`removedByUserId`/`removedAt`。撤去→保管、設置品のみ)
+- `asset.repair_started` (`note`(nullable)/`startedByUserId`。貸出品・設置品共通)
+- `asset.repair_completed` (`note`(nullable)/`completedByUserId`。貸出品・設置品共通)
+- `asset.reported_lost` (`note`(nullable)/`reportedByUserId`。貸出中の場合も借用者情報
+  (`current_loan_id`/`asset_loans`)は保持したまま`lending_status`のみ`lost`へ遷移する)
+- `asset.recovered_from_lost` (`wasLoanedBeforeLoss`/`recoveredByUserId`。発見時点で貸出中扱い
+  だったかにより`lending_status`が`loaned`/`available`のどちらへ戻るかを決める)
+- `asset.disposed` (`note`(nullable)/`disposedByUserId`。廃棄はProjection上の行を残し
+  `status=disposed`のまま検索・一覧対象にも表示する)
 
 ## 命名規則
 

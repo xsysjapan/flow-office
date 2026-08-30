@@ -114,6 +114,9 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - approved_at
 - returned_at
 - cancelled_at
+- rejected_at (nullable。汎用「却下」機能(`RejectWorkflowRequest`/`WorkflowRequestRejected`)で
+  設定する終端状態`REJECTED`の却下日時。docs/34-usecases-asset-management.md参照)
+- rejection_reason (nullable, text。却下理由)
 - created_at / updated_at
 
 ## request_types
@@ -1151,6 +1154,99 @@ UC-X004〜UC-X009: 通勤費・業務交通費・その他経費(宿泊費・会
 - reimbursement_amount (会社から社員への返金額。派生値。`payment_bearer`が`employee`の場合のみ)
 - attributes (nullable, JSON。区分固有の入力項目値。`expense_categories.field_definitions`で
   許可されたキーのみ)
+- created_at / updated_at
+
+## assets (備品本体。正データ)
+
+docs/34-usecases-asset-management.md参照。`App\Domain\Asset\Aggregates\AssetAggregate`
+(UUID主キー、呼び出し元採番)がこのテーブルに対応する唯一のAggregate。貸出品・設置品を
+`management_type`で1つのテーブルにまとめ、状態は貸出用・設置用で別カラム
+(`lending_status`/`installation_status`)を持つ(`changesets/20260830-equipment-management/spec.md`
+論点3)。
+
+- id (UUID)
+- asset_no (一意。管理番号。不変)
+- name
+- category
+- serial_number (nullable)
+- management_type (`lending` / `installation`)
+- lending_status (nullable。`available` / `loaned` / `repair` / `lost` / `disposed`。
+  `management_type=lending`の場合のみ値を持つ)
+- installation_status (nullable。`stored` / `installed` / `repair` / `lost` / `disposed`。
+  `management_type=installation`の場合のみ値を持つ)
+- lending_method (nullable。`self_service` / `backoffice` / `approval`。貸出品のみ)
+- default_location_text (nullable, text。貸出品の通常配置場所。貸出中でも不変。履歴は
+  `asset_default_location_changes`で追跡する。`self_service`にするにはこれが設定済みである
+  必要がある)
+- qr_token (一意。QRコードの中身となるランダムトークン。再発行(`ReissueAssetQrCode`)時のみ
+  値を差し替える。`asset_no`・履歴は変更しない)
+- current_loan_id (nullable, UUID, → asset_loans。現在アクティブな貸出。`asset_loans`テーブル
+  作成後に外部キー制約を追加)
+- notes (nullable, text)
+- created_at / updated_at
+
+削除(`DeleteAsset`)はこのテーブルから物理削除するが、`stored_events`は変更しない。廃棄
+(`DisposeAsset`)は行を残し`status=disposed`のまま検索・一覧対象にも表示する。
+
+## asset_default_location_changes (貸出品の通常配置場所の変更履歴)
+
+- id
+- asset_id (→ assets)
+- location_text (text)
+- changed_by_user_id (→ users)
+- changed_at
+
+## asset_placements (設置品の設置/保管場所の履歴。現在有効な1件+履歴)
+
+貸出品の`default_location_text`(単一の現在値)とは意味が異なり、設置品は「開始/終了」を
+持つ区間の連続として設置場所を表現する(spec 論点5)。
+
+- id
+- asset_id (→ assets)
+- location_text (text)
+- started_at
+- ended_at (nullable。nullなら現在有効な設置)
+- started_by_user_id (→ users)
+- ended_by_user_id (nullable, → users)
+
+## asset_loans (貸出の正データ)
+
+`asset.loaned`イベントの`loanId`をそのまま主キーにする。`self_service`/`backoffice`/`approval`
+いずれの貸出方式でも同じ形状で記録する(spec 論点1)。
+
+- id (UUID。`asset.loaned`の`loanId`)
+- asset_id (→ assets)
+- user_id (→ users。借用者)
+- loan_request_id (nullable, UUID。`approval`方式で承認済み申請に基づいて貸与した場合のみ
+  `asset_loan_requests.id`を指す。外部キー制約なし)
+- loaned_at
+- expected_return_at (nullable)
+- loaned_by_user_id (→ users)
+- returned_at (nullable)
+- returned_by_user_id (nullable, → users)
+- return_note (nullable, text)
+
+## asset_loan_requests (貸出申請。読み取り専用Projection)
+
+書き込みロジックを持たない純粋なProjection。`request_types.code=asset_loan`の
+`workflow_requests`側イベント(`workflow_request.submitted`/`.approved`/`.rejected`/
+`.withdrawn`/`.cancelled`)と`asset.loaned`(`loanRequestId`あり)を購読する
+`App\Domain\Asset\Reactors\AssetLoanRequestOnWorkflowRequestReactor`/
+`AssetLoanRequestOnAssetLoanedReactor`が更新する。`id`は`workflow_requests.id`と同一(1対1)。
+
+- id (UUID。`workflow_requests.id`と同一)
+- asset_id (→ assets)
+- applicant_user_id (→ users)
+- approver_user_id (nullable, → users)
+- status (`pending` / `approved` / `rejected` / `withdrawn` / `cancelled` / `lent`)
+- purpose (nullable, text)
+- submitted_at (nullable)
+- approved_at (nullable)
+- rejected_at (nullable)
+- rejection_reason (nullable, text)
+- withdrawn_at (nullable)
+- cancelled_at (nullable)
+- lent_at (nullable。`asset.loaned`の`loanRequestId`がこの申請を指した時点)
 - created_at / updated_at
 
 ## attachments

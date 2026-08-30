@@ -58,3 +58,29 @@ Permissionの集合を`Role`として分離する。Roleはユーザーまたは
   (`docs/10-usecases-workflow.md`)経由とし、専用の申請経路は持たない。
 - API・MCP連携経由の操作も、Web画面と同じFeature・Permission判定を共通のCommandHandlerで通す
   (`docs/25-usecases-integrations-mcp.md`)。
+
+## 備品管理に関するPermission
+
+備品管理(`docs/34-usecases-asset-management.md`)は新規Permissionを1つだけ追加する
+(`changesets/20260830-equipment-management/spec.md`論点10)。
+
+- `asset.manage`(スコープ: `global`のみ) — 備品登録・編集・削除・QR発行/再発行・管理区分変更・
+  貸出方式変更・設置・移設・撤去・修理開始/完了・紛失報告・発見・廃棄、および
+  `backoffice`/`approval`方式の`LendAsset`実行(他者への貸与)・一括貸与・一括移設を実行する。
+  備品貸出申請(`asset_loan`)のapprover(承認者)として選択できるのも本Permission保有者に限定する
+  (申請の承認自体は既存`workflow_requests`の仕組み(指定されたapprover本人のみ実行可)を
+  そのまま使うため、承認専用の別Permissionは持たない)。
+
+以下の基本操作はPermission不要(認証済みユーザーであれば誰でも実行できる)。
+
+- 備品の検索・詳細参照・QRコードからの参照・履歴閲覧
+- セルフサービス方式(`lending_method=self_service`)の備品の**本人への**セルフ貸出
+  (`borrowerUserId = lentByUserId = 呼び出し本人`の場合のみ)
+- セルフ返却(自分が借用中の備品の返却。他人による返却操作を含め、返却自体もPermission不要)
+- 自分の貸与状況の確認(`GET /users/{user}/asset-loans`)
+- 貸出申請(`asset_loan`)の作成・提出、自分の申請の取下げ
+  (既存の`workflow_requests`の申請者向け操作をそのまま使う)
+
+貸出申請の承認自体は、既存の`workflow_requests`の仕組み(指定された`approver_user_id`本人のみ
+実行可、`approval.execute` Permission)をそのまま使う。ただし申請UIでの承認者候補は
+`asset.manage`権限保有者に絞る。
