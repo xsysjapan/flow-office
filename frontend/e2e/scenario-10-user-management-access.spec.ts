@@ -114,9 +114,9 @@ test("モバイル管理メニューとアクセス設定をキーボードで�
   await expect(
     navigation.getByRole("link", { name: "グループ種別" }),
   ).toBeVisible();
-  await navigation.getByRole("link", { name: "ロール定義" }).click();
+  await navigation.getByRole("link", { name: "ロール管理" }).click();
   await expect(
-    page.getByRole("heading", { name: "ロール定義" }),
+    page.getByRole("heading", { name: "ロール管理" }),
   ).toBeVisible();
 });
 
@@ -137,10 +137,7 @@ test("人事担当者には人事機能だけを表示しアクセス管理へ�
     navigation.getByRole("link", { name: "所属変更" }),
   ).toBeVisible();
   await expect(
-    navigation.getByRole("link", { name: "ロール割当" }),
-  ).toHaveCount(0);
-  await expect(
-    navigation.getByRole("link", { name: "ロール定義" }),
+    navigation.getByRole("link", { name: "ロール管理" }),
   ).toHaveCount(0);
   await expect(
     navigation.getByRole("link", { name: "ID・管理元設定" }),
@@ -167,12 +164,9 @@ test("人事担当者には人事機能だけを表示しアクセス管理へ�
   ).toHaveCount(0);
 
   await page.goto("/admin/access-control");
-  await expect(page).not.toHaveURL(/\/admin\/access\/(assignments|roles)/);
+  await expect(page).not.toHaveURL(/\/admin\/access\/roles/);
   await expect(
-    page.getByRole("heading", { name: "ロール割当" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "ロール定義" }),
+    page.getByRole("heading", { name: "ロール管理" }),
   ).toHaveCount(0);
 });
 
@@ -377,7 +371,7 @@ test("ユーザー管理を中心にグループ種別・グループ・所属�
   await expect(page.getByText("group.created").first()).toBeVisible();
 });
 
-test("Role定義のFeature構成保存でグループへFeatureが自動同期され、個別停止が有効アクセスへ即時反映される", async ({
+test("Role定義のFeature構成保存でグループへFeatureが自動同期される", async ({
   browser,
 }) => {
   test.setTimeout(300000);
@@ -391,10 +385,11 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
     await loginAs(userPage, SCENARIO_USERS.monthlyEmployee);
 
     // ロール定義ページ(Role起点)でロールを新規作成し、Permission・Feature構成を設定する。
+    // (Roleに加えグループ選択肢も読み込むため、ローカルのPHP開発サーバーではやや時間がかかる)
     await adminPage.goto("/admin/access/roles");
     await adminPage
       .getByRole("button", { name: "新規作成" })
-      .click({ timeout: 15000 });
+      .click({ timeout: 60000 });
     await adminPage.getByLabel("ロールコード").fill(roleCode, { timeout: 15000 });
     await adminPage
       .getByLabel("ロール名", { exact: true })
@@ -405,7 +400,7 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
           response.url().endsWith("/access-control/roles") &&
           response.request().method() === "POST" &&
           response.ok(),
-        { timeout: 15000 },
+        { timeout: 30000 },
       ),
       adminPage
         .getByRole("button", { name: "作成", exact: true })
@@ -414,7 +409,7 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
 
     await adminPage
       .getByRole("row", { name: new RegExp(roleName) })
-      .click({ timeout: 15000 });
+      .click({ timeout: 30000 });
     const roleCard = card(adminPage, roleName);
 
     await roleCard
@@ -445,20 +440,16 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
       roleCard.getByRole("button", { name: "Feature構成を保存" }).click(),
     ]);
 
-    // ロール割当ページ(主体起点)で、対象グループにこのロールを割り当てる。
-    // Feature自動適用の対象は「グループへのRole割当」のみ(docs/31)。手動でのFeature付与操作は行わない。
-    await adminPage.goto(
-      `/admin/access/assignments?subjectType=group&subjectId=`,
-    );
-    await adminPage.getByRole("tab", { name: "グループ" }).click();
+    // ロール管理ページの「割当グループ」セクション(同じ画面内)で、対象グループにこの
+    // ロールを割り当てる。Feature自動適用の対象は「グループへのRole割当」のみ(docs/31)。
+    // 手動でのFeature付与操作は行わない。
+    const assignmentCard = card(adminPage, "割当グループ");
+    await assignmentCard
+      .getByRole("button", { name: "Roleを割り当てる" })
+      .click();
     await adminPage
       .getByLabel("対象グループ")
       .selectOption({ label: groupName });
-
-    await adminPage.getByRole("button", { name: "Roleを追加" }).click();
-    await adminPage
-      .getByLabel("Role", { exact: true })
-      .selectOption({ label: roleName });
     await adminPage.getByLabel("対象範囲").selectOption("global");
     await Promise.all([
       adminPage.waitForResponse(
@@ -467,9 +458,13 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
           response.request().method() === "POST" &&
           response.ok(),
       ),
-      adminPage.getByRole("button", { name: "追加", exact: true }).click(),
+      adminPage
+        .getByRole("button", { name: "割り当てる", exact: true })
+        .click(),
     ]);
-    await expect(adminPage.getByRole("cell", { name: roleName })).toBeVisible();
+    await expect(
+      assignmentCard.getByRole("cell", { name: groupName }),
+    ).toBeVisible();
 
     // Feature付与ボタンを一切操作していないが、Role側のFeature構成からグループへ
     // 自動同期され、有効アクセスにFeature・Permissionの両方が反映されることを確認する。
@@ -478,48 +473,6 @@ test("Role定義のFeature構成保存でグループへFeatureが自動同期�
       .toMatchObject({
         features: expect.arrayContaining(["administration"]),
         permissions: expect.arrayContaining(["system_settings.read"]),
-      });
-
-    // 個別停止(ユーザー起点)。
-    await adminPage.getByRole("tab", { name: "ユーザー" }).click();
-    await adminPage
-      .getByRole("combobox", { name: "対象ユーザー" })
-      .click();
-    await adminPage
-      .getByPlaceholder("氏名またはメールアドレスで検索")
-      .fill(SCENARIO_USERS.monthlyEmployee);
-    await adminPage
-      .getByRole("option", { name: new RegExp(SCENARIO_USERS.monthlyEmployee) })
-      .click();
-
-    const suspensionCard = card(adminPage, "個別Feature停止");
-    await suspensionCard.getByLabel("Feature").selectOption({ label: "管理" });
-    await suspensionCard.getByLabel("停止理由").fill("E2E個別停止");
-    await Promise.all([
-      adminPage.waitForResponse(
-        (response) =>
-          response.url().endsWith("/feature-suspensions") &&
-          response.request().method() === "POST" &&
-          response.ok(),
-      ),
-      suspensionCard.getByRole("button", { name: "停止", exact: true }).click(),
-    ]);
-    const suspension = suspensionCard
-      .locator("span")
-      .filter({ hasText: "E2E個別停止" });
-    await expect(suspension).toBeVisible({ timeout: 90000 });
-    await expect
-      .poll(async () => effectiveAccess(userPage))
-      .not.toMatchObject({
-        features: expect.arrayContaining(["administration"]),
-      });
-
-    await suspension.getByRole("button", { name: "解除" }).click();
-    await adminPage.getByRole("button", { name: "解除する" }).click();
-    await expect
-      .poll(async () => effectiveAccess(userPage))
-      .toMatchObject({
-        features: expect.arrayContaining(["administration"]),
       });
   } finally {
     await adminContext.close();

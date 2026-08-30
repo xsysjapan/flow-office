@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -7,7 +7,29 @@ import type { Paginated, User } from "../../api/types";
 import type { GroupType, ManagedGroup } from "../../api/userManagement";
 import * as userManagementApi from "../../api/userManagement";
 import * as usersApi from "../../api/users";
+import * as accessControlApi from "../../api/accessControl";
+import type { AccessRole, RoleAssignment } from "../../api/accessControl";
 import { GroupDetailPage } from "./GroupDetailPage";
+
+const role: AccessRole = {
+  id: 3,
+  code: "group_manager",
+  name: "グループ管理者",
+  description: null,
+  status: "active",
+  is_system: false,
+  permissions: [
+    {
+      id: 1,
+      code: "attendance.view",
+      resource: "attendance",
+      action: "view",
+      description: null,
+      allowed_scope_types: ["global", "group"],
+    },
+  ],
+  features: [],
+};
 
 const groupType: GroupType = {
   id: 1,
@@ -68,7 +90,9 @@ const availableUser: User = {
   last_login_at: null,
 };
 
-function renderPage() {
+function renderPage({
+  roleAssignments = [] as RoleAssignment[],
+}: { roleAssignments?: RoleAssignment[] } = {}) {
   vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
     parent,
     group,
@@ -82,6 +106,10 @@ function renderPage() {
     meta: { current_page: 1, last_page: 1, total: 1 },
     links: { next: null, prev: null },
   } satisfies Paginated<User>);
+  vi.spyOn(accessControlApi, "fetchAccessRoles").mockResolvedValue([role]);
+  vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue(
+    roleAssignments,
+  );
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -108,6 +136,8 @@ describe("GroupDetailPage", () => {
     vi.spyOn(userManagementApi, "createGroup").mockResolvedValue({
       id: "group-new",
     });
+    vi.spyOn(accessControlApi, "fetchAccessRoles").mockResolvedValue([role]);
+    vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue([]);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -133,6 +163,67 @@ describe("GroupDetailPage", () => {
     expect(await screen.findByText("新規グループの詳細")).toBeInTheDocument();
   });
 
+  it("assigns the selected initial role to the newly created group", async () => {
+    const newGroup: ManagedGroup = {
+      ...parent,
+      id: "group-new",
+      name: "新規グループ",
+    };
+    vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
+      parent,
+      group,
+    ]);
+    vi.spyOn(userManagementApi, "fetchGroupTypes").mockResolvedValue([
+      groupType,
+    ]);
+    vi.spyOn(userManagementApi, "createGroup").mockResolvedValue({
+      id: "group-new",
+    });
+    vi.spyOn(accessControlApi, "fetchAccessRoles").mockResolvedValue([role]);
+    vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue([]);
+    const createAssignmentSpy = vi
+      .spyOn(accessControlApi, "createRoleAssignment")
+      .mockResolvedValue({ id: "assignment-new" });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/admin/groups/new"]}>
+          <Routes>
+            <Route path="/admin/groups/:id" element={<GroupDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("グループを新規作成")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("グループ種別"), "1");
+    await userEvent.type(screen.getByLabelText("名称"), "新規グループ");
+    await userEvent.selectOptions(
+      screen.getByLabelText("作成時に割り当てるRole(任意)"),
+      "3",
+    );
+    vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue([
+      parent,
+      group,
+      newGroup,
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "作成する" }));
+
+    await waitFor(() =>
+      expect(createAssignmentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subject_type: "group",
+          subject_id: "group-new",
+          role_id: 3,
+          scope_type: "global",
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
   it("updates individual fields including the parent group", async () => {
     vi.spyOn(userManagementApi, "updateGroup").mockResolvedValue(undefined);
     renderPage();
@@ -155,6 +246,44 @@ describe("GroupDetailPage", () => {
         parent_group_id: "group-parent",
         status: "inactive",
       }),
+    );
+  });
+
+  it("shows and removes an active role assignment for the group in the Role割当 section", async () => {
+    vi.spyOn(accessControlApi, "removeRoleAssignment").mockResolvedValue(
+      undefined,
+    );
+    renderPage({
+      roleAssignments: [
+        {
+          id: "assignment-1",
+          subject_type: "group",
+          subject_id: "group-1",
+          role_id: 3,
+          scope_type: "global",
+          scope_group_id: null,
+          include_descendants: false,
+          starts_at: null,
+          ends_at: null,
+          status: "active",
+          role,
+        },
+      ],
+    });
+
+    expect(await screen.findByText("Role割当")).toBeInTheDocument();
+    const roleCell = await screen.findByText("グループ管理者");
+    const row = roleCell.closest("tr");
+    if (!row) throw new Error("Role割当の行が見つかりません");
+
+    await userEvent.click(within(row).getByRole("button", { name: "解除" }));
+    await userEvent.click(screen.getByRole("button", { name: "解除する" }));
+
+    await waitFor(() =>
+      expect(accessControlApi.removeRoleAssignment).toHaveBeenCalledWith(
+        "assignment-1",
+        expect.anything(),
+      ),
     );
   });
 

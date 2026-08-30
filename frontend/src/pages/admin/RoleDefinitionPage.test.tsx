@@ -10,7 +10,36 @@ import type {
   Permission,
   RoleAssignment,
 } from "../../api/accessControl";
+import * as userManagementApi from "../../api/userManagement";
+import type { ManagedGroup } from "../../api/userManagement";
 import { RoleDefinitionPage } from "./RoleDefinitionPage";
+
+const groupType: ManagedGroup["type"] = {
+  id: 1,
+  code: "ORGANIZATION",
+  name: "組織",
+  display_order: 1,
+  status: "active",
+  is_system: true,
+  membership_limit_type: "unlimited",
+  max_memberships_per_user: null,
+  primary_membership_required: false,
+  max_primary_memberships: null,
+};
+
+const managedGroup: ManagedGroup = {
+  id: "group-1",
+  group_type_id: 1,
+  name: "総務部",
+  code: "GENERAL_AFFAIRS",
+  status: "active",
+  parent_group_id: null,
+  memberships_count: 0,
+  type: groupType,
+  features: [],
+  memberships: [],
+  role_assignments: [],
+};
 
 const permissions: Permission[] = [
   {
@@ -72,10 +101,12 @@ function makeRoles(): AccessRole[] {
 function renderPage({
   roles = makeRoles(),
   roleAssignments = [] as RoleAssignment[],
+  groups = [managedGroup] as ManagedGroup[],
   initialPath = "/admin/access/roles",
 }: {
   roles?: AccessRole[];
   roleAssignments?: RoleAssignment[];
+  groups?: ManagedGroup[];
   initialPath?: string;
 } = {}) {
   const queryClient = new QueryClient({
@@ -87,6 +118,7 @@ function renderPage({
   vi.spyOn(accessControlApi, "fetchRoleAssignments").mockResolvedValue(
     roleAssignments,
   );
+  vi.spyOn(userManagementApi, "fetchManagedGroups").mockResolvedValue(groups);
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -142,10 +174,7 @@ describe("RoleDefinitionPage", () => {
     );
   });
 
-  it("shows the reference group count after saving the feature configuration", async () => {
-    vi.spyOn(accessControlApi, "updateRoleFeatures").mockResolvedValue(
-      undefined,
-    );
+  it("shows only active group assignments for the selected role in the 割当グループ section", async () => {
     renderPage({
       initialPath: "/admin/access/roles?roleId=2",
       roleAssignments: [
@@ -176,12 +205,28 @@ describe("RoleDefinitionPage", () => {
       ],
     });
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Feature構成を保存" }),
-    );
+    expect(await screen.findByText("割当グループ")).toBeInTheDocument();
+    expect(await screen.findByText("総務部")).toBeInTheDocument();
+  });
+
+  it("does not render the literal 0 for a non-system role's status note (is_system as 0/1)", async () => {
+    renderPage({
+      roles: [
+        {
+          ...makeRoles()[1],
+          // バックエンドがboolean相当のフィールドを0/1で返してくることがある既知の挙動を再現する。
+          is_system: 0 as unknown as boolean,
+        },
+      ],
+      initialPath: "/admin/access/roles?roleId=2",
+    });
 
     expect(
-      await screen.findByText("このロールを保持しているグループ: 1件"),
+      await screen.findByRole("heading", { name: "バックオフィス担当者" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("システム標準ロールのため状態は変更できません。"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("状態")).not.toBeDisabled();
   });
 });

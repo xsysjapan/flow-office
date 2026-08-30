@@ -37,12 +37,6 @@ export const useRoleAssignments = (enabled = true) =>
     queryFn: api.fetchRoleAssignments,
     enabled,
   });
-export const useFeatureSuspensions = (enabled = true) =>
-  useQuery({
-    queryKey: ["access", "feature-suspensions"],
-    queryFn: api.fetchFeatureSuspensions,
-    enabled,
-  });
 export const useCreateRole = () => useAccessMutation(api.createRole);
 export const useCloneRole = () =>
   useAccessMutation(
@@ -78,10 +72,6 @@ export const useUpdateRoleAssignment = () =>
       input: Parameters<typeof api.updateRoleAssignment>[1];
     }) => api.updateRoleAssignment(id, input),
   );
-export const useSuspendUserFeature = () =>
-  useAccessMutation(api.suspendUserFeature);
-export const useRemoveFeatureSuspension = () =>
-  useAccessMutation(api.removeFeatureSuspension);
 export const useUpdateRolePermissions = () =>
   useAccessMutation(
     ({ roleId, permissionIds }: { roleId: number; permissionIds: number[] }) =>

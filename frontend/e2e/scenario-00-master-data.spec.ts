@@ -20,7 +20,6 @@ test("管理者が各種マスタ管理画面にアクセスできる", async ({
     "/admin/users",
     "/admin/groups",
     "/admin/hr-import",
-    "/admin/access/assignments",
     "/admin/access/roles",
     "/admin/identity-settings",
     "/admin/group-types",

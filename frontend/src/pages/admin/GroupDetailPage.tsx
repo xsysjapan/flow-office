@@ -34,6 +34,8 @@ import {
   membershipChangeDescription,
   membershipChangeStatusLabel,
 } from "../../utils/membershipChangeLabels";
+import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
+import * as access from "../../hooks/useAccessControl";
 
 export function GroupDetailPage() {
   const { id = "new" } = useParams<{ id: string }>();
@@ -41,14 +43,20 @@ export function GroupDetailPage() {
   const navigate = useNavigate();
   const groups = useManagedGroups();
   const types = useGroupTypes();
+  const roles = access.useAccessRoles();
   const createGroup = useCreateGroup();
   const updateGroup = useUpdateGroup();
+  const createAssignment = access.useCreateRoleAssignment();
+  const updateAssignment = access.useUpdateRoleAssignment();
+  const removeAssignment = access.useRemoveRoleAssignment();
+  const assignments = access.useRoleAssignments(!isNew);
   const [initializedId, setInitializedId] = useState("");
   const [form, setForm] = useState({
     group_type_id: "",
     name: "",
     parent_group_id: "",
     status: "active",
+    initial_role_id: "",
   });
 
   const group = groups.data?.find((item) => item.id === id);
@@ -59,15 +67,22 @@ export function GroupDetailPage() {
       name: group.name,
       parent_group_id: group.parent_group_id ?? "",
       status: group.status,
+      initial_role_id: "",
     });
     setInitializedId(group.id);
   }, [group, initializedId, isNew]);
 
-  if (groups.isLoading || types.isLoading) return <LoadingState />;
-  if (groups.error || types.error) {
+  if (
+    groups.isLoading ||
+    types.isLoading ||
+    roles.isLoading ||
+    (!isNew && assignments.isLoading)
+  )
+    return <LoadingState />;
+  if (groups.error || types.error || roles.error || assignments.error) {
     return (
       <ErrorMessage
-        error={groups.error ?? types.error}
+        error={groups.error ?? types.error ?? roles.error ?? assignments.error}
         fallback="グループ詳細の取得に失敗しました。"
       />
     );
@@ -153,6 +168,27 @@ export function GroupDetailPage() {
               </NativeSelect>
             </FormField>
           )}
+          {isNew && (
+            <FormField
+              label="作成時に割り当てるRole(任意)"
+              htmlFor="group-detail-initial-role"
+            >
+              <NativeSelect
+                id="group-detail-initial-role"
+                value={form.initial_role_id}
+                onChange={(event) =>
+                  setForm({ ...form, initial_role_id: event.target.value })
+                }
+              >
+                <option value="">割り当てない</option>
+                {roles.data?.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          )}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
@@ -169,11 +205,24 @@ export function GroupDetailPage() {
                   {
                     // 作成後は更新時と同じ「詳細画面に留まる」挙動に揃えるため、一覧ではなく
                     // 作成されたグループ自身の詳細画面(このページ)へ遷移する(SKILL.md §2.6)。
-                    onSuccess: (data) =>
-                      navigate(
-                        `/admin/groups/${(data as { id: string }).id}`,
-                        { replace: true },
-                      ),
+                    onSuccess: async (data) => {
+                      const newGroupId = (data as { id: string }).id;
+                      if (form.initial_role_id) {
+                        await createAssignment.mutateAsync({
+                          subject_type: "group",
+                          subject_id: newGroupId,
+                          role_id: Number(form.initial_role_id),
+                          scope_type: "global",
+                          scope_group_id: null,
+                          include_descendants: false,
+                          starts_at: null,
+                          ends_at: null,
+                        });
+                      }
+                      navigate(`/admin/groups/${newGroupId}`, {
+                        replace: true,
+                      });
+                    },
                   },
                 );
                 return;
@@ -192,6 +241,24 @@ export function GroupDetailPage() {
           </Button>
         </div>
       </Card>
+      {!isNew && group && (
+        <RoleAssignmentSection
+          mode="pick-role"
+          title="Role割当"
+          roles={roles.data ?? []}
+          groups={groups.data ?? []}
+          assignments={(assignments.data ?? []).filter(
+            (assignment) =>
+              assignment.subject_type === "group" &&
+              assignment.subject_id === group.id &&
+              assignment.status === "active",
+          )}
+          fixedGroupId={group.id}
+          createAssignment={createAssignment}
+          updateAssignment={updateAssignment}
+          removeAssignment={removeAssignment}
+        />
+      )}
       {!isNew && group && (
         <GroupMembersCard group={group} groupOptions={groups.data ?? []} />
       )}

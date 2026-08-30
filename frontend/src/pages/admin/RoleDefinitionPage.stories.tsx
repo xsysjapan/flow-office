@@ -7,6 +7,7 @@ import type {
   Permission,
   RoleAssignment,
 } from "../../api/accessControl";
+import type { ManagedGroup } from "../../api/userManagement";
 import { RoleDefinitionPage } from "./RoleDefinitionPage";
 
 const permissions: Permission[] = [
@@ -87,6 +88,33 @@ const roleAssignments: RoleAssignment[] = [
   },
 ];
 
+const groups: ManagedGroup[] = [
+  {
+    id: "group-1",
+    group_type_id: 1,
+    name: "総務部",
+    code: "GENERAL_AFFAIRS",
+    status: "active",
+    parent_group_id: null,
+    memberships_count: 3,
+    type: {
+      id: 1,
+      code: "ORGANIZATION",
+      name: "組織",
+      display_order: 1,
+      status: "active",
+      is_system: true,
+      membership_limit_type: "unlimited",
+      max_memberships_per_user: null,
+      primary_membership_required: false,
+      max_primary_memberships: null,
+    },
+    features: [],
+    memberships: [],
+    role_assignments: [],
+  },
+];
+
 function withSeeded() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -95,6 +123,7 @@ function withSeeded() {
   queryClient.setQueryData(["access", "permissions"], permissions);
   queryClient.setQueryData(["access", "features"], features);
   queryClient.setQueryData(["access", "role-assignments"], roleAssignments);
+  queryClient.setQueryData(["user-management", "groups"], groups);
 
   return function Decorator() {
     return (

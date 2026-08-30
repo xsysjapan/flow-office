@@ -27,8 +27,11 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table";
+import { RoleAssignmentSection } from "../../components/RoleAssignmentSection/RoleAssignmentSection";
 import * as access from "../../hooks/useAccessControl";
-import type { AccessRole, Feature } from "../../api/accessControl";
+import * as userManagement from "../../hooks/useUserManagement";
+import type { AccessRole, Feature, RoleAssignment } from "../../api/accessControl";
+import type { ManagedGroup } from "../../api/userManagement";
 
 /**
  * ロール定義ページ(OOUI: Role起点)。
@@ -45,12 +48,16 @@ export function RoleDefinitionPage() {
   const permissions = access.usePermissions();
   const features = access.useFeatures();
   const assignments = access.useRoleAssignments();
+  const groups = userManagement.useManagedGroups();
 
   const createRole = access.useCreateRole();
   const cloneRole = access.useCloneRole();
   const updateRole = access.useUpdateRole();
   const updateRolePermissions = access.useUpdateRolePermissions();
   const updateRoleFeatures = access.useUpdateRoleFeatures();
+  const createAssignment = access.useCreateRoleAssignment();
+  const updateAssignment = access.useUpdateRoleAssignment();
+  const removeAssignment = access.useRemoveRoleAssignment();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"create" | "clone">("create");
@@ -92,7 +99,7 @@ export function RoleDefinitionPage() {
     updateRolePermissions.error ??
     updateRoleFeatures.error;
 
-  const queries = [roles, permissions, features, assignments];
+  const queries = [roles, permissions, features, assignments, groups];
   if (queries.some((query) => query.isLoading)) return <LoadingState />;
   const loadError = queries.find((query) => query.error)?.error;
   if (loadError)
@@ -103,9 +110,9 @@ export function RoleDefinitionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">ロール定義</h1>
+        <h1 className="text-lg font-semibold">ロール管理</h1>
         <p className="text-sm text-muted-foreground">
-          ロールを選択して、名称・状態・Permission・Feature構成を編集します。
+          ロールを選択して、名称・状態・Permission・Feature構成・割当グループを編集します。
         </p>
       </div>
       {mutationError && <ErrorMessage error={mutationError} />}
@@ -251,17 +258,22 @@ export function RoleDefinitionPage() {
           role={selectedRole}
           permissions={permissions.data ?? []}
           allFeatures={features.data ?? []}
-          groupsHoldingRoleCount={
+          roles={roles.data ?? []}
+          groups={groups.data ?? []}
+          roleGroupAssignments={
             assignments.data?.filter(
               (assignment) =>
                 assignment.subject_type === "group" &&
                 assignment.role_id === selectedRole.id &&
                 assignment.status === "active",
-            ).length ?? 0
+            ) ?? []
           }
           updateRole={updateRole}
           updateRolePermissions={updateRolePermissions}
           updateRoleFeatures={updateRoleFeatures}
+          createAssignment={createAssignment}
+          updateAssignment={updateAssignment}
+          removeAssignment={removeAssignment}
           onClone={openCloneDialog}
         />
       )}
@@ -273,10 +285,15 @@ function RoleDetail({
   role,
   permissions,
   allFeatures,
-  groupsHoldingRoleCount,
+  roles,
+  groups,
+  roleGroupAssignments,
   updateRole,
   updateRolePermissions,
   updateRoleFeatures,
+  createAssignment,
+  updateAssignment,
+  removeAssignment,
   onClone,
 }: {
   role: AccessRole;
@@ -287,10 +304,15 @@ function RoleDetail({
     description: string | null;
   }>;
   allFeatures: Feature[];
-  groupsHoldingRoleCount: number;
+  roles: AccessRole[];
+  groups: ManagedGroup[];
+  roleGroupAssignments: RoleAssignment[];
   updateRole: ReturnType<typeof access.useUpdateRole>;
   updateRolePermissions: ReturnType<typeof access.useUpdateRolePermissions>;
   updateRoleFeatures: ReturnType<typeof access.useUpdateRoleFeatures>;
+  createAssignment: ReturnType<typeof access.useCreateRoleAssignment>;
+  updateAssignment: ReturnType<typeof access.useUpdateRoleAssignment>;
+  removeAssignment: ReturnType<typeof access.useRemoveRoleAssignment>;
   onClone: () => void;
 }) {
   const [basicForm, setBasicForm] = useState({
@@ -381,7 +403,7 @@ function RoleDetail({
               <option value="active">有効</option>
               <option value="inactive">廃止</option>
             </NativeSelect>
-            {role.is_system && (
+            {Boolean(role.is_system) && (
               <p className="mt-1.5 text-xs text-muted-foreground">
                 システム標準ロールのため状態は変更できません。
               </p>
@@ -513,11 +535,20 @@ function RoleDetail({
             ))}
           </div>
         )}
-        {updateRoleFeatures.isSuccess && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            このロールを保持しているグループ: {groupsHoldingRoleCount}件
-          </p>
-        )}
+      </div>
+
+      <div className="mt-6">
+        <RoleAssignmentSection
+          mode="pick-group"
+          title="割当グループ"
+          roles={roles}
+          groups={groups}
+          assignments={roleGroupAssignments}
+          fixedRoleId={role.id}
+          createAssignment={createAssignment}
+          updateAssignment={updateAssignment}
+          removeAssignment={removeAssignment}
+        />
       </div>
     </Card>
   );

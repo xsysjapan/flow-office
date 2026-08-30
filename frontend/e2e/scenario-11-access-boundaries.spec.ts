@@ -3,7 +3,7 @@ import { apiFetch, fetchUserIdByEmail } from "./support/api";
 import { loginAs, SCENARIO_USERS } from "./support/auth";
 
 type Feature = { id: number; code: string; children?: Feature[] };
-type Permission = { id: number; code: string };
+type Permission = { id: number; code: string; allowed_scope_types: string[] };
 type Role = {
   id: number;
   code: string;
@@ -142,18 +142,39 @@ async function createRole(
   return role;
 }
 
+// グループへのFeature直接付与APIは廃止され、Roleに紐づくFeature構成からグループへの
+// Role割当時に自動同期される方式に変わった(PR#102)。そのため、テスト前提データの
+// 投入も「Feature構成を持つRoleを作ってグループへ割り当てる」経由で行う。
 async function assignFeatures(page: Page, groupId: string, codes: string[]) {
   const features = flattenFeatures(
     await apiFetch<Feature[]>(page, "/admin/access-control/features"),
   );
-  for (const code of codes) {
-    await apiFetch(page, `/admin/access-control/groups/${groupId}/features`, {
-      method: "POST",
-      body: {
-        feature_id: features.find((feature) => feature.code === code)!.id,
-      },
-    });
-  }
+  const roleCode = `e2e_feature_carrier_${groupId}_${codes.join("_")}`.slice(
+    0,
+    100,
+  );
+  // Role割当はscope_typeを満たすPermissionを1つ以上持つRoleでなければ422になるため、
+  // globalスコープに対応した無害なPermission(feature.view)を1つだけ持たせる。
+  const role = await createRole(page, roleCode, ["feature.view"]);
+  await apiFetch(page, `/admin/access-control/roles/${role.id}/features`, {
+    method: "PUT",
+    body: {
+      feature_ids: codes.map(
+        (code) => features.find((feature) => feature.code === code)!.id,
+      ),
+    },
+  });
+  await apiFetch(page, "/admin/access-control/role-assignments", {
+    method: "POST",
+    body: {
+      subject_type: "group",
+      subject_id: groupId,
+      role_id: role.id,
+      scope_type: "global",
+      scope_group_id: null,
+      include_descendants: false,
+    },
+  });
 }
 
 async function loginTwoUsers(browser: Browser) {
@@ -199,8 +220,19 @@ test("システム管理者グループへの追加だけで管理メニュー�
     expect(authenticatedUser.effective_features).toEqual(
       expect.arrayContaining(["administration", "administration.users", "administration.settings"]),
     );
+    // "self"スコープのみ許可されたPermission(例: attendance.submission_revoke =
+    // 月次勤怠提出取下げは本人操作のみ想定、docs/16-database-schema.md参照)は、
+    // SYSTEM_ADMINISTRATORSグループ経由のglobalスコープ割当では意図的に有効化されない
+    // (仕様通り)。そのため比較対象から除外する。
+    const globallyGrantablePermissions = permissions.filter(
+      (permission) =>
+        !(
+          permission.allowed_scope_types.length === 1 &&
+          permission.allowed_scope_types[0] === "self"
+        ),
+    );
     expect(authenticatedUser.effective_permissions.sort()).toEqual(
-      permissions.map((permission) => permission.code).sort(),
+      globallyGrantablePermissions.map((permission) => permission.code).sort(),
     );
   } finally {
     if (userId && adminGroupId) {
@@ -462,23 +494,32 @@ test("直接Role付与の有効期間・Groupスコープ・Role複製を確認�
       await scopedContext.close();
     }
 
-    await session.adminPage.goto("/admin/access-control");
+    await session.adminPage.goto("/admin/access/roles");
     await session.adminPage
-      .getByRole("tab", { name: "Role・Permission" })
+      .getByRole("row", { name: new RegExp(source.name) })
       .click();
-    const roleCard = session.adminPage
-      .getByRole("heading", { name: "Role・Permission" })
-      .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]');
-    await roleCard
-      .getByLabel("編集するRole", { exact: true })
-      .selectOption({ label: source.name });
-    await roleCard
-      .getByPlaceholder("新規Roleコード")
-      .fill("e2e_timed_role_clone");
-    await roleCard.getByPlaceholder("Role名").first().fill("E2E Role Clone");
-    await roleCard.getByRole("button", { name: "選択Roleを複製" }).click();
+    await session.adminPage
+      .getByRole("button", { name: "このロールを複製" })
+      .click();
+    const cloneDialog = session.adminPage.getByRole("dialog");
+    await cloneDialog.getByLabel("ロールコード").fill("e2e_timed_role_clone");
+    await cloneDialog
+      .getByLabel("ロール名", { exact: true })
+      .fill("E2E Role Clone");
+    await Promise.all([
+      session.adminPage.waitForResponse(
+        (response) =>
+          /\/access-control\/roles\/\d+\/clone$/.test(response.url()) &&
+          response.request().method() === "POST" &&
+          response.ok(),
+      ),
+      cloneDialog.getByRole("button", { name: "複製する" }).click(),
+    ]);
+    await session.adminPage
+      .getByRole("row", { name: new RegExp("E2E Role Clone") })
+      .click();
     await expect(
-      roleCard.getByText("E2E Role Clone (e2e_timed_role_clone)"),
+      session.adminPage.getByRole("heading", { name: "E2E Role Clone" }),
     ).toBeVisible();
     const roles = await apiFetch<Role[]>(
       session.adminPage,

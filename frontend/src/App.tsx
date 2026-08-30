@@ -62,7 +62,6 @@ import {
 import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
-import { RoleAssignmentPage } from "./pages/admin/RoleAssignmentPage";
 import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
 
 function App() {
@@ -155,11 +154,11 @@ function App() {
           <Route path="hr-import" element={<UserOperationsPage />} />
           <Route
             path="access-control"
-            element={<Navigate to="/admin/access/assignments" replace />}
+            element={<Navigate to="/admin/access/roles" replace />}
           />
           <Route
             path="access/assignments"
-            element={<RoleAssignmentPage />}
+            element={<Navigate to="/admin/access/roles" replace />}
           />
           <Route path="access/roles" element={<RoleDefinitionPage />} />
           <Route path="identity-settings" element={<IdentitySettingsPage />} />

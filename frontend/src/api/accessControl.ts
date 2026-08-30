@@ -45,17 +45,6 @@ export interface RoleAssignment {
   status: string;
   role?: AccessRole;
 }
-export interface FeatureSuspension {
-  id: string;
-  user_id: string;
-  feature_id: number;
-  reason: string;
-  starts_at: string | null;
-  ends_at: string | null;
-  user: { id: string; name: string };
-  feature: Feature;
-}
-
 export const fetchEffectiveAccess = (): Promise<EffectiveAccess> =>
   apiFetch("/access/me");
 export const fetchFeatures = (): Promise<Feature[]> =>
@@ -66,8 +55,6 @@ export const fetchAccessRoles = (): Promise<AccessRole[]> =>
   apiFetch("/admin/access-control/roles");
 export const fetchRoleAssignments = (): Promise<RoleAssignment[]> =>
   apiFetch("/admin/access-control/role-assignments");
-export const fetchFeatureSuspensions = (): Promise<FeatureSuspension[]> =>
-  apiFetch("/admin/access-control/feature-suspensions");
 export const createRole = (input: {
   code: string;
   name: string;
@@ -117,21 +104,6 @@ export const updateRoleAssignment = (
   apiFetch(`/admin/access-control/role-assignments/${id}`, {
     method: "PATCH",
     body: input,
-  });
-export const suspendUserFeature = (input: {
-  user_id: string;
-  feature_id: number;
-  reason: string;
-  starts_at?: string | null;
-  ends_at?: string | null;
-}): Promise<void> =>
-  apiFetch("/admin/access-control/feature-suspensions", {
-    method: "POST",
-    body: input,
-  });
-export const removeFeatureSuspension = (id: string): Promise<void> =>
-  apiFetch(`/admin/access-control/feature-suspensions/${id}`, {
-    method: "DELETE",
   });
 export const updateRolePermissions = (
   roleId: number,
