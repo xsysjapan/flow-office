@@ -162,9 +162,8 @@ function LendAssetDialog({ asset }: { asset: Asset }) {
 
 /**
  * 貸出申請フォーム(UC-L07)。approval方式・available状態の資産に対し、利用目的と
- * 承認者を指定して申請する。承認者はspec 論点10の通り本来asset.manage権限保有者に
- * 絞るべきだが、権限別ユーザー一覧を返すAPIが無いため、全ユーザーから選択する
- * (タスク指示の許容範囲。UserPicker自体の絞り込みは行わない)。
+ * 承認者を指定して申請する。承認者はspec 論点10の通り`asset.manage`権限保有者に絞る
+ * (`UserPicker`の`permission`propで`GET /users/search?permission=asset.manage`に絞り込む)。
  */
 function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
   const createRequest = useCreateWorkflowRequest()
@@ -207,7 +206,12 @@ function AssetLoanRequestDialog({ asset }: { asset: Asset }) {
         <Textarea id="asset-loan-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
       </FormField>
       <FormField label="承認者" htmlFor="asset-loan-approver" required>
-        <UserPicker id="asset-loan-approver" value={approverUserId} onChange={setApproverUserId} />
+        <UserPicker
+          id="asset-loan-approver"
+          value={approverUserId}
+          onChange={setApproverUserId}
+          permission="asset.manage"
+        />
       </FormField>
     </ConfirmActionDialog>
   )

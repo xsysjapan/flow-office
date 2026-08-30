@@ -559,3 +559,10 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
     `asset_loan_requests`Projection参照に更新。
   - フロントエンド(却下ボタン等のUI)・`docs/26`以降のユースケースドキュメントは本フェーズの
     対象外のまま(次フェーズで対応)。
+- フェーズ3(本節、2026-08-30実装): 論点2で決定していた「申請UIの承認者選択を`asset.manage`
+  権限保有者に絞る」を実装(フェーズ2実装時は絞り込み用APIが無く暫定的に全ユーザーから
+  選択する実装のままだった差分の解消)。既存の`GET /api/users/search`(`UserPicker`が使う
+  軽量エンドポイント)に`permission`クエリパラメータを追加する形で対応し、専用エンドポイント
+  は新設しなかった(`EffectiveAccessResolver::userIdsWithGlobalPermission()`を新設し、
+  globalスコープで指定Permissionを保有するユーザーIDへ絞り込む)。フロントは`UserPicker`に
+  `permission`propを追加し、`AssetLoanRequestDialog`から`permission="asset.manage"`を渡す。

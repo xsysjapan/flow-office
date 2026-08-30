@@ -145,22 +145,28 @@ class UserController extends Controller
         parameters: [
             new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100)),
+            new OA\Parameter(name: 'permission', in: 'query', required: false, description: '指定した場合、globalスコープで当該Permissionを保有するユーザーのみに絞り込む(承認者選択の絞り込み等)', schema: new OA\Schema(type: 'string')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Successful response'),
             new OA\Response(response: 401, description: 'Unauthenticated'),
         ],
     )]
-    public function search(Request $request): AnonymousResourceCollection
+    public function search(Request $request, EffectiveAccessResolver $resolver): AnonymousResourceCollection
     {
         $validated = $request->validate([
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'permission' => ['sometimes', 'string', 'max:255'],
         ]);
 
         $users = User::query()
             ->when($request->string('q')->toString(), fn ($query, $q) => $query->where(function ($sub) use ($q) {
                 $sub->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%");
             }))
+            ->when($validated['permission'] ?? null, fn ($query, $permission) => $query->whereIn(
+                'id',
+                $resolver->userIdsWithGlobalPermission($permission),
+            ))
             ->orderBy('name')
             ->paginate($validated['per_page'] ?? 50);
 

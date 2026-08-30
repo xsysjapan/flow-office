@@ -10,17 +10,28 @@ export interface UserPickerProps {
   value: string | undefined
   onChange: (userId: string | undefined) => void
   placeholder?: string
+  /**
+   * 指定すると、globalスコープで当該Permissionを保有するユーザーのみに選択肢を絞り込む
+   * (例: 備品貸出申請の承認者を`asset.manage`保有者に絞る)。
+   */
+  permission?: string
 }
 
 /**
  * 氏名/メールアドレスで検索して社員を1人選ぶ入力。承認者指定・担当者割り当て・
  * 有給付与対象者選択など、社員IDを1件確定させたい場面で共通利用する。
  */
-export function UserPicker({ id, value, onChange, placeholder = '氏名またはメールアドレスで検索' }: UserPickerProps) {
+export function UserPicker({
+  id,
+  value,
+  onChange,
+  placeholder = '氏名またはメールアドレスで検索',
+  permission,
+}: UserPickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedLabel, setSelectedLabel] = useState<string>()
-  const { data } = useUserSearch(query, 100)
+  const { data } = useUserSearch(query, 100, permission)
   const suggestions = data?.data ?? []
 
   return (
