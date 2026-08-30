@@ -7,7 +7,7 @@ import * as attendanceApi from '../../api/attendance'
 import * as exportsApi from '../../api/exports'
 import * as usersApi from '../../api/users'
 import type { AttendanceDay, AttendanceMonth, AttendanceMonthlyCalculationTotals, Paginated, User } from '../../api/types'
-import { formatDate, mondayOf } from '../../utils/weekDates'
+import { datesInMonth, formatDate, mondayOf } from '../../utils/weekDates'
 import { AttendanceReferencePage } from './AttendanceReferencePage'
 
 const targetUser: User = {
@@ -122,7 +122,11 @@ describe('AttendanceReferencePage', () => {
     await userEvent.click(screen.getByRole('button', { name: '週次' }))
 
     expect(await screen.findByText('週次勤怠')).toBeInTheDocument()
-    const weekStart = formatDate(mondayOf(new Date()))
+    // 週次ビューは選択中の年月(既定では今月)の最初の週に限定される(他画面と共通の
+    // AttendanceMonthReferenceTabsの挙動。「今週」ではなく対象月内の週になる)。
+    const currentYearMonth = formatDate(new Date()).slice(0, 7)
+    const firstDateOfMonth = datesInMonth(currentYearMonth)[0]
+    const weekStart = formatDate(mondayOf(new Date(`${firstDateOfMonth}T00:00:00`)))
     await waitFor(() => expect(attendanceApi.fetchWeek).toHaveBeenCalledWith(weekStart, targetUser.id))
   })
 
@@ -146,14 +150,17 @@ describe('AttendanceReferencePage', () => {
   })
 
   it('shows the daily record read-only, without edit or delete actions', async () => {
-    const today = formatDate(new Date())
+    // 日次ビューは選択中の年月(既定では今月)の1日目が初期表示になる(他画面と共通の
+    // AttendanceMonthReferenceTabsの挙動。「今日」ではなく対象月の1日目になる)。
+    const currentYearMonth = formatDate(new Date()).slice(0, 7)
+    const firstDateOfMonth = datesInMonth(currentYearMonth)[0]
     const day: AttendanceDay = {
       id: 'day-1',
       user_id: targetUser.id,
-      work_date: today,
+      work_date: firstDateOfMonth,
       status: 'clocked_out',
-      actual_start_at: `${today}T09:00:00+09:00`,
-      actual_end_at: `${today}T18:00:00+09:00`,
+      actual_start_at: `${firstDateOfMonth}T09:00:00+09:00`,
+      actual_end_at: `${firstDateOfMonth}T18:00:00+09:00`,
       work_type: null,
       note: null,
       is_locked: false,

@@ -15,3 +15,4 @@
 | フォルダ | タイトル | ステータス |
 |---|---|---|
 | [20260829-backoffice-task-detail-cleanup](./20260829-backoffice-task-detail-cleanup/spec.md) | 月次勤怠表示コンポーネントの統一(申請詳細・バックオフィスタスク詳細・勤怠参照画面) | 完了 |
+| [20260829-attendance-confirmation-revert-ui](./20260829-attendance-confirmation-revert-ui/spec.md) | 月次勤怠の確定取消(UC-A018)フロントエンドUIの追加 | 完了 |

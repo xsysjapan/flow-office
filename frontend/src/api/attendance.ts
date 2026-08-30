@@ -308,3 +308,14 @@ export function reopenMonth(id: string, reason: string): Promise<AttendanceMonth
 export function fetchAttendanceMonthById(id: string): Promise<AttendanceMonth> {
   return apiFetch(`/attendance-months/${id}`)
 }
+
+/**
+ * UC-A018: 承認済み(締め前)の月次勤怠の確定を取り消す(バックオフィス担当者専用の救済コマンド)。
+ * 「勤怠確定取消依頼」ワークフロー申請の承認後、バックオフィス担当者が実行する。
+ */
+export function revertMonthConfirmation(id: string, reason: string, workflowRequestId: string): Promise<AttendanceMonth> {
+  return apiFetch(`/attendance-months/${id}/revert-confirmation`, {
+    method: 'POST',
+    body: { reason, workflow_request_id: workflowRequestId },
+  })
+}

@@ -488,6 +488,23 @@ Storybookで以下を目視確認する:
   - `backend/tests/Feature/Attendance/AttendanceFlowTest.php`・
     `backend/tests/Feature/AccessControl/PermissionCatalogIntegrationTest.php`:
     新権限追加に伴う既存テストの非破壊修正。
+- 追加コミット: ユーザーから「勤怠参照画面のイメージが違う。年月選択を上部に配置し月別で
+  表示、コンポーネントまるごと承認画面と共通化してほしい。週次/日次の挙動もExcel出力等の
+  要素も他画面と同じにしたい」との指摘を受け、`AttendanceReferencePage`本体を修正。
+  - 画面上部(社員選択の隣)に前月/次月ボタン+`YearMonthPicker`+今月ボタンを配置し、
+    URL(`?user=&yearMonth=`)で状態を保持するようにした。月次/週次/日次の切り替えボタンは
+    ページ本体からは削除し、選択した社員・年月をそのまま`AttendanceMonthReferenceTabs`
+    (承認画面`ApprovalDetailPanel`→`WorkflowRequestSubjectDetail`、バックオフィスタスク詳細と
+    完全に同一のコンポーネント)に渡すだけにした。これにより週次/日次への切り替え・
+    月内制限ナビゲーション・CSV/Excel出力・状態変更の挙動が他画面と完全に一致する。
+  - `MonthlyReferenceView`の`restrictToYearMonth`(オプショナル、未指定時のみ前月/次月ボタンと
+    `YearMonthPicker`を内部に表示する分岐)は、この変更で全呼び出し元が常に年月を渡す形に
+    統一されたため到達不能コードになった。`yearMonth`必須のシンプルな props
+    (`initialYearMonth`・`restrictToYearMonth`を`yearMonth`に統合)に整理し、内部の
+    重複ナビゲーションUIを削除した。
+  - `AttendanceReferencePage.test.tsx`: 週次・日次に切り替えた際の初期表示が「今週/今日」
+    ではなく「選択中の年月の最初の週/1日目」になる(他画面と同じ挙動)ことに合わせて
+    既存テストの期待値を更新した。
 
 テスト結果:
 - フロントエンド: `npm test`(vitest)全体 801 passed / 2 skipped / 6 failed
