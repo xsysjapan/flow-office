@@ -1711,3 +1711,80 @@ export interface AdminCommandRun {
   error_message: string | null;
   created_at: string;
 }
+
+// --- 備品管理 (docs/changesets/20260830-equipment-management/spec.md) ---
+// backend/app/Http/Resources/AssetResource.php・AssetLoanResource.phpの実際のレスポンス
+// 形状に合わせる(フェーズ4第一弾: 検索一覧・詳細のみ。登録・編集・各種操作フォームは対象外)。
+
+export type AssetManagementType = "lending" | "installation";
+
+export type AssetLendingMethod = "self_service" | "backoffice" | "approval";
+
+export type AssetLendingStatus =
+  | "available"
+  | "loaned"
+  | "repair"
+  | "lost"
+  | "disposed";
+
+export type AssetInstallationStatus =
+  | "stored"
+  | "installed"
+  | "repair"
+  | "lost"
+  | "disposed";
+
+export interface AssetLoan {
+  id: string;
+  asset_id: string;
+  user_id: string;
+  borrower?: User | null;
+  loan_request_id: string | null;
+  loaned_at: string | null;
+  expected_return_at: string | null;
+  loaned_by_user_id: string;
+  returned_at: string | null;
+  returned_by_user_id: string | null;
+  return_note: string | null;
+}
+
+export interface AssetCurrentPlacement {
+  location_text: string;
+  started_at: string | null;
+}
+
+export interface Asset {
+  id: string;
+  asset_no: string;
+  name: string;
+  category: string;
+  serial_number: string | null;
+  management_type: AssetManagementType;
+  /** management_type=lendingの備品のみ意味を持つ。installationの場合はnull。 */
+  lending_status: AssetLendingStatus | null;
+  /** management_type=installationの備品のみ意味を持つ。lendingの場合はnull。 */
+  installation_status: AssetInstallationStatus | null;
+  /** management_type=lendingの備品のみ意味を持つ。 */
+  lending_method: AssetLendingMethod | null;
+  /** 貸出備品の「通常配置場所」。設置備品では使わない。 */
+  default_location_text: string | null;
+  qr_token: string;
+  current_loan_id: string | null;
+  notes: string | null;
+  current_loan?: AssetLoan | null;
+  /** management_type=installationの場合のみ含まれる(現在設置中でなければnull)。 */
+  current_placement?: AssetCurrentPlacement | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetLoanEligibility {
+  asset_id: string;
+  management_type: AssetManagementType;
+  lending_method: AssetLendingMethod | null;
+  lending_status: AssetLendingStatus | null;
+  eligible: boolean;
+  requires_approval: boolean;
+  approved_loan_request_id: string | null;
+  reason: string | null;
+}

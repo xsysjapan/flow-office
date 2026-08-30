@@ -1,0 +1,150 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as assetApi from '../../api/asset'
+import { ApiError } from '../../api/client'
+import type { Asset, StoredEvent } from '../../api/types'
+import { AssetDetailPage } from './AssetDetailPage'
+
+const lendingAsset: Asset = {
+  id: 'asset-1',
+  asset_no: 'EQ-00121',
+  name: 'ThinkPad X1',
+  category: 'ノートPC',
+  serial_number: 'SN-001',
+  management_type: 'lending',
+  lending_status: 'loaned',
+  installation_status: null,
+  lending_method: 'self_service',
+  default_location_text: '本社4F',
+  qr_token: 'qr-token-1',
+  current_loan_id: 'loan-1',
+  notes: '付属品: 充電器',
+  current_loan: {
+    id: 'loan-1',
+    asset_id: 'asset-1',
+    user_id: 'user-1',
+    borrower: {
+      id: 'user-1',
+      name: '山田太郎',
+      email: 'yamada@example.com',
+      department: null,
+      job_title: null,
+      employment_status: 'active',
+      last_login_at: null,
+    },
+    loan_request_id: null,
+    loaned_at: '2026-08-01T00:00:00+09:00',
+    expected_return_at: null,
+    loaned_by_user_id: 'user-1',
+    returned_at: null,
+    returned_by_user_id: null,
+    return_note: null,
+  },
+  created_at: '2026-08-01T00:00:00+09:00',
+  updated_at: '2026-08-01T00:00:00+09:00',
+}
+
+const history: StoredEvent[] = [
+  {
+    id: '1',
+    event_id: '1',
+    aggregate_type: 'asset',
+    aggregate_id: 'asset-1',
+    version: 1,
+    event_type: 'asset.registered',
+    payload: {},
+    occurred_at: '2026-08-01T00:00:00+09:00',
+  },
+  {
+    id: '2',
+    event_id: '2',
+    aggregate_type: 'asset',
+    aggregate_id: 'asset-1',
+    version: 2,
+    event_type: 'asset.loaned',
+    payload: {},
+    occurred_at: '2026-08-02T00:00:00+09:00',
+  },
+]
+
+function renderPage(id = 'asset-1') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/assets/${id}`]}>
+        <Routes>
+          <Route path="/assets/:id" element={<AssetDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+describe('AssetDetailPage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shows a back link to the asset list', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: '← 一覧へ戻る' })).toHaveAttribute('href', '/assets')
+  })
+
+  it('shows a permission denied state instead of a generic error on 403', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockRejectedValue(new ApiError(403, 'Forbidden'))
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByText(/権限がありません/)).toBeInTheDocument()
+  })
+
+  it('shows lending details for a loaned lending asset', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByText('EQ-00121')).toBeInTheDocument()
+    expect(screen.getByText('貸出中')).toBeInTheDocument()
+    expect(screen.getByText('山田太郎')).toBeInTheDocument()
+    expect(screen.getByText('本社4F')).toBeInTheDocument()
+  })
+
+  it('shows installation details for an installed installation asset', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue({
+      ...lendingAsset,
+      id: 'asset-2',
+      management_type: 'installation',
+      lending_status: null,
+      installation_status: 'installed',
+      lending_method: null,
+      default_location_text: null,
+      current_loan: null,
+      current_loan_id: null,
+      current_placement: { location_text: '会議室A', started_at: '2026-08-01T00:00:00+09:00' },
+    })
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage('asset-2')
+
+    expect(await screen.findByText('設置中')).toBeInTheDocument()
+    expect(screen.getByText('会議室A')).toBeInTheDocument()
+  })
+
+  it('shows the operation history', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue(history)
+
+    renderPage()
+
+    expect(await screen.findByText('登録')).toBeInTheDocument()
+    expect(screen.getByText('貸与')).toBeInTheDocument()
+  })
+})

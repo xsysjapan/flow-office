@@ -53,6 +53,8 @@ import { ExternalIntegrationConnectionsPage } from "./pages/admin/ExternalIntegr
 import { MyIntegrationsPage } from "./pages/integrations/MyIntegrationsPage";
 import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
+import { AssetListPage } from "./pages/asset/AssetListPage";
+import { AssetDetailPage } from "./pages/asset/AssetDetailPage";
 import {
   IdentitySettingsPage,
   MembershipChangesPage,
@@ -127,6 +129,8 @@ function App() {
           path="backoffice-tasks/:id"
           element={<BackOfficeTaskDetailPage />}
         />
+        <Route path="assets" element={<AssetListPage />} />
+        <Route path="assets/:id" element={<AssetDetailPage />} />
         <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />

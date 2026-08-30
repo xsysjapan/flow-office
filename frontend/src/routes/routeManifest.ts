@@ -125,6 +125,13 @@ export const routeManifest: RouteManifestEntry[] = [
     show: (ctx) => ctx.canSeeBackOfficeTasks,
   },
   {
+    // 検索・詳細・セルフ貸出/返却はPermission不要(認証済みなら誰でも)。
+    // spec: docs/changesets/20260830-equipment-management/spec.md
+    label: "備品管理",
+    to: "/assets",
+    group: "mypage",
+  },
+  {
     label: "アカウント設定",
     to: "/account",
     group: "mypage",
