@@ -67,6 +67,10 @@ class AccessControlCatalog
         'admin_command.execute' => ['name' => '運用コマンド実行', 'scopes' => ['global']],
         // 旧APIとの移行互換。新しい画面・APIは上記の操作単位Permissionを使用する。
         'user.manage' => ['name' => 'ユーザー管理（互換）', 'scopes' => ['global', 'group']],
+        // 備品管理(spec: docs/changesets/20260830-equipment-management/spec.md 論点10)。
+        // 検索・セルフ貸出/返却・貸出申請作成/取下げ等の一般ユーザーの基本操作には
+        // Permissionを設けず、認証済みユーザーであれば誰でも操作可能とする。
+        'asset.manage' => ['name' => '備品管理', 'scopes' => ['global']],
     ];
 
     /** @var array<string, array{0: string, 1: int}> code => [name, display_order] */
