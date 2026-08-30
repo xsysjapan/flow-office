@@ -1,8 +1,38 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { fn } from 'storybook/test'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import type { Asset, StoredEvent } from '../../api/types'
+import type { Asset, StoredEvent, User } from '../../api/types'
+import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { AssetDetailPage } from './AssetDetailPage'
+
+const managerUser: User = {
+  id: 'user-manager',
+  name: '管理担当者',
+  email: 'manager@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+}
+
+const managerAuthValue: AuthContextValue = {
+  user: { ...managerUser, effective_permissions: ['asset.manage'] },
+  status: 'authenticated',
+  login: fn(),
+  completeLogin: fn(),
+  applySession: fn(),
+  logout: fn(),
+}
+
+const staffAuthValue: AuthContextValue = {
+  user: { id: 'user-1', name: '山田太郎', email: 'yamada@example.com', department: null, job_title: null, employment_status: 'active', last_login_at: null, effective_permissions: [] },
+  status: 'authenticated',
+  login: fn(),
+  completeLogin: fn(),
+  applySession: fn(),
+  logout: fn(),
+}
 
 const lendingAsset: Asset = {
   id: 'asset-1',
@@ -85,20 +115,22 @@ const history: StoredEvent[] = [
   },
 ]
 
-function withSeeded(asset: Asset, events: StoredEvent[]) {
+function withSeeded(asset: Asset, events: StoredEvent[], authValue: AuthContextValue = managerAuthValue) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   queryClient.setQueryData(['assets', asset.id], asset)
   queryClient.setQueryData(['assets', asset.id, 'history'], events)
 
   return function Decorator() {
     return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/assets/${asset.id}`]}>
-          <Routes>
-            <Route path="/assets/:id" element={<AssetDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
+      <AuthContext.Provider value={authValue}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[`/assets/${asset.id}`]}>
+            <Routes>
+              <Route path="/assets/:id" element={<AssetDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>
     )
   }
 }
@@ -117,4 +149,20 @@ export const LendingAssetLoaned: Story = {
 
 export const InstallationAssetInstalled: Story = {
   render: withSeeded(installationAsset, []),
+}
+
+const availableSelfServiceAsset: Asset = {
+  ...lendingAsset,
+  id: 'asset-3',
+  lending_status: 'available',
+  current_loan_id: null,
+  current_loan: null,
+}
+
+export const LendingAssetAvailableAsManager: Story = {
+  render: withSeeded(availableSelfServiceAsset, [], managerAuthValue),
+}
+
+export const LendingAssetAvailableAsStaff: Story = {
+  render: withSeeded(availableSelfServiceAsset, [], staffAuthValue),
 }

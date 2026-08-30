@@ -55,6 +55,8 @@ import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
 import { AssetListPage } from "./pages/asset/AssetListPage";
 import { AssetDetailPage } from "./pages/asset/AssetDetailPage";
+import { AssetRegisterPage } from "./pages/asset/AssetRegisterPage";
+import { AssetEditPage } from "./pages/asset/AssetEditPage";
 import {
   IdentitySettingsPage,
   MembershipChangesPage,
@@ -130,7 +132,9 @@ function App() {
           element={<BackOfficeTaskDetailPage />}
         />
         <Route path="assets" element={<AssetListPage />} />
+        <Route path="assets/new" element={<AssetRegisterPage />} />
         <Route path="assets/:id" element={<AssetDetailPage />} />
+        <Route path="assets/:id/edit" element={<AssetEditPage />} />
         <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />

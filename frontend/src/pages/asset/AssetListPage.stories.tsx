@@ -1,8 +1,29 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { fn } from 'storybook/test'
 import { MemoryRouter } from 'react-router-dom'
-import type { Asset, Paginated } from '../../api/types'
+import type { Asset, Paginated, User } from '../../api/types'
+import { AuthContext, type AuthContextValue } from '../../auth/AuthContext'
 import { AssetListPage } from './AssetListPage'
+
+const managerUser: User = {
+  id: 'user-manager',
+  name: '管理担当者',
+  email: 'manager@example.com',
+  department: null,
+  job_title: null,
+  employment_status: 'active',
+  last_login_at: null,
+}
+
+const authValue: AuthContextValue = {
+  user: { ...managerUser, effective_permissions: ['asset.manage'] },
+  status: 'authenticated',
+  login: fn(),
+  completeLogin: fn(),
+  applySession: fn(),
+  logout: fn(),
+}
 
 const lendingAsset: Asset = {
   id: 'asset-1',
@@ -78,11 +99,13 @@ function withSeeded(page: Paginated<Asset>) {
 
   return function Decorator() {
     return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/assets']}>
-          <AssetListPage />
-        </MemoryRouter>
-      </QueryClientProvider>
+      <AuthContext.Provider value={authValue}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/assets']}>
+            <AssetListPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>
     )
   }
 }

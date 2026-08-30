@@ -1,14 +1,46 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import {
+  changeAssetLendingMethod,
+  changeAssetManagementType,
+  completeAssetRepair,
+  deleteAsset,
+  disposeAsset,
   getAsset,
   getAssetByQrToken,
   getAssetHistory,
   getUserAssetLoans,
+  installAsset,
+  lendAsset,
+  recoverAssetFromLost,
+  registerAsset,
+  reissueAssetQrCode,
+  relocateAsset,
+  removeAssetFromInstallation,
+  reportAssetLost,
+  returnAsset,
   searchAssets,
+  setAssetDefaultLocation,
+  startAssetRepair,
+  updateAssetDetails,
+  type LendAssetInput,
+  type RegisterAssetInput,
+  type ReturnAssetInput,
   type SearchAssetsParams,
+  type UpdateAssetDetailsInput,
 } from '../api/asset'
+import type { AssetLendingMethod, AssetManagementType } from '../api/types'
 
 const ASSETS_KEY = ['assets']
+
+/**
+ * 業務操作(貸与・返却・設置・修理等)の成功後に無効化すべきクエリ(spec「実装対象」)。
+ * 一覧・詳細・履歴のいずれからも古いデータが見え続けないようにする。
+ */
+function invalidateAssetQueries(queryClient: ReturnType<typeof useQueryClient>, assetId: string) {
+  queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, 'search'] })
+  queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, assetId] })
+  queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, assetId, 'history'] })
+}
 
 /** 検索条件をそのままクエリキーに使う(ページ・フィルターの組み合わせごとにキャッシュする)。 */
 export function useAssetSearch(params: SearchAssetsParams) {
@@ -48,5 +80,146 @@ export function useUserAssetLoans(userId: string | undefined) {
     queryKey: ['users', userId, 'asset-loans'],
     queryFn: () => getUserAssetLoans(userId as string),
     enabled: userId !== undefined,
+  })
+}
+
+/** 新規登録。成功時は一覧の再取得だけでよい(対象詳細はまだキャッシュに存在しない)。 */
+export function useRegisterAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: RegisterAssetInput) => registerAsset(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, 'search'] })
+    },
+  })
+}
+
+export function useUpdateAssetDetails() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateAssetDetailsInput }) => updateAssetDetails(id, input),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteAsset(id),
+    onSuccess: (_data, id) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useChangeAssetManagementType() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, managementType }: { id: string; managementType: AssetManagementType }) =>
+      changeAssetManagementType(id, managementType),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useChangeAssetLendingMethod() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, lendingMethod }: { id: string; lendingMethod: AssetLendingMethod }) =>
+      changeAssetLendingMethod(id, lendingMethod),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useReissueAssetQrCode() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => reissueAssetQrCode(id),
+    onSuccess: (_data, id) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useSetAssetDefaultLocation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, locationText }: { id: string; locationText: string }) => setAssetDefaultLocation(id, locationText),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useLendAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: LendAssetInput }) => lendAsset(id, input),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useReturnAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input?: ReturnAssetInput }) => returnAsset(id, input),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useInstallAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, locationText }: { id: string; locationText: string }) => installAsset(id, locationText),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useRelocateAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, locationText }: { id: string; locationText: string }) => relocateAsset(id, locationText),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useRemoveAssetFromInstallation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => removeAssetFromInstallation(id),
+    onSuccess: (_data, id) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useStartAssetRepair() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) => startAssetRepair(id, note),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useCompleteAssetRepair() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) => completeAssetRepair(id, note),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useReportAssetLost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) => reportAssetLost(id, note),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useRecoverAssetFromLost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => recoverAssetFromLost(id),
+    onSuccess: (_data, id) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+export function useDisposeAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) => disposeAsset(id, note),
+    onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
   })
 }

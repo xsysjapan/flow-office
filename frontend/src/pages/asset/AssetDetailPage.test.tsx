@@ -1,11 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../api/asset'
 import { ApiError } from '../../api/client'
 import type { Asset, StoredEvent } from '../../api/types'
 import { AssetDetailPage } from './AssetDetailPage'
+
+let currentUser: { id: string; effective_permissions: string[] } | null = {
+  id: 'user-1',
+  effective_permissions: ['asset.manage'],
+}
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: currentUser }),
+}))
 
 const lendingAsset: Asset = {
   id: 'asset-1',
@@ -85,6 +95,7 @@ function renderPage(id = 'asset-1') {
 describe('AssetDetailPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    currentUser = { id: 'user-1', effective_permissions: ['asset.manage'] }
   })
 
   it('shows a back link to the asset list', async () => {
@@ -146,5 +157,63 @@ describe('AssetDetailPage', () => {
 
     expect(await screen.findByText('登録')).toBeInTheDocument()
     expect(screen.getByText('貸与')).toBeInTheDocument()
+  })
+
+  it('shows manage actions (lend/return/delete) for asset.manage holders on an available asset', async () => {
+    const availableAsset: Asset = { ...lendingAsset, lending_status: 'available', current_loan_id: null, current_loan: null }
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(availableAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '貸与する' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '借りる' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '廃棄' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '削除' })).toBeInTheDocument()
+  })
+
+  it('only shows self-service borrow/return actions for users without asset.manage', async () => {
+    currentUser = { id: 'user-1', effective_permissions: [] }
+    const availableAsset: Asset = { ...lendingAsset, lending_status: 'available', current_loan_id: null, current_loan: null }
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(availableAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '借りる' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '貸与する' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '編集' })).not.toBeInTheDocument()
+  })
+
+  it('shows a return action for a loaned asset', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '返却' })).toBeInTheDocument()
+  })
+
+  it('calls returnAsset when the return dialog is confirmed', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(lendingAsset)
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+    const returnSpy = vi.spyOn(assetApi, 'returnAsset').mockResolvedValue({ ...lendingAsset, lending_status: 'available' })
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '返却' }))
+    await userEvent.click(await screen.findByRole('button', { name: '返却する' }))
+
+    expect(returnSpy).toHaveBeenCalledWith('asset-1', { return_note: null })
+  })
+
+  it('shows no operations for a disposed asset', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue({ ...lendingAsset, lending_status: 'disposed', current_loan_id: null, current_loan: null })
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue([])
+
+    renderPage()
+
+    expect(await screen.findByText('廃棄済みのため操作はありません。')).toBeInTheDocument()
   })
 })

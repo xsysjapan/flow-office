@@ -8,11 +8,19 @@ import type { Asset, Paginated } from '../../api/types'
 import { AssetListPage } from './AssetListPage'
 
 const navigate = vi.fn()
+let currentUser: { id: string; effective_permissions: string[] } | null = {
+  id: 'user-1',
+  effective_permissions: ['asset.manage'],
+}
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return { ...actual, useNavigate: () => navigate }
 })
+
+vi.mock('../../auth/useAuth', () => ({
+  useAuth: () => ({ user: currentUser }),
+}))
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -91,6 +99,28 @@ describe('AssetListPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     navigate.mockClear()
+    currentUser = { id: 'user-1', effective_permissions: ['asset.manage'] }
+  })
+
+  it('shows a register button for asset.manage holders and navigates to the create page', async () => {
+    vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: '新規登録' })
+    await userEvent.click(button)
+
+    expect(navigate).toHaveBeenCalledWith('/assets/new')
+  })
+
+  it('hides the register button for users without asset.manage', async () => {
+    currentUser = { id: 'user-2', effective_permissions: [] }
+    vi.spyOn(assetApi, 'searchAssets').mockResolvedValue(pageOf([]))
+
+    renderPage()
+
+    await screen.findByText('登録されている備品がまだありません。')
+    expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
   })
 
   it('shows an empty state when there are no assets', async () => {

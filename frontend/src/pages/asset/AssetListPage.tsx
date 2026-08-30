@@ -1,6 +1,7 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { SearchAssetsParams } from '../../api/asset'
 import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/useAuth'
 import { Badge } from '../../components/Badge/Badge'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
@@ -74,6 +75,8 @@ const FILTER_KEYS = [
  */
 export function AssetListPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canManage = user?.effective_permissions?.includes('asset.manage') ?? false
   const [searchParams, setSearchParams] = useSearchParams()
 
   const params: SearchAssetsParams = {}
@@ -126,7 +129,16 @@ export function AssetListPage() {
   const assets = data?.data ?? []
 
   return (
-    <Card title="備品管理">
+    <Card
+      title="備品管理"
+      actions={
+        canManage && (
+          <Button size="sm" onClick={() => navigate('/assets/new')}>
+            新規登録
+          </Button>
+        )
+      }
+    >
       <div className="mb-4 flex flex-col gap-4">
         <div className="w-full max-w-sm">
           <FormField label="キーワード検索" htmlFor="asset-search-q">
