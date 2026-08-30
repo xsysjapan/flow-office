@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { exchangeCodeForToken, fetchCurrentUser, fetchMicrosoftRedirectUrl, logout as logoutRequest } from '../api/auth'
-import { clearToken, getToken, setToken } from '../api/client'
+import { ApiError, clearToken, getToken, setToken } from '../api/client'
 import type { User } from '../api/types'
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
@@ -37,8 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentUser)
         setStatus('authenticated')
       })
-      .catch(() => {
-        clearToken()
+      .catch((error: unknown) => {
+        // トークン自体が無効(401/419)な場合のみ破棄する。ページ遷移によってこの取得中の
+        // fetchがキャンセルされた場合(TypeError等、ApiErrorではない失敗)は、有効な
+        // トークンをlocalStorageから消してしまわないようにする。消してしまうと、直後に
+        // 読み込まれる次のページが「未ログイン」からやり直すことになってしまう。
+        if (error instanceof ApiError && (error.status === 401 || error.status === 419)) {
+          clearToken()
+        }
         setStatus('unauthenticated')
       })
   }, [])

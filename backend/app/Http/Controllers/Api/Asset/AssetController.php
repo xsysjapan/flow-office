@@ -76,7 +76,7 @@ class AssetController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Asset::query()->with(['loans' => fn ($q) => $q->whereNull('returned_at')]);
+        $query = Asset::query()->with(['loans' => fn ($q) => $q->whereNull('returned_at')->with('borrower')]);
 
         if (isset($data['q'])) {
             $keyword = $data['q'];

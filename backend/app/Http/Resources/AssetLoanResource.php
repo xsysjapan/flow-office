@@ -15,6 +15,13 @@ class AssetLoanResource extends JsonResource
         return [
             'id' => $this->id,
             'asset_id' => $this->asset_id,
+            // AssetResource::current_loan からも参照されるため、循環参照を避けて
+            // 資産の要約情報のみを軽量なarrayとして含める(AssetResourceは埋め込まない)。
+            'asset' => $this->whenLoaded('asset', fn () => [
+                'id' => $this->asset->id,
+                'asset_no' => $this->asset->asset_no,
+                'name' => $this->asset->name,
+            ]),
             'user_id' => $this->user_id,
             'borrower' => new UserResource($this->whenLoaded('borrower')),
             'loan_request_id' => $this->loan_request_id,
