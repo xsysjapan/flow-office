@@ -14,6 +14,6 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20260830-equipment-management](./20260830-equipment-management/spec.md) | 備品管理機能の追加(貸出・設置・修理・紛失・廃棄・QR操作) | 実装中 |
+| [20260830-equipment-management](./20260830-equipment-management/spec.md) | 備品管理機能の追加(貸出・設置・修理・紛失・廃棄・QR操作) | 完了 |
 | [20260829-backoffice-task-detail-cleanup](./20260829-backoffice-task-detail-cleanup/spec.md) | 月次勤怠表示コンポーネントの統一(申請詳細・バックオフィスタスク詳細・勤怠参照画面) | 完了 |
 | [20260829-attendance-confirmation-revert-ui](./20260829-attendance-confirmation-revert-ui/spec.md) | 月次勤怠の確定取消(UC-A018)フロントエンドUIの追加 | 完了 |

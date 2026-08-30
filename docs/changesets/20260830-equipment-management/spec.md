@@ -1,6 +1,6 @@
 # 備品管理機能の追加
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -566,3 +566,27 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   は新設しなかった(`EffectiveAccessResolver::userIdsWithGlobalPermission()`を新設し、
   globalスコープで指定Permissionを保有するユーザーIDへ絞り込む)。フロントは`UserPicker`に
   `permission`propを追加し、`AssetLoanRequestDialog`から`permission="asset.manage"`を渡す。
+
+- フェーズ4(2026-08-30実装、フロントエンド一式):
+  - `frontend/src/api/asset.ts`・`frontend/src/hooks/useAsset.ts`(検索/詳細/QR取得/履歴/
+    貸出可否検証/ユーザー貸与一覧の各query、および全17業務Commandに対応するmutation)。
+  - `frontend/src/pages/asset/AssetListPage.tsx`(検索一覧)・`AssetDetailPage.tsx`(詳細+
+    状態/権限に応じた業務操作ボタン一式+貸出申請ダイアログ+approval方式の申請選択UI)・
+    `AssetRegisterPage.tsx`・`AssetEditPage.tsx`。
+  - `frontend/src/pages/asset/bulk/`: `SelfBulkLoanPage`・`SelfBulkReturnPage`・
+    `BackofficeBulkLendPage`・`BackofficeBulkReturnPage`・`BulkRelocatePage`
+    (共通コンポーネント`AssetScanInput`でQRトークン/管理番号のテキスト入力による
+    スキャン代替。カメラによる実際のQRスキャン統合は既存リポジトリに前例が無いため
+    別タスクとする)。
+  - `frontend/src/pages/workflow/WorkflowRequestDetailPage.tsx`・`WorkflowRequestListPage.tsx`:
+    `asset_loan`種別申請への却下ボタン(却下理由ダイアログ付き、他申請種別には非表示)・
+    対象備品名の解決表示を追加。
+  - `App.tsx`へのルート追加、ナビゲーションへの「備品管理」メニュー追加。
+  - バックエンドテスト900件・フロントエンドテスト(備品関連)全通過、`npm run build`・
+    `npm run build-storybook`成功。フロントエンド全体テストで無関係な既存2ファイル
+    (`ApprovalsPage`/`AttendanceReferencePage`関連)の失敗があるが、本機能追加前から
+    存在する既存不具合であることを確認済み(未着手のまま別途対応要)。
+  - Docs: `docs/34-usecases-asset-management.md`(新規。仕様検討時点の想定26番は
+    `docs/26-usecases-monthly-import.md`と衝突するため34番を採用)、
+    `docs/16-database-schema.md`・`docs/17-events.md`・`docs/05-user-roles.md`・
+    `docs/10-usecases-workflow.md`・`docs/README.md`を実装済みコードに基づき更新。
