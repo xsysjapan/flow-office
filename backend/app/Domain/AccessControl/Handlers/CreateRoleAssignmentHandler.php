@@ -4,6 +4,7 @@ namespace App\Domain\AccessControl\Handlers;
 
 use App\Domain\AccessControl\Aggregates\RoleAssignmentAggregate;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
+use App\Domain\AccessControl\Services\GroupFeatureSyncService;
 use App\Domain\AccessControl\Services\PrivilegeAssignmentPolicy;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 /** @implements CommandHandler<CreateRoleAssignment> */
 class CreateRoleAssignmentHandler implements CommandHandler
 {
-    public function __construct(private PrivilegeAssignmentPolicy $privilegePolicy) {}
+    public function __construct(private PrivilegeAssignmentPolicy $privilegePolicy, private GroupFeatureSyncService $groupFeatureSync) {}
 
     public function handle(Command $command): string
     {
@@ -41,6 +42,10 @@ class CreateRoleAssignmentHandler implements CommandHandler
             throw new DomainRuleException('有効な付与先を指定してください。');
         } $this->privilegePolicy->assertSelfAssignmentAllowed($command->actorUserId, $command->subjectType, $command->subjectId, $command->roleId);
         RoleAssignmentAggregate::retrieve($command->assignmentId)->create($command->subjectType, $command->subjectId, $command->roleId, $command->scopeType, $command->scopeGroupId, $command->includeDescendants, $command->startsAt, $command->endsAt, $command->actorUserId)->persist();
+
+        if ($command->subjectType === 'group') {
+            $this->groupFeatureSync->syncGroup($command->subjectId, $command->actorUserId);
+        }
 
         return $command->assignmentId;
     }

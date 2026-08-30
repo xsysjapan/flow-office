@@ -45,6 +45,11 @@ class Role extends Model
         return $this->belongsToMany(Permission::class);
     }
 
+    public function features(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Feature::class, 'role_features');
+    }
+
     public function assignments(): HasMany
     {
         return $this->hasMany(RoleAssignment::class);

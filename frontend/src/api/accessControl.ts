@@ -30,6 +30,7 @@ export interface AccessRole {
   status: string;
   is_system: boolean;
   permissions: Permission[];
+  features: Feature[];
 }
 export interface RoleAssignment {
   id: string;
@@ -89,21 +90,6 @@ export const updateRole = (
     method: "PATCH",
     body: input,
   });
-export const assignFeatureToGroup = (
-  groupId: string,
-  featureId: number,
-): Promise<void> =>
-  apiFetch(`/admin/access-control/groups/${groupId}/features`, {
-    method: "POST",
-    body: { feature_id: featureId },
-  });
-export const removeFeatureFromGroup = (
-  groupId: string,
-  featureId: number,
-): Promise<void> =>
-  apiFetch(`/admin/access-control/groups/${groupId}/features/${featureId}`, {
-    method: "DELETE",
-  });
 export const createRoleAssignment = (
   input: Omit<RoleAssignment, "id" | "status" | "role">,
 ): Promise<{ id: string }> =>
@@ -154,4 +140,12 @@ export const updateRolePermissions = (
   apiFetch(`/admin/access-control/roles/${roleId}/permissions`, {
     method: "PUT",
     body: { permission_ids: permissionIds },
+  });
+export const updateRoleFeatures = (
+  roleId: number,
+  featureIds: number[],
+): Promise<void> =>
+  apiFetch(`/admin/access-control/roles/${roleId}/features`, {
+    method: "PUT",
+    body: { feature_ids: featureIds },
   });

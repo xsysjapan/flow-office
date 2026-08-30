@@ -3,6 +3,7 @@
 namespace App\Domain\AccessControl\Aggregates;
 
 use App\Domain\AccessControl\Events\RoleCreated;
+use App\Domain\AccessControl\Events\RoleFeaturesChanged;
 use App\Domain\AccessControl\Events\RolePermissionsChanged;
 use App\Domain\AccessControl\Events\RoleUpdated;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -26,6 +27,13 @@ class RoleAggregate extends AggregateRoot
     public function changePermissions(int $roleId, array $permissionIds, string $actor): self
     {
         $this->recordThat(new RolePermissionsChanged($roleId, $permissionIds, $actor));
+
+        return $this;
+    }
+
+    public function changeFeatures(int $roleId, array $featureIds, string $actor): self
+    {
+        $this->recordThat(new RoleFeaturesChanged($roleId, $featureIds, $actor));
 
         return $this;
     }

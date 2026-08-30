@@ -157,9 +157,16 @@ export const adminNavGroups: AdminNavGroup[] = [
     icon: Settings,
     items: [
       {
-        to: "/admin/access-control",
-        label: "アクセス管理",
-        description: "Feature・Role・Permissionと利用停止を管理する",
+        to: "/admin/access/assignments",
+        label: "ロール割当",
+        description: "ユーザー・グループへのRole割当とFeatureの個別停止を管理する",
+        feature: "administration.users",
+        permissions: ["feature.view", "role.view"],
+      },
+      {
+        to: "/admin/access/roles",
+        label: "ロール定義",
+        description: "RoleごとのPermission・Feature構成を管理する",
         feature: "administration.users",
         permissions: ["feature.view", "role.view"],
       },

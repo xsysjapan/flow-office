@@ -6,6 +6,7 @@ use App\Domain\AccessControl\Events\RoleAssignmentCreated;
 use App\Domain\AccessControl\Events\RoleAssignmentRemoved;
 use App\Domain\AccessControl\Events\RoleAssignmentUpdated;
 use App\Domain\AccessControl\Events\RoleCreated;
+use App\Domain\AccessControl\Events\RoleFeaturesChanged;
 use App\Domain\AccessControl\Events\RolePermissionsChanged;
 use App\Domain\AccessControl\Events\RoleUpdated;
 use App\Domain\AccessControl\Events\UserFeatureSuspended;
@@ -323,6 +324,7 @@ return [
         'external_identity.unlinked' => ExternalIdentityUnlinked::class,
         'user.field_authority_changed' => UserFieldAuthorityChanged::class,
         'role.permissions_changed' => RolePermissionsChanged::class,
+        'role.features_changed' => RoleFeaturesChanged::class,
         'system_settings.updated' => SystemSettingsUpdated::class,
         'external_integration_connection.created' => ExternalIntegrationConnectionCreated::class,
         'external_integration_connection.updated' => ExternalIntegrationConnectionUpdated::class,
