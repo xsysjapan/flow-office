@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import {
+  bulkAssetOperation,
   changeAssetLendingMethod,
   changeAssetManagementType,
   completeAssetRepair,
@@ -8,6 +9,7 @@ import {
   getAsset,
   getAssetByQrToken,
   getAssetHistory,
+  getAssetLoanEligibility,
   getUserAssetLoans,
   installAsset,
   lendAsset,
@@ -17,11 +19,13 @@ import {
   relocateAsset,
   removeAssetFromInstallation,
   reportAssetLost,
+  resolveAssetByScanInput,
   returnAsset,
   searchAssets,
   setAssetDefaultLocation,
   startAssetRepair,
   updateAssetDetails,
+  type AssetBulkOperationInput,
   type LendAssetInput,
   type RegisterAssetInput,
   type ReturnAssetInput,
@@ -221,5 +225,38 @@ export function useDisposeAsset() {
   return useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string | null }) => disposeAsset(id, note),
     onSuccess: (_data, { id }) => invalidateAssetQueries(queryClient, id),
+  })
+}
+
+/**
+ * QR一括操作画面(spec「50. QR操作画面」)向け。スキャン(または管理番号手入力)の都度、
+ * 対象を1件解決する。サーバーには何も保存しない読み取り専用の呼び出しのため、イベント
+ * 駆動(Enter押下)の`useMutation`として提供する(`useQuery`のような自動再フェッチは不要)。
+ */
+export function useResolveAssetForBulk() {
+  return useMutation({
+    mutationFn: (input: string) => resolveAssetByScanInput(input),
+  })
+}
+
+/** バックオフィス一括貸与でのスキャン時点の貸出可否検証(spec 論点8)。 */
+export function useAssetLoanEligibility() {
+  return useMutation({
+    mutationFn: ({ assetId, borrowerUserId }: { assetId: string; borrowerUserId?: string }) =>
+      getAssetLoanEligibility(assetId, borrowerUserId),
+  })
+}
+
+/** QR一括操作の確定(`POST /assets/bulk`を1回だけ呼ぶ)。成功後は一覧・関連詳細を無効化する。 */
+export function useBulkAssetOperation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AssetBulkOperationInput) => bulkAssetOperation(input),
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, 'search'] })
+      for (const assetId of input.asset_ids) {
+        queryClient.invalidateQueries({ queryKey: [...ASSETS_KEY, assetId] })
+      }
+    },
   })
 }

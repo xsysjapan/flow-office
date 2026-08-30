@@ -1,10 +1,11 @@
-import { apiFetch } from './client'
+import { ApiError, apiFetch } from './client'
 import type {
   Asset,
   AssetLendingStatus,
   AssetInstallationStatus,
   AssetLendingMethod,
   AssetLoan,
+  AssetLoanEligibility,
   AssetManagementType,
   Paginated,
   StoredEvent,
@@ -49,6 +50,35 @@ export function getAssetHistory(id: string): Promise<StoredEvent[]> {
 
 export function getUserAssetLoans(userId: string): Promise<AssetLoan[]> {
   return apiFetch(`/users/${userId}/asset-loans`)
+}
+
+export function getAssetLoanEligibility(assetId: string, borrowerUserId?: string): Promise<AssetLoanEligibility> {
+  return apiFetch(`/assets/${assetId}/loan-eligibility`, {
+    query: borrowerUserId ? { borrower_user_id: borrowerUserId } : undefined,
+  })
+}
+
+/**
+ * QR一括操作画面(spec「50. QR操作画面」「一括QR操作API」)でのスキャン(または管理番号
+ * 手入力)1件分の解決処理。QRトークン文字列としてまず解決を試み、404の場合は管理番号の
+ * 完全一致検索にフォールバックする(spec 31番「QR以外の操作」: 管理番号入力でも同じ操作が
+ * できること)。どちらでも見つからない場合はErrorを投げる。
+ */
+export async function resolveAssetByScanInput(input: string): Promise<Asset> {
+  const trimmed = input.trim()
+  if (!trimmed) throw new Error('管理番号またはQRトークンを入力してください。')
+
+  try {
+    return await getAssetByQrToken(trimmed)
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e
+  }
+
+  const found = await searchAssets({ asset_no: trimmed, per_page: 5 })
+  const exact = found.data.find((asset) => asset.asset_no === trimmed)
+  if (exact) return exact
+
+  throw new Error(`管理番号またはQRトークン「${trimmed}」に一致する備品が見つかりませんでした。`)
 }
 
 /**
@@ -150,4 +180,38 @@ export function recoverAssetFromLost(id: string): Promise<Asset> {
 
 export function disposeAsset(id: string, note?: string | null): Promise<Asset> {
   return apiFetch(`/assets/${id}/dispose`, { method: 'POST', body: { note: note ?? null } })
+}
+
+/**
+ * QR一括操作(spec「一括QR操作API」/論点8)。`POST /assets/bulk`を1回だけ呼び、対象
+ * asset_id配列をまとめて送る。バックエンドは1備品=1Aggregateとしてループで処理するため、
+ * 部分成功(一部だけ失敗)がありうる。
+ */
+export type AssetBulkOperationType = 'self_loan' | 'self_return' | 'backoffice_lend' | 'return' | 'relocate'
+
+export interface AssetBulkOperationInput {
+  operation: AssetBulkOperationType
+  asset_ids: string[]
+  borrower_user_id?: string
+  expected_return_at?: string | null
+  location_text?: string
+  return_note?: string | null
+}
+
+export interface AssetBulkOperationResultItem {
+  asset_id: string
+  success: boolean
+  result?: string
+  error?: string
+}
+
+export interface AssetBulkOperationResult {
+  operation: AssetBulkOperationType
+  results: AssetBulkOperationResultItem[]
+  succeeded_count: number
+  failed_count: number
+}
+
+export function bulkAssetOperation(input: AssetBulkOperationInput): Promise<AssetBulkOperationResult> {
+  return apiFetch('/assets/bulk', { method: 'POST', body: input })
 }

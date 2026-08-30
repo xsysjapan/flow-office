@@ -140,6 +140,31 @@ export function AssetListPage() {
       }
     >
       <div className="mb-4 flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          <Link to="/assets/bulk/self-loan" className="text-sm text-primary hover:underline">
+            セルフ一括貸出
+          </Link>
+          <span className="text-sm text-muted-foreground">/</span>
+          <Link to="/assets/bulk/self-return" className="text-sm text-primary hover:underline">
+            セルフ一括返却
+          </Link>
+          {canManage && (
+            <>
+              <span className="text-sm text-muted-foreground">/</span>
+              <Link to="/assets/bulk/lend" className="text-sm text-primary hover:underline">
+                一括貸与
+              </Link>
+              <span className="text-sm text-muted-foreground">/</span>
+              <Link to="/assets/bulk/return" className="text-sm text-primary hover:underline">
+                一括返却
+              </Link>
+              <span className="text-sm text-muted-foreground">/</span>
+              <Link to="/assets/bulk/relocate" className="text-sm text-primary hover:underline">
+                一括移設
+              </Link>
+            </>
+          )}
+        </div>
         <div className="w-full max-w-sm">
           <FormField label="キーワード検索" htmlFor="asset-search-q">
             <Input
