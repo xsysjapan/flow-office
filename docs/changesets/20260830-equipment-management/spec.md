@@ -543,4 +543,19 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
 
 ## 実装結果
 
-未着手。
+- フェーズ1(2026-08-30時点で実装済み): `App\Domain\Asset`のドメイン基盤(AssetAggregate・
+  Command/Event/Handler/Projector、assets/asset_default_location_changes/asset_placements/
+  asset_loansテーブル)。
+- フェーズ2(本節、2026-08-30実装):
+  - `workflow_requests`への汎用「却下」機能(`RejectWorkflowRequest`/`WorkflowRequestRejected`/
+    `RejectWorkflowRequestHandler`、`WorkflowRequestStatus::REJECTED`、
+    `rejected_at`/`rejection_reason`カラム、`/workflow-requests/{id}/reject` API)。
+  - `request_types`に`asset_loan`(備品貸出申請、`form_schema`に`asset_id`/`purpose`)を追加。
+  - `asset_loan_requests`Projection(`App\Domain\Asset\Reactors\
+    AssetLoanRequestOnWorkflowRequestReactor`/`AssetLoanRequestOnAssetLoanedReactor`)。
+  - `LendAssetHandler`に`approval`方式のガード(`loanRequestId`必須、承認済み・対象一致検証)
+    を追加。あわせて`AssetActiveBusinessGuard`を、フェーズ1時点で仮実装していた
+    `workflow_requests.subject_type='AssetLoanRequest'`検索から、新設した
+    `asset_loan_requests`Projection参照に更新。
+  - フロントエンド(却下ボタン等のUI)・`docs/26`以降のユースケースドキュメントは本フェーズの
+    対象外のまま(次フェーズで対応)。

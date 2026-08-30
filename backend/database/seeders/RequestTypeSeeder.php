@@ -98,6 +98,23 @@ class RequestTypeSeeder extends Seeder
                 'backoffice_department' => '人事部',
             ],
             [
+                'code' => 'asset_loan',
+                'name' => '備品貸出申請',
+                'description' => '貸出方式が承認制(approval)の備品を借りるための申請。' .
+                    '承認されただけでは貸出中にはならず、承認済み申請に基づき' .
+                    'バックオフィスがLendAssetを実行して初めて貸与される' .
+                    '(docs/26-usecases-asset-management.md参照)。',
+                'form_schema' => [
+                    ['key' => 'asset_id', 'label' => '対象備品', 'type' => 'uuid', 'required' => true],
+                    ['key' => 'purpose', 'label' => '利用目的', 'type' => 'text', 'required' => false],
+                ],
+                // 承認完了後の処理(貸与)はAssetドメインのReactorがworkflow_request.approvedを
+                // 購読して申請ステータスをasset_loan_requests.status=approvedへ反映するのみで、
+                // バックオフィスタスクの自動生成は不要(LendAsset自体がバックオフィスの操作)。
+                'requires_backoffice_task' => false,
+                'backoffice_task_type' => null,
+            ],
+            [
                 'code' => 'general_request',
                 'name' => '一般申請',
                 'description' => 'その他一般的な申請',

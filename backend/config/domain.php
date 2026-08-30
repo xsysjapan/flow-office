@@ -371,11 +371,13 @@ use App\Domain\UserManagement\Handlers\UpdateUserProfileHandler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\RejectWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Handlers\ApproveWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
+use App\Domain\Workflow\Handlers\RejectWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\SubmitWorkflowRequestHandler;
 
@@ -482,6 +484,7 @@ return [
         ApproveWorkflowRequest::class => ApproveWorkflowRequestHandler::class,
         ReturnWorkflowRequest::class => ReturnWorkflowRequestHandler::class,
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
+        RejectWorkflowRequest::class => RejectWorkflowRequestHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,

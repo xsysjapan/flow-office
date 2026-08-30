@@ -164,6 +164,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/workflow-requests/{workflowRequest}/submit', [WorkflowRequestController::class, 'submit']);
     Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return'])->middleware('permission:approval.execute');
+    Route::post('/workflow-requests/{workflowRequest}/reject', [WorkflowRequestController::class, 'reject'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/cancel', [WorkflowRequestController::class, 'cancel']);
     Route::get('/workflow-requests/{workflowRequest}/history', [WorkflowRequestController::class, 'history']);
 

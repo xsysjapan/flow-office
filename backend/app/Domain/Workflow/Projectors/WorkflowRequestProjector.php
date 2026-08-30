@@ -5,6 +5,7 @@ namespace App\Domain\Workflow\Projectors;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestRejected;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use App\Models\WorkflowRequest;
@@ -64,6 +65,15 @@ class WorkflowRequestProjector extends Projector
         WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => WorkflowRequestStatus::CANCELLED,
             'cancelled_at' => $event->createdAt(),
+        ]);
+    }
+
+    public function onWorkflowRequestRejected(WorkflowRequestRejected $event): void
+    {
+        WorkflowRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => WorkflowRequestStatus::REJECTED,
+            'rejected_at' => $event->createdAt(),
+            'rejection_reason' => $event->reason,
         ]);
     }
 }

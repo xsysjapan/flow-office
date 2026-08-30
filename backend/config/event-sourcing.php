@@ -203,6 +203,7 @@ use App\Domain\UserManagement\Events\UserUsageStartDateSet;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestRejected;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use Spatie\EventSourcing\EventSerializers\JsonEventSerializer;
@@ -474,6 +475,7 @@ return [
         'workflow_request.approved' => WorkflowRequestApproved::class,
         'workflow_request.returned' => WorkflowRequestReturned::class,
         'workflow_request.cancelled' => WorkflowRequestCancelled::class,
+        'workflow_request.rejected' => WorkflowRequestRejected::class,
 
         'paid_leave.granted' => PaidLeaveGranted::class,
         'paid_leave.requested' => PaidLeaveRequested::class,

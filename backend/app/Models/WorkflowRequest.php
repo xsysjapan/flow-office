@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * `request_type_id`は常にnullで、フォーム内容は`form_data`ではなく対象ドメインの正データ
  * (`attendance_months`/`expense_claims`)を参照する。
  */
-#[Fillable(['id', 'request_type_id', 'title', 'applicant_user_id', 'approver_user_id', 'status', 'form_data', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at', 'subject_type', 'subject_id'])]
+#[Fillable(['id', 'request_type_id', 'title', 'applicant_user_id', 'approver_user_id', 'status', 'form_data', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at', 'rejected_at', 'rejection_reason', 'subject_type', 'subject_id'])]
 class WorkflowRequest extends Model
 {
     use HasUuids;
@@ -40,6 +40,7 @@ class WorkflowRequest extends Model
             'approved_at' => 'datetime',
             'returned_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 

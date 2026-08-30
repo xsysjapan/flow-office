@@ -5,6 +5,7 @@ namespace App\Domain\Workflow\Aggregates;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestRejected;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -73,6 +74,13 @@ class WorkflowRequestAggregate extends AggregateRoot
     public function cancel(string $cancelledByUserId, string $reason): self
     {
         $this->recordThat(new WorkflowRequestCancelled(cancelledByUserId: $cancelledByUserId, reason: $reason));
+
+        return $this;
+    }
+
+    public function reject(string $rejectedByUserId, string $reason): self
+    {
+        $this->recordThat(new WorkflowRequestRejected(rejectedByUserId: $rejectedByUserId, reason: $reason));
 
         return $this;
     }
