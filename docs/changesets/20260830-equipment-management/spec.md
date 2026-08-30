@@ -89,12 +89,37 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
 - 理由: CLAUDE.md 14番の設計原則で「誰が・何を・いつ申請し誰が承認するかという進行状況は
   ドメイン横断で統合的に扱う」と明記されており、既存の申請一覧・通知・承認UIをそのまま
   再利用できるA案が既存踏襲として最も自然。取下げ(UC-L10)は`workflow_requests`の
-  既存の取下げ操作をそのまま使う。却下理由は`workflow_requests`側に既存カラムがあれば流用し、
-  なければ本変更で追加する(現状の`workflow_requests`スキーマを実装時に再確認し、
-  `rejection_reason`相当が無ければ追加する。本spec時点では既存カラム構成の詳細確認は
-  実装フェーズの最初のタスクとする)。
-- 未確定・要確認事項: `workflow_requests`に却下理由カラムが無い場合、既存の他申請種別にも
-  影響する共通カラム追加になるため、影響範囲を実装開始時に確認してから着手する。
+  既存の取下げ操作をそのまま使う。
+
+### 論点2-2: 却下(UC-L09)をどこで実装するか
+
+- 背景: `workflow_requests`は現状「提出→承認」「提出→差し戻し(SUBMITTED状態のみ、
+  申請者が編集して再提出可能な非終端状態、`WorkflowRequestReturned`イベント)」
+  「取消(`CancelWorkflowRequest`)」しか持たず、指示書UC-L09が求める「編集不可・再提出不可の
+  終端的な却下」に相当する状態がない。差し戻しで代替できないか確認したところ、
+  ユーザーから「却下は申請業務(ワークフロー)の内数であり、貸出ドメイン(備品ドメイン)に
+  却下の概念を持ち込まない」との判断を得た。
+- 選択肢:
+  - A. `workflow_requests`本体に新しい終端状態`REJECTED`と`Reject`系Command/Event
+    (`RejectWorkflowRequest`/`WorkflowRequestRejected`、却下理由`reason`を持つ)を追加する。
+    これは全申請種別(経費・休暇等)で共通利用可能な汎用機能となる。
+  - B. 備品ドメイン側(`AssetLoanRequestAggregate`)に却下Command/Eventを持たせ、
+    `workflow_requests`側は差し戻しや取消で間に合わせる。
+- 決定: A。却下は`workflow_requests`(汎用申請ワークフロー)の機能として追加し、
+  `AssetLoanRequestAggregate`には却下の概念(Command/Event/状態)を一切持たせない。
+  備品ドメイン側は`workflow_requests`が`REJECTED`になったことを`Reactor`で検知し、
+  紐づく`AssetLoanRequest`Projectionを`rejected`表示に反映するだけ(備品ドメイン自身は
+  却下を判断・記録しない)。
+- 理由: ユーザー指示に加え、CLAUDE.md 14番の原則「進行状況(workflow_requests)はドメイン
+  横断で統合的に扱い、各ドメイン固有の業務ロジックは統合ワークフロー側に混入させない」の
+  逆方向(=進行状況側の概念を個別ドメインに重複実装しない)にも合致する。却下は経費・休暇等
+  他の申請種別でも将来必要になりうる汎用概念であり、`workflow_requests`に1回実装すれば
+  全申請種別で使い回せる。
+- 影響: `workflow_requests`テーブルに`rejected_at`(timestamp, nullable)・`rejection_reason`
+  (text, nullable)を追加し、`WorkflowRequestStatus`に`REJECTED`を追加する。既存の他申請種別
+  (経費・休暇等)には却下を実行するUIをまだ出さない(却下ボタンは備品貸出申請の承認画面にのみ
+  表示する)が、Command/Event自体は汎用実装とする。既存申請種別の承認画面に却下ボタンを
+  出すかどうかは本変更セットの対象外とし、必要になれば別途変更セットを起票する。
 
 ### 論点3: 貸出備品と設置備品を1つのAggregate/テーブルにまとめるか、分離するか
 
@@ -211,30 +236,23 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   - A. `AccessControlCatalog::PERMISSIONS`に備品管理専用のPermissionコードを新規追加する
     (例: `asset.view`/`asset.manage`/`asset.self_borrow`/`asset.loan_request`)。
   - B. 既存の`backoffice_task.execute`等の汎用Permissionを流用し、新規コードを増やさない。
-- 決定: A(ただし最小限)。
+- 決定: A(ただし最小限。一般ユーザーの基本操作にはPermissionを新設しない)。
 - 理由: 既存の`attendance.read`/`attendance.update`のように「ドメイン.操作」単位で
-  Permissionを切る既存パターンに合わせる。備品管理はバックオフィスだけでなく一般ユーザーの
-  セルフ操作(セルフ貸出・自分の申請取下げ等)もあり、`backoffice_task.execute`のような
-  既存コードは意味が異なるため流用しない。新設するPermissionコードは以下の4つのみとする
-  (指示書43番の権限一覧を「閲覧/自己操作/バックオフィス管理」の3段階に集約):
-  - `asset.view`(scopes: `global`) — 備品検索・詳細閲覧・履歴閲覧・他人の貸与状況確認
-    (一般ユーザーの検索・自分の貸与確認・セルフ貸出/返却は本Permission不要、認証済み
-    ユーザーなら誰でも可能とする。理由は仕様確定事項参照)
-  - `asset.loan_request.create`(scopes: `self`) — 貸出申請作成・自分の申請取下げ
-    (実運用上は全社員に付与する想定だが、既存の「Featureで機能自体のON/OFFを制御し、
-    Permissionはその中の操作粒度を制御する」設計に合わせてFeature側で機能公開範囲を
-    制御し、本Permissionは自分の申請に対する操作可否として定義する)
+  Permissionを切る既存パターンに合わせつつ、指示書43番の一般ユーザー欄が「特別な権限を
+  前提としない基本操作」として書かれていることから、検索・QRセルフ貸出・セルフ返却・
+  自分の貸与確認・貸出申請作成・自分の申請取下げについては専用Permissionを作らず、
+  認証済みユーザーであれば誰でも操作可能とする(ユーザーに確認済み)。
+  新設するPermissionコードはバックオフィス操作の2つのみとする:
   - `asset.manage`(scopes: `global`) — 備品登録・編集・削除・QR発行/再発行・管理区分変更・
     貸出方式変更・設置・移設・撤去・修理・紛失・発見・廃棄・バックオフィス貸与/一括貸与・
     返却・一括返却
-  - `asset.loan_request.approve`(scopes: `global`) — 貸出申請承認・却下・承認済み取消
-- 未確定・要確認事項: 「セルフ貸出・セルフ返却・検索・自分の貸与確認」を無条件(ログイン
-  済みなら誰でも)にするか、専用Permission(例: `asset.self_service`)を必須にするかは
-  運用次第で変わりうる。本specでは指示書43番の一般ユーザー欄が「特別な権限を前提としない
-  基本操作」として書かれていることから無条件案を採用するが、将来的に一部社員だけ備品管理
-  機能自体を非公開にしたい場合は、既存のFeature(機能単位のON/OFF、`AccessControlCatalog`の
-  Feature側)で「備品管理」機能を切り出し、Feature未付与のユーザーには画面自体を出さない
-  という既存の使い分け(Permission=操作粒度、Feature=機能公開可否)で対応する。
+  - `asset.loan_request.approve`(scopes: `global`) — 貸出申請承認・承認済み取消
+    (却下自体は`workflow_requests`汎用機能側の権限で判定し、本Permissionでは扱わない。
+    実装時に既存の承認権限判定と揃える)
+  将来的に一部社員だけ備品管理機能自体を非公開にしたい場合は、既存のFeature(機能単位の
+  ON/OFF、`AccessControlCatalog`のFeature側)で「備品管理」機能を切り出し、Feature未付与の
+  ユーザーには画面自体を出さないという既存の使い分け(Permission=操作粒度、
+  Feature=機能公開可否)で対応する(本変更では新規Feature追加は行わない)。
 
 ### 論点11: DB制約・楽観的並行制御
 
@@ -265,9 +283,12 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   `ReportAssetLost`, `RecoverAssetFromLost`, `DisposeAsset`。
 - Command一覧(`AssetLoanRequest`、`workflow_requests`と連携):
   `SubmitAssetLoanRequest`(内部的に`workflow_requests`の`SubmitWorkflowRequest`相当も発行)、
-  `WithdrawAssetLoanRequest`, `ApproveAssetLoanRequest`, `RejectAssetLoanRequest`,
+  `WithdrawAssetLoanRequest`, `ApproveAssetLoanRequest`,
   `CancelApprovedAssetLoanRequest`, `LendApprovedAsset`(承認済み申請に基づく実貸与。
   `AssetAggregate`側の`LendAssetByBackoffice`相当を内部的に呼ぶ)。
+  却下は`workflow_requests`側の汎用`RejectWorkflowRequest`を使用し、備品ドメインは
+  `WorkflowRequestRejected`イベントをReactorで受けてProjection表示を更新するのみ
+  (論点2-2参照)。
 - Event一覧(`event_type`、`asset.`/`asset_loan_request.`プレフィックス):
   `asset.registered`, `asset.details_updated`, `asset.deleted`,
   `asset.management_type_changed`, `asset.lending_method_changed`,
@@ -277,7 +298,9 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   `asset.repair_started`, `asset.repair_completed`,
   `asset.reported_lost`, `asset.recovered_from_lost`, `asset.disposed`。
   `asset_loan_request.submitted`, `asset_loan_request.withdrawn`, `asset_loan_request.approved`,
-  `asset_loan_request.rejected`, `asset_loan_request.approval_cancelled`。
+  `asset_loan_request.approval_cancelled`。却下は`workflow_request.rejected`
+  (`workflow_requests`側の汎用イベント)のみで表現し、備品ドメイン独自の却下イベントは
+  持たない。
 
 ### 状態遷移
 
@@ -291,8 +314,10 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   `stored/installed → repair → stored`(修理完了後は保管に戻し、必要なら改めて設置)。
   `stored/installed → lost → stored`。`stored → disposed`。
 - 貸出申請`status`(`asset_loan_requests`): `pending → approved → lent`(貸与完了で
-  `workflow_requests`側も完了扱い)、`pending → rejected`、`pending → withdrawn`、
-  `approved → cancelled`(承認済み取消)。
+  `workflow_requests`側も完了扱い)、`pending → withdrawn`、`approved → cancelled`
+  (承認済み取消)。`pending → rejected`は備品ドメイン自身のCommandではなく、
+  `workflow_requests`側の`RejectWorkflowRequest`(論点2-2)を起点にReactorが
+  `asset_loan_requests.status`へ反映する形で発生する(備品ドメインは却下を判断しない)。
 
 ### 貸出方式(`lending_method`)と制約
 
@@ -307,10 +332,12 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
 ### 削除可否ガード
 
 `DeleteAsset`は以下のいずれかに該当する場合は`ValidationException`で拒否する:
-`lending_status=loaned`、`installation_status=installed`は削除可(履歴不問。ただし
-指示書26番の「進行中の業務」の例に設置中は含まれていないため、設置中は削除可とする。
-未確定点として仕様確定事項の最後に明記)、`lending_status=repair`、
-承認待ち(`pending`)または承認済み未貸与(`approved`)の`asset_loan_requests`が存在する場合。
+`lending_status=loaned`、`lending_status=repair`、`installation_status=installed`、
+`installation_status=repair`、承認待ち(`pending`)または承認済み未貸与(`approved`)の
+`asset_loan_requests`が存在する場合。指示書26番の「進行中の業務」の例には「設置中」が
+明記されていなかったため確認したところ、ユーザーより「設置中も削除禁止にする」との
+判断を得た(現物がどこかに設置されたままシステム上だけ消えることを避けるため、
+先に撤去(`RemoveAssetFromInstallation`)してから削除する運用とする)。
 
 ### 一括QR操作API
 
@@ -362,10 +389,14 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   `asset_placements` / `asset_loan_requests` / `asset_loans` テーブル定義を追記。
 - `docs/17-events.md`: `## Asset` / `## AssetLoanRequest` セクションを追加し、上記イベント
   一覧を記載。
-- `docs/05-user-roles.md`(または権限一覧の該当章): `asset.view` / `asset.loan_request.create` /
-  `asset.manage` / `asset.loan_request.approve` の4Permissionを追記。
-- `docs/10-usecases-workflow.md`: `request_types`に`asset_loan`を追加する旨と、
-  `subject_type=AssetLoanRequest`のポリモーフィック連携を追記。
+- `docs/05-user-roles.md`(または権限一覧の該当章): `asset.manage` / `asset.loan_request.approve`
+  の2Permissionと、それ以外の基本操作(検索・セルフ貸出・セルフ返却・自分の貸与確認・
+  貸出申請作成・自分の申請取下げ)はPermission不要である旨を追記。
+- `docs/10-usecases-workflow.md`: `request_types`に`asset_loan`を追加する旨、
+  `subject_type=AssetLoanRequest`のポリモーフィック連携、および新規追加する汎用「却下」
+  (`REJECTED`状態・`RejectWorkflowRequest`/`WorkflowRequestRejected`・
+  `rejected_at`/`rejection_reason`カラム)を追記。
+- `docs/17-events.md`: `## Workflow (汎用申請)`セクションに`workflow_request.rejected`を追加。
 - `docs/03-architecture.md`: 変更なし(既存原則の範囲内のため)。
 
 ## モック・アセット
@@ -378,8 +409,13 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
   - `backend/app/Domain/Asset/{Aggregates,Commands,Events,Handlers,Projectors,Services,Guards}/`
   - `backend/database/migrations/`: `assets`, `asset_default_location_changes`,
     `asset_placements`, `asset_loan_requests`, `asset_loans`, および`request_types`への
-    `asset_loan`シードレコード追加。
-  - `backend/app/Domain/AccessControl/AccessControlCatalog.php`: Permission4件追加。
+    `asset_loan`シードレコード追加。加えて`workflow_requests`へ`rejected_at`/
+    `rejection_reason`カラムを追加するマイグレーション(汎用却下機能、論点2-2)。
+  - `backend/app/Domain/Workflow/{Commands,Events,Handlers}/`: `RejectWorkflowRequest`
+    Command・`WorkflowRequestRejected`Event・Handler・`WorkflowRequestStatus::REJECTED`
+    追加(既存の`ReturnWorkflowRequest`/`CancelWorkflowRequest`と同様のパターンで実装)。
+  - `backend/app/Domain/AccessControl/AccessControlCatalog.php`: Permission2件
+    (`asset.manage`, `asset.loan_request.approve`)追加。
   - `backend/app/Http/Controllers/Api/Asset/`: 一覧/詳細/検索/各種アクション/一括操作
     コントローラ。
   - `backend/routes/api.php`: 上記エンドポイント追加。
@@ -402,7 +438,17 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
 
 ## レビュー履歴
 
-初版。
+- 初版。
+- 2026-08-30: 却下(UC-L09)の実装場所についてユーザーに確認したところ「却下は申請業務
+  (ワークフロー)の内数であり、貸出ドメインに却下の概念を持ち込まない」との回答を得た。
+  これを受けて論点2-2を追加し、却下を`workflow_requests`側の汎用機能として実装する方針に
+  変更(備品ドメイン側の`RejectAssetLoanRequest`/`asset_loan_request.rejected`は削除)。
+- 2026-08-30: 削除可否ガードにおける「設置中」の扱いをユーザーに確認し、「設置中も
+  削除禁止にする」との回答を得た(仕様確定事項「削除可否ガード」を修正)。
+- 2026-08-30: 一般ユーザーの基本操作(検索・セルフ貸出/返却・自分の貸与確認・貸出申請
+  作成/取下げ)にPermissionを必須にするかユーザーに確認し、「不要(認証済みなら誰でも可)」
+  との回答を得た。これを受け`asset.view`/`asset.loan_request.create`を廃止し、新設
+  Permissionを`asset.manage`/`asset.loan_request.approve`の2つに縮小(論点10を修正)。
 
 ## 実装結果
 
