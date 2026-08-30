@@ -3,6 +3,7 @@
 use App\Application\UserManagement\Handlers\ApplyExternalHrImportHandler;
 use App\Application\UserManagement\Handlers\CreateUserHandler;
 use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
+use App\Domain\AccessControl\Commands\ChangeRoleFeatures;
 use App\Domain\AccessControl\Commands\ChangeRolePermissions;
 use App\Domain\AccessControl\Commands\CreateRole;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
@@ -13,6 +14,7 @@ use App\Domain\AccessControl\Commands\SuspendUserFeature;
 use App\Domain\AccessControl\Commands\UpdateRole;
 use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
 use App\Domain\AccessControl\Handlers\AssignFeatureToGroupHandler;
+use App\Domain\AccessControl\Handlers\ChangeRoleFeaturesHandler;
 use App\Domain\AccessControl\Handlers\ChangeRolePermissionsHandler;
 use App\Domain\AccessControl\Handlers\CreateRoleAssignmentHandler;
 use App\Domain\AccessControl\Handlers\CreateRoleHandler;
@@ -372,6 +374,7 @@ return [
         UnlinkExternalIdentity::class => UnlinkExternalIdentityHandler::class,
         ChangeFieldAuthority::class => ChangeFieldAuthorityHandler::class,
         ChangeRolePermissions::class => ChangeRolePermissionsHandler::class,
+        ChangeRoleFeatures::class => ChangeRoleFeaturesHandler::class,
         UpdateGroup::class => UpdateGroupHandler::class,
         CreateGroupType::class => CreateGroupTypeHandler::class,
         CreateRole::class => CreateRoleHandler::class,

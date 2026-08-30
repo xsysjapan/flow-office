@@ -131,9 +131,9 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
     await loginAs(adminPage, SCENARIO_USERS.admin);
 
     // このテストを何度も実行しても前提が同じになるよう、まずemployeeのみの状態に戻す
-    // (このテストで hr_staff を付与した結果が残っていることがあるため)。UI上の割当一覧は
-    // 対象ユーザー名を表示せず(Role名/付与先種別/対象範囲のみ)特定の割当を探しづらいため、
-    // 事前状態の確認・削除はAPIで行い、UI操作は「ロールを付与する」本題の手順に絞る。
+    // (このテストで hr_staff を付与した結果が残っていることがあるため)。ユーザー個人への
+    // 直接Role付与UIは廃止された(PR#102、UI上はグループへの割当のみ)ため、事前状態の
+    // 確認・削除・本題の付与はすべてAPIで行う。
     const hrRoleId = await adminPage.evaluate(async () => {
       const token = localStorage.getItem("flow-office.token");
       const res = await fetch(
@@ -183,21 +183,34 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
     );
 
     // 管理者がhr_staffロールを追加する(ログインし直しではなくロールを都度DBに反映する)。
-    await adminPage.goto("/admin/access-control");
-    await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
-    await adminPage
-      .getByLabel("付与先ユーザー")
-      .selectOption({ label: SCENARIO_USERS.approver });
-    await adminPage.getByLabel("Role", { exact: true }).selectOption({ label: "人事担当者" });
-    await adminPage.getByLabel("対象範囲").selectOption({ label: "全社" });
-    await Promise.all([
-      adminPage.waitForResponse(
-        (res) =>
-          res.url().includes("/admin/access-control/role-assignments") &&
-          res.request().method() === "POST",
-      ),
-      adminPage.getByRole("button", { name: "Roleを割当" }).click(),
-    ]);
+    // ユーザー個人への直接Role付与UIは廃止された(PR#102、UI上はグループへの割当のみ)ため、
+    // 本題はAPIで行い、この後の§5-7監査ログ確認(UI)に焦点を絞る。
+    await adminPage.evaluate(
+      async ({ userId, hrRoleId }) => {
+        const token = localStorage.getItem("flow-office.token");
+        const res = await fetch(
+          "http://localhost:8000/api/admin/access-control/role-assignments",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              subject_type: "user",
+              subject_id: userId,
+              role_id: hrRoleId,
+              scope_type: "global",
+              scope_group_id: null,
+              include_descendants: false,
+            }),
+          },
+        );
+        if (!res.ok) throw new Error(`role-assignment create failed: ${res.status}`);
+      },
+      { userId, hrRoleId },
+    );
 
     // §5-7: この操作が監査ログに記録されていることを確認する。
     await adminPage.goto("/admin/audit-log");
@@ -415,21 +428,37 @@ test("§5-9: Entra ID初回ログイン(新入社員オンボーディング)", 
       adminPage.getByRole("status", { name: "保存しました" }),
     ).toBeVisible();
 
-    await adminPage.goto("/admin/access-control");
-    await adminPage.getByRole("tab", { name: "Role・Permission" }).click();
-    await adminPage
-      .getByLabel("付与先ユーザー")
-      .selectOption({ label: newHireName });
-    await adminPage.getByLabel("Role", { exact: true }).selectOption({ label: "人事担当者" });
-    await adminPage.getByLabel("対象範囲").selectOption({ label: "全社" });
-    await Promise.all([
-      adminPage.waitForResponse(
-        (res) =>
-          res.url().includes("/admin/access-control/role-assignments") &&
-          res.request().method() === "POST",
-      ),
-      adminPage.getByRole("button", { name: "Roleを割当" }).click(),
-    ]);
+    // ユーザー個人への直接Role付与UIは廃止された(PR#102、UI上はグループへの割当のみ)ため、
+    // hr_staffロールの付与はAPIで行う。
+    await adminPage.evaluate(
+      async ({ userId }) => {
+        const token = localStorage.getItem("flow-office.token");
+        const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+        const rolesRes = await fetch(
+          "http://localhost:8000/api/admin/access-control/roles",
+          { headers },
+        );
+        const roles: Array<{ id: number; code: string }> = await rolesRes.json();
+        const hrRoleId = roles.find((r) => r.code === "hr_staff")!.id;
+        const res = await fetch(
+          "http://localhost:8000/api/admin/access-control/role-assignments",
+          {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject_type: "user",
+              subject_id: userId,
+              role_id: hrRoleId,
+              scope_type: "global",
+              scope_group_id: null,
+              include_descendants: false,
+            }),
+          },
+        );
+        if (!res.ok) throw new Error(`role-assignment create failed: ${res.status}`);
+      },
+      { userId },
+    );
   } finally {
     await adminContext.close();
   }

@@ -37,12 +37,6 @@ export const useRoleAssignments = (enabled = true) =>
     queryFn: api.fetchRoleAssignments,
     enabled,
   });
-export const useFeatureSuspensions = (enabled = true) =>
-  useQuery({
-    queryKey: ["access", "feature-suspensions"],
-    queryFn: api.fetchFeatureSuspensions,
-    enabled,
-  });
 export const useCreateRole = () => useAccessMutation(api.createRole);
 export const useCloneRole = () =>
   useAccessMutation(
@@ -64,16 +58,6 @@ export const useUpdateRole = () =>
       input: Parameters<typeof api.updateRole>[1];
     }) => api.updateRole(id, input),
   );
-export const useAssignFeatureToGroup = () =>
-  useAccessMutation(
-    ({ groupId, featureId }: { groupId: string; featureId: number }) =>
-      api.assignFeatureToGroup(groupId, featureId),
-  );
-export const useRemoveFeatureFromGroup = () =>
-  useAccessMutation(
-    ({ groupId, featureId }: { groupId: string; featureId: number }) =>
-      api.removeFeatureFromGroup(groupId, featureId),
-  );
 export const useCreateRoleAssignment = () =>
   useAccessMutation(api.createRoleAssignment);
 export const useRemoveRoleAssignment = () =>
@@ -88,12 +72,13 @@ export const useUpdateRoleAssignment = () =>
       input: Parameters<typeof api.updateRoleAssignment>[1];
     }) => api.updateRoleAssignment(id, input),
   );
-export const useSuspendUserFeature = () =>
-  useAccessMutation(api.suspendUserFeature);
-export const useRemoveFeatureSuspension = () =>
-  useAccessMutation(api.removeFeatureSuspension);
 export const useUpdateRolePermissions = () =>
   useAccessMutation(
     ({ roleId, permissionIds }: { roleId: number; permissionIds: number[] }) =>
       api.updateRolePermissions(roleId, permissionIds),
+  );
+export const useUpdateRoleFeatures = () =>
+  useAccessMutation(
+    ({ roleId, featureIds }: { roleId: number; featureIds: number[] }) =>
+      api.updateRoleFeatures(roleId, featureIds),
   );

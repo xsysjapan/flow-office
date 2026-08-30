@@ -57,7 +57,7 @@ describe("AdminLayout", () => {
     ]);
     expect(system?.items.map((item) => item.label)).toEqual(
       expect.arrayContaining([
-        "アクセス管理",
+        "ロール管理",
         "ID・管理元設定",
         "グループ種別",
       ]),
@@ -72,7 +72,7 @@ describe("AdminLayout", () => {
     expect(screen.getByRole("link", { name: "グループ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "所属変更" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "アクセス管理" }),
+      screen.getByRole("link", { name: "ロール管理" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "グループ種別" }),
@@ -90,7 +90,7 @@ describe("AdminLayout", () => {
       screen.getByRole("link", { name: "人事データ連携" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "アクセス管理" }),
+      screen.queryByRole("link", { name: "ロール管理" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "ID・管理元設定" }),

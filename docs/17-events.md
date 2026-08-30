@@ -30,7 +30,11 @@
 - `user.feature_suspended` / `user.feature_suspension_removed`
 - `role.created` / `role.updated` / `role.inactivated`
 - `role.permissions_changed`
+- `role.features_changed`(Role→Feature自動適用のFeatureマスタ変更。保存後にそのRoleを保持する
+  全グループへ`GroupFeatureSyncService`が`group_feature_assignments`を差分同期する)
 - `role_assignment.created` / `role_assignment.updated` / `role_assignment.removed`
+  (`subject_type='group'`の場合、保存後に`GroupFeatureSyncService`が対象グループの
+  `group_feature_assignments`を差分同期する)
 - `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
 
 ## Workflow (汎用申請)

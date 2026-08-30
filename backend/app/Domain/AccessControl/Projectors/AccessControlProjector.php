@@ -8,6 +8,7 @@ use App\Domain\AccessControl\Events\RoleAssignmentCreated;
 use App\Domain\AccessControl\Events\RoleAssignmentRemoved;
 use App\Domain\AccessControl\Events\RoleAssignmentUpdated;
 use App\Domain\AccessControl\Events\RoleCreated;
+use App\Domain\AccessControl\Events\RoleFeaturesChanged;
 use App\Domain\AccessControl\Events\RolePermissionsChanged;
 use App\Domain\AccessControl\Events\RoleUpdated;
 use App\Domain\AccessControl\Events\UserFeatureSuspended;
@@ -62,6 +63,14 @@ class AccessControlProjector extends Projector
         DB::table('permission_role')->where('role_id', $event->roleId)->delete();
         foreach ($event->permissionIds as $permissionId) {
             DB::table('permission_role')->insert(['role_id' => $event->roleId, 'permission_id' => $permissionId]);
+        }
+    }
+
+    public function onRoleFeaturesChanged(RoleFeaturesChanged $event): void
+    {
+        DB::table('role_features')->where('role_id', $event->roleId)->delete();
+        foreach ($event->featureIds as $featureId) {
+            DB::table('role_features')->insert(['role_id' => $event->roleId, 'feature_id' => $featureId, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()]);
         }
     }
 

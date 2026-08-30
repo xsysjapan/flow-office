@@ -4,6 +4,7 @@ namespace App\Domain\AccessControl\Handlers;
 
 use App\Domain\AccessControl\Aggregates\RoleAssignmentAggregate;
 use App\Domain\AccessControl\Commands\UpdateRoleAssignment;
+use App\Domain\AccessControl\Services\GroupFeatureSyncService;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 /** @implements CommandHandler<UpdateRoleAssignment> */ class UpdateRoleAssignmentHandler implements CommandHandler
 {
+    public function __construct(private readonly GroupFeatureSyncService $groupFeatureSync) {}
+
     public function handle(Command $c): string
     {
         assert($c instanceof UpdateRoleAssignment);
@@ -33,7 +36,13 @@ use Illuminate\Support\Facades\DB;
             throw new DomainRuleException('このRoleには選択したスコープで有効になるPermissionがありません。');
         } if ($c->startsAt && $c->endsAt && $c->startsAt > $c->endsAt) {
             throw new DomainRuleException('開始日時は終了日時以前にしてください。');
-        } RoleAssignmentAggregate::retrieve($c->assignmentId)->update($c->scopeType, $c->scopeGroupId, $c->includeDescendants, $c->startsAt, $c->endsAt, $c->actorUserId)->persist();
+        } $subjectType = DB::table('role_assignments')->where('id', $c->assignmentId)->value('subject_type');
+        $subjectId = DB::table('role_assignments')->where('id', $c->assignmentId)->value('subject_id');
+        RoleAssignmentAggregate::retrieve($c->assignmentId)->update($c->scopeType, $c->scopeGroupId, $c->includeDescendants, $c->startsAt, $c->endsAt, $c->actorUserId)->persist();
+
+        if ($subjectType === 'group') {
+            $this->groupFeatureSync->syncGroup($subjectId, $c->actorUserId);
+        }
 
         return $c->assignmentId;
     }

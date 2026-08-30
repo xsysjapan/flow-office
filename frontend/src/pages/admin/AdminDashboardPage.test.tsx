@@ -47,7 +47,7 @@ describe("AdminDashboardPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^所属変更/ })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /^アクセス管理/ }),
+      screen.getByRole("link", { name: /^ロール管理/ }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /^グループ種別/ }),
@@ -64,7 +64,7 @@ describe("AdminDashboardPage", () => {
       screen.getByRole("link", { name: /^グループ 組織/ }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: /^アクセス管理/ }),
+      screen.queryByRole("link", { name: /^ロール管理/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /^グループ種別/ }),

@@ -78,7 +78,13 @@ Feature・Permissionの定義自体の唯一の情報源は`AccessControlCatalog
 
 標準の管理権限は`SYSTEM_ADMINISTRATORS`グループへの所属と、そのグループへ付与された管理Feature・
 管理RoleAssignmentから得る。したがって、ユーザーを同グループへ追加した時点で管理メニューと対応APIが
-有効になり、グループから外すと無効になる。RoleAssignmentだけを直接付与してもFeatureは補完しない。
+有効になり、グループから外すと無効になる。
+
+Roleに紐づくFeatureマスタ(`role_features`)を持ち、グループへのRole割当(作成・更新・削除)や
+Role自体のFeature変更(`ChangeRoleFeatures`)が起きるたびに、そのグループの`group_feature_assignments`
+がRoleの保有Featureの和集合へ自動同期される(`GroupFeatureSyncService`、Role→Feature自動適用)。
+差分だけを追加・削除し、既存の割当を全消し全入れしない。ユーザー個人への直接RoleAssignmentは
+引き続きFeatureを補完しない(対象外。今回自動適用されるのはグループへのRole割当のみ)。
 
 - FeatureとPermissionは初期状態をすべてOFFとし、明示的に付与されたものだけを有効にする。
 - 有効なPermissionは、ユーザーへの直接Role割当と、所属グループ経由のRole割当の和集合とする。
@@ -266,6 +272,11 @@ GroupFeatureAssignment
 - assigned_by
 - assigned_at
 
+RoleFeature
+- id
+- role_id
+- feature_id
+
 UserFeatureSuspension
 - id
 - user_id
@@ -280,6 +291,11 @@ Featureはグループにだけ付与し、複数グループの結果を和集�
 行わない。例外的な個人停止だけを`UserFeatureSuspension`で表現する。親FeatureをONにした場合は
 子Featureを初期選択するが、保存状態は各Featureの明示的な割当として扱い、親子の暗黙継承に
 依存しない。Featureには業務設定値入力欄を設けない。
+
+Roleに紐づくFeatureマスタ`RoleFeature`(`role_features`テーブル)を持ち、グループへのRole割当時に
+そのグループの有効Feature(`GroupFeatureAssignment`)へRole保有Featureが自動同期される
+(Role→Feature自動適用、`GroupFeatureSyncService`)。ユーザー個人への直接Role割当は
+引き続きFeatureを補完しない。
 
 ## 31.8 Role・Permission・Scope
 

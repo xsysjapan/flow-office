@@ -54,7 +54,6 @@ import { MyIntegrationsPage } from "./pages/integrations/MyIntegrationsPage";
 import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
 import {
-  AccessControlManagementPage,
   IdentitySettingsPage,
   MembershipChangesPage,
   UserManagementAccessPage,
@@ -63,6 +62,7 @@ import {
 import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
+import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
 
 function App() {
   return (
@@ -154,8 +154,13 @@ function App() {
           <Route path="hr-import" element={<UserOperationsPage />} />
           <Route
             path="access-control"
-            element={<AccessControlManagementPage />}
+            element={<Navigate to="/admin/access/roles" replace />}
           />
+          <Route
+            path="access/assignments"
+            element={<Navigate to="/admin/access/roles" replace />}
+          />
+          <Route path="access/roles" element={<RoleDefinitionPage />} />
           <Route path="identity-settings" element={<IdentitySettingsPage />} />
           <Route path="group-types" element={<GroupTypeManagementPage />} />
           <Route path="request-types" element={<RequestTypeListPage />} />

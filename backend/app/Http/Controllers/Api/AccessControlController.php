@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\AccessControl\Commands\AssignFeatureToGroup;
+use App\Domain\AccessControl\Commands\ChangeRoleFeatures;
 use App\Domain\AccessControl\Commands\ChangeRolePermissions;
 use App\Domain\AccessControl\Commands\CreateRole;
 use App\Domain\AccessControl\Commands\CreateRoleAssignment;
-use App\Domain\AccessControl\Commands\RemoveFeatureFromGroup;
 use App\Domain\AccessControl\Commands\RemoveRoleAssignment;
 use App\Domain\AccessControl\Commands\RemoveUserFeatureSuspension;
 use App\Domain\AccessControl\Commands\SuspendUserFeature;
@@ -47,7 +46,7 @@ class AccessControlController extends Controller
 
     public function roles(): JsonResponse
     {
-        $roles = Role::query()->with('permissions')->orderBy('id')->get();
+        $roles = Role::query()->with('permissions', 'features')->orderBy('id')->get();
         $roles->each(fn (Role $role) => $role->permissions->each(
             fn (Permission $permission) => $permission->setAttribute('allowed_scope_types', $permission->allowedScopeTypes())
         ));
@@ -110,23 +109,6 @@ class AccessControlController extends Controller
         return response()->json(['id' => $created->id], 201);
     }
 
-    public function assignFeature(Request $r, CommandBus $bus): JsonResponse
-    {
-        $this->assertGroupAllowed($r, (string) $r->route('group'));
-        $d = $r->validate(['feature_id' => ['required', 'integer']]);
-        $bus->dispatch(new AssignFeatureToGroup($r->route('group'), $d['feature_id'], $r->user()->id));
-
-        return response()->json([], 201);
-    }
-
-    public function removeFeature(Request $r, string $group, int $feature, CommandBus $bus): JsonResponse
-    {
-        $this->assertGroupAllowed($r, $group);
-        $bus->dispatch(new RemoveFeatureFromGroup($group, $feature, $r->user()->id));
-
-        return response()->json([], 200);
-    }
-
     public function suspendFeature(Request $r, CommandBus $bus): JsonResponse
     {
         $d = $r->validate(['user_id' => ['required', 'uuid', 'exists:users,id'], 'feature_id' => ['required', 'integer', 'exists:features,id'], 'reason' => ['required', 'string', 'max:1000'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date']]);
@@ -179,6 +161,15 @@ class AccessControlController extends Controller
         $this->assertGlobal($r);
         $d = $r->validate(['permission_ids' => ['array'], 'permission_ids.*' => ['integer', 'distinct']]);
         $bus->dispatch(new ChangeRolePermissions($role, $d['permission_ids'] ?? [], $r->user()->id));
+
+        return response()->json([], 200);
+    }
+
+    public function updateRoleFeatures(Request $r, int $role, CommandBus $bus): JsonResponse
+    {
+        $this->assertGlobal($r);
+        $d = $r->validate(['feature_ids' => ['array'], 'feature_ids.*' => ['integer', 'distinct']]);
+        $bus->dispatch(new ChangeRoleFeatures($role, $d['feature_ids'] ?? [], $r->user()->id));
 
         return response()->json([], 200);
     }

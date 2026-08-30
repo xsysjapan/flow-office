@@ -133,14 +133,13 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/roles', [AccessControlController::class, 'storeRole'])->middleware('permission:role.create,any');
         Route::post('/roles/{role}/clone', [AccessControlController::class, 'cloneRole'])->middleware('permission:role.create,any');
         Route::patch('/roles/{role}', [AccessControlController::class, 'updateRole'])->middleware('permission:role.update,any');
-        Route::post('/groups/{group}/features', [AccessControlController::class, 'assignFeature'])->middleware('permission:feature.assign');
-        Route::delete('/groups/{group}/features/{feature}', [AccessControlController::class, 'removeFeature'])->middleware('permission:feature.assign');
         Route::post('/feature-suspensions', [AccessControlController::class, 'suspendFeature'])->middleware('permission:feature.assign,any');
         Route::delete('/feature-suspensions/{suspension}', [AccessControlController::class, 'removeSuspension'])->middleware('permission:feature.assign,any');
         Route::post('/role-assignments', [AccessControlController::class, 'storeRoleAssignment'])->middleware('permission:role.assign,any');
         Route::delete('/role-assignments/{assignment}', [AccessControlController::class, 'destroyRoleAssignment'])->middleware('permission:role.assign,any');
         Route::patch('/role-assignments/{assignment}', [AccessControlController::class, 'updateRoleAssignment'])->middleware('permission:role.assign,any');
         Route::put('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->middleware('permission:role.update,any');
+        Route::put('/roles/{role}/features', [AccessControlController::class, 'updateRoleFeatures'])->middleware('permission:role.update,any');
     });
     // --- ユーザー・権限管理 (docs/15-usecases-admin.md UC-M001) ---
     // 入社日・退社日・雇用区分を含む一覧・詳細も実効Permissionで制御する。
