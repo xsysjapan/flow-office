@@ -114,6 +114,20 @@ class AssetApiTest extends TestCase
         $response->assertJsonPath('id', $asset->id);
     }
 
+    public function test_asset_detail_response_includes_qr_url_built_from_qr_token(): void
+    {
+        $user = User::factory()->create();
+        $asset = $this->registerAsset($user);
+
+        $response = $this->actingAs($user)->getJson("/api/assets/{$asset->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath(
+            'qr_url',
+            rtrim(config('app.frontend_url'), '/')."/assets/qr/{$asset->qr_token}"
+        );
+    }
+
     public function test_asset_history_returns_registration_event(): void
     {
         $user = User::factory()->create();

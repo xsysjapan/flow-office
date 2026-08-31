@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\FrontendUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,6 +28,7 @@ class AssetResource extends JsonResource
             'lending_method' => $this->lending_method,
             'default_location_text' => $this->default_location_text,
             'qr_token' => $this->qr_token,
+            'qr_url' => FrontendUrl::path("/assets/qr/{$this->qr_token}"),
             'current_loan_id' => $this->current_loan_id,
             'notes' => $this->notes,
             'current_loan' => $this->when($this->current_loan_id !== null, function () {

@@ -55,6 +55,7 @@ import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
 import { AssetListPage } from "./pages/asset/AssetListPage";
 import { AssetDetailPage } from "./pages/asset/AssetDetailPage";
+import { AssetQrRedirectPage } from "./pages/asset/AssetQrRedirectPage";
 import { AssetRegisterPage } from "./pages/asset/AssetRegisterPage";
 import { AssetEditPage } from "./pages/asset/AssetEditPage";
 import { SelfBulkLoanPage } from "./pages/asset/bulk/SelfBulkLoanPage";
@@ -143,6 +144,7 @@ function App() {
         <Route path="assets/bulk/lend" element={<BackofficeBulkLendPage />} />
         <Route path="assets/bulk/return" element={<BackofficeBulkReturnPage />} />
         <Route path="assets/bulk/relocate" element={<BulkRelocatePage />} />
+        <Route path="assets/qr/:token" element={<AssetQrRedirectPage />} />
         <Route path="assets/:id" element={<AssetDetailPage />} />
         <Route path="assets/:id/edit" element={<AssetEditPage />} />
         <Route path="account" element={<AccountSettingsPage />} />

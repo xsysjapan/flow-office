@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as assetApi from '../../../api/asset'
 import type { Asset } from '../../../api/types'
@@ -16,6 +17,44 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 vi.mock('../../../auth/useAuth', () => ({
   useAuth: () => ({ user: { id: 'user-1', name: '山田太郎', effective_permissions: [] } }),
+}))
+
+vi.mock('../../../components/AssetPicker/AssetPicker', () => ({
+  AssetPicker: ({
+    id,
+    label,
+    onSubmit,
+    isPending,
+    disabled,
+    disabledReason,
+  }: {
+    id: string
+    label: string
+    onSubmit: (value: string) => Promise<void> | void
+    isPending?: boolean
+    disabled?: boolean
+    disabledReason?: string
+  }) => {
+    const [value, setValue] = useState('')
+    return (
+      <div>
+        <label htmlFor={id}>{label}</label>
+        <input id={id} value={value} onChange={(e) => setValue(e.target.value)} disabled={disabled} />
+        <button
+          type="button"
+          disabled={disabled || isPending || !value.trim()}
+          onClick={async () => {
+            if (!value.trim() || isPending || disabled) return
+            await onSubmit(value)
+            setValue('')
+          }}
+        >
+          追加
+        </button>
+        {disabled && disabledReason && <p>{disabledReason}</p>}
+      </div>
+    )
+  },
 }))
 
 function renderPage() {
@@ -42,6 +81,7 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     lending_method: 'self_service',
     default_location_text: '本社4F',
     qr_token: 'qr-token-1',
+    qr_url: 'https://example.com/assets/qr/qr-token-1',
     current_loan_id: 'loan-1',
     current_loan: {
       id: 'loan-1',

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../auth/useAuth'
-import { AssetScanInput } from '../../../components/AssetScanInput/AssetScanInput'
+import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
 import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
@@ -13,8 +13,8 @@ import type { AssetBulkOperationResult } from '../../../api/asset'
 
 /**
  * セルフ一括貸出(spec「50. QR操作画面」「一括QR操作API」)。対象はself_service方式かつ
- * 貸出可能な備品のみ。QRカメラスキャンは未実装(このファイル冒頭ではなく`AssetScanInput`側の
- * コメント参照)。1件ずつ`resolveAssetByScanInput`→適格性検証を行い、有効なものだけ
+ * 貸出可能な備品のみ。管理番号検索・QRカメラ読み取りは`AssetPicker`が担う(spec 論点12)。
+ * 1件ずつ`resolveAssetByScanInput`→適格性検証を行い、有効なものだけ
  * 対象リストに追加する。確定は`POST /assets/bulk`を1回だけ呼ぶ(部分成功あり)。
  */
 export function SelfBulkLoanPage() {
@@ -72,7 +72,7 @@ export function SelfBulkLoanPage() {
           {user?.name ?? '自分'}自身への一括貸出です。セルフサービス方式の備品のみ対象にできます。
         </p>
 
-        <AssetScanInput
+        <AssetPicker
           id="self-bulk-loan-scan"
           label="貸出対象に追加する備品"
           onSubmit={handleScan}

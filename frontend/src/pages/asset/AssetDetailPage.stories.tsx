@@ -46,6 +46,7 @@ const lendingAsset: Asset = {
   lending_method: 'self_service',
   default_location_text: '本社4F',
   qr_token: 'qr-token-1',
+  qr_url: 'https://example.com/assets/qr/qr-token-1',
   current_loan_id: 'loan-1',
   notes: '付属品: 充電器',
   current_loan: {
@@ -85,6 +86,7 @@ const installationAsset: Asset = {
   lending_method: null,
   default_location_text: null,
   qr_token: 'qr-token-2',
+  qr_url: 'https://example.com/assets/qr/qr-token-2',
   current_loan_id: null,
   notes: null,
   current_placement: { location_text: '会議室A', started_at: '2026-08-01T00:00:00+09:00' },

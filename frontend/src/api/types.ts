@@ -1772,6 +1772,7 @@ export interface Asset {
   /** 貸出備品の「通常配置場所」。設置備品では使わない。 */
   default_location_text: string | null;
   qr_token: string;
+  qr_url: string;
   current_loan_id: string | null;
   notes: string | null;
   current_loan?: AssetLoan | null;

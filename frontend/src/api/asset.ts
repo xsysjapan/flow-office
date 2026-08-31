@@ -74,17 +74,29 @@ export function getAssetLoanRequests(
 }
 
 /**
+ * QRの中身がURL形式(`.../assets/qr/{token}`)の場合に末尾のtokenを抽出する(spec 論点7-2・
+ * 論点12)。URL形式でなければそのまま返す(QRトークンの直接文字列・管理番号の場合)。
+ */
+function extractQrToken(input: string): string {
+  const match = input.match(/\/assets\/qr\/([^/?#]+)\/?$/)
+  return match ? decodeURIComponent(match[1]) : input
+}
+
+/**
  * QR一括操作画面(spec「50. QR操作画面」「一括QR操作API」)でのスキャン(または管理番号
- * 手入力)1件分の解決処理。QRトークン文字列としてまず解決を試み、404の場合は管理番号の
- * 完全一致検索にフォールバックする(spec 31番「QR以外の操作」: 管理番号入力でも同じ操作が
- * できること)。どちらでも見つからない場合はErrorを投げる。
+ * 手入力)1件分の解決処理。QRの中身はURL形式(`.../assets/qr/{token}`)・QRトークン文字列
+ * いずれの場合もまずトークンとして解決を試み、404の場合は管理番号の完全一致検索に
+ * フォールバックする(spec 31番「QR以外の操作」: 管理番号入力でも同じ操作ができること)。
+ * どちらでも見つからない場合はErrorを投げる。
  */
 export async function resolveAssetByScanInput(input: string): Promise<Asset> {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('管理番号またはQRトークンを入力してください。')
 
+  const token = extractQrToken(trimmed)
+
   try {
-    return await getAssetByQrToken(trimmed)
+    return await getAssetByQrToken(token)
   } catch (e) {
     if (!(e instanceof ApiError) || e.status !== 404) throw e
   }

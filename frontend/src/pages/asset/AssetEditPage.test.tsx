@@ -39,6 +39,7 @@ const asset: Asset = {
   lending_method: 'backoffice',
   default_location_text: null,
   qr_token: 'qr-token-1',
+  qr_url: 'https://example.com/assets/qr/qr-token-1',
   current_loan_id: null,
   notes: '付属品: 充電器',
   created_at: '2026-08-01T00:00:00+09:00',

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../auth/useAuth'
 import type { AssetBulkOperationResult } from '../../../api/asset'
 import type { Asset } from '../../../api/types'
-import { AssetScanInput } from '../../../components/AssetScanInput/AssetScanInput'
+import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
 import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
@@ -88,7 +88,7 @@ export function BulkRelocatePage() {
           </FormField>
         </div>
 
-        <AssetScanInput
+        <AssetPicker
           id="bulk-relocate-scan"
           label="移設対象に追加する備品"
           onSubmit={handleScan}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../auth/useAuth'
 import type { AssetBulkOperationResult } from '../../../api/asset'
 import type { Asset } from '../../../api/types'
-import { AssetScanInput } from '../../../components/AssetScanInput/AssetScanInput'
+import { AssetPicker } from '../../../components/AssetPicker/AssetPicker'
 import { Badge } from '../../../components/Badge/Badge'
 import { Button } from '../../../components/Button/Button'
 import { Card } from '../../../components/Card/Card'
@@ -69,7 +69,7 @@ export function SelfBulkReturnPage() {
           自分が現在借用中の備品を一括返却します。返却先(通常配置場所)ごとにグループ表示します。
         </p>
 
-        <AssetScanInput
+        <AssetPicker
           id="self-bulk-return-scan"
           label="返却対象に追加する備品"
           onSubmit={handleScan}

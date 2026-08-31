@@ -31,6 +31,7 @@ const lendingAsset: Asset = {
   lending_method: 'self_service',
   default_location_text: '本社4F',
   qr_token: 'qr-token-1',
+  qr_url: 'https://example.com/assets/qr/qr-token-1',
   current_loan_id: 'loan-1',
   notes: '付属品: 充電器',
   current_loan: {
@@ -124,7 +125,7 @@ describe('AssetDetailPage', () => {
 
     renderPage()
 
-    expect(await screen.findByText('EQ-00121')).toBeInTheDocument()
+    expect((await screen.findAllByText('EQ-00121')).length).toBeGreaterThan(0)
     expect(screen.getByText('貸出中')).toBeInTheDocument()
     expect(screen.getByText('山田太郎')).toBeInTheDocument()
     expect(screen.getByText('本社4F')).toBeInTheDocument()

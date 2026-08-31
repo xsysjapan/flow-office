@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import type { Asset } from '../../api/types'
 import { useAuth } from '../../auth/useAuth'
+import { AssetQrLabel } from '../../components/AssetQrLabel/AssetQrLabel'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -463,10 +464,22 @@ export function AssetDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/assets" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+      {/* spec 論点7-2: 印刷時(コンビニのネットプリント等)は`.no-print`要素を隠し、
+          QRラベル(`.asset-qr-print-area`)だけが用紙に収まるようにする。 */}
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      <Link
+        to="/assets"
+        className="no-print text-sm text-muted-foreground hover:text-foreground hover:underline"
+      >
         ← 一覧へ戻る
       </Link>
 
+      <div className="no-print">
       <Card
         title={`${asset.name} / ${asset.asset_no}`}
         actions={
@@ -792,6 +805,14 @@ export function AssetDetailPage() {
           </div>
         </div>
       </Card>
+      </div>
+
+      <div className="asset-qr-print-area flex flex-col items-start gap-3">
+        <Button variant="secondary" size="sm" className="no-print" onClick={() => window.print()}>
+          印刷
+        </Button>
+        <AssetQrLabel qrUrl={asset.qr_url} assetNo={asset.asset_no} name={asset.name} />
+      </div>
     </div>
   )
 }
