@@ -76,9 +76,13 @@ UC-L02と同じ`POST /assets/{asset}/return`を使う。Permission不要のた�
 
 **画面**: `SelfBulkLoanPage`(`frontend/src/pages/asset/bulk/`)
 
-1. 社員が備品のQRコードを次々にスキャンし、フロント側のローカル状態に対象リストを追加する
-   (サーバーには何も保存しない。スキャン都度`GET /assets/{asset}/loan-eligibility`等で
-   適格性を検証できる)
+1. 社員が備品ピッカー(`AssetPicker`、`frontend/src/components/AssetPicker/AssetPicker.tsx`)
+   でテキスト検索(管理番号の部分一致)またはカメラでのQRスキャン(`@zxing/browser`を
+   使用)により対象を次々に追加し、フロント側のローカル状態に対象リストを積み上げる
+   (サーバーには何も保存しない。追加都度`GET /assets/{asset}/loan-eligibility`等で
+   適格性を検証できる)。この画面は複数選択できるため、QRリーダーの「連続読み取り」
+   トグルが常に表示・有効になっており、オンにすると1件読み取ってもリーダーを開いたまま
+   次のスキャンを続けられる(オフの場合は1件読み取るとリーダー・ポップアップが閉じる)
 2. 「確定」を押すと`POST /assets/bulk`を`operation=self_loan`・`asset_ids`配列で1回呼ぶ
 3. `AssetBulkOperationController`がループで各`asset_id`に`LendAsset`を発行する
    (`borrower_user_id`は常に呼び出し本人。`lending_method`が`self_service`でない備品は
@@ -249,15 +253,29 @@ UC-L05と同じ確定パターンで、`POST /assets/bulk`を`operation=relocate
   のまま行を残し、検索・一覧対象にも表示する(削除とは異なる)。
 - **QRコード再発行**: `POST /assets/{asset}/qr-code/reissue`→`ReissueAssetQrCode`→
   `asset.qr_code_reissued`。`qr_token`のみ新しいランダム値に差し替え、`asset_no`・履歴は
-  変更しない。QR画像自体はフロントエンドでレンダリングし(サーバーはトークンのみ払い出す)、
-  QRの中身は名称・状態等の可変情報を含まない識別URLとする。
+  変更しない。QRの中身は`qr_token`そのものではなく、`App\Support\FrontendUrl::path()`で
+  組み立てた完全なURL(`AssetResource.qr_url`、`/assets/qr/{qr_token}`形式。既存の
+  デバイスペアリングQRの`claim_url`と同じ組み立て方)であり、名称・状態等の可変情報は
+  含まない識別URLとする。スマホのカメラでQRラベルを直接読み取って開くと、フロントエンドの
+  `/assets/qr/:token`ルート(`AssetQrRedirectPage`)が`GET /assets/by-qr/{token}`で
+  トークンから資産を解決し、備品詳細画面(`/assets/{id}`)へリダイレクトする(未ログイン時は
+  既存の保護ルートの仕組みによりログイン後に同URLへ戻る)。QR画像自体はフロントエンドで
+  レンダリングする(サーバーはトークン・URLのみ払い出す)。
 
 ## 検索・参照(Permission不要)
 
 - `GET /assets`: カテゴリ・管理区分・状態・貸出方式・申請状況等で絞り込んで検索する
   (`AssetListPage`)。
-- `GET /assets/{asset}`: 備品詳細(`AssetDetailPage`)。
-- `GET /assets/by-qr/{qrToken}`: QRコードから備品詳細へ遷移する。
+- `GET /assets/{asset}`: 備品詳細(`AssetDetailPage`)。QR画像
+  (`frontend/src/components/AssetQrLabel/AssetQrLabel.tsx`、`qrcode.react`の
+  `QRCodeSVG`を使用)を表示する画面はこの備品詳細画面のみで、`qr_url`をQRの値として
+  描画する。物理的な備品ラベルとしてコンビニのネットプリント等でそのまま出力できる
+  ことを想定し、QR+管理番号+名称の大きめ表示で`@media print`に対応した印刷向け
+  レイアウトになっている(端末ペアリングQR(`DevicePairingQr`)のような画面間連携用途
+  ではなく、印刷してモノに貼るためのものである点が異なる)。
+- `GET /assets/by-qr/{qrToken}`: QRコードから備品詳細へ遷移する(`AssetQrRedirectPage`が
+  使う)。レスポンスの`AssetResource`は`qr_token`に加え、`qr_url`(`/assets/qr/{qr_token}`
+  形式の完全なURL)フィールドも返す。
 - `GET /assets/{asset}/history`: `stored_events`から再構成した操作履歴。
 - `GET /assets/{asset}/loan-eligibility`: QR一括操作のスキャン時点で、対象備品が指定操作の
   対象になり得るかを軽量に検証する(サーバー側にセッション状態は持たない)。
