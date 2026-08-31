@@ -1,6 +1,6 @@
 # 備品管理機能の追加
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -675,3 +675,19 @@ EventStoreに正として残す。既存の経費・勤怠・申請ワークフ�
     `docs/26-usecases-monthly-import.md`と衝突するため34番を採用)、
     `docs/16-database-schema.md`・`docs/17-events.md`・`docs/05-user-roles.md`・
     `docs/10-usecases-workflow.md`・`docs/README.md`を実装済みコードに基づき更新。
+- フェーズ5(2026-08-31実装、QR URL化・備品ピッカー):
+  - `AssetResource`に`qr_url`(`FrontendUrl::path`で組み立てた`/assets/qr/{qr_token}`
+    形式の完全URL)を追加。
+  - フロントに`/assets/qr/:token`ルート(`AssetQrRedirectPage`)を新設し、QRを直接開くと
+    備品詳細画面へリダイレクトするようにした。
+  - `AssetQrLabel`コンポーネントを新規作成し、備品詳細画面のみでQR画像
+    (`qrcode.react`、`qr_url`をエンコード)を印刷向けレイアウトで表示するようにした
+    (コンビニのネットプリント等での出力を想定)。
+  - `AssetPicker`コンポーネント(`@zxing/browser`使用、テキスト検索+カメラQR読み取り
+    両対応、連続読み取りトグル付き)を新規実装し、一括操作5画面の`AssetScanInput`
+    (テキスト入力のみ)を完全に置き換えた。
+  - `docs/34-usecases-asset-management.md`をQR URL化・AssetPicker導入の内容に合わせて
+    更新。
+  - バックエンド901件・フロントエンド(備品関連)51件通過、build/build-storybook成功。
+- 最終監査(2026-08-31): spec.mdの仕様確定事項・対象外項目と実装済みコードを再度突き合わせ、
+  抜け漏れが無いことを確認した。
