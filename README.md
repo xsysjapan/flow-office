@@ -39,6 +39,27 @@ DBを維持して3サービスだけを再起動する場合は`task start`を�
   (`http://localhost:9000`) だけを起動し、backend/frontendは [CLAUDE.md](CLAUDE.md) の手順で
   ホスト上に直接セットアップする。
 
+### CodeGraphのクロス環境利用
+
+CodeGraphはグローバルにインストールされている前提ではなく、必要時に自動導入できるように
+`npx --yes codegraph ...` を使う構成にしている。これにより、ローカルPC・Dev Container・Claude
+Cloudなど、Node.jsが使える環境で同じ手順を利用できる。
+
+```bash
+# プロジェクトを初期化してインデックスを作成
+npx --yes codegraph init .
+
+# Claude CodeへMCPを導入
+npx --yes codegraph install --target=claude --location=local
+
+# 既にインストール済みのClaude hookを更新
+npx --yes codegraph install --target=claude --location=local --refresh
+```
+
+`npx` を使うので、環境に `codegraph` コマンドが入っていなくても自動で最新バージョンを
+取得し、必要に応じて導入できる。リポジトリの `.mcp.json` と `.claude/settings.json` は
+この方式を前提にしている。
+
 ### Entra ID SSOのローカルモック (`mock-oidc/`)
 
 実際のMicrosoft Entra IDの代わりにログインできる開発用モックOIDCサーバーを同梱している
