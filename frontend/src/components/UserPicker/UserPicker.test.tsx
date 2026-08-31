@@ -60,7 +60,24 @@ describe('UserPicker', () => {
     await userEvent.click(screen.getByRole('combobox'))
 
     expect(await screen.findByRole('option', { name: '承認者花子(hanako@example.com)' })).toBeInTheDocument()
-    expect(usersApi.searchUsers).toHaveBeenCalledWith('', 100)
+    expect(usersApi.searchUsers).toHaveBeenCalledWith('', 100, undefined)
+  })
+
+  it('passes the permission prop through to narrow the candidate search', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(paginatedUsers)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UserPicker id="approver" value={undefined} onChange={vi.fn()} permission="asset.manage" />
+      </QueryClientProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('combobox'))
+
+    await waitFor(() =>
+      expect(usersApi.searchUsers).toHaveBeenCalledWith('', 100, 'asset.manage'),
+    )
   })
 
   it('matches the trigger width and constrains long content', async () => {

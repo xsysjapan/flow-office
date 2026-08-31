@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\AttendanceImportPreviewController;
 use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AttendanceSubmissionReminderExclusionController;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\Asset\AssetBulkOperationController;
+use App\Http\Controllers\Api\Asset\AssetController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
@@ -164,8 +166,43 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::post('/workflow-requests/{workflowRequest}/submit', [WorkflowRequestController::class, 'submit']);
     Route::post('/workflow-requests/{workflowRequest}/approve', [WorkflowRequestController::class, 'approve'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/return', [WorkflowRequestController::class, 'return'])->middleware('permission:approval.execute');
+    Route::post('/workflow-requests/{workflowRequest}/reject', [WorkflowRequestController::class, 'reject'])->middleware('permission:approval.execute');
     Route::post('/workflow-requests/{workflowRequest}/cancel', [WorkflowRequestController::class, 'cancel']);
     Route::get('/workflow-requests/{workflowRequest}/history', [WorkflowRequestController::class, 'history']);
+
+    // --- 備品管理 (docs/changesets/20260830-equipment-management/spec.md) ---
+    // 検索・詳細・QR参照・履歴・貸与可否検証はPermission不要(認証済みユーザーなら誰でも)。
+    Route::get('/assets', [AssetController::class, 'index']);
+    Route::get('/assets/by-qr/{qrToken}', [AssetController::class, 'showByQrToken']);
+    Route::get('/assets/{asset}', [AssetController::class, 'show']);
+    Route::get('/assets/{asset}/history', [AssetController::class, 'history']);
+    Route::get('/assets/{asset}/loan-eligibility', [AssetController::class, 'loanEligibility']);
+    // 貸与時の申請選択UI(spec 論点2-3)向け。asset.manage検証はController内で行う
+    // (対象資産に紐づく承認済み申請一覧の取得に限定するため他のasset.manage系と同列)。
+    Route::get('/assets/{asset}/loan-requests', [AssetController::class, 'loanRequests']);
+    Route::post('/assets', [AssetController::class, 'store'])->middleware('permission:asset.manage,any');
+    Route::patch('/assets/{asset}', [AssetController::class, 'update'])->middleware('permission:asset.manage,any');
+    Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/management-type', [AssetController::class, 'changeManagementType'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/lending-method', [AssetController::class, 'changeLendingMethod'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/qr-code/reissue', [AssetController::class, 'reissueQrCode'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/default-location', [AssetController::class, 'setDefaultLocation'])->middleware('permission:asset.manage,any');
+    // lend/returnは本人性・貸出方式に応じた認可をController内で行うため、ルートレベルでは
+    // permissionミドルウェアを付けない(spec「貸出方式(lending_method)とLendAsset呼び出し条件」)。
+    Route::post('/assets/{asset}/lend', [AssetController::class, 'lend']);
+    Route::post('/assets/{asset}/return', [AssetController::class, 'returnAsset']);
+    Route::post('/assets/{asset}/install', [AssetController::class, 'install'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/relocate', [AssetController::class, 'relocate'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/remove-from-installation', [AssetController::class, 'removeFromInstallation'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/repair/start', [AssetController::class, 'startRepair'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/repair/complete', [AssetController::class, 'completeRepair'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/lost', [AssetController::class, 'reportLost'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/recover', [AssetController::class, 'recover'])->middleware('permission:asset.manage,any');
+    Route::post('/assets/{asset}/dispose', [AssetController::class, 'dispose'])->middleware('permission:asset.manage,any');
+    // 一括QR操作: backoffice_lend/relocateはController内でasset.manageを検証する
+    // (operationごとに要件が異なるため、ルートレベルでは付けない)。
+    Route::post('/assets/bulk', [AssetBulkOperationController::class, 'store']);
+    Route::get('/users/{user}/asset-loans', [AssetController::class, 'loansForUser']);
 
     // --- 通知 (docs/13-usecases-notification.md UC-N001) ---
     Route::get('/notifications/mine', [NotificationController::class, 'indexMine']);

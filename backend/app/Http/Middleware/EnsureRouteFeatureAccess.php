@@ -35,6 +35,9 @@ class EnsureRouteFeatureAccess
     {
         return match (true) {
             $path === 'users/search' => null,
+            // 自分自身の現在の貸与品確認(spec docs/34「36. ユーザー単位の貸与確認」)は
+            // Permission不要の基本操作であり、`administration.users`Featureの対象外とする。
+            preg_match('#^users/[^/]+/asset-loans$#', $path) === 1 => null,
             str_starts_with($path, 'attendance/clock-'), str_starts_with($path, 'attendance/break/') => 'attendance.clock',
             str_starts_with($path, 'attendance/month'), str_starts_with($path, 'exports/attendance') => 'attendance.timesheet',
             str_starts_with($path, 'attendance'), str_starts_with($path, 'work-calendars'), str_starts_with($path, 'work-styles'), str_starts_with($path, 'shift-patterns'), str_starts_with($path, 'rotation-patterns'), str_starts_with($path, 'employee-shift'), str_starts_with($path, 'employee-rotation'), str_starts_with($path, 'user-work-style'), str_starts_with($path, 'employment-categories'), str_starts_with($path, 'admin/work-'), str_starts_with($path, 'admin/shifts'), str_starts_with($path, 'admin/attendance') => 'attendance.entry',

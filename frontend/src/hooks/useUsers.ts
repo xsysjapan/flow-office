@@ -33,11 +33,24 @@ export function useUsers(
   });
 }
 
-/** 承認者選択(UserPicker)等、一般社員も使う軽量な検索。 */
-export function useUserSearch(query?: string, perPage?: number) {
+/**
+ * 承認者選択(UserPicker)等、一般社員も使う軽量な検索。
+ * `permission`を指定すると、globalスコープで当該Permissionを保有するユーザーのみに絞り込む。
+ */
+export function useUserSearch(
+  query?: string,
+  perPage?: number,
+  permission?: string,
+) {
   return useQuery({
-    queryKey: ["users", "search", query ?? "", perPage ?? "default"],
-    queryFn: () => searchUsers(query, perPage),
+    queryKey: [
+      "users",
+      "search",
+      query ?? "",
+      perPage ?? "default",
+      permission ?? "",
+    ],
+    queryFn: () => searchUsers(query, perPage, permission),
     placeholderData: keepPreviousData,
   });
 }

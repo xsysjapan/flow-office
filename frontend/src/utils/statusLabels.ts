@@ -1,5 +1,11 @@
 import type { BadgeTone } from '../components/Badge/Badge'
 import type {
+  Asset,
+  AssetInstallationStatus,
+  AssetLendingMethod,
+  AssetLendingStatus,
+  AssetLoanRequestStatus,
+  AssetManagementType,
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
@@ -27,6 +33,7 @@ const workflowRequestStatusMeta: Record<WorkflowRequestStatus, StatusMeta> = {
   approved: { label: '承認済み', tone: 'success' },
   returned: { label: '差戻し', tone: 'warning' },
   cancelled: { label: '取消', tone: 'danger' },
+  rejected: { label: '却下', tone: 'danger' },
 }
 
 const attendanceMonthStatusMeta: Record<AttendanceMonthStatus, StatusMeta> = {
@@ -430,4 +437,101 @@ const workflowRequestHistoryActionLabels: Record<string, string> = {
 
 export function workflowRequestHistoryActionLabel(action: string): string {
   return workflowRequestHistoryActionLabels[action] ?? action
+}
+
+// --- 備品管理 (docs/changesets/20260830-equipment-management/spec.md) ---
+
+const assetManagementTypeLabels: Record<AssetManagementType, string> = {
+  lending: '貸出品',
+  installation: '設置品',
+}
+
+export function assetManagementTypeLabel(type: AssetManagementType): string {
+  return assetManagementTypeLabels[type]
+}
+
+const assetLendingMethodLabels: Record<AssetLendingMethod, string> = {
+  self_service: 'セルフ貸出',
+  backoffice: 'バックオフィス貸与',
+  approval: '承認制',
+}
+
+export function assetLendingMethodLabel(method: AssetLendingMethod): string {
+  return assetLendingMethodLabels[method]
+}
+
+const assetLendingStatusMeta: Record<AssetLendingStatus, StatusMeta> = {
+  available: { label: '利用可能', tone: 'success' },
+  loaned: { label: '貸出中', tone: 'info' },
+  repair: { label: '修理中', tone: 'warning' },
+  lost: { label: '紛失', tone: 'danger' },
+  disposed: { label: '廃棄済み', tone: 'neutral' },
+}
+
+export function assetLendingStatusLabel(status: AssetLendingStatus): StatusMeta {
+  return assetLendingStatusMeta[status]
+}
+
+const assetInstallationStatusMeta: Record<AssetInstallationStatus, StatusMeta> = {
+  stored: { label: '保管中', tone: 'neutral' },
+  installed: { label: '設置中', tone: 'success' },
+  repair: { label: '修理中', tone: 'warning' },
+  lost: { label: '紛失', tone: 'danger' },
+  disposed: { label: '廃棄済み', tone: 'neutral' },
+}
+
+export function assetInstallationStatusLabel(status: AssetInstallationStatus): StatusMeta {
+  return assetInstallationStatusMeta[status]
+}
+
+const assetLoanRequestStatusMeta: Record<AssetLoanRequestStatus, StatusMeta> = {
+  pending: { label: '承認待ち', tone: 'info' },
+  approved: { label: '承認済み(未貸与)', tone: 'success' },
+  rejected: { label: '却下', tone: 'danger' },
+  withdrawn: { label: '取下げ', tone: 'neutral' },
+  cancelled: { label: '取消', tone: 'danger' },
+  lent: { label: '貸与済み', tone: 'success' },
+}
+
+export function assetLoanRequestStatusLabel(status: AssetLoanRequestStatus): StatusMeta {
+  return assetLoanRequestStatusMeta[status]
+}
+
+/** 一覧行の「現在の状況」1セル分の要約(spec「UI設計方針」相当: 貸出中なら誰へ、
+ *  設置品なら設置場所、それ以外は状態バッジのラベルのみ)。 */
+export function assetStatusSummary(asset: Pick<Asset, 'management_type' | 'lending_status' | 'installation_status' | 'current_loan' | 'current_placement'>): string {
+  if (asset.management_type === 'lending') {
+    if (asset.lending_status === 'loaned') {
+      return `貸出中: ${asset.current_loan?.borrower?.name ?? '不明'}`
+    }
+    return asset.lending_status ? assetLendingStatusLabel(asset.lending_status).label : ''
+  }
+  if (asset.installation_status === 'installed') {
+    return `設置中: ${asset.current_placement?.location_text ?? '不明'}`
+  }
+  return asset.installation_status ? assetInstallationStatusLabel(asset.installation_status).label : ''
+}
+
+const assetHistoryEventTypeLabels: Record<string, string> = {
+  'asset.registered': '登録',
+  'asset.details_updated': '詳細編集',
+  'asset.deleted': '削除',
+  'asset.management_type_changed': '管理区分変更',
+  'asset.lending_method_changed': '貸出方式変更',
+  'asset.qr_code_reissued': 'QRコード再発行',
+  'asset.default_location_set': '通常配置場所設定',
+  'asset.loaned': '貸与',
+  'asset.returned': '返却',
+  'asset.installed': '設置',
+  'asset.relocated': '移設',
+  'asset.removed_from_installation': '撤去',
+  'asset.repair_started': '修理開始',
+  'asset.repair_completed': '修理完了',
+  'asset.reported_lost': '紛失登録',
+  'asset.recovered_from_lost': '発見',
+  'asset.disposed': '廃棄',
+}
+
+export function assetHistoryEventTypeLabel(eventType: string): string {
+  return assetHistoryEventTypeLabels[eventType] ?? eventType
 }

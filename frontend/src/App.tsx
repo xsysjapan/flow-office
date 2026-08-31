@@ -53,6 +53,16 @@ import { ExternalIntegrationConnectionsPage } from "./pages/admin/ExternalIntegr
 import { MyIntegrationsPage } from "./pages/integrations/MyIntegrationsPage";
 import { NotificationsPage } from "./pages/notifications/NotificationsPage";
 import { AccountSettingsPage } from "./pages/account/AccountSettingsPage";
+import { AssetListPage } from "./pages/asset/AssetListPage";
+import { AssetDetailPage } from "./pages/asset/AssetDetailPage";
+import { AssetQrRedirectPage } from "./pages/asset/AssetQrRedirectPage";
+import { AssetRegisterPage } from "./pages/asset/AssetRegisterPage";
+import { AssetEditPage } from "./pages/asset/AssetEditPage";
+import { SelfBulkLoanPage } from "./pages/asset/bulk/SelfBulkLoanPage";
+import { SelfBulkReturnPage } from "./pages/asset/bulk/SelfBulkReturnPage";
+import { BackofficeBulkLendPage } from "./pages/asset/bulk/BackofficeBulkLendPage";
+import { BackofficeBulkReturnPage } from "./pages/asset/bulk/BackofficeBulkReturnPage";
+import { BulkRelocatePage } from "./pages/asset/bulk/BulkRelocatePage";
 import {
   IdentitySettingsPage,
   MembershipChangesPage,
@@ -127,6 +137,16 @@ function App() {
           path="backoffice-tasks/:id"
           element={<BackOfficeTaskDetailPage />}
         />
+        <Route path="assets" element={<AssetListPage />} />
+        <Route path="assets/new" element={<AssetRegisterPage />} />
+        <Route path="assets/bulk/self-loan" element={<SelfBulkLoanPage />} />
+        <Route path="assets/bulk/self-return" element={<SelfBulkReturnPage />} />
+        <Route path="assets/bulk/lend" element={<BackofficeBulkLendPage />} />
+        <Route path="assets/bulk/return" element={<BackofficeBulkReturnPage />} />
+        <Route path="assets/bulk/relocate" element={<BulkRelocatePage />} />
+        <Route path="assets/qr/:token" element={<AssetQrRedirectPage />} />
+        <Route path="assets/:id" element={<AssetDetailPage />} />
+        <Route path="assets/:id/edit" element={<AssetEditPage />} />
         <Route path="account" element={<AccountSettingsPage />} />
         <Route path="integrations" element={<MyIntegrationsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />

@@ -3,10 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as assetApi from '../../api/asset'
 import * as attachmentsApi from '../../api/attachments'
 import { ApiError } from '../../api/client'
 import * as workflowRequestsApi from '../../api/workflowRequests'
-import type { Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
+import type { Asset, Attachment, User, WorkflowRequest, WorkflowRequestHistoryEntry } from '../../api/types'
 import { WorkflowRequestDetailPage } from './WorkflowRequestDetailPage'
 
 const applicant: User = {
@@ -332,5 +333,79 @@ describe('WorkflowRequestDetailPage', () => {
 
     await screen.findByText('タクシー代')
     expect(screen.queryByText('申請内容')).not.toBeInTheDocument()
+  })
+
+  const asset: Asset = {
+    id: 'asset-1',
+    asset_no: 'EQ-00121',
+    name: 'タブレット',
+    category: 'PC',
+    serial_number: null,
+    management_type: 'lending',
+    lending_status: 'available',
+    installation_status: null,
+    lending_method: 'approval',
+    default_location_text: null,
+    qr_token: 'qr-token-1',
+    qr_url: 'https://example.com/assets/qr/qr-token-1',
+    current_loan_id: null,
+    notes: null,
+    created_at: '2026-08-01T00:00:00+09:00',
+    updated_at: '2026-08-01T00:00:00+09:00',
+  }
+
+  const assetLoanRequest: WorkflowRequest = {
+    ...submittedRequest,
+    id: 'workflow-request-asset-loan',
+    title: 'タブレット貸出申請',
+    request_type: { id: 1, code: 'asset_loan', name: '備品貸出申請', description: null, form_schema: [], requires_attachment: false, attachment_max_size_kb: null, attachment_allowed_extensions: null, eligible_role_codes: null, requires_backoffice_task: false, backoffice_task_type: null, backoffice_department: null, export_amount_field: null, allowed_status_transitions: null, is_active: true },
+    form_data: { asset_id: 'asset-1', purpose: 'リモート会議用' },
+  }
+
+  it('resolves and shows the target asset name for an asset_loan request', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    renderPage(assetLoanRequest)
+
+    expect(await screen.findByText('申請内容')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'タブレット(EQ-00121)' })).toHaveAttribute('href', '/assets/asset-1')
+  })
+
+  it('shows a reject button (with reason dialog) for the approver only on asset_loan requests', async () => {
+    currentUser = approver
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    renderPage(assetLoanRequest)
+
+    expect(await screen.findByRole('button', { name: '却下' })).toBeInTheDocument()
+  })
+
+  it('does not show a reject button for non-asset_loan requests', async () => {
+    currentUser = approver
+    renderPage(submittedRequest)
+
+    await screen.findByRole('button', { name: '承認する' })
+    expect(screen.queryByRole('button', { name: '却下' })).not.toBeInTheDocument()
+  })
+
+  it('rejects an asset_loan request with a reason via the confirmation dialog', async () => {
+    currentUser = approver
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    vi.spyOn(workflowRequestsApi, 'rejectWorkflowRequest').mockResolvedValue({ ...assetLoanRequest, status: 'rejected' })
+
+    renderPage(assetLoanRequest)
+
+    await userEvent.click(await screen.findByRole('button', { name: '却下' }))
+    await userEvent.type(screen.getByPlaceholderText('却下理由'), '在庫不足のため')
+    await userEvent.click(screen.getByRole('button', { name: '却下する' }))
+
+    await waitFor(() =>
+      expect(workflowRequestsApi.rejectWorkflowRequest).toHaveBeenCalledWith('workflow-request-asset-loan', '在庫不足のため'),
+    )
+  })
+
+  it('shows the rejection reason for a rejected request', async () => {
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    renderPage({ ...assetLoanRequest, status: 'rejected', rejected_at: '2026-08-05T00:00:00+09:00', rejection_reason: '在庫不足のため' })
+
+    expect(await screen.findByText('却下理由: 在庫不足のため')).toBeInTheDocument()
   })
 })

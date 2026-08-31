@@ -24,6 +24,40 @@ use App\Domain\AccessControl\Handlers\RemoveUserFeatureSuspensionHandler;
 use App\Domain\AccessControl\Handlers\SuspendUserFeatureHandler;
 use App\Domain\AccessControl\Handlers\UpdateRoleAssignmentHandler;
 use App\Domain\AccessControl\Handlers\UpdateRoleHandler;
+use App\Domain\Asset\Commands\ChangeAssetLendingMethod;
+use App\Domain\Asset\Commands\ChangeAssetManagementType;
+use App\Domain\Asset\Commands\CompleteAssetRepair;
+use App\Domain\Asset\Commands\DeleteAsset;
+use App\Domain\Asset\Commands\DisposeAsset;
+use App\Domain\Asset\Commands\InstallAsset;
+use App\Domain\Asset\Commands\LendAsset;
+use App\Domain\Asset\Commands\RecoverAssetFromLost;
+use App\Domain\Asset\Commands\RegisterAsset;
+use App\Domain\Asset\Commands\ReissueAssetQrCode;
+use App\Domain\Asset\Commands\RelocateAsset;
+use App\Domain\Asset\Commands\RemoveAssetFromInstallation;
+use App\Domain\Asset\Commands\ReportAssetLost;
+use App\Domain\Asset\Commands\ReturnAsset;
+use App\Domain\Asset\Commands\SetAssetDefaultLocation;
+use App\Domain\Asset\Commands\StartAssetRepair;
+use App\Domain\Asset\Commands\UpdateAssetDetails;
+use App\Domain\Asset\Handlers\ChangeAssetLendingMethodHandler;
+use App\Domain\Asset\Handlers\ChangeAssetManagementTypeHandler;
+use App\Domain\Asset\Handlers\CompleteAssetRepairHandler;
+use App\Domain\Asset\Handlers\DeleteAssetHandler;
+use App\Domain\Asset\Handlers\DisposeAssetHandler;
+use App\Domain\Asset\Handlers\InstallAssetHandler;
+use App\Domain\Asset\Handlers\LendAssetHandler;
+use App\Domain\Asset\Handlers\RecoverAssetFromLostHandler;
+use App\Domain\Asset\Handlers\RegisterAssetHandler;
+use App\Domain\Asset\Handlers\ReissueAssetQrCodeHandler;
+use App\Domain\Asset\Handlers\RelocateAssetHandler;
+use App\Domain\Asset\Handlers\RemoveAssetFromInstallationHandler;
+use App\Domain\Asset\Handlers\ReportAssetLostHandler;
+use App\Domain\Asset\Handlers\ReturnAssetHandler;
+use App\Domain\Asset\Handlers\SetAssetDefaultLocationHandler;
+use App\Domain\Asset\Handlers\StartAssetRepairHandler;
+use App\Domain\Asset\Handlers\UpdateAssetDetailsHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
@@ -337,11 +371,13 @@ use App\Domain\UserManagement\Handlers\UpdateUserProfileHandler;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\RejectWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Domain\Workflow\Handlers\ApproveWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\CancelWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\DraftWorkflowRequestHandler;
+use App\Domain\Workflow\Handlers\RejectWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\ReturnWorkflowRequestHandler;
 use App\Domain\Workflow\Handlers\SubmitWorkflowRequestHandler;
 
@@ -388,6 +424,23 @@ return [
         UpdateMembershipChange::class => UpdateMembershipChangeHandler::class,
         ApplyExternalHrImport::class => ApplyExternalHrImportHandler::class,
         ScheduleExistingMembershipChange::class => ScheduleExistingMembershipChangeHandler::class,
+        RegisterAsset::class => RegisterAssetHandler::class,
+        UpdateAssetDetails::class => UpdateAssetDetailsHandler::class,
+        DeleteAsset::class => DeleteAssetHandler::class,
+        ChangeAssetManagementType::class => ChangeAssetManagementTypeHandler::class,
+        ChangeAssetLendingMethod::class => ChangeAssetLendingMethodHandler::class,
+        ReissueAssetQrCode::class => ReissueAssetQrCodeHandler::class,
+        SetAssetDefaultLocation::class => SetAssetDefaultLocationHandler::class,
+        LendAsset::class => LendAssetHandler::class,
+        ReturnAsset::class => ReturnAssetHandler::class,
+        InstallAsset::class => InstallAssetHandler::class,
+        RelocateAsset::class => RelocateAssetHandler::class,
+        RemoveAssetFromInstallation::class => RemoveAssetFromInstallationHandler::class,
+        StartAssetRepair::class => StartAssetRepairHandler::class,
+        CompleteAssetRepair::class => CompleteAssetRepairHandler::class,
+        ReportAssetLost::class => ReportAssetLostHandler::class,
+        RecoverAssetFromLost::class => RecoverAssetFromLostHandler::class,
+        DisposeAsset::class => DisposeAssetHandler::class,
         UploadAttachment::class => UploadAttachmentHandler::class,
 
         RegisterDevice::class => RegisterDeviceHandler::class,
@@ -431,6 +484,7 @@ return [
         ApproveWorkflowRequest::class => ApproveWorkflowRequestHandler::class,
         ReturnWorkflowRequest::class => ReturnWorkflowRequestHandler::class,
         CancelWorkflowRequest::class => CancelWorkflowRequestHandler::class,
+        RejectWorkflowRequest::class => RejectWorkflowRequestHandler::class,
 
         CreateBackOfficeTaskFromApproval::class => CreateBackOfficeTaskFromApprovalHandler::class,
         CreateBackOfficeTaskFromExpenseClaimApproval::class => CreateBackOfficeTaskFromExpenseClaimApprovalHandler::class,

@@ -16,4 +16,6 @@ final class WorkflowRequestHistoryAction
     public const RETURNED = 'returned';
 
     public const CANCELLED = 'cancelled';
+
+    public const REJECTED = 'rejected';
 }

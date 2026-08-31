@@ -11,6 +11,23 @@ use App\Domain\AccessControl\Events\RolePermissionsChanged;
 use App\Domain\AccessControl\Events\RoleUpdated;
 use App\Domain\AccessControl\Events\UserFeatureSuspended;
 use App\Domain\AccessControl\Events\UserFeatureSuspensionRemoved;
+use App\Domain\Asset\Events\AssetDefaultLocationSet;
+use App\Domain\Asset\Events\AssetDeleted;
+use App\Domain\Asset\Events\AssetDetailsUpdated;
+use App\Domain\Asset\Events\AssetDisposed;
+use App\Domain\Asset\Events\AssetInstalled;
+use App\Domain\Asset\Events\AssetLendingMethodChanged;
+use App\Domain\Asset\Events\AssetLoaned;
+use App\Domain\Asset\Events\AssetManagementTypeChanged;
+use App\Domain\Asset\Events\AssetQrCodeReissued;
+use App\Domain\Asset\Events\AssetRecoveredFromLost;
+use App\Domain\Asset\Events\AssetRegistered;
+use App\Domain\Asset\Events\AssetRelocated;
+use App\Domain\Asset\Events\AssetRemovedFromInstallation;
+use App\Domain\Asset\Events\AssetRepairCompleted;
+use App\Domain\Asset\Events\AssetRepairStarted;
+use App\Domain\Asset\Events\AssetReportedLost;
+use App\Domain\Asset\Events\AssetReturned;
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
@@ -186,6 +203,7 @@ use App\Domain\UserManagement\Events\UserUsageStartDateSet;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestRejected;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use Spatie\EventSourcing\EventSerializers\JsonEventSerializer;
@@ -333,6 +351,23 @@ return [
         'group_type.created' => GroupTypeCreated::class,
         'role.created' => RoleCreated::class,
         'membership_change_set.failed' => MembershipChangeSetFailed::class,
+        'asset.registered' => AssetRegistered::class,
+        'asset.details_updated' => AssetDetailsUpdated::class,
+        'asset.deleted' => AssetDeleted::class,
+        'asset.management_type_changed' => AssetManagementTypeChanged::class,
+        'asset.lending_method_changed' => AssetLendingMethodChanged::class,
+        'asset.qr_code_reissued' => AssetQrCodeReissued::class,
+        'asset.default_location_set' => AssetDefaultLocationSet::class,
+        'asset.loaned' => AssetLoaned::class,
+        'asset.returned' => AssetReturned::class,
+        'asset.installed' => AssetInstalled::class,
+        'asset.relocated' => AssetRelocated::class,
+        'asset.removed_from_installation' => AssetRemovedFromInstallation::class,
+        'asset.repair_started' => AssetRepairStarted::class,
+        'asset.repair_completed' => AssetRepairCompleted::class,
+        'asset.reported_lost' => AssetReportedLost::class,
+        'asset.recovered_from_lost' => AssetRecoveredFromLost::class,
+        'asset.disposed' => AssetDisposed::class,
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
         'export.created' => ExportCreated::class,
@@ -440,6 +475,7 @@ return [
         'workflow_request.approved' => WorkflowRequestApproved::class,
         'workflow_request.returned' => WorkflowRequestReturned::class,
         'workflow_request.cancelled' => WorkflowRequestCancelled::class,
+        'workflow_request.rejected' => WorkflowRequestRejected::class,
 
         'paid_leave.granted' => PaidLeaveGranted::class,
         'paid_leave.requested' => PaidLeaveRequested::class,

@@ -20,12 +20,19 @@ export function fetchUsers(
   });
 }
 
-/** 承認者選択(UserPicker)等、一般社員も使う軽量な検索。機微な項目は返らない。 */
+/**
+ * 承認者選択(UserPicker)等、一般社員も使う軽量な検索。機微な項目は返らない。
+ * `permission`を指定すると、globalスコープで当該Permissionを保有するユーザーのみに
+ * 絞り込む(例: 備品貸出申請の承認者を`asset.manage`保有者に絞る)。
+ */
 export function searchUsers(
   query?: string,
   perPage?: number,
+  permission?: string,
 ): Promise<Paginated<UserSearchResult>> {
-  return apiFetch("/users/search", { query: { q: query, per_page: perPage } });
+  return apiFetch("/users/search", {
+    query: { q: query, per_page: perPage, permission },
+  });
 }
 
 export function fetchUser(id: string): Promise<User> {

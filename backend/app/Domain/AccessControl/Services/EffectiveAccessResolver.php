@@ -254,6 +254,43 @@ class EffectiveAccessResolver
         return $result->unique()->values();
     }
 
+    /**
+     * global スコープで指定Permissionを保有するユーザーのID一覧
+     * (承認者選択(UserPicker)の絞り込み等、軽量な用途向け)。
+     * グループスコープの割当は対象外とする(グローバルに絞り込む用途に限定するため)。
+     *
+     * @return Collection<int, string>
+     */
+    public function userIdsWithGlobalPermission(string $permission): Collection
+    {
+        $now = now();
+
+        $assignments = DB::table('role_assignments')
+            ->join('roles', 'role_assignments.role_id', '=', 'roles.id')
+            ->join('permission_role', 'roles.id', '=', 'permission_role.role_id')
+            ->join('permissions', 'permission_role.permission_id', '=', 'permissions.id')
+            ->join('permission_scope_types', function ($join) {
+                $join->on('permission_scope_types.permission_id', '=', 'permissions.id')
+                    ->on('permission_scope_types.scope_type', '=', 'role_assignments.scope_type');
+            })
+            ->where('permissions.code', $permission)
+            ->where('role_assignments.scope_type', 'global')
+            ->where('roles.status', 'active')
+            ->where('role_assignments.status', 'active')
+            ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now))
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', $now))
+            ->select('role_assignments.subject_type', 'role_assignments.subject_id')
+            ->get();
+
+        $directUserIds = $assignments->where('subject_type', 'user')->pluck('subject_id');
+        $groupIds = $assignments->where('subject_type', 'group')->pluck('subject_id');
+        $groupMemberIds = $groupIds->isNotEmpty()
+            ? DB::table('memberships')->whereIn('group_id', $groupIds)->pluck('user_id')
+            : collect();
+
+        return $directUserIds->merge($groupMemberIds)->unique()->values();
+    }
+
     private function activeAssignmentsFor(User $user, string $permission): Collection
     {
         $now = now();

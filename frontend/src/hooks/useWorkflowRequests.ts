@@ -7,6 +7,7 @@ import {
   fetchWorkflowRequest,
   fetchWorkflowRequestHistory,
   fetchWorkflowRequestsToApprove,
+  rejectWorkflowRequest,
   returnWorkflowRequest,
   submitWorkflowRequest,
   type CreateWorkflowRequestInput,
@@ -93,6 +94,15 @@ export function useReturnWorkflowRequest() {
 
   return useMutation({
     mutationFn: ({ id, comment }: { id: string; comment: string }) => returnWorkflowRequest(id, comment),
+    onSuccess: (_data, { id }) => invalidate(id),
+  })
+}
+
+export function useRejectWorkflowRequest() {
+  const invalidate = useInvalidateWorkflowRequests()
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectWorkflowRequest(id, reason),
     onSuccess: (_data, { id }) => invalidate(id),
   })
 }

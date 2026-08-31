@@ -45,6 +45,22 @@
 5. バックオフィスタスクが必要な申請種別ならタスクを作成する
 6. 申請者へ通知する
 
+## UC-W003-2: 承認者が申請を却下する
+
+`workflow_requests`本体が持つ汎用機能(全申請種別で共通利用可能。
+`changesets/20260830-equipment-management/spec.md`論点2-2)。編集・再提出不可の終端状態
+`REJECTED`へ遷移する点で、修正の上で再提出できる差戻し(UC-W004)とは異なる。
+
+1. 承認者が申請詳細を開く
+2. 却下理由を入力する
+3. 却下する(`RejectWorkflowRequest`コマンド → `workflow_request.rejected`イベント。
+   `workflow_requests.rejected_at`/`rejection_reason`に反映)
+4. 申請者へ通知する
+
+Command/Event自体は全申請種別で汎用的に使えるが、却下ボタンは現時点では備品貸出申請
+(`asset_loan`)の承認画面(`WorkflowRequestDetailPage`)にのみ表示する。既存の他申請種別
+(経費・休暇等)の承認画面に却下ボタンを出すかどうかは別途変更セットで検討する。
+
 ## UC-W004: 承認者が差戻しする
 
 1. 承認者が不備を確認する
@@ -113,3 +129,15 @@
   (`compensatory_leave_requests`)は有給・特別休暇と同じく `DraftWorkflowRequest` に subject を
   渡して作成し、以降の提出・承認・差戻し・取消も汎用申請と同じCommand/Handlerで行う。詳細は
   [9章 代休](./09-usecases-paid-leave.md#代休appdomaincompensatoryleave)を参照。
+
+- 備品貸出申請(`request_types.code=asset_loan`)は、上記の有給・代休等と異なり
+  `subject_type`/`subject_id`のポリモーフィック関連を持たない(専用の申請ドメインAggregateを
+  持たないため)。`form_data`は`asset_id`(対象備品、UUID)と`purpose`(利用目的、任意)の
+  2項目のみで、承認されただけでは貸出中にはならない(承認済み申請に基づいて`App\Domain\Asset`
+  側の`LendAsset`をバックオフィスが実行して初めて貸与される)。申請者・進行状況の管理は
+  `workflow_requests`本体で完結し、`App\Domain\Asset`側は`asset_loan_requests`という読み取り
+  専用Projectionで`workflow_requests`側のイベント(`workflow_request.submitted`/`.approved`/
+  `.rejected`/`.withdrawn`/`.cancelled`)と`asset.loaned`(`loanRequestId`あり)を購読して
+  反映するのみで、備品ドメイン固有の申請用Command/Eventは一切持たない。承認者候補は
+  `asset.manage`Permission保有者に絞る。詳細は[34章 備品管理](./34-usecases-asset-management.md)、
+  `changesets/20260830-equipment-management/spec.md`論点1・論点2を参照。

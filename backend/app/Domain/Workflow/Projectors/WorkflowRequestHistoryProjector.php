@@ -5,6 +5,7 @@ namespace App\Domain\Workflow\Projectors;
 use App\Domain\Workflow\Events\WorkflowRequestApproved;
 use App\Domain\Workflow\Events\WorkflowRequestCancelled;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
+use App\Domain\Workflow\Events\WorkflowRequestRejected;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
 use App\Domain\Workflow\Events\WorkflowRequestSubmitted;
 use App\Models\WorkflowRequestHistoryAction;
@@ -43,6 +44,11 @@ class WorkflowRequestHistoryProjector extends Projector
     public function onWorkflowRequestCancelled(WorkflowRequestCancelled $event): void
     {
         $this->record($event, WorkflowRequestHistoryAction::CANCELLED, $event->cancelledByUserId, $event->reason);
+    }
+
+    public function onWorkflowRequestRejected(WorkflowRequestRejected $event): void
+    {
+        $this->record($event, WorkflowRequestHistoryAction::REJECTED, $event->rejectedByUserId, $event->reason);
     }
 
     private function record(ShouldBeStored $event, string $action, ?string $actorUserId, ?string $comment = null): void

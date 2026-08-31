@@ -24,6 +24,8 @@ class WorkflowRequestResource extends JsonResource
             'approved_at' => $this->approved_at?->toIso8601String(),
             'returned_at' => $this->returned_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
+            'rejected_at' => $this->rejected_at?->toIso8601String(),
+            'rejection_reason' => $this->rejection_reason,
             'created_at' => $this->created_at?->toIso8601String(),
             'attachments' => AttachmentResource::collection($this->whenLoaded('attachments')),
             // subject_type/subject_idを持つ行(月次勤怠申請・経費精算申請)は、対象ドメインの

@@ -8,6 +8,7 @@ use App\Domain\Leave\Support\LeaveUsageQuery;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\CancelWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
+use App\Domain\Workflow\Commands\RejectWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
 use App\Domain\Workflow\Commands\SubmitWorkflowRequest;
 use App\Http\Controllers\Controller;
@@ -50,7 +51,7 @@ class WorkflowRequestController extends Controller
         summary: '自分の申請一覧を取得する',
         tags: ['汎用申請'],
         parameters: [
-            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['draft', 'submitted', 'approved', 'returned', 'cancelled'])),
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['draft', 'submitted', 'approved', 'returned', 'cancelled', 'rejected'])),
             new OA\Parameter(name: 'subject_type', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
         ],
@@ -59,7 +60,7 @@ class WorkflowRequestController extends Controller
     public function indexMine(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
-            'status' => ['nullable', Rule::in(['draft', 'submitted', 'approved', 'returned', 'cancelled'])],
+            'status' => ['nullable', Rule::in(['draft', 'submitted', 'approved', 'returned', 'cancelled', 'rejected'])],
             'subject_type' => ['nullable', 'string'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -89,7 +90,7 @@ class WorkflowRequestController extends Controller
         summary: '承認待ち申請一覧を取得する',
         tags: ['汎用申請'],
         parameters: [
-            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['submitted', 'approved', 'returned', 'cancelled', 'all'])),
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['submitted', 'approved', 'returned', 'cancelled', 'rejected', 'all'])),
             new OA\Parameter(name: 'year_month', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
         ],
@@ -98,7 +99,7 @@ class WorkflowRequestController extends Controller
     public function indexToApprove(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
-            'status' => ['nullable', Rule::in(['submitted', 'approved', 'returned', 'cancelled', 'all'])],
+            'status' => ['nullable', Rule::in(['submitted', 'approved', 'returned', 'cancelled', 'rejected', 'all'])],
             'year_month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -487,6 +488,33 @@ class WorkflowRequestController extends Controller
             workflowRequestId: $workflowRequest->id,
             returnedByUserId: $request->user()->id,
             comment: $data['comment'],
+        ));
+
+        return new WorkflowRequestResource($workflowRequest->refresh()->load(['requestType', 'applicant', 'approver']));
+    }
+
+    /**
+     * spec 論点2-2 (UC-L09相当): 承認者が申請を却下する(編集・再提出不可の終端状態)。
+     * 全申請種別で共通利用可能な汎用APIだが、現時点では備品貸出申請(asset_loan)のみが
+     * 却下ボタンをフロントに露出する想定。
+     */
+    #[OA\Post(
+        path: '/workflow-requests/{workflowRequest}/reject',
+        operationId: 'workflowRequests.reject',
+        summary: '申請を却下する',
+        tags: ['汎用申請'],
+        parameters: [new OA\Parameter(name: 'workflowRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'reason', type: 'string')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function reject(Request $request, WorkflowRequest $workflowRequest, CommandBus $commandBus): WorkflowRequestResource
+    {
+        $data = $request->validate(['reason' => ['required', 'string']]);
+
+        $commandBus->dispatch(new RejectWorkflowRequest(
+            workflowRequestId: $workflowRequest->id,
+            rejectedByUserId: $request->user()->id,
+            reason: $data['reason'],
         ));
 
         return new WorkflowRequestResource($workflowRequest->refresh()->load(['requestType', 'applicant', 'approver']));

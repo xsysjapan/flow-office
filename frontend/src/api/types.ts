@@ -249,7 +249,7 @@ export interface RequestFormFieldSchema {
 }
 
 export type WorkflowRequestStatus =
-  "draft" | "submitted" | "approved" | "returned" | "cancelled";
+  "draft" | "submitted" | "approved" | "returned" | "cancelled" | "rejected";
 
 /**
  * 統合承認画面(UC-W003/UC-W004・UC-A009・UC-X011)向け: この汎用申請が別ドメインの
@@ -469,6 +469,9 @@ export interface WorkflowRequest {
   approved_at: string | null;
   returned_at: string | null;
   cancelled_at: string | null;
+  /** 論点2-2: 却下(終端状態)。汎用機能だが現時点ではasset_loanのみ却下ボタンを露出する。 */
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   created_at: string | null;
   attachments?: Attachment[];
   /** 統合承認画面向け。一覧・詳細のいずれにも含まれる。未設定(古いレスポンス)はnull相当として扱う。 */
@@ -1710,4 +1713,112 @@ export interface AdminCommandRun {
   output: string | null;
   error_message: string | null;
   created_at: string;
+}
+
+// --- 備品管理 (docs/changesets/20260830-equipment-management/spec.md) ---
+// backend/app/Http/Resources/AssetResource.php・AssetLoanResource.phpの実際のレスポンス
+// 形状に合わせる(フェーズ4第一弾: 検索一覧・詳細のみ。登録・編集・各種操作フォームは対象外)。
+
+export type AssetManagementType = "lending" | "installation";
+
+export type AssetLendingMethod = "self_service" | "backoffice" | "approval";
+
+export type AssetLendingStatus =
+  | "available"
+  | "loaned"
+  | "repair"
+  | "lost"
+  | "disposed";
+
+export type AssetInstallationStatus =
+  | "stored"
+  | "installed"
+  | "repair"
+  | "lost"
+  | "disposed";
+
+export interface AssetLoan {
+  id: string;
+  asset_id: string;
+  user_id: string;
+  borrower?: User | null;
+  loan_request_id: string | null;
+  loaned_at: string | null;
+  expected_return_at: string | null;
+  loaned_by_user_id: string;
+  returned_at: string | null;
+  returned_by_user_id: string | null;
+  return_note: string | null;
+}
+
+export interface AssetCurrentPlacement {
+  location_text: string;
+  started_at: string | null;
+}
+
+export interface Asset {
+  id: string;
+  asset_no: string;
+  name: string;
+  category: string;
+  serial_number: string | null;
+  management_type: AssetManagementType;
+  /** management_type=lendingの備品のみ意味を持つ。installationの場合はnull。 */
+  lending_status: AssetLendingStatus | null;
+  /** management_type=installationの備品のみ意味を持つ。lendingの場合はnull。 */
+  installation_status: AssetInstallationStatus | null;
+  /** management_type=lendingの備品のみ意味を持つ。 */
+  lending_method: AssetLendingMethod | null;
+  /** 貸出備品の「通常配置場所」。設置備品では使わない。 */
+  default_location_text: string | null;
+  qr_token: string;
+  qr_url: string;
+  current_loan_id: string | null;
+  notes: string | null;
+  current_loan?: AssetLoan | null;
+  /** management_type=installationの場合のみ含まれる(現在設置中でなければnull)。 */
+  current_placement?: AssetCurrentPlacement | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AssetLoanRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "withdrawn"
+  | "cancelled"
+  | "lent";
+
+/**
+ * 貸出申請Projection(asset_loan_requests)。idはworkflow_requests.idと同一
+ * (UC-L07〜L11、spec 論点2-3)。
+ */
+export interface AssetLoanRequest {
+  id: string;
+  asset_id: string;
+  applicant_user_id: string;
+  applicant?: User | null;
+  approver_user_id: string | null;
+  approver?: User | null;
+  status: AssetLoanRequestStatus;
+  purpose: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  withdrawn_at: string | null;
+  cancelled_at: string | null;
+  lent_at: string | null;
+}
+
+export interface AssetLoanEligibility {
+  asset_id: string;
+  management_type: AssetManagementType;
+  lending_method: AssetLendingMethod | null;
+  lending_status: AssetLendingStatus | null;
+  eligible: boolean;
+  requires_approval: boolean;
+  approved_loan_request_id: string | null;
+  reason: string | null;
 }
