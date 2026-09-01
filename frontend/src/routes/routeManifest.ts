@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Boxes,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -8,7 +9,7 @@ import {
 } from "lucide-react";
 
 /**
- * 一般ユーザー向けナビ(AppLayout)の5グループ。管理者向け(AdminLayout)は対象外
+ * 一般ユーザー向けナビ(AppLayout)の6グループ。管理者向け(AdminLayout)は対象外
  * (adminNavGroups.tsに別管理のまま)。
  */
 export type NavGroupKey =
@@ -16,6 +17,7 @@ export type NavGroupKey =
   | "attendance"
   | "requests"
   | "approvals"
+  | "backoffice"
   | "mypage";
 
 export interface NavContext {
@@ -107,6 +109,13 @@ export const routeManifest: RouteManifestEntry[] = [
     group: "requests",
   },
   {
+    // 検索・詳細・セルフ貸出/返却はPermission不要(認証済みなら誰でも)。
+    // spec: docs/changesets/20260831-asset-management-refinement/spec.md 論点8
+    label: "備品貸出",
+    to: "/assets",
+    group: "requests",
+  },
+  {
     label: "承認待ち",
     to: "/approvals",
     feature: [
@@ -121,15 +130,17 @@ export const routeManifest: RouteManifestEntry[] = [
     label: "タスク一覧",
     to: "/backoffice-tasks",
     feature: "backoffice.tasks",
-    group: "approvals",
+    group: "backoffice",
     show: (ctx) => ctx.canSeeBackOfficeTasks,
   },
   {
-    // 検索・詳細・セルフ貸出/返却はPermission不要(認証済みなら誰でも)。
-    // spec: docs/changesets/20260830-equipment-management/spec.md
+    // バックオフィス担当者(備品管理権限保持者)向けの管理導線。遷移先は「備品貸出」
+    // (requestsグループ)と同じ一覧ページで、権限に応じた操作が出し分けられる。
+    // spec: docs/changesets/20260831-asset-management-refinement/spec.md 論点8
     label: "備品管理",
     to: "/assets",
-    group: "mypage",
+    feature: "asset.manage",
+    group: "backoffice",
   },
   {
     label: "アカウント設定",
@@ -160,6 +171,7 @@ export const navGroupMeta: Record<
   attendance: { label: "勤怠", icon: CalendarClock },
   requests: { label: "申請", icon: ClipboardList },
   approvals: { label: "承認", icon: CheckCircle2 },
+  backoffice: { label: "バックオフィス", icon: Boxes },
   mypage: { label: "マイページ", icon: UserRound },
 };
 
@@ -223,6 +235,7 @@ export function buildNavGroups(
     "attendance",
     "requests",
     "approvals",
+    "backoffice",
     "mypage",
   ];
   return groups
