@@ -1,4 +1,5 @@
 import {
+  Boxes,
   Calendar,
   Settings,
   Users,
@@ -149,6 +150,19 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "経費区分ごとの証憑要件・承認省略ルールを管理する",
         feature: "backoffice.expenses",
         permission: "expense_category.manage",
+      },
+    ],
+  },
+  {
+    label: "備品管理設定",
+    icon: Boxes,
+    items: [
+      {
+        to: "/admin/asset-number-rules",
+        label: "採番ルール設定",
+        description: "カテゴリ別の管理番号自動採番ルール(プレフィックス・桁数)を管理する",
+        feature: "asset.manage",
+        permission: "asset.manage",
       },
     ],
   },

@@ -70,6 +70,7 @@ import {
   UserOperationsPage,
 } from "./pages/admin/UserManagementAccessPage";
 import { GroupTypeManagementPage } from "./pages/admin/GroupTypeManagementPage";
+import { AssetNumberRuleListPage } from "./pages/admin/AssetNumberRuleListPage";
 import { GroupDetailPage } from "./pages/admin/GroupDetailPage";
 import { AdminCommandsPage } from "./pages/admin/AdminCommandsPage";
 import { RoleDefinitionPage } from "./pages/admin/RoleDefinitionPage";
@@ -192,6 +193,10 @@ function App() {
           <Route
             path="expense-categories/:id"
             element={<ExpenseCategoryEditPage />}
+          />
+          <Route
+            path="asset-number-rules"
+            element={<AssetNumberRuleListPage />}
           />
           <Route path="work-calendars" element={<WorkCalendarListPage />} />
           <Route
