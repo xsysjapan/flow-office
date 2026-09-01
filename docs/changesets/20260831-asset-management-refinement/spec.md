@@ -97,25 +97,50 @@
   場合のみカラム追加で対応する。
 - 未確定・要確認事項: なし。
 
-### 論点3: 採番のON/OFF粒度(全体OFF or カテゴリ単位OFF)
+### 論点3: 採番のON/OFF判定方式(グローバル設定 or ルールの有無)
 
 - 選択肢:
-  - A. カテゴリ単位で`enabled`を持ち、該当カテゴリだけ自動採番、それ以外は手入力。
-  - B. `system_settings`にグローバルな1スイッチ(`asset_numbering_enabled`)を持ち、
-    ON/OFFは全カテゴリ一括。
-  - C. AとBの両方(グローバルOFF優先、ONの場合のみカテゴリ単位`enabled`を見る)。
-- 決定: C。`system_settings.asset_numbering_enabled`(bool, デフォルトfalse)を
-  グローバルスイッチとして持ち、これがfalseなら常に手入力(採番機能自体を完全にOFFに
-  できる)。trueの場合のみ、`asset_number_rules`側の該当カテゴリの`enabled`と
-  `next_number`の有無を見て、ルールが存在し`enabled=true`のカテゴリだけ自動採番の
-  対象にする(ルール未登録・OFFのカテゴリは引き続き手入力)。
-- 理由: 「完全にOFFにしても成り立つ」という要件を満たすにはグローバルスイッチが
-  必須。一方でカテゴリごとに温度差がある運用(一部カテゴリだけ自動採番したい)も
-  自然に発生しうるため、カテゴリ単位の制御も残す。二重にすることで「まず全体を
-  試験導入せず現状維持(OFF)」→「カテゴリを絞って有効化」という段階導入もできる。
+  - A. `system_settings`にグローバルな1スイッチ(`asset_numbering_enabled`)を持ち、
+    ON/OFFは全カテゴリ一括。ONの場合のみ`asset_number_rules`側のカテゴリ単位
+    `enabled`を見る。
+  - B. グローバルスイッチを持たず、「該当カテゴリに有効なルールが存在するか」
+    だけで自動採番するかどうかを判定する(ルールが1件も無ければ実質的に
+    機能全体がOFFの状態と同義になる)。
+- 決定: B(グローバルスイッチは廃止)。
+- 理由: グローバルスイッチとカテゴリ単位`enabled`を両方持つと、「スイッチON・
+  対象ルールなし」という状態が発生し、「設定はONなのに何も自動採番されない」
+  という分かりにくい状態になる。ルールの有無だけで判定すれば状態は「ルールが
+  あって有効」「ルールがあって無効」「ルールが無い」の3通りに単純化され、
+  「管理番号の採番を完全にOFFにしても成り立つ」という要件も、単に
+  `asset_number_rules`に有効な行が1つも無い状態として自然に表現できる
+  (=特別なOFFフラグを別途持つ必要がない)。
 - 未確定・要確認事項: なし。
 
-### 論点4: 登録画面での採番トリガー方式(自動採番が有効なカテゴリの場合)
+### 論点10: 条件に一致するルールが無いカテゴリの扱い(デフォルトルール)
+
+- 選択肢:
+  - A. 一致するカテゴリのルールが無ければ常に手入力(デフォルトルールという
+    概念自体を持たない)。
+  - B. 「デフォルトルール」を1件だけ設定できるようにし、カテゴリ一致ルールが
+    見つからない場合はデフォルトルールが有効ならそちらで自動採番、無効・
+    未設定なら手入力にフォールバックする。
+- 決定: B。`asset_number_rules`に`is_default`(boolean)カラムを追加し、
+  `is_default = true`の行(`category`は`NULL`)をちょうど0件または1件だけ
+  持てるようにする。判定順序は「①`category`完全一致の有効なルール →
+  ②(①が無い場合のみ)デフォルトルール(`is_default=true`かつ`enabled=true`)
+  → ③(①②とも無ければ)手入力」とする。①のルールが存在するが`enabled=false`
+  の場合はデフォルトにはフォールバックせず手入力とする(そのカテゴリは
+  「明示的に自動採番しない」という意思表示のため)。
+- 理由: カテゴリマスタ化(論点1で対象外とした)を行わない以上、新しいカテゴリ
+  文字列が随時登場しうる。その都度ルールを登録しなくても、少なくとも
+  「それ以外は`AST-00001`のような共通の連番で管理する」という運用ができるよう
+  デフォルトルールを用意する。①で見つかった個別ルールが`enabled=false`の
+  場合にデフォルトへフォールバックしない設計にするのは、論点5(個別カテゴリの
+  自動採番OFF)の意図(=そのカテゴリだけは手入力に戻したい)を素直に実現する
+  ため。
+- 未確定・要確認事項: なし。
+
+### 論点4: 登録画面での採番トリガー方式(自動採番が適用されるカテゴリの場合)
 
 - 選択肢:
   - A. カテゴリ選択と同時に、確定した管理番号をバックエンドから即時払い出して
@@ -131,11 +156,13 @@
     という表示のみで、保存ボタン押下時に初めてサーバー側で番号が決まる。
 - 決定: C。ただし、ユーザーが保存前に採番結果を確認できるよう、保存確認ダイアログ
   (`ui-interaction-patterns`の保存確認パターン)に確定した管理番号を表示する。
-  具体的には、登録画面の「管理番号」欄は自動採番ONのカテゴリを選んでいる間は
-  読み取り専用表示(プレースホルダ「保存時に自動採番されます」)に切り替え、
-  「作成」ボタン押下→バックエンドが`assets`テーブルへのINSERTと同一トランザクション内で
-  `asset_number_rules`の行をロックして次番号を払い出し`AssetRegistered`イベントに
-  積む→レスポンスで確定した`asset_no`を返し、遷移後の詳細画面で確認できるようにする。
+  具体的には、登録画面の「管理番号」欄は入力中の`category`が論点10の判定
+  (①カテゴリ一致の有効なルール→②デフォルトルール)により自動採番対象と
+  分かっている間は読み取り専用表示(プレースホルダ「保存時に自動採番されます」)に
+  切り替え、「作成」ボタン押下→バックエンドが`assets`テーブルへのINSERTと同一
+  トランザクション内で該当ルール(カテゴリ一致 or デフォルト)の行をロックして
+  次番号を払い出し`AssetRegistered`イベントに積む→レスポンスで確定した
+  `asset_no`を返し、遷移後の詳細画面で確認できるようにする。
 - 理由: 選択肢A/Bのように登録前に番号を払い出す方式は、カテゴリの選び直しや登録
   キャンセルのたびに欠番が発生する(欠番自体は許容する設計思想でも、無駄な払い出しは
   極力避けたい)。Cなら保存が確定した時だけ連番が消費されるため欠番が最小化され、
@@ -143,18 +170,22 @@
   (「採番済みだが未保存」)を持つ必要がない。
 - 未確定・要確認事項: なし。
 
-### 論点5: 手入力とのハイブリッド(自動採番ONのカテゴリでも手入力を許すか)
+### 論点5: 手入力とのハイブリッド(自動採番が適用されるカテゴリでも手入力を許すか)
 
 - 選択肢:
-  - A. 自動採番ONのカテゴリを選んだら管理番号入力欄は完全に隠し、常に自動採番のみ。
-  - B. 自動採番ONのカテゴリでも「手動で管理番号を指定する」チェックボックス/リンクを
-    用意し、必要なら例外的に手入力できるようにする(手入力した番号は連番管理外になる
-    ため、以後その番号と連番が衝突しないよう一意制約はDBの`unique`で保証する)。
-- 決定: A(自動採番ONのカテゴリでは常に自動採番。手入力の抜け道は用意しない)。
+  - A. 自動採番が適用されるカテゴリを選んだら管理番号入力欄は完全に隠し、常に
+    自動採番のみ。
+  - B. 自動採番が適用されるカテゴリでも「手動で管理番号を指定する」チェック
+    ボックス/リンクを用意し、必要なら例外的に手入力できるようにする(手入力した
+    番号は連番管理外になるため、以後その番号と連番が衝突しないよう一意制約は
+    DBの`unique`で保証する)。
+- 決定: A(自動採番が適用されるカテゴリでは常に自動採番。手入力の抜け道は
+  用意しない)。
 - 理由: 台帳としての一貫性を優先する。「例外的に手入力したい」ケースが実際に
-  発生した場合は、そのカテゴリ自体の採番ルールを一時的に`enabled=false`にする
-  (論点3のカテゴリ単位OFF)ことで代替でき、UI上に例外入力の分岐を増やすと
-  「結局番号が重複・飛び番になった」という運用事故のリスクを増やすだけになる。
+  発生した場合は、そのカテゴリ自体の採番ルールを`enabled=false`にする
+  (論点10: この場合デフォルトルールへもフォールバックせず手入力になる)ことで
+  代替でき、UI上に例外入力の分岐を増やすと「結局番号が重複・飛び番になった」
+  という運用事故のリスクを増やすだけになる。
 - 未確定・要確認事項: なし。
 
 ### 論点6: 既存登録済みデータ・カテゴリ文字列表記ゆれとの整合
@@ -253,52 +284,63 @@
 ### バックエンド
 
 1. 新規マイグレーション `create_asset_number_rules_table`:
-   - `id`, `category`(string, unique), `prefix`(string, 例: `NPC`),
+   - `id`, `category`(string, nullable, unique — `is_default=true`の行のみ
+     `NULL`を許容。MySQLのunique indexは複数`NULL`を区別済みとして許すため、
+     デフォルト行を複数作れてしまわないようアプリ側(Handler内トランザクション+
+     事前チェック)で1件までに制限する), `prefix`(string, 例: `NPC`),
      `digit_count`(unsigned tinyint, デフォルト5), `next_number`(unsigned int,
-     デフォルト1), `enabled`(boolean, デフォルトtrue), `created_at`, `updated_at`。
-2. `system_settings`に`asset_numbering_enabled`(boolean, デフォルトfalse)を
-   カラム追加。管理者用`SystemSettingController`のPUTで更新可能にする
-   (既存の他設定項目と同じパターン)。
+     デフォルト1), `enabled`(boolean, デフォルトtrue), `is_default`(boolean,
+     デフォルトfalse), `created_at`, `updated_at`。
+   - 部分インデックス相当の保証が必要な場合はDB制約ではなくアプリ層
+     (`ConfigureAssetNumberRuleHandler`内で`is_default=true`かつ`id`が異なる
+     行の存在チェック)で担保する(MySQLの部分ユニーク制約非対応のため)。
+2. `system_settings`へのカラム追加は行わない(論点3でグローバルスイッチを
+   廃止したため)。
 3. `AssetNumberRule`モデル(`app/Models/AssetNumberRule.php`)を追加。
    Eloquentモデルで良い(このマスタ自体は`stored_events`を正とする対象外。
    ただしCLAUDE.mdの原則1の例外規定に倣い、採番ルールの作成・変更・連番払い出しは
    監査目的で`stored_events`にも記録する。専用ドメイン
    `App\Domain\AssetNumbering`にCommand
    (`ConfigureAssetNumberRule`, `IssueAssetNumber`)・Event
-   (`AssetNumberRuleConfigured`, `AssetNumberIssued`)・Handlerを新設し、
-   `system_settings`のグローバルスイッチ変更も同様に監査イベントとして記録する
-   (原則1の`system_settings`直更新+同一トランザクション監査イベント記録の方式を
-   踏襲)。
-4. 採番ロジック(`IssueAssetNumberHandler`):
-   - `system_settings.asset_numbering_enabled`が`false`なら例外
-     (`AssetNumberingDisabledException`)。呼び出し元(`RegisterAssetHandler`)は
-     この例外時、自動採番をスキップして通常の手入力`asset_no`を要求するフロー
-     (=そもそもフロント側がグローバルOFF時は常に手入力欄を出すため、通常は
-     この例外は発生しない。バックエンド側の二重防御として実装する)。
-   - `asset_number_rules`から`category`一致・`enabled=true`の行を
-     `lockForUpdate()`で取得できない(該当なし)場合も同様に自動採番不可として
-     扱い、`RegisterAssetHandler`は手入力`asset_no`を要求する。
-   - 該当行がある場合、`next_number`を採番して返し、同一トランザクションで
-     `next_number`をインクリメント、`AssetNumberIssued`イベントを`stored_events`
-     に記録。生成される`asset_no`は`{prefix}-{next_numberをdigit_countで
-     ゼロパディング}`(例: `NPC-00001`)。
+   (`AssetNumberRuleConfigured`, `AssetNumberIssued`)・Handlerを新設する)。
+4. 採番ロジック(`IssueAssetNumberHandler`、引数は登録対象の`category`文字列):
+   - まず`asset_number_rules`から`category`完全一致の行を`lockForUpdate()`で
+     取得する。
+     - 行が存在し`enabled=true` → その行から採番する(下記の払い出し処理へ)。
+     - 行が存在し`enabled=false` → 自動採番不可(デフォルトへはフォール
+       バックしない)。`RegisterAssetHandler`は手入力`asset_no`を要求する。
+     - 行が存在しない → `is_default=true`の行を`lockForUpdate()`で取得する。
+       - デフォルト行が存在し`enabled=true` → その行から採番する。
+       - デフォルト行が存在しない、または`enabled=false` → 自動採番不可。
+         `RegisterAssetHandler`は手入力`asset_no`を要求する。
+   - 払い出し処理: 選ばれた行の`next_number`を採番して返し、同一トランザクション
+     で`next_number`をインクリメント、`AssetNumberIssued`イベント(採番元の
+     `asset_number_rule_id`・払い出した番号・対象`category`を含む)を
+     `stored_events`に記録。生成される`asset_no`は`{prefix}-{next_numberを
+     digit_countでゼロパディング}`(例: `NPC-00001`。デフォルトルールを
+     使った場合もそのルールの`prefix`をそのまま使う)。
 5. `RegisterAssetHandler`の変更:
    - `RegisterAsset`コマンドの`assetNo`を`?string`(nullable)に変更。
    - `assetNo`が`null`の場合のみ、`category`をもとに`IssueAssetNumberHandler`を
-     呼び出し採番、`AssetRegistered`イベントに確定した番号を積む。
+     呼び出す。採番不可(4.のいずれのケースにも該当せず)の場合は
+     バリデーションエラーとし、フロントに「管理番号を入力してください」を
+     返す(通常はフロント側が事前に判定して手入力欄を出しているため、
+     この経路は主に直接API叩き等への防御)。
    - `assetNo`が非nullの場合(手入力)は現状どおりそのまま使う。
    - `assets.asset_no`のunique制約は維持(採番後の番号も含め一意性を保証)。
 6. APIエンドポイント追加(`routes/api.php`, `permission:asset.manage,any`配下):
-   - `GET /asset-number-rules` — 一覧取得(管理画面用)。
+   - `GET /asset-number-rules` — 一覧取得(管理画面用。デフォルト行も含む)。
    - `PUT /asset-number-rules/{category}` — 単一カテゴリのルール作成・更新
      (`prefix`, `digit_count`, `enabled`)。`next_number`は直接編集させない
      (欠番管理を崩すため。連番のリセットが必要な場合は別途「次番号を手動修正」
      専用の確認ダイアログ付き操作を将来検討するが、今回は対象外)。
+   - `PUT /asset-number-rules/default` — デフォルトルールの作成・更新・無効化
+     (`prefix`, `digit_count`, `enabled`)。まだ存在しなければ新規作成、
+     存在すれば更新する(`category`一致ルートとは別エンドポイントにして
+     `is_default`行を一意に扱う)。
    - `GET /asset-number-rules/categories` — 登録済みカテゴリ候補一覧
      (`AssetRegisterPage`のカテゴリ補完に使う。既存`assets.category`のDISTINCT値と
-     `asset_number_rules.category`のUNIONを返す)。
-   - 既存`PUT /system-settings`に`asset_numbering_enabled`を含める(新規エンドポイント
-     追加ではなく既存の一括更新APIに項目追加)。
+     `asset_number_rules.category`(デフォルト行を除く)のUNIONを返す)。
 7. `POST /assets`(登録)のレスポンスに、採番された場合は確定した`asset_no`を含める
    (既存レスポンス形状の`asset_no`フィールドがそのまま該当)。
 
@@ -306,22 +348,23 @@
 
 8. `frontend/src/api/assetNumberRules.ts` + `frontend/src/hooks/useAssetNumberRules.ts`
    を新設(`add-api-hook`スキルに沿う)。型は`AssetNumberRule`
-   (`category`, `prefix`, `digitCount`, `nextNumber`, `enabled`)。
-9. `frontend/src/api/systemSettings.ts`(既存)に`assetNumberingEnabled`フィールドを
-   追加。
+   (`category: string | null`(`null`はデフォルト行), `prefix`, `digitCount`,
+   `nextNumber`, `enabled`, `isDefault`)。
+9. (削除。グローバル設定APIは追加しない。)
 10. `AssetRegisterPage.tsx`の変更:
     - カテゴリ入力を`Input`から、登録済みカテゴリ候補(`GET
       /asset-number-rules/categories`)をサジェストする補完付き入力
       (`components/ui/combobox`相当。既存になければ`add-frontend-component`で
       新設)に変更。自由入力も許可する。
-    - `system_settings.asset_numbering_enabled === true` かつ 現在入力中の
-      `category`が`asset_number_rules`に`enabled=true`で存在する場合、
+    - 現在入力中の`category`について、`asset_number_rules`一覧から
+      論点10の判定順(①カテゴリ完全一致かつ`enabled=true` → ②該当なしの場合
+      `isDefault=true`かつ`enabled=true`の行 → ③いずれも無ければ対象外)を
+      フロント側でも同じロジックで評価し、①②のいずれかに一致する間は
       「管理番号」欄を編集不可表示に切り替え、プレースホルダ文言
       「保存時に自動採番されます」を表示する(入力値はサーバーに送らない
-      = `asset_no`を`null`で送信)。それ以外の場合は現状どおり手入力必須。
-    - 判定に使う`asset_number_rules`一覧・`system_settings`は
-      ページ表示時に`useAssetNumberRules`・`useSystemSettings`(既存hook)で
-      取得する。
+      = `asset_no`を`null`で送信)。③の場合は現状どおり手入力必須。
+    - 判定に使う`asset_number_rules`一覧はページ表示時に
+      `useAssetNumberRules`で取得する。
     - 保存確認: 自動採番の場合、「作成」ボタン押下時に
       `ui-interaction-patterns`の保存確認ダイアログを表示せず(採番自体は
       1アクションなので確認不要という既存踏襲方針。手入力の場合も現状
@@ -331,11 +374,16 @@
 11. 管理メニュー(`frontend/src/components/AdminLayout/adminNavGroups.ts`)に
     「採番ルール設定」項目を追加し、`AssetNumberRuleListPage`
     (`frontend/src/pages/admin/AssetNumberRuleListPage.tsx`)を新設。
-    一覧はカテゴリ・プレフィックス・桁数・現在の次番号(表示のみ・編集不可)・
-    有効/無効の一覧テーブルで、行編集(プレフィックス・桁数・有効/無効)と
-    新規カテゴリ行の追加ができる。グローバルスイッチ
-    (`asset_numbering_enabled`)はこの画面の先頭に表示するトグルとして置く
-    (`SystemSettingController`側のAPIを呼ぶ)。
+    画面構成:
+    - 先頭に「デフォルトルール」1行(常に表示。未作成の場合は「未設定」表示+
+      「デフォルトルールを作成」ボタン。作成済みならプレフィックス・桁数・
+      有効/無効をインライン編集可能)。
+    - その下にカテゴリ別ルールの一覧テーブル(カテゴリ・プレフィックス・桁数・
+      現在の次番号(表示のみ・編集不可)・有効/無効)。行編集(プレフィックス・
+      桁数・有効/無効)と、新規カテゴリ行の追加ができる。
+    - 表全体に、各カテゴリの実際の適用状態(「このルールで採番」/「無効化中
+      (手入力)」/「デフォルトにフォールバック」等)が一目でわかるようステータス
+      列を出す(実装は`ui-design-system`のバッジ表現に合わせる)。
 12. `frontend/src/routes/routeManifest.ts`の変更:
     - `NavGroupKey`に`"backoffice"`を追加。
     - `navGroupMeta`に`backoffice: { label: "バックオフィス", icon:
@@ -371,7 +419,8 @@
 ## ドキュメントへの影響
 
 - `docs/34-usecases-asset-management.md`: 「登録」ユースケースに、管理番号の
-  自動採番(カテゴリ別ルール、グローバルOFF可)の仕様を追記する。
+  自動採番(カテゴリ別ルール・デフォルトルール・ルール0件時は手入力)の仕様を
+  追記する。
 - `docs/11-usecases-backoffice.md`: 変更なし(タスク一覧の業務仕様自体は変わらず、
   ナビ上の置き場所のみの変更のため)。
 - 新規: `docs/34-usecases-asset-management.md`内に採番ルールマスタの節を追加
@@ -388,17 +437,14 @@
 
 - backend:
   - `database/migrations/..._create_asset_number_rules_table.php`
-  - `database/migrations/..._add_asset_numbering_enabled_to_system_settings_table.php`
   - `app/Models/AssetNumberRule.php`
   - `app/Domain/AssetNumbering/`(Commands: `ConfigureAssetNumberRule`,
     `IssueAssetNumber` / Events: `AssetNumberRuleConfigured`,
-    `AssetNumberIssued` / Handlers / 例外`AssetNumberingDisabledException`)
+    `AssetNumberIssued` / Handlers)
   - `app/Domain/Asset/Commands/RegisterAsset.php`,
     `Handlers/RegisterAssetHandler.php`(assetNo nullable化・採番呼び出し)
-  - `app/Http/Controllers/Api/AssetNumberRuleController.php`(一覧・更新・
-    categories)
-  - `app/Http/Controllers/Api/SystemSettingController.php`
-    (`asset_numbering_enabled`追加)
+  - `app/Http/Controllers/Api/AssetNumberRuleController.php`(一覧・カテゴリ別
+    更新・デフォルト更新・categories)
   - `routes/api.php`(上記エンドポイント追加)
 - frontend:
   - `src/api/assetNumberRules.ts`, `src/hooks/useAssetNumberRules.ts`
@@ -415,14 +461,19 @@
 ## 検証方法
 
 - backend: `cd backend && php artisan test --filter=Asset`
-  (採番ハンドラのユニットテスト、`RegisterAssetHandler`の自動採番/手入力
-  両分岐、グローバルOFF時の挙動、行ロックによる連番の重複無し確認)。
+  (採番ハンドラのユニットテスト。`RegisterAssetHandler`のカテゴリ一致採番/
+  デフォルト採番/個別ルールOFF時の手入力フォールバック/ルール0件時の手入力の
+  各分岐、行ロックによる連番の重複無し確認)。
 - frontend: `cd frontend && npm run test -- AssetRegisterPage
   AssetNumberRuleListPage routeManifest`
-- frontend: `npm run storybook`でAssetRegisterPageの自動採番ON/OFF両パターンを
-  目視確認。
-- 手動確認: 採番ルールを1つ作成→対象カテゴリで備品を2件登録→連番が重複なく
-  払い出されること、グローバルOFFにすると全カテゴリで手入力に戻ることを確認。
+- frontend: `npm run storybook`でAssetRegisterPageの
+  「カテゴリ一致ルールで自動採番」「デフォルトルールで自動採番」
+  「ルール無し(手入力)」の3パターンを目視確認。
+- 手動確認: (1)ルールを1件も作らない状態で登録→手入力になること、
+  (2)特定カテゴリのルールを作成→そのカテゴリで連番が重複なく払い出されること、
+  (3)デフォルトルールのみ作成→未登録カテゴリでデフォルトの連番が払い出される
+  こと、(4)特定カテゴリのルールを`enabled=false`にする→デフォルトへ
+  フォールバックせず手入力に戻ることを確認。
 - ナビ確認: 一般ユーザー(備品管理権限なし)で「申請」に「備品貸出」が出て
   「バックオフィス」グループが出ない/または「備品管理」項目のみ出ないこと、
   備品管理権限保持者で「バックオフィス」グループに「タスク一覧」「備品管理」が
@@ -430,7 +481,17 @@
 
 ## レビュー履歴
 
-初版。
+- 初版。
+- 2026-09-01: ユーザーレビューを受け、以下を変更。
+  - 論点3を「グローバル設定+カテゴリ単位OFF」から「ルールの有無のみで判定」に
+    変更(`system_settings.asset_numbering_enabled`を廃止)。
+  - 論点10「デフォルトルール」を新設。カテゴリ一致ルールが無い場合のみ
+    デフォルトルールにフォールバックする判定順序を追加。
+  - 論点5(個別ルールのOFF)は維持しつつ、OFF時はデフォルトへフォールバック
+    しないことを明記(既存の意図どおり)。
+  - 上記に伴い、バックエンドの`system_settings`カラム追加・関連APIを削除し、
+    `asset_number_rules`に`is_default`カラムを追加。管理画面にデフォルト
+    ルールの編集UIを追加。
 
 ## 実装結果
 
