@@ -58,6 +58,10 @@ use App\Domain\Asset\Handlers\ReturnAssetHandler;
 use App\Domain\Asset\Handlers\SetAssetDefaultLocationHandler;
 use App\Domain\Asset\Handlers\StartAssetRepairHandler;
 use App\Domain\Asset\Handlers\UpdateAssetDetailsHandler;
+use App\Domain\AssetNumbering\Commands\ConfigureAssetNumberRule;
+use App\Domain\AssetNumbering\Commands\IssueAssetNumber;
+use App\Domain\AssetNumbering\Handlers\ConfigureAssetNumberRuleHandler;
+use App\Domain\AssetNumbering\Handlers\IssueAssetNumberHandler;
 use App\Domain\Attachment\Commands\UploadAttachment;
 use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
@@ -72,8 +76,6 @@ use App\Domain\Attendance\Commands\CancelSubmittedAttendanceMonth;
 use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
-use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
-use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
@@ -105,7 +107,9 @@ use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
+use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
+use App\Domain\Attendance\Commands\RevertApprovedAttendanceMonth;
 use App\Domain\Attendance\Commands\RevertCalendarBulkOperation;
 use App\Domain\Attendance\Commands\RevertLastHolidayCalendarSync;
 use App\Domain\Attendance\Commands\SetDefaultCompanyCalendar;
@@ -133,8 +137,6 @@ use App\Domain\Attendance\Handlers\CancelSubmittedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
-use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
-use App\Domain\Attendance\Handlers\RevertApprovedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
@@ -166,7 +168,9 @@ use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\RegisterHolidayCalendarSourceHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
+use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
+use App\Domain\Attendance\Handlers\RevertApprovedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\RevertCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\RevertLastHolidayCalendarSyncHandler;
 use App\Domain\Attendance\Handlers\SetDefaultCompanyCalendarHandler;
@@ -425,6 +429,8 @@ return [
         ApplyExternalHrImport::class => ApplyExternalHrImportHandler::class,
         ScheduleExistingMembershipChange::class => ScheduleExistingMembershipChangeHandler::class,
         RegisterAsset::class => RegisterAssetHandler::class,
+        ConfigureAssetNumberRule::class => ConfigureAssetNumberRuleHandler::class,
+        IssueAssetNumber::class => IssueAssetNumberHandler::class,
         UpdateAssetDetails::class => UpdateAssetDetailsHandler::class,
         DeleteAsset::class => DeleteAssetHandler::class,
         ChangeAssetManagementType::class => ChangeAssetManagementTypeHandler::class,

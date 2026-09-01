@@ -2,14 +2,15 @@
 
 use App\Http\Controllers\Api\AccessControlController;
 use App\Http\Controllers\Api\AdminCommandController;
+use App\Http\Controllers\Api\Asset\AssetBulkOperationController;
+use App\Http\Controllers\Api\Asset\AssetController;
+use App\Http\Controllers\Api\AssetNumberRuleController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceImportPreviewController;
 use App\Http\Controllers\Api\AttendancePunchController;
 use App\Http\Controllers\Api\AttendanceSubmissionReminderExclusionController;
 use App\Http\Controllers\Api\AuditLogController;
-use App\Http\Controllers\Api\Asset\AssetBulkOperationController;
-use App\Http\Controllers\Api\Asset\AssetController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthenticationKeyController;
 use App\Http\Controllers\Api\BackOfficeTaskController;
@@ -202,6 +203,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // 一括QR操作: backoffice_lend/relocateはController内でasset.manageを検証する
     // (operationごとに要件が異なるため、ルートレベルでは付けない)。
     Route::post('/assets/bulk', [AssetBulkOperationController::class, 'store']);
+
+    // --- 管理番号自動採番ルール (docs/changesets/20260831-asset-management-refinement/spec.md) ---
+    Route::get('/asset-number-rules', [AssetNumberRuleController::class, 'index'])->middleware('permission:asset.manage,any');
+    Route::get('/asset-number-rules/categories', [AssetNumberRuleController::class, 'categories'])->middleware('permission:asset.manage,any');
+    Route::put('/asset-number-rules/default', [AssetNumberRuleController::class, 'updateDefault'])->middleware('permission:asset.manage,any');
+    Route::put('/asset-number-rules/{category}', [AssetNumberRuleController::class, 'update'])->middleware('permission:asset.manage,any');
     Route::get('/users/{user}/asset-loans', [AssetController::class, 'loansForUser']);
 
     // --- 通知 (docs/13-usecases-notification.md UC-N001) ---
