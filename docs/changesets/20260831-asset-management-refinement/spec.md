@@ -1,6 +1,6 @@
 # 備品管理ブラッシュアップ(管理番号自動採番 + ナビ再編)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -495,4 +495,28 @@
 
 ## 実装結果
 
-未着手。
+実装完了(コミット: `ae266fa`, `b4fc368`, `450c1cc`, `545c565`)。
+
+- `ae266fa` ナビゲーション再編: `routeManifest.ts`に`backoffice`グループを新設し、
+  「タスク一覧」を`approvals`から移設、「備品管理」を`mypage`から削除して`requests`の
+  「備品貸出」と`backoffice`の「備品管理」(`feature: "asset.manage"`)に分割。
+- `b4fc368` `frontend/src/api/assetNumberRules.ts`・`useAssetNumberRules.ts`・
+  `CategoryCombobox`コンポーネント(新規、自由入力+候補サジェスト)を追加。
+- `450c1cc` `AssetRegisterPage`にカテゴリ補完・管理番号自動採番表示(①カテゴリ一致→
+  ②デフォルト→③手入力の優先順位判定)を実装。管理メニューに
+  `AssetNumberRuleListPage`(`/admin/asset-number-rules`)を新設。
+- `545c565` バックエンドに`App\Domain\AssetNumbering`ドメイン
+  (`ConfigureAssetNumberRule`/`IssueAssetNumber`コマンド、
+  `AssetNumberRuleConfigured`/`AssetNumberIssued`監査イベント)を新設。
+  `asset_number_rules`テーブル・`AssetNumberRule`モデルを追加し、
+  `RegisterAssetHandler`が`asset_no`未指定時にこのドメインを呼び出すよう変更。
+  `/asset-number-rules`系4エンドポイントを追加。
+
+テスト結果: バックエンド`php artisan test --filter=Asset`(67件全通過)、
+フロントエンド`npm run test -- AssetRegisterPage AssetNumberRuleListPage
+assetNumberRules`(14件全通過)、`npx tsc --noEmit`エラーなし。
+
+ドキュメント更新: `docs/34-usecases-asset-management.md`(管理番号の自動採番の節を追加、
+登録ユースケースの記述を更新)、`docs/16-database-schema.md`(`asset_number_rules`
+テーブル定義を追加、`assets.asset_no`の説明を更新)、`docs/17-events.md`
+(`asset_number_rule.configured`/`asset_number.issued`イベントを追加)。
