@@ -218,12 +218,41 @@ UC-L05と同じ確定パターンで、`POST /assets/bulk`を`operation=relocate
 
 `BackofficeBulkReturnPage`(`operation=return`)も同じ確定パターンで一括返却を行う。
 
+## 管理番号の自動採番(`asset_number_rules`)
+
+- 管理番号(`asset_no`)は手入力が原則だが、カテゴリごとの採番ルールを`asset_number_rules`
+  マスタに登録しておくと、登録時にサーバー側が自動で払い出す。マスタは`prefix`
+  (例: `NPC`)・`digit_count`(ゼロパディング桁数、既定5)・`enabled`・`category`
+  (`NULL`の場合はデフォルトルール、最大1件)の列を持つ。区切り文字は固定で`-`
+  (例: `NPC-00001`)。
+- 判定順序(`IssueAssetNumberHandler`): ①登録する`category`と完全一致し
+  `enabled=true`のルールがあればそれを使う→②無ければ`is_default=true`かつ
+  `enabled=true`のデフォルトルールを使う→③どちらも無ければ`asset_no`は手入力必須
+  (＝ルールを1件も登録しなければ機能全体が実質OFFになる。専用のON/OFF設定は持たない)。
+  ①のルールが存在するが`enabled=false`の場合はデフォルトへフォールバックせず手入力に
+  なる(そのカテゴリだけ意図的に自動採番を止めたい場合の運用)。
+- 採番は`POST /assets`(登録)の1トランザクション内で、対象ルール行を`lockForUpdate()`
+  してから`next_number`を払い出し・インクリメントする。欠番は許容するが、連番の重複は
+  発生しない。
+- 採番ルールのCRUDは管理メニュー(`/admin/asset-number-rules`、`AssetNumberRuleListPage`)
+  から`asset.manage`権限で行う。`next_number`自体は画面から直接編集できない
+  (欠番管理を崩すため)。
+- API: `GET /asset-number-rules`(一覧)・`PUT /asset-number-rules/{category}`
+  (カテゴリ別ルールの作成・更新)・`PUT /asset-number-rules/default`
+  (デフォルトルールの作成・更新)・`GET /asset-number-rules/categories`
+  (`AssetRegisterPage`のカテゴリ入力補完用の候補一覧)。
+- 監査目的で、ルールの作成・変更・連番払い出しは`AssetNumberRuleConfigured`/
+  `AssetNumberIssued`イベントとして`stored_events`に記録する(`asset_number_rules`
+  自体はEloquentが正のマスタで、これらのイベントはこのマスタを再生成する対象ではなく
+  監査ログとしての位置づけ)。
+
 ## 備品の登録・編集・削除・状態変更(バックオフィス操作)
 
 いずれも`asset.manage`権限が必須。
 
 - **登録**(`AssetRegisterPage`): `POST /assets`→`RegisterAsset`コマンド→`asset.registered`
-  イベント。`asset_no`(管理番号)・`qr_token`はこの時点で確定し、以後不変
+  イベント。`asset_no`(管理番号)は上記の自動採番ルールに一致すればサーバー側で自動
+  払い出し、一致しなければ手入力必須。`qr_token`はこの時点で確定し、以後不変
   (`qr_token`のみ後述の再発行で差し替え可能)。
 - **編集**(`AssetEditPage`): `PATCH /assets/{asset}`→`UpdateAssetDetails`→
   `asset.details_updated`(名称・カテゴリ・シリアル番号・備考)。

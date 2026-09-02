@@ -304,6 +304,17 @@ paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)
 - `asset.disposed` (`note`(nullable)/`disposedByUserId`。廃棄はProjection上の行を残し
   `status=disposed`のまま検索・一覧対象にも表示する)
 
+管理番号の自動採番(`asset_number_rules`、docs/34-usecases-asset-management.md参照)は
+監査専用の別Aggregate(`AssetNumberRuleAuditAggregate`)から以下を発行する。
+`asset_number_rules`自体はEloquentが正のマスタであり、これらのイベントから
+Projectionを再生成する対象ではない。
+
+- `asset_number_rule.configured` (`assetNumberRuleId`/`category`(nullable。`null`は
+  デフォルトルール)/`prefix`/`digitCount`/`enabled`/`isDefault`/`actorUserId`)
+- `asset_number.issued` (`assetNumberRuleId`/`category`/`issuedNumber`/`assetNo`/
+  `actorUserId`。カテゴリ一致ルールまたはデフォルトルールいずれから採番したかは
+  `assetNumberRuleId`から判別する)
+
 ## 命名規則
 
 `user.roles_changed`と`user.roles_migrated_from_legacy`は、旧ユーザーロール機構で記録済みの

@@ -28,6 +28,8 @@ use App\Domain\Asset\Events\AssetRepairCompleted;
 use App\Domain\Asset\Events\AssetRepairStarted;
 use App\Domain\Asset\Events\AssetReportedLost;
 use App\Domain\Asset\Events\AssetReturned;
+use App\Domain\AssetNumbering\Events\AssetNumberIssued;
+use App\Domain\AssetNumbering\Events\AssetNumberRuleConfigured;
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
@@ -368,6 +370,8 @@ return [
         'asset.reported_lost' => AssetReportedLost::class,
         'asset.recovered_from_lost' => AssetRecoveredFromLost::class,
         'asset.disposed' => AssetDisposed::class,
+        'asset_number_rule.configured' => AssetNumberRuleConfigured::class,
+        'asset_number.issued' => AssetNumberIssued::class,
         'attachment.uploaded' => AttachmentUploaded::class,
         'attachment.downloaded' => AttachmentDownloaded::class,
         'export.created' => ExportCreated::class,

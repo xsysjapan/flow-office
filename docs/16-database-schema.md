@@ -1165,7 +1165,8 @@ docs/34-usecases-asset-management.md参照。`App\Domain\Asset\Aggregates\AssetA
 論点3)。
 
 - id (UUID)
-- asset_no (一意。管理番号。不変)
+- asset_no (一意。管理番号。不変。手入力または`asset_number_rules`による自動採番で
+  登録時に確定する)
 - name
 - category
 - serial_number (nullable)
@@ -1187,6 +1188,27 @@ docs/34-usecases-asset-management.md参照。`App\Domain\Asset\Aggregates\AssetA
 
 削除(`DeleteAsset`)はこのテーブルから物理削除するが、`stored_events`は変更しない。廃棄
 (`DisposeAsset`)は行を残し`status=disposed`のまま検索・一覧対象にも表示する。
+
+## asset_number_rules (管理番号の自動採番ルール。マスタ)
+
+docs/34-usecases-asset-management.md「管理番号の自動採番」参照。カテゴリごとに1行、
+加えて`is_default=true`の行を最大1件持てる(未一致カテゴリ用のフォールバック)。
+`AssetNumberRule`はEloquentモデルであり`stored_events`を正とするテーブルではないが、
+作成・変更・連番払い出しは`AssetNumberRuleConfigured`/`AssetNumberIssued`イベントとして
+`stored_events`にも監査目的で記録する(`changesets/20260831-asset-management-refinement/spec.md`
+論点1・論点10)。
+
+- id
+- category (nullable, unique。`is_default=true`の行のみ`NULL`。`is_default`行を複数
+  作れないことはアプリ層(`ConfigureAssetNumberRuleHandler`)で保証し、DB制約では
+  持たない)
+- prefix (例: `NPC`)
+- digit_count (unsigned tinyint。既定5。ゼロパディング桁数)
+- next_number (unsigned int。既定1。次に払い出す連番。行ロックしてから払い出し・
+  インクリメントする)
+- enabled (boolean。既定true)
+- is_default (boolean。既定false)
+- created_at / updated_at
 
 ## asset_default_location_changes (貸出品の通常配置場所の変更履歴)
 

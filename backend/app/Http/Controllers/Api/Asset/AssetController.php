@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Asset;
 
+use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\Asset\Commands\ChangeAssetLendingMethod;
 use App\Domain\Asset\Commands\ChangeAssetManagementType;
 use App\Domain\Asset\Commands\CompleteAssetRepair;
@@ -299,7 +300,7 @@ class AssetController extends Controller
     public function store(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'asset_no' => ['required', 'string', 'max:255', 'unique:assets,asset_no'],
+            'asset_no' => ['nullable', 'string', 'max:255', 'unique:assets,asset_no'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],
@@ -310,7 +311,7 @@ class AssetController extends Controller
         ]);
 
         $asset = $commandBus->dispatch(new RegisterAsset(
-            assetNo: $data['asset_no'],
+            assetNo: $data['asset_no'] ?? null,
             name: $data['name'],
             category: $data['category'],
             serialNumber: $data['serial_number'] ?? null,
@@ -710,7 +711,7 @@ class AssetController extends Controller
 
     private function authorizeAssetManage(Request $request): void
     {
-        $hasPermission = app(\App\Domain\AccessControl\Services\EffectiveAccessResolver::class)
+        $hasPermission = app(EffectiveAccessResolver::class)
             ->hasGlobalPermission($request->user(), 'asset.manage');
 
         abort_unless($hasPermission, 403, 'この操作を行う権限がありません。');

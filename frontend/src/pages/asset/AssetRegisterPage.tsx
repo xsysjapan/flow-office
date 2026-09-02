@@ -2,17 +2,33 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { CategoryCombobox } from '../../components/CategoryCombobox/CategoryCombobox'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
 import { Input } from '../../components/ui/input'
 import { NativeSelect } from '../../components/ui/native-select'
 import { Textarea } from '../../components/ui/textarea'
 import type { AssetLendingMethod, AssetManagementType } from '../../api/types'
+import type { AssetNumberRule } from '../../api/assetNumberRules'
 import { useRegisterAsset } from '../../hooks/useAsset'
+import { useAssetNumberRuleCategories, useAssetNumberRules } from '../../hooks/useAssetNumberRules'
 import { assetLendingMethodLabel, assetManagementTypeLabel } from '../../utils/statusLabels'
 
 const MANAGEMENT_TYPE_OPTIONS: AssetManagementType[] = ['lending', 'installation']
 const LENDING_METHOD_OPTIONS: AssetLendingMethod[] = ['self_service', 'backoffice', 'approval']
+
+/**
+ * spec 論点10の判定順: ①category完全一致かつenabled=true → ②(①が無い場合のみ)
+ * isDefault=trueかつenabled=true → ③いずれも無ければ手入力(null)。
+ */
+function resolveAutoNumberingRule(category: string, rules: AssetNumberRule[]): AssetNumberRule | null {
+  const trimmed = category.trim()
+  if (!trimmed) return null
+  const matched = rules.find((rule) => rule.category === trimmed)
+  if (matched) return matched.enabled ? matched : null
+  const defaultRule = rules.find((rule) => rule.isDefault)
+  return defaultRule?.enabled ? defaultRule : null
+}
 
 /**
  * 備品の新規登録(spec「実装対象」)。管理区分が貸出品の場合のみ貸出方式を選ばせ、
@@ -22,6 +38,8 @@ const LENDING_METHOD_OPTIONS: AssetLendingMethod[] = ['self_service', 'backoffic
 export function AssetRegisterPage() {
   const navigate = useNavigate()
   const registerAsset = useRegisterAsset()
+  const numberRules = useAssetNumberRules()
+  const numberRuleCategories = useAssetNumberRuleCategories()
 
   const [assetNo, setAssetNo] = useState('')
   const [name, setName] = useState('')
@@ -34,15 +52,17 @@ export function AssetRegisterPage() {
 
   const isLending = managementType === 'lending'
   const requiresDefaultLocation = isLending && lendingMethod === 'self_service'
+  const autoNumberingRule = resolveAutoNumberingRule(category, numberRules.data ?? [])
+  const isAutoNumbered = autoNumberingRule !== null
   const isValid =
-    assetNo.trim() !== '' &&
+    (isAutoNumbered || assetNo.trim() !== '') &&
     name.trim() !== '' &&
     category.trim() !== '' &&
     (!requiresDefaultLocation || defaultLocationText.trim() !== '')
 
   async function handleSave() {
     const asset = await registerAsset.mutateAsync({
-      asset_no: assetNo,
+      asset_no: isAutoNumbered ? null : assetNo,
       name,
       category,
       serial_number: serialNumber || null,
@@ -60,8 +80,15 @@ export function AssetRegisterPage() {
 
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="管理番号" htmlFor="asset-no" required>
-            <Input id="asset-no" value={assetNo} onChange={(e) => setAssetNo(e.target.value)} placeholder="例: EQ-00121" />
+          <FormField label="管理番号" htmlFor="asset-no" required={!isAutoNumbered}>
+            <Input
+              id="asset-no"
+              value={isAutoNumbered ? '' : assetNo}
+              onChange={(e) => setAssetNo(e.target.value)}
+              placeholder={isAutoNumbered ? '保存時に自動採番されます' : '例: EQ-00121'}
+              disabled={isAutoNumbered}
+              readOnly={isAutoNumbered}
+            />
           </FormField>
           <FormField label="名称" htmlFor="asset-name" required>
             <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="例: ThinkPad X1" />
@@ -70,7 +97,13 @@ export function AssetRegisterPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="カテゴリ" htmlFor="asset-category" required>
-            <Input id="asset-category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="例: ノートPC" />
+            <CategoryCombobox
+              id="asset-category"
+              value={category}
+              onChange={setCategory}
+              suggestions={numberRuleCategories.data ?? []}
+              placeholder="例: ノートPC"
+            />
           </FormField>
           <FormField label="シリアル番号" htmlFor="asset-serial">
             <Input id="asset-serial" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} />

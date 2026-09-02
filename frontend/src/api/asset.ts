@@ -113,7 +113,9 @@ export async function resolveAssetByScanInput(input: string): Promise<Asset> {
  * 1関数ずつ対応する。バリデーション自体はバックエンドが行うため、ここではペイロードの整形のみ行う。
  */
 export interface RegisterAssetInput {
-  asset_no: string
+  /** null(または未指定)の場合、カテゴリに対応する自動採番ルールでバックエンドが確定する
+   *  (docs/changesets/20260831-asset-management-refinement/spec.md 論点4)。 */
+  asset_no?: string | null
   name: string
   category: string
   serial_number?: string | null
