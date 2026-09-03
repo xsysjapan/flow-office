@@ -6,6 +6,7 @@ use App\Domain\Attendance\Events\CompanyCalendarDaysUpdated;
 use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
 use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
+use App\Domain\Attendance\Events\CompanyCalendarYearFiscalYearCorrected;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Models\CompanyCalendarDay;
@@ -105,5 +106,14 @@ class CompanyCalendarYearProjector extends Projector
     public function onCompanyCalendarYearDeleted(CompanyCalendarYearDeleted $event): void
     {
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->delete();
+    }
+
+    public function onCompanyCalendarYearFiscalYearCorrected(CompanyCalendarYearFiscalYearCorrected $event): void
+    {
+        CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
+            'fiscal_year' => $event->fiscalYear,
+            'starts_on' => $event->startsOn,
+            'ends_on' => $event->endsOn,
+        ]);
     }
 }

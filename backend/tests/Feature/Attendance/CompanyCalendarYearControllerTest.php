@@ -656,6 +656,79 @@ class CompanyCalendarYearControllerTest extends TestCase
         ]);
     }
 
+    public function test_correcting_fiscal_year_forcibly_updates_a_published_year_even_with_closed_months(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2025,
+            'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31',
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/publish")->assertOk();
+
+        // 通常のunpublishなら拒否される締め済み月があっても、年度番号の強制訂正は行える
+        // (実績データは日付レンジでのみ紐づき、fiscal_year/calendar_idを直接参照しないため)。
+        AttendanceMonth::query()->create([
+            'user_id' => $admin->id,
+            'year_month' => '2025-04',
+            'status' => 'approved',
+        ]);
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/unpublish")
+            ->assertUnprocessable();
+
+        $response = $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/correct-fiscal-year", [
+            'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01',
+            'ends_on' => '2027-03-31',
+            'reason' => '公開時に年度を誤って2025年度として公開したための訂正',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('status', 'published');
+        $response->assertJsonPath('fiscal_year', 2026);
+        $this->assertDatabaseHas('company_calendar_years', [
+            'id' => $year->id,
+            'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01',
+            'ends_on' => '2027-03-31',
+            'status' => 'published',
+        ]);
+
+        // 訂正後もこの年度に属する実績月・カレンダー日は一切変更されない
+        // (fiscal_year/calendar_idを直接参照するテーブルが無く、日付レンジで扱われるため)。
+        $this->assertDatabaseHas('attendance_months', [
+            'user_id' => $admin->id,
+            'year_month' => '2025-04',
+            'status' => 'approved',
+        ]);
+    }
+
+    public function test_correcting_fiscal_year_to_an_already_used_number_on_the_same_calendar_is_rejected(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2025,
+            'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31',
+        ])->json('id');
+        $firstYear = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        $this->actingAs($admin)->postJson("/api/company-calendars/{$calendarId}/years", [
+            'fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31',
+        ])->assertCreated();
+
+        $response = $this->actingAs($admin)->postJson("/api/company-calendar-years/{$firstYear->id}/correct-fiscal-year", [
+            'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01',
+            'ends_on' => '2027-03-31',
+        ]);
+
+        $response->assertUnprocessable();
+        $this->assertDatabaseHas('company_calendar_years', ['id' => $firstYear->id, 'fiscal_year' => 2025]);
+    }
+
     public function test_get_days_endpoint_returns_the_years_days_in_date_order(): void
     {
         $admin = $this->makeAdmin();

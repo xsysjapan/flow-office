@@ -7,6 +7,7 @@ use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
 use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
+use App\Domain\Attendance\Events\CompanyCalendarYearFiscalYearCorrected;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
@@ -122,6 +123,29 @@ class CompanyCalendarYearAggregate extends AggregateRoot
     {
         $this->recordThat(new CompanyCalendarYearDeleted(
             deletedByUserId: $deletedByUserId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 公開誤り等で年度番号を取り違えたカレンダー年度を、ステータスを問わず強制的に訂正する。
+     * 通常の差戻し(unpublish)と異なり締め済み月の有無は問わない(呼び出し元Handlerで
+     * 「番号の付け替えのみで実績日には手を加えない」ことを利用者に確認させる運用を前提とする)。
+     */
+    public function correctFiscalYear(
+        int $fiscalYear,
+        string $startsOn,
+        string $endsOn,
+        string $correctedByUserId,
+        ?string $reason,
+    ): self {
+        $this->recordThat(new CompanyCalendarYearFiscalYearCorrected(
+            fiscalYear: $fiscalYear,
+            startsOn: $startsOn,
+            endsOn: $endsOn,
+            correctedByUserId: $correctedByUserId,
+            reason: $reason,
         ));
 
         return $this;

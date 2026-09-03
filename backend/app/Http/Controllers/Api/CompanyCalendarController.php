@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
+use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\DeleteCompanyCalendar;
@@ -303,6 +304,50 @@ class CompanyCalendarController extends Controller
         $year = $commandBus->dispatch(new ArchiveCompanyCalendarYear(
             companyCalendarYearId: $companyCalendarYear->id,
             archivedByUserId: $request->user()->id,
+        ));
+
+        return new CompanyCalendarYearResource($year);
+    }
+
+    /**
+     * 公開誤りで年度番号を取り違えたカレンダー年度を、ステータス(下書き/公開済み/廃止)を
+     * 問わず強制的に訂正する。実績日(attendance_days等)はfiscal_year/calendar_idを直接
+     * 参照しないため、この操作は年度番号・開始日・終了日のみを書き換え、実績データには
+     * 手を加えない。
+     */
+    #[OA\Post(
+        path: '/company-calendar-years/{companyCalendarYear}/correct-fiscal-year',
+        operationId: 'companyCalendarYears.correctFiscalYear',
+        summary: 'カレンダー年度の年度番号・開始日・終了日を強制的に訂正する(公開誤りの事後修正)',
+        tags: ['勤務カレンダー'],
+        parameters: [new OA\Parameter(name: 'companyCalendarYear', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(
+            required: ['fiscal_year', 'starts_on', 'ends_on'],
+            properties: [
+                new OA\Property(property: 'fiscal_year', type: 'integer'),
+                new OA\Property(property: 'starts_on', type: 'string', format: 'date'),
+                new OA\Property(property: 'ends_on', type: 'string', format: 'date'),
+                new OA\Property(property: 'reason', type: 'string', nullable: true),
+            ],
+        )),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function correctFiscalYear(Request $request, CompanyCalendarYear $companyCalendarYear, CommandBus $commandBus): CompanyCalendarYearResource
+    {
+        $data = $request->validate([
+            'fiscal_year' => ['required', 'integer', 'min:1'],
+            'starts_on' => ['required', 'date'],
+            'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $year = $commandBus->dispatch(new CorrectCompanyCalendarYearFiscalYear(
+            companyCalendarYearId: $companyCalendarYear->id,
+            fiscalYear: $data['fiscal_year'],
+            startsOn: $data['starts_on'],
+            endsOn: $data['ends_on'],
+            correctedByUserId: $request->user()->id,
+            reason: $data['reason'] ?? null,
         ));
 
         return new CompanyCalendarYearResource($year);

@@ -69,6 +69,7 @@ use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
+use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
@@ -130,6 +131,7 @@ use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
+use App\Domain\Attendance\Handlers\CorrectCompanyCalendarYearFiscalYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
@@ -528,6 +530,7 @@ return [
         PublishCompanyCalendarYear::class => PublishCompanyCalendarYearHandler::class,
         UnpublishCompanyCalendarYear::class => UnpublishCompanyCalendarYearHandler::class,
         ArchiveCompanyCalendarYear::class => ArchiveCompanyCalendarYearHandler::class,
+        CorrectCompanyCalendarYearFiscalYear::class => CorrectCompanyCalendarYearFiscalYearHandler::class,
         DeleteCompanyCalendarYear::class => DeleteCompanyCalendarYearHandler::class,
         UpdateCompanyCalendarDays::class => UpdateCompanyCalendarDaysHandler::class,
         DuplicateCompanyCalendarYear::class => DuplicateCompanyCalendarYearHandler::class,
