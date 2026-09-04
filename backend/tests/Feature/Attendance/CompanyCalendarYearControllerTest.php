@@ -696,12 +696,72 @@ class CompanyCalendarYearControllerTest extends TestCase
             'status' => 'published',
         ]);
 
-        // 訂正後もこの年度に属する実績月・カレンダー日は一切変更されない
-        // (fiscal_year/calendar_idを直接参照するテーブルが無く、日付レンジで扱われるため)。
+        // 訂正後、実績月(fiscal_year/calendar_idを直接参照しない)は一切変更されない。
         $this->assertDatabaseHas('attendance_months', [
             'user_id' => $admin->id,
             'year_month' => '2025-04',
             'status' => 'approved',
+        ]);
+
+        // 一方で日別データ(所定休日・法定休日)は、訂正前の期間分は破棄され、
+        // 新しい期間に対して本体の曜日休日パターンから自動的に作り直される
+        // (2026-04-04は土曜、既定パターンでは所定休日)。
+        $this->assertDatabaseMissing('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2025-04-05 00:00:00',
+        ]);
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-04-04 00:00:00', 'schedule_state' => 'OFF', 'is_working_day' => false,
+        ]);
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2027-03-31 00:00:00',
+        ]);
+    }
+
+    public function test_correcting_fiscal_year_resyncs_the_holiday_calendar_source_for_the_new_period(): void
+    {
+        $admin = $this->makeAdmin();
+
+        Http::fake([
+            'https://example.com/holidays-correct.ics' => Http::response(<<<'ICS'
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            BEGIN:VEVENT
+            UID:uid-correct-1
+            DTSTART;VALUE=DATE:20260505
+            SUMMARY:こどもの日
+            END:VEVENT
+            END:VCALENDAR
+            ICS, 200),
+        ]);
+
+        $source = HolidayCalendarSource::query()->create([
+            'id' => (string) Str::uuid(), 'name' => 'ソース', 'ics_url' => 'https://example.com/holidays-correct.ics',
+        ]);
+
+        $calendarId = $this->actingAs($admin)->postJson('/api/company-calendars', [
+            'name' => '本社カレンダー', 'fiscal_year' => 2025,
+            'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31',
+            'holiday_calendar_source_id' => $source->id,
+        ])->json('id');
+        $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->first();
+
+        // 誤った期間(2025年度)には2026-05-05は含まれないため祝日は未登録。
+        $this->assertDatabaseMissing('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-05-05 00:00:00',
+        ]);
+
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/publish")->assertOk();
+
+        $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/correct-fiscal-year", [
+            'fiscal_year' => 2026,
+            'starts_on' => '2026-04-01',
+            'ends_on' => '2027-03-31',
+        ])->assertOk();
+
+        // 訂正後の新しい期間(2026年度)に限定して祝日ソースが再同期され、こどもの日が反映される。
+        $this->assertDatabaseHas('company_calendar_days', [
+            'calendar_id' => $year->id, 'date' => '2026-05-05 00:00:00',
+            'is_public_holiday' => true, 'public_holiday_name' => 'こどもの日',
         ]);
     }
 
