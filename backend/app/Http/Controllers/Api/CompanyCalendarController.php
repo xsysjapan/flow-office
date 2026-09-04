@@ -312,8 +312,10 @@ class CompanyCalendarController extends Controller
     /**
      * 公開誤りで年度番号を取り違えたカレンダー年度を、ステータス(下書き/公開済み/廃止)を
      * 問わず強制的に訂正する。実績日(attendance_days等)はfiscal_year/calendar_idを直接
-     * 参照しないため、この操作は年度番号・開始日・終了日のみを書き換え、実績データには
-     * 手を加えない。
+     * 参照しないため、この操作は実績データには手を加えない。一方で日別データ
+     * (所定休日・法定休日・祝日)は新しい期間に対して本体の曜日休日パターンから
+     * 作り直し、祝日iCalendarソースが設定されていれば新しい期間に限定して再同期する
+     * (手動編集していた日別データは破棄される)。
      */
     #[OA\Post(
         path: '/company-calendar-years/{companyCalendarYear}/correct-fiscal-year',
