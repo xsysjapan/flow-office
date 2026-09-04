@@ -112,6 +112,25 @@ export function archiveWorkCalendarYear(id: string): Promise<WorkCalendarYear> {
   return apiFetch(`/company-calendar-years/${id}/archive`, { method: 'POST' })
 }
 
+export interface CorrectWorkCalendarYearFiscalYearInput {
+  fiscal_year: number
+  starts_on: string
+  ends_on: string
+  reason?: string
+}
+
+/**
+ * 管理者専用: 誤って公開してしまった年度番号・開始日・終了日を、ステータス(draft/published/
+ * archived)や締め済み月の有無にかかわらず強制的に訂正する(公開時の入力ミス救済用の特例操作。
+ * 通常の公開/取消/廃止フローとは別枠として扱う)。同一カレンダー内で年度番号が重複する場合は422。
+ */
+export function correctWorkCalendarYearFiscalYear(
+  id: string,
+  input: CorrectWorkCalendarYearFiscalYearInput,
+): Promise<WorkCalendarYear> {
+  return apiFetch(`/company-calendar-years/${id}/correct-fiscal-year`, { method: 'POST', body: input })
+}
+
 /**
  * カレンダー年度を削除する(旧「廃止する」を置き換える操作。廃止はステータスを変えるだけで
  * 同じ年度番号を作り直せなかったため、実際に削除して同じ年度を再作成できるようにする)。

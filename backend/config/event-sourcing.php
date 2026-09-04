@@ -67,6 +67,7 @@ use App\Domain\Attendance\Events\CompanyCalendarYearArchived;
 use App\Domain\Attendance\Events\CompanyCalendarYearBatchGenerated;
 use App\Domain\Attendance\Events\CompanyCalendarYearCreated;
 use App\Domain\Attendance\Events\CompanyCalendarYearDeleted;
+use App\Domain\Attendance\Events\CompanyCalendarYearFiscalYearCorrected;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Domain\Attendance\Events\EmployeeCalendarEntryAssigned;
@@ -417,6 +418,7 @@ return [
         'company_calendar_year.archived' => CompanyCalendarYearArchived::class,
         'company_calendar_year.deleted' => CompanyCalendarYearDeleted::class,
         'company_calendar_year.batch_generated' => CompanyCalendarYearBatchGenerated::class,
+        'company_calendar_year.fiscal_year_corrected' => CompanyCalendarYearFiscalYearCorrected::class,
 
         'holiday_calendar_source.registered' => HolidayCalendarSourceRegistered::class,
         'holiday_calendar_source.updated' => HolidayCalendarSourceUpdated::class,

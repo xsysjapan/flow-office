@@ -329,6 +329,38 @@ describe('WorkCalendarDaysPage', () => {
       expect(screen.queryByRole('button', { name: '年度を再作成する' })).not.toBeInTheDocument()
     })
 
+    it('corrects the fiscal year via the correct-fiscal-year dialog', async () => {
+      vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
+      vi.spyOn(workCalendarsApi, 'correctWorkCalendarYearFiscalYear').mockResolvedValue({
+        ...year,
+        fiscal_year: 2027,
+        starts_on: '2027-04-01',
+        ends_on: '2027-04-30',
+      })
+
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: '年度を訂正' }))
+      expect(await screen.findByText('年度を訂正しますか?')).toBeInTheDocument()
+
+      const fiscalYearInput = screen.getByLabelText('年度番号')
+      await userEvent.clear(fiscalYearInput)
+      await userEvent.type(fiscalYearInput, '2027')
+
+      await userEvent.click(screen.getByRole('button', { name: '訂正する' }))
+
+      await waitFor(() =>
+        expect(workCalendarsApi.correctWorkCalendarYearFiscalYear).toHaveBeenCalledWith('year-1', {
+          fiscal_year: 2027,
+          starts_on: '2026-04-01',
+          ends_on: '2026-04-30',
+          reason: undefined,
+        }),
+      )
+      // 訂正が成功するとダイアログは閉じる。
+      await waitFor(() => expect(screen.queryByText('年度を訂正しますか?')).not.toBeInTheDocument())
+    })
+
     it('disables the sync button and hints at source management when no source is set', async () => {
       vi.spyOn(workCalendarsApi, 'fetchCompanyCalendarYearDays').mockResolvedValue(buildAprilDays())
 
