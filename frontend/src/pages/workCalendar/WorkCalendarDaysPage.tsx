@@ -4,6 +4,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
+import { CorrectFiscalYearDialog } from '../../components/CorrectFiscalYearDialog/CorrectFiscalYearDialog'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -316,6 +317,7 @@ export function WorkCalendarDaysPage() {
   const regenerateYear = useRegenerateCompanyCalendarYear()
 
   const [syncSummary, setSyncSummary] = useState<HolidayCalendarSyncSummary | null>(null)
+  const [correctingYear, setCorrectingYear] = useState(false)
 
   const [daysMap, setDaysMap] = useState<Map<string, DayState>>(new Map())
   const [loadedForYearId, setLoadedForYearId] = useState<string | null>(null)
@@ -516,6 +518,21 @@ export function WorkCalendarDaysPage() {
               />
             )}
           </div>
+
+          <div className="flex items-center gap-2 border-t border-dashed border-border pt-3">
+            <Button variant="secondary" size="sm" onClick={() => setCorrectingYear(true)}>
+              年度を訂正
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              公開時の年度番号・期間の入力ミスを、状態に関わらず強制的に訂正する特例操作です。
+            </p>
+          </div>
+
+          <CorrectFiscalYearDialog
+            year={correctingYear ? year : null}
+            companyCalendarId={calendar?.id ?? ''}
+            onOpenChange={setCorrectingYear}
+          />
 
           {!hasHolidaySource && calendar && (
             <p className="text-xs text-muted-foreground">

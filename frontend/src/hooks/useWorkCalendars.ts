@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   archiveWorkCalendarYear,
+  correctWorkCalendarYearFiscalYear,
   createWorkCalendar,
   createWorkCalendarYear,
   deleteWorkCalendar,
@@ -17,6 +18,7 @@ import {
   syncCompanyCalendarYearHolidayCalendar,
   unpublishWorkCalendarYear,
   updateWorkCalendar,
+  type CorrectWorkCalendarYearFiscalYearInput,
   type CreateWorkCalendarInput,
   type CreateWorkCalendarYearInput,
   type PutCalendarDayInput,
@@ -137,6 +139,23 @@ export function useArchiveWorkCalendarYear(companyCalendarId: string) {
 
   return useMutation({
     mutationFn: (id: string) => archiveWorkCalendarYear(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
+    },
+  })
+}
+
+/**
+ * 管理者専用: 年度番号・開始日・終了日をステータスに関わらず強制訂正する
+ * (公開時の入力ミス救済用の特例操作)。年度の表示内容(年度番号・期間・状態)が変わるため
+ * 年度一覧のキャッシュを無効化する。
+ */
+export function useCorrectWorkCalendarYearFiscalYear(companyCalendarId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: CorrectWorkCalendarYearFiscalYearInput }) =>
+      correctWorkCalendarYearFiscalYear(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: yearsKey(companyCalendarId) })
     },
