@@ -1,6 +1,6 @@
 # 有給・特別休暇の自動付与のユーザーごと有効/無効設定
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 休暇の自動設定について、現状自動設定ルールはありますが、ユーザーごとには制御ができません。自動設定の有効・無効について、ユーザーごとに設定できるようにしてください。設定のUIはユーザーごとの画面と自動設定ルールでユーザーを設定していくのの両方向から作ってください。
@@ -364,4 +364,36 @@
   存在しない(`docs/09-usecases-paid-leave.md`に併記されている)という調査結果に基づき修正。
 
 ## 実装結果
-未着手。
+
+ブランチ `claude/vacation-auto-config-per-user-ljr6qv` に実装済み。
+
+**バックエンド**:
+- マイグレーション `backend/database/migrations/2026_09_05_000000_add_auto_grant_enabled_flags_to_users_table.php`
+  で `users.paid_leave_auto_grant_enabled` / `special_leave_auto_grant_enabled`(共にdefault true)を追加。
+- `App\Domain\UserManagement` に `SetPaidLeaveAutoGrantEnabled`/`SetSpecialLeaveAutoGrantEnabled`
+  のCommand/Event/Handlerを追加し、`UserAggregate`/`UserProjector`に反映。
+  `config/domain.php`(Command→Handler)・`config/event-sourcing.php`(イベント別名)に登録。
+- `GrantScheduledPaidLeaveHandler`/`GrantScheduledSpecialLeaveHandler`の`eligibleUsers()`に
+  それぞれのフラグでの絞り込みを追加。
+- API: `PUT /users/{user}/paid-leave-auto-grant-enabled` /
+  `.../special-leave-auto-grant-enabled`(`UserController`、`user.update`権限)、
+  `GET /paid-leave/grant-rules/{rule}/target-users` / `special-leave/grant-rules/{rule}/target-users`
+  (`PaidLeaveController`/`SpecialLeaveController`)。`UserResource`に両フラグを追加。
+- `docs/16-database-schema.md`・`docs/17-events.md`・`docs/09-usecases-paid-leave.md`を更新。
+- 実装レビューで見つけた不具合を修正: `config/domain.php`のCommand→Handler登録漏れ(PUTが500に
+  なっていた)、`User`モデルの新カラムに`boolean`castが無くレスポンス上0/1に化けていた点、
+  `User::factory()->create()`直後のモデルにDBの`default(true)`が反映されないEloquentの挙動への
+  対応(`$attributes`にデフォルト値を設定)。
+- テスト: `php artisan test` 922件全て成功。Laravel Pint(フォーマッタ)も通過。
+
+**フロントエンド**:
+- `frontend/src/api/users.ts`・`useUsers.ts`に`update{PaidLeave,SpecialLeave}AutoGrantEnabled`の
+  クライアント関数・ミューテーションフックを追加。
+- `UserRoleEditPage.tsx`: 入社日・利用開始日と同じ「保存ボタン方式」で有給/特別休暇の自動付与
+  チェックボックスを追加、無効時は「自動付与:無効」バッジを表示。
+- `PaidLeaveAdminPage.tsx`/`SpecialLeaveAdminPage.tsx`: 付与ルールごとの「対象社員」展開セクション
+  (社員名検索ボックス付き、チェックボックスは即時反映)を追加。
+- テスト: `npm run test -- UserRoleEditPage PaidLeaveAdminPage SpecialLeaveAdminPage` 27件全て成功、
+  `npx tsc -b`エラー無し、`npm run lint`(oxlint)は既存の無関係な警告のみでエラー無し。
+
+**未対応・残課題**: なし(受入テスト条件の各項目は上記実装でカバーしている)。
