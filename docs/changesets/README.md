@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20260904-paid-leave-auto-grant-per-user-toggle](./20260904-paid-leave-auto-grant-per-user-toggle/spec.md) | 有給自動付与のユーザーごと有効/無効設定 | レビュー中 |
+| [20260904-paid-leave-auto-grant-per-user-toggle](./20260904-paid-leave-auto-grant-per-user-toggle/spec.md) | 有給・特別休暇の自動付与のユーザーごと有効/無効設定 | レビュー中 |
 | [20260831-asset-management-refinement](./20260831-asset-management-refinement/spec.md) | 備品管理ブラッシュアップ(管理番号自動採番 + ナビ再編) | 完了 |
 | [20260830-equipment-management](./20260830-equipment-management/spec.md) | 備品管理機能の追加(貸出・設置・修理・紛失・廃棄・QR操作) | 完了 |
 | [20260829-backoffice-task-detail-cleanup](./20260829-backoffice-task-detail-cleanup/spec.md) | 月次勤怠表示コンポーネントの統一(申請詳細・バックオフィスタスク詳細・勤怠参照画面) | 完了 |
