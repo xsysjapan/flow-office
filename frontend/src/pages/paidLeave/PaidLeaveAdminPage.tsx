@@ -14,25 +14,111 @@ import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGran
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
 import { Input } from '../../components/ui/input'
+import { useQueryClient } from '@tanstack/react-query'
 import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
   useAdminCancelPaidLeaveRequest,
   useCreatePaidLeaveGrantRule,
   useGrantPaidLeave,
   usePaidLeaveGrantRules,
+  usePaidLeaveGrantRuleTargetUsers,
   usePaidLeaveGrantsForUser,
   usePaidLeaveUsagesForUser,
   useRevokePaidLeaveGrant,
 } from '../../hooks/usePaidLeave'
+import { useUpdatePaidLeaveAutoGrantEnabled } from '../../hooks/useUsers'
 
 interface StepInput {
   continuous_service_months: number
   grant_days: number
 }
 
+/** 付与ルールの対象条件にマッチする社員一覧(展開時のみ取得)。名前で絞り込み・ON/OFF即時反映。 */
+function PaidLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number }) {
+  const { data: targetUsers, isLoading, error } = usePaidLeaveGrantRuleTargetUsers(ruleId)
+  const updateAutoGrantEnabled = useUpdatePaidLeaveAutoGrantEnabled()
+  const queryClient = useQueryClient()
+  const [nameFilter, setNameFilter] = useState('')
+
+  const filteredUsers = (targetUsers ?? []).filter((user) => user.name.includes(nameFilter))
+
+  const handleToggle = (userId: string, enabled: boolean) => {
+    updateAutoGrantEnabled.mutate(
+      { id: userId, enabled },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: ['paid-leave', 'grant-rules', ruleId, 'target-users'] })
+        },
+      },
+    )
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-border p-3">
+      {error && <ErrorMessage error={error} fallback="対象社員の取得に失敗しました。" />}
+      {updateAutoGrantEnabled.error && <ErrorMessage error={updateAutoGrantEnabled.error} />}
+
+      <FormField label="社員名で絞り込み" htmlFor={`paid-leave-rule-${ruleId}-target-user-filter`}>
+        <Input
+          id={`paid-leave-rule-${ruleId}-target-user-filter`}
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+        />
+      </FormField>
+
+      {isLoading ? (
+        <LoadingState />
+      ) : filteredUsers.length === 0 ? (
+        <EmptyState title="対象社員はいません。" />
+      ) : (
+        <table className="mt-3 w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+              <th className="py-1 pr-3">氏名</th>
+              <th className="py-1 pr-3">働き方</th>
+              <th className="py-1 pr-3">自動付与</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.map((user) => (
+              <tr key={user.id} className="border-b border-border last:border-0">
+                <td className="py-1.5 pr-3 text-foreground">{user.name}</td>
+                <td className="py-1.5 pr-3 text-muted-foreground">{user.work_style ?? '-'}</td>
+                <td className="py-1.5 pr-3">
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={user.paid_leave_auto_grant_enabled}
+                      onCheckedChange={(checked) => handleToggle(user.id, checked === true)}
+                      aria-label={`${user.name}の有給自動付与`}
+                    />
+                    {!user.paid_leave_auto_grant_enabled && <Badge tone="warning">自動付与:無効</Badge>}
+                  </label>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 function PaidLeaveGrantRulesCard() {
   const { data: rules, isLoading, error } = usePaidLeaveGrantRules()
   const createRule = useCreatePaidLeaveGrantRule()
+  const [expandedRuleIds, setExpandedRuleIds] = useState<Set<number>>(new Set())
+
+  const toggleExpanded = (ruleId: number) => {
+    setExpandedRuleIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(ruleId)) {
+        next.delete(ruleId)
+      } else {
+        next.add(ruleId)
+      }
+      return next
+    })
+  }
 
   const [ruleName, setRuleName] = useState('')
   const [minAttendanceRate, setMinAttendanceRate] = useState('')
@@ -107,6 +193,10 @@ function PaidLeaveGrantRulesCard() {
                   ))}
                 </ul>
               )}
+              <Button variant="secondary" size="sm" className="mt-2" onClick={() => toggleExpanded(rule.id)}>
+                {expandedRuleIds.has(rule.id) ? '対象社員を閉じる' : '対象社員'}
+              </Button>
+              {expandedRuleIds.has(rule.id) && <PaidLeaveGrantRuleTargetUsersSection ruleId={rule.id} />}
             </li>
           ))}
         </ul>

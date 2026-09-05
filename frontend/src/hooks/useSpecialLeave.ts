@@ -9,6 +9,7 @@ import {
   fetchMySpecialLeaveHistory,
   fetchMySpecialLeaveRequests,
   fetchSpecialLeaveGrantRules,
+  fetchSpecialLeaveGrantRuleTargetUsers,
   fetchSpecialLeaveGrantsForUser,
   fetchSpecialLeaveHistoryForUser,
   fetchSpecialLeaveTypes,
@@ -69,6 +70,15 @@ export function useSpecialLeaveGrantsForUser(userId: string) {
 
 export function useSpecialLeaveGrantRules() {
   return useQuery({ queryKey: RULES_KEY, queryFn: fetchSpecialLeaveGrantRules })
+}
+
+/** 付与ルールの対象社員一覧(対象社員セクション用)。展開時にのみ取得すればよいので `enabled` で制御する。 */
+export function useSpecialLeaveGrantRuleTargetUsers(ruleId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['special-leave', 'grant-rules', ruleId, 'target-users'],
+    queryFn: () => fetchSpecialLeaveGrantRuleTargetUsers(ruleId),
+    enabled,
+  })
 }
 
 export function useCreateSpecialLeaveGrantRule() {

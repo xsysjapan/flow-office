@@ -15,6 +15,10 @@ export interface User {
   termination_date?: string | null;
   /** 本システムの利用開始日。勤怠提出フォロー等の各種フォロー通知はこの日付以降のみ送る。未設定ならnull。 */
   usage_start_date?: string | null;
+  /** 有給の自動付与(UC-P002)の対象からこの社員を個別に外すためのフラグ。デフォルトtrue。 */
+  paid_leave_auto_grant_enabled?: boolean;
+  /** 特別休暇の自動付与の対象からこの社員を個別に外すためのフラグ(種別問わず一括)。デフォルトtrue。 */
+  special_leave_auto_grant_enabled?: boolean;
   last_login_at: string | null;
   /** Microsoft 365(Entra ID)アカウントと連携済みかどうか(docs/06-usecases-auth.md UC-004)。 */
   sso_linked?: boolean;
@@ -931,6 +935,14 @@ export interface PaidLeaveGrantRule {
   steps?: PaidLeaveGrantRuleStep[];
 }
 
+/** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
+export interface PaidLeaveGrantRuleTargetUser {
+  id: string;
+  name: string;
+  work_style: string | null;
+  paid_leave_auto_grant_enabled: boolean;
+}
+
 /** 特別休暇の名前付き種別マスタ(例: 誕生日休暇)。有効な種別が1件も無ければ
  *  特別休暇メニュー自体を表示しない。 */
 export interface SpecialLeaveType {
@@ -978,6 +990,14 @@ export interface SpecialLeaveGrantRule {
   expires_after_months: number | null;
   is_active: boolean;
   steps?: SpecialLeaveGrantRuleStep[];
+}
+
+/** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
+export interface SpecialLeaveGrantRuleTargetUser {
+  id: string;
+  name: string;
+  work_style: string | null;
+  special_leave_auto_grant_enabled: boolean;
 }
 
 export interface SpecialLeaveRequest {

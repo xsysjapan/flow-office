@@ -189,6 +189,8 @@ use App\Domain\UserManagement\Events\MembershipChangeSetScheduled;
 use App\Domain\UserManagement\Events\MembershipChangeSetUpdated;
 use App\Domain\UserManagement\Events\MembershipPrimaryChanged;
 use App\Domain\UserManagement\Events\MembershipRemoved;
+use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
+use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
 use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\UserFieldAuthorityChanged;
@@ -537,6 +539,8 @@ return [
         'user.termination_date_set' => UserTerminationDateSet::class,
         'user.usage_start_date_set' => UserUsageStartDateSet::class,
         'user.migrated_from_legacy' => UserMigratedFromLegacy::class,
+        'user.paid_leave_auto_grant_enabled_set' => PaidLeaveAutoGrantEnabledSet::class,
+        'user.special_leave_auto_grant_enabled_set' => SpecialLeaveAutoGrantEnabledSet::class,
 
         'backoffice_task.created' => BackOfficeTaskCreated::class,
         'backoffice_task.assigned' => BackOfficeTaskAssigned::class,

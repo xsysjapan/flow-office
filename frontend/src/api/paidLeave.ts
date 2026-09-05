@@ -1,5 +1,13 @@
 import { apiFetch } from './client'
-import type { PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveRequest, PaidLeaveType, PaidLeaveUsage, StoredEvent } from './types'
+import type {
+  PaidLeaveGrant,
+  PaidLeaveGrantRule,
+  PaidLeaveGrantRuleTargetUser,
+  PaidLeaveRequest,
+  PaidLeaveType,
+  PaidLeaveUsage,
+  StoredEvent,
+} from './types'
 
 export function fetchMyPaidLeaveGrants(): Promise<PaidLeaveGrant[]> {
   return apiFetch('/paid-leave/grants/mine')
@@ -25,6 +33,11 @@ export interface CreatePaidLeaveGrantRuleInput {
 
 export function createPaidLeaveGrantRule(input: CreatePaidLeaveGrantRuleInput): Promise<PaidLeaveGrantRule> {
   return apiFetch('/paid-leave/grant-rules', { method: 'POST', body: input })
+}
+
+/** ルールの対象条件(雇用形態/勤務体系)にマッチする社員の軽量一覧を取得する(対象社員セクション用)。 */
+export function fetchPaidLeaveGrantRuleTargetUsers(ruleId: number): Promise<PaidLeaveGrantRuleTargetUser[]> {
+  return apiFetch(`/paid-leave/grant-rules/${ruleId}/target-users`)
 }
 
 export interface GrantPaidLeaveInput {

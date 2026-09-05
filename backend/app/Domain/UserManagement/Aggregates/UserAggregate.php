@@ -2,6 +2,8 @@
 
 namespace App\Domain\UserManagement\Aggregates;
 
+use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
+use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
 use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\UserHireDateSet;
@@ -99,6 +101,20 @@ class UserAggregate extends AggregateRoot
     public function setUsageStartDate(string $usageStartDate, string $changedByUserId): self
     {
         $this->recordThat(new UserUsageStartDateSet(usageStartDate: $usageStartDate, changedByUserId: $changedByUserId));
+
+        return $this;
+    }
+
+    public function setPaidLeaveAutoGrantEnabled(bool $enabled, string $changedByUserId): self
+    {
+        $this->recordThat(new PaidLeaveAutoGrantEnabledSet(enabled: $enabled, changedByUserId: $changedByUserId));
+
+        return $this;
+    }
+
+    public function setSpecialLeaveAutoGrantEnabled(bool $enabled, string $changedByUserId): self
+    {
+        $this->recordThat(new SpecialLeaveAutoGrantEnabledSet(enabled: $enabled, changedByUserId: $changedByUserId));
 
         return $this;
     }

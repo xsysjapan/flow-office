@@ -5,7 +5,14 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as paidLeaveApi from '../../api/paidLeave'
 import * as usersApi from '../../api/users'
-import type { Paginated, PaidLeaveGrant, PaidLeaveGrantRule, PaidLeaveUsage, User } from '../../api/types'
+import type {
+  Paginated,
+  PaidLeaveGrant,
+  PaidLeaveGrantRule,
+  PaidLeaveGrantRuleTargetUser,
+  PaidLeaveUsage,
+  User,
+} from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
 import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
 
@@ -135,5 +142,35 @@ describe('PaidLeaveAdminPage', () => {
     expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
     expect(paidLeaveApi.fetchPaidLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
+  })
+
+  it('shows the target users of a grant rule, filters by name, and toggles auto-grant instantly', async () => {
+    const targetUsers: PaidLeaveGrantRuleTargetUser[] = [
+      { id: 'user-3', name: '鈴木一郎', work_style: '通常勤務', paid_leave_auto_grant_enabled: true },
+      { id: 'user-4', name: '他の社員', work_style: null, paid_leave_auto_grant_enabled: false },
+    ]
+    vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRuleTargetUsers').mockResolvedValue(targetUsers)
+    vi.spyOn(usersApi, 'updatePaidLeaveAutoGrantEnabled').mockResolvedValue({
+      ...targetUser,
+      paid_leave_auto_grant_enabled: false,
+    })
+
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: '対象社員' }))
+
+    expect(await screen.findByText('鈴木一郎')).toBeInTheDocument()
+    expect(screen.getByText('他の社員')).toBeInTheDocument()
+    expect(screen.getByText('自動付与:無効')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('社員名で絞り込み'), '他の')
+    expect(screen.queryByText('鈴木一郎')).not.toBeInTheDocument()
+    expect(screen.getByText('他の社員')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '他の社員の有給自動付与' }))
+
+    await waitFor(() =>
+      expect(usersApi.updatePaidLeaveAutoGrantEnabled).toHaveBeenCalledWith('user-4', true),
+    )
   })
 })

@@ -9,6 +9,7 @@ import type {
   Paginated,
   SpecialLeaveGrant,
   SpecialLeaveGrantRule,
+  SpecialLeaveGrantRuleTargetUser,
   SpecialLeaveType,
   SpecialLeaveUsage,
   User,
@@ -180,5 +181,36 @@ describe('SpecialLeaveAdminPage', () => {
     expect(await screen.findByText('2026-07-10')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
     expect(specialLeaveApi.fetchSpecialLeaveUsagesForUser).toHaveBeenCalledWith('user-3')
+  })
+
+  it('shows the target users of a grant rule, filters by name, and toggles auto-grant instantly', async () => {
+    const targetUsers: SpecialLeaveGrantRuleTargetUser[] = [
+      { id: 'user-3', name: '鈴木一郎', work_style: '通常勤務', special_leave_auto_grant_enabled: true },
+      { id: 'user-4', name: '他の社員', work_style: null, special_leave_auto_grant_enabled: false },
+    ]
+    vi.spyOn(specialLeaveApi, 'fetchSpecialLeaveGrantRuleTargetUsers').mockResolvedValue(targetUsers)
+    vi.spyOn(usersApi, 'updateSpecialLeaveAutoGrantEnabled').mockResolvedValue({
+      ...targetUser,
+      special_leave_auto_grant_enabled: false,
+    })
+
+    renderPage()
+    await screen.findByText('誕生日休暇: 誕生日休暇ルール')
+
+    await userEvent.click(screen.getByRole('button', { name: '対象社員' }))
+
+    expect(await screen.findByText('鈴木一郎')).toBeInTheDocument()
+    expect(screen.getByText('他の社員')).toBeInTheDocument()
+    expect(screen.getByText('自動付与:無効')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('社員名で絞り込み'), '他の')
+    expect(screen.queryByText('鈴木一郎')).not.toBeInTheDocument()
+    expect(screen.getByText('他の社員')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '他の社員の特別休暇自動付与' }))
+
+    await waitFor(() =>
+      expect(usersApi.updateSpecialLeaveAutoGrantEnabled).toHaveBeenCalledWith('user-4', true),
+    )
   })
 })

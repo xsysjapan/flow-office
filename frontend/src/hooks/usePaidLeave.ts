@@ -8,6 +8,7 @@ import {
   fetchMyPaidLeaveHistory,
   fetchMyPaidLeaveRequests,
   fetchPaidLeaveGrantRules,
+  fetchPaidLeaveGrantRuleTargetUsers,
   fetchPaidLeaveGrantsForUser,
   fetchPaidLeaveHistoryForUser,
   fetchPaidLeaveUsagesForUser,
@@ -36,6 +37,15 @@ export function usePaidLeaveGrantsForUser(userId: string) {
 
 export function usePaidLeaveGrantRules() {
   return useQuery({ queryKey: RULES_KEY, queryFn: fetchPaidLeaveGrantRules })
+}
+
+/** 付与ルールの対象社員一覧(対象社員セクション用)。展開時にのみ取得すればよいので `enabled` で制御する。 */
+export function usePaidLeaveGrantRuleTargetUsers(ruleId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['paid-leave', 'grant-rules', ruleId, 'target-users'],
+    queryFn: () => fetchPaidLeaveGrantRuleTargetUsers(ruleId),
+    enabled,
+  })
 }
 
 export function useCreatePaidLeaveGrantRule() {

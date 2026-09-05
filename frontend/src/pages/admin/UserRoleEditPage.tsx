@@ -12,6 +12,7 @@ import { FormField } from "../../components/FormField/FormField";
 import { LoadingState } from "../../components/LoadingState/LoadingState";
 import { AttendanceSubmissionReminderExclusionPanel } from "../../components/AttendanceSubmissionReminderExclusionPanel/AttendanceSubmissionReminderExclusionPanel";
 import { NativeSelect } from "../../components/ui/native-select";
+import { Checkbox } from "../../components/ui/checkbox";
 import { Input } from "../../components/ui/input";
 import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
 import {
@@ -30,6 +31,8 @@ import {
   useUserWorkStyleMonthlyAssignments,
 } from "../../hooks/useUserWorkStyleMonthlyAssignments";
 import {
+  useUpdatePaidLeaveAutoGrantEnabled,
+  useUpdateSpecialLeaveAutoGrantEnabled,
   useUpdateUserHireDate,
   useUpdateUserTerminationDate,
   useUpdateUserUsageStartDate,
@@ -75,6 +78,8 @@ export function UserRoleEditPage() {
   const updateHireDate = useUpdateUserHireDate();
   const updateTerminationDate = useUpdateUserTerminationDate();
   const updateUsageStartDate = useUpdateUserUsageStartDate();
+  const updatePaidLeaveAutoGrantEnabled = useUpdatePaidLeaveAutoGrantEnabled();
+  const updateSpecialLeaveAutoGrantEnabled = useUpdateSpecialLeaveAutoGrantEnabled();
   const updateUser = useUpdateUser();
   const assignWorkStyleForMonth = useAssignUserWorkStyleForMonth();
   const removeWorkStyleAssignment = useRemoveUserWorkStyleMonthlyAssignment();
@@ -85,6 +90,10 @@ export function UserRoleEditPage() {
   const [hireDate, setHireDate] = useState("");
   const [terminationDate, setTerminationDate] = useState("");
   const [usageStartDate, setUsageStartDate] = useState("");
+  const [paidLeaveAutoGrantEnabled, setPaidLeaveAutoGrantEnabled] =
+    useState(true);
+  const [specialLeaveAutoGrantEnabled, setSpecialLeaveAutoGrantEnabled] =
+    useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [membershipChangeOpen, setMembershipChangeOpen] = useState(false);
   const [membershipChange, setMembershipChange] = useState({
@@ -119,6 +128,10 @@ export function UserRoleEditPage() {
       setHireDate(user.hire_date ?? "");
       setTerminationDate(user.termination_date ?? "");
       setUsageStartDate(user.usage_start_date ?? "");
+      setPaidLeaveAutoGrantEnabled(user.paid_leave_auto_grant_enabled ?? true);
+      setSpecialLeaveAutoGrantEnabled(
+        user.special_leave_auto_grant_enabled ?? true,
+      );
       setProfile({
         name: user.name,
         email: user.email ?? "",
@@ -798,6 +811,76 @@ export function UserRoleEditPage() {
             利用開始日を保存する
           </Button>
         </div>
+      </div>
+
+      <div className="mt-6 border-t border-border pt-4">
+        {updatePaidLeaveAutoGrantEnabled.error && (
+          <ErrorMessage error={updatePaidLeaveAutoGrantEnabled.error} />
+        )}
+        {updateSpecialLeaveAutoGrantEnabled.error && (
+          <ErrorMessage error={updateSpecialLeaveAutoGrantEnabled.error} />
+        )}
+        {(updatePaidLeaveAutoGrantEnabled.isSuccess ||
+          updateSpecialLeaveAutoGrantEnabled.isSuccess) && (
+          <Badge tone="success">保存しました</Badge>
+        )}
+
+        <h3 className="mb-3 text-sm font-semibold text-foreground">
+          休暇の自動付与
+        </h3>
+
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Checkbox
+                id="user-role-edit-paid-leave-auto-grant-enabled"
+                checked={paidLeaveAutoGrantEnabled}
+                onCheckedChange={(checked) =>
+                  setPaidLeaveAutoGrantEnabled(checked === true)
+                }
+              />
+              有給の自動付与を有効にする
+            </label>
+            {user.paid_leave_auto_grant_enabled === false && (
+              <Badge tone="warning">自動付与:無効</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Checkbox
+                id="user-role-edit-special-leave-auto-grant-enabled"
+                checked={specialLeaveAutoGrantEnabled}
+                onCheckedChange={(checked) =>
+                  setSpecialLeaveAutoGrantEnabled(checked === true)
+                }
+              />
+              特別休暇の自動付与を有効にする
+            </label>
+            {user.special_leave_auto_grant_enabled === false && (
+              <Badge tone="warning">自動付与:無効</Badge>
+            )}
+          </div>
+        </div>
+
+        <Button
+          variant="secondary"
+          isLoading={
+            updatePaidLeaveAutoGrantEnabled.isPending ||
+            updateSpecialLeaveAutoGrantEnabled.isPending
+          }
+          onClick={() => {
+            updatePaidLeaveAutoGrantEnabled.mutate({
+              id: userId,
+              enabled: paidLeaveAutoGrantEnabled,
+            });
+            updateSpecialLeaveAutoGrantEnabled.mutate({
+              id: userId,
+              enabled: specialLeaveAutoGrantEnabled,
+            });
+          }}
+        >
+          自動付与設定を保存する
+        </Button>
       </div>
 
       <div className="mt-6 border-t border-border pt-4">

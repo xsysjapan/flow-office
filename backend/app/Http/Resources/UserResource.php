@@ -31,6 +31,8 @@ class UserResource extends JsonResource
             'hire_date' => $this->hire_date?->toDateString(),
             'termination_date' => $this->termination_date?->toDateString(),
             'usage_start_date' => $this->usage_start_date?->toDateString(),
+            'paid_leave_auto_grant_enabled' => $this->paid_leave_auto_grant_enabled,
+            'special_leave_auto_grant_enabled' => $this->special_leave_auto_grant_enabled,
             'external_identities' => $this->whenLoaded('externalIdentities', fn () => $this->externalIdentities->map(fn ($identity) => [
                 'id' => $identity->id,
                 'provider' => $identity->provider,

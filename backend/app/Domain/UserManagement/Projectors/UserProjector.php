@@ -2,6 +2,8 @@
 
 namespace App\Domain\UserManagement\Projectors;
 
+use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
+use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
 use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\UserHireDateSet;
@@ -159,6 +161,20 @@ class UserProjector extends Projector
     {
         User::query()->whereKey($event->aggregateRootUuid())->update([
             'usage_start_date' => $event->usageStartDate,
+        ]);
+    }
+
+    public function onPaidLeaveAutoGrantEnabledSet(PaidLeaveAutoGrantEnabledSet $event): void
+    {
+        User::query()->whereKey($event->aggregateRootUuid())->update([
+            'paid_leave_auto_grant_enabled' => $event->enabled,
+        ]);
+    }
+
+    public function onSpecialLeaveAutoGrantEnabledSet(SpecialLeaveAutoGrantEnabledSet $event): void
+    {
+        User::query()->whereKey($event->aggregateRootUuid())->update([
+            'special_leave_auto_grant_enabled' => $event->enabled,
         ]);
     }
 }
