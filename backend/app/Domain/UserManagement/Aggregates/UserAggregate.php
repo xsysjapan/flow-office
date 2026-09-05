@@ -2,10 +2,10 @@
 
 namespace App\Domain\UserManagement\Aggregates;
 
-use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
-use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
+use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
+use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserLoggedIn;
 use App\Domain\UserManagement\Events\UserOnboardedAsAdmin;

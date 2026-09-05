@@ -2,12 +2,12 @@
 
 namespace App\Domain\UserManagement\Projectors;
 
+use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
+use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserCreatedFromSsoLogin;
 use App\Domain\UserManagement\Events\UserCreatedManually;
 use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserLoggedIn;
-use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
-use App\Domain\UserManagement\Events\SpecialLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserMigratedFromLegacy;
 use App\Domain\UserManagement\Events\UserOnboardedAsAdmin;
 use App\Domain\UserManagement\Events\UserProfileUpdated;
