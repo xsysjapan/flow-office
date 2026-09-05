@@ -118,6 +118,7 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
     {
         $query = User::query()
             ->whereNotNull('hire_date')
+            ->where('special_leave_auto_grant_enabled', true)
             ->where(DailyBatchTimezoneGroups::constraint($timezone, $defaultTimezone))
             ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 

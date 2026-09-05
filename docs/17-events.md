@@ -14,6 +14,10 @@
   `auth_method`が`sso`(実際のEntra IDログイン結果で作成、ExternalIdentityリンク済み)か
   `local`(ローカルパスワードで作成)かを区別する)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
+- `user.paid_leave_auto_grant_enabled_set` (有給の自動付与をユーザーごとに有効/無効化する。
+  docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
+- `user.special_leave_auto_grant_enabled_set` (特別休暇の自動付与をユーザーごとに有効/無効化する。
+  同上)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
   Microsoft 365アカウントを紐づける)
