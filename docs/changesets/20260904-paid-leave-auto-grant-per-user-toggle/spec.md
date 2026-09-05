@@ -151,6 +151,25 @@
   ことをコードで確認済みのため、同じ実装方針をそのまま適用できる。
 - 未確定・要確認事項: なし。
 
+### 論点6: 編集画面の保存方式・対象社員一覧の検索
+- 選択肢(保存方式):
+  - A. 即時保存(チェック切替と同時にAPI呼び出し)。
+  - B. 既存の入社日・利用開始日と同じ「入力→保存ボタン押下で確定」方式。
+- 決定: B。
+- 理由: `UserRoleEditPage.tsx`内の他フィールドと操作方式を統一するため(ユーザー確認により
+  決定)。
+- 選択肢(対象社員一覧の検索):
+  - A. 検索なしのシンプルな一覧のみ。
+  - B. 社員名で絞り込む検索ボックスを追加する。
+- 決定: B。
+- 理由: 社員数が多い場合に一覧から目的の社員を探しやすくするため(ユーザー確認により決定)。
+  既存の`UserPicker`と同様、取得済み一覧に対するクライアントサイドの絞り込みとする
+  (サーバー側の検索パラメータは追加しない。対象社員数はルール単位で絞られており、
+  全社員一覧より小規模なため)。
+  なお、対象社員一覧内のON/OFF切替そのものは(編集画面と異なり)即時反映とする
+  (1クリックで完結する単純な操作のため、保存ボタンを挟む必要性が薄い)。
+- 未確定・要確認事項: なし。
+
 ## 仕様確定事項(まとめ)
 - **DB**: `users`テーブルに以下2列を追加するマイグレーションを作成。
   - `paid_leave_auto_grant_enabled boolean not null default true`
@@ -198,14 +217,19 @@
     `useUpdatePaidLeaveAutoGrantEnabled` / `useUpdateSpecialLeaveAutoGrantEnabled`
     ミューテーションフックを追加。
   - `UserRoleEditPage.tsx`: 入社日・利用開始日の並びに Checkbox
-    「有給の自動付与を有効にする」「特別休暇の自動付与を有効にする」を追加し、変更時に
-    即時保存(既存の他フィールドの保存ボタン方式に合わせる。既存コードの
-    `updateHireDate.mutate`と同様の呼び出し形にする)。
+    「有給の自動付与を有効にする」「特別休暇の自動付与を有効にする」を追加する。
+    保存方式は既存の入社日・利用開始日と同じ「入力→保存ボタン押下で確定」方式に統一する
+    (チェック状態はローカルstateで保持し、既存の`updateHireDate.mutate`と同様に
+    保存ボタン押下時に`update*AutoGrantEnabled.mutate`を呼ぶ。画面内の操作方式を統一する)。
   - `PaidLeaveAdminPage.tsx` の `PaidLeaveGrantRulesCard`、および
     `SpecialLeaveAdminPage.tsx` の `SpecialLeaveGrantRulesCard`: 各ルール行に
-    「対象社員」展開ボタンを追加し、展開すると`target-users`一覧をテーブル表示、各行に
-    Checkbox(`components/ui/checkbox`)で自動付与ON/OFFを切替(切替はそれぞれ対応する
-    `update*AutoGrantEnabled`を呼ぶ。ルールへの所属自体は変更しない、あくまで社員個別のON/OFF)。
+    「対象社員」展開ボタンを追加し、展開すると`target-users`一覧をテーブル表示する。
+    一覧上部に社員名での検索ボックス(`components/ui/input`、既存の`UserPicker`と同様の
+    クライアントサイド絞り込み)を設置し、各行にCheckbox(`components/ui/checkbox`)で
+    自動付与ON/OFFを切替(この一覧上のCheckboxはトグル即時反映とする。編集画面と異なり
+    1件ずつの単純なON/OFF操作であり、保存ボタンを介す必要性が薄いため。切替はそれぞれ
+    対応する`update*AutoGrantEnabled`を呼ぶ。ルールへの所属自体は変更しない、あくまで
+    社員個別のON/OFF)。
   - 一覧・詳細双方とも、無効化されている社員には`Badge`等で「自動付与:無効」を明示する。
 - **既存挙動への影響**: マイグレーション適用直後は全社員`true`のため、既存の自動付与挙動は
   有給・特別休暇いずれも変化しない。
@@ -228,10 +252,12 @@
   「`users.paid_leave_auto_grant_enabled = true` の社員のみ」を追記する。また新規ユースケース
   UC-P00X(社員ごとの有給自動付与ON/OFFを設定する)を追加し、2つの操作経路
   (社員編集画面/付与ルール画面の対象社員一覧)を明記する。
-- 特別休暇のユースケースドキュメント(`GrantScheduledSpecialLeaveHandler`に対応する
-  docs/配下のユースケース番号。実装時にdocs/README.mdの目次で特定し追記する)に、同様に
-  対象者判定条件「`users.special_leave_auto_grant_enabled = true` の社員のみ」と、
-  新規ユースケース(社員ごとの特別休暇自動付与ON/OFFを設定する)を追加する。
+- 特別休暇には独立したユースケース文書は無く、`docs/09-usecases-paid-leave.md`内で
+  UC-P008/UC-P009等の注記として「同じ構造を特別休暇にも実装する」という形で言及されている
+  (確認済み)。そのため本変更も同ファイルのUC-P002注記部分に、有給と併記する形で
+  「特別休暇についても`users.special_leave_auto_grant_enabled = true`の社員のみが
+  自動付与対象」である旨と、新規ユースケース(社員ごとの有給/特別休暇自動付与ON/OFFを
+  設定する。両休暇種別を1つのUC番号にまとめる)を追記する。
 - `docs/16-database-schema.md`: `users`テーブル定義に `paid_leave_auto_grant_enabled` /
   `special_leave_auto_grant_enabled` の2列を追記。
 - `docs/17-events.md`: `user.paid_leave_auto_grant_enabled_set` /
@@ -284,8 +310,9 @@
      フラグをOFFにしない限り従来どおり自動付与される(回帰なし)。
 
 2. **有給自動付与のON/OFF(ユーザー編集画面から)**
-   - `UserRoleEditPage.tsx`で対象社員の「有給の自動付与を有効にする」チェックを外して保存すると、
-     `users.paid_leave_auto_grant_enabled`が`false`になる。
+   - `UserRoleEditPage.tsx`で対象社員の「有給の自動付与を有効にする」チェックを外し、
+     保存ボタンを押すと(チェックを外しただけでは保存されない)`users.paid_leave_auto_grant_enabled`
+     が`false`になる。
    - その状態で`paid-leave:grant-scheduled`(または`GrantScheduledPaidLeave`コマンド)を実行しても、
      当該社員が付与ルールの他の条件(記念日・出勤率等)を満たしていても`paid_leave_grants`が
      作成されない。
@@ -303,6 +330,8 @@
    - 一覧上でチェックボックスを切り替えると、(2)と同じAPIが呼ばれ`users`テーブルが更新される
      (`UserRoleEditPage.tsx`側の表示にも反映される。設定値は1つなので画面をまたいで一致する)。
    - `SpecialLeaveAdminPage.tsx`の付与ルール一覧でも同様に対象社員一覧とON/OFF切替ができる。
+   - 対象社員一覧の検索ボックスに社員名を入力すると、一覧がクライアントサイドで絞り込まれる。
+   - 一覧上のチェックボックス切替は(編集画面と異なり)保存ボタン無しで即時に反映される。
 
 5. **無効化されている社員の可視化**
    - `UserRoleEditPage.tsx`および付与ルール管理画面の対象社員一覧の双方で、無効化されている
@@ -330,6 +359,9 @@
 - 特別休暇の自動付与についても同様の制御を追加する依頼を受け、対象範囲を有給+特別休暇に拡張。
   特別休暇特有の論点(論点1a: 種別ごとではなく全体で1フラグ)を追加し、受入テスト条件セクションを
   新設。
+- ユーザー確認により論点6(編集画面の保存方式=保存ボタン方式に統一、対象社員一覧に検索
+  ボックスを追加)を確定。「ドキュメントへの影響」を、特別休暇の独立ユースケース文書は
+  存在しない(`docs/09-usecases-paid-leave.md`に併記されている)という調査結果に基づき修正。
 
 ## 実装結果
 未着手。
