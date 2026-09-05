@@ -26,12 +26,15 @@ use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\PaidLeaveUsage;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -87,6 +90,47 @@ class PaidLeaveController extends Controller
         }
 
         return (new PaidLeaveGrantRuleResource($rule->load('steps')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * ある有給付与ルールが現在対象としている社員の一覧(対象社員ごとの自動付与ON/OFF状態付き)を
+     * 取得する。付与済み日数等の計算は行わない一覧表示専用の軽量エンドポイント
+     * (docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md 論点4・5)。
+     * 対象条件(work_style_id一致・hire_date設定済み)は
+     * GrantScheduledPaidLeaveHandler::eligibleUsers() と同じ考え方だが、
+     * タイムゾーン・利用開始日の到来判定は行わない(日次バッチの適格性判定ではなく、
+     * 「このルールが現在どの社員を対象にしているか」の静的な一覧のため)。
+     */
+    #[OA\Get(
+        path: '/paid-leave/grant-rules/{rule}/target-users',
+        operationId: 'paidLeave.grantRules.targetUsers',
+        summary: '有給付与ルールの対象社員一覧を取得する',
+        tags: ['有給休暇'],
+        parameters: [new OA\Parameter(name: 'rule', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function targetUsers(PaidLeaveGrantRule $rule): JsonResponse
+    {
+        $query = User::query()->whereNotNull('hire_date');
+
+        if ($rule->work_style_id !== null) {
+            $userIds = EmployeeCalendarEntry::query()
+                ->where('work_style_id', $rule->work_style_id)
+                ->whereDate('work_date', Carbon::now()->toDateString())
+                ->pluck('user_id');
+            $query->whereIn('id', $userIds);
+        }
+
+        $workStyleName = $rule->work_style_id !== null ? $rule->workStyle?->name : null;
+
+        return response()->json([
+            'data' => $query->orderBy('name')->get()->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'work_style' => $workStyleName,
+                'paid_leave_auto_grant_enabled' => $user->paid_leave_auto_grant_enabled,
+            ]),
+        ]);
     }
 
     /**

@@ -54,6 +54,14 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   有給の自動付与(docs/09-usecases-paid-leave.md UC-P002)の継続勤務期間の基準日に使う)
 - termination_date (退社日。未設定なら在籍中。入社日以降の日付だけを設定でき、月次勤怠の
   表示対象は入社月から退社月または当月までとする)
+- paid_leave_auto_grant_enabled (boolean, default true。有給の自動付与バッチ(UC-P002)の
+  対象からユーザー個別に除外するためのフラグ。false の間は付与ルールの他の条件を満たしても
+  自動付与されない。手動付与には影響しない。
+  docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
+- special_leave_auto_grant_enabled (boolean, default true。特別休暇の自動付与バッチ
+  (`GrantScheduledSpecialLeaveHandler`)の対象からユーザー個別に除外するためのフラグ。
+  特別休暇種別を問わず一括で判定する。手動付与には影響しない。
+  docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
 - last_login_at
 - created_at / updated_at
 

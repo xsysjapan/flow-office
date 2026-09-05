@@ -156,6 +156,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     Route::put('/users/{user}/hire-date', [UserController::class, 'updateHireDate'])->middleware('permission:user.update');
     Route::put('/users/{user}/termination-date', [UserController::class, 'updateTerminationDate'])->middleware('permission:user.update');
     Route::put('/users/{user}/usage-start-date', [UserController::class, 'updateUsageStartDate'])->middleware('permission:user.update');
+    Route::put('/users/{user}/paid-leave-auto-grant-enabled', [UserController::class, 'updatePaidLeaveAutoGrantEnabled'])->middleware('permission:user.update');
+    Route::put('/users/{user}/special-leave-auto-grant-enabled', [UserController::class, 'updateSpecialLeaveAutoGrantEnabled'])->middleware('permission:user.update');
     // --- 申請種別マスタ (docs/10-usecases-workflow.md UC-W001, docs/15 UC-M002) ---
     Route::get('/request-types', [RequestTypeController::class, 'index']);
 
@@ -413,6 +415,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
+    Route::get('/paid-leave/grant-rules/{rule}/target-users', [PaidLeaveController::class, 'targetUsers']);
     Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
     Route::get('/paid-leave/history/mine', [PaidLeaveController::class, 'myHistory'])->middleware('ability:leave:self:read');
@@ -434,6 +437,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     //     App\Domain\SpecialLeaveとして完全に独立させる) ---
     Route::get('/special-leave/types', [SpecialLeaveController::class, 'indexTypes']);
     Route::get('/special-leave/grant-rules', [SpecialLeaveController::class, 'indexRules']);
+    Route::get('/special-leave/grant-rules/{rule}/target-users', [SpecialLeaveController::class, 'targetUsers']);
     Route::get('/special-leave/grants/mine', [SpecialLeaveController::class, 'myGrants']);
     Route::get('/special-leave/requests/mine', [SpecialLeaveController::class, 'myRequests']);
     Route::get('/special-leave/requests/to-approve', [SpecialLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');

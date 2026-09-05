@@ -45,9 +45,39 @@
    (有給取得日は出勤したものとして扱う)。期間中に勤務予定日が1件も無い場合は判定不能として
    付与しない。
 6. 同一社員に同日重複して付与しないよう、当日すでに付与済みの場合はスキップする。
+7. `users.paid_leave_auto_grant_enabled = true` の社員のみを対象とする(ユーザーごとの
+   自動付与ON/OFF設定。UC-P00X参照)。特別休暇の自動付与も同様に
+   `users.special_leave_auto_grant_enabled = true` の社員のみが対象となる
+   (`GrantScheduledSpecialLeaveHandler`、種別を問わず一括で判定)。いずれも手動付与
+   (`GrantPaidLeave` / `GrantSpecialLeave`)には影響しない。
 
 実際の付与処理(grant作成・イベント記録・Teams通知)は既存のUC-P002手動付与
 (`GrantPaidLeave`)と共通のCommandを再利用する。
+
+## UC-P00X: 社員ごとの有給/特別休暇自動付与ON/OFFを設定する
+
+出向者・休職者・契約上休暇を個別管理する社員など、付与ルールの対象条件には合致するが
+自動付与の対象から外したい社員を個別に除外できるようにする
+(docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md)。
+
+1. `users.paid_leave_auto_grant_enabled` / `users.special_leave_auto_grant_enabled`
+   (いずれもboolean, default true)で制御する。特別休暇は休暇種別を問わず1つのフラグで
+   一括ON/OFFする(種別ごとの個別制御はしない)。
+2. `App\Domain\UserManagement` 配下でCommand(`SetPaidLeaveAutoGrantEnabled` /
+   `SetSpecialLeaveAutoGrantEnabled`)→Event(`PaidLeaveAutoGrantEnabledSet` /
+   `SpecialLeaveAutoGrantEnabledSet`)→`UserProjector`経由で更新する
+   (`hire_date`/`usage_start_date`と同じパターン)。
+3. 設定経路は2つ(裏側の設定値は1つずつなので二重管理にはならない):
+   - 社員個別編集画面(`UserRoleEditPage.tsx`)から、入社日等と同じ「保存ボタンで確定」方式
+     で切り替える(`PUT /api/users/{user}/paid-leave-auto-grant-enabled` /
+     `.../special-leave-auto-grant-enabled`、権限は`user.update`)。
+   - 付与ルール管理画面(`PaidLeaveAdminPage.tsx` / `SpecialLeaveAdminPage.tsx`)の各ルールの
+     「対象社員」一覧から、ルールの対象条件に現在マッチする社員一覧を表示し
+     (`GET /api/paid-leave/grant-rules/{rule}/target-users` /
+     `GET /api/special-leave/grant-rules/{rule}/target-users`)、行ごとのチェックボックスで
+     即時に切り替える(同じ更新APIを叩く)。
+4. デフォルトは`true`。マイグレーション適用直後は既存の全社員が有効のままであり、
+   本機能追加による既存挙動の変化はない。
 
 ## UC-P003: 有給を申請する
 

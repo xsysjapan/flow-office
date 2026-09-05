@@ -117,6 +117,20 @@ class SpecialLeaveScheduledBatchTest extends TestCase
         $this->assertCount(0, $grantedIds);
     }
 
+    public function test_it_skips_users_with_special_leave_auto_grant_disabled_even_when_otherwise_eligible(): void
+    {
+        $today = Carbon::parse('2026-08-10');
+        $employee = User::factory()->create(['hire_date' => '2025-08-10', 'special_leave_auto_grant_enabled' => false]);
+        $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
+        $this->createRuleWithSteps($type, expiresAfterMonths: 6);
+        $this->seedAttendanceHistory($employee, $today, scheduledDays: 5, attendedDays: 5);
+
+        $grantedIds = app(CommandBus::class)->dispatch(new GrantScheduledSpecialLeave($today->toDateString()));
+
+        $this->assertCount(0, $grantedIds);
+        $this->assertSame(0, SpecialLeaveGrant::query()->where('user_id', $employee->id)->count());
+    }
+
     public function test_it_does_not_grant_on_a_non_anniversary_day(): void
     {
         $today = Carbon::parse('2026-08-11');
