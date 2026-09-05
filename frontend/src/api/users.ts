@@ -91,3 +91,25 @@ export function updateUserUsageStartDate(
     body: { usage_start_date: usageStartDate },
   });
 }
+
+/** 有給の自動付与(UC-P002)の対象からこの社員を個別に外す/戻す。 */
+export function updatePaidLeaveAutoGrantEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<User> {
+  return apiFetch(`/users/${id}/paid-leave-auto-grant-enabled`, {
+    method: "PUT",
+    body: { enabled },
+  });
+}
+
+/** 特別休暇の自動付与の対象からこの社員を個別に外す/戻す(種別問わず一括)。 */
+export function updateSpecialLeaveAutoGrantEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<User> {
+  return apiFetch(`/users/${id}/special-leave-auto-grant-enabled`, {
+    method: "PUT",
+    body: { enabled },
+  });
+}
