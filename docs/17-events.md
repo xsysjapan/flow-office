@@ -198,14 +198,22 @@
 - `field_provenance.recorded` (AI推定値・ユーザー確認等、項目ごとの出所の記録)
 - `field_provenance.confirmed` (ユーザーがAI推定値を確認したことの記録)
 
-## PaidLeave
+## PaidLeave(廃止・監査目的でstored_eventsに残存)
+
+年次有給休暇は2026年9月の`PaidLeaveAccountAggregate`への再設計(cutover、
+docs/changesets/20260906-paid-leave-domain-redesign/spec.md)により、以下の
+`paid_leave.*`イベント群は**廃止**された。旧`App\Domain\PaidLeave\Aggregates\
+{PaidLeaveGrantAggregate,PaidLeaveRequestAggregate}`および対応するCommand/Handler/
+Projectorはコードから削除済みで、以後この名前空間から新規に発行されることはない。
+イベントクラス自体は`stored_events`に残る過去データのreplay・履歴参照のためだけに
+物理的に残置している(`enforce_event_class_map`解決のため)。新規実装・新規参照では
+下記「PaidLeaveAccount」節のイベントを使うこと。
 
 - `paid_leave.rule_created`
 - `paid_leave.granted`
 - `paid_leave.requested`
-- `paid_leave.usage_designated` (paid_leave_request集約が記録。申請時点(承認前)で
-  `paid_leave_usages`に確定前(grant_id未設定・is_confirmed=false)の行を作る。
-  docs/16-database-schema.md paid_leave_usages参照)
+- `paid_leave.usage_designated` (旧paid_leave_request集約が記録。申請時点(承認前)で
+  `paid_leave_usages`に確定前(grant_id未設定・is_confirmed=false)の行を作る)
 - `paid_leave.request_approved`
 - `paid_leave.request_returned`
 - `paid_leave.request_cancelled`
@@ -213,8 +221,55 @@
 - `paid_leave.usage_reversed`
 - `paid_leave.expired`
 - `paid_leave.warning_raised`
-- `paid_leave.grant_revoked` (管理者による付与取消。UC-P008、消化済み日数がある付与は
-  取消不可)
+- `paid_leave.grant_revoked` (管理者による付与取消。消化済み日数がある付与は取消不可
+  ―この制約自体も新ドメインでは変更されている。docs/09-usecases-paid-leave.md UC-P008参照)
+
+## PaidLeaveAccount(現行、`App\Domain\PaidLeaveAccount\Events\`)
+
+`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`
+(AggregateId = `userId`)が発行する。`config/event-sourcing.php`に`paid_leave_account.*`
+エイリアスで登録される(実クラス名は`PaidLeaveAccount`接頭辞を持たず、設定側で
+`use ... as PaidLeaveAccountXxx`のエイリアスにより`paid_leave.*`時代の同名クラスとの
+衝突を避けている)。詳細は docs/09-usecases-paid-leave.md「PaidLeaveAccountAggregateの
+内部モデル」を参照。
+
+- `paid_leave_account.grant_created` → `PaidLeaveGrantCreated`
+  (grantId, grantedOn, expiresOn, grantedDays, grantReason, source)。新規Grant発行
+  (手動・自動付与とも共通)。
+- `paid_leave_account.grant_amount_changed` → `PaidLeaveGrantAmountChanged`
+  (grantId, newGrantedDays, reason, changedByUserId)。最新Grantの日数変更
+  (Allocation合計を下回る減額は不可)。
+- `paid_leave_account.grant_date_changed` → `PaidLeaveGrantDateChanged`
+  (grantId, newGrantedOn, reason, changedByUserId)。最新Grantの付与日変更。
+- `paid_leave_account.grant_expiry_changed` → `PaidLeaveGrantExpiryChanged`
+  (grantId, newExpiresOn, reason, changedByUserId)。最新Grantの有効期限変更
+  (Allocation済みGrantの短縮は不可)。
+- `paid_leave_account.grant_revoked` → `PaidLeaveGrantRevoked`
+  (grantId, revokedByUserId, reason)。UC-P008。最新Grantの取消(全Allocationを解除)。
+- `paid_leave_account.grant_warning_raised` → `PaidLeaveGrantWarningRaised`
+  (grantId, warningType, message)。UC-P005/UC-P006の警告記録専用(`warningType`が
+  `expiry`/`five_day_obligation`)。残高等の不変条件には関与しない。
+- `paid_leave_account.usage_designated` → `PaidLeaveUsageDesignated`
+  (usageId, workflowRequestId, attendanceDayId, usedOn, usedDays, usageType,
+  paidLeaveRequestId, approverUserId, reason, requestGroupId, hours)。申請時点
+  (承認前)に未確定Usageを1件作成する。`usageType`/`paidLeaveRequestId`等はAggregateの
+  不変条件には使わず、`paid_leave_requests`Projection再構築用に運ぶだけ。
+- `paid_leave_account.usage_confirmed` → `PaidLeaveUsageConfirmed`
+  (usageId, confirmedByUserId)。承認によりUsageを確定し、続けてAllocationを実行する。
+- `paid_leave_account.usage_cancelled` → `PaidLeaveUsageCancelled`
+  (usageId, cancelledByUserId, reason)。Usage取消(事前に全Allocationを解除する
+  `usage_allocation_released`が発行される)。
+- `paid_leave_account.usage_allocated` → `PaidLeaveUsageAllocated`
+  (usageId, grantId, allocatedDays)。`AllocationPlanner`の算出結果に基づき、
+  UsageとGrantを充当する(1件のUsage確定で複数件発行されうる)。
+- `paid_leave_account.usage_allocation_released` → `PaidLeaveUsageAllocationReleased`
+  (usageId, grantId, releasedDays)。Grant取消・Usage取消時にAllocationを解除する。
+- `paid_leave_account.migrated` → `PaidLeaveAccountMigrated`
+  (cutoverDate, grants[])。既存システム/旧ドメインからのcutover移行専用。口座ごとに
+  1回だけ発行され、通常の`grant()`が課す不変条件(直前Grantより後の日付であること等)を
+  経由しない`migrateGrants()`から発行される。`grants[]`の各要素は
+  `{grantId, originalGrantedOn?, originalGrantedDays?, remainingDaysAtCutover, expiresOn,
+  source, cutoverMetadata?}`(docs/09-usecases-paid-leave.md UC-P010参照)。
 
 ## SpecialLeave
 

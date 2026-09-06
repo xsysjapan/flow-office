@@ -1024,16 +1024,27 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - grant_days
 - created_at / updated_at
 
-## paid_leave_grants (有給付与の正)
+## paid_leave_grants (有給付与の正のProjection)
 
-- id
+`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `userId`)の
+Grant系イベント(`PaidLeaveGrantCreated`等)から`PaidLeaveUsageAllocationProjector`が
+再構築する。行自体はProjection(表示専用)であり、業務判定はCommandHandlerが
+Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。
+
+- id (uuid。`PaidLeaveGrantCreated.grantId`)
 - user_id
 - granted_on
 - expires_on
 - granted_days
-- used_days
-- remaining_days
+- allocated_days (`paid_leave_usage_allocations`の合計の非正規化キャッシュ。Source of Truthは
+  `paid_leave_usage_allocations`側で、この列はあくまで表示用)
+- used_days (旧ドメイン互換のため存続。`allocated_days`と同じ意味の値を保持)
+- remaining_days (`granted_days - allocated_days`の非正規化キャッシュ)
 - grant_reason
+- source (`manual` / `migration`。通常のGrantとcutover移行由来のGrantを監査上区別する)
+- original_granted_days (nullable。移行(モードA)由来のGrantのみ設定される、切替前の
+  元の付与日数。監査・表示専用で、不変条件には使わない)
+- cutover_metadata (nullable, json。移行由来のGrantの付随情報(モード種別・備考等))
 - expiry_warned_at (UC-P005: 消滅警告を通知済みの日時。重複通知防止用)
 - five_day_obligation_warned_at (UC-P006: 年5日取得義務警告を通知済みの日時。重複通知防止用)
 - status (`active` / `revoked`。UC-P008: 管理者による付与取消。デフォルト`active`)
@@ -1043,7 +1054,8 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - created_at / updated_at
 
 `special_leave_grants`も同じ`status`/`revoked_at`/`revoked_by_user_id`/`revoke_reason`を持つ
-(UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ)。
+(UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ。特別休暇は今回の
+再設計の対象外で、引き続き旧構造のまま実装されている)。
 
 ## paid_leave_requests (有給申請の正)
 
@@ -1063,36 +1075,77 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - created_at / updated_at
 
 汎用申請(workflow_requests)・バックオフィス処理(backoffice_tasks)と同様、独立した
-ステータス系列で管理する (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。
+ステータス系列で管理する (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。cutover後は
+`PaidLeaveUsageDesignated`イベントのペイロード(usageType/paidLeaveRequestId/
+approverUserId/reason/requestGroupId/hours)から`PaidLeaveUsageAllocationProjector`が
+この行を再構築する(単一Projectorへ統合。旧`PaidLeaveRequestProjector`は削除済み)。
 
 ## paid_leave_usages
 
-- id
+`PaidLeaveAccountAggregate`のUsage系イベント(`PaidLeaveUsageDesignated`/
+`PaidLeaveUsageConfirmed`/`PaidLeaveUsageCancelled`)から`PaidLeaveUsageAllocationProjector`が
+更新する。
+
+- id (内部連番。既存互換のため残置)
+- usage_id (uuid、unique。新ドメインのUsage識別子。`PaidLeaveUsageDesignated.usageId`)
+- stored_event_id (nullable, unique。旧ドメイン時代の冪等性列。新ドメインの行は
+  `usage_id`で冪等Upsertする)
 - user_id
-- attendance_day_id
-- paid_leave_grant_id (nullable)
-- paid_leave_request_id
+- attendance_day_id (nullable)
+- paid_leave_grant_id (nullable。旧ドメインが単一Grant参照に使っていた列。新ドメインの
+  Allocationは`paid_leave_usage_allocations`側で複数Grantにまたがって持つため、この列は
+  cutover後は使われないが、既存Projection互換のため列自体は削除せず残置している)
+- paid_leave_request_id (nullable)
 - used_on
 - used_days
-- used_minutes
-- usage_type
-- is_confirmed (承認によりgrant消化が確定済みかどうか。下記参照)
+- used_minutes (nullable)
+- usage_type (nullable。full / am_half / pm_half / hourly)
+- confirmed (boolean, default false。承認によりUsageが確定済みかどうか)
+- cancelled (boolean, default false。取消済みかどうか)
 - created_at / updated_at
 
-行のライフサイクル: 申請時点(承認前)で`paid_leave.usage_designated`イベントにより
-`paid_leave_grant_id=null`・`is_confirmed=false`の行が1件作られる(勤怠側はこの行の
-存在だけで「休暇が設定されているか」を判定でき、`paid_leave_requests`を参照しに行く
-必要が無い。ドメインをまたいだ参照を避けるための設計)。承認時、最初の`paid_leave.used`
-イベントがこの行を確定させる(`paid_leave_grant_id`を設定し`is_confirmed=true`にする)。
-1件の`paid_leave_requests`の承認が、有効期限が近い複数の`paid_leave_grants`にまたがって
-消化される場合、2件目以降のgrantは新規の確定済み行として追加される。
+行のライフサイクル: 申請時点(承認前)で`PaidLeaveUsageDesignated`イベントにより
+`confirmed=false`の行が1件作られる(勤怠側はこの行の存在だけで「休暇が設定されているか」を
+判定でき、`paid_leave_requests`を参照しに行く必要が無い。ドメインをまたいだ参照を避けるための
+設計)。承認時、`PaidLeaveUsageConfirmed`イベントが`confirmed=true`にする。取消時は
+`PaidLeaveUsageCancelled`イベントが`cancelled=true`にする(行は物理削除しない。監査可能に
+残す)。実際にどのGrantへ何日充当されたかは`paid_leave_usage_allocations`(下記)を参照する。
 
-承認済み(is_confirmed=true)の行は、取消時に削除される(「現時点で有効な消化」の一覧であり、
-取消の事実自体は`stored_events`の`paid_leave.usage_reversed`イベントとして残る)。未承認
-(is_confirmed=false)のまま取消された場合は、`paid_leave.request_cancelled`イベントの
-Projectorが直接この行を削除する(grant消化がまだ発生していないため`usage_reversed`は
-発行されない)。`special_leave_usages`・`compensatory_leave_usages`も同じ構造・同じ
-ライフサイクル・同じ取消時の挙動を持つ。
+`special_leave_usages`・`compensatory_leave_usages`は今回の再設計の対象外で、引き続き
+旧構造(`is_confirmed`列によるライフサイクル、`paid_leave_grant_id`相当の単一Grant参照)の
+まま実装されている。
+
+## paid_leave_usage_allocations (Usage↔Grantの充当関係の正)
+
+`PaidLeaveUsageAllocated`/`PaidLeaveUsageAllocationReleased`イベントから
+`PaidLeaveUsageAllocationProjector`が作成・更新する。UsageとGrantの充当関係のSource of
+Truthであり、`paid_leave_grants.allocated_days`/`remaining_days`や`paid_leave_balances`は
+ここからの非正規化キャッシュに過ぎない(docs/changesets/20260906-paid-leave-domain-redesign/spec.md
+論点7)。
+
+- id
+- usage_id (uuid。`paid_leave_usages.usage_id`)
+- grant_id (uuid。`paid_leave_grants.id`)
+- allocated_days
+- created_at / updated_at
+
+`(usage_id, grant_id)`のユニーク制約を持つ(同じUsage×Grantの組は1行に集約する。
+複数回のAllocation/解除で増減する)。1件の承認済みUsageが複数のGrantにまたがって充当される
+場合、Grantの数だけ行が存在する。
+
+## paid_leave_balances (社員単位の現在残高キャッシュ)
+
+`PaidLeaveAccountAggregate`のGrant/Usage/Allocationイベントから`PaidLeaveBalanceProjector`が
+都度再集計する表示専用のProjection(判定の根拠には使わない。判定は必ずCommandHandlerが
+Aggregateをreplayして行う)。
+
+- user_id (uuid, primary key)
+- available_days (現在利用可能な残高)
+- pending_days (未確定(designated、confirmed前)Usageの合計)
+- unallocated_days (確定済みだが未充当のUsage合計)
+- next_grant_scheduled_on (nullable。`PaidLeaveScheduleAggregate`(Phase 7以降、今回は
+  対象外)導入まで常にnull)
+- created_at / updated_at
 
 ## compensatory_leave_grants (代休付与。追加カラムのみ抜粋)
 
