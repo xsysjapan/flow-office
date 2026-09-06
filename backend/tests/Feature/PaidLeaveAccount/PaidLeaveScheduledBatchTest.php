@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature\PaidLeave;
+namespace Tests\Feature\PaidLeaveAccount;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;

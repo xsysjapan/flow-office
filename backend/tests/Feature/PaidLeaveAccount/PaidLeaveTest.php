@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature\PaidLeave;
+namespace Tests\Feature\PaidLeaveAccount;
 
 use App\Models\Role;
 use App\Models\User;

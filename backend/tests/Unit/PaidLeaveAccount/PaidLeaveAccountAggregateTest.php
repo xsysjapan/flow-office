@@ -308,7 +308,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u1', 'wf-1', 'day-1', '2025-05-01', 1.0);
+                $aggregate->designateUsage('u1', 'wf-1', 'day-1', '2025-05-01', 1.0, 'full');
             })
             ->assertRecorded([
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 1.0),
@@ -322,10 +322,10 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u1', 'wf-1', 'day-1', '2025-05-01', 0.5);
+                $aggregate->designateUsage('u1', 'wf-1', 'day-1', '2025-05-01', 0.5, 'am_half');
             })
             ->assertRecorded([
-                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 0.5),
+                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 0.5, 'am_half'),
             ]);
     }
 
@@ -353,7 +353,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageCancelled('u1', 'user-1', '差戻し'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u2', 'wf-2', 'day-1', '2025-05-01', 1.0);
+                $aggregate->designateUsage('u2', 'wf-2', 'day-1', '2025-05-01', 1.0, 'full');
             })
             ->assertRecorded([
                 new PaidLeaveUsageDesignated('u2', 'wf-2', 'day-1', '2025-05-01', 1.0),
@@ -574,7 +574,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
                 // u2はu1よりusedOnが早いが、g1に空きがないため既存のu1へのAllocationは
                 // 組み替えられず、u2は未充当のまま残る。
-                $aggregate->designateUsage('u2', 'wf-2', 'day-2', '2025-05-01', 1.0);
+                $aggregate->designateUsage('u2', 'wf-2', 'day-2', '2025-05-01', 1.0, 'full');
                 $aggregate->confirmUsage('u2', 'approver-1');
             })
             ->assertRecorded([

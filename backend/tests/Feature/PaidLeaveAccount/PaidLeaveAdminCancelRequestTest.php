@@ -1,7 +1,9 @@
 <?php
 
-namespace Tests\Feature\PaidLeave;
+namespace Tests\Feature\PaidLeaveAccount;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
@@ -56,10 +58,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         $approver = User::factory()->create();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-10',
@@ -87,10 +86,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         $other = User::factory()->create();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-10',
@@ -108,10 +104,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         $other = User::factory()->create();
         $this->createWorkingDayShift($employee, '2026-08-11');
 
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => '2026-08-11',
@@ -134,10 +127,7 @@ class PaidLeaveAdminCancelRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         $this->createWorkingDayShift($employee, '2026-08-12');
 
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         foreach (['2026-08-10', '2026-08-12'] as $date) {
             $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [

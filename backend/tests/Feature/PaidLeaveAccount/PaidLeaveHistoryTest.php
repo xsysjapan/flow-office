@@ -1,7 +1,9 @@
 <?php
 
-namespace Tests\Feature\PaidLeave;
+namespace Tests\Feature\PaidLeaveAccount;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
@@ -64,23 +66,22 @@ class PaidLeaveHistoryTest extends TestCase
         $response = $this->actingAs($employee)->getJson('/api/paid-leave/history/mine');
         $response->assertOk();
 
+        // Phase 5(cutover): 有給付与・申請・承認は`App\Domain\PaidLeaveAccount\Aggregates\
+        // PaidLeaveAccountAggregate`(集約ルート=userId)のイベントとして記録される。
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
             [
-                'paid_leave.used',
-                'paid_leave.request_approved',
-                'paid_leave.request_shared',
-                'paid_leave.usage_designated',
-                'paid_leave.requested',
-                'paid_leave.granted',
+                'paid_leave_account.usage_allocated',
+                'paid_leave_account.usage_confirmed',
+                'paid_leave_account.usage_designated',
+                'paid_leave_account.grant_created',
             ],
             $eventTypes,
         );
 
-        $usedEvent = collect($response->json())->firstWhere('event_type', 'paid_leave.used');
-        $this->assertEquals(1.0, $usedEvent['payload']['used_days']);
-        $requestedEvent = collect($response->json())->firstWhere('event_type', 'paid_leave.requested');
-        $this->assertSame('full', $requestedEvent['payload']['leave_type']);
+        $designatedEvent = collect($response->json())->firstWhere('event_type', 'paid_leave_account.usage_designated');
+        $this->assertEquals(1.0, $designatedEvent['payload']['used_days']);
+        $this->assertSame('full', $designatedEvent['payload']['usage_type']);
     }
 
     public function test_an_employee_cannot_see_another_employees_history(): void
@@ -99,6 +100,7 @@ class PaidLeaveHistoryTest extends TestCase
         $hr = User::factory()->create();
         $this->assignRole($hr, Role::query()->create(['code' => Role::HR_STAFF, 'name' => '人事担当者']));
 
+        // Command経由ではなく、Projectionへ直接rowを作成する(イベントを発行しない)。
         PaidLeaveGrant::query()->create([
             'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
@@ -131,6 +133,9 @@ class PaidLeaveHistoryTest extends TestCase
         $response = $this->actingAs($employee)->getJson('/api/paid-leave/history/mine');
         $response->assertOk();
         $this->assertCount(1, $response->json());
-        $this->assertEquals($employee->id, $response->json()[0]['payload']['user_id']);
+        // 新ドメインの集約ルートはuserId自体(=aggregate_id)なので、旧`payload.user_id`ではなく
+        // aggregate_idで対象社員のイベントであることを確認する。
+        $this->assertEquals($employee->id, $response->json()[0]['aggregate_id']);
+        $this->assertEquals(10.0, $response->json()[0]['payload']['granted_days']);
     }
 }
