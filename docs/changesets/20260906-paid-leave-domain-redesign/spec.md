@@ -743,3 +743,20 @@ Projection→Workflow接続→cutover→レビュー修正→データ移行)が
 承認画面Preview API・Grant管理UI・Schedule/Assessment・法定通常/比例/シフト付与判定・
 月次ローリングSchedule展開バッチは、ユーザー指示により本変更セットのスコープ外
 (「実装方針の変更」節参照)とし、必要になった時点で別の変更セットとして着手する。
+
+### ドキュメント更新(完了)
+
+「ドキュメントへの影響」節の記載通り、本体ドキュメントを実装内容に合わせて更新した。
+
+- `docs/09-usecases-paid-leave.md`: 全面改訂。`PaidLeaveAccountAggregate`を唯一の
+  Write Model Rootとする記述へ更新、旧Aggregateが存在しない旨を明記。既存UC番号は
+  維持しつつ、データ移行機能を新規UC-P010として追加(既存UC体系との整合を優先し
+  リナンバーはしていない)。Grant取消の挙動変化(Allocation済みGrantも取消可能、
+  旧422ブロックとの相違)も明記。
+- `docs/16-database-schema.md`: `paid_leave_grants`/`paid_leave_requests`/
+  `paid_leave_usages`の列を現況へ更新し、`paid_leave_usage_allocations`/
+  `paid_leave_balances`を新規追加。
+- `docs/17-events.md`: 旧`paid_leave.*`イベント一覧を「非推奨・監査目的でのみ保持」と
+  明記し、新`paid_leave_account.*`イベント11種(payload・エイリアスとも実装と
+  突き合わせ済み)を追加。
+- コミット: `b02e47d`(ドキュメント: 有給休暇ドメイン再設計をdocs/09・16・17へ反映)。
