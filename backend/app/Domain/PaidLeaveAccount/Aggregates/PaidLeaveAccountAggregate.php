@@ -108,6 +108,10 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             throw new DomainRuleException('Grant日付はひとつ前のGrantより後である必要があります。');
         }
 
+        if ($newGrantedOn > $this->grants[$grantId]['expiresOn']) {
+            throw new DomainRuleException('Grant日付は同じGrantの有効期限より後にはできません。');
+        }
+
         $this->recordThat(new PaidLeaveGrantDateChanged(
             grantId: $grantId,
             newGrantedOn: $newGrantedOn,
@@ -129,6 +133,10 @@ class PaidLeaveAccountAggregate extends AggregateRoot
 
         if ($isShortening && count($current['allocations']) > 0) {
             throw new DomainRuleException('Allocation済みのGrantは有効期限を短縮できません。');
+        }
+
+        if ($newExpiresOn < $current['grantedOn']) {
+            throw new DomainRuleException('有効期限は同じGrantの付与日より前にはできません。');
         }
 
         $this->recordThat(new PaidLeaveGrantExpiryChanged(

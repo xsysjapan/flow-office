@@ -167,6 +167,62 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
+    public function test_change_grant_expiry_rejected_when_new_expiry_precedes_own_granted_on(): void
+    {
+        // Allocation件数0なので短縮チェックは通るが、grantedOn(2025-04-01)より前の
+        // expiresOnはgrantedOn<=expiresOnの不変条件に違反するため拒否されるべき。
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantExpiry('g1', '2025-01-01', '誤入力', 'admin-1');
+            });
+    }
+
+    public function test_change_grant_expiry_to_exactly_granted_on_is_allowed(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantExpiry('g1', '2025-04-01', '短縮', 'admin-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantExpiryChanged('g1', '2025-04-01', '短縮', 'admin-1'),
+            ]);
+    }
+
+    public function test_change_grant_date_rejected_when_new_granted_on_exceeds_own_expires_on(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantDate('g1', '2027-05-01', '誤入力', 'admin-1');
+            });
+    }
+
+    public function test_change_grant_date_to_exactly_own_expires_on_is_allowed(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->changeGrantDate('g1', '2027-04-01', '訂正', 'admin-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveGrantDateChanged('g1', '2027-04-01', '訂正', 'admin-1'),
+            ]);
+    }
+
     // ---- Grant: 取消(スタック解除) ----
 
     public function test_latest_grant_revoke_releases_no_allocations_when_none_exist(): void
