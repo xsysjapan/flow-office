@@ -207,7 +207,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         }
 
         // usageType/paidLeaveRequestId等は集約の不変条件には使わない(有給固有の申請
-        // パラメータの表示投影用にイベントへ乗せて運ぶだけ。PaidLeaveRequestProjector参照)。
+        // パラメータの表示投影用にイベントへ乗せて運ぶだけ。
+        // PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded参照)。
         $this->recordThat(new PaidLeaveUsageDesignated(
             usageId: $usageId,
             workflowRequestId: $workflowRequestId,

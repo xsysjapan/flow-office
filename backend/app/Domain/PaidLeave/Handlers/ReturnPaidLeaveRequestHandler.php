@@ -14,7 +14,7 @@ use App\Support\FrontendUrl;
  * Phase 5(cutover)により、旧`PaidLeaveRequestAggregate::returnRequest`は廃止した。
  * `paid_leave_requests.status`自体の更新は、この差戻しが必ずworkflow_request経由で
  * 発生すること(`PaidLeaveReturnOnWorkflowRequestReturnedReactor`参照)を利用し、
- * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveRequestProjector`が
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::onWorkflowRequestReturned`が
  * Workflowドメインの`WorkflowRequestReturned`イベントを直接購読して行う
  * (差戻しは承認前の状態のためGrant/Usageには一切影響しない。旧Handlerの挙動と同じ
  * ―対象日の勤怠・paid_leave_usagesは変更しない。既存のcutover前挙動をそのまま保つ判断)。

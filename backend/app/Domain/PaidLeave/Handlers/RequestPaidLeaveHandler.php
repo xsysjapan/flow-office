@@ -40,7 +40,7 @@ use Illuminate\Support\Str;
  * 旧`App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate`は廃止した。
  * `paid_leave_requests`行はこのHandlerが直接Eloquentで作成するのではなく、
  * `App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage`を発行し、
- * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveRequestProjector`が
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded`が
  * `PaidLeaveUsageDesignated`イベントから作成する(`event-sourcing:replay`で
  * 再生成可能であることを保つため)。workflow_requestの提出(旧`PaidLeaveRequestShared`→
  * `SubmitWorkflowRequestOnPaidLeaveRequestSharedReactor`が担っていた処理)もこのHandlerが

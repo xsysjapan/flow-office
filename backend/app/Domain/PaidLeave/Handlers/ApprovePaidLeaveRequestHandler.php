@@ -29,7 +29,7 @@ use App\Models\PaidLeaveUsage;
  * `AllocationPlanner`が判定する(Handlerはこの判定にEloquent Projectionを問い合わせない。
  * docs/changesets/20260906-paid-leave-domain-redesign/spec.md 論点1/2)。
  * `paid_leave_requests.status`自体の更新は
- * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveRequestProjector`が
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::updatePaidLeaveRequestStatus`が
  * `PaidLeaveUsageConfirmed`イベントから行う。
  *
  * @implements CommandHandler<ApprovePaidLeaveRequest>

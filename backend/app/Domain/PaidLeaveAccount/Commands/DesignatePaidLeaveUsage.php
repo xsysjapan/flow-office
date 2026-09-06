@@ -7,7 +7,7 @@ use App\Domain\EventSourcing\Contracts\Command;
 /**
  * Phase 5(cutover): usageType/paidLeaveRequestId/approverUserId/reason/requestGroupId/hours は
  * PaidLeaveAccountAggregate自体の不変条件には使わないが、
- * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveRequestProjector`が`paid_leave_requests`
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded`が`paid_leave_requests`
  * (有給固有の申請パラメータ。docs/changesets/20260906-paid-leave-domain-redesign/spec.md
  * 論点10)をイベントから再生成できるようにするため、イベントにそのまま乗せて運ぶ。
  */
