@@ -311,7 +311,12 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
 ## 仕様確定事項(まとめ)
 
 ### Aggregate
-- 新設: `App\Domain\PaidLeave\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `userId`)。
+- 新設: `App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`(AggregateId = `userId`)。
+  既存`App\Domain\PaidLeave\*`(旧Aggregate/Command/Event群)と同名クラスが多数存在し
+  クラス名が衝突するため、新設分は`App\Domain\PaidLeave`配下ではなく新規ドメイン名前空間
+  `App\Domain\PaidLeaveAccount`配下に置く(既存コードとの衝突回避。設定ファイル側で
+  必要な箇所は`use ... as ...`エイリアスで解決する)。旧ドメインを削除するcutover
+  (論点2)完了後、最終的に`App\Domain\PaidLeave`へ統合するか判断する。
 - 内部状態(replayで再構築、Projectionには依存しない):
   - `grants: array<GrantId, GrantState>`(`grantId, grantedOn, expiresOn, grantedDays,
     revoked, grantReason/source, allocations: array<UsageId, allocatedDays>`)
@@ -331,7 +336,7 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
   7. 空き発生時は未充当Usageを`usedOn`昇順に自動Allocation、既存Allocationは
      組み替えない。
 
-### Event(`App\Domain\PaidLeave\Events\`、`config/event-sourcing.php`に`paid_leave_account.*`
+### Event(`App\Domain\PaidLeaveAccount\Events\`、`config/event-sourcing.php`に`paid_leave_account.*`
 で新規登録。既存`paid_leave.*`は廃止せずstored_eventsに残すが以後未使用)
 - `PaidLeaveGrantCreated`(grantId, grantedOn, expiresOn, grantedDays, grantReason, source)
 - `PaidLeaveGrantAmountChanged`(grantId, newGrantedDays, reason, changedByUserId)
@@ -491,4 +496,27 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
 
 ## 実装結果
 
-未着手。
+### Phase 2(完了): PaidLeaveAccountAggregate本体・Domain Model・単体テスト
+
+- 追加: `backend/app/Domain/PaidLeaveAccount/`配下に
+  `Aggregates/PaidLeaveAccountAggregate.php`(replay専用状態管理、8つの公開メソッド、
+  不変条件を内部で保証)/`Support/AllocationPlanner.php`(副作用なしAllocation算出)/
+  `Events/`(実イベント10種+Phase 9予約分`PaidLeaveAccountMigrated`)/
+  `Commands/`・`Handlers/`(8コマンド、既存`CommandBus`/`config/domain.php`規約に準拠)。
+- 追加: `backend/tests/Unit/PaidLeaveAccount/PaidLeaveAccountAggregateTest.php`
+  (36テスト、`::fake()->given()->when()->assertRecorded()`によるAggregate replayベース、
+  Projection不使用)。
+- 設定変更: `config/event-sourcing.php`へ`paid_leave_account.*`で11イベント登録、
+  `config/domain.php`へ8コマンド→ハンドラのマッピング追加。
+- **命名空間の補足修正**: 実装時、既存`App\Domain\PaidLeave\*`(旧Aggregate/Command/Event群)
+  と同名クラスが多数(`RevokePaidLeaveGrant`/`PaidLeaveUsageDesignated`等)存在しクラス名が
+  衝突するため、新設分は`App\Domain\PaidLeaveAccount`という新規ドメイン名前空間に配置した
+  (本文の名前空間表記もこれに合わせて修正済み。設定ファイルの衝突箇所は`use ... as ...`
+  エイリアスで解決)。
+- テスト結果: 新規36件全pass。既存`--filter=PaidLeave`87件全pass(無改変・影響なし)。
+  全体スイート932/958pass(残り8件は本変更と無関係な既存環境起因の失敗
+  `MissingAppKeyException`等、本変更前から存在)。
+- コミット: `375873e`(Phase 2: PaidLeaveAccountAggregate本体・Grant/Usage/Allocation
+  ドメインモデルを追加)。
+
+Phase 3(Projection・DB migration)以降は未着手。
