@@ -426,9 +426,57 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
 - 承認画面には`AllocationPlanner`(副作用なしのDomain Service、Aggregateと同一ロジックを
   共有)によるPreview(Grant別充当予定・不足日数)を表示。
 
+## 実装方針の変更(Phase 4完了後、ユーザー指示により確定)
+
+Phase 4完了時点でユーザーより「旧実装は残さなくてよい。最後のPhaseとしてデータ移行を
+検討してほしい」との指示を受けた。これに伴い、当初計画(Phase 5 Preview/承認API→
+Phase 6 Grant管理UI→Phase 7 Schedule/Assessment→Phase 8 月次ローリングバッチ→
+Phase 9 Migration→Phase 10 UI仕上げ)を以下の通り変更する。
+
+- **Phase 5(cutover、新設)を次に実施**: 旧`App\Domain\PaidLeave\Aggregates\
+  PaidLeaveGrantAggregate`/`PaidLeaveRequestAggregate`とそのCommand/Handler/Reactor/
+  Projector、および論点2で「並行稼働後に削除」としていた旧ドメイン一式を削除し、
+  既存API(`Http/Controllers/Api/*`の有給関連エンドポイント)の読み取りを新ドメインの
+  Projection(`paid_leave_grants`/`paid_leave_usages`/`paid_leave_usage_allocations`/
+  `paid_leave_balances`)へ切り替える。Phase 4で追加した`PaidLeaveUsage`(旧)/
+  `PaidLeaveAccountUsage`(新)のスコープ分離は、旧ドメイン削除に伴い不要になるため
+  `PaidLeaveUsage`に一本化する。既存`tests/Feature/PaidLeave/*`は新ドメインの挙動で
+  同じ振る舞いを検証するテストへ書き換える(依頼書§59の方針通り、Projection直接作成
+  ではなくEvent→Aggregate replayベースへ)。
+- **hourly(時間単位)有給申請の扱いを訂正**: Phase 4では依頼書§50「時間単位有給は
+  対象外」を根拠に、新ドメインではhourly種別のUsageを作成せずスキップする実装とした。
+  ユーザーより「hourlyは残してください」との指示があったため、この判断を撤回する。
+  依頼書§50が対象外とするのは時間単位年休(時間を単位とした残高管理・別建て制度)の
+  新規構築であり、既存本番機能である「1日未満の時間数を指定して有給申請し、
+  端数日数(例: 3時間 = 0.375日)を消費する」機能自体は継続提供する必要がある。
+  Phase 5のcutoverで、hourly種別の申請も従来通り計算済みの端数`requestedDays`を
+  そのまま`usedDays`としてUsageへ反映する(full/halfと同じ経路、特別な時間単位残高
+  システムは追加しない)よう修正する。`DomainRuleException`によるフェイルファストは
+  hourly以外の真に未知な`usageType`に対してのみ残す。
+- **Phase 6(migration、旧Phase 9を繰り上げ)を最終Phaseとして実施**: 依頼書§44-48・
+  本spec「既存データ移行」節の3モード(Grant単位で完全に分かる/前年度繰越+当年度残高/
+  残高と有効期限のみ)を受け付ける`MigratePaidLeaveAccount` Command/Handler、および
+  cutover時点(`usage_start_date`)の旧Projectionからの移行データ抽出を実装する。
+- **当初Phase 5(承認画面Preview API)・Phase 6(Grant管理UI)・Phase 7(Schedule/
+  Assessment・法定/比例/シフト判定)・Phase 8(月次ローリング付与Schedule展開)は、
+  本変更セットのスコープから一旦除外する**(対象外節に追記)。今回のユーザー指示は
+  「最後のPhaseとしてデータ移行」であり、Schedule/Assessment・UI仕上げは範囲外である
+  ことを明示する。将来必要になった時点で別の変更セットとして着手する。
+
 ## 対象外
 
-- 時間単位有給(依頼書§50)。
+- 時間単位年休(時間を単位とした独立の残高管理・別建て制度、依頼書§50)の**新規構築**。
+  ただし既存本番機能である「1日未満の時間数を指定した有給申請(hourly)」自体は対象外
+  ではない(上記「実装方針の変更」参照。full/halfと同じUsage経路でそのまま継続提供する)。
+- 承認画面Allocation Preview API・Grant管理UI・社員別有給画面(当初Phase 5・6・10)。
+  ドメインロジック(Aggregate・Allocation算出)は完成しているため、画面実装のみ
+  必要になった時点で別途変更セットを起こす。
+- `PaidLeaveScheduleAggregate`/Assessment・法定通常/比例付与判定・シフト勤務判定・
+  月次ローリングSchedule展開バッチ(当初Phase 7・8)。既存`GrantScheduledPaidLeave`系の
+  日次評価バッチは、cutover後もそのまま存続させ(削除しない)、新規Grantは
+  `App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave`経由で新Aggregateへ記録されるよう
+  接続だけ付け替える(バッチの判定ロジック自体・出勤率計算・Schedule/Assessmentの
+  独立ドメイン化は行わない)。
 - 年5日取得義務の監視・警告機能(既存`WarnFiveDayObligation`はPhase移行後、当面は
   現行のまま残置し、新Aggregateへの本格統合は別Featureとして対象外とする)。
 - 計画的付与(依頼書§52)。
