@@ -629,4 +629,57 @@ Phase 9 Migration→Phase 10 UI仕上げ)を以下の通り変更する。
   (残り8件はPhase 2から継続する既存無関係のSSO/外部連携暗号化設定起因の失敗)。
 - コミット: `8861119`(Phase 4: 有給申請WorkflowをPaidLeaveAccountAggregateへ配線)。
 
-Phase 5(Allocation Preview・承認処理API)以降は未着手。
+### Phase 5(完了): cutover(旧PaidLeaveドメイン削除・新ドメインへの完全切替)
+
+- 削除: 旧`App\Domain\PaidLeave\Aggregates\{PaidLeaveGrantAggregate,PaidLeaveRequestAggregate}`、
+  旧Projector3種(`PaidLeaveGrantProjector`/`PaidLeaveRequestProjector`/
+  `PaidLeaveUsageProjector`)、旧`GrantPaidLeave`/`RevokePaidLeaveGrant`
+  Command+Handler、Phase 4のstrangler-fig Reactor、旧Workflow連携Reactor2本。
+  Phase 4で追加した`PaidLeaveAccountUsage`(新)/`PaidLeaveUsage`のスコープ分割も、
+  旧ドメイン削除により不要になったため解消し`PaidLeaveUsage`へ一本化。
+- 書き換え: `RequestPaidLeaveHandler`/`ApprovePaidLeaveRequestHandler`/
+  `ReturnPaidLeaveRequestHandler`/`CancelPaidLeaveRequestHandler`はCommandクラス・
+  名前空間(Workflow Reactorからのディスパッチ先)を維持したまま、内部で
+  `PaidLeaveAccountAggregate`を`DesignatePaidLeaveUsage`/`ConfirmPaidLeaveUsage`/
+  `CancelPaidLeaveUsage`経由で呼ぶよう変更。`GrantScheduledPaidLeaveHandler`・
+  Warn系Handlerも新ドメインのCommandへ発行先を付け替え(バッチ判定ロジック自体は
+  無変更、対象外節の方針通り)。`PaidLeaveController`のgrant/revokeアクションも
+  新Command経由に切替。
+- API契約: `routes/api.php`配下の有給関連エンドポイント(grants/requests/usages/
+  history/grant-rules)は形状を変更せず維持。応答フィールドは新
+  `PaidLeaveUsageAllocationProjector`が旧Projectorの全列(`grant_reason`/`status`/
+  `revoked_at`/`revoked_by_user_id`/`revoke_reason`等)を引き継いで供給。
+  `paid_leave_requests`は`DesignatePaidLeaveUsage`イベントのペイロード拡張
+  (usageType/paidLeaveRequestId/approverUserId/reason/requestGroupId/hours追加)から
+  単一Projectorで再構築(FK順序の実バグを避けるため、grants/usages/requestsを
+  1つのProjectorクラスに統合)。
+- hourly修正: `resolveRequestedDays`の端数日数計算をそのまま移植し、hourly種別でも
+  `DesignatePaidLeaveUsage`を必ず呼ぶよう修正(Phase 4のスキップを撤回)。未知の
+  `usageType`のみ`DomainRuleException`で例外化する方針は維持。
+- 旧stored_events再生安全性: 旧`App\Domain\PaidLeave\Events\*`10クラスは
+  `enforce_event_class_map`解決のため物理的に残し(死んだ設定コメント付き、能動的な
+  発行経路からは完全に除去)、能動的なdispatch/wiringからのみ削除。
+- **仕様上の想定と異なる判断(承認済み設計の帰結として妥当)**: 旧ドメインでは
+  Allocation済みGrantの取消は422でブロックされていたが、新ドメインの不変条件5
+  (取消時に全Allocationを解除して復元)は既にPhase 2で承認済みの設計のため、
+  該当テストは新しい「取消可能・Allocation解除+残高復元」の挙動を検証する形へ
+  更新した(Phase 5でのリグレッションではなく、既存承認済み仕様の反映)。
+- テスト: `tests/Feature/PaidLeave/*`(7ファイル)を監査の上`tests/Feature/PaidLeaveAccount/`
+  へ移行(各シナリオの検証内容を落とさずCommand→Aggregate replay経由の検証へ書き換え)。
+  Phase 4のstrangler-fig用テストは重複のため削除。
+  `tests/Feature/PaidLeaveAccount`+`tests/Unit/PaidLeaveAccount`: 92件全pass。
+  レビュー時に全体スイートを実施環境で再実行し963/963件全pass確認済み
+  (以前「無関係」としていた8件の失敗は本セッションの`.env`未設定が原因と判明し、
+  コード起因ではなかったことも合わせて確認)。
+- コミット: `a6a9ff7`(新ドメイン機能拡張)/`d5a726b`(旧ドメイン削除・cutover)/
+  `23bf16c`(テスト移行)。
+
+## 最終Phase(未着手): データ移行
+
+依頼書§44-48・本spec「既存データ移行」節に基づき、`MigratePaidLeaveAccount`
+Command/Handlerと、cutover時点(社員ごとの`usage_start_date`)の移行データ抽出処理を
+実装する。旧ドメインは既に削除済みのため、移行元データは現在の
+`paid_leave_grants`/`paid_leave_usages`テーブル(historyとしてDBに残る実データ)、
+または別途提供される旧システムエクスポートを想定する。3モード
+(Grant単位で完全に分かる/前年度繰越+当年度残高/残高と有効期限のみ)を
+受け付けられる構造にする。
