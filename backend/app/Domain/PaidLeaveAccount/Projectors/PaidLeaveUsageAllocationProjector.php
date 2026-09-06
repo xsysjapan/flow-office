@@ -7,6 +7,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantExpiryChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantRevoked;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased;
@@ -55,9 +56,39 @@ class PaidLeaveUsageAllocationProjector extends Projector
                 'used_days' => 0,
                 'remaining_days' => $event->grantedDays,
                 'grant_reason' => $event->grantReason,
+                'source' => $event->source,
                 'status' => 'active',
             ],
         );
+    }
+
+    /**
+     * cutover専用の一括初期化(spec.md「既存データ移行」)。`source = 'migration'`で
+     * 監査上通常Grant(`source = 'manual'`等)と区別できるようにし、3モードいずれで
+     * 移行したかを含む付随情報を`original_granted_days`/`cutover_metadata`へそのまま保存する
+     * (不変条件には使わないため、あくまで表示・監査専用の非正規化列)。
+     */
+    public function onPaidLeaveAccountMigrated(PaidLeaveAccountMigrated $event): void
+    {
+        foreach ($event->grants as $g) {
+            PaidLeaveGrant::query()->updateOrCreate(
+                ['id' => $g['grantId']],
+                [
+                    'user_id' => $event->aggregateRootUuid(),
+                    'granted_on' => $g['originalGrantedOn'] ?? $event->cutoverDate,
+                    'expires_on' => $g['expiresOn'],
+                    'granted_days' => $g['remainingDaysAtCutover'],
+                    'allocated_days' => 0,
+                    'used_days' => 0,
+                    'remaining_days' => $g['remainingDaysAtCutover'],
+                    'grant_reason' => null,
+                    'source' => $g['source'],
+                    'original_granted_days' => $g['originalGrantedDays'],
+                    'cutover_metadata' => $g['cutoverMetadata'],
+                    'status' => 'active',
+                ],
+            );
+        }
     }
 
     public function onPaidLeaveGrantAmountChanged(PaidLeaveGrantAmountChanged $event): void

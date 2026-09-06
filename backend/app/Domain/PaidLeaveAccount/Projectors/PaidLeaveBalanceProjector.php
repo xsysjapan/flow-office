@@ -2,6 +2,7 @@
 
 namespace App\Domain\PaidLeaveAccount\Projectors;
 
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
@@ -35,6 +36,15 @@ use Spatie\EventSourcing\StoredEvents\Models\EloquentStoredEvent;
 class PaidLeaveBalanceProjector extends Projector
 {
     public function onPaidLeaveGrantCreated(PaidLeaveGrantCreated $event): void
+    {
+        $this->recalculate($event->aggregateRootUuid());
+    }
+
+    /**
+     * 最終Phase(データ移行)。cutover専用の一括初期化イベントも他イベントと同様、
+     * 都度全件再集計に含める(recalculate()内のmatchへ'paid_leave_account.migrated'を追加)。
+     */
+    public function onPaidLeaveAccountMigrated(PaidLeaveAccountMigrated $event): void
     {
         $this->recalculate($event->aggregateRootUuid());
     }
@@ -104,6 +114,18 @@ class PaidLeaveBalanceProjector extends Projector
                     'revoked' => false,
                     'allocated' => 0.0,
                 ],
+                // 移行Grantの以後の消化上限は常にremainingDaysAtCutoverそのもの
+                // (PaidLeaveAccountAggregate::migrateGrantsのdoc参照。originalGrantedDaysは
+                // 表示・監査専用の付随情報であり、ここでの上限計算には使わない)。
+                'paid_leave_account.migrated' => (function () use (&$grants, $props) {
+                    foreach ($props['grants'] as $g) {
+                        $grants[$g['grantId']] = [
+                            'grantedDays' => (float) $g['remainingDaysAtCutover'],
+                            'revoked' => false,
+                            'allocated' => 0.0,
+                        ];
+                    }
+                })(),
                 'paid_leave_account.grant_amount_changed' => $grants[$props['grantId']]['grantedDays']
                     = (float) $props['newGrantedDays'],
                 'paid_leave_account.grant_revoked' => $grants[$props['grantId']]['revoked'] = true,

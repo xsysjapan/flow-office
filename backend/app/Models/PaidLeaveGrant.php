@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 生成できるUUIDにしている(.claude/skills/add-projection「集約ルートのUUID化」参照)。
  * この行自体もPaidLeaveGrantProjectorがstored_eventsから作成・更新する。
  */
-#[Fillable(['id', 'user_id', 'granted_on', 'expires_on', 'granted_days', 'allocated_days', 'used_days', 'remaining_days', 'grant_reason', 'expiry_warned_at', 'five_day_obligation_warned_at', 'status', 'revoked_at', 'revoked_by_user_id', 'revoke_reason'])]
+#[Fillable(['id', 'user_id', 'granted_on', 'expires_on', 'granted_days', 'allocated_days', 'used_days', 'remaining_days', 'grant_reason', 'source', 'original_granted_days', 'cutover_metadata', 'expiry_warned_at', 'five_day_obligation_warned_at', 'status', 'revoked_at', 'revoked_by_user_id', 'revoke_reason'])]
 class PaidLeaveGrant extends Model
 {
     use HasUuids;
@@ -32,6 +32,8 @@ class PaidLeaveGrant extends Model
             'allocated_days' => 'decimal:1',
             'used_days' => 'decimal:1',
             'remaining_days' => 'decimal:1',
+            'original_granted_days' => 'decimal:1',
+            'cutover_metadata' => 'array',
             'expiry_warned_at' => 'datetime',
             'five_day_obligation_warned_at' => 'datetime',
             'revoked_at' => 'datetime',
