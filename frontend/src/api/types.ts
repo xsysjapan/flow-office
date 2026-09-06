@@ -621,6 +621,8 @@ export interface AttendanceMonthlyCalculationTotals {
   paid_leave_minutes?: number;
   special_leave_days?: number;
   special_leave_minutes?: number;
+  /** 労働日数(実際に勤務した日数。休日区分を問わずwork_minutes > 0の日を数える)。 */
+  worked_days?: number;
 }
 
 export type AttendanceDaySource = "live" | "manual" | "punch";

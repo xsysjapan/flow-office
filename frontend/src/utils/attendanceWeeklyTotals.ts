@@ -95,6 +95,7 @@ export function specialLeaveTypeBreakdown(days: AttendanceDay[]): AttendanceSpec
 export function weeklyAttendanceTotals(days: AttendanceDay[]): {
   totals: WeeklyAttendanceTotals
   absenceDays: number
+  workedDays: number
   specialLeaveDays: number
   specialLeaveBreakdown: AttendanceSpecialLeaveBreakdownItem[]
 } {
@@ -103,6 +104,11 @@ export function weeklyAttendanceTotals(days: AttendanceDay[]): {
     if (!calculation || calculation.prescribed_work_minutes <= 0) return count
 
     return (calculation.absence_minutes ?? 0) >= calculation.prescribed_work_minutes ? count + 1 : count
+  }, 0)
+
+  // 労働日数(月次のworked_daysと同じ基準: work_minutes > 0の日を数える)。
+  const workedDays = days.reduce((count, day) => {
+    return (day.calculation?.work_minutes ?? 0) > 0 ? count + 1 : count
   }, 0)
 
   const totals = days.reduce((sum, day) => {
@@ -115,5 +121,5 @@ export function weeklyAttendanceTotals(days: AttendanceDay[]): {
     return sum
   }, zeroWeeklyTotals())
 
-  return { totals, absenceDays, specialLeaveDays: totals.special_leave_days, specialLeaveBreakdown: specialLeaveTypeBreakdown(days) }
+  return { totals, absenceDays, workedDays, specialLeaveDays: totals.special_leave_days, specialLeaveBreakdown: specialLeaveTypeBreakdown(days) }
 }
