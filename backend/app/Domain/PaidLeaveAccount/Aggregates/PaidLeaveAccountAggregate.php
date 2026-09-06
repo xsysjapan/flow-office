@@ -8,6 +8,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantExpiryChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantRevoked;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled;
@@ -165,23 +166,52 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         return $this;
     }
 
+    /**
+     * UC-P005/UC-P006向けの警告済みフラグ記録専用。残高等の不変条件には関与しない
+     * (旧`PaidLeaveGrantAggregate::raiseWarning`の置き換え)。
+     */
+    public function raiseGrantWarning(string $grantId, string $warningType, string $message): self
+    {
+        $this->recordThat(new PaidLeaveGrantWarningRaised(
+            grantId: $grantId,
+            warningType: $warningType,
+            message: $message,
+        ));
+
+        return $this;
+    }
+
     public function designateUsage(
         string $usageId,
         ?string $workflowRequestId,
         ?string $attendanceDayId,
         string $usedOn,
         float $usedDays,
+        string $usageType,
+        ?string $paidLeaveRequestId = null,
+        ?string $approverUserId = null,
+        ?string $reason = null,
+        ?string $requestGroupId = null,
+        ?float $hours = null,
     ): self {
         if (isset($this->usages[$usageId])) {
             throw new DomainRuleException("Usage [{$usageId}] は既に存在します。");
         }
 
+        // usageType/paidLeaveRequestId等は集約の不変条件には使わない(有給固有の申請
+        // パラメータの表示投影用にイベントへ乗せて運ぶだけ。PaidLeaveRequestProjector参照)。
         $this->recordThat(new PaidLeaveUsageDesignated(
             usageId: $usageId,
             workflowRequestId: $workflowRequestId,
             attendanceDayId: $attendanceDayId,
             usedOn: $usedOn,
             usedDays: $usedDays,
+            usageType: $usageType,
+            paidLeaveRequestId: $paidLeaveRequestId,
+            approverUserId: $approverUserId,
+            reason: $reason,
+            requestGroupId: $requestGroupId,
+            hours: $hours,
         ));
 
         return $this;

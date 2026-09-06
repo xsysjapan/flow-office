@@ -7,14 +7,20 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantExpiryChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantRevoked;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
+use App\Domain\Workflow\Events\WorkflowRequestReturned;
+use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Models\PaidLeaveGrant;
-use App\Models\PaidLeaveAccountUsage;
+use App\Models\PaidLeaveRequest;
+use App\Models\PaidLeaveRequestStatus;
+use App\Models\PaidLeaveUsage;
 use App\Models\PaidLeaveUsageAllocation;
+use App\Models\WorkflowRequest;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -89,16 +95,24 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
     public function onPaidLeaveUsageDesignated(PaidLeaveUsageDesignated $event): void
     {
-        PaidLeaveAccountUsage::query()->updateOrCreate(
+        // paid_leave_usages.paid_leave_request_idは外部キー制約付きのため、参照先の
+        // paid_leave_requests行を必ず先に作る(同一Projector内で順序を保証する。
+        // 別クラスに分けるとProjectorの実行順序に依存してFK違反を起こしうるため、
+        // あえて1つのProjectorにまとめている)。
+        $this->createPaidLeaveRequestIfNeeded($event);
+
+        PaidLeaveUsage::query()->updateOrCreate(
             ['usage_id' => $event->usageId],
             [
                 'user_id' => $event->aggregateRootUuid(),
                 'attendance_day_id' => $event->attendanceDayId,
                 'paid_leave_grant_id' => null,
-                'paid_leave_request_id' => null,
+                'paid_leave_request_id' => $event->paidLeaveRequestId,
                 'used_on' => $event->usedOn,
                 'used_days' => $event->usedDays,
-                'usage_type' => null,
+                'used_minutes' => $event->hours !== null ? (int) round($event->hours * 60) : null,
+                'usage_type' => $event->usageType,
+                'is_confirmed' => false,
                 'confirmed' => false,
                 'cancelled' => false,
             ],
@@ -107,12 +121,105 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
     public function onPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
-        PaidLeaveAccountUsage::query()->where('usage_id', $event->usageId)->update(['confirmed' => true]);
+        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update([
+            'confirmed' => true,
+            'is_confirmed' => true,
+        ]);
+
+        $this->updatePaidLeaveRequestStatus($event->usageId, PaidLeaveRequestStatus::APPROVED, 'approved_at', $event->createdAt());
     }
 
     public function onPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void
     {
-        PaidLeaveAccountUsage::query()->where('usage_id', $event->usageId)->update(['cancelled' => true]);
+        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update(['cancelled' => true]);
+
+        $this->updatePaidLeaveRequestStatus($event->usageId, PaidLeaveRequestStatus::CANCELLED, 'cancelled_at', $event->createdAt());
+    }
+
+    /**
+     * 差戻し(returned)は新ドメインのUsageを一切変更しない方針(cutover前の挙動を保つ。
+     * `App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler`クラスdoc参照)のため、
+     * Workflow側の`WorkflowRequestReturned`(既存のWorkflowドメインイベント、regenerable)を
+     * 直接購読して`paid_leave_requests.status`を切り替える。
+     */
+    public function onWorkflowRequestReturned(WorkflowRequestReturned $event): void
+    {
+        $workflowRequest = WorkflowRequest::query()->find($event->aggregateRootUuid());
+
+        if ($workflowRequest?->subject_type !== WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST) {
+            return;
+        }
+
+        PaidLeaveRequest::query()->whereKey($workflowRequest->subject_id)->update([
+            'status' => PaidLeaveRequestStatus::RETURNED,
+            'returned_at' => $event->createdAt(),
+        ]);
+    }
+
+    /**
+     * `paid_leave_requests`(有給固有の申請パラメータ。docs/changesets/20260906-
+     * paid-leave-domain-redesign/spec.md 論点10)を`PaidLeaveUsageDesignated`から作成する。
+     * 旧`App\Domain\PaidLeave\Projectors\PaidLeaveRequestProjector`(Phase 5 cutoverで削除)の
+     * 役割の置き換え。
+     */
+    private function createPaidLeaveRequestIfNeeded(PaidLeaveUsageDesignated $event): void
+    {
+        if ($event->paidLeaveRequestId === null) {
+            return;
+        }
+
+        PaidLeaveRequest::query()->updateOrCreate(
+            ['id' => $event->paidLeaveRequestId],
+            [
+                'user_id' => $event->aggregateRootUuid(),
+                'approver_user_id' => $event->approverUserId,
+                'status' => PaidLeaveRequestStatus::SUBMITTED,
+                'leave_type' => $event->usageType,
+                'target_date' => $event->usedOn,
+                'hours' => $event->hours,
+                'requested_days' => $event->usedDays,
+                'reason' => $event->reason,
+                'request_group_id' => $event->requestGroupId,
+                'submitted_at' => $event->createdAt(),
+            ],
+        );
+    }
+
+    /**
+     * `PaidLeaveUsageConfirmed`/`Cancelled`は`usageId`のみを運ぶため、対応する
+     * `paid_leave_requests.id`は`paid_leave_usages.paid_leave_request_id`
+     * (Designated時点で本Projectorが設定済み)から逆引きする。
+     */
+    private function updatePaidLeaveRequestStatus(string $usageId, string $status, string $timestampColumn, \DateTimeInterface $occurredAt): void
+    {
+        $requestId = PaidLeaveUsage::query()->where('usage_id', $usageId)->value('paid_leave_request_id');
+
+        if ($requestId === null) {
+            return;
+        }
+
+        PaidLeaveRequest::query()->whereKey($requestId)->update([
+            'status' => $status,
+            $timestampColumn => $occurredAt,
+        ]);
+    }
+
+    /**
+     * UC-P005/UC-P006(消滅警告・年5日取得義務警告)。旧`PaidLeaveGrantAggregate::raiseWarning`
+     * 廃止に伴い、同じ`paid_leave_grants.expiry_warned_at`/`five_day_obligation_warned_at`列を
+     * このProjectorから書き込む(Warn*Handlerがこのイベントを発行する。
+     * `App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler`/`WarnFiveDayObligationHandler`参照)。
+     */
+    public function onPaidLeaveGrantWarningRaised(PaidLeaveGrantWarningRaised $event): void
+    {
+        $grant = PaidLeaveGrant::query()->find($event->grantId);
+        if ($grant === null) {
+            return;
+        }
+
+        $column = $event->warningType === 'expiry' ? 'expiry_warned_at' : 'five_day_obligation_warned_at';
+
+        $grant->update([$column => $event->createdAt()]);
     }
 
     public function onPaidLeaveUsageAllocated(PaidLeaveUsageAllocated $event): void
@@ -162,6 +269,10 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
         $grant->update([
             'allocated_days' => $allocatedTotal,
+            // 旧ドメインのused_days/remaining_daysと同じ意味(=消化済み扱いの合計)を保つため、
+            // used_daysもallocated_daysと同じ値にしておく(表示用の非正規化キャッシュ。
+            // Source of Truthはpaid_leave_usage_allocations)。
+            'used_days' => $allocatedTotal,
             'remaining_days' => (float) $grant->granted_days - $allocatedTotal,
         ]);
     }
@@ -173,7 +284,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
      */
     private function syncUsageGrantReference(string $usageId): void
     {
-        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->first();
+        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->first();
         if ($usage === null) {
             return;
         }

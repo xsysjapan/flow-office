@@ -280,37 +280,35 @@ use App\Domain\Notification\Commands\ConfirmNotification;
 use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
-use App\Domain\PaidLeave\Handlers\GrantPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\GrantScheduledPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
-use App\Domain\PaidLeave\Handlers\RevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
-use App\Domain\PaidLeaveAccount\Commands\CancelPaidLeaveUsage as PaidLeaveAccountCancelPaidLeaveUsage;
+use App\Domain\PaidLeaveAccount\Commands\CancelPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantAmount;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantDate;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantExpiry;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
-use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave as PaidLeaveAccountGrantPaidLeave;
-use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant as PaidLeaveAccountRevokePaidLeaveGrant;
-use App\Domain\PaidLeaveAccount\Handlers\CancelPaidLeaveUsageHandler as PaidLeaveAccountCancelPaidLeaveUsageHandler;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
+use App\Domain\PaidLeaveAccount\Handlers\CancelPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantAmountHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantDateHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantExpiryHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
+use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
 use App\Domain\ShiftSwap\Commands\CancelShiftSwapRequest;
@@ -597,7 +595,11 @@ return [
         WarnMonthCloseDeadline::class => WarnMonthCloseDeadlineHandler::class,
         ExcludeAttendanceSubmissionReminder::class => ExcludeAttendanceSubmissionReminderHandler::class,
 
-        GrantPaidLeave::class => GrantPaidLeaveHandler::class,
+        // 有給休暇(docs/changesets/20260906-paid-leave-domain-redesign/spec.md「実装方針の変更」
+        // Phase 5 cutover): 旧App\Domain\PaidLeaveのGrant/Request Aggregate・Projectorは廃止し、
+        // App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate(社員単位の年休台帳)
+        // へ一本化した。RequestPaidLeave等のCommand自体はWorkflow層との既存の配線を保つため
+        // 旧namespaceのまま残すが、Handlerの内部実装はすべて新ドメインのCommandを呼ぶ。
         GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,
         WarnExpiringPaidLeave::class => WarnExpiringPaidLeaveHandler::class,
         WarnFiveDayObligation::class => WarnFiveDayObligationHandler::class,
@@ -605,17 +607,16 @@ return [
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
         CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
-        RevokePaidLeaveGrant::class => RevokePaidLeaveGrantHandler::class,
 
-        // PaidLeaveAccountAggregate(Phase 2。docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。
-        PaidLeaveAccountGrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
+        GrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
         ChangePaidLeaveGrantAmount::class => ChangePaidLeaveGrantAmountHandler::class,
         ChangePaidLeaveGrantDate::class => ChangePaidLeaveGrantDateHandler::class,
         ChangePaidLeaveGrantExpiry::class => ChangePaidLeaveGrantExpiryHandler::class,
-        PaidLeaveAccountRevokePaidLeaveGrant::class => PaidLeaveAccountRevokePaidLeaveGrantHandler::class,
+        RevokePaidLeaveGrant::class => PaidLeaveAccountRevokePaidLeaveGrantHandler::class,
         DesignatePaidLeaveUsage::class => DesignatePaidLeaveUsageHandler::class,
         ConfirmPaidLeaveUsage::class => ConfirmPaidLeaveUsageHandler::class,
-        PaidLeaveAccountCancelPaidLeaveUsage::class => PaidLeaveAccountCancelPaidLeaveUsageHandler::class,
+        CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
+        RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
 
         GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
         GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,

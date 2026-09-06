@@ -163,6 +163,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated as PaidLeaveAccount
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged as PaidLeaveAccountGrantDateChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantExpiryChanged as PaidLeaveAccountGrantExpiryChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantRevoked as PaidLeaveAccountGrantRevoked;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantWarningRaised as PaidLeaveAccountGrantWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocated as PaidLeaveAccountUsageAllocated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased as PaidLeaveAccountUsageAllocationReleased;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccountUsageCancelled;
@@ -515,6 +516,7 @@ return [
         'paid_leave_account.grant_date_changed' => PaidLeaveAccountGrantDateChanged::class,
         'paid_leave_account.grant_expiry_changed' => PaidLeaveAccountGrantExpiryChanged::class,
         'paid_leave_account.grant_revoked' => PaidLeaveAccountGrantRevoked::class,
+        'paid_leave_account.grant_warning_raised' => PaidLeaveAccountGrantWarningRaised::class,
         'paid_leave_account.usage_designated' => PaidLeaveAccountUsageDesignated::class,
         'paid_leave_account.usage_confirmed' => PaidLeaveAccountUsageConfirmed::class,
         'paid_leave_account.usage_cancelled' => PaidLeaveAccountUsageCancelled::class,

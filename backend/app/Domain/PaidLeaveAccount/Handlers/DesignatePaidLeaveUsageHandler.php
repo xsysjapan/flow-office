@@ -26,6 +26,12 @@ class DesignatePaidLeaveUsageHandler implements CommandHandler
                 attendanceDayId: $command->attendanceDayId,
                 usedOn: $command->usedOn,
                 usedDays: $command->usedDays,
+                usageType: $command->usageType,
+                paidLeaveRequestId: $command->paidLeaveRequestId,
+                approverUserId: $command->approverUserId,
+                reason: $command->reason,
+                requestGroupId: $command->requestGroupId,
+                hours: $command->hours,
             )
             ->persist();
 
