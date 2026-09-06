@@ -10,7 +10,7 @@ use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Models\PaidLeaveBalance;
 use App\Models\PaidLeaveGrant;
-use App\Models\PaidLeaveUsage;
+use App\Models\PaidLeaveAccountUsage;
 use App\Models\PaidLeaveUsageAllocation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,7 +71,7 @@ class PaidLeaveAccountProjectionTest extends TestCase
             usedDays: 1.0,
         ));
 
-        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
+        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->firstOrFail();
         $this->assertFalse($usage->confirmed);
         $this->assertFalse($usage->cancelled);
         $this->assertNull($usage->paid_leave_grant_id);
@@ -106,7 +106,7 @@ class PaidLeaveAccountProjectionTest extends TestCase
             ->firstOrFail();
         $this->assertEquals(3.0, (float) $allocation->allocated_days);
 
-        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
+        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->firstOrFail();
         $this->assertTrue($usage->confirmed);
         $this->assertEquals($grantId, $usage->paid_leave_grant_id);
 
@@ -139,7 +139,7 @@ class PaidLeaveAccountProjectionTest extends TestCase
 
         $this->assertSame(0, PaidLeaveUsageAllocation::query()->where('usage_id', $usageId)->count());
 
-        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
+        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->firstOrFail();
         $this->assertTrue($usage->cancelled);
         $this->assertNull($usage->paid_leave_grant_id);
 
@@ -178,7 +178,7 @@ class PaidLeaveAccountProjectionTest extends TestCase
         $this->assertEquals(0.0, (float) $grant->allocated_days);
 
         // Usage自体は取消されない(不変条件5)が、充当先を失い未充当のまま残る。
-        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->firstOrFail();
+        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->firstOrFail();
         $this->assertTrue($usage->confirmed);
         $this->assertFalse($usage->cancelled);
 

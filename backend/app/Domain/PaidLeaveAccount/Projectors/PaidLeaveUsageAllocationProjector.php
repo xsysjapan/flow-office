@@ -13,7 +13,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
 use App\Models\PaidLeaveGrant;
-use App\Models\PaidLeaveUsage;
+use App\Models\PaidLeaveAccountUsage;
 use App\Models\PaidLeaveUsageAllocation;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -89,7 +89,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
     public function onPaidLeaveUsageDesignated(PaidLeaveUsageDesignated $event): void
     {
-        PaidLeaveUsage::query()->updateOrCreate(
+        PaidLeaveAccountUsage::query()->updateOrCreate(
             ['usage_id' => $event->usageId],
             [
                 'user_id' => $event->aggregateRootUuid(),
@@ -107,12 +107,12 @@ class PaidLeaveUsageAllocationProjector extends Projector
 
     public function onPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
-        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update(['confirmed' => true]);
+        PaidLeaveAccountUsage::query()->where('usage_id', $event->usageId)->update(['confirmed' => true]);
     }
 
     public function onPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void
     {
-        PaidLeaveUsage::query()->where('usage_id', $event->usageId)->update(['cancelled' => true]);
+        PaidLeaveAccountUsage::query()->where('usage_id', $event->usageId)->update(['cancelled' => true]);
     }
 
     public function onPaidLeaveUsageAllocated(PaidLeaveUsageAllocated $event): void
@@ -173,7 +173,7 @@ class PaidLeaveUsageAllocationProjector extends Projector
      */
     private function syncUsageGrantReference(string $usageId): void
     {
-        $usage = PaidLeaveUsage::query()->where('usage_id', $usageId)->first();
+        $usage = PaidLeaveAccountUsage::query()->where('usage_id', $usageId)->first();
         if ($usage === null) {
             return;
         }

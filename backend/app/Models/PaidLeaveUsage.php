@@ -14,6 +14,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['stored_event_id', 'usage_id', 'user_id', 'attendance_day_id', 'paid_leave_grant_id', 'paid_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed', 'confirmed', 'cancelled'])]
 class PaidLeaveUsage extends Model
 {
+    /**
+     * `paid_leave_usages`は旧`PaidLeave`ドメインと新`PaidLeaveAccount`ドメイン
+     * (docs/changesets/20260906-paid-leave-domain-redesign/spec.md)が同じ物理テーブルを
+     * 共有する(論点7)。このモデルは旧ドメイン専用であり、既存のController/テストの
+     * `where('user_id', ...)`のような素朴なクエリが新ドメイン側の行(`usage_id`列が
+     * 設定されている行)を誤って拾わないよう、既定で`usage_id`が未設定の行のみを対象にする
+     * (デフォルトスコープ)。新ドメイン側の行を扱う場合は`App\Models\PaidLeaveAccountUsage`を
+     * 使う(同じテーブルを指す姉妹モデル)。
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('legacyPaidLeaveDomain', function ($query) {
+            $query->whereNull('usage_id');
+        });
+    }
+
     protected function casts(): array
     {
         return [
