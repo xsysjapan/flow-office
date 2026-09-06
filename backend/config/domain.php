@@ -307,7 +307,9 @@ use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantDateHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantExpiryHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
+use App\Domain\PaidLeaveAccount\Commands\MigratePaidLeaveAccount;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
+use App\Domain\PaidLeaveAccount\Handlers\MigratePaidLeaveAccountHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
@@ -617,6 +619,7 @@ return [
         ConfirmPaidLeaveUsage::class => ConfirmPaidLeaveUsageHandler::class,
         CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
+        MigratePaidLeaveAccount::class => MigratePaidLeaveAccountHandler::class,
 
         GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
         GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,
