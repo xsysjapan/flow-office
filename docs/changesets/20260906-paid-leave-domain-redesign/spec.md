@@ -519,4 +519,31 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
 - コミット: `375873e`(Phase 2: PaidLeaveAccountAggregate本体・Grant/Usage/Allocation
   ドメインモデルを追加)。
 
-Phase 3(Projection・DB migration)以降は未着手。
+### Phase 3(完了): Projectionテーブル・DB migration
+
+- 追加migration: `2026_09_07_000000_add_allocation_cache_to_paid_leave_grants_table.php`
+  (`paid_leave_grants`へ`allocated_days`キャッシュ列追加)/
+  `2026_09_07_000001_add_paid_leave_account_columns_to_paid_leave_usages_table.php`
+  (`paid_leave_usages`へ`usage_id`/`confirmed`/`cancelled`列追加)/
+  `2026_09_07_000002_create_paid_leave_usage_allocations_table.php`(新設、Allocationの
+  Source of Truth)/`2026_09_07_000003_create_paid_leave_balances_table.php`
+  (新設、`next_grant_scheduled_on`はPhase 7まで常にnull)。
+- 追加: `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector`
+  (`paid_leave_grants`/`paid_leave_usages`/`paid_leave_usage_allocations`を更新)・
+  `PaidLeaveBalanceProjector`(既存`PaidLeaveGrantProjector::recalculate()`と同様、
+  stored_eventsの再走査による冪等再計算方式。`event-sourcing:replay`で再生成可能、
+  専用rebuildコマンドは不要と確認済み)。Eloquentモデル
+  `PaidLeaveUsageAllocation`/`PaidLeaveBalance`を追加。
+- 追加テスト: `tests/Feature/PaidLeaveAccount/PaidLeaveAccountProjectionTest.php`
+  (CommandBus経由でCommand→Handler→Aggregate→Event→Projectorの一連を検証)。
+  結果: 新規41件全pass。既存`--filter=PaidLeave`92件全pass(無改変・影響なし)。
+- **仕様からの意図的な逸脱(要判断済み)**: spec.md「Projection変更」節では
+  `paid_leave_usages.paid_leave_grant_id`列の廃止を想定していたが、旧
+  `PaidLeaveGrantProjector`/`PaidLeaveUsageProjector`が現在もこの列(NOT NULL)へ
+  書き込んでおり、既存`tests/Feature/PaidLeave/*`もこれに依存しているため、
+  **この列は廃止せずnullable化のみに留めた**。実際の列削除は旧`PaidLeave`ドメインの
+  cutover・decommission(論点2、Phase 9以降)まで先送りする。既存動作を壊さないための
+  意図的な判断であり、以後の設計変更ではない。
+- コミット: `e9450ad`(Phase 3: PaidLeaveAccount向けProjectionテーブルを追加)。
+
+Phase 4(Workflow接続)以降は未着手。
