@@ -674,6 +674,38 @@ Phase 9 Migration→Phase 10 UI仕上げ)を以下の通り変更する。
 - コミット: `a6a9ff7`(新ドメイン機能拡張)/`d5a726b`(旧ドメイン削除・cutover)/
   `23bf16c`(テスト移行)。
 
+### レビュー修正(完了): Phase 2〜5に対するcode-reviewスキルレビュー指摘3件の修正
+
+Phase 5完了後、最終Phase着手前に`code-review`スキル(effort: high)でPhase 2〜5全体の
+実装をレビューし、以下3件を修正した。
+
+1. **【実バグ】取消済みUsageの日次paid_leave_minutes残留**
+   (`backend/app/Domain/Attendance/Services/AttendanceCalculator.php`):
+   hourly有給を取消しても行を物理削除せず`cancelled=true`で残す設計
+   (Grant取消と同じ「物理削除しない・監査可能に残す」方針、意図通り)自体は問題ないが、
+   `AttendanceCalculator`がhourly有給の`used_minutes`集計時に`cancelled`列で
+   フィルタしておらず、取消後も日次`paid_leave_minutes`に残り続け、同日に再申請すると
+   新旧が二重加算される不具合があった。`->where('cancelled', false)`条件を追加して修正。
+   `SpecialLeaveUsage`側は`cancelled`列が無く本変更の対象外のためそのまま。
+   回帰テスト`tests/Feature/PaidLeaveAccount/PaidLeaveUsageCancellationRecalculationTest.php`
+   追加(hourly申請→承認→120分反映→取消→0分に復元→再申請→60分のみ反映、旧行との
+   二重加算がないことを検証)。
+2. **【潜在的不変条件の抜け】Grant日付・有効期限変更でgrantedOn>expiresOnを許容していた**
+   (`PaidLeaveAccountAggregate::changeGrantDate`/`changeGrantExpiry`):
+   他Grantとの前後関係・Allocation超過チェックのみで、単一Grant内の
+   `grantedOn <= expiresOn`整合性を検証していなかった。両メソッドに
+   `DomainRuleException`によるガードを追加。単体テスト4件追加(境界値含む)。
+   現状これらのCommandへ到達するHTTPルートは無く実害はまだ発生していなかったが、
+   最終Phase以降でGrant管理UIを追加する際の事故を未然に防ぐ。
+3. **【軽微】存在しない`PaidLeaveRequestProjector`を指すdocコメント**:
+   実際は`PaidLeaveUsageAllocationProjector`内のメソッドが担っている旨へ5ファイルの
+   コメントを修正(挙動変更なし)。
+- テスト結果: `tests/Feature/PaidLeaveAccount`+`tests/Unit/PaidLeaveAccount` 97件全pass。
+  `--filter=PaidLeave` 97件全pass。全体スイート968件全pass(レビュー時に独立して
+  再実行し確認済み)。
+- コミット: `7f5db3c`(取消Usage残留バグ修正)/`30e4839`(Grant日付整合性ガード追加)/
+  `cd10da5`(docコメント修正)。
+
 ## 最終Phase(未着手): データ移行
 
 依頼書§44-48・本spec「既存データ移行」節に基づき、`MigratePaidLeaveAccount`
