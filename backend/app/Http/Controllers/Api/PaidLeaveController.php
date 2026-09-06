@@ -9,6 +9,7 @@ use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveReq
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\MigratePaidLeaveAccount;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
@@ -230,6 +231,55 @@ class PaidLeaveController extends Controller
         ));
 
         return new PaidLeaveGrantResource($grant->refresh());
+    }
+
+    /**
+     * 旧システム/旧ドメインからのcutover移行専用エンドポイント(1社員分)。管理者権限限定。
+     * 口座は一度きりの移行しか受け付けないため、既にGrantが存在する口座への再実行は
+     * `MigratePaidLeaveAccountHandler`経由でDomainRuleException(422)となる。
+     * 大量移行はartisanコマンド`paid-leave:migrate-accounts`(CSV/JSON一括投入、行単位で
+     * 成功・失敗を継続収集する)を使う想定で、本エンドポイントは1社員分の疎通・単発修正用。
+     *
+     * @see \App\Console\Commands\MigratePaidLeaveAccountsCommand
+     */
+    #[OA\Post(
+        path: '/paid-leave/migrate',
+        operationId: 'paidLeave.migrate',
+        summary: '旧システムからの有給データを1社員分移行する(cutover専用・一度きり)',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'cutover_date', 'grants'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'cutover_date', type: 'string', format: 'date'), new OA\Property(property: 'grants', type: 'array', items: new OA\Items(type: 'object'))])),
+        responses: [new OA\Response(response: 204, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function migrate(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            'cutover_date' => ['required', 'date'],
+            'grants' => ['array'],
+            'grants.*.grant_id' => ['nullable', 'string', 'uuid'],
+            'grants.*.original_granted_on' => ['nullable', 'date'],
+            'grants.*.original_granted_days' => ['nullable', 'numeric', 'min:0'],
+            'grants.*.remaining_days_at_cutover' => ['required', 'numeric', 'min:0'],
+            'grants.*.expires_on' => ['required', 'date'],
+            'grants.*.mode' => ['required', Rule::in(['A', 'B', 'C'])],
+            'grants.*.notes' => ['nullable', 'string'],
+        ]);
+
+        $commandBus->dispatch(new MigratePaidLeaveAccount(
+            userId: $data['user_id'],
+            cutoverDate: $data['cutover_date'],
+            grants: array_map(static fn (array $g): array => [
+                'grantId' => $g['grant_id'] ?? null,
+                'originalGrantedOn' => $g['original_granted_on'] ?? null,
+                'originalGrantedDays' => $g['original_granted_days'] ?? null,
+                'remainingDaysAtCutover' => (float) $g['remaining_days_at_cutover'],
+                'expiresOn' => $g['expires_on'],
+                'mode' => $g['mode'],
+                'notes' => $g['notes'] ?? null,
+            ], $data['grants'] ?? []),
+        ));
+
+        return response()->json(null, 204);
     }
 
     /**
