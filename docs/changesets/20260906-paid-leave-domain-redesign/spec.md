@@ -546,4 +546,39 @@ Explore調査結果(要点)。詳細ファイルパスは各項目内に記載�
   意図的な判断であり、以後の設計変更ではない。
 - コミット: `e9450ad`(Phase 3: PaidLeaveAccount向けProjectionテーブルを追加)。
 
-Phase 4(Workflow接続)以降は未着手。
+### Phase 4(完了): 既存有給申請WorkflowをPaidLeaveAccountAggregateへ並行接続
+
+- 追加: `App\Domain\PaidLeaveAccount\Reactors\PaidLeaveAccountOnPaidLeaveRequestReactor`
+  1本に集約。旧`PaidLeave`ドメインのイベント(`PaidLeaveUsageDesignated`/
+  `PaidLeaveRequestApproved`/`Returned`/`Cancelled`)を購読し、新ドメインの
+  `DesignatePaidLeaveUsage`/`ConfirmPaidLeaveUsage`/`CancelPaidLeaveUsage`を並行発行する
+  (strangler figパターン。旧ドメインの挙動・API応答・attendance_days反映は無変更)。
+  Workflowイベントではなく旧ドメインイベントを直接購読することで、承認不要即時承認
+  パス(`PaidLeaveController::storeRequest`、workflow_requestsを経由しない)も
+  同一Reactorで漏れなく対応。
+- **Usage紐付け**: 旧`PaidLeaveRequestApproved`/`Returned`/`Cancelled`イベントには
+  usage_idが乗っていないため、`(user_id, used_on)`の組で`paid_leave_usages`を検索して
+  対応するUsageを特定(旧ドメインが同日重複申請を禁止しているため一意性が担保される)。
+  新規列は追加していない。
+- **半日/時間単位有給の扱い**: 全日(1.0)・半日(0.5)はそのまま新ドメインのUsageへ反映。
+  時間単位有給(`usageType`が`hourly`)は依頼書の対象外(§50)のため新ドメイン側では
+  Usageを作成せずスキップ(エラーにはしない)。それ以外の未知の`usageType`は
+  `DomainRuleException`で例外化し、想定外ケースを握りつぶさない設計とした。
+  (調査の結果、「有給申請にhourlyは発生しない」という前提は誤りで、実際に
+  `RequestPaidLeaveHandler::resolveRequestedDays`・既存テストの双方でhourly有給申請の
+  実例が確認されたため、上記の通りスキップ処理として明示的に扱った。)
+- **既存テーブル共有時の衝突と対処**: 新ドメインのCommandが実運用トラフィックとして
+  実際に`paid_leave_usages`テーブルへ書き込むようになったことで、既存テスト
+  (`PaidLeaveAdminCancelRequestTest::test_usages_for_user_...`)の行数アサーションが
+  破綻することが判明。`PaidLeaveUsage`モデルへデフォルトのglobal scope
+  (`usage_id IS NULL`)を追加し、新ドメイン用の`PaidLeaveAccountUsage`モデル
+  (`usage_id IS NOT NULL`スコープ、同一テーブル参照)を新設して読み書きを分離した。
+  旧ドメインの挙動・列・migrationへの変更は無し。
+- 追加テスト: `tests/Feature/PaidLeaveAccount/PaidLeaveAccountWorkflowWiringTest.php`
+  (4件、Workflow申請→承認→差戻し→取消の一連を新ドメイン側projectionで検証)。
+- テスト結果: `tests/Feature/PaidLeaveAccount`9件全pass。既存`--filter=PaidLeave`
+  96件全pass(旧92件+新4件、無回帰)。全体スイート941/967pass
+  (残り8件はPhase 2から継続する既存無関係のSSO/外部連携暗号化設定起因の失敗)。
+- コミット: `8861119`(Phase 4: 有給申請WorkflowをPaidLeaveAccountAggregateへ配線)。
+
+Phase 5(Allocation Preview・承認処理API)以降は未着手。
