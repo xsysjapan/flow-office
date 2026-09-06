@@ -607,4 +607,60 @@ class PaidLeaveRequestTest extends TestCase
         $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
         $this->assertSame('cancelled', $workflowRequest->status);
     }
+
+    /**
+     * RequestPaidLeaveHandlerの同日重複申請ガード(依頼書§11相当)がcutover後も
+     * 有効であることを確認する回帰テスト。
+     */
+    public function test_a_second_request_for_the_same_date_is_rejected_while_the_first_is_still_pending(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated();
+
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'am_half',
+            'approver_user_id' => $approver->id,
+        ])->assertStatus(422);
+
+        $this->assertSame(1, PaidLeaveRequest::query()->where('user_id', $employee->id)->count());
+    }
+
+    /**
+     * 依頼書§57(Workflowから同じ承認処理が再送されても二重確定・二重Allocation・
+     * 二重消費が発生しない冪等性)の回帰テスト。ApprovePaidLeaveRequestHandlerが
+     * `status !== SUBMITTED`を先にチェックしてAggregateへ到達させないため、
+     * 2回目の承認呼び出しはエラーとなり、Grant消化・Allocationは1回分のまま。
+     */
+    public function test_approving_the_same_request_twice_does_not_double_consume_the_grant(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertStatus(422);
+
+        $grant = PaidLeaveGrant::query()->where('user_id', $employee->id)->firstOrFail();
+        $this->assertEquals(1.0, (float) $grant->used_days);
+        $this->assertEquals(9.0, (float) $grant->remaining_days);
+
+        $usage = PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->firstOrFail();
+        $this->assertSame(1, PaidLeaveUsageAllocation::query()->where('usage_id', $usage->usage_id)->count());
+    }
 }

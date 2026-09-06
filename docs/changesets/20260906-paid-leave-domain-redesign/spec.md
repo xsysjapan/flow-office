@@ -760,3 +760,27 @@ Projection→Workflow接続→cutover→レビュー修正→データ移行)が
   明記し、新`paid_leave_account.*`イベント11種(payload・エイリアスとも実装と
   突き合わせ済み)を追加。
 - コミット: `b02e47d`(ドキュメント: 有給休暇ドメイン再設計をdocs/09・16・17へ反映)。
+
+### テスト網羅性の確認・フロントエンド影響確認(完了)
+
+全Phase完了後、バックエンドのテスト網羅性とフロントエンドへの影響を確認した。
+
+- **フロントエンド**: 本変更セットは`frontend/`配下を一切変更していないことを
+  `git diff --stat main...`で確認。`npx tsc -b`型チェック・`npm run test`(vitest)を
+  実行し、型チェックは問題なし、単体テストは128ファイル中126ファイル全pass。
+  失敗した2ファイル・6件(`ApprovalDetailPanel`/`ApprovalsPage`、勤怠月次承認の
+  ドリルダウン関連)は`useAuth must be used within an AuthProvider`という
+  有給休暇ドメインと無関係な既存の失敗で、単独実行でも同一エラーで再現することを
+  確認済み(本変更セットに起因しない、対応不要)。
+- **バックエンドのテスト網羅性**: `tests/Feature/PaidLeaveAccount`+
+  `tests/Unit/PaidLeaveAccount`配下の既存テスト(約130件)を精査し、依頼書§60の
+  Grant/Usage/Allocation/Migrationの検証項目はほぼ網羅されていることを確認した。
+  一方で以下2件のテストギャップを検出(実装側のガード自体は既に存在しており実害は
+  無いが、回帰テストが無かった):
+  1. 同日重複申請の拒否(`RequestPaidLeaveHandler`の既存ガード、依頼書§11相当)
+  2. Workflow再送時の冪等性(依頼書§57、`ApprovePaidLeaveRequestHandler`が
+     `status !== SUBMITTED`を先にチェックしAggregateへ到達させないことで二重承認を防ぐ)
+  `tests/Feature/PaidLeaveAccount/PaidLeaveRequestTest.php`へ
+  `test_a_second_request_for_the_same_date_is_rejected_while_the_first_is_still_pending`と
+  `test_approving_the_same_request_twice_does_not_double_consume_the_grant`の2件を追加。
+  全体スイート990件全pass(既存988件+新規2件、無回帰)。
