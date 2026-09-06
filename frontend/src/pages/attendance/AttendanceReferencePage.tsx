@@ -297,7 +297,7 @@ export function WeeklyReferenceView({
   const { data: schedule } = useShiftAssignments(userId, dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
-  const { totals, absenceDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
+  const { totals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
 
   return (
     <>
@@ -347,6 +347,7 @@ export function WeeklyReferenceView({
               title="今週の集計"
               totals={totals}
               absenceDays={absenceDays}
+              workDays={workedDays}
               specialLeaveBreakdown={specialLeaveBreakdown}
               showAllLeaveTotals
             />

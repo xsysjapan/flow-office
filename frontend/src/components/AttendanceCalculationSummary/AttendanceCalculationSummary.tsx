@@ -40,6 +40,8 @@ export interface AttendanceCalculationSummaryData {
   paid_leave_minutes?: number
   special_leave_days?: number
   special_leave_minutes?: number
+  /** 労働日数(実際に勤務した日数)。週次はworkDays propで別途渡すため、日次は通常未指定。 */
+  worked_days?: number
 }
 
 export interface AttendanceCalculationSummaryProps {
@@ -49,6 +51,10 @@ export interface AttendanceCalculationSummaryProps {
   /** 週40時間(労基法32条)超残業。週次では対象週、月次では月内全週の合計を指定する。 */
   weeklyStatutoryExcessOvertimeMinutes?: number
   absenceDays?: number
+  /** 労働日数(実際に勤務した日数)。月次はtotals.worked_daysをそのまま渡せるが、週次は
+   *  クライアント集計(attendanceWeeklyTotals.ts)の結果を渡すため、absenceDays同様propsで
+   *  別途受け取る。 */
+  workDays?: number
   showAllLeaveTotals?: boolean
   /** 特別休暇の種類ごとの内訳。未指定の場合は従来通り合計(special_leave_days/minutes)のみ表示する。 */
   specialLeaveBreakdown?: AttendanceSpecialLeaveBreakdownItem[]
@@ -81,6 +87,7 @@ export function AttendanceCalculationSummary({
   statutoryExcessOver60hMinutes,
   weeklyStatutoryExcessOvertimeMinutes,
   absenceDays,
+  workDays,
   showAllLeaveTotals = false,
   specialLeaveBreakdown,
   payrollWorkMinutes,
@@ -160,6 +167,9 @@ export function AttendanceCalculationSummary({
           {totals.work_minutes !== undefined && (
             <SummaryItem label="実労働時間" fullWidth><Duration minutes={totals.work_minutes} /></SummaryItem>
           )}
+          {(workDays ?? totals.worked_days) !== undefined && (
+            <SummaryItem label="労働日数" fullWidth>{workDays ?? totals.worked_days}日</SummaryItem>
+          )}
           {showPayrollWorkMinutes && (
             <SummaryItem label="給与計算上の労働時間" fullWidth><Duration minutes={payrollWorkMinutes} /></SummaryItem>
           )}
@@ -186,6 +196,9 @@ export function AttendanceCalculationSummary({
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr_auto_1fr]">
           {totals.work_minutes !== undefined && (
             <SummaryItem label="実労働時間"><Duration minutes={totals.work_minutes} /></SummaryItem>
+          )}
+          {(workDays ?? totals.worked_days) !== undefined && (
+            <SummaryItem label="労働日数">{workDays ?? totals.worked_days}日</SummaryItem>
           )}
           <SummaryItem label="所定労働時間"><Duration minutes={totals.prescribed_work_minutes} /></SummaryItem>
           <SummaryItem label="残業時間"><Duration minutes={overtimeMinutes} /></SummaryItem>
