@@ -8,6 +8,8 @@ import {
   fetchUser,
   fetchUsers,
   searchUsers,
+  updatePaidLeaveAutoGrantEnabled,
+  updateSpecialLeaveAutoGrantEnabled,
   updateUserHireDate,
   updateUserTerminationDate,
   updateUserUsageStartDate,
@@ -131,6 +133,32 @@ export function useUpdateUserUsageStartDate() {
       id: string;
       usageStartDate: string;
     }) => updateUserUsageStartDate(id, usageStartDate),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+      void queryClient.invalidateQueries({ queryKey: ["users", "detail", id] });
+    },
+  });
+}
+
+export function useUpdatePaidLeaveAutoGrantEnabled() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      updatePaidLeaveAutoGrantEnabled(id, enabled),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+      void queryClient.invalidateQueries({ queryKey: ["users", "detail", id] });
+    },
+  });
+}
+
+export function useUpdateSpecialLeaveAutoGrantEnabled() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      updateSpecialLeaveAutoGrantEnabled(id, enabled),
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["users"] });
       void queryClient.invalidateQueries({ queryKey: ["users", "detail", id] });

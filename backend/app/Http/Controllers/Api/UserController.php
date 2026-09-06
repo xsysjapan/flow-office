@@ -6,6 +6,8 @@ use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\UserManagement\Commands\AddMembership;
 use App\Domain\UserManagement\Commands\CreateUser;
+use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
+use App\Domain\UserManagement\Commands\SetSpecialLeaveAutoGrantEnabled;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Commands\SetUserTerminationDate;
 use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
@@ -301,6 +303,58 @@ class UserController extends Controller
         $commandBus->dispatch(new SetUserUsageStartDate(
             userId: $user->id,
             usageStartDate: $data['usage_start_date'],
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new UserResource($user->refresh());
+    }
+
+    /**
+     * 有給の自動付与をユーザーごとに有効/無効化する
+     * (docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md)。
+     */
+    #[OA\Put(
+        path: '/users/{user}/paid-leave-auto-grant-enabled',
+        operationId: 'users.updatePaidLeaveAutoGrantEnabled',
+        summary: '有給の自動付与の有効/無効を設定する',
+        tags: ['ユーザー'],
+        parameters: [new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['enabled'], properties: [new OA\Property(property: 'enabled', type: 'boolean')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function updatePaidLeaveAutoGrantEnabled(Request $request, User $user, CommandBus $commandBus): UserResource
+    {
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+
+        $commandBus->dispatch(new SetPaidLeaveAutoGrantEnabled(
+            userId: $user->id,
+            enabled: $data['enabled'],
+            changedByUserId: $request->user()->id,
+        ));
+
+        return new UserResource($user->refresh());
+    }
+
+    /**
+     * 特別休暇の自動付与をユーザーごとに有効/無効化する
+     * (docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md)。
+     */
+    #[OA\Put(
+        path: '/users/{user}/special-leave-auto-grant-enabled',
+        operationId: 'users.updateSpecialLeaveAutoGrantEnabled',
+        summary: '特別休暇の自動付与の有効/無効を設定する',
+        tags: ['ユーザー'],
+        parameters: [new OA\Parameter(name: 'user', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['enabled'], properties: [new OA\Property(property: 'enabled', type: 'boolean')])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function updateSpecialLeaveAutoGrantEnabled(Request $request, User $user, CommandBus $commandBus): UserResource
+    {
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+
+        $commandBus->dispatch(new SetSpecialLeaveAutoGrantEnabled(
+            userId: $user->id,
+            enabled: $data['enabled'],
             changedByUserId: $request->user()->id,
         ));
 

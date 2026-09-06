@@ -44,6 +44,17 @@ class User extends Authenticatable
 
     protected $keyType = 'string';
 
+    /**
+     * マイグレーションのdefault(true)と一致させる。DB側のdefaultだけでは、
+     * create()直後のモデルインスタンス(未リフレッシュ)にその値が反映されないため。
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'paid_leave_auto_grant_enabled' => true,
+        'special_leave_auto_grant_enabled' => true,
+    ];
+
     /** @var list<string> */
     protected $hidden = ['password'];
 
@@ -54,6 +65,8 @@ class User extends Authenticatable
             'termination_date' => 'date',
             'usage_start_date' => 'date',
             'last_login_at' => 'datetime',
+            'paid_leave_auto_grant_enabled' => 'boolean',
+            'special_leave_auto_grant_enabled' => 'boolean',
             // ローカルパスワードは平文でDBに保持しない (Laravel標準のhashedキャストで自動ハッシュ化する)。
             'password' => 'hashed',
         ];

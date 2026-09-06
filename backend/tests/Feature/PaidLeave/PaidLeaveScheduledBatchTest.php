@@ -143,6 +143,19 @@ class PaidLeaveScheduledBatchTest extends TestCase
         $this->assertCount(0, $grantedIds);
     }
 
+    public function test_it_skips_users_with_paid_leave_auto_grant_disabled_even_when_otherwise_eligible(): void
+    {
+        $today = Carbon::parse('2026-08-10');
+        $employee = User::factory()->create(['hire_date' => '2026-02-10', 'paid_leave_auto_grant_enabled' => false]);
+        $this->createRuleWithSteps();
+        $this->seedAttendanceHistory($employee, $today, scheduledDays: 5, attendedDays: 5);
+
+        $grantedIds = app(CommandBus::class)->dispatch(new GrantScheduledPaidLeave($today->toDateString()));
+
+        $this->assertCount(0, $grantedIds);
+        $this->assertSame(0, PaidLeaveGrant::query()->where('user_id', $employee->id)->count());
+    }
+
     public function test_it_skips_when_there_is_no_schedule_history_to_verify_attendance(): void
     {
         $today = Carbon::parse('2026-08-10');

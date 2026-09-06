@@ -3,6 +3,7 @@ import type {
   PaidLeaveType,
   SpecialLeaveGrant,
   SpecialLeaveGrantRule,
+  SpecialLeaveGrantRuleTargetUser,
   SpecialLeaveRequest,
   SpecialLeaveType,
   SpecialLeaveUsage,
@@ -60,6 +61,11 @@ export interface CreateSpecialLeaveGrantRuleInput {
 
 export function createSpecialLeaveGrantRule(input: CreateSpecialLeaveGrantRuleInput): Promise<SpecialLeaveGrantRule> {
   return apiFetch('/special-leave/grant-rules', { method: 'POST', body: input })
+}
+
+/** ルールの対象条件(雇用形態/勤務体系)にマッチする社員の軽量一覧を取得する(対象社員セクション用)。 */
+export function fetchSpecialLeaveGrantRuleTargetUsers(ruleId: number): Promise<SpecialLeaveGrantRuleTargetUser[]> {
+  return apiFetch(`/special-leave/grant-rules/${ruleId}/target-users`)
 }
 
 export interface GrantSpecialLeaveInput {

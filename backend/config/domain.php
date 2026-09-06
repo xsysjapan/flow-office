@@ -69,7 +69,6 @@ use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
-use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
 use App\Domain\Attendance\Commands\AssignShiftPatternDay;
 use App\Domain\Attendance\Commands\AssignUserWorkStyleForMonth;
@@ -78,6 +77,7 @@ use App\Domain\Attendance\Commands\ClockIn;
 use App\Domain\Attendance\Commands\ClockOut;
 use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
+use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
@@ -131,7 +131,6 @@ use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
-use App\Domain\Attendance\Handlers\CorrectCompanyCalendarYearFiscalYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
 use App\Domain\Attendance\Handlers\AssignShiftPatternDayHandler;
 use App\Domain\Attendance\Handlers\AssignUserWorkStyleForMonthHandler;
@@ -140,6 +139,7 @@ use App\Domain\Attendance\Handlers\ClockInHandler;
 use App\Domain\Attendance\Handlers\ClockOutHandler;
 use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
+use App\Domain\Attendance\Handlers\CorrectCompanyCalendarYearFiscalYearHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarYearHandler;
@@ -337,6 +337,8 @@ use App\Domain\UserManagement\Commands\RecordSsoLogin;
 use App\Domain\UserManagement\Commands\RemoveMembership;
 use App\Domain\UserManagement\Commands\ScheduleExistingMembershipChange;
 use App\Domain\UserManagement\Commands\ScheduleMembershipChange;
+use App\Domain\UserManagement\Commands\SetPaidLeaveAutoGrantEnabled;
+use App\Domain\UserManagement\Commands\SetSpecialLeaveAutoGrantEnabled;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Commands\SetUserTerminationDate;
 use App\Domain\UserManagement\Commands\SetUserUsageStartDate;
@@ -364,6 +366,8 @@ use App\Domain\UserManagement\Handlers\RecordSsoLoginHandler;
 use App\Domain\UserManagement\Handlers\RemoveMembershipHandler;
 use App\Domain\UserManagement\Handlers\ScheduleExistingMembershipChangeHandler;
 use App\Domain\UserManagement\Handlers\ScheduleMembershipChangeHandler;
+use App\Domain\UserManagement\Handlers\SetPaidLeaveAutoGrantEnabledHandler;
+use App\Domain\UserManagement\Handlers\SetSpecialLeaveAutoGrantEnabledHandler;
 use App\Domain\UserManagement\Handlers\SetUserHireDateHandler;
 use App\Domain\UserManagement\Handlers\SetUserTerminationDateHandler;
 use App\Domain\UserManagement\Handlers\SetUserUsageStartDateHandler;
@@ -478,6 +482,8 @@ return [
 
         SetUserHireDate::class => SetUserHireDateHandler::class,
         SetUserTerminationDate::class => SetUserTerminationDateHandler::class,
+        SetPaidLeaveAutoGrantEnabled::class => SetPaidLeaveAutoGrantEnabledHandler::class,
+        SetSpecialLeaveAutoGrantEnabled::class => SetSpecialLeaveAutoGrantEnabledHandler::class,
         SetUserUsageStartDate::class => SetUserUsageStartDateHandler::class,
         SyncUsersFromMs365::class => SyncUsersFromMs365Handler::class,
         RecordSsoLogin::class => RecordSsoLoginHandler::class,

@@ -467,6 +467,44 @@ describe("UserRoleEditPage", () => {
     );
   });
 
+  it("shows the disabled auto-grant badge and saves the toggled checkboxes", async () => {
+    vi.spyOn(usersApi, "updatePaidLeaveAutoGrantEnabled").mockResolvedValue({
+      ...targetUser,
+      paid_leave_auto_grant_enabled: false,
+    });
+    vi.spyOn(usersApi, "updateSpecialLeaveAutoGrantEnabled").mockResolvedValue({
+      ...targetUser,
+      special_leave_auto_grant_enabled: true,
+    });
+    renderPage({
+      ...targetUser,
+      paid_leave_auto_grant_enabled: false,
+      special_leave_auto_grant_enabled: true,
+    });
+
+    const paidLeaveCheckbox = await screen.findByRole("checkbox", {
+      name: "有給の自動付与を有効にする",
+    });
+    expect(paidLeaveCheckbox).not.toBeChecked();
+    expect(screen.getAllByText("自動付与:無効")).toHaveLength(1);
+
+    await userEvent.click(paidLeaveCheckbox);
+    await userEvent.click(
+      screen.getByRole("button", { name: "自動付与設定を保存する" }),
+    );
+
+    await waitFor(() =>
+      expect(usersApi.updatePaidLeaveAutoGrantEnabled).toHaveBeenCalledWith(
+        "user-1",
+        true,
+      ),
+    );
+    expect(usersApi.updateSpecialLeaveAutoGrantEnabled).toHaveBeenCalledWith(
+      "user-1",
+      true,
+    );
+  });
+
   it("defaults to using the company default work style when no monthly assignment exists", async () => {
     renderPage(targetUser);
 

@@ -21,6 +21,7 @@ use App\Http\Resources\SpecialLeaveRequestResource;
 use App\Http\Resources\SpecialLeaveTypeResource;
 use App\Http\Resources\SpecialLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
@@ -29,11 +30,13 @@ use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -147,6 +150,43 @@ class SpecialLeaveController extends Controller
         }
 
         return (new SpecialLeaveGrantRuleResource($rule->load('steps', 'specialLeaveType')))->response()->setStatusCode(201);
+    }
+
+    /**
+     * ある特別休暇付与ルールが現在対象としている社員の一覧(自動付与ON/OFF状態付き)を取得する。
+     * PaidLeaveController::targetUsers()と同じ考え方(有給・特別休暇の一括ON/OFFフラグは
+     * users.special_leave_auto_grant_enabled、論点1a参照)。
+     */
+    #[OA\Get(
+        path: '/special-leave/grant-rules/{rule}/target-users',
+        operationId: 'specialLeave.grantRules.targetUsers',
+        summary: '特別休暇付与ルールの対象社員一覧を取得する',
+        tags: ['特別休暇'],
+        parameters: [new OA\Parameter(name: 'rule', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
+    )]
+    public function targetUsers(SpecialLeaveGrantRule $rule): JsonResponse
+    {
+        $query = User::query()->whereNotNull('hire_date');
+
+        if ($rule->work_style_id !== null) {
+            $userIds = EmployeeCalendarEntry::query()
+                ->where('work_style_id', $rule->work_style_id)
+                ->whereDate('work_date', Carbon::now()->toDateString())
+                ->pluck('user_id');
+            $query->whereIn('id', $userIds);
+        }
+
+        $workStyleName = $rule->work_style_id !== null ? $rule->workStyle?->name : null;
+
+        return response()->json([
+            'data' => $query->orderBy('name')->get()->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'work_style' => $workStyleName,
+                'special_leave_auto_grant_enabled' => $user->special_leave_auto_grant_enabled,
+            ]),
+        ]);
     }
 
     #[OA\Get(
