@@ -1,6 +1,6 @@
 # 年次有給休暇ドメイン再設計(PaidLeaveAccountAggregate中心の再構築)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -706,12 +706,40 @@ Phase 5完了後、最終Phase着手前に`code-review`スキル(effort: high)�
 - コミット: `7f5db3c`(取消Usage残留バグ修正)/`30e4839`(Grant日付整合性ガード追加)/
   `cd10da5`(docコメント修正)。
 
-## 最終Phase(未着手): データ移行
+## 最終Phase(完了): データ移行
 
-依頼書§44-48・本spec「既存データ移行」節に基づき、`MigratePaidLeaveAccount`
-Command/Handlerと、cutover時点(社員ごとの`usage_start_date`)の移行データ抽出処理を
-実装する。旧ドメインは既に削除済みのため、移行元データは現在の
-`paid_leave_grants`/`paid_leave_usages`テーブル(historyとしてDBに残る実データ)、
-または別途提供される旧システムエクスポートを想定する。3モード
-(Grant単位で完全に分かる/前年度繰越+当年度残高/残高と有効期限のみ)を
-受け付けられる構造にする。
+- 追加: `PaidLeaveAccountAggregate::migrateGrants()`(通常の`grant()`不変条件
+  ―同日/過去日拒否等―を経由しない専用メソッド。社員のAccountがGrant0件の状態
+  でのみ実行可能、1回限りの操作として拒否条件を実装)。
+- **モデリング上の重要な決定**: 全モード(A/B/C)共通で、Aggregate内部の不変条件
+  (減額・Allocation超過判定等)が参照する「上限」は常に`remainingDaysAtCutover`とし、
+  `originalGrantedOn`/`originalGrantedDays`はnullable可能な監査・表示専用メタデータ
+  として保持するに留め、業務ロジックには一切使わない。これにより、モードC
+  (元付与日数不明)でも架空の上限を作らず、依頼書§45「過去の全Usage履歴再現は
+  必須としない」の方針に整合する。
+  「最新Grant」の判定キーが無い場合(モードCで`originalGrantedOn`が null)は、
+  `cutoverDate`を代替の順序キーとして用いる(spec.md論点11の「時系列順にAccount
+  初期状態を構築する」という記述から合理的に補完)。
+- 追加: `MigratePaidLeaveAccount` Command/Handler、`paid_leave_grants`への
+  監査列追加migration(`source`/`original_granted_days`/`cutover_metadata`)。
+  通常Grantは`source='manual'`、移行Grantは`source='migration'`として区別
+  (依頼書§47「MigrationとManual Grantを分ける」)。
+- 追加: 管理者専用`POST /api/paid-leave/migrate`(社員1名分、`permission:leave.manage,any`)、
+  および一括投入用artisanコマンド`php artisan paid-leave:migrate-accounts <file.json> [--dry-run]`
+  (JSON形式。社員ごとにGrantが入れ子になるためCSVではなくJSONを採用)。
+  いずれも部分失敗許容(1件のエラーでバッチ全体を中断せず、行ごとの成否を報告)。
+- テスト: `tests/Unit/PaidLeaveAccount/PaidLeaveAccountMigrationTest.php`(12件)、
+  `tests/Feature/PaidLeaveAccount/{PaidLeaveAccountMigrationTest,PaidLeaveMigrationApiTest,
+  MigratePaidLeaveAccountsCommandTest}.php`(10件)追加。3モードそれぞれの移行後残高・
+  最新Grant判定・通常Grant/Usage操作との接続、二重移行の拒否、部分失敗許容の一括投入を
+  検証。
+- テスト結果: `tests/Feature/PaidLeaveAccount`+`tests/Unit/PaidLeaveAccount` 117件全pass。
+  全体スイート988件全pass(レビュー時に独立して再実行し確認済み、無回帰)。
+- コミット: `1bd5480`(migrateGrants追加)/`46e8070`(監査列・Projector対応)/
+  `e5e5d48`(管理者API)/`0362c49`(一括投入artisanコマンド)。
+
+依頼書に基づく年次有給休暇ドメイン再設計の全Phase(調査・設計→Aggregate/Domain Model→
+Projection→Workflow接続→cutover→レビュー修正→データ移行)が完了した。当初計画にあった
+承認画面Preview API・Grant管理UI・Schedule/Assessment・法定通常/比例/シフト付与判定・
+月次ローリングSchedule展開バッチは、ユーザー指示により本変更セットのスコープ外
+(「実装方針の変更」節参照)とし、必要になった時点で別の変更セットとして着手する。
