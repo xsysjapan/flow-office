@@ -4,16 +4,22 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveRequest;
-use App\Models\PaidLeaveRequestStatus;
 use App\Models\User;
 use App\Support\FrontendUrl;
 
 /**
+ * Phase 5(cutover)により、旧`PaidLeaveRequestAggregate::returnRequest`は廃止した。
+ * `paid_leave_requests.status`自体の更新は、この差戻しが必ずworkflow_request経由で
+ * 発生すること(`PaidLeaveReturnOnWorkflowRequestReturnedReactor`参照)を利用し、
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveRequestProjector`が
+ * Workflowドメインの`WorkflowRequestReturned`イベントを直接購読して行う
+ * (差戻しは承認前の状態のためGrant/Usageには一切影響しない。旧Handlerの挙動と同じ
+ * ―対象日の勤怠・paid_leave_usagesは変更しない。既存のcutover前挙動をそのまま保つ判断)。
+ * このHandlerの役目は、Reactor経由で二重に来た場合の検証と通知のみに残す。
+ *
  * @implements CommandHandler<ReturnPaidLeaveRequest>
  */
 class ReturnPaidLeaveRequestHandler implements CommandHandler
@@ -22,21 +28,12 @@ class ReturnPaidLeaveRequestHandler implements CommandHandler
     {
         assert($command instanceof ReturnPaidLeaveRequest);
 
+        // 差戻し可否(提出済みであること・指定承認者であること)は、このHandlerを呼び出す
+        // 起点である`ReturnWorkflowRequestHandler`が既にworkflow_request側で検証済み
+        // (`PaidLeaveReturnOnWorkflowRequestReturnedReactor`経由でここに来る時点でイベントは
+        // 既に記録されているため、ここで同じ検証をやり直すとProjector実行順序次第で
+        // 二重チェックが不整合を起こしうる。クラスdoc参照)。
         $request = PaidLeaveRequest::query()->findOrFail($command->paidLeaveRequestId);
-
-        if ($request->status !== PaidLeaveRequestStatus::SUBMITTED) {
-            throw new DomainRuleException('提出済みの有給申請のみ差戻しできます。');
-        }
-
-        if ($request->approver_user_id !== $command->returnedByUserId) {
-            throw new DomainRuleException('指定された承認者のみ差戻しできます。');
-        }
-
-        PaidLeaveRequestAggregate::retrieve($request->id)
-            ->returnRequest($command->returnedByUserId, $command->comment)
-            ->persist();
-
-        $request = $request->refresh();
 
         $applicant = User::find($request->user_id);
         if ($applicant !== null) {
@@ -48,6 +45,6 @@ class ReturnPaidLeaveRequestHandler implements CommandHandler
             );
         }
 
-        return $request;
+        return $request->fresh();
     }
 }

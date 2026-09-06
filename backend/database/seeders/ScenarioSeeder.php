@@ -9,7 +9,7 @@ use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;

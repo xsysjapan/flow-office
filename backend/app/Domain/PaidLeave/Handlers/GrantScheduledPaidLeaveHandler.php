@@ -5,8 +5,8 @@ namespace App\Domain\PaidLeave\Handlers;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeCalendarEntry;
@@ -92,15 +92,16 @@ class GrantScheduledPaidLeaveHandler implements CommandHandler
                         continue;
                     }
 
-                    $grant = $this->commandBus->dispatch(new GrantPaidLeave(
+                    $grantId = $this->commandBus->dispatch(new GrantPaidLeave(
                         userId: $user->id,
                         grantedOn: $today->toDateString(),
                         expiresOn: $today->copy()->addYears(2)->toDateString(),
                         grantedDays: (float) $grantDays,
                         grantReason: "自動付与（{$rule->name}、勤続{$months}か月）",
+                        source: 'scheduled_batch',
                     ));
 
-                    $grantedIds[] = $grant->id;
+                    $grantedIds[] = $grantId;
                 }
             }
         }

@@ -7,9 +7,9 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveRequestCommand;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
-use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -192,13 +192,15 @@ class PaidLeaveController extends Controller
             'grant_reason' => ['nullable', 'string'],
         ]);
 
-        $grant = $commandBus->dispatch(new GrantPaidLeave(
+        $grantId = $commandBus->dispatch(new GrantPaidLeave(
             userId: $data['user_id'],
             grantedOn: $data['granted_on'],
             expiresOn: $data['expires_on'],
             grantedDays: (float) $data['granted_days'],
             grantReason: $data['grant_reason'] ?? null,
         ));
+
+        $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
     }
@@ -220,13 +222,14 @@ class PaidLeaveController extends Controller
     {
         $data = $request->validate(['reason' => ['nullable', 'string']]);
 
-        $grant = $commandBus->dispatch(new RevokePaidLeaveGrant(
+        $commandBus->dispatch(new RevokePaidLeaveGrant(
+            userId: $grant->user_id,
             grantId: $grant->id,
             revokedByUserId: $request->user()->id,
             reason: $data['reason'] ?? null,
         ));
 
-        return new PaidLeaveGrantResource($grant);
+        return new PaidLeaveGrantResource($grant->refresh());
     }
 
     /**
@@ -466,6 +469,7 @@ class PaidLeaveController extends Controller
         $usages = PaidLeaveUsage::query()
             ->with('request')
             ->where('user_id', $userId)
+            ->where('cancelled', false)
             ->orderByDesc('used_on')
             ->get();
 
@@ -538,6 +542,10 @@ class PaidLeaveController extends Controller
             userId: $userId,
             grantModelClass: PaidLeaveGrant::class,
             requestModelClass: PaidLeaveRequest::class,
+            // Phase 5(cutover): PaidLeaveAccountAggregateの集約ルートはgrant/request単位
+            // ではなくuserId(社員単位の年休台帳)なので、grantIds/requestIdsでは拾えない。
+            // aggregate_uuid=userIdのpaid_leave_account.*イベントを別枠で追加する。
+            userScopedEventClassPrefixes: ['paid_leave_account.'],
         );
 
         return StoredEventResource::collection($events);
