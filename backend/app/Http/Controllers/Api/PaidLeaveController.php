@@ -18,6 +18,7 @@ use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
+use App\Http\Resources\PaidLeaveGrantRuleTargetUserResource;
 use App\Http\Resources\PaidLeaveRequestResource;
 use App\Http\Resources\PaidLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
@@ -110,7 +111,7 @@ class PaidLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'rule', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function targetUsers(PaidLeaveGrantRule $rule): JsonResponse
+    public function targetUsers(Request $request, PaidLeaveGrantRule $rule): JsonResponse
     {
         $query = User::query()->whereNotNull('hire_date');
 
@@ -124,14 +125,14 @@ class PaidLeaveController extends Controller
 
         $workStyleName = $rule->work_style_id !== null ? $rule->workStyle?->name : null;
 
-        return response()->json([
-            'data' => $query->orderBy('name')->get()->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'work_style' => $workStyleName,
-                'paid_leave_auto_grant_enabled' => $user->paid_leave_auto_grant_enabled,
-            ]),
-        ]);
+        // AppServiceProviderでJsonResource::withoutWrapping()しているため、他のエンドポイント
+        // と同じくトップレベルを"data"でラップしない。1件ずつPaidLeaveGrantRuleTargetUserResource
+        // で整形した配列をそのままトップレベルとして返す。
+        $data = $query->orderBy('name')->get()
+            ->map(fn (User $user) => (new PaidLeaveGrantRuleTargetUserResource($user, $workStyleName))->resolve($request))
+            ->all();
+
+        return response()->json($data);
     }
 
     /**
