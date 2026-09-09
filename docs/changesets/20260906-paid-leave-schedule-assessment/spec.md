@@ -689,4 +689,43 @@ persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeav
 
 ## 実装結果
 
-未着手。
+### Phase A(完了): PaidLeaveScheduleAggregate・Domain Model
+
+- 追加: `App\Domain\PaidLeaveSchedule\{Aggregates,Events,Commands,Handlers,Support}`
+  (Aggregate本体、Event7種、Command/Handler各6種、`AttendanceRateAssessor`・
+  `GrantCategoryClassifier`)。`work_styles`へ`weekly_scheduled_days`/
+  `annual_scheduled_days`/`agreed_scheduled_days_per_year`(nullable)を追加。
+- テスト: `tests/Unit/PaidLeaveSchedule`28件追加、全pass。既存有給テスト147件も無影響。
+- コミット: `93711e1`/`d78b588`/`3fbd13e`/`9f98697`。
+
+### Phase B(完了): 法定Policyマスタ・Projection
+
+- 追加: `paid_leave_grant_policies`/`paid_leave_proportional_grant_policies`/
+  `paid_leave_grant_expiry_policy`(いずれもversion管理、法定値をシード投入)、
+  `paid_leave_schedule_entries`Projection+Projector、`GrantDaysResolver`
+  (独自ルール優先・無ければ法定Policy適用)。
+- 「変更あり」列は永続化せず、`status===NeedsReview && manual_override_by_user_id!==null`
+  から導出するモデルメソッドとした(Projectionの過剰な非正規化を避ける判断)。
+- 比例付与表の法定値: 週4日=7,8,9,10,12,13,15/週3日=5,6,6,8,9,10,11/
+  週2日=3,4,4,5,6,6,7/週1日=1,2,2,2,3,3,3(継続勤務6/18/30/42/54/66/78ヶ月)。
+  **実装エージェントからの申告**: この場での知識に基づく値であり、外部の一次情報での
+  検証は行っていない。本番投入前に社労士確認を行うこと(CLAUDE.md原則8の前提通り)。
+- テスト: 39件追加、全pass。既存有給テスト158件も無影響。
+- コミット: `14dd62d`/`b980dd4`/`6352040`/`557f0b9`。
+
+### 論点14の是正(完了): Aggregate UUID衝突の恒久修正
+
+- 修正: `PaidLeaveScheduleAggregate::aggregateUuidForUser()`
+  (`Uuid::uuid5(固定namespace, userId)`による決定的な別UUID導出)を追加し、
+  全Handlerがこれ経由でAggregateを取得するよう修正。全7イベントへ`userId`を
+  明示的にペイロード追加(aggregate_uuidから逆算しない)。`PaidLeaveScheduleEntryProjector`
+  も`$event->userId`から`user_id`列を設定するよう修正。`ApplyScheduledGrantsHandler`の
+  応急対処(都度retrieveし直す)を撤去し、根本原因(uuid空間の衝突)を解消。
+- 回帰テスト追加: 同一userIdでSchedule/Account両Aggregateを交互にpersistしても
+  楽観的排他エラーが起きないことを確認するテストを追加(旧実装に戻すと実際に
+  失敗することを確認済み)。
+- テスト結果: 独立して全体スイートを再実行し1030/1030全pass確認済み。
+- コミット: `d256bd7`。
+
+Phase C(`paid-leave:roll-schedules`バッチ・再計算Reactor・旧`GrantScheduledPaidLeaveHandler`
+廃止)以降は未着手。
