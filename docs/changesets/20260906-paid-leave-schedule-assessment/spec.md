@@ -1,6 +1,6 @@
 # 年次有給休暇 付与Schedule/Assessmentドメイン新設(将来付与予定の確認画面)
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -767,4 +767,31 @@ persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeav
 - テスト結果: 独立して全体スイートを再実行し1046/1046全pass確認済み(無回帰)。
 - コミット: `2072671`。
 
-Phase E(フロントエンド: 付与予定一覧・詳細Sheet・付与ポリシー画面)以降は未着手。
+### Phase E(完了): フロントエンド
+
+- 追加: `frontend/src/api/paidLeaveSchedule.ts`・`hooks/usePaidLeaveSchedule.ts`
+  (Phase Dの6エンドポイントに対応)、`PaidLeaveSchedulePage`(付与予定一覧、
+  `ApprovalsPage`と同型のTabs+URL状態同期+Bulk Action Bar構成)、
+  `PaidLeaveScheduleEntryDetailPanel`(詳細Sheet、勤怠データ確認→再判定→
+  判定結果を上書きの3段構成、Override入力は既定で折りたたみ)。
+- リネーム: `PaidLeaveAdminPage`→`PaidLeavePolicyPage`(挙動は無変更)。ナビへ
+  「付与予定」を追加。
+- **実機確認で発見・修正した実バグ**: 区分列に`GrantCategory`の内部値
+  `NeedsReview`(英語)がそのまま表示されていた。フロントエンドのラベル変換が
+  存在しない英語キー(regular/proportional/shift)を想定しており、実際の値
+  (「通常」「比例」「シフト」という日本語文字列そのもの、または未判定時の
+  `NeedsReview`)と噛み合っていなかったため。実際にPlaywrightでログインし
+  シナリオデータを投入した状態で画面を目視確認して発見(テストのみでは
+  発見できなかった―フィクスチャ自体が同じ誤った値を使っていたため)。
+  修正: 英語キーへのマッピングを撤去し`NeedsReview`のみ「要確認」に変換、
+  テスト・Storyのフィクスチャも実データに合わせて修正。
+- テスト結果: `npx tsc -b`clean。`npm run test`は907 pass、失敗6件は前回から
+  継続する既存無関係の`useAuth`バグ(2026-08-29のコミット由来、本変更セットの
+  対象外)のみで新規失敗なし。実機確認(ログイン→一覧表示→詳細Sheet表示→
+  付与ポリシー画面表示)をスクリーンショットで確認済み。
+- コミット: `4917bac`/`11be259`/`dd094d8`/`408fa12`/`e850325`/`3959735`
+  (最後のコミットが上記の実バグ修正)。
+
+依頼書に基づく付与Schedule/Assessmentドメイン新設の全Phase(調査・設計→UX検討→
+Aggregate/Domain Model→Policy/Projection→バッチ/Reactor→管理API→フロントエンド)が
+完了した。
