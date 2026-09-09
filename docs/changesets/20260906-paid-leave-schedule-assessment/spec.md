@@ -111,8 +111,9 @@ Explore調査結果(要点)。
    選んで一括でGrantを発行する(依頼書§39)。
 5. **勤務条件変更による影響に気づきたい**: 異動・時短勤務移行等で通常/比例区分や
    候補日数が変わった社員を見つけ、変更前後を比較確認する。
-6. **Override操作を後から追跡したい**: 過去に誰が・いつ・どんな理由で自動判定を
-   上書きしたかを監査する。
+6. **Override操作の記録を残したい**: 誰が・いつ・どんな理由で自動判定を上書きしたかが
+   `stored_events`に記録され、必要になれば追跡できる状態にする(ただし、これを見るための
+   専用UI・専用の履歴一覧は不要 — 後述「対象外」参照)。
 
 ### 各ユースケースの利用フロー(概略)
 
@@ -131,9 +132,12 @@ Explore調査結果(要点)。
   → 「一括付与」→ 確定
   → 一覧が更新され、付与済み行がフィルタから外れる
 
-[ユースケース6: 監査]
-気になる社員の行をクリック → 詳細パネルでAssessment履歴
-  (自動判定・最終判定・Override理由・操作者・日時)を確認
+[ユースケース6: 記録の確認(必要な範囲のみ)]
+気になる社員の行をクリック → 詳細パネルで「現在の」自動判定・最終判定・
+  (Override済みなら)理由・操作者・日時を確認する(ユースケース2・3の判断材料と共通の
+  表示で足りる)。過去の判定が具体的に何だったか等、業務上の意思決定に使わない
+  純粋な事後監査目的の閲覧は、専用UIを作らず`stored_events`を直接参照する
+  (対象外節参照)。
 ```
 
 ## 仕様検討
@@ -160,17 +164,25 @@ Explore調査結果(要点)。
 ### 論点2: Schedule EntryとAssessmentの関係
 
 - 選択肢:
-  - A. 1つのScheduleエントリ(scheduled_on単位)が1つのAssessment記録を持つ
-    (Schedule Entry:Assessment = 1:1、再評価のたびに新しいAssessment版を追記)。
-  - B. AssessmentをSchedule Entryに畳み込み、同一テーブルの列として持つ
-    (バージョン履歴を持たない)。
+  - A. 1つのScheduleエントリ(scheduled_on単位)が「現在の」Assessment結果1件のみを
+    状態として持つ(Schedule Entry:Assessment = 1:1・現在値のみ)。再判定・Overrideは
+    都度`PaidLeaveScheduleAssessmentRecorded`/`PaidLeaveScheduleAssessmentOverridden`
+    イベントとして`stored_events`に追記されるため、「誰が・いつ・何を根拠に・どう判定し・
+    誰が上書きしたか」という事後追跡に必要な情報はイベント自体が担う。Aggregate内部状態・
+    Projectionテーブルは過去の版を配列やバージョン履歴として保持せず、常に最新の
+    Assessment結果だけを持つ。
+  - B. Aggregate内部状態・Projectionの両方に、Schedule Entryに対する全Assessment版を
+    配列として保持する(バージョン履歴をドメイン状態としても多重に持つ)。
 - 決定: A。
-- 理由: 依頼書§30「Assessment結果は監査可能にする」、§40「calculated attendance rate/
-  automatic result/final result/override reason/operator/timestamp」の記録要求は、
-  「誰が・いつ・何を根拠に・どう判定し・誰が上書きしたか」を全て残す必要があり、
-  1回きりの列上書きでは「前回の自動判定が何だったか」を失う。Assessmentは
-  Schedule Entryに対して複数回記録されうる(再判定のたびに新規追加、最新版を
-  `final_result`として参照)構造とする。
+- 理由: ユーザー指摘の通り、事後監査(誰が・いつ・なぜ上書きしたか)は`stored_events`に
+  記録されるイベントで十分であり、同じ情報をAggregate状態・Projectionにも複製して
+  「版履歴」として持つ必要はない(CLAUDE.md原則2「Projectionは再生成可能な派生データ」
+  にも合致し、監査専用の複製データを持たないほうが構造として単純になる)。一方、
+  ユースケース2・3(Not Eligible/NeedsReviewの妥当性確認・解消)は業務上「現在の
+  自動判定・最終判定・(あれば)Override理由」を見て次のアクションを決める必要があり、
+  これは監査目的ではなく日々の運用に必要な情報のため、Aggregate状態・Projectionには
+  この「現在値」のみを持たせる。過去に遡った全履歴の閲覧が必要になった場合は
+  `stored_events`を参照する(専用の履歴API・UIは対象外、後述)。
 - 未確定・要確認事項: なし。
 
 ### 論点3: 法定区分判定に必要なWorkStyleマスタの拡張
@@ -476,10 +488,11 @@ Explore調査結果(要点)。
 
 - 新設: `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
   (AggregateId=userId)。内部状態: `entries: array<ScheduleEntryId, {scheduledOn, category,
-  candidateGrantDays, status, manualOverride: {reason, byUserId, at}|null, assessments:
-  array<AssessmentId, {periodStart, periodEnd, denominatorDays, attendanceDays,
-  excludedDays, attendanceRate, policyVersion, automaticResult, finalResult,
-  overrideReason|null}>}>`。
+  candidateGrantDays, status, manualOverride: {reason, byUserId, at}|null, assessment:
+  {periodStart, periodEnd, denominatorDays, attendanceDays, excludedDays, attendanceRate,
+  policyVersion, automaticResult, finalResult, overrideReason|null}|null}>`(論点2の通り、
+  Assessmentは版履歴を持たず「現在値」のみを状態として保持する。再判定・Overrideの都度
+  発行されるイベント自体が`stored_events`上の履歴となる)。
 - Command: `EnsureFutureScheduleGenerated`(userId、対象タイムゾーングループ、
   1年先まで存在保証、べき等)/`RecalculateFutureSchedule`(userId、変更検知の理由文字列)/
   `RunAttendanceRateAssessment`(scheduleEntryId)/`OverrideScheduleAssessment`
@@ -562,6 +575,11 @@ Explore調査結果(要点)。
 - Eligibleのまま長期未処理のエントリに対するメール通知(論点8参照、ログ警告のみ)。
 - 年5日取得義務・計画的付与(前回changesetと同様、対象外)。
 - Allocation Preview API・Grant管理UI(前回changesetのA案件、引き続き保留)。
+- **Assessmentの版履歴を閲覧するための専用画面・専用API**(論点2・ユースケース6)。
+  再判定・Override操作は`stored_events`にイベントとして記録されるため、事後の追跡は
+  そこで担保できる。Aggregate状態・Projection・UIは常に「現在の」Assessment結果のみを
+  持ち、過去に何度再判定されたか、以前の自動判定が何だったか、といった時系列の一覧・
+  比較機能は本変更セットでは作らない(業務上の意思決定に不要な監査専用UIのため)。
 
 ## ドキュメントへの影響
 
@@ -614,6 +632,14 @@ Explore調査結果(要点)。
   UI設計の具体化(既存`ApprovalsPage`/`ApprovalDetailPanel`と同型のList+Detail Sheet
   パターンへ統一)、「画面設計」節(実装前メモ・テキストワイヤーフレーム)を追加。
   仕様の決定内容自体(何を作るか)に変更はなく、どう見せる・どう操作するかを具体化した。
+- 2026-09-09: ユーザーより「ユースケース6(監査)はイベントだけあれば良く、監査のためだけの
+  履歴は不要(業務的に必要な履歴はその限りではない)」との指摘。論点2の決定を
+  「Aggregate状態・Projectionは版履歴を持たず現在値のみ保持し、事後追跡は
+  `stored_events`で担保する」方向へ修正し、ドメインモデルの`assessments: array<...>`を
+  `assessment: {...}|null`(単一の現在値)へ変更。ユースケース6の記述、対象外節
+  (Assessment版履歴閲覧用の専用画面・APIは作らない旨)を追記。ユースケース2・3の
+  判断材料として必要な「現在の自動判定・最終判定・Override理由」の表示は業務上必要な
+  情報として維持し、除外していない。
 
 ## 実装結果
 
