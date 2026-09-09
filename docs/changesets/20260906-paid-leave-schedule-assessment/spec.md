@@ -754,4 +754,17 @@ persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeav
 - テスト結果: 独立して全体スイートを再実行し1036/1036全pass確認済み(無回帰)。
 - コミット: `f87a23f`/`3f6f404`/`d6d826b`。
 
-Phase D(付与予定一覧・Override・一括付与の管理API)以降は未着手。
+### Phase D(完了): 付与予定管理API
+
+- 追加: `PaidLeaveScheduleController`(一覧・詳細・再判定・Override・手動編集・一括付与)、
+  `PaidLeaveScheduleEntryResource`。ルートは`/paid-leave/schedule-entries*`配下、
+  既存`PaidLeaveController`と同じ`permission:leave.manage,any`。
+- 「変更あり」フィルタはPhase Bの`needsReviewDueToConflict()`と同一ロジックを
+  クエリ側でも実装し、一覧行のフラグと一貫性を保つ。
+- 一括付与のレスポンスは、前回changesetの`paid-leave:migrate-accounts`と同じ
+  「行ごとの成否を継続収集」方式(`{results: [{entry_id, status, grant_id?, error?}],
+  success_count, failure_count}`)を踏襲。
+- テスト結果: 独立して全体スイートを再実行し1046/1046全pass確認済み(無回帰)。
+- コミット: `2072671`。
+
+Phase E(フロントエンド: 付与予定一覧・詳細Sheet・付与ポリシー画面)以降は未着手。
