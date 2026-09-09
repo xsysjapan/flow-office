@@ -9,15 +9,13 @@ import { NativeSelect } from '../ui/native-select'
 import { Separator } from '../ui/separator'
 import { Textarea } from '../ui/textarea'
 
-const CATEGORY_LABELS: Record<string, string> = {
-  regular: '通常付与',
-  proportional: '比例付与',
-  shift: 'シフト勤務',
-}
-
+// バックエンド(GrantCategory)の実際の値は「通常」「比例」「シフト」という日本語文字列
+// そのもの、判定不能時のみ`NeedsReview`という英語の内部値になる。英語キーへの
+// マッピングは実データと噛み合わないため行わず、`NeedsReview`だけ表示用ラベルへ変換する。
 function categoryLabel(category: string | null): string {
   if (!category) return '未判定'
-  return CATEGORY_LABELS[category] ?? category
+  if (category === 'NeedsReview') return '要確認'
+  return category
 }
 
 function formatDays(days: number | null): string {

@@ -12,7 +12,7 @@ const eligibleEntry: PaidLeaveScheduleEntry = {
   user_id: 'user-1',
   user_name: '高橋 太郎',
   scheduled_on: '2026-10-01',
-  category: 'regular',
+  category: '通常',
   candidate_grant_days: 11,
   status: 'Eligible',
   needs_review_due_to_conflict: false,

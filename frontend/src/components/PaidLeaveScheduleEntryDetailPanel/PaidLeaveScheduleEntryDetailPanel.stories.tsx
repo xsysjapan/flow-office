@@ -7,7 +7,7 @@ const baseEntry: PaidLeaveScheduleEntry = {
   user_id: 'user-1',
   user_name: '加藤 由美',
   scheduled_on: '2026-10-12',
-  category: 'regular',
+  category: '通常',
   candidate_grant_days: 12,
   status: 'NeedsReview',
   needs_review_due_to_conflict: false,

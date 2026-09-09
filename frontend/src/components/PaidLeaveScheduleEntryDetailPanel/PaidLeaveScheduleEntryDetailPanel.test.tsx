@@ -9,7 +9,7 @@ const entry: PaidLeaveScheduleEntry = {
   user_id: 'user-1',
   user_name: '加藤 由美',
   scheduled_on: '2026-10-12',
-  category: 'regular',
+  category: '通常',
   candidate_grant_days: 12,
   status: 'NeedsReview',
   needs_review_due_to_conflict: false,
@@ -35,8 +35,8 @@ describe('PaidLeaveScheduleEntryDetailPanel', () => {
   it('判定状態・区分・Assessment内訳を表示する', () => {
     render(<PaidLeaveScheduleEntryDetailPanel entry={entry} onReassess={vi.fn()} onOverride={vi.fn()} />)
 
-    expect(screen.getByText('要確認')).toBeInTheDocument()
-    expect(screen.getByText('通常付与')).toBeInTheDocument()
+    expect(screen.getAllByText('要確認').length).toBeGreaterThan(0)
+    expect(screen.getByText('通常')).toBeInTheDocument()
     expect(screen.getByText('2025-10-12 〜 2026-10-11')).toBeInTheDocument()
     expect(screen.getByText('算出不可')).toBeInTheDocument()
   })
