@@ -814,3 +814,24 @@ Aggregate/Domain Model→Policy/Projection→バッチ/Reactor→管理API→フ
 - テスト結果: `--filter=PaidLeave`180件、全体1051件、フロントエンドは既存の
   無関係な失敗6件を除き新規失敗なし。全て確認済み。
 - コミット: `5938bd0`(バックエンド)/`7323505`(フロントエンド)。
+
+### 追加改善(完了・2026-09-09): E2Eシナリオ・未実施だったドキュメント同期
+
+- **ドキュメントの積み残しを解消**: Phase A〜Eの「ドキュメントへの影響」で予定していたが
+  未実施だった`docs/09-usecases-paid-leave.md`のUC番号(UC-P011〜UC-P015: Schedule生成・
+  Assessment・一覧確認・Override・一括付与)、`docs/16-database-schema.md`・
+  `docs/17-events.md`のSchedule系テーブル・イベント記載(いずれも0件だった)を追記。
+- **シナリオテスト**: `docs/testing/scenario-tests.md`§5へ項目18(付与Schedule/Assessment
+  〜一括付与)を追加、`frontend/e2e/scenario-15-paid-leave-schedule.spec.ts`として実装。
+  `ScenarioSeeder`のWorkStyleへ`weekly_scheduled_days`/`annual_scheduled_days`を追加
+  (通常/比例区分判定が実際に機能する状態にするため)。
+- **実装中に発見・修正した実バグ2件**:
+  1. `PaidLeaveScheduleController::index()`の期間フィルタが`scheduled_on`
+     (datetime cast列)に対し`whereBetween`/`where`を直接使っており、境界値
+     (from=toの単日指定等)で正しく機能しない場合があった。他のこのコードベースの
+     慣習通り`whereDate`へ修正。
+  2. 詳細Sheet(`ui/sheet.tsx`)に`overflow-y-auto`が無く、Override入力フォームを
+     展開すると「確定」ボタンがビューポート外に出て操作不能になっていた。修正。
+- テスト結果: 独立して検証し、`php artisan test`1051/1051、フロントエンド型チェック
+  clean、`scenario-15`のE2E4件全pass(2回連続)を確認済み。
+- コミット: `18bd1b1`/`5c64b13`/`289c7d5`/`dfa7da5`/`364d43d`。
