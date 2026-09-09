@@ -727,5 +727,31 @@ persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeav
 - テスト結果: 独立して全体スイートを再実行し1030/1030全pass確認済み。
 - コミット: `d256bd7`。
 
-Phase C(`paid-leave:roll-schedules`バッチ・再計算Reactor・旧`GrantScheduledPaidLeaveHandler`
-廃止)以降は未着手。
+### Phase C(完了): `paid-leave:roll-schedules`バッチ・再計算Reactor・旧バッチ廃止
+
+- 追加: `paid-leave:roll-schedules`(日次cron、`GenerateCompanyCalendarYearsCommand`と
+  同じべき等・タイムゾーングループ方式。対象社員へ`EnsureFutureScheduleGenerated`、
+  `scheduled_on`到来済み`Scheduled`エントリへ`RunAttendanceRateAssessment`を発行。
+  1社員の失敗で全体を止めない部分失敗許容。Eligibleのまま30日超未処理のエントリは
+  ログ警告、論点8の通り)。
+- 追加Reactor: `RecalculateScheduleOnUserConditionChangedReactor`
+  (`hire_date`/`usage_start_date`/`paid_leave_auto_grant_enabled`変更、いずれも
+  `UserAggregate`でイベントソース化済み)、
+  `RecalculateScheduleOnWorkStyleChangedReactor`(`work_style_id`月次割当変更、
+  WorkStyleの区分判定関連列変更)。
+- **未対応(既知のギャップとして記録)**: `paid_leave_grant_rules`/
+  `paid_leave_grant_rule_steps`(会社独自の上乗せルール)は現状も素のEloquent CRUDで
+  イベントソース化されていないため、変更時の自動再計算Reactorは配線できていない。
+  将来このテーブルをイベントソース化する際に追加対応が必要。
+- **既知のギャップ(実害なし、将来のPhaseで解消)**: `RecalculateFutureScheduleHandler`
+  (Phase A)は現在の勤務体系を`EmployeeCalendarEntry`から取得しており、
+  `user_work_style_monthly_assignments`(月次割当)とは別経路。両者の整合性は
+  今回検証していない。
+- 廃止: `GrantScheduledPaidLeaveHandler`/`GrantScheduledPaidLeave`コマンド/
+  `GrantScheduledPaidLeaveCommand`(旧`paid-leave:grant-scheduled`)とcron登録。
+  `WarnExpiringPaidLeave`/`WarnFiveDayObligation`は無依存を確認の上、無変更で存続。
+  旧`PaidLeaveScheduledBatchTest.php`のカバレッジは新設テストへ移行済み。
+- テスト結果: 独立して全体スイートを再実行し1036/1036全pass確認済み(無回帰)。
+- コミット: `f87a23f`/`3f6f404`/`d6d826b`。
+
+Phase D(付与予定一覧・Override・一括付与の管理API)以降は未着手。
