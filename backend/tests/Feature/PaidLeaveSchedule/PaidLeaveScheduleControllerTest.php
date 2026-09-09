@@ -133,6 +133,84 @@ class PaidLeaveScheduleControllerTest extends TestCase
         $this->assertTrue($data[0]['needs_review_due_to_conflict']);
     }
 
+    public function test_index_filters_by_scheduled_on_from(): void
+    {
+        $hr = $this->hrUser();
+        $employee = User::factory()->create();
+        $this->createEntry($employee, '2026-10-01', ScheduleEntryStatus::ELIGIBLE);
+        $later = $this->createEntry($employee, '2026-12-01', ScheduleEntryStatus::ELIGIBLE);
+
+        $this->actingAs($hr);
+        $response = $this->getJson('/api/paid-leave/schedule-entries?scheduled_on_from=2026-11-01');
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($later->id, $data[0]['id']);
+    }
+
+    public function test_index_filters_by_scheduled_on_to(): void
+    {
+        $hr = $this->hrUser();
+        $employee = User::factory()->create();
+        $earlier = $this->createEntry($employee, '2026-10-01', ScheduleEntryStatus::ELIGIBLE);
+        $this->createEntry($employee, '2026-12-01', ScheduleEntryStatus::ELIGIBLE);
+
+        $this->actingAs($hr);
+        $response = $this->getJson('/api/paid-leave/schedule-entries?scheduled_on_to=2026-11-01');
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($earlier->id, $data[0]['id']);
+    }
+
+    public function test_index_filters_by_scheduled_on_range(): void
+    {
+        $hr = $this->hrUser();
+        $employee = User::factory()->create();
+        $this->createEntry($employee, '2026-09-01', ScheduleEntryStatus::ELIGIBLE);
+        $inRange = $this->createEntry($employee, '2026-10-15', ScheduleEntryStatus::ELIGIBLE);
+        $this->createEntry($employee, '2026-12-01', ScheduleEntryStatus::ELIGIBLE);
+
+        $this->actingAs($hr);
+        $response = $this->getJson('/api/paid-leave/schedule-entries?scheduled_on_from=2026-10-01&scheduled_on_to=2026-11-01');
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($inRange->id, $data[0]['id']);
+    }
+
+    public function test_index_rejects_invalid_scheduled_on_range(): void
+    {
+        $hr = $this->hrUser();
+
+        $this->actingAs($hr);
+        $response = $this->getJson('/api/paid-leave/schedule-entries?scheduled_on_from=2026-11-01&scheduled_on_to=2026-10-01');
+
+        $response->assertJsonValidationErrors(['scheduled_on_to']);
+    }
+
+    public function test_index_combines_scheduled_on_range_with_status_filter(): void
+    {
+        $hr = $this->hrUser();
+        $employee = User::factory()->create();
+        $match = $this->createEntry($employee, '2026-10-15', ScheduleEntryStatus::ELIGIBLE);
+        $this->createEntry($employee, '2026-10-20', ScheduleEntryStatus::NOT_ELIGIBLE);
+        $this->createEntry($employee, '2026-12-01', ScheduleEntryStatus::ELIGIBLE);
+
+        $this->actingAs($hr);
+        $response = $this->getJson(
+            '/api/paid-leave/schedule-entries?status=eligible&scheduled_on_from=2026-10-01&scheduled_on_to=2026-11-01',
+        );
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($match->id, $data[0]['id']);
+    }
+
     public function test_show_returns_assessment_breakdown(): void
     {
         $hr = $this->hrUser();

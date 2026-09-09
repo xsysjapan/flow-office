@@ -44,15 +44,19 @@ class PaidLeaveScheduleController extends Controller
         parameters: [
             new OA\Parameter(name: 'status', in: 'query', required: false, description: 'all(既定)/eligible/not_eligible/needs_review/changed', schema: new OA\Schema(type: 'string', enum: ['all', 'eligible', 'not_eligible', 'needs_review', 'changed'])),
             new OA\Parameter(name: 'user_name', in: 'query', required: false, description: '社員名の部分一致検索', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'scheduled_on_from', in: 'query', required: false, description: '付与予定日(scheduled_on)の期間絞り込み: 開始日(以上)', schema: new OA\Schema(type: 'string', format: 'date')),
+            new OA\Parameter(name: 'scheduled_on_to', in: 'query', required: false, description: '付与予定日(scheduled_on)の期間絞り込み: 終了日(以下)', schema: new OA\Schema(type: 'string', format: 'date')),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
         ],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden')],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $data = $request->validate([
             'status' => ['nullable', Rule::in(self::STATUS_FILTERS)],
             'user_name' => ['nullable', 'string', 'max:200'],
+            'scheduled_on_from' => ['nullable', 'date'],
+            'scheduled_on_to' => ['nullable', 'date', 'after_or_equal:scheduled_on_from'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
 
@@ -73,6 +77,18 @@ class PaidLeaveScheduleController extends Controller
             ->when($status === 'changed', fn ($query) => $query
                 ->where('status', ScheduleEntryStatus::NEEDS_REVIEW)
                 ->whereNotNull('manual_override_by_user_id'))
+            ->when(
+                ($data['scheduled_on_from'] ?? null) && ($data['scheduled_on_to'] ?? null),
+                fn ($query) => $query->whereBetween('scheduled_on', [$data['scheduled_on_from'], $data['scheduled_on_to']]),
+            )
+            ->when(
+                ($data['scheduled_on_from'] ?? null) && ! ($data['scheduled_on_to'] ?? null),
+                fn ($query) => $query->where('scheduled_on', '>=', $data['scheduled_on_from']),
+            )
+            ->when(
+                ($data['scheduled_on_to'] ?? null) && ! ($data['scheduled_on_from'] ?? null),
+                fn ($query) => $query->where('scheduled_on', '<=', $data['scheduled_on_to']),
+            )
             ->orderBy('scheduled_on')
             ->paginate($data['per_page'] ?? 50);
 
