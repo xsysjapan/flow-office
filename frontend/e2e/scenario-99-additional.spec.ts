@@ -233,7 +233,7 @@ test("§5-6+7: ロール変更が即座に反映され、監査ログに記録�
   await expect(page.getByRole("link", { name: "管理メニュー" })).toBeVisible();
   await page.getByRole("link", { name: "管理メニュー" }).click();
   await expect(
-    page.getByRole("complementary").getByRole("link", { name: "有給設定" }),
+    page.getByRole("complementary").getByRole("link", { name: "付与ポリシー" }),
   ).toBeVisible();
 });
 
