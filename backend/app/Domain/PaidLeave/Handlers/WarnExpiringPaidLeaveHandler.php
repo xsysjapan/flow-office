@@ -2,10 +2,11 @@
 
 namespace App\Domain\PaidLeave\Handlers;
 
+use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use App\Models\SystemSetting;
@@ -22,6 +23,8 @@ use App\Support\DailyBatchTimezoneGroups;
 class WarnExpiringPaidLeaveHandler implements CommandHandler
 {
     private const WARNING_WINDOW_DAYS = 90;
+
+    public function __construct(private readonly CommandBus $commandBus) {}
 
     /**
      * @return int 警告を発行した件数
@@ -62,9 +65,12 @@ class WarnExpiringPaidLeaveHandler implements CommandHandler
                     detailUrl: null,
                 );
 
-                PaidLeaveGrantAggregate::retrieve($grant->id)
-                    ->raiseWarning($grant->user_id, 'expiry', $message)
-                    ->persist();
+                $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
+                    userId: $grant->user_id,
+                    grantId: $grant->id,
+                    warningType: 'expiry',
+                    message: $message,
+                ));
             }
 
             $warnedCount += $grants->count();

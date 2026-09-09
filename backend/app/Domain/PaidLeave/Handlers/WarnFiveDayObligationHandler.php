@@ -2,10 +2,11 @@
 
 namespace App\Domain\PaidLeave\Handlers;
 
+use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
+use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Jobs\SendNotificationJob;
 use App\Models\PaidLeaveGrant;
 use App\Models\SystemSetting;
@@ -25,6 +26,8 @@ class WarnFiveDayObligationHandler implements CommandHandler
     private const REQUIRED_USED_DAYS = 5;
 
     private const WARNING_WINDOW_DAYS = 60;
+
+    public function __construct(private readonly CommandBus $commandBus) {}
 
     /**
      * @return int 警告を発行した件数
@@ -78,9 +81,12 @@ class WarnFiveDayObligationHandler implements CommandHandler
                 detailUrl: null,
             );
 
-            PaidLeaveGrantAggregate::retrieve($grant->id)
-                ->raiseWarning($grant->user_id, 'five_day_obligation', $message)
-                ->persist();
+            $this->commandBus->dispatch(new RaisePaidLeaveGrantWarning(
+                userId: $grant->user_id,
+                grantId: $grant->id,
+                warningType: 'five_day_obligation',
+                message: $message,
+            ));
 
             $warnedCount++;
         }

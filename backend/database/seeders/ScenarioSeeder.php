@@ -9,7 +9,7 @@ use App\Domain\Attendance\Commands\GenerateEmployeeCalendarEntries;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\UpdateCompanyCalendarDays;
 use App\Domain\EventSourcing\CommandBus;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
@@ -54,8 +54,15 @@ class ScenarioSeeder extends Seeder
         $calendarTo = $month->copy()->addMonth()->endOfMonth();
 
         $calendar = $this->seedCalendar($commandBus, $admin->id, $month, $calendarFrom, $calendarTo);
-        $punchWorkStyle = $this->seedWorkStyle($commandBus, $admin->id, 'standard_punch', '標準勤務(打刻)', $calendar);
-        $monthlyWorkStyle = $this->seedWorkStyle($commandBus, $admin->id, 'standard_monthly', '標準勤務(月次入力)', $calendar);
+        // weekly_scheduled_days/annual_scheduled_daysは付与Schedule/Assessmentドメイン
+        // (App\Domain\PaidLeaveSchedule)が通常付与/比例付与の区分判定に用いる所定労働日数
+        // (docs/09-usecases-paid-leave.md UC-P011、docs/testing/scenario-tests.md §5-18)。
+        // 追加時点でこれらの列を参照する既存のE2Eシナリオ・単体テストは無いため、既存の
+        // WorkStyleへの追加は他シナリオの挙動に影響しない(週5日勤務=通常付与想定の値)。
+        $punchWorkStyle = $this->seedWorkStyle($commandBus, $admin->id, 'standard_punch', '標準勤務(打刻)', $calendar, weeklyScheduledDays: 5, annualScheduledDays: 245);
+        // 伊藤舞(monthly)は週3日勤務の短時間勤務者とし、比例付与区分の想定データとして使う
+        // (docs/testing/scenario-tests.md §5-18)。
+        $monthlyWorkStyle = $this->seedWorkStyle($commandBus, $admin->id, 'standard_monthly', '標準勤務(月次入力)', $calendar, weeklyScheduledDays: 3, annualScheduledDays: 147);
         $this->seedPaidLeaveGrantRule();
 
         $users = $this->seedUsers($commandBus);
@@ -164,7 +171,7 @@ class ScenarioSeeder extends Seeder
         return $calendar->refresh();
     }
 
-    private function seedWorkStyle(CommandBus $commandBus, string $adminId, string $code, string $name, CompanyCalendar $calendar): WorkStyle
+    private function seedWorkStyle(CommandBus $commandBus, string $adminId, string $code, string $name, CompanyCalendar $calendar, ?int $weeklyScheduledDays = null, ?int $annualScheduledDays = null): WorkStyle
     {
         $existing = WorkStyle::query()->where('code', $code)->first();
 
@@ -190,6 +197,8 @@ class ScenarioSeeder extends Seeder
                 'default_break_minutes' => 60,
                 'company_calendar_id' => $calendar->id,
                 'is_shift_based' => false,
+                'weekly_scheduled_days' => $weeklyScheduledDays,
+                'annual_scheduled_days' => $annualScheduledDays,
             ],
             createdByUserId: $adminId,
         ));

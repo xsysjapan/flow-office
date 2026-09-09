@@ -30,19 +30,38 @@ final class LeaveHistoryQuery
     /**
      * @param  class-string<Model>  $grantModelClass
      * @param  class-string<Model>  $requestModelClass
+     * @param  array<int, string>  $userScopedEventClassPrefixes  `App\Domain\PaidLeaveAccount`
+     *         (docs/changesets/20260906-paid-leave-domain-redesign/spec.md)のように、
+     *         集約ルートがgrant/request単位ではなく社員単位(aggregate_uuid = userId)の
+     *         ドメインを追加で含める場合、そのevent_classの接頭辞(例: 'paid_leave_account.')
+     *         を渡す。
      * @return Collection<int, object>
      */
     public static function eventsForUser(
         string $userId,
         string $grantModelClass,
         string $requestModelClass,
+        array $userScopedEventClassPrefixes = [],
     ): Collection {
         $grantIds = $grantModelClass::query()->where('user_id', $userId)->pluck('id');
         $requestIds = $requestModelClass::query()->where('user_id', $userId)->pluck('id');
         $aggregateIds = $grantIds->merge($requestIds);
 
         return EloquentStoredEvent::query()
-            ->whereIn('aggregate_uuid', $aggregateIds)
+            ->where(function ($query) use ($aggregateIds, $userId, $userScopedEventClassPrefixes) {
+                $query->whereIn('aggregate_uuid', $aggregateIds);
+
+                if ($userScopedEventClassPrefixes !== []) {
+                    $query->orWhere(function ($userScopedQuery) use ($userId, $userScopedEventClassPrefixes) {
+                        $userScopedQuery->where('aggregate_uuid', $userId)
+                            ->where(function ($prefixQuery) use ($userScopedEventClassPrefixes) {
+                                foreach ($userScopedEventClassPrefixes as $prefix) {
+                                    $prefixQuery->orWhere('event_class', 'like', $prefix.'%');
+                                }
+                            });
+                    });
+                }
+            })
             ->orderByDesc('id')
             ->get()
             ->map(fn (EloquentStoredEvent $event) => (object) [

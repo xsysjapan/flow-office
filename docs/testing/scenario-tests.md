@@ -430,6 +430,35 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     `expense/ExpenseClaimNewPage`・`attendance/{AttendanceMonthDetailPage,AttendanceDayPage}`の
     `*.test.tsx`)で確認する。
 
+18. **付与Schedule/Assessmentから一括付与まで**: 人事担当者(加藤由美)が
+    `paid-leave:roll-schedules`(UC-P011)によるScheduleのローリング生成から、出勤率
+    Assessment(UC-P012)・付与予定一覧の確認(UC-P013)・判定結果のOverride(UC-P014)・
+    一括付与(UC-P015)までを1本の画面操作で通す。対象社員には勤務条件が明確な社員を使う
+    (通常付与区分想定=週5日勤務の高橋健太`SCENARIO_USERS.punchEmployee`、比例付与区分
+    想定=週3日勤務の伊藤舞`SCENARIO_USERS.monthlyEmployee`。`WorkStyle.weekly_scheduled_days`
+    が設定済みであることが前提)。
+
+    1. 前提として対象社員のWorkStyleに所定労働日数(`weekly_scheduled_days`)が設定済み
+       であることを確認する。
+    2. `paid-leave:roll-schedules`を実行し、Schedule生成(1年先までのローリング生成)を
+       確認する。
+    3. `/admin/paid-leave/schedule`(付与予定一覧)を開き、対象社員の行を確認する。
+    4. 期間フィルタ(付与予定日)で絞り込めることを確認する。
+    5. 詳細パネルからAssessmentの勤怠データ内訳(算定期間・分母/分子・出勤率・判定
+       Policyバージョン)を確認する。
+    6. 「再判定」ボタンで自動判定が更新される(エラーにならない)ことを確認する。
+    7. 要確認/対象外の行をOverrideで付与対象(Eligible)に変更し、理由を入力して確定する。
+    8. 付与対象(`eligible`)フィルタで複数選択し、一括付与を実行する。
+    9. 付与後、一覧から`eligible`フィルタで対象行が消えることを確認する。
+    10. 付与された社員本人の有給残数画面(`/paid-leave`)に反映されることを確認する。
+    11. 一括付与に一部失敗が混在するケース(対象外行が紛れ込む等)で、成功/失敗件数が
+        表示されることを確認する。
+
+    確認ポイント: 通常/比例/シフト区分判定がWorkStyleデータの有無で正しく分岐するか
+    (`GrantCategoryClassifier`/`GrantDaysResolver`)、Assessmentが`scheduled_on`到来前は
+    実行されないこと、`Eligible`行のみ一括付与できること
+    (`frontend/e2e/scenario-15-paid-leave-schedule.spec.ts`)。
+
 ## 6. 実行方法の検討
 
 ### 6.1 手動確認チェックリスト(必須・最初にやる)
@@ -468,6 +497,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     監査ログ記録、§5-8締めた月のCSV出力、§5-9新入社員の初回ログイン、§5-11打刻ログの
     訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。§5-17(会社カレンダーの
     ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済み。
+    §5-18(付与Schedule/Assessmentから一括付与まで、`scenario-15-paid-leave-schedule.spec.ts`)
+    は実装・グリーン確認済み。
 
     本PR作成当時、`POST /dev/reset-database`のグローバルセットアップチェック
     (ALL_USERSグループのFeature割当数の期待値)がscenario-00等の既存シナリオも含めて

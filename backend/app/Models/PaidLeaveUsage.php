@@ -10,8 +10,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 有給消化 (docs/03-architecture.md 3.3: 勤怠の正の一つ)。有効期限が近い付与分から
  * 優先的に消し込むため、1件の有給申請の承認が複数のpaid_leave_grantにまたがる場合、
  * grantごとに1行作成される。
+ *
+ * Phase 5(cutover、docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で
+ * 旧`App\Domain\PaidLeave`ドメインを削除したため、`usage_id`列によるスコープ分離
+ * (旧`legacyPaidLeaveDomain`グローバルスコープ・姉妹モデル`PaidLeaveAccountUsage`)は
+ * 不要になった。行はすべて`App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate`
+ * が発行するイベントから作成される。
  */
-#[Fillable(['stored_event_id', 'user_id', 'attendance_day_id', 'paid_leave_grant_id', 'paid_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed'])]
+#[Fillable(['stored_event_id', 'usage_id', 'user_id', 'attendance_day_id', 'paid_leave_grant_id', 'paid_leave_request_id', 'used_on', 'used_days', 'used_minutes', 'usage_type', 'is_confirmed', 'confirmed', 'cancelled'])]
 class PaidLeaveUsage extends Model
 {
     protected function casts(): array
@@ -20,6 +26,8 @@ class PaidLeaveUsage extends Model
             'used_on' => 'date',
             'used_days' => 'decimal:1',
             'is_confirmed' => 'boolean',
+            'confirmed' => 'boolean',
+            'cancelled' => 'boolean',
         ];
     }
 

@@ -7,9 +7,10 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveRequestCommand;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\GrantPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
-use App\Domain\PaidLeave\Commands\RevokePaidLeaveGrant;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\MigratePaidLeaveAccount;
+use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -17,6 +18,7 @@ use App\Domain\Workflow\Support\WorkflowRequestNotificationContent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PaidLeaveGrantResource;
 use App\Http\Resources\PaidLeaveGrantRuleResource;
+use App\Http\Resources\PaidLeaveGrantRuleTargetUserResource;
 use App\Http\Resources\PaidLeaveRequestResource;
 use App\Http\Resources\PaidLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
@@ -109,7 +111,7 @@ class PaidLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'rule', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function targetUsers(PaidLeaveGrantRule $rule): JsonResponse
+    public function targetUsers(Request $request, PaidLeaveGrantRule $rule): JsonResponse
     {
         $query = User::query()->whereNotNull('hire_date');
 
@@ -123,14 +125,14 @@ class PaidLeaveController extends Controller
 
         $workStyleName = $rule->work_style_id !== null ? $rule->workStyle?->name : null;
 
-        return response()->json([
-            'data' => $query->orderBy('name')->get()->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'work_style' => $workStyleName,
-                'paid_leave_auto_grant_enabled' => $user->paid_leave_auto_grant_enabled,
-            ]),
-        ]);
+        // AppServiceProviderでJsonResource::withoutWrapping()しているため、他のエンドポイント
+        // と同じくトップレベルを"data"でラップしない。1件ずつPaidLeaveGrantRuleTargetUserResource
+        // で整形した配列をそのままトップレベルとして返す。
+        $data = $query->orderBy('name')->get()
+            ->map(fn (User $user) => (new PaidLeaveGrantRuleTargetUserResource($user, $workStyleName))->resolve($request))
+            ->all();
+
+        return response()->json($data);
     }
 
     /**
@@ -192,13 +194,15 @@ class PaidLeaveController extends Controller
             'grant_reason' => ['nullable', 'string'],
         ]);
 
-        $grant = $commandBus->dispatch(new GrantPaidLeave(
+        $grantId = $commandBus->dispatch(new GrantPaidLeave(
             userId: $data['user_id'],
             grantedOn: $data['granted_on'],
             expiresOn: $data['expires_on'],
             grantedDays: (float) $data['granted_days'],
             grantReason: $data['grant_reason'] ?? null,
         ));
+
+        $grant = PaidLeaveGrant::query()->findOrFail($grantId);
 
         return (new PaidLeaveGrantResource($grant))->response()->setStatusCode(201);
     }
@@ -220,13 +224,63 @@ class PaidLeaveController extends Controller
     {
         $data = $request->validate(['reason' => ['nullable', 'string']]);
 
-        $grant = $commandBus->dispatch(new RevokePaidLeaveGrant(
+        $commandBus->dispatch(new RevokePaidLeaveGrant(
+            userId: $grant->user_id,
             grantId: $grant->id,
             revokedByUserId: $request->user()->id,
             reason: $data['reason'] ?? null,
         ));
 
-        return new PaidLeaveGrantResource($grant);
+        return new PaidLeaveGrantResource($grant->refresh());
+    }
+
+    /**
+     * 旧システム/旧ドメインからのcutover移行専用エンドポイント(1社員分)。管理者権限限定。
+     * 口座は一度きりの移行しか受け付けないため、既にGrantが存在する口座への再実行は
+     * `MigratePaidLeaveAccountHandler`経由でDomainRuleException(422)となる。
+     * 大量移行はartisanコマンド`paid-leave:migrate-accounts`(CSV/JSON一括投入、行単位で
+     * 成功・失敗を継続収集する)を使う想定で、本エンドポイントは1社員分の疎通・単発修正用。
+     *
+     * @see \App\Console\Commands\MigratePaidLeaveAccountsCommand
+     */
+    #[OA\Post(
+        path: '/paid-leave/migrate',
+        operationId: 'paidLeave.migrate',
+        summary: '旧システムからの有給データを1社員分移行する(cutover専用・一度きり)',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['user_id', 'cutover_date', 'grants'], properties: [new OA\Property(property: 'user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'cutover_date', type: 'string', format: 'date'), new OA\Property(property: 'grants', type: 'array', items: new OA\Items(type: 'object'))])),
+        responses: [new OA\Response(response: 204, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function migrate(Request $request, CommandBus $commandBus): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'string', 'exists:users,id'],
+            'cutover_date' => ['required', 'date'],
+            'grants' => ['array'],
+            'grants.*.grant_id' => ['nullable', 'string', 'uuid'],
+            'grants.*.original_granted_on' => ['nullable', 'date'],
+            'grants.*.original_granted_days' => ['nullable', 'numeric', 'min:0'],
+            'grants.*.remaining_days_at_cutover' => ['required', 'numeric', 'min:0'],
+            'grants.*.expires_on' => ['required', 'date'],
+            'grants.*.mode' => ['required', Rule::in(['A', 'B', 'C'])],
+            'grants.*.notes' => ['nullable', 'string'],
+        ]);
+
+        $commandBus->dispatch(new MigratePaidLeaveAccount(
+            userId: $data['user_id'],
+            cutoverDate: $data['cutover_date'],
+            grants: array_map(static fn (array $g): array => [
+                'grantId' => $g['grant_id'] ?? null,
+                'originalGrantedOn' => $g['original_granted_on'] ?? null,
+                'originalGrantedDays' => $g['original_granted_days'] ?? null,
+                'remainingDaysAtCutover' => (float) $g['remaining_days_at_cutover'],
+                'expiresOn' => $g['expires_on'],
+                'mode' => $g['mode'],
+                'notes' => $g['notes'] ?? null,
+            ], $data['grants'] ?? []),
+        ));
+
+        return response()->json(null, 204);
     }
 
     /**
@@ -466,6 +520,7 @@ class PaidLeaveController extends Controller
         $usages = PaidLeaveUsage::query()
             ->with('request')
             ->where('user_id', $userId)
+            ->where('cancelled', false)
             ->orderByDesc('used_on')
             ->get();
 
@@ -538,6 +593,10 @@ class PaidLeaveController extends Controller
             userId: $userId,
             grantModelClass: PaidLeaveGrant::class,
             requestModelClass: PaidLeaveRequest::class,
+            // Phase 5(cutover): PaidLeaveAccountAggregateの集約ルートはgrant/request単位
+            // ではなくuserId(社員単位の年休台帳)なので、grantIds/requestIdsでは拾えない。
+            // aggregate_uuid=userIdのpaid_leave_account.*イベントを別枠で追加する。
+            userScopedEventClassPrefixes: ['paid_leave_account.'],
         );
 
         return StoredEventResource::collection($events);

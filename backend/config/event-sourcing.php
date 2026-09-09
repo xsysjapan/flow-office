@@ -157,6 +157,25 @@ use App\Domain\PaidLeave\Events\PaidLeaveUsageDesignated;
 use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged as PaidLeaveAccountGrantAmountChanged;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated as PaidLeaveAccountGrantCreated;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged as PaidLeaveAccountGrantDateChanged;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantExpiryChanged as PaidLeaveAccountGrantExpiryChanged;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantRevoked as PaidLeaveAccountGrantRevoked;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantWarningRaised as PaidLeaveAccountGrantWarningRaised;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocated as PaidLeaveAccountUsageAllocated;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased as PaidLeaveAccountUsageAllocationReleased;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccountUsageCancelled;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed as PaidLeaveAccountUsageConfirmed;
+use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated as PaidLeaveAccountUsageDesignated;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestCancelled;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequested;
@@ -496,6 +515,32 @@ return [
         'paid_leave.usage_reversed' => PaidLeaveUsageReversed::class,
         'paid_leave.warning_raised' => PaidLeaveWarningRaised::class,
         'paid_leave.grant_revoked' => PaidLeaveGrantRevoked::class,
+
+        // PaidLeaveAccountAggregate(社員単位の年休台帳集約。Grant/Usage/Allocationの
+        // 不変条件をAggregate自身が保証する。docs/changesets/20260906-paid-leave-domain-redesign/spec.md参照)。
+        'paid_leave_account.grant_created' => PaidLeaveAccountGrantCreated::class,
+        'paid_leave_account.grant_amount_changed' => PaidLeaveAccountGrantAmountChanged::class,
+        'paid_leave_account.grant_date_changed' => PaidLeaveAccountGrantDateChanged::class,
+        'paid_leave_account.grant_expiry_changed' => PaidLeaveAccountGrantExpiryChanged::class,
+        'paid_leave_account.grant_revoked' => PaidLeaveAccountGrantRevoked::class,
+        'paid_leave_account.grant_warning_raised' => PaidLeaveAccountGrantWarningRaised::class,
+        'paid_leave_account.usage_designated' => PaidLeaveAccountUsageDesignated::class,
+        'paid_leave_account.usage_confirmed' => PaidLeaveAccountUsageConfirmed::class,
+        'paid_leave_account.usage_cancelled' => PaidLeaveAccountUsageCancelled::class,
+        'paid_leave_account.usage_allocated' => PaidLeaveAccountUsageAllocated::class,
+        'paid_leave_account.usage_allocation_released' => PaidLeaveAccountUsageAllocationReleased::class,
+        // Migration専用(Phase 9)。Command/Handlerは未実装だがイベント名を予約しておく。
+        'paid_leave_account.migrated' => PaidLeaveAccountMigrated::class,
+
+        // PaidLeaveScheduleAggregate(社員単位の将来付与予定Schedule。
+        // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
+        'paid_leave_schedule.entry_created' => PaidLeaveScheduleEntryCreated::class,
+        'paid_leave_schedule.entry_superseded' => PaidLeaveScheduleEntrySuperseded::class,
+        'paid_leave_schedule.assessment_recorded' => PaidLeaveScheduleAssessmentRecorded::class,
+        'paid_leave_schedule.assessment_overridden' => PaidLeaveScheduleAssessmentOverridden::class,
+        'paid_leave_schedule.entry_manually_edited' => PaidLeaveScheduleEntryManuallyEdited::class,
+        'paid_leave_schedule.entry_granted' => PaidLeaveScheduleEntryGranted::class,
+        'paid_leave_schedule.entry_cancelled' => PaidLeaveScheduleEntryCancelled::class,
 
         'special_leave.granted' => SpecialLeaveGranted::class,
         'special_leave.requested' => SpecialLeaveRequested::class,

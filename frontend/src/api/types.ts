@@ -945,6 +945,64 @@ export interface PaidLeaveGrantRuleTargetUser {
   paid_leave_auto_grant_enabled: boolean;
 }
 
+/**
+ * 付与予定(Schedule)の判定状態(`docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`
+ * §30の状態名をそのままバックエンドの`status`列の値として使う)。
+ */
+export type PaidLeaveScheduleEntryStatus =
+  | "Scheduled"
+  | "AssessmentPending"
+  | "Eligible"
+  | "NotEligible"
+  | "NeedsReview"
+  | "Granted"
+  | "Cancelled";
+
+/** 付与予定1件の出勤率Assessment内訳(分母/分子/除外日・判定結果)。閲覧専用の属性表示のみに使う。 */
+export interface PaidLeaveScheduleAssessment {
+  period_start: string | null;
+  period_end: string | null;
+  denominator_days: number | null;
+  attendance_days: number | null;
+  excluded_days: number | null;
+  attendance_rate: number | null;
+  policy_version: string | null;
+  automatic_result: PaidLeaveScheduleEntryStatus | null;
+  final_result: PaidLeaveScheduleEntryStatus | null;
+  override_reason: string | null;
+}
+
+/** `PaidLeaveScheduleEntryResource`(付与予定一覧・詳細)。 */
+export interface PaidLeaveScheduleEntry {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  scheduled_on: string | null;
+  category: string | null;
+  candidate_grant_days: number | null;
+  status: PaidLeaveScheduleEntryStatus;
+  needs_review_due_to_conflict: boolean;
+  manual_override_reason: string | null;
+  manual_override_by_user_id: string | null;
+  manual_override_at: string | null;
+  granted_paid_leave_grant_id: string | null;
+  assessment: PaidLeaveScheduleAssessment;
+}
+
+/** 一括付与APIのエントリ単位の結果。 */
+export interface ApplyScheduledGrantsResultItem {
+  entry_id: string;
+  status: "granted" | "failed";
+  grant_id?: string | null;
+  error?: string;
+}
+
+export interface ApplyScheduledGrantsResult {
+  results: ApplyScheduledGrantsResultItem[];
+  success_count: number;
+  failure_count: number;
+}
+
 /** 特別休暇の名前付き種別マスタ(例: 誕生日休暇)。有効な種別が1件も無ければ
  *  特別休暇メニュー自体を表示しない。 */
 export interface SpecialLeaveType {

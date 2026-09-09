@@ -4,17 +4,16 @@ namespace App\Domain\PaidLeave\Handlers;
 
 use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
 use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\PaidLeave\Aggregates\PaidLeaveGrantAggregate;
-use App\Domain\PaidLeave\Aggregates\PaidLeaveRequestAggregate;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
+use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Models\AttendanceDay;
-use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveRequestStatus;
-use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
+use App\Models\PaidLeaveUsage;
 
 /**
  * UC-P004: 有給を承認する。対象日の勤怠(attendance_days.work_type)への反映は
@@ -24,21 +23,23 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * (マイナスになっても)承認自体は成立させる(RequestPaidLeaveHandler冒頭のコメント参照。
  * 残数は承認済み分のみで計測する方針のため、ここで消化できなかった分は単に記録しない)。
  *
- * paid_leave.usedイベントは、申請時点でPaidLeaveUsageProjectorが作成した未確定
- * (grant_id未設定・is_confirmed=false)のpaid_leave_usages行を、最初の1件はその場で
- * 確定済み(grant_id設定・is_confirmed=true)へ更新し、複数grantにまたがる場合は2件目以降を
- * 新規の確定済み行として追加する(同Projector参照)。
- *
- * 承認1件で「paid_leave_request集約の承認」と「1件以上のpaid_leave_grant集約の消化」に
- * またがるため、`AggregateRoot::persistInTransaction()`で1トランザクションにまとめて記録する
- * (DeviceAdminSessionOpenerに次ぐ2例目の複数集約トランザクション。
- * docs/29-event-sourcing-framework-migration.md参照)。
+ * Phase 5(cutover)により、旧`PaidLeaveGrantAggregate`によるFIFO消化プランの手組みは廃止し、
+ * `App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage`を発行するだけにした。
+ * どのGrantから消化するか(消化順・複数Grantへの分割)は`PaidLeaveAccountAggregate`内部の
+ * `AllocationPlanner`が判定する(Handlerはこの判定にEloquent Projectionを問い合わせない。
+ * docs/changesets/20260906-paid-leave-domain-redesign/spec.md 論点1/2)。
+ * `paid_leave_requests.status`自体の更新は
+ * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::updatePaidLeaveRequestStatus`が
+ * `PaidLeaveUsageConfirmed`イベントから行う。
  *
  * @implements CommandHandler<ApprovePaidLeaveRequest>
  */
 class ApprovePaidLeaveRequestHandler implements CommandHandler
 {
-    public function __construct(private readonly AttendanceCalculator $calculator) {}
+    public function __construct(
+        private readonly AttendanceCalculator $calculator,
+        private readonly CommandBus $commandBus,
+    ) {}
 
     public function handle(Command $command): PaidLeaveRequest
     {
@@ -63,66 +64,24 @@ class ApprovePaidLeaveRequestHandler implements CommandHandler
             ->whereDate('work_date', $request->target_date)
             ->firstOrFail();
 
-        $plan = $this->planConsumption($request);
+        $usageId = PaidLeaveUsage::query()
+            ->where('paid_leave_request_id', $request->id)
+            ->where('cancelled', false)
+            ->value('usage_id');
 
-        $usedMinutes = $request->hours !== null ? (int) round($request->hours * 60) : null;
-
-        $aggregates = [
-            PaidLeaveRequestAggregate::retrieve($request->id)->approve($command->approvedByUserId),
-        ];
-
-        foreach ($plan as ['grant' => $grant, 'amount' => $amount]) {
-            $aggregates[] = PaidLeaveGrantAggregate::retrieve($grant->id)->use(
+        if ($usageId !== null) {
+            $this->commandBus->dispatch(new ConfirmPaidLeaveUsage(
                 userId: $request->user_id,
-                paidLeaveRequestId: $request->id,
-                attendanceDayId: $day->id,
-                usedOn: $request->target_date->toDateString(),
-                usedDays: $amount,
-                usedMinutes: $usedMinutes,
-                usageType: $request->leave_type,
-            );
+                usageId: $usageId,
+                confirmedByUserId: $command->approvedByUserId,
+            ));
         }
 
-        AggregateRoot::persistInTransaction(...$aggregates);
-
-        if ($plan !== []) {
-            $calculation = $this->calculator->calculate(
-                $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
-            );
-            AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
-        }
+        $calculation = $this->calculator->calculate(
+            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
+        );
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
 
         return PaidLeaveRequest::query()->findOrFail($request->id);
-    }
-
-    /**
-     * 消化計画を確定する。残数不足でも承認自体はブロックせず、消化できる分だけを
-     * 記録する(残数が0のgrantへ紐付けることはできないため、不足分は単に記録しない)。
-     *
-     * @return array<int, array{grant: PaidLeaveGrant, amount: float}>
-     */
-    private function planConsumption(PaidLeaveRequest $request): array
-    {
-        $remainingToConsume = (float) $request->requested_days;
-        $plan = [];
-
-        $grants = PaidLeaveGrant::query()
-            ->where('user_id', $request->user_id)
-            ->whereDate('expires_on', '>=', $request->target_date)
-            ->where('remaining_days', '>', 0)
-            ->orderBy('expires_on')
-            ->get();
-
-        foreach ($grants as $grant) {
-            if ($remainingToConsume <= 0) {
-                break;
-            }
-
-            $consume = min((float) $grant->remaining_days, $remainingToConsume);
-            $plan[] = ['grant' => $grant, 'amount' => $consume];
-            $remainingToConsume -= $consume;
-        }
-
-        return $plan;
     }
 }

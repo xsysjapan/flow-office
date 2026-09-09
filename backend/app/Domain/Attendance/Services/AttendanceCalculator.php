@@ -128,6 +128,7 @@ class AttendanceCalculator
             default => 0.0,
         };
         $paidLeaveMinutes = (int) $day->paidLeaveUsages
+            ->where('cancelled', false)
             ->where('usage_type', PaidLeaveType::HOURLY)
             ->sum('used_minutes');
 

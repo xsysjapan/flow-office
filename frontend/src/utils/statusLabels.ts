@@ -13,6 +13,7 @@ import type {
   ExpensePaymentBearer,
   LegalHolidayWarning,
   PaidLeaveRequestStatus,
+  PaidLeaveScheduleEntryStatus,
   PaidLeaveType,
   PunchStatus,
   PunchType,
@@ -530,6 +531,21 @@ const assetHistoryEventTypeLabels: Record<string, string> = {
   'asset.reported_lost': '紛失登録',
   'asset.recovered_from_lost': '発見',
   'asset.disposed': '廃棄',
+}
+
+const paidLeaveScheduleEntryStatusMeta: Record<PaidLeaveScheduleEntryStatus, StatusMeta> = {
+  Scheduled: { label: '未判定', tone: 'neutral' },
+  AssessmentPending: { label: '判定中', tone: 'neutral' },
+  Eligible: { label: '付与対象', tone: 'success' },
+  NotEligible: { label: '対象外', tone: 'warning' },
+  NeedsReview: { label: '要確認', tone: 'danger' },
+  Granted: { label: '付与済み', tone: 'info' },
+  Cancelled: { label: '取消済み', tone: 'neutral' },
+}
+
+/** 付与予定(Schedule)の判定状態バッジ(`PaidLeaveSchedulePage`・詳細パネル共通)。 */
+export function paidLeaveScheduleEntryStatusLabel(status: PaidLeaveScheduleEntryStatus): StatusMeta {
+  return paidLeaveScheduleEntryStatusMeta[status]
 }
 
 export function assetHistoryEventTypeLabel(eventType: string): string {
