@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('grant_days', 4, 1);
             $table->timestamps();
 
-            $table->unique(['version', 'continuous_service_months']);
+            $table->unique(['version', 'continuous_service_months'], 'paid_leave_grant_policies_unique');
         });
     }
 
