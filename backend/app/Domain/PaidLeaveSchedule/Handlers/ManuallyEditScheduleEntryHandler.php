@@ -17,7 +17,7 @@ class ManuallyEditScheduleEntryHandler implements CommandHandler
     {
         assert($command instanceof ManuallyEditScheduleEntry);
 
-        PaidLeaveScheduleAggregate::retrieve($command->userId)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId))
             ->manuallyEditEntry(
                 entryId: $command->entryId,
                 category: $command->category,

@@ -36,14 +36,16 @@ class ApplyScheduledGrantsHandler implements CommandHandler
 
         $grantedIds = [];
 
+        // `PaidLeaveScheduleAggregate`のAggregateId(=userIdから決定的に導出したUUID)は
+        // `PaidLeaveAccountAggregate`(AggregateId=生のuserId)とはuuid空間が分離されているため
+        // (spec.md論点14)、両者のstored_eventsストリームは互いに干渉しない。Schedule Aggregate
+        // は1回retrieveし、エントリごとに`GrantPaidLeave`発行 → `applyGrant` →
+        // `persist()`をループ内で行う(1エントリごとの付与が独立した業務単位であり、途中の
+        // エントリで例外が起きても直前まで処理したエントリの付与・遷移は確定させたいため、
+        // まとめて末尾で1回persistするのではなくエントリ単位でpersistする形を維持する)。
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId));
+
         foreach ($command->entryIds as $entryId) {
-            // `PaidLeaveScheduleAggregate`と`PaidLeaveAccountAggregate`は共に
-            // AggregateId=userIdであり、同一イベントストリーム(stored_events)のバージョンを
-            // 共有する。直後の`GrantPaidLeave`発行(PaidLeaveAccountAggregateへの書き込み)で
-            // ストリームのバージョンが進むため、エントリごとに`retrieve()`し直してから
-            // `applyGrant`・`persist()`する(先頭で1回だけretrieveしてループ末尾で
-            // まとめてpersistすると、楽観的並行性エラーになる)。
-            $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
             $entry = $aggregate->entry($entryId);
 
             if ($entry === null) {
@@ -66,7 +68,6 @@ class ApplyScheduledGrantsHandler implements CommandHandler
                 source: 'scheduled_batch',
             ));
 
-            $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
             $aggregate->applyGrant(entryId: $entryId, grantId: $grantId, operatorUserId: $command->operatorUserId);
             $aggregate->persist();
 

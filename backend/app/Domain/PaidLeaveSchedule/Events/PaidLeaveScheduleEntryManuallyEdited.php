@@ -11,6 +11,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveScheduleEntryManuallyEdited extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $entryId,
         public readonly ?string $category,
         public readonly ?float $candidateGrantDays,

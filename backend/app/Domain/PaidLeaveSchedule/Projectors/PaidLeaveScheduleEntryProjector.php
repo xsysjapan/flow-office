@@ -14,7 +14,8 @@ use App\Models\PaidLeaveScheduleEntry;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * `PaidLeaveScheduleAggregate`(AggregateId = userId)のイベントから
+ * `PaidLeaveScheduleAggregate`(AggregateId = userIdから決定的に導出した別UUID、spec.md論点14)
+ * のイベントから
  * `paid_leave_schedule_entries`(Projection Table)を更新する。CLAUDE.md原則2
  * (Projectionは再生成可能な派生データ)に従い、すべての更新はイベントのプロパティのみから
  * 冪等な`updateOrCreate`/`update`で行い、`event-sourcing:replay`によるProjection再生成に
@@ -27,7 +28,7 @@ class PaidLeaveScheduleEntryProjector extends Projector
         PaidLeaveScheduleEntry::query()->updateOrCreate(
             ['id' => $event->entryId],
             [
-                'user_id' => $event->aggregateRootUuid(),
+                'user_id' => $event->userId,
                 'scheduled_on' => $event->scheduledOn,
                 'category' => $event->category,
                 'candidate_grant_days' => $event->candidateGrantDays,

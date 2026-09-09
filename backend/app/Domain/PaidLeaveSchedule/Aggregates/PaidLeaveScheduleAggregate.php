@@ -11,10 +11,13 @@ use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleEntryStatus;
+use Ramsey\Uuid\Uuid;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * paid_leave_schedule集約(AggregateId = userId)。その社員の将来Scheduleエントリ一式
+ * paid_leave_schedule集約(AggregateId = userIdから決定的に導出した別UUID。
+ * `PaidLeaveAccountAggregate`の生UUID=userIdとはuuid空間を分離する。spec.md論点14)。
+ * その社員の将来Scheduleエントリ一式
  * (複数の`scheduledOn`)を内部で保持し、「過去確定Schedule不変・未来のみ再計算」
  * (依頼書§27)という不変条件を保証する。
  * docs/changesets/20260906-paid-leave-schedule-assessment/spec.md「仕様確定事項」参照。
@@ -31,10 +34,36 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  */
 class PaidLeaveScheduleAggregate extends AggregateRoot
 {
+    /**
+     * この集約専用の固定namespace UUID。`userId`からuuid5で決定的に導出したUUIDを
+     * `AggregateId`(=`stored_events.aggregate_uuid`)として使う(spec.md論点14)。
+     * `PaidLeaveAccountAggregate`(AggregateId=生のuserId)とはuuid空間が完全に分離される。
+     * 値そのものに意味は無いが、デプロイをまたいで不変でなければならない。
+     */
+    private const AGGREGATE_UUID_NAMESPACE = '2b3f6a2e-4c9b-4b8a-9d0a-6a2e9c2b6a71';
+
     /** @var array<string, EntryState> */
     private array $entries = [];
 
+    /**
+     * 実際の対象社員のuserId。`$this->uuid`(spatieのAggregateRootが持つプロパティ)は
+     * `aggregateUuidForUser()`で導出したこの集約専用のUUIDであり、実userIdではないため、
+     * replay可能な内部状態として別途保持する。最初のイベント適用時にのみ設定される。
+     */
+    private ?string $userId = null;
+
+    /**
+     * `userId`から決定的に導出したAggregateId(`stored_events.aggregate_uuid`用)。
+     * 同じuserIdは常に同じUUIDに解決されるため、`retrieve()`は毎回同じイベントストリームを
+     * 参照できる。`PaidLeaveAccountAggregate`の生UUID(=userId)とは別のuuid空間になる。
+     */
+    public static function aggregateUuidForUser(string $userId): string
+    {
+        return Uuid::uuid5(self::AGGREGATE_UUID_NAMESPACE, $userId)->toString();
+    }
+
     public function createEntry(
+        string $userId,
         string $entryId,
         string $scheduledOn,
         string $category,
@@ -45,6 +74,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryCreated(
+            userId: $userId,
             entryId: $entryId,
             scheduledOn: $scheduledOn,
             category: $category,
@@ -80,6 +110,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             }
 
             $this->recordThat(new PaidLeaveScheduleEntrySuperseded(
+                userId: $this->userId,
                 entryId: $entryId,
                 reason: $reason,
                 previousCategory: $entry['category'],
@@ -94,6 +125,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntrySuperseded(
+            userId: $this->userId,
             entryId: $entryId,
             reason: $reason,
             previousCategory: $entry['category'],
@@ -127,6 +159,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         $this->requireNonTerminalEntry($entryId);
 
         $this->recordThat(new PaidLeaveScheduleAssessmentRecorded(
+            userId: $this->userId,
             entryId: $entryId,
             periodStart: $periodStart,
             periodEnd: $periodEnd,
@@ -158,6 +191,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleAssessmentOverridden(
+            userId: $this->userId,
             entryId: $entryId,
             finalResult: $finalResult,
             reason: $reason,
@@ -183,6 +217,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         $this->requireNonTerminalEntry($entryId);
 
         $this->recordThat(new PaidLeaveScheduleEntryManuallyEdited(
+            userId: $this->userId,
             entryId: $entryId,
             category: $category,
             candidateGrantDays: $candidateGrantDays,
@@ -211,6 +246,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         }
 
         $this->recordThat(new PaidLeaveScheduleEntryGranted(
+            userId: $this->userId,
             entryId: $entryId,
             grantId: $grantId,
             operatorUserId: $operatorUserId,
@@ -224,6 +260,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         $this->requireNonTerminalEntry($entryId);
 
         $this->recordThat(new PaidLeaveScheduleEntryCancelled(
+            userId: $this->userId,
             entryId: $entryId,
             reason: $reason,
             byUserId: $byUserId,
@@ -299,6 +336,8 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     protected function applyPaidLeaveScheduleEntryCreated(PaidLeaveScheduleEntryCreated $event): void
     {
+        $this->userId = $event->userId;
+
         $this->entries[$event->entryId] = [
             'scheduledOn' => $event->scheduledOn,
             'category' => $event->category,

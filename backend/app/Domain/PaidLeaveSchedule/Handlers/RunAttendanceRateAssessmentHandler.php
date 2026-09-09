@@ -28,7 +28,7 @@ class RunAttendanceRateAssessmentHandler implements CommandHandler
         assert($command instanceof RunAttendanceRateAssessment);
 
         $user = User::query()->findOrFail($command->userId);
-        $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId));
         $entry = $aggregate->entry($command->entryId);
 
         if ($entry === null) {

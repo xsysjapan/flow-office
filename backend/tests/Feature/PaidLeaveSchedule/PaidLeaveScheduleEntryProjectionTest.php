@@ -72,8 +72,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $user = User::factory()->create();
         $entryId = (string) Str::uuid();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
             ->persist();
 
         $row = PaidLeaveScheduleEntry::query()->findOrFail($entryId);
@@ -93,8 +93,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $this->seedFullAttendance($user, $workStyle, $periodEnd->copy()->subYear(), 300);
 
         $entryId = (string) Str::uuid();
-        PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, $periodEnd->toDateString(), GrantCategory::REGULAR, 11.0)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, $periodEnd->toDateString(), GrantCategory::REGULAR, 11.0)
             ->persist();
 
         $this->bus()->dispatch(new RunAttendanceRateAssessment(userId: $user->id, entryId: $entryId));
@@ -113,8 +113,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $user = User::factory()->create(['hire_date' => '2024-01-01']);
         $entryId = (string) Str::uuid();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
             ->recordAssessment(
                 entryId: $entryId,
                 periodStart: '2025-10-01',
@@ -152,8 +152,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $user = User::factory()->create(['hire_date' => '2024-01-01']);
         $entryId = (string) Str::uuid();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
             ->recordAssessment(
                 entryId: $entryId,
                 periodStart: '2025-10-01',
@@ -180,6 +180,74 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
     }
 
     /**
+     * 回帰テスト(spec.md論点14): `PaidLeaveScheduleAggregate`と`PaidLeaveAccountAggregate`の
+     * AggregateIdが同じ生userIdを共有していた旧実装では、`ApplyScheduledGrantsHandler`が
+     * 「Schedule Aggregateをpersist → 同一userIdでAccount AggregateのGrantを発行・persist →
+     * 再度Schedule Aggregateをretrieveしてpersist」という順序で両Aggregateを交互に操作した際、
+     * 両者が`stored_events.aggregate_uuid`を共有するために発生した`CouldNotPersistAggregate`
+     * (楽観的排他の誤発火)が起きないことを検証する。userIdから決定的に導出した別UUIDへ
+     * AggregateIdを分離した本修正が正しく機能していれば、複数エントリの一括付与(Schedule
+     * persist → Account persist → Schedule persistをエントリ数分繰り返す)が例外なく完了する。
+     */
+    public function test_applying_multiple_scheduled_grants_does_not_trigger_cross_aggregate_uuid_collision(): void
+    {
+        $user = User::factory()->create(['hire_date' => '2024-01-01']);
+        $admin = User::factory()->create();
+
+        $entryIdA = (string) Str::uuid();
+        $entryIdB = (string) Str::uuid();
+
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryIdA, '2026-10-01', GrantCategory::REGULAR, 11.0)
+            ->recordAssessment(
+                entryId: $entryIdA,
+                periodStart: '2025-10-01',
+                periodEnd: '2026-09-30',
+                denominatorDays: 200,
+                attendanceDays: 190,
+                excludedDays: 0,
+                attendanceRate: 95.0,
+                policyVersion: 'v1',
+                automaticResult: ScheduleEntryStatus::ELIGIBLE,
+            );
+        $aggregate->createEntry($user->id, $entryIdB, '2027-04-01', GrantCategory::REGULAR, 12.0)
+            ->recordAssessment(
+                entryId: $entryIdB,
+                periodStart: '2026-04-01',
+                periodEnd: '2027-03-31',
+                denominatorDays: 200,
+                attendanceDays: 190,
+                excludedDays: 0,
+                attendanceRate: 95.0,
+                policyVersion: 'v1',
+                automaticResult: ScheduleEntryStatus::ELIGIBLE,
+            );
+        $aggregate->persist();
+
+        // 例外(CouldNotPersistAggregate)が発生しないことそのものがこのテストの主張。
+        $grantedIds = $this->bus()->dispatch(new ApplyScheduledGrants(
+            userId: $user->id,
+            entryIds: [$entryIdA, $entryIdB],
+            operatorUserId: $admin->id,
+        ));
+
+        $this->assertCount(2, $grantedIds);
+
+        $rowA = PaidLeaveScheduleEntry::query()->findOrFail($entryIdA);
+        $rowB = PaidLeaveScheduleEntry::query()->findOrFail($entryIdB);
+        $this->assertSame(ScheduleEntryStatus::GRANTED, $rowA->status);
+        $this->assertSame(ScheduleEntryStatus::GRANTED, $rowB->status);
+        $this->assertSame($grantedIds[$entryIdA], $rowA->granted_paid_leave_grant_id);
+        $this->assertSame($grantedIds[$entryIdB], $rowB->granted_paid_leave_grant_id);
+
+        // Schedule Aggregateを改めてretrieveでき、両エントリがGrantedとして正しくreplayされる
+        // (AggregateId分離後もイベントストリームの通し番号が破綻していないことの裏付け)。
+        $replayed = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id));
+        $this->assertSame(ScheduleEntryStatus::GRANTED, $replayed->entry($entryIdA)['status']);
+        $this->assertSame(ScheduleEntryStatus::GRANTED, $replayed->entry($entryIdB)['status']);
+    }
+
+    /**
      * 個別修正済みエントリが新算出結果と食い違いNeedsReviewへ押し出された場合、
      * `needsReviewDueToConflict()`(専用列を持たない「変更・要確認」導出、spec.md論点12)が
      * trueを返すことを確認する。
@@ -190,8 +258,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $admin = User::factory()->create();
         $entryId = (string) Str::uuid();
 
-        $aggregate = PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, '2026-10-01', GrantCategory::REGULAR, 11.0);
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, '2026-10-01', GrantCategory::REGULAR, 11.0);
         $aggregate->manuallyEditEntry(
             entryId: $entryId,
             category: null,
@@ -202,7 +270,7 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         );
         $aggregate->persist();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
             ->supersedeEntry($entryId, 'work_style変更', GrantCategory::PROPORTIONAL, 7.0)
             ->persist();
 
@@ -218,8 +286,8 @@ class PaidLeaveScheduleEntryProjectionTest extends TestCase
         $user = User::factory()->create();
         $entryId = (string) Str::uuid();
 
-        PaidLeaveScheduleAggregate::retrieve($user->id)
-            ->createEntry($entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($user->id))
+            ->createEntry($user->id, $entryId, '2026-10-01', GrantCategory::REGULAR, 11.0)
             ->persist();
 
         $this->assertDatabaseHas('paid_leave_schedule_entries', ['id' => $entryId, 'status' => ScheduleEntryStatus::SCHEDULED]);

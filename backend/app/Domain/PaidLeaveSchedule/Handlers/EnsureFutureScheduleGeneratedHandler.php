@@ -43,7 +43,7 @@ class EnsureFutureScheduleGeneratedHandler implements CommandHandler
         }
 
         $horizon = Carbon::now()->addYear();
-        $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId));
 
         $rule = PaidLeaveGrantRule::query()->where('is_active', true)->with('steps')
             ->where(fn ($q) => $q->whereNull('work_style_id')->orWhere('work_style_id', $this->currentWorkStyleId($user)))
@@ -68,6 +68,7 @@ class EnsureFutureScheduleGeneratedHandler implements CommandHandler
                 $candidateGrantDays = $this->grantDaysResolver->resolve($rule, $months, $category, $workStyle);
 
                 $aggregate->createEntry(
+                    userId: $command->userId,
                     entryId: (string) Str::uuid(),
                     scheduledOn: $scheduledOn->toDateString(),
                     category: $category,

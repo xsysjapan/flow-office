@@ -10,6 +10,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class PaidLeaveScheduleEntryCreated extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $entryId,
         public readonly string $scheduledOn,
         public readonly string $category,

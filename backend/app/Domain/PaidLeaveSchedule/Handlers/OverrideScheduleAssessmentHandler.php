@@ -17,7 +17,7 @@ class OverrideScheduleAssessmentHandler implements CommandHandler
     {
         assert($command instanceof OverrideScheduleAssessment);
 
-        PaidLeaveScheduleAggregate::retrieve($command->userId)
+        PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId))
             ->overrideAssessment(
                 entryId: $command->entryId,
                 finalResult: $command->finalResult,

@@ -35,7 +35,7 @@ class RecalculateFutureScheduleHandler implements CommandHandler
         assert($command instanceof RecalculateFutureSchedule);
 
         $user = User::query()->findOrFail($command->userId);
-        $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
+        $aggregate = PaidLeaveScheduleAggregate::retrieve(PaidLeaveScheduleAggregate::aggregateUuidForUser($command->userId));
 
         $rule = PaidLeaveGrantRule::query()->where('is_active', true)->with('steps')
             ->where(fn ($q) => $q->whereNull('work_style_id')->orWhere('work_style_id', $this->currentWorkStyleId($user)))
