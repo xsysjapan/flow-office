@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20260906-paid-leave-schedule-assessment](./20260906-paid-leave-schedule-assessment/spec.md) | 年次有給休暇 付与Schedule/Assessmentドメイン新設(将来付与予定の確認画面) | レビュー中 |
+| [20260906-paid-leave-schedule-assessment](./20260906-paid-leave-schedule-assessment/spec.md) | 年次有給休暇 付与Schedule/Assessmentドメイン新設(将来付与予定の確認画面) | 実装中 |
 | [20260906-paid-leave-domain-redesign](./20260906-paid-leave-domain-redesign/spec.md) | 年次有給休暇ドメイン再設計(PaidLeaveAccountAggregate中心の再構築) | 完了 |
 | [20260904-paid-leave-auto-grant-per-user-toggle](./20260904-paid-leave-auto-grant-per-user-toggle/spec.md) | 有給・特別休暇の自動付与のユーザーごと有効/無効設定 | 完了 |
 | [20260831-asset-management-refinement](./20260831-asset-management-refinement/spec.md) | 備品管理ブラッシュアップ(管理番号自動採番 + ナビ再編) | 完了 |
