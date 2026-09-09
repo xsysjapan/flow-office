@@ -497,6 +497,8 @@ cron実行される設計で、日付を偽装する手段が無い。Playwright
     監査ログ記録、§5-8締めた月のCSV出力、§5-9新入社員の初回ログイン、§5-11打刻ログの
     訂正・削除、§5-12日次勤怠の削除、§5-13追加の労働時間制度)。§5-17(会社カレンダーの
     ライフサイクル、`scenario-12-calendar-lifecycle.spec.ts`)はコード上は追加済み。
+    §5-18(付与Schedule/Assessmentから一括付与まで、`scenario-15-paid-leave-schedule.spec.ts`)
+    は実装・グリーン確認済み。
 
     本PR作成当時、`POST /dev/reset-database`のグローバルセットアップチェック
     (ALL_USERSグループのFeature割当数の期待値)がscenario-00等の既存シナリオも含めて
