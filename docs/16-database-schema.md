@@ -1133,6 +1133,80 @@ Truthであり、`paid_leave_grants.allocated_days`/`remaining_days`や`paid_lea
 複数回のAllocation/解除で増減する)。1件の承認済みUsageが複数のGrantにまたがって充当される
 場合、Grantの数だけ行が存在する。
 
+## paid_leave_grant_policies (通常付与の法定日数表)
+
+労働基準法39条の通常付与日数表。`version`で版管理し、現在有効な版は「最大version」とする
+(`App\Models\PaidLeaveGrantPolicy::currentVersion()`)。将来法改正があっても過去に確定した
+Assessment・Grantの根拠(`policyVersion`)を変えずに新版を追加できる
+(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md論点4)。
+
+- id
+- version
+- continuous_service_months (継続勤務月数)
+- grant_days
+- created_at / updated_at
+
+`(version, continuous_service_months)`のユニーク制約を持つ。
+
+## paid_leave_proportional_grant_policies (比例付与の法定日数表)
+
+労働基準法39条3項。週所定労働日数区分×継続勤務年数の比例付与日数表。`version`で版管理し、
+現在有効な版は「最大version」とする。
+
+- id
+- version
+- weekly_scheduled_days (週所定労働日数)
+- continuous_service_months
+- grant_days
+- created_at / updated_at
+
+`(version, weekly_scheduled_days, continuous_service_months)`のユニーク制約を持つ。
+
+## paid_leave_grant_expiry_policy (有給付与の時効ルール)
+
+労働基準法115条(既定2年)。`version`で版管理し、現在有効な版は「最大version」とする。
+`expiry_years`は`Carbon::addYears()`にそのまま使える整数の年数。
+
+- id
+- version (unique)
+- expiry_years
+- created_at / updated_at
+
+## paid_leave_schedule_entries (付与予定のProjection)
+
+`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)の
+イベントから`App\Domain\PaidLeaveSchedule\Projectors\PaidLeaveScheduleEntryProjector`が
+再構築する画面表示用Projection(CLAUDE.md原則2、再生成可能な派生データ)。一覧画面
+(社員/付与予定日/区分/候補日数/出勤率/判定状態)とAssessment内訳(詳細パネル)に必要な値を
+そのまま持つ(docs/09-usecases-paid-leave.md UC-P011以降)。
+
+- id (uuid。`PaidLeaveScheduleEntryCreated.entryId`)
+- user_id
+- scheduled_on (付与予定日)
+- category (`regular`(通常付与) / `proportional`(比例付与) / `shift`(シフト勤務) /
+  `NeedsReview`(区分・判定とも要確認))
+- candidate_grant_days (候補付与日数)
+- status (`Scheduled` / `Eligible` / `NeedsReview` / `NotEligible` / `Granted` / `Cancelled`)
+- manual_override_reason (nullable。手動修正の理由)
+- manual_override_by_user_id (nullable)
+- manual_override_at (nullable)
+- assessment_period_start / assessment_period_end (nullable。出勤率判定の対象期間)
+- assessment_denominator_days (nullable。判定の分母(勤務予定日数))
+- assessment_attendance_days (nullable。判定の分子(出勤日数))
+- assessment_excluded_days (nullable)
+- assessment_attendance_rate (nullable)
+- assessment_policy_version (nullable。判定に用いた`paid_leave_grant_policies`等の版)
+- assessment_automatic_result (nullable。自動判定結果)
+- assessment_final_result (nullable。Override後の最終結果。未Overrideなら自動判定と同値)
+- assessment_override_reason (nullable)
+- granted_paid_leave_grant_id (nullable。一括付与後に紐づく`paid_leave_grants.id`)
+- created_at / updated_at
+
+「変更・要確認」表示は独立列を持たず、`status = NeedsReview`かつ
+`manual_override_by_user_id`が入っている(=個別修正済みだったのに新しい算出結果と
+食い違ってNeedsReviewへ押し出された)という既存列の組み合わせで判定する
+(CLAUDE.md原則2、冗長な列を追加しない)。
+
 ## paid_leave_balances (社員単位の現在残高キャッシュ)
 
 `PaidLeaveAccountAggregate`のGrant/Usage/Allocationイベントから`PaidLeaveBalanceProjector`が

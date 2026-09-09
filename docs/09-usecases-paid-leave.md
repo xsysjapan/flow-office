@@ -22,9 +22,10 @@ Eloquent Projectionを読んで業務ルールを判定することはしない
 
 付与ルール(`paid_leave_grant_rules`/`paid_leave_grant_rule_steps`)は継続勤務期間ごとの
 付与日数・出勤率条件をマスタ化したもので、UC-P002の日次バッチが判定に用いる。法定の
-通常/比例付与判定・シフト勤務判定を独立ドメイン化する構想(`PaidLeaveScheduleAggregate`/
-Assessment)は今回の再設計のスコープ外であり(spec.md「対象外」)、既存のルールマスタ・
-バッチ判定ロジックはそのまま存続する。
+通常/比例付与判定・シフト勤務判定を独立ドメイン化した`PaidLeaveScheduleAggregate`/
+Assessmentは別の変更セット(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)
+で実装済み(UC-P011〜UC-P015参照)。既存のルールマスタ・`paid-leave:grant-scheduled`は
+UC-P011の`paid-leave:roll-schedules`に置換される。
 
 ## UC-P002: 有給を自動付与する
 
@@ -403,6 +404,86 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 いずれも`leave.manage`相当の管理者権限に限定する。UI(移行専用の管理画面)は当変更セットの
 スコープ外(spec.md「対象外」)で、artisanコマンド・単発APIのみで完結する。
 
+## UC-P011: 付与予定(Schedule)をローリング生成する
+
+1. `paid-leave:roll-schedules`コマンドがcronから毎日実行される
+2. `hire_date`設定済み・`paid_leave_auto_grant_enabled=true`・`usage_start_date`未設定
+   または到来済みの社員を対象に抽出する
+3. 社員ごとに`EnsureFutureScheduleGenerated` Commandを発行し、現在から1年先までの
+   `paid_leave_schedule_entries`(通常付与/比例付与/シフト勤務の各区分。判定不能な場合は
+   `NeedsReview`)の存在を保証する
+4. `scheduled_on`が到来済み(社員本人のタイムゾーン基準の「今日」以前)かつ`Scheduled`の
+   ままのエントリについて、続けてUC-P012の出勤率Assessmentを実行する
+
+旧`paid-leave:grant-scheduled`(UC-P002、`GrantScheduledPaidLeaveHandler`による日次全件
+評価)を置換するバッチで、`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
+(AggregateId = `userId`)が状態を管理する(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)。
+1年先まで先出しでScheduleを生成しておくことで、UC-P013の一覧画面から確定前の付与予定を
+事前に確認できるようにする。1社員の失敗が他の社員の処理を止めないよう、行単位で成否を
+収集して継続する(部分失敗許容)。既存の`paid_leave_grant_rules`ベースのバッチ判定
+(UC-P001/UC-P002)とは独立した別ドメインであり、両者は共存しない(cutover的な置換)。
+
+## UC-P012: 出勤率Assessmentを実行する
+
+1. `RunAttendanceRateAssessment` Commandにより、対象エントリの直近期間の勤務予定日数
+   (分母)・出勤日数(分子)を`attendance_days`等から算出し、出勤率を求める
+2. `paid_leave_grant_policies`(通常付与)/`paid_leave_proportional_grant_policies`
+   (比例付与)の現在有効な版(`version`最大)を判定根拠として記録する
+   (`assessment_policy_version`)
+3. 出勤率に基づく自動判定結果(`Eligible` / `NotEligible`)を算出し、
+   `PaidLeaveScheduleAssessmentRecorded`イベントを記録する
+4. 既にUC-P014のOverrideが行われている場合でもこのイベント自体は発行されるが、
+   エントリの導出ステータスはOverride結果(`assessment_final_result`)を優先し、
+   自動判定に上書きされない
+
+`POST /paid-leave/schedule-entries/{entry}/reassess`(「再判定」ボタン)でも同一条件で
+手動再実行できる。UC-P011のバッチから`scheduled_on`到来時に自動実行される他、勤怠データが
+事後修正された場合に手動で再判定する用途を想定する。
+
+## UC-P013: 付与予定一覧を確認する
+
+1. 人事担当者・管理者が`/admin/paid-leave/schedule`画面で付与予定一覧を確認する
+   (`GET /paid-leave/schedule-entries`)
+2. `status`フィルタ(`all`/`eligible`/`not_eligible`/`needs_review`/`changed`)で絞り込む。
+   `changed`(変更あり)は永続化された列ではなく、個別修正済み
+   (`manual_override_by_user_id`あり)かつ再計算で`NeedsReview`へ押し出された行を示す
+   合成フィルタ
+3. 社員名の部分一致(`user_name`)、付与予定日(`scheduled_on`)の期間(`scheduled_on_from`/
+   `scheduled_on_to`)で絞り込む
+4. 一覧の行から詳細パネルを開き、`GET /paid-leave/schedule-entries/{entry}`でAssessment内訳
+   (判定対象期間・分母/分子・出勤率・判定根拠の`policy_version`)を確認する
+
+一覧の列は社員/付与予定日/区分(`regular`/`proportional`/`shift`/`NeedsReview`)/候補付与
+日数/出勤率/判定状態(`status`)。詳細は「実装上のポイント」に追記の通り、区分・判定とも
+`NeedsReview`になりうる。
+
+## UC-P014: 判定結果をOverrideする
+
+1. 人事担当者・管理者が、`NeedsReview`または自動判定に納得できないエントリを選ぶ
+2. 最終判定(`Eligible`/`NotEligible`)と理由(必須)を入力する
+3. `POST /paid-leave/schedule-entries/{entry}/override`により`OverrideScheduleAssessment`
+   Commandが発行され、`PaidLeaveScheduleAssessmentOverridden`イベントが記録される
+4. 以降、当該エントリの導出ステータスはUC-P012の自動判定結果より本Override結果
+   (`assessment_final_result`)を優先する
+
+区分・候補付与日数そのものの手動修正は別経路(`PATCH /paid-leave/schedule-entries/{entry}`、
+`ManuallyEditScheduleEntry` Command)で、理由必須・以後の自動再計算(`RecalculateFutureSchedule`)
+から保護される(`manual_override_by_user_id`が設定される)。両者は独立した操作で、区分修正は
+判定結果のOverrideを兼ねない。
+
+## UC-P015: 付与予定を一括付与する
+
+1. 人事担当者・管理者が一覧を`Eligible`フィルタで絞り込み、対象エントリを複数選択する
+2. `POST /paid-leave/schedule-entries/apply-grants`(`entry_ids`)を実行する
+3. エントリごとに`ApplyScheduledGrants` Commandが発行され、`PaidLeaveAccountAggregate::grant()`
+   (UC-P002と共通のGrant発行経路)が成功した後、`PaidLeaveScheduleEntryGranted`イベントで
+   当該エントリのステータスを`Granted`へ遷移し、`granted_paid_leave_grant_id`を設定する
+4. 対象社員の`paid_leave_balances`(UC-P007と同じ経路)に反映される
+
+`Eligible`以外のエントリが選択に混入していた場合や、1件のAggregate例外が他のエントリの
+処理を止めないよう、エントリ単位で成功/失敗を収集し、レスポンスに部分失敗を含めて返す
+(黙って握りつぶさない。`paid-leave:migrate-accounts`と同じ「行単位継続」方針)。
+
 ## 実装上のポイント
 
 - 付与ルール (`paid_leave_grant_rules` / `paid_leave_grant_rule_steps`) はマスタ化し、
@@ -449,11 +530,13 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   (欠勤ではなく有給消化であることは `attendance_days.work_type` で判別できるが、給与計算上の
   「有給分の賃金換算」は本実装のスコープ外。給与計算ソフト側で `work_type` を見て加算する、
   または後続フェーズで日次集計に有給分を組み込む対応が必要)。
-- 承認画面Allocation Preview API・Grant管理UI・社員別有給画面、
-  `PaidLeaveScheduleAggregate`/Assessment・法定通常/比例付与判定・シフト勤務判定・月次
-  ローリングSchedule展開バッチは、いずれも今回の再設計のスコープ外
+- 承認画面Allocation Preview API・Grant管理UI・社員別有給画面は、今回の再設計のスコープ外
   (spec.md「対象外」参照)。ドメインロジック(Aggregate・Allocation算出)自体は完成済みの
-  ため、画面・バッチ実装のみが必要になった時点で別途変更セットを起こす想定。
+  ため、画面実装のみが必要になった時点で別途変更セットを起こす想定。
+  `PaidLeaveScheduleAggregate`/Assessment・法定通常/比例付与判定・シフト勤務判定・
+  ローリングSchedule生成バッチ(1年先まで)は、別の変更セット
+  (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)で実装済み
+  (UC-P011〜UC-P015参照)。
 
 ## 代休(`App\Domain\CompensatoryLeave`)
 

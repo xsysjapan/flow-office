@@ -271,6 +271,40 @@ Projectorはコードから削除済みで、以後この名前空間から新�
   `{grantId, originalGrantedOn?, originalGrantedDays?, remainingDaysAtCutover, expiresOn,
   source, cutoverMetadata?}`(docs/09-usecases-paid-leave.md UC-P010参照)。
 
+## PaidLeaveSchedule(`App\Domain\PaidLeaveSchedule\Events\`)
+
+`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)
+が発行する。docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照。
+`paid-leave:roll-schedules`バッチ(1年先までのローリング生成)・Assessment実行・
+Override・一括付与(`paid-leave/schedule-entries*`API)で発行される。docs/09-usecases-paid-leave.md
+UC-P011以降を参照。
+
+- `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
+  (userId, entryId, scheduledOn, category, candidateGrantDays)。
+  `EnsureFutureScheduleGenerated`によりScheduleエントリが新規作成された。
+- `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
+  (userId, entryId, reason, previousCategory, previousCandidateGrantDays,
+  wasManuallyOverridden, newCategory?, newCandidateGrantDays?, pushedToNeedsReview)。
+  `RecalculateFutureSchedule`により非確定(Granted/Cancelled以外)のエントリが新しい
+  算出結果で置き換えられた、または手動修正済みのため置き換えられずNeedsReviewへ
+  押し出されたことを記録する。
+- `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
+  (userId, entryId, category?, candidateGrantDays?, reason, byUserId, at)。管理者が
+  区分・候補付与日数を手動修正した。以後`RecalculateFutureSchedule`から保護される
+  (`manualOverride`フラグ)。
+- `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
+  (userId, entryId, periodStart, periodEnd, denominatorDays, attendanceDays,
+  excludedDays, attendanceRate?, policyVersion, automaticResult)。
+  `AttendanceRateAssessor`による最新の出勤率判定結果を記録する。
+- `paid_leave_schedule.assessment_overridden` → `PaidLeaveScheduleAssessmentOverridden`
+  (userId, entryId, finalResult, reason, byUserId, at)。管理者が自動判定結果を上書きした。
+  以後、導出ステータスは自動判定より`finalResult`を優先する。
+- `paid_leave_schedule.entry_granted` → `PaidLeaveScheduleEntryGranted`
+  (userId, entryId, grantId, operatorUserId)。管理者の一括付与操作(`ApplyScheduledGrants`)
+  により`PaidLeaveAccountAggregate::grant()`成功後、Scheduleエントリ側をGrantedへ遷移する。
+- `paid_leave_schedule.entry_cancelled` → `PaidLeaveScheduleEntryCancelled`
+  (userId, entryId, reason?, byUserId?)。Scheduleエントリの取消。
+
 ## SpecialLeave
 
 `paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
