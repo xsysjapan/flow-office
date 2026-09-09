@@ -7,6 +7,7 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Support\GrantCategoryClassifier;
+use App\Domain\PaidLeaveSchedule\Support\GrantDaysResolver;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\User;
@@ -17,11 +18,8 @@ use Illuminate\Support\Str;
 /**
  * 対象社員1名について、現在から1年先までのScheduleエントリ存在を保証する(べき等)。
  *
- * Phase A時点の制約: `paid_leave_grant_policies`等の法定Policyマスタ(Phase B)が
- * まだ無いため、`resolveGrantDays`の完全な優先順位(独自ルール優先・無ければ法定Policy)は
- * 実装しない。独自ルール(`paid_leave_grant_rules`)が対象社員に適用可能であればそれを使い、
- * 無ければ`GrantCategoryClassifier`で区分のみ判定し候補日数は0(NeedsReview相当)として
- * 記録する(Phase Bで法定Policy参照に置き換える)。
+ * 候補付与日数は`GrantDaysResolver`(spec.md論点5: 独自ルール優先、無ければ
+ * `GrantCategoryClassifier`の区分に対応する法定Policy)で決定する。
  * `paid-leave:roll-schedules`バッチ本体(全社員ループ)はPhase Cで実装する
  * (spec.md「実装対象」)。
  *
@@ -29,7 +27,10 @@ use Illuminate\Support\Str;
  */
 class EnsureFutureScheduleGeneratedHandler implements CommandHandler
 {
-    public function __construct(private readonly GrantCategoryClassifier $classifier) {}
+    public function __construct(
+        private readonly GrantCategoryClassifier $classifier,
+        private readonly GrantDaysResolver $grantDaysResolver,
+    ) {}
 
     public function handle(Command $command): mixed
     {
@@ -64,7 +65,7 @@ class EnsureFutureScheduleGeneratedHandler implements CommandHandler
             if ($aggregate->entryIdForDate($scheduledOn->toDateString()) === null) {
                 $workStyle = $this->currentWorkStyle($user);
                 $category = $this->classifier->classify($workStyle);
-                $candidateGrantDays = $this->resolveGrantDays($rule, $months);
+                $candidateGrantDays = $this->grantDaysResolver->resolve($rule, $months, $category, $workStyle);
 
                 $aggregate->createEntry(
                     entryId: (string) Str::uuid(),
@@ -96,21 +97,5 @@ class EnsureFutureScheduleGeneratedHandler implements CommandHandler
         $workStyleId = $this->currentWorkStyleId($user);
 
         return $workStyleId === null ? null : WorkStyle::query()->find($workStyleId);
-    }
-
-    private function resolveGrantDays(?PaidLeaveGrantRule $rule, int $months): float
-    {
-        if ($rule === null) {
-            // Phase B(法定Policyマスタ)が無いため、独自ルールが無い場合は候補日数を
-            // 決定できない。0日・NeedsReview相当として記録する。
-            return 0.0;
-        }
-
-        $applicableStep = $rule->steps
-            ->filter(fn ($step) => $step->continuous_service_months <= $months)
-            ->sortByDesc('continuous_service_months')
-            ->first();
-
-        return (float) ($applicableStep?->grant_days ?? 0);
     }
 }

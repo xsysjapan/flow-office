@@ -34,10 +34,16 @@ class ApplyScheduledGrantsHandler implements CommandHandler
     {
         assert($command instanceof ApplyScheduledGrants);
 
-        $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
         $grantedIds = [];
 
         foreach ($command->entryIds as $entryId) {
+            // `PaidLeaveScheduleAggregate`と`PaidLeaveAccountAggregate`は共に
+            // AggregateId=userIdであり、同一イベントストリーム(stored_events)のバージョンを
+            // 共有する。直後の`GrantPaidLeave`発行(PaidLeaveAccountAggregateへの書き込み)で
+            // ストリームのバージョンが進むため、エントリごとに`retrieve()`し直してから
+            // `applyGrant`・`persist()`する(先頭で1回だけretrieveしてループ末尾で
+            // まとめてpersistすると、楽観的並行性エラーになる)。
+            $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
             $entry = $aggregate->entry($entryId);
 
             if ($entry === null) {
@@ -60,12 +66,12 @@ class ApplyScheduledGrantsHandler implements CommandHandler
                 source: 'scheduled_batch',
             ));
 
+            $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
             $aggregate->applyGrant(entryId: $entryId, grantId: $grantId, operatorUserId: $command->operatorUserId);
+            $aggregate->persist();
 
             $grantedIds[$entryId] = $grantId;
         }
-
-        $aggregate->persist();
 
         return $grantedIds;
     }

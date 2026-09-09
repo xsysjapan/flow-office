@@ -55,5 +55,7 @@ class RunAttendanceRateAssessmentHandler implements CommandHandler
         );
 
         $aggregate->persist();
+
+        return null;
     }
 }

@@ -27,5 +27,7 @@ class ManuallyEditScheduleEntryHandler implements CommandHandler
                 at: Carbon::now()->toIso8601String(),
             )
             ->persist();
+
+        return null;
     }
 }

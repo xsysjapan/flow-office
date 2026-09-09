@@ -7,6 +7,7 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
 use App\Domain\PaidLeaveSchedule\Support\GrantCategoryClassifier;
+use App\Domain\PaidLeaveSchedule\Support\GrantDaysResolver;
 use App\Domain\PaidLeaveSchedule\Support\ScheduleEntryStatus;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrantRule;
@@ -24,7 +25,10 @@ use Illuminate\Support\Carbon;
  */
 class RecalculateFutureScheduleHandler implements CommandHandler
 {
-    public function __construct(private readonly GrantCategoryClassifier $classifier) {}
+    public function __construct(
+        private readonly GrantCategoryClassifier $classifier,
+        private readonly GrantDaysResolver $grantDaysResolver,
+    ) {}
 
     public function handle(Command $command): mixed
     {
@@ -49,7 +53,7 @@ class RecalculateFutureScheduleHandler implements CommandHandler
 
             $scheduledOn = Carbon::parse($entry['scheduledOn']);
             $months = $user->hire_date !== null ? Carbon::parse($user->hire_date)->diffInMonths($scheduledOn) : 0;
-            $newCandidateGrantDays = $this->resolveGrantDays($rule, $months);
+            $newCandidateGrantDays = $this->grantDaysResolver->resolve($rule, $months, $newCategory, $workStyle);
 
             $aggregate->supersedeEntry(
                 entryId: $entryId,
@@ -60,6 +64,8 @@ class RecalculateFutureScheduleHandler implements CommandHandler
         }
 
         $aggregate->persist();
+
+        return null;
     }
 
     private function currentWorkStyleId(User $user): ?string
@@ -76,19 +82,5 @@ class RecalculateFutureScheduleHandler implements CommandHandler
         $workStyleId = $this->currentWorkStyleId($user);
 
         return $workStyleId === null ? null : WorkStyle::query()->find($workStyleId);
-    }
-
-    private function resolveGrantDays(?PaidLeaveGrantRule $rule, int $months): float
-    {
-        if ($rule === null) {
-            return 0.0;
-        }
-
-        $applicableStep = $rule->steps
-            ->filter(fn ($step) => $step->continuous_service_months <= $months)
-            ->sortByDesc('continuous_service_months')
-            ->first();
-
-        return (float) ($applicableStep?->grant_days ?? 0);
     }
 }
