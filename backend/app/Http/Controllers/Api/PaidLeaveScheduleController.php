@@ -77,17 +77,18 @@ class PaidLeaveScheduleController extends Controller
             ->when($status === 'changed', fn ($query) => $query
                 ->where('status', ScheduleEntryStatus::NEEDS_REVIEW)
                 ->whereNotNull('manual_override_by_user_id'))
+            // scheduled_onは`date`キャストだが、sqlite上は日付部分だけを保証しない
+            // 生文字列(datetime相当)で保存されうるため、他コントローラの日付列絞り込みと
+            // 同じく`whereDate`で日付部分のみを比較する(`whereBetween`/`where`の素の
+            // 文字列比較では、期間の開始日=終了日のような境界値が一致しなくなるバグが
+            // あった。E2E `scenario-15-paid-leave-schedule.spec.ts`で発見)。
             ->when(
-                ($data['scheduled_on_from'] ?? null) && ($data['scheduled_on_to'] ?? null),
-                fn ($query) => $query->whereBetween('scheduled_on', [$data['scheduled_on_from'], $data['scheduled_on_to']]),
+                $data['scheduled_on_from'] ?? null,
+                fn ($query, $from) => $query->whereDate('scheduled_on', '>=', $from),
             )
             ->when(
-                ($data['scheduled_on_from'] ?? null) && ! ($data['scheduled_on_to'] ?? null),
-                fn ($query) => $query->where('scheduled_on', '>=', $data['scheduled_on_from']),
-            )
-            ->when(
-                ($data['scheduled_on_to'] ?? null) && ! ($data['scheduled_on_from'] ?? null),
-                fn ($query) => $query->where('scheduled_on', '<=', $data['scheduled_on_to']),
+                $data['scheduled_on_to'] ?? null,
+                fn ($query, $to) => $query->whereDate('scheduled_on', '<=', $to),
             )
             ->orderBy('scheduled_on')
             ->paginate($data['per_page'] ?? 50);
