@@ -795,3 +795,22 @@ persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeav
 依頼書に基づく付与Schedule/Assessmentドメイン新設の全Phase(調査・設計→UX検討→
 Aggregate/Domain Model→Policy/Projection→バッチ/Reactor→管理API→フロントエンド)が
 完了した。
+
+### 追加改善(完了・2026-09-09): 付与予定一覧の期間検索
+
+完了後、実利用で「付与予定一覧が長すぎる」との指摘を受けた追加改善。
+
+- 追加: `PaidLeaveScheduleController::index()`へ`scheduled_on_from`/`scheduled_on_to`
+  クエリパラメータ(`whereBetween`相当、`to`は`from`以降であることをバリデーション)。
+  既存の`status`/`user_name`フィルタと同じ`->when()`スタイルで実装。
+  フロントエンドは`DateRangePicker`(`ui-design-system`§2.4準拠)をツールバーへ追加し、
+  `status`と同じくURL(`?scheduled_on_from=&scheduled_on_to=`)に同期。フィルタ変更時は
+  ページを1に戻す。Filtered Emptyの判定条件にも日付範囲を追加。
+- 実機確認: Playwrightでログインし、43件→期間指定で6件への絞り込み、および
+  Filtered Empty表示(該当0件+フィルタークリア導線)をスクリーンショットで確認済み。
+- 既存のページング(`per_page`既定50、`Pagination`コンポーネント)は元々機能していた
+  (前回確認時のデータ件数がたまたま1ページに収まる件数だったため見えなかっただけ)。
+  ページ送り自体はモックテストで新規に回帰確認を追加。
+- テスト結果: `--filter=PaidLeave`180件、全体1051件、フロントエンドは既存の
+  無関係な失敗6件を除き新規失敗なし。全て確認済み。
+- コミット: `5938bd0`(バックエンド)/`7323505`(フロントエンド)。
