@@ -280,14 +280,12 @@ use App\Domain\Notification\Commands\ConfirmNotification;
 use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
-use App\Domain\PaidLeave\Handlers\GrantScheduledPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
@@ -614,7 +612,6 @@ return [
         // App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate(社員単位の年休台帳)
         // へ一本化した。RequestPaidLeave等のCommand自体はWorkflow層との既存の配線を保つため
         // 旧namespaceのまま残すが、Handlerの内部実装はすべて新ドメインのCommandを呼ぶ。
-        GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,
         WarnExpiringPaidLeave::class => WarnExpiringPaidLeaveHandler::class,
         WarnFiveDayObligation::class => WarnFiveDayObligationHandler::class,
         RequestPaidLeave::class => RequestPaidLeaveHandler::class,
