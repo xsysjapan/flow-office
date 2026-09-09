@@ -169,6 +169,13 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageAllocationReleased as PaidL
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccountUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed as PaidLeaveAccountUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated as PaidLeaveAccountUsageDesignated;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
+use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestApproved;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequestCancelled;
 use App\Domain\ShiftSwap\Events\ShiftSwapRequested;
@@ -524,6 +531,16 @@ return [
         'paid_leave_account.usage_allocation_released' => PaidLeaveAccountUsageAllocationReleased::class,
         // Migration専用(Phase 9)。Command/Handlerは未実装だがイベント名を予約しておく。
         'paid_leave_account.migrated' => PaidLeaveAccountMigrated::class,
+
+        // PaidLeaveScheduleAggregate(社員単位の将来付与予定Schedule。
+        // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
+        'paid_leave_schedule.entry_created' => PaidLeaveScheduleEntryCreated::class,
+        'paid_leave_schedule.entry_superseded' => PaidLeaveScheduleEntrySuperseded::class,
+        'paid_leave_schedule.assessment_recorded' => PaidLeaveScheduleAssessmentRecorded::class,
+        'paid_leave_schedule.assessment_overridden' => PaidLeaveScheduleAssessmentOverridden::class,
+        'paid_leave_schedule.entry_manually_edited' => PaidLeaveScheduleEntryManuallyEdited::class,
+        'paid_leave_schedule.entry_granted' => PaidLeaveScheduleEntryGranted::class,
+        'paid_leave_schedule.entry_cancelled' => PaidLeaveScheduleEntryCancelled::class,
 
         'special_leave.granted' => SpecialLeaveGranted::class,
         'special_leave.requested' => SpecialLeaveRequested::class,
