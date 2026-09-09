@@ -480,14 +480,54 @@ Explore調査結果(要点)。
 既存機能(付与ルール一覧・作成・対象社員プレビュー)をそのまま移設するのみで、
 画面構造・操作は変更しない(論点11参照)。実装前メモは不要(既存挙動の維持)。
 
-## 仕様確定事項(まとめ)
+### 論点14: `PaidLeaveScheduleAggregate`のAggregateId(spatieのUUID衝突回避)
+
+Phase A・Bの実装中に発覚した設計上の問題。当初「AggregateId=userId」とだけ決めていたが
+(前回changesetの`PaidLeaveAccountAggregate`と同じ考え方の踏襲のつもりだった)、
+`PaidLeaveAccountAggregate`も同じく`AggregateId=userId`であるため、**両Aggregateが
+`stored_events.aggregate_uuid`として全く同じ値(生のuserId)を使うことになる**。
+
+spatie/laravel-event-sourcingは`aggregate_uuid`のみでイベントストリームを管理し
+(`aggregate_version`は`aggregate_uuid`単位の通し番号、`(aggregate_uuid, aggregate_version)`
+にDB上のUNIQUE制約がある)、Aggregateクラスの違いを一切考慮しない。そのため
+同一userIdを共有する2つの異なるAggregateクラスが同じuuid空間を使うと、
+
+- 一方のAggregateのイベントがもう一方の`retrieveAll($uuid)`時にも読み込まれ、
+  `aggregateVersion`が意図せず混在してカウントされる
+- 同一リクエスト内で両Aggregateを交互に読み書きすると、実際には競合していないのに
+  楽観的排他(`ensureNoOtherEventsHaveBeenPersisted`)が誤って発火し、
+  `CouldNotPersistAggregate`例外になる
+
+という問題が起きる。実際に`ApplyScheduledGrantsHandler`(Schedule Aggregateを
+persistした直後に同じuserIdで`PaidLeaveAccountAggregate`のGrantPaidLeaveを発行し、
+再度Schedule Aggregateをpersistする処理)で本当に発生することを確認済み。
+
+- 選択肢:
+  - A. `PaidLeaveScheduleAggregate`のAggregateIdを、userIdから決定的に導出した
+    **別のUUID**(例: 固定namespaceによる`Uuid::uuid5($namespace, $userId)`)にし、
+    `PaidLeaveAccountAggregate`の生UUIDとは別のuuid空間を使う。Schedule側の各Eventに
+    `userId`フィールドを明示的に持たせ(aggregate_uuidから逆算しない)、
+    ProjectorやHandlerはこの導出関数を通してのみAggregateを取得する。
+  - B. そのまま生のuserIdを使い続け、`ApplyScheduledGrantsHandler`のように
+    「都度retrieveし直す」個別対処で凌ぐ。
+- 決定: A。
+- 理由: Bは今回見つかった1箇所の症状を止血しただけで、将来Schedule/Accountの両方に
+  触れる別の処理(例えば将来のPreview機能や別のバッチ)が増えるたびに同じ罠を踏む。
+  spatieの設計はそもそも「1 Aggregateクラス = 1 uuid空間」を前提にしており、
+  複数のAggregateクラスが同じuuidを共有すること自体が誤用である。決定的な別UUIDへ
+  分離することで、今後Schedule/Accountのどちらかを単独で操作する分には
+  お互いのイベントストリームに触れず、根本的に事故らない構造にする。
+- 未確定・要確認事項: なし。
 
 ## 仕様確定事項(まとめ)
 
 ### ドメインモデル
 
 - 新設: `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`
-  (AggregateId=userId)。内部状態: `entries: array<ScheduleEntryId, {scheduledOn, category,
+  (AggregateId=userIdから決定的に導出した別UUID。論点14参照。
+  `PaidLeaveAccountAggregate`の生UUIDとuuid空間を分離する)。各Eventは`userId`を
+  明示的にペイロードへ持つ(aggregate_uuidから逆算しない)。内部状態:
+  `entries: array<ScheduleEntryId, {scheduledOn, category,
   candidateGrantDays, status, manualOverride: {reason, byUserId, at}|null, assessment:
   {periodStart, periodEnd, denominatorDays, attendanceDays, excludedDays, attendanceRate,
   policyVersion, automaticResult, finalResult, overrideReason|null}|null}>`(論点2の通り、
@@ -640,6 +680,12 @@ Explore調査結果(要点)。
   (Assessment版履歴閲覧用の専用画面・APIは作らない旨)を追記。ユースケース2・3の
   判断材料として必要な「現在の自動判定・最終判定・Override理由」の表示は業務上必要な
   情報として維持し、除外していない。
+- 2026-09-09: Phase A・B実装中に、`PaidLeaveScheduleAggregate`と
+  `PaidLeaveAccountAggregate`が共に`AggregateId=userId`のため`stored_events.aggregate_uuid`
+  を共有し、spatie/laravel-event-sourcingの楽観的排他が誤発火する実装上の欠陥を発見
+  (`ApplyScheduledGrantsHandler`で実際に再現)。論点14を追加し、Schedule Aggregateの
+  AggregateIdをuserIdから決定的に導出した別UUIDへ分離する方針に修正(Phase Bの応急対処
+  ―都度retrieveし直す―は根本解決ではないため、Phase A/Bのコードを修正する)。
 
 ## 実装結果
 
