@@ -14,7 +14,7 @@ import type {
   User,
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
-import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
+import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
 
 const rule: PaidLeaveGrantRule = {
   id: 1,
@@ -44,13 +44,13 @@ function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
-        <PaidLeaveAdminPage />
+        <PaidLeavePolicyPage />
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-describe('PaidLeaveAdminPage', () => {
+describe('PaidLeavePolicyPage', () => {
   it('lists existing grant rules with their steps', async () => {
     renderPage()
 

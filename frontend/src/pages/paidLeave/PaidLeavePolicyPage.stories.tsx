@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { Paginated, PaidLeaveGrantRule, User } from '../../api/types'
-import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
+import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
 
 const rules: PaidLeaveGrantRule[] = [
   {
@@ -33,16 +33,16 @@ function withSeeded(seedRules: PaidLeaveGrantRule[]) {
   return function Decorator() {
     return (
       <QueryClientProvider client={queryClient}>
-        <PaidLeaveAdminPage />
+        <PaidLeavePolicyPage />
       </QueryClientProvider>
     )
   }
 }
 
 const meta = {
-  title: 'Pages/PaidLeave/PaidLeaveAdminPage',
-  component: PaidLeaveAdminPage,
-} satisfies Meta<typeof PaidLeaveAdminPage>
+  title: 'Pages/PaidLeave/PaidLeavePolicyPage',
+  component: PaidLeavePolicyPage,
+} satisfies Meta<typeof PaidLeavePolicyPage>
 
 export default meta
 type Story = StoryObj<typeof meta>
