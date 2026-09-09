@@ -125,4 +125,67 @@ describe('PaidLeaveSchedulePage', () => {
     expect(within(dialog).getAllByText('要確認').length).toBeGreaterThan(0)
     expect(within(dialog).getByText('2025-10-01 〜 2026-09-30')).toBeInTheDocument()
   })
+
+  it('URLに期間指定があると、scheduledOnFrom/scheduledOnToを付けてfetchする', async () => {
+    const fetchSpy = vi
+      .spyOn(paidLeaveScheduleApi, 'fetchPaidLeaveScheduleEntries')
+      .mockResolvedValue(paginated([eligibleEntry]))
+
+    renderPage('/admin/paid-leave/schedule?scheduled_on_from=2026-10-01&scheduled_on_to=2026-10-31')
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ scheduledOnFrom: '2026-10-01', scheduledOnTo: '2026-10-31' }),
+      ),
+    )
+  })
+
+  it('期間フィルタでヒットしない場合はFiltered Emptyを表示し、クリアするとscheduled_on系パラメータが外れる', async () => {
+    const fetchSpy = vi.spyOn(paidLeaveScheduleApi, 'fetchPaidLeaveScheduleEntries').mockResolvedValue(paginated([]))
+
+    renderPage('/admin/paid-leave/schedule?scheduled_on_from=2026-10-01&scheduled_on_to=2026-10-31')
+
+    expect(await screen.findByText('条件に一致する付与予定はありません。')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'フィルターをクリア' }))
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ scheduledOnFrom: undefined, scheduledOnTo: undefined, status: 'all' }),
+      ),
+    )
+  })
+
+  it('付与予定が1件も存在しない場合はInitial Emptyを表示する(フィルタクリア導線を出さない)', async () => {
+    vi.spyOn(paidLeaveScheduleApi, 'fetchPaidLeaveScheduleEntries').mockResolvedValue(paginated([]))
+
+    renderPage()
+
+    expect(await screen.findByText('付与予定はまだありません。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'フィルターをクリア' })).not.toBeInTheDocument()
+  })
+
+  it('次のページをクリックするとpage=2でfetchし、別の行が表示される', async () => {
+    const page2Entry: PaidLeaveScheduleEntry = { ...needsReviewEntry, id: 'entry-3', user_name: '鈴木 花子' }
+    const fetchSpy = vi
+      .spyOn(paidLeaveScheduleApi, 'fetchPaidLeaveScheduleEntries')
+      .mockImplementation(({ page } = {}) =>
+        Promise.resolve(
+          page === 2
+            ? { data: [page2Entry], meta: { current_page: 2, last_page: 2, total: 2 }, links: { next: null, prev: null } }
+            : { data: [eligibleEntry], meta: { current_page: 1, last_page: 2, total: 2 }, links: { next: null, prev: null } },
+        ),
+      )
+
+    renderPage()
+    await waitFor(() => expect(screen.getByText('高橋 太郎')).toBeInTheDocument())
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: '次のページ' }))
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(expect.objectContaining({ page: 2 })))
+    expect(await screen.findByText('鈴木 花子')).toBeInTheDocument()
+    expect(screen.queryByText('高橋 太郎')).not.toBeInTheDocument()
+  })
 })

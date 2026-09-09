@@ -7,6 +7,8 @@ export type PaidLeaveScheduleStatusFilter = 'all' | 'eligible' | 'not_eligible' 
 export interface FetchPaidLeaveScheduleEntriesOptions {
   status?: PaidLeaveScheduleStatusFilter
   userName?: string
+  scheduledOnFrom?: string
+  scheduledOnTo?: string
   page?: number
   perPage?: number
 }
@@ -18,6 +20,8 @@ export function fetchPaidLeaveScheduleEntries(
     query: {
       status: options.status,
       user_name: options.userName,
+      scheduled_on_from: options.scheduledOnFrom,
+      scheduled_on_to: options.scheduledOnTo,
       page: options.page,
       per_page: options.perPage,
     },

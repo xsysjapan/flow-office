@@ -6,6 +6,7 @@ import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
 import { ClickableTableRow } from '../../components/ClickableTableRow/ClickableTableRow'
+import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker/DateRangePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
@@ -64,8 +65,12 @@ export function PaidLeaveSchedulePage() {
   const pageParam = Number(searchParams.get('page'))
   const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
   const selectedEntryId = searchParams.get('scheduleEntryId')
+  const scheduledOnFrom = searchParams.get('scheduled_on_from') ?? undefined
+  const scheduledOnTo = searchParams.get('scheduled_on_to') ?? undefined
+  const dateRange: DateRangeValue | undefined =
+    scheduledOnFrom || scheduledOnTo ? { from: scheduledOnFrom, to: scheduledOnTo } : undefined
 
-  const { data, isLoading, error } = usePaidLeaveScheduleEntries({ status, page })
+  const { data, isLoading, error } = usePaidLeaveScheduleEntries({ status, page, scheduledOnFrom, scheduledOnTo })
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams(
@@ -91,11 +96,21 @@ export function PaidLeaveSchedulePage() {
   const applyGrants = useApplyScheduledGrants()
 
   const entries = data?.data ?? []
-  const isFiltered = status !== DEFAULT_STATUS
+  const isFiltered = status !== DEFAULT_STATUS || Boolean(scheduledOnFrom) || Boolean(scheduledOnTo)
   const selectedEntry: PaidLeaveScheduleEntry | undefined = entries.find((e) => e.id === selectedEntryId)
 
   function handleStatusChange(next: PaidLeaveScheduleStatusFilter) {
     updateParams({ status: next === DEFAULT_STATUS ? null : next, page: null })
+    setSelectedIds(new Set())
+  }
+
+  function handleDateRangeChange(next: DateRangeValue | undefined) {
+    updateParams({ scheduled_on_from: next?.from ?? null, scheduled_on_to: next?.to ?? null, page: null })
+    setSelectedIds(new Set())
+  }
+
+  function clearFilters() {
+    updateParams({ status: null, scheduled_on_from: null, scheduled_on_to: null, page: null })
     setSelectedIds(new Set())
   }
 
@@ -130,15 +145,26 @@ export function PaidLeaveSchedulePage() {
 
   return (
     <Card title="付与予定">
-      <Tabs value={status} onValueChange={(value) => handleStatusChange(value as PaidLeaveScheduleStatusFilter)}>
-        <TabsList>
-          {STATUS_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={status} onValueChange={(value) => handleStatusChange(value as PaidLeaveScheduleStatusFilter)}>
+          <TabsList>
+            {STATUS_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
+        <div className="w-full sm:w-64">
+          <DateRangePicker
+            aria-label="付与予定日で絞り込み"
+            placeholder="付与予定日で絞り込み"
+            value={dateRange}
+            onChange={handleDateRangeChange}
+          />
+        </div>
+      </div>
 
       {selectedIds.size > 0 && (
         <div className="mt-4 flex w-full basis-full flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 sm:w-auto sm:basis-auto sm:flex-row sm:items-center">
@@ -168,7 +194,7 @@ export function PaidLeaveSchedulePage() {
               title="条件に一致する付与予定はありません。"
               description="フィルタを変えると表示される場合があります。"
               action={
-                <Button variant="secondary" size="sm" onClick={() => handleStatusChange(DEFAULT_STATUS)}>
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
                   フィルターをクリア
                 </Button>
               }
