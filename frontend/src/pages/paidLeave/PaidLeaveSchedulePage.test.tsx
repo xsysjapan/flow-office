@@ -47,6 +47,11 @@ function renderPage(entries: PaidLeaveScheduleEntry[] = [eligibleEntry, needsRev
 }
 
 describe('PaidLeaveSchedulePage', () => {
+  it('links back to the policy page', async () => {
+    renderPage()
+    expect(await screen.findByRole('link', { name: '← 付与ポリシー' })).toHaveAttribute('href', '/admin/paid-leave')
+  })
+
   it('lists schedule entries with category/status/attendance rate columns', async () => {
     renderPage()
 

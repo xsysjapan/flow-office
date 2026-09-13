@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
@@ -124,7 +124,13 @@ export function PaidLeaveSchedulePage() {
   const rows = entries ?? []
 
   return (
-    <Card title="付与予定">
+    <div className="flex flex-col gap-4">
+      <div>
+        <Link to="/admin/paid-leave" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+          ← 付与ポリシー
+        </Link>
+      </div>
+      <Card title="付与予定">
       <div className="mb-4 flex flex-wrap gap-2">
         {FILTER_OPTIONS.map((option) => (
           <Button
@@ -248,6 +254,7 @@ export function PaidLeaveSchedulePage() {
           ) : null}
         </SheetContent>
       </Sheet>
-    </Card>
+      </Card>
+    </div>
   )
 }

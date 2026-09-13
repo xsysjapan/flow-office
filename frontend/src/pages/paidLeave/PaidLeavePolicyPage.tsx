@@ -556,6 +556,11 @@ function PaidLeaveUsageCard() {
 export function PaidLeavePolicyPage() {
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex justify-end">
+        <Button asChild variant="secondary" size="sm">
+          <Link to="/admin/paid-leave/schedule">付与予定を確認</Link>
+        </Button>
+      </div>
       <PaidLeaveGrantRulesCard />
       <ManualGrantCard />
       <PaidLeaveUsageCard />
