@@ -3,7 +3,9 @@ import {
   adminCancelPaidLeaveRequest,
   bulkGrantPaidLeaveScheduleEntries,
   cancelPaidLeaveRequest,
+  createPaidLeaveGrantPolicyVersion,
   createPaidLeaveGrantRule,
+  createPaidLeaveProportionalGrantPolicyVersion,
   createPaidLeaveRequest,
   deletePaidLeaveGrantRule,
   fetchMyPaidLeaveGrants,
@@ -28,6 +30,7 @@ import {
   type OverridePaidLeaveScheduleAssessmentInput,
   type PaidLeaveScheduleFilter,
 } from '../api/paidLeave'
+import type { PaidLeaveGrantPolicyStep, PaidLeaveProportionalGrantPolicyStep } from '../api/types'
 
 const RULES_KEY = ['paid-leave', 'grant-rules']
 const GRANT_POLICIES_KEY = ['paid-leave', 'grant-policies']
@@ -109,6 +112,30 @@ export function usePaidLeaveGrantPolicies() {
     queryKey: GRANT_POLICIES_KEY,
     queryFn: fetchPaidLeaveGrantPolicies,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** 法定通常付与表の新バージョン作成(spec.md Feature 5)。成功時は読み取り専用マトリクスを再取得させる。 */
+export function useCreatePaidLeaveGrantPolicyVersion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (rows: PaidLeaveGrantPolicyStep[]) => createPaidLeaveGrantPolicyVersion(rows),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: GRANT_POLICIES_KEY })
+    },
+  })
+}
+
+/** 法定比例付与表の新バージョン作成(spec.md Feature 5)。成功時は読み取り専用マトリクスを再取得させる。 */
+export function useCreatePaidLeaveProportionalGrantPolicyVersion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (rows: PaidLeaveProportionalGrantPolicyStep[]) => createPaidLeaveProportionalGrantPolicyVersion(rows),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: GRANT_POLICIES_KEY })
+    },
   })
 }
 

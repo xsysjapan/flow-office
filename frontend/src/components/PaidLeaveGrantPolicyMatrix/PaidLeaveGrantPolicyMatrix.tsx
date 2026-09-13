@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { PaidLeaveGrantPolicies } from '../../api/types'
 
 function monthsLabel(months: number): string {
@@ -23,7 +24,17 @@ const WEEKLY_CATEGORY_LABELS: Record<string, string> = {
  * 別表第1に基づく最低基準であることを明記し、これを上回るカスタマイズが自由であることを添える
  * (spec.md論点16)。
  */
-export function PaidLeaveGrantPolicyMatrix({ policies }: { policies: PaidLeaveGrantPolicies }) {
+export function PaidLeaveGrantPolicyMatrix({
+  policies,
+  normalAction,
+  proportionalAction,
+}: {
+  policies: PaidLeaveGrantPolicies
+  /** 通常付与表の見出し横に表示する操作(例: 新バージョン作成ボタン)。 */
+  normalAction?: ReactNode
+  /** 比例付与表の見出し横に表示する操作(例: 新バージョン作成ボタン)。 */
+  proportionalAction?: ReactNode
+}) {
   const normalMonths = [...new Set(policies.normal.map((s) => s.continuous_service_months))].sort((a, b) => a - b)
   const proportionalMonths = [...new Set(policies.proportional.map((s) => s.continuous_service_months))].sort(
     (a, b) => a - b,
@@ -48,7 +59,10 @@ export function PaidLeaveGrantPolicyMatrix({ policies }: { policies: PaidLeaveGr
       </p>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-foreground">通常付与(週所定労働日数5日以上、週所定労働時間30時間以上、または年間所定労働日数217日以上)</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">通常付与(週所定労働日数5日以上、週所定労働時間30時間以上、または年間所定労働日数217日以上)</h3>
+          {normalAction}
+        </div>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -74,7 +88,10 @@ export function PaidLeaveGrantPolicyMatrix({ policies }: { policies: PaidLeaveGr
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-foreground">比例付与(週所定労働日数4日以下かつ週所定労働時間30時間未満)</h3>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">比例付与(週所定労働日数4日以下かつ週所定労働時間30時間未満)</h3>
+          {proportionalAction}
+        </div>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full text-sm">
             <thead>

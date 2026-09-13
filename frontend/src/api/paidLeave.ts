@@ -2,8 +2,10 @@ import { apiFetch } from './client'
 import type {
   PaidLeaveGrant,
   PaidLeaveGrantPolicies,
+  PaidLeaveGrantPolicyStep,
   PaidLeaveGrantRule,
   PaidLeaveGrantRuleTargetUser,
+  PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
   PaidLeaveScheduleBulkGrantResponse,
   PaidLeaveScheduleEntry,
@@ -55,6 +57,26 @@ export function deletePaidLeaveGrantRule(id: number): Promise<void> {
 /** 法定通常付与表・比例付与表(最新version)。ルール編集フォームの参考値・読み取り専用マトリクス表示に使う。 */
 export function fetchPaidLeaveGrantPolicies(): Promise<PaidLeaveGrantPolicies> {
   return apiFetch<{ data: PaidLeaveGrantPolicies }>('/paid-leave/grant-policies').then((res) => res.data)
+}
+
+/** 法定通常付与表の新バージョンを作成する(spec.md Feature 5)。既存versionは変更されない。 */
+export function createPaidLeaveGrantPolicyVersion(
+  rows: PaidLeaveGrantPolicyStep[],
+): Promise<{ version: string; normal: PaidLeaveGrantPolicyStep[] }> {
+  return apiFetch<{ data: { version: string; normal: PaidLeaveGrantPolicyStep[] } }>('/paid-leave/grant-policies', {
+    method: 'POST',
+    body: { rows },
+  }).then((res) => res.data)
+}
+
+/** 法定比例付与表の新バージョンを作成する(spec.md Feature 5)。既存versionは変更されない。 */
+export function createPaidLeaveProportionalGrantPolicyVersion(
+  rows: PaidLeaveProportionalGrantPolicyStep[],
+): Promise<{ version: string; proportional: PaidLeaveProportionalGrantPolicyStep[] }> {
+  return apiFetch<{ data: { version: string; proportional: PaidLeaveProportionalGrantPolicyStep[] } }>(
+    '/paid-leave/proportional-grant-policies',
+    { method: 'POST', body: { rows } },
+  ).then((res) => res.data)
 }
 
 /** ルールの対象条件(雇用形態/勤務体系)にマッチする社員の軽量一覧を取得する(対象社員セクション用)。 */

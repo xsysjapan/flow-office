@@ -227,6 +227,139 @@ class PaidLeaveController extends Controller
     }
 
     /**
+     * `version`列(文字列)の次バージョンを採番する。既存versionが`v<数値>`形式であれば
+     * その最大値+1を、そうでなければ現在のversion数+1を採用する(spec.md Feature 5。
+     * `latestVersion()`同様、単純な数値インクリメント列を持たないためここで解決する)。
+     */
+    private function nextGrantPolicyVersion(string $modelClass): string
+    {
+        $versions = $modelClass::query()->distinct()->pluck('version');
+
+        $maxNumber = 0;
+        foreach ($versions as $version) {
+            if (preg_match('/^v(\d+)$/', (string) $version, $matches) === 1) {
+                $maxNumber = max($maxNumber, (int) $matches[1]);
+            }
+        }
+
+        if ($maxNumber > 0) {
+            return 'v'.($maxNumber + 1);
+        }
+
+        return 'v'.($versions->count() + 1);
+    }
+
+    /**
+     * 法定通常付与表(`paid_leave_grant_policies`)の新バージョンを作成する
+     * (docs/changesets/20260914-port-to-pr112/spec.md Feature 5)。法務判断が必要な値
+     * (CLAUDE.md原則8)のため、既存versionは一切変更せず新versionとして追記する。
+     */
+    #[OA\Post(
+        path: '/paid-leave/grant-policies',
+        operationId: 'paidLeave.grantPolicies.store',
+        summary: '法定通常付与表の新バージョンを作成する',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['rows'], properties: [new OA\Property(property: 'rows', type: 'array', items: new OA\Items(type: 'object'))])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function storeGrantPolicy(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'rows' => ['required', 'array', 'min:1'],
+            'rows.*.continuous_service_months' => ['required', 'integer', 'min:0'],
+            'rows.*.grant_days' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $months = array_map(fn (array $row) => $row['continuous_service_months'], $data['rows']);
+        if (count($months) !== count(array_unique($months))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'rows' => ['continuous_service_monthsは重複できません。'],
+            ]);
+        }
+
+        $version = DB::transaction(function () use ($data) {
+            $version = $this->nextGrantPolicyVersion(PaidLeaveGrantPolicy::class);
+
+            foreach ($data['rows'] as $row) {
+                PaidLeaveGrantPolicy::query()->create([
+                    'version' => $version,
+                    'continuous_service_months' => $row['continuous_service_months'],
+                    'grant_days' => $row['grant_days'],
+                    'effective_from' => now()->toDateString(),
+                    'is_active' => true,
+                ]);
+            }
+
+            return $version;
+        });
+
+        $rows = PaidLeaveGrantPolicy::query()
+            ->where('version', $version)
+            ->orderBy('continuous_service_months')
+            ->get(['continuous_service_months', 'grant_days']);
+
+        return response()->json(['data' => ['version' => $version, 'normal' => $rows]], 201);
+    }
+
+    /**
+     * 法定比例付与表(`paid_leave_proportional_grant_policies`)の新バージョンを作成する。
+     * `weekly_scheduled_days_category`はこの表が実際に管理する区分キー('1'〜'4'週日数)
+     * であり、既存モデル・GETレスポンスと同じ形式で受け取る。
+     */
+    #[OA\Post(
+        path: '/paid-leave/proportional-grant-policies',
+        operationId: 'paidLeave.proportionalGrantPolicies.store',
+        summary: '法定比例付与表の新バージョンを作成する',
+        tags: ['有給休暇'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['rows'], properties: [new OA\Property(property: 'rows', type: 'array', items: new OA\Items(type: 'object'))])),
+        responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+    )]
+    public function storeProportionalGrantPolicy(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'rows' => ['required', 'array', 'min:1'],
+            'rows.*.weekly_scheduled_days_category' => ['required', 'string', 'in:1,2,3,4'],
+            'rows.*.continuous_service_months' => ['required', 'integer', 'min:0'],
+            'rows.*.grant_days' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $keys = array_map(
+            fn (array $row) => $row['weekly_scheduled_days_category'].'-'.$row['continuous_service_months'],
+            $data['rows'],
+        );
+        if (count($keys) !== count(array_unique($keys))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'rows' => ['weekly_scheduled_days_categoryとcontinuous_service_monthsの組み合わせは重複できません。'],
+            ]);
+        }
+
+        $version = DB::transaction(function () use ($data) {
+            $version = $this->nextGrantPolicyVersion(PaidLeaveProportionalGrantPolicy::class);
+
+            foreach ($data['rows'] as $row) {
+                PaidLeaveProportionalGrantPolicy::query()->create([
+                    'version' => $version,
+                    'weekly_scheduled_days_category' => $row['weekly_scheduled_days_category'],
+                    'continuous_service_months' => $row['continuous_service_months'],
+                    'grant_days' => $row['grant_days'],
+                    'effective_from' => now()->toDateString(),
+                    'is_active' => true,
+                ]);
+            }
+
+            return $version;
+        });
+
+        $rows = PaidLeaveProportionalGrantPolicy::query()
+            ->where('version', $version)
+            ->orderBy('weekly_scheduled_days_category')
+            ->orderBy('continuous_service_months')
+            ->get(['weekly_scheduled_days_category', 'continuous_service_months', 'grant_days']);
+
+        return response()->json(['data' => ['version' => $version, 'proportional' => $rows]], 201);
+    }
+
+    /**
      * ある有給付与ルールが現在対象としている社員の一覧(対象社員ごとの自動付与ON/OFF状態付き)を
      * 取得する。付与済み日数等の計算は行わない一覧表示専用の軽量エンドポイント
      * (docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md 論点4・5)。

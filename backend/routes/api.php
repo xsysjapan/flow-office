@@ -436,6 +436,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/paid-leave/migrate', [PaidLeaveController::class, 'migrate']);
         Route::put('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'updateRule']);
         Route::delete('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'destroyRule']);
+        Route::post('/paid-leave/grant-policies', [PaidLeaveController::class, 'storeGrantPolicy']);
+        Route::post('/paid-leave/proportional-grant-policies', [PaidLeaveController::class, 'storeProportionalGrantPolicy']);
         // --- 有給付与予定Schedule/Assessment管理 (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md Phase D) ---
         Route::get('/paid-leave/schedule-entries', [PaidLeaveScheduleController::class, 'index']);
         Route::get('/paid-leave/schedule-entries/{scheduleEntry}', [PaidLeaveScheduleController::class, 'show']);

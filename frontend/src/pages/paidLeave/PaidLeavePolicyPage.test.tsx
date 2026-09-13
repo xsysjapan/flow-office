@@ -210,4 +210,64 @@ describe('PaidLeavePolicyPage', () => {
       expect(usersApi.updatePaidLeaveAutoGrantEnabled).toHaveBeenCalledWith('user-4', true),
     )
   })
+
+  it('creates a new normal grant policy version with a statutory-review warning', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantPolicyVersion').mockResolvedValue({
+      version: 'v2',
+      normal: [{ continuous_service_months: 6, grant_days: 11 }],
+    })
+
+    renderPage()
+
+    await screen.findByText('週4日')
+    const normalSection = screen.getByText(/通常付与\(週所定労働日数5日以上/).closest('div')!
+    await userEvent.click(within(normalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。'),
+    ).toBeInTheDocument()
+
+    const monthsInput = within(dialog).getByLabelText('継続勤務(か月)') as HTMLInputElement
+    const daysInput = within(dialog).getByLabelText('付与日数') as HTMLInputElement
+    expect(monthsInput).toHaveValue(6)
+    await userEvent.clear(daysInput)
+    await userEvent.type(daysInput, '11')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveGrantPolicyVersion).toHaveBeenCalledWith([
+        { continuous_service_months: 6, grant_days: 11 },
+      ]),
+    )
+  })
+
+  it('creates a new proportional grant policy version', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveProportionalGrantPolicyVersion').mockResolvedValue({
+      version: 'v2',
+      proportional: [{ weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 8 }],
+    })
+
+    renderPage()
+
+    await screen.findByText('週4日')
+    const proportionalSection = screen.getByText(/比例付与\(週所定労働日数4日以下/).closest('div')!
+    await userEvent.click(within(proportionalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByText('この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。')
+
+    const daysInput = within(dialog).getByLabelText('付与日数') as HTMLInputElement
+    await userEvent.clear(daysInput)
+    await userEvent.type(daysInput, '8')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveProportionalGrantPolicyVersion).toHaveBeenCalledWith([
+        { weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 8 },
+      ]),
+    )
+  })
 })
