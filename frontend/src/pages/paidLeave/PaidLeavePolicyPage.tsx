@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Badge } from '../../components/Badge/Badge'
 import { Button } from '../../components/Button/Button'
 import { Card } from '../../components/Card/Card'
+import { ConfirmActionDialog } from '../../components/ConfirmActionDialog/ConfirmActionDialog'
 import { DatePicker } from '../../components/DatePicker/DatePicker'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
@@ -10,6 +11,8 @@ import { FormField } from '../../components/FormField/FormField'
 import { GrantTargetPicker, type GrantTargetMode } from '../../components/GrantTargetPicker/GrantTargetPicker'
 import { LeaveUsageList } from '../../components/LeaveUsageList/LeaveUsageList'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
+import { PaidLeaveGrantPolicyMatrix } from '../../components/PaidLeaveGrantPolicyMatrix/PaidLeaveGrantPolicyMatrix'
+import { PaidLeaveGrantRulePreview } from '../../components/PaidLeaveGrantRulePreview/PaidLeaveGrantRulePreview'
 import { RevokeGrantButton } from '../../components/RevokeGrantButton/RevokeGrantButton'
 import { UserPicker } from '../../components/UserPicker/UserPicker'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -19,7 +22,9 @@ import { runBulkGrant, type BulkGrantResult } from '../../lib/bulkGrant'
 import {
   useAdminCancelPaidLeaveRequest,
   useCreatePaidLeaveGrantRule,
+  useDeletePaidLeaveGrantRule,
   useGrantPaidLeave,
+  usePaidLeaveGrantPolicies,
   usePaidLeaveGrantRules,
   usePaidLeaveGrantRuleTargetUsers,
   usePaidLeaveGrantsForUser,
@@ -103,8 +108,37 @@ function PaidLeaveGrantRuleTargetUsersSection({ ruleId }: { ruleId: number }) {
   )
 }
 
+/** 無効化済みルールのみ「削除」できる(バックエンドが強制)。有効なルールはボタンを無効化し理由を示す。 */
+function DeleteRuleButton({ ruleId, ruleName, isActive }: { ruleId: number; ruleName: string; isActive: boolean }) {
+  const deleteRule = useDeletePaidLeaveGrantRule()
+
+  if (isActive) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Button variant="danger" size="sm" disabled>
+          削除
+        </Button>
+        <p className="text-xs text-muted-foreground">有効なルールは削除できません。先に無効化してください。</p>
+      </div>
+    )
+  }
+
+  return (
+    <ConfirmActionDialog
+      triggerLabel="削除"
+      title={`${ruleName}を削除しますか?`}
+      description="この操作は元に戻せません。"
+      confirmLabel="削除する"
+      isPending={deleteRule.isPending}
+      error={deleteRule.error}
+      onConfirm={() => deleteRule.mutateAsync(ruleId)}
+    />
+  )
+}
+
 function PaidLeaveGrantRulesCard() {
   const { data: rules, isLoading, error } = usePaidLeaveGrantRules()
+  const { data: policies, isLoading: isLoadingPolicies, error: policiesError } = usePaidLeaveGrantPolicies()
   const createRule = useCreatePaidLeaveGrantRule()
   const [expandedRuleIds, setExpandedRuleIds] = useState<Set<number>>(new Set())
 
@@ -169,31 +203,32 @@ function PaidLeaveGrantRulesCard() {
       ) : (rules ?? []).length === 0 ? (
         <EmptyState title="付与ルールはまだありません。" description="ルールを作成すると、対象社員へ自動的に有給が付与されます。" />
       ) : (
-        <ul className="mb-5 divide-y divide-border">
+        <ul className="mb-5 flex flex-col gap-4">
           {(rules ?? []).map((rule) => (
-            <li key={rule.id} className="py-3">
-              <div className="flex items-center gap-3">
-                <strong className="text-sm font-semibold text-foreground">{rule.name}</strong>
-                <span className="text-sm text-muted-foreground">{rule.is_active ? '有効' : '無効'}</span>
+            <li key={rule.id} className="rounded-md border border-border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <strong className="text-sm font-semibold text-foreground">{rule.name}</strong>
+                  <span className="text-sm text-muted-foreground">{rule.is_active ? '有効' : '無効'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button asChild variant="secondary" size="sm">
+                    <Link to={`/admin/paid-leave/rules/${rule.id}/edit`}>編集</Link>
+                  </Button>
+                  <DeleteRuleButton ruleId={rule.id} ruleName={rule.name} isActive={rule.is_active} />
+                </div>
               </div>
-              <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
-                <dt className="font-medium text-muted-foreground">最低出勤率</dt>
-                <dd className="text-foreground">{rule.min_attendance_rate}</dd>
-                <dt className="font-medium text-muted-foreground">初回付与</dt>
-                <dd className="text-foreground">{rule.first_grant_after_months}か月後</dd>
-                <dt className="font-medium text-muted-foreground">付与サイクル</dt>
-                <dd className="text-foreground">{rule.grant_cycle_months}か月ごと</dd>
-              </dl>
-              {rule.steps && rule.steps.length > 0 && (
-                <ul className="mt-1 list-disc pl-4 text-sm text-muted-foreground">
-                  {rule.steps.map((step, index) => (
-                    <li key={index}>
-                      継続勤務{step.continuous_service_months}か月→{step.grant_days}日
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Button variant="secondary" size="sm" className="mt-2" onClick={() => toggleExpanded(rule.id)}>
+
+              <div className="mt-2">
+                <PaidLeaveGrantRulePreview
+                  firstGrantAfterMonths={rule.first_grant_after_months}
+                  grantCycleMonths={rule.grant_cycle_months}
+                  minAttendanceRate={rule.min_attendance_rate}
+                  steps={rule.steps ?? []}
+                />
+              </div>
+
+              <Button variant="secondary" size="sm" className="mt-3" onClick={() => toggleExpanded(rule.id)}>
                 {expandedRuleIds.has(rule.id) ? '対象社員を閉じる' : '対象社員'}
               </Button>
               {expandedRuleIds.has(rule.id) && <PaidLeaveGrantRuleTargetUsersSection ruleId={rule.id} />}
@@ -269,6 +304,12 @@ function PaidLeaveGrantRulesCard() {
           ルールを作成
         </Button>
         {!ruleName && <p className="text-xs text-muted-foreground">ルール名を入力してください。</p>}
+      </div>
+
+      <div className="mt-8 border-t border-border pt-5">
+        <h3 className="mb-3 text-sm font-semibold text-foreground">法定付与日数(参考・自動適用)</h3>
+        {policiesError && <ErrorMessage error={policiesError} fallback="法定付与表の取得に失敗しました。" />}
+        {isLoadingPolicies ? <LoadingState /> : policies && <PaidLeaveGrantPolicyMatrix policies={policies} />}
       </div>
     </Card>
   )
@@ -508,9 +549,11 @@ function PaidLeaveUsageCard() {
 
 /**
  * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
- * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する。
+ * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する
+ * (旧`PaidLeaveAdminPage`。spec.md論点11で「付与予定」画面(`PaidLeaveSchedulePage`)と
+ * 分離し、こちらは付与ポリシー(独自ルール・法定Policy)専用のページへリネームした)。
  */
-export function PaidLeaveAdminPage() {
+export function PaidLeavePolicyPage() {
   return (
     <div className="flex flex-col gap-6">
       <PaidLeaveGrantRulesCard />

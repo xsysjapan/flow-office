@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\MockOidcUserController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\PaidLeaveController;
+use App\Http\Controllers\Api\PaidLeaveScheduleController;
 use App\Http\Controllers\Api\PublicSystemSettingController;
 use App\Http\Controllers\Api\RequestTypeController;
 use App\Http\Controllers\Api\RotationPatternController;
@@ -415,6 +416,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
     // --- 有給残数管理・申請・承認 (docs/09-usecases-paid-leave.md UC-P001〜UC-P004, UC-P007) ---
     Route::get('/paid-leave/grants/mine', [PaidLeaveController::class, 'myGrants'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/grant-rules', [PaidLeaveController::class, 'indexRules']);
+    Route::get('/paid-leave/grant-policies', [PaidLeaveController::class, 'indexGrantPolicies']);
     Route::get('/paid-leave/grant-rules/{rule}/target-users', [PaidLeaveController::class, 'targetUsers']);
     Route::get('/paid-leave/requests/mine', [PaidLeaveController::class, 'myRequests'])->middleware('ability:leave:self:read');
     Route::get('/paid-leave/requests/to-approve', [PaidLeaveController::class, 'requestsToApprove'])->middleware('permission:approval.execute');
@@ -432,6 +434,14 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/paid-leave/grants/{grant}/revoke', [PaidLeaveController::class, 'revoke']);
         Route::post('/paid-leave/requests/{paidLeaveRequest}/admin-cancel', [PaidLeaveController::class, 'adminCancelRequest']);
         Route::post('/paid-leave/migrate', [PaidLeaveController::class, 'migrate']);
+        Route::put('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'updateRule']);
+        Route::delete('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'destroyRule']);
+        // --- 有給付与予定Schedule/Assessment管理 (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md Phase D) ---
+        Route::get('/paid-leave/schedule-entries', [PaidLeaveScheduleController::class, 'index']);
+        Route::get('/paid-leave/schedule-entries/{scheduleEntry}', [PaidLeaveScheduleController::class, 'show']);
+        Route::post('/paid-leave/schedule-entries/bulk-grant', [PaidLeaveScheduleController::class, 'bulkGrant']);
+        Route::post('/paid-leave/schedule-entries/{scheduleEntry}/reassess', [PaidLeaveScheduleController::class, 'reassess']);
+        Route::post('/paid-leave/schedule-entries/{scheduleEntry}/override', [PaidLeaveScheduleController::class, 'override']);
     });
 
     // --- 特別休暇の種別マスタ・残数管理・申請・承認(有給と同じUXだが、ビジネスロジックは

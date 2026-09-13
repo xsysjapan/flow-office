@@ -1,6 +1,6 @@
 # 年次有給休暇 付与Schedule/Assessmentドメイン新設(将来付与予定の確認画面)
 
-ステータス: レビュー中
+ステータス: 実装完了(Phase A〜E)
 
 ## 変更要望(原文)
 
@@ -163,10 +163,13 @@ Explore調査結果(要点)。
 - 理由: 前回変更セットの「対象外」節で既に「会社独自の上乗せルールの余地として残す」
   方針を確定済み。今回はその方針を維持しつつ、依頼書§34-36で要求されている
   法定判定自体(通常/比例/シフト区分の自動判定)を新設する。
-- 未確定・要確認事項: 独自ルールと法定Policyが「食い違う」場合(例:
-  独自ルールのstepsが法定最低日数を下回る)の保存時バリデーション具体仕様は、
-  実装フェーズで`PaidLeaveGrantRuleController`の既存バリデーションへ追記する形で
-  詳細化する(仕様の大枠は本節で確定済みのため、実装を妨げるレベルの未確定ではない)。
+- 未確定・要確認事項: なし。独自ルールと法定Policyが「食い違う」場合(例: 独自ルールのstepsが
+  法定最低日数を下回る)の保存時バリデーション仕様は論点16で確定した
+  (`work_style_id`から`GrantCategoryClassifier`区分を判定し、対応する法定Policyの
+  `continuous_service_months`最大一致ステップを最低日数として、step単位で`grant_days`が
+  それを下回る場合のみ`PaidLeaveGrantRuleController::storeRule`/`updateRule`の
+  バリデーションでField Errorとして拒否する。`work_style_id`が未指定(全社共通ルール)の
+  場合は「通常付与」の法定Policyを最低日数として扱う)。
 
 ### 論点6: 月次ローリングSchedule生成の実装方式
 
@@ -260,17 +263,18 @@ Explore調査結果(要点)。
     ページを分割する。
   - B. 既存ページに全て詰め込む。
 - 決定: A(依頼書§38の構成に合わせて`frontend/src/pages/paidLeave/`配下を
-  `PaidLeaveOverviewPage`/`PaidLeaveScheduleSchedulePage`/`PaidLeaveBalancePage`
+  `PaidLeaveOverviewPage`/`PaidLeaveSchedulePage`/`PaidLeaveBalancePage`
   (社員別、前回changesetのAllocation関連UIは別途A案件として保留中)/
   `PaidLeavePolicyPage`(現行`PaidLeaveAdminPage`をリネーム・分割)へ再編する)。
 - 理由: 依頼書§38の管理画面構成そのものが「概要/付与予定/残高/付与ポリシー」という
   4分割を明示しており、今回「付与予定」画面を追加するタイミングでページ構成を
   仕様通りに揃えておかないと、後から残高画面(A案件)を追加する際に再度ページ構成を
   作り直すことになる。
-- 未確定・要確認事項: 「概要」「残高」ページの中身は前回保留にしたA案件(Allocation
-  確認画面)の範囲であり、本変更セットでは「付与予定」「付与ポリシー」の2画面のみ
+- 未確定・要確認事項: なし(検討過程: 「概要」「残高」ページの中身は前回保留にしたA案件
+  (Allocation確認画面)の範囲であり、本変更セットでは「付与予定」「付与ポリシー」の2画面のみ
   実装し、「概要」「残高」は空/最小限のプレースホルダーとするか、そもそもページを
-  作らずナビゲーションだけ用意するか。→ **決定**: 本変更セットでは「付与予定」
+  作らずナビゲーションだけ用意するかを検討した)。
+- 結論: 本変更セットでは「付与予定」
   「付与ポリシー」の2画面のみ実装し、「概要」「残高」ページ・ナビ項目は追加しない
   (依頼書の管理画面構成を将来の指針として記録するに留め、無い機能のためのリンクは
   作らない。UIのIA変更は必要最小限に留める、という一般的なUI原則に従う)。
@@ -364,24 +368,110 @@ Explore調査結果(要点)。
   `WarnFiveDayObligation`は無変更で存続。
 - 既存`paid_leave_grant_rules`/`paid_leave_grant_rule_steps`とその管理API
   (`PaidLeaveController::indexRules/storeRule/targetUsers`)は存続。保存時バリデーションへ
-  「法定Policyの最低日数を下回るstepを拒否する」チェックを追加。
+  「法定Policyの最低日数を下回るstepを拒否する」チェックを追加(論点16)。あわせて
+  `updateRule`/`destroyRule`エンドポイントを新設し、ルール内容の「編集」と`is_active`の
+  「無効化」を区別する(論点15-1、既存は作成のみで訂正手段が無かったための追加)。
 
 ### 管理画面
 
 - `frontend/src/pages/paidLeave/`を以下へ再編(既存`PaidLeaveAdminPage.tsx`を
   `PaidLeavePolicyPage.tsx`へリネームし、現行の付与ポリシー管理機能はそのまま移設):
   - `PaidLeaveSchedulePage.tsx`(新規): 付与予定一覧。フィルタタブ
-    (すべて/付与対象/対象外/要確認/変更あり)、テーブル列(社員/付与予定日/区分
-    (通常・比例・シフト)/付与候補日数/出勤率/判定状態/変更・要確認バッジ)、
-    行選択+「一括付与」ボタン(Eligible行のみ選択可能)。
-  - 行詳細パネル: 「勤怠データを確認」(Assessment内訳の分母/分子/除外日をドリルダウン)→
-    「再判定」(同条件でAssessor再実行)→「判定結果を上書き」(理由必須)の3ステップ導線。
+    (すべて/付与対象/対象外/要確認/変更あり、状態は`useSearchParams`でURLへ反映 — 論点15-5)、
+    テーブル列(社員/付与予定日/区分(通常・比例・シフト)/付与候補日数/出勤率/判定状態/
+    変更・要確認バッジ)、行選択+「一括付与」ボタン(Eligible行のみ選択可能。実行結果は
+    既存`ManualGrantCard`の`runBulkGrant`/`ResultSummary`パターンを踏襲 — 論点15-6)。
+    `NeedsReview`行には原因(`WorkStyle`未入力項目)を示すバッジと、当該社員の`WorkStyle`
+    設定画面への遷移リンクを表示する(論点15-3)。
+  - 行詳細Sheet(論点15-4により、一覧行のインライン展開ではなくSheetで実装): 「勤怠データを
+    確認」(Assessment内訳の分母/分子/除外日をドリルダウン)→「再判定」(同条件でAssessor
+    再実行)→「判定結果を上書き」(理由必須)の3ステップ導線。
   - `PaidLeavePolicyPage.tsx`(リネーム): 既存の付与ポリシー(`paid_leave_grant_rules`)
-    管理機能をそのまま移設。
+    管理機能をそのまま移設し、論点14/15-1/15-2/16の改善を反映する: (1)設定値からの
+    日本語文プレビュー、(2)経過年数を列見出しにした付与日数テーブル表示、(3)法定通常/比例
+    Policyの読み取り専用マトリクス表(比例付与のトグルは置かない)、(4)ルールの「編集」
+    「削除」導線(`updateRule`/`destroyRule`)、(5)入力日数がその継続勤務月数の法定最低日数を
+    下回る場合のField Error表示。
   - 「概要」「残高」ページは本変更セットでは追加しない(論点11参照)。
   - ナビゲーション: `AdminLayout`の休暇管理メニューに「付与予定」を追加
     (既存の有給休暇管理メニューの構成を確認し、依頼書§38の並び
     「概要/付与予定/残高/付与ポリシー」のうち今回実装する2項目のみ追加)。
+
+### 論点14: `PaidLeavePolicyPage`(付与ポリシー編集UI)のわかりやすさ改善
+
+- 経緯: ユーザーから既存`PaidLeaveGrantRulesCard`(現行`PaidLeaveAdminPage.tsx`、
+  リネーム後`PaidLeavePolicyPage.tsx`)について、「6か月後に10日付与される」ことが
+  画面から読み取れない(`first_grant_after_months`と`steps`の`continuous_service_months`が
+  別々の入力欄で、両者の対応関係が示されていない)、また平均出勤日数(所定労働日数)に
+  応じて付与日数が変わる比例付与の概念がUIに全く無い、という指摘。
+- 選択肢:
+  - A. `PaidLeavePolicyPage`のルール編集フォームに、(1)設定値から機械的に組み立てた
+    日本語文プレビュー(「入社日からXか月後に最初の付与。以後Yか月ごとに、付与テーブルに
+    沿って日数が増えていきます。出勤率がZ%未満の月は付与されません。」)を入力欄の上に
+    表示する、(2)`steps`の一覧を「継続勤務◯か月→◯日」という箇条書きではなく、
+    経過年数を列見出しにした横並びテーブル(6か月/1年6か月/2年6か月/…→付与日数)として
+    表示し、初回付与月数と対応する列に「初回付与はこの列」を明示する、
+    (3)論点3-4で新設する法定通常/比例Policy(`paid_leave_grant_policies`/
+    `paid_leave_proportional_grant_policies`)を週所定労働日数区分×継続勤務年数の
+    マトリクス表として読み取り専用表示し、対象社員に比例付与区分が適用されるかどうかの
+    説明文を添える、という3点の表示改善を行う。データモデル(`paid_leave_grant_rules`/
+    `paid_leave_grant_rule_steps`と論点5の優先順位ロジック)自体は変更しない、表示層のみの
+    改善とする。
+  - B. 表示は変更せず、ヘルプテキストの追加のみで対応する。
+- 決定: A。
+- 理由: 表示だけの問題であり、論点5で決定済みの「独自ルールが法定Policyより優先、
+  無ければ法定Policyを適用」というデータモデルとは矛盾しない。むしろPhase D/Eで
+  法定Policyをはじめて画面に出す本変更セットのタイミングで、既存の独自ルール画面も
+  合わせて読みやすくしておかないと、「独自ルール」「法定Policy」という2つの表が
+  並んだときに関係性がさらに分かりにくくなる。Bはユーザーの指摘(数値の対応関係が
+  読み取れない)を解決しない。
+- 未確定・要確認事項: なし。実装時のワイヤーフレームはPhase Eの詳細設計時に用意する。
+
+### 論点15: 操作性レビュー(実際の管理者操作を想定した`ui-interaction-patterns`準拠チェック)
+
+- 経緯: 論点12-14のUI案について、実際に操作するバックオフィス担当者・管理者を想定した
+  操作性レビューを実施した。
+- 決定した追加対応:
+  1. **`paid_leave_grant_rules`の更新・削除エンドポイントを本変更セットのスコープに追加する**。
+     現状は作成のみで、管理者がルール内容を訂正する手段が無く(無効化して作り直すしかない)、
+     Edit Pageパターン(§2.6)を満たさない実害の大きい欠陥のため、Phase D(管理API)・
+     Phase E(`PaidLeavePolicyPage`)に「編集」「削除」を追加する
+     (`PaidLeaveGrantRuleController`へ`updateRule`/`destroyRule`を追加、削除は
+     `is_active=false`への無効化ではなく物理的な行削除は避け、既存の`is_active`切替を
+     「無効化」、内容変更を「編集」として明確に区別する)。
+  2. 論点14で提案した比例付与セクションの「トグル」は撤去する。比例付与は
+     `GrantCategoryClassifier`が`WorkStyle`から自動判定するものであり、管理者がルール単位で
+     ON/OFFする設定ではないため、トグルを置くと実際のロジックと乖離した誤解を生む。
+     「法定比例付与表(参考・自動適用)」という読み取り専用セクションとして表示する。
+  3. `NeedsReview`判定になった社員の行に、原因となった`WorkStyle`設定画面への遷移リンクを
+     追加する(オブジェクト起点設計 §2.24。現状の設計は「要確認」バッジを表示するのみで、
+     何を直せば解消するかへの導線が無かった)。
+  4. 論点13のOverride 3ステップ導線(勤怠データ確認→再判定→上書き)は、一覧行のインライン
+     展開ではなくSheetで実装する(§2.11「考慮が必要な作業」に該当し、理由必須の確定操作を
+     軽量な展開パネルで扱うのは誤操作のリスクがあるため)。
+  5. 論点12のフィルタタブ(すべて/付与対象/対象外/要確認/変更あり)の状態はURLへ反映する
+     (§2.10、`useSearchParams`)。
+  6. 一括付与ボタンの実行結果(成功/失敗件数、一部失敗時の内訳)は、既存`ManualGrantCard`の
+     `runBulkGrant`/`ResultSummary`パターンをそのまま踏襲して表示する(Idle→Submitting→
+     Success/Errorの状態遷移を新規に設計しない)。
+- 未確定・要確認事項: なし。
+
+### 論点16: 法定最低日数を上回るカスタマイズの明示
+
+- 経緯: ユーザーから「当該の法律を教え、それ以上の有給付与も設定に応じてできるようカスタマイズの
+  余地も残してほしい」との要望。根拠法令は労働基準法第39条(第1項・第2項: 通常の労働者への
+  法定付与表、第3項: 比例付与、労働基準法施行規則第24条の3・別表第1)。同条は**最低基準**を
+  定めるものであり、これを下回ることは違法だが、上回ることは会社の任意で日数の上限に法的制限は
+  無い。
+- 現状の設計(論点5、変更なし): `paid_leave_grant_rules`(会社独自ルール)は法定Policyが
+  算出する最低日数を**下回る**内容のみ保存時に拒否し、上回る内容は制限しない。この構造は
+  既に「法定日数以上へ自由にカスタマイズできる」という要望を満たしている。
+- 追加対応(UI): 論点14のルール編集フォームに、法定Policyがその社員に適用する最低日数を
+  常時参照値として表示し(例:「この継続勤務月数の法定最低日数: 11日」)、入力欄の付与日数が
+  それを下回る場合はSubmit時にField Errorとして提示する(§2.19、Submit ErrorではなくField
+  Error)。上回る入力は制限なく許可し、その旨をヘルプテキスト
+  (「法定最低日数以上であれば自由に設定できます」)で明示する。
+- 未確定・要確認事項: なし。
 
 ## 対象外
 
@@ -420,9 +510,11 @@ Explore調査結果(要点)。
   `paid_leave_schedule_entries`/`paid_leave_schedule_assessments`Projection。
 - Phase C: `paid-leave:roll-schedules`コマンド、Reactor(再計算トリガー)、
   既存`GrantScheduledPaidLeaveHandler`関連の削除。
-- Phase D: 管理API(付与予定一覧・詳細・再判定・Override・一括付与エンドポイント)。
-- Phase E: フロントエンド(`PaidLeaveSchedulePage`・行詳細パネル・
-  `PaidLeavePolicyPage`へのリネーム・ナビ追加)。
+- Phase D: 管理API(付与予定一覧・詳細・再判定・Override・一括付与エンドポイント、
+  論点15-1の`paid_leave_grant_rules`更新・削除エンドポイント)。
+- Phase E: フロントエンド(`PaidLeaveSchedulePage`・Sheetによる行詳細(論点15-4)・
+  `PaidLeavePolicyPage`へのリネーム・編集/削除UI(論点15-1)・ナビ追加・
+  論点14/16の文章プレビュー/テーブル表示改善・法定最低日数の参照表示と下回り時のField Error)。
 
 ## 検証方法
 
@@ -438,8 +530,47 @@ Explore調査結果(要点)。
 
 ## レビュー履歴
 
-初版。
+- 初版。
+- 論点14を追加(付与ポリシー編集UIのわかりやすさ改善: 文章プレビュー・付与日数テーブルの
+  横並び表示・法定比例付与マトリクスの読み取り専用表示)。
+- 操作性レビュー(実際の管理者操作を想定した`ui-interaction-patterns`準拠チェック)を実施し、
+  論点15(更新・削除API追加、比例付与トグルの撤去、NeedsReviewからの導線、Override Sheet化、
+  フィルタのURL反映、一括付与結果表示)・論点16(根拠法令の明記、法定最低日数超のカスタマイズを
+  阻害しないことの確認とUIでの明示)を追加。あわせて「仕様確定事項(まとめ)」節・
+  「既存実装の置換」節を論点14-16の決定内容と整合するよう更新(まとめに未反映のまま
+  実装フェーズへ進むと決定が伝わらないため)。ページ名の表記ゆれ(`PaidLeaveScheduleSchedulePage`
+  → `PaidLeaveSchedulePage`)を修正。
 
 ## 実装結果
 
-未着手。
+- **Phase A**(ドメインモデル): `PaidLeaveScheduleAggregate`・6コマンド・7イベント・
+  `AttendanceRateAssessor`・`GrantCategoryClassifier`を実装。`php artisan test --filter=PaidLeave`
+  160/160、フルスイート1031/1031。Command→Handlerの一部に`return`文欠落があったが
+  Phase Bで発見・修正。
+- **Phase B**(法定Policyマスタ・Projection): `paid_leave_grant_policies`/
+  `paid_leave_proportional_grant_policies`/`paid_leave_grant_expiry_policy`(migration+seed)、
+  `WorkStyle`への列追加、`paid_leave_schedule_entries`/`paid_leave_schedule_assessments`
+  Projector。フルスイート1045/1045。**投入した比例付与表の日数は労働基準法施行規則
+  第24条の3別表第1に基づく値だが、本番投入前に社労士確認が必要**(CLAUDE.md原則8)。
+- **Phase C**(Schedule生成・再計算): `paid-leave:roll-schedules`コマンド、条件変更検知
+  Reactor、旧`GrantScheduledPaidLeaveHandler`関連を削除。フルスイート1045/1045。
+  既知の制約: シフト勤務区分の付与日数算出は実績データを使わない暫定近似
+  (`agreed_scheduled_days_per_year`ベース)であり、管理画面での確認・上書きを前提とする。
+  また会社独自ルール(`paid_leave_grant_rules`)はEvent Sourcing化されていないため、
+  ルール変更時に自動再計算されない既知のギャップが残る(コード内にフォローアップとして
+  明記)。
+- **Phase D**(管理API): 付与予定一覧・詳細・再判定・Override・一括付与エンドポイント、
+  ルール編集・削除エンドポイントを追加。ルール削除は「無効化済みのルールのみ物理削除可」
+  という2段階方式で仕様の表現の揺れを解消。`ApplyScheduledGrantsHandler`の
+  Aggregate競合バグ(`PaidLeaveScheduleAggregate`と`PaidLeaveAccountAggregate`が
+  同一`userId`をUUIDに使うため、`GrantPaidLeave`発行後の`persist()`がバージョン競合で
+  失敗する)を発見・修正。フルスイート1059/1059。
+- **Phase E**(フロントエンド): `PaidLeaveSchedulePage`(フィルタタブ・URL状態同期・
+  一括付与・NeedsReviewからのWorkStyle画面リンク)、行詳細Sheet(3ステップOverride導線)、
+  `PaidLeavePolicyPage`(文章プレビュー・付与日数テーブル・法定Policy読み取り専用マトリクス・
+  編集/削除)を実装。既存になかった読み取り専用API2件(法定Policy一覧、Schedule一覧への
+  `attendance_rate`列)をPhase Eのタイミングで追加(バックエンド回帰確認済み、
+  `--filter=PaidLeave` 188/188)。`tsc --noEmit`クリーン、新規/変更ファイル対象の
+  vitestは57/57成功(フルスイートは既存の並列実行下のflaky現象があるが本変更と無関係)。
+- **未実施**: 実機でのブラウザ確認(`run`スキル)。出荷前に`/admin/paid-leave`・
+  `/admin/paid-leave/schedule`の動作確認を推奨。

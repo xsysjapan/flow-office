@@ -271,6 +271,37 @@ Projectorはコードから削除済みで、以後この名前空間から新�
   `{grantId, originalGrantedOn?, originalGrantedDays?, remainingDaysAtCutover, expiresOn,
   source, cutoverMetadata?}`(docs/09-usecases-paid-leave.md UC-P010参照)。
 
+## PaidLeaveSchedule(`App\Domain\PaidLeaveSchedule\Events\`)
+
+`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)
+が発行する。`config/event-sourcing.php`に`paid_leave_schedule.*`エイリアスで登録される。
+将来付与予定Schedule・出勤率Assessmentを扱う(Phase A、
+docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
+
+- `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
+  (scheduleEntryId, scheduledOn, category, candidateGrantDays)。新規Scheduleエントリ作成
+  (新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
+- `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
+  (scheduleEntryId, reason, previousScheduledOn, previousCategory,
+  previousCandidateGrantDays)。再計算により既存エントリが置き換えられたことを記録する
+  (置き換え前の内容も監査用に保持)。
+- `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
+  (scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,
+  excludedDays, attendanceRate, policyVersion, automaticResult)。出勤率Assessment結果を記録し、
+  エントリの状態を`automaticResult`(Eligible/NotEligible/NeedsReview)へ遷移させる。
+- `paid_leave_schedule.assessment_overridden` → `PaidLeaveScheduleAssessmentOverridden`
+  (scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
+  上書き(理由必須)。
+- `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
+  (scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正。以後の
+  自動再計算(`recalculateFutureSchedule`)の対象から除外される。
+- `paid_leave_schedule.entry_granted` → `PaidLeaveScheduleEntryGranted`
+  (scheduleEntryId, grantId, operatorUserId)。管理者の一括付与操作でEligibleエントリを
+  Grantedへ遷移させる(実際の`PaidLeaveAccount\Commands\GrantPaidLeave`発行はHandlerが担う)。
+- `paid_leave_schedule.entry_cancelled` → `PaidLeaveScheduleEntryCancelled`
+  (scheduleEntryId, reason)。エントリが不要になった場合の取消(再計算での削除・
+  管理者操作の両方から発行されうる)。
+
 ## SpecialLeave
 
 `paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは

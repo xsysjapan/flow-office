@@ -280,14 +280,12 @@ use App\Domain\Notification\Commands\ConfirmNotification;
 use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
-use App\Domain\PaidLeave\Commands\GrantScheduledPaidLeave;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
-use App\Domain\PaidLeave\Handlers\GrantScheduledPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
@@ -312,6 +310,18 @@ use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccou
 use App\Domain\PaidLeaveAccount\Handlers\MigratePaidLeaveAccountHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
+use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
+use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
+use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
+use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
+use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
+use App\Domain\PaidLeaveSchedule\Handlers\ApplyScheduledGrantsHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\EnsureFutureScheduleGeneratedHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\ManuallyEditScheduleEntryHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\OverrideScheduleAssessmentHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\RecalculateFutureScheduleHandler;
+use App\Domain\PaidLeaveSchedule\Handlers\RunAttendanceRateAssessmentHandler;
 use App\Domain\ShiftSwap\Commands\ApproveShiftSwapRequest;
 use App\Domain\ShiftSwap\Commands\CancelShiftSwapRequest;
 use App\Domain\ShiftSwap\Commands\RequestShiftSwap;
@@ -602,7 +612,6 @@ return [
         // App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate(社員単位の年休台帳)
         // へ一本化した。RequestPaidLeave等のCommand自体はWorkflow層との既存の配線を保つため
         // 旧namespaceのまま残すが、Handlerの内部実装はすべて新ドメインのCommandを呼ぶ。
-        GrantScheduledPaidLeave::class => GrantScheduledPaidLeaveHandler::class,
         WarnExpiringPaidLeave::class => WarnExpiringPaidLeaveHandler::class,
         WarnFiveDayObligation::class => WarnFiveDayObligationHandler::class,
         RequestPaidLeave::class => RequestPaidLeaveHandler::class,
@@ -620,6 +629,13 @@ return [
         CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
         MigratePaidLeaveAccount::class => MigratePaidLeaveAccountHandler::class,
+
+        EnsureFutureScheduleGenerated::class => EnsureFutureScheduleGeneratedHandler::class,
+        RecalculateFutureSchedule::class => RecalculateFutureScheduleHandler::class,
+        RunAttendanceRateAssessment::class => RunAttendanceRateAssessmentHandler::class,
+        OverrideScheduleAssessment::class => OverrideScheduleAssessmentHandler::class,
+        ManuallyEditScheduleEntry::class => ManuallyEditScheduleEntryHandler::class,
+        ApplyScheduledGrants::class => ApplyScheduledGrantsHandler::class,
 
         GrantSpecialLeave::class => GrantSpecialLeaveHandler::class,
         GrantScheduledSpecialLeave::class => GrantScheduledSpecialLeaveHandler::class,

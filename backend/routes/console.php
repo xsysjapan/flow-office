@@ -25,8 +25,9 @@ Schedule::command('users:sync-ms365')
     ->dailyAt('01:00')
     ->withoutOverlapping();
 
-// UC-P002: 有給を毎日自動付与する(継続勤務期間の記念日にのみ実際に付与される)。
-Schedule::command('paid-leave:grant-scheduled')
+// spec.md(docs/changesets/20260906-paid-leave-schedule-assessment): 有給の将来付与予定
+// Scheduleを1年先まで日次でロール生成する(実際のGrant発行は管理者の一括付与操作で行う)。
+Schedule::command('paid-leave:roll-schedules')
     ->dailyAt('02:00')
     ->withoutOverlapping();
 

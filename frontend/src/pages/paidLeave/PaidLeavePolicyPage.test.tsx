@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -8,13 +8,14 @@ import * as usersApi from '../../api/users'
 import type {
   Paginated,
   PaidLeaveGrant,
+  PaidLeaveGrantPolicies,
   PaidLeaveGrantRule,
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveUsage,
   User,
 } from '../../api/types'
 import { pickDate } from '../../test-support/pickerInteractions'
-import { PaidLeaveAdminPage } from './PaidLeaveAdminPage'
+import { PaidLeavePolicyPage } from './PaidLeavePolicyPage'
 
 const rule: PaidLeaveGrantRule = {
   id: 1,
@@ -25,6 +26,13 @@ const rule: PaidLeaveGrantRule = {
   grant_cycle_months: 12,
   is_active: true,
   steps: [{ continuous_service_months: 6, grant_days: 10 }],
+}
+
+const policies: PaidLeaveGrantPolicies = {
+  version: 'v1',
+  normal: [{ continuous_service_months: 6, grant_days: 10 }],
+  proportional_version: 'v1',
+  proportional: [{ weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 7 }],
 }
 
 const targetUser: User = {
@@ -40,22 +48,46 @@ const targetUser: User = {
 function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue(rules)
+  vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantPolicies').mockResolvedValue(policies)
 
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
-        <PaidLeaveAdminPage />
+        <PaidLeavePolicyPage />
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-describe('PaidLeaveAdminPage', () => {
-  it('lists existing grant rules with their steps', async () => {
+describe('PaidLeavePolicyPage', () => {
+  it('lists existing grant rules with a sentence preview and steps table', async () => {
     renderPage()
 
     expect(await screen.findByText('正社員標準ルール')).toBeInTheDocument()
-    expect(screen.getByText('継続勤務6か月→10日')).toBeInTheDocument()
+    const ruleItem = screen.getByText('正社員標準ルール').closest('li')!
+    expect(
+      within(ruleItem).getByText('入社日から6か月後に最初の付与。以後12か月ごとに、付与テーブルに沿って日数が増えていきます。出勤率が0.8%未満の月は付与されません。'),
+    ).toBeInTheDocument()
+    expect(within(ruleItem).getByText('6か月')).toBeInTheDocument()
+    expect(within(ruleItem).getByText('10日')).toBeInTheDocument()
+  })
+
+  it('shows the statutory grant policy matrix as a read-only reference (no toggle)', async () => {
+    renderPage()
+
+    expect(await screen.findByText('法定付与日数(参考・自動適用)')).toBeInTheDocument()
+    expect(await screen.findByText('週4日')).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  })
+
+  it('disables deleting an active rule with a reason, and allows deleting an inactive one', async () => {
+    renderPage([rule, { ...rule, id: 2, name: '無効ルール', is_active: false }])
+
+    await screen.findByText('正社員標準ルール')
+    const deleteButtons = screen.getAllByRole('button', { name: '削除' })
+    expect(deleteButtons[0]).toBeDisabled()
+    expect(screen.getByText('有効なルールは削除できません。先に無効化してください。')).toBeInTheDocument()
+    expect(deleteButtons[1]).toBeEnabled()
   })
 
   it('creates a new grant rule with the entered values', async () => {
