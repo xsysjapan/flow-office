@@ -1,6 +1,6 @@
 # PR#112(claude/paid-leave-domain-redesign-58ojrn)への差分移植
 
-ステータス: 実装中
+ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -121,3 +121,51 @@ anniversary型ルール(法定Policyと同じsteps)を明示的に追加し、�
 
 Feature 3(ナビ再編)・Feature 5(法定付与日数テーブル編集UI)は別エージェントの
 担当範囲のため本作業では未着手。
+
+### Feature 3(ナビ再編)
+
+- `adminNavGroups.ts`から「付与予定」の独立ナビ項目を削除。
+- `PaidLeavePolicyPage.tsx`へ「付与予定を確認」ボタンを追加、
+  `PaidLeaveSchedulePage.tsx`へ「← 付与ポリシー」の戻る導線を追加。
+  スケジュール画面のルート登録(`App.tsx`)自体は変更せず、URL直接アクセスは維持。
+- テスト: `npx tsc -b`クリーン、変更した3ファイル(`PaidLeavePolicyPage.test.tsx`/
+  `PaidLeaveSchedulePage.test.tsx`/`AdminLayout.test.tsx`)19/19 pass。フルスイートは
+  既存の無関係な`ApprovalsPage`/`useAuth`失敗6件のみで新規失敗無し。
+- コミット: `46c32d6`。
+
+### Feature 5(法定付与日数テーブル編集UI)
+
+- バックエンド: `PaidLeaveController`へ`storeGrantPolicy`/`storeProportionalGrantPolicy`
+  (`POST /paid-leave/grant-policies`・`POST /paid-leave/proportional-grant-policies`)を
+  追加。既存の`permission:leave.manage,any`グループに登録。新バージョンはトランザクション内で
+  一括insertし既存行は変更しない。
+- フロントエンド: `PaidLeaveGrantPolicyMatrix.tsx`に`normalAction`/`proportionalAction`
+  スロットを追加し、`PaidLeavePolicyPage.tsx`から「新しいバージョンを作成」ボタン
+  (Sheet、行の追加/削除/編集、固定警告文「この表の変更は法令に基づく設定です。
+  保存前に社労士等の専門家に確認してください。」)を表示。
+- **仕様からの逸脱**: 依頼時点の想定と異なり、本ブランチの比例付与表は
+  `weekly_scheduled_days`(1-7の生の整数)ではなく`weekly_scheduled_days_category`
+  (`'1'|'2'|'3'|'4'`のカテゴリコード)を使用しており、既存のGET側・Matrix
+  コンポーネントもこちらに合わせて実装されていたため、バリデーション・
+  フロントエンドSelectともこのカテゴリコードに合わせた。また`version`列は数値の
+  連番ではなく`v1`/`v2`...という文字列のため、`+1`ではなく専用の
+  `nextGrantPolicyVersion()`ヘルパーでバージョンを算出する形にした。
+- テスト: `backend/tests/Feature/PaidLeaveAccount/PaidLeaveGrantPolicyAdminTest.php`
+  (新規9件)。`php artisan test --filter=PaidLeave`: 199→208件、全件green。
+  `php artisan test`(フルスイート): 1079/1079 green(無回帰)。`npx tsc -b`クリーン、
+  `npm run test`は既存の無関係な失敗6件のみ(新規`PaidLeavePolicyPage.test.tsx`
+  10件は全pass)。
+- コミット: `10d61a7`。
+
+### 全体の最終確認
+
+3コミット(`403f4d9`/`46c32d6`/`10d61a7`)を積んだ状態で、ワークツリーに
+`.env`・`APP_KEY`・DBマイグレーションを独立して用意した上で再度
+`php artisan test`を実行し、**1079/1079 全green**(バックエンドが報告した
+「.envのAPP_KEY未設定による8件の無関係な失敗」がこのセットアップにより解消された
+ことを確認)。コード上も、前倒しアルゴリズム(`ScheduleCandidateGenerator::
+massGrantScheduledDates()`)・NeedsReview化(`isDeterminate`の伝播)が仕様通り
+実装されていることを目視確認済み。
+
+ステータスを`完了`とし、`origin/claude/paid-leave-domain-redesign-58ojrn`へpushして
+PR#112を更新する。
