@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20260913-login-redirect-return-url](./20260913-login-redirect-return-url/spec.md) | ログイン時のリダイレクト元URL復帰対応(Open Redirect対策込み) | 完了 |
 | [20260906-paid-leave-schedule-assessment](./20260906-paid-leave-schedule-assessment/spec.md) | 年次有給休暇 付与Schedule/Assessmentドメイン新設(将来付与予定の確認画面) | 完了 |
 | [20260906-paid-leave-domain-redesign](./20260906-paid-leave-domain-redesign/spec.md) | 年次有給休暇ドメイン再設計(PaidLeaveAccountAggregate中心の再構築) | 完了 |
 | [20260904-paid-leave-auto-grant-per-user-toggle](./20260904-paid-leave-auto-grant-per-user-toggle/spec.md) | 有給・特別休暇の自動付与のユーザーごと有効/無効設定 | 完了 |

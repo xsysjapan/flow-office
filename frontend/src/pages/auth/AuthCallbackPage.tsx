@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
+import { getSafeRedirectTarget, POST_LOGIN_REDIRECT_STORAGE_KEY } from '../../auth/redirectTarget'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { LoadingState } from '../../components/LoadingState/LoadingState'
 
@@ -27,7 +28,11 @@ export function AuthCallbackPage() {
     hasStarted.current = true
 
     completeLogin(code)
-      .then(() => navigate('/', { replace: true }))
+      .then(() => {
+        const stored = sessionStorage.getItem(POST_LOGIN_REDIRECT_STORAGE_KEY)
+        sessionStorage.removeItem(POST_LOGIN_REDIRECT_STORAGE_KEY)
+        navigate(getSafeRedirectTarget(stored) ?? '/', { replace: true })
+      })
       .catch(() => setError(new Error('ログインに失敗しました。もう一度お試しください。')))
   }, [searchParams, completeLogin, navigate])
 
