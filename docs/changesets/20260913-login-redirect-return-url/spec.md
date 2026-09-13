@@ -80,18 +80,22 @@ Open Redirect対策が漏れなく入っているかを確認する。
     細工されたURLでのリダイレクトループを未然に防ぐ。
 - 未確定・要確認事項: なし
 
-### 論点4(補足調査): 「Laravelで最初に有効化するところ」の確認
-- 内容: バックエンド側でSanctum/認証ミドルウェアが最初にどこで有効化されているかを確認した。
-  `backend/CLAUDE.md`・`docs/02-tech-stack.md`記載の通り、本システムはCookieベースの
-  Sanctum SPA認証ではなくBearerトークン認証(`auth:sanctum`ミドルウェアをAPIルートに付与、
-  `config/sanctum.php`の`stateful`ドメイン機構は不使用)を採用している。ログイン画面URL自体は
-  Laravel側にステートを持たない(フロントエンドのSPAルーティングのみ)ため、
-  「ログイン時に最初にリダイレクト先を有効化する」処理はLaravel側には存在せず、
-  今回の変更はフロントエンド(+SSO往復の一時保存)のみで完結する。バックエンド側の
-  変更は不要と判断する。
-- 決定: バックエンド(`backend/`)は変更しない。
-- 理由: Cookideベースのstateful認証(`EnsureFrontendRequestsAreStateful`等)を使っていない
-  ため、Laravel側でリダイレクト元URLを扱う仕組みを新設する必要がない。
+### 論点4: 「Laravelで最初に有効化するところ」の考慮(React側での実装)
+- 内容: Laravel標準の認証ミドルウェア(`Illuminate\Auth\Middleware\Authenticate`)は、
+  未認証アクセス時に元のURLを`session()->put('url.intended', ...)`へ保存し、ログイン成功後に
+  `redirect()->intended('/')`でそこへ戻す「intended URL」という一般的な仕組みを標準で持つ
+  (Laravel初期化直後から有効な既定動作)。本システムはCookieベースのstateful Sanctum認証を
+  使わずBearerトークン認証のSPA構成のため、この仕組みはLaravel側には存在しない。今回の
+  依頼は、この`intended URL`パターンと同等の考慮(未認証時に元URLを保存し、ログイン後に
+  そこへ戻す)を**React側(SPAのルーティング層)に実装してほしい**という意味だった
+  (2026-09-13ユーザー確認済み)。
+- 決定: 論点1〜3で確定した`RequireAuth`(元URL保存)→`LoginPage`/`AuthCallbackPage`
+  (戻り先への遷移、`sessionStorage`でSSO往復をまたぐ)の一連の実装が、この
+  `intended URL`パターンのReact側での実装そのものにあたる。バックエンド(`backend/`)は
+  引き続き変更しない(Laravel側に該当ミドルウェアの出番がないため)。
+- 理由: Bearerトークン認証ではLaravel側にセッション(Cookie)が存在せず`session()`を
+  使えないため、同等の状態保持はSPA側(`sessionStorage`・URLクエリ)で行うのが自然な対応
+  であり、論点1で決定した設計と矛盾なく両立する。
 
 ## 仕様確定事項(まとめ)
 - `frontend/src/auth/redirectTarget.ts`(新規)に以下を実装する:
@@ -152,7 +156,11 @@ Open Redirect対策が漏れなく入っているかを確認する。
   `sessionStorage`書き込み/読み出しロジックの単体テストで代替する。
 
 ## レビュー履歴
-初版。
+- 初版。
+- 2026-09-13: 論点4を修正。「Laravelで最初に有効化するところ」の意図はバックエンド不要の
+  結論ではなく、Laravel標準の`intended URL`パターン相当の考慮をReact側に実装してほしいと
+  いう意味だったとユーザーより確認。実装方針(論点1〜3)自体はこれと合致しているため、
+  技術的な実装対象・結論に変更なし。
 
 ## 実装結果
 未着手。
