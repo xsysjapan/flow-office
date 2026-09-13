@@ -87,4 +87,37 @@ investigatorエージェントによる比較調査の結果(要点):
 
 ## 実装結果
 
-未着手。
+Feature 1・2・4(バックエンド)を移植した。
+
+- migration: `paid_leave_grant_rules`へ`grant_cycle_type`/`mass_grant_month`列を追加
+  (`2026_09_14_000000_...`)、全社共通の一斉付与ルールを冪等にシード
+  (`2026_09_14_000001_...`)。
+- `ScheduleCandidateGenerator`: work_style固有ルールが無ければ全社共通ルール
+  (`work_style_id`がnull)へフォールバックするよう修正(従来は未実装で無視されていた)。
+  いずれのルールも無ければ候補を一切生成しない。`grant_cycle_type`が
+  `mass_grant_month`の場合は前倒しアルゴリズムで日付を算出。`usage_start_date`より前の
+  候補は生成しない(null許容の防御的チェック込み)。
+- `resolveGrantDays`の戻り値を`GrantDaysResult`(days + isDeterminate)に変更し、
+  「ルールはあるがstep未整備」「NeedsReview区分」「法定Policy未整備」を確定不可として
+  区別。`PaidLeaveScheduleEntryCreated`イベント・`PaidLeaveScheduleAggregate`・
+  Projectorに`isDeterminate`を伝播し、確定不可の場合はScheduledではなくNeedsReview状態で
+  エントリを作成する。
+- `PaidLeaveController::storeRule`/`updateRule`に`grant_cycle_type`/`mass_grant_month`の
+  バリデーションを追加。
+
+移植に伴う既存テストへの影響: マイグレーションでシードした全社共通ルールが常に
+フォールバック適用されるようになったため、`RollPaidLeaveSchedulesCommandTest`・
+`RecalculateScheduleOnConditionChangedReactorTest`の既存テストにwork_style固有の
+anniversary型ルール(法定Policyと同じsteps)を明示的に追加し、従来の周年ベースの
+挙動・アサーションを維持した。
+
+テスト結果:
+- `php artisan test --filter=PaidLeave`: 移植前187件→移植後199件(12件追加)、
+  全件green(assertions 497)。
+- `php artisan test`(フルスイート): 1070件中1044件pass・8件failだが、
+  いずれもこの変更と無関係(ワークツリーの`.env`に`APP_KEY`が設定されておらず、
+  暗号化を使うExternalIntegration/SSO/Onboarding系テストが
+  `MissingAppKeyException`で失敗する既存の環境起因の問題。PaidLeave関連の失敗は無し)。
+
+Feature 3(ナビ再編)・Feature 5(法定付与日数テーブル編集UI)は別エージェントの
+担当範囲のため本作業では未着手。

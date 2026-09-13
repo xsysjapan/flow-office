@@ -11,5 +11,6 @@ class PaidLeaveScheduleEntryCreated extends ShouldBeStored
         public readonly string $scheduledOn,
         public readonly string $category,
         public readonly float $candidateGrantDays,
+        public readonly bool $isDeterminate = true,
     ) {}
 }

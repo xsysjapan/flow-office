@@ -31,7 +31,7 @@ class PaidLeaveScheduleProjector extends Projector
                 'scheduled_on' => $event->scheduledOn,
                 'category' => $event->category,
                 'candidate_grant_days' => $event->candidateGrantDays,
-                'status' => PaidLeaveScheduleEntry::STATUS_SCHEDULED,
+                'status' => $event->isDeterminate ? PaidLeaveScheduleEntry::STATUS_SCHEDULED : PaidLeaveScheduleEntry::STATUS_NEEDS_REVIEW,
             ],
         );
     }

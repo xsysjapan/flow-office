@@ -287,7 +287,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
     }
 
     /**
-     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}  $candidate
+     * @param  array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float, isDeterminate?: bool}  $candidate
      */
     private function createEntry(array $candidate): void
     {
@@ -296,6 +296,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             scheduledOn: $candidate['scheduledOn'],
             category: $candidate['category'],
             candidateGrantDays: $candidate['candidateGrantDays'],
+            isDeterminate: $candidate['isDeterminate'] ?? true,
         ));
     }
 
@@ -330,7 +331,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
             'scheduledOn' => $event->scheduledOn,
             'category' => $event->category,
             'candidateGrantDays' => $event->candidateGrantDays,
-            'status' => self::STATUS_SCHEDULED,
+            'status' => $event->isDeterminate ? self::STATUS_SCHEDULED : self::STATUS_NEEDS_REVIEW,
             'manualOverride' => null,
             'assessments' => [],
             'latestAssessmentId' => null,

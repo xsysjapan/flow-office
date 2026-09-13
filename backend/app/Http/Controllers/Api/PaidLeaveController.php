@@ -83,11 +83,18 @@ class PaidLeaveController extends Controller
             'min_attendance_rate' => ['integer', 'between:0,100'],
             'first_grant_after_months' => ['integer', 'min:0'],
             'grant_cycle_months' => ['integer', 'min:1'],
+            'grant_cycle_type' => ['string', 'in:anniversary,mass_grant_month'],
+            'mass_grant_month' => ['required_if:grant_cycle_type,mass_grant_month', 'nullable', 'integer', 'between:1,12'],
             'is_active' => ['boolean'],
             'steps' => ['array'],
             'steps.*.continuous_service_months' => ['required', 'integer', 'min:0'],
             'steps.*.grant_days' => ['required', 'integer', 'min:0'],
         ]);
+
+        $data['grant_cycle_type'] = $data['grant_cycle_type'] ?? PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY;
+        $data['mass_grant_month'] = $data['grant_cycle_type'] === PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH
+            ? ($data['mass_grant_month'] ?? null)
+            : null;
 
         $this->validateStepsAgainstStatutoryMinimum($data['work_style_id'] ?? null, $data['steps'] ?? []);
 
@@ -122,11 +129,18 @@ class PaidLeaveController extends Controller
             'min_attendance_rate' => ['integer', 'between:0,100'],
             'first_grant_after_months' => ['integer', 'min:0'],
             'grant_cycle_months' => ['integer', 'min:1'],
+            'grant_cycle_type' => ['string', 'in:anniversary,mass_grant_month'],
+            'mass_grant_month' => ['required_if:grant_cycle_type,mass_grant_month', 'nullable', 'integer', 'between:1,12'],
             'is_active' => ['boolean'],
             'steps' => ['array'],
             'steps.*.continuous_service_months' => ['required', 'integer', 'min:0'],
             'steps.*.grant_days' => ['required', 'integer', 'min:0'],
         ]);
+
+        $data['grant_cycle_type'] = $data['grant_cycle_type'] ?? PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY;
+        $data['mass_grant_month'] = $data['grant_cycle_type'] === PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH
+            ? ($data['mass_grant_month'] ?? null)
+            : null;
 
         $this->validateStepsAgainstStatutoryMinimum($data['work_style_id'] ?? null, $data['steps'] ?? []);
 

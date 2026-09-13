@@ -19,6 +19,8 @@ class PaidLeaveGrantRuleResource extends JsonResource
             'min_attendance_rate' => $this->min_attendance_rate,
             'first_grant_after_months' => $this->first_grant_after_months,
             'grant_cycle_months' => $this->grant_cycle_months,
+            'grant_cycle_type' => $this->grant_cycle_type,
+            'mass_grant_month' => $this->mass_grant_month,
             'is_active' => $this->is_active,
             'steps' => $this->whenLoaded('steps', fn () => $this->steps->map(fn ($step) => [
                 'continuous_service_months' => $step->continuous_service_months,

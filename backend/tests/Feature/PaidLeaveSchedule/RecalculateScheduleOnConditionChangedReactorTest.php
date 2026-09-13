@@ -8,6 +8,7 @@ use App\Domain\PaidLeaveSchedule\Commands\EnsureFutureScheduleGenerated;
 use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\UserManagement\Commands\SetUserHireDate;
 use App\Models\PaidLeaveGrantPolicy;
+use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveScheduleEntry;
 use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
@@ -151,6 +152,22 @@ class RecalculateScheduleOnConditionChangedReactorTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-09-13'));
         $this->seedNormalPolicy();
         $workStyle = $this->createWorkStyle(['weekly_scheduled_days' => null, 'prescribed_weekly_minutes' => 800, 'is_shift_based' => false]);
+
+        // マイグレーションでシードされた全社共通(一斉付与)ルールより優先させ、
+        // 従来通りの周年サイクル・法定Policy相当の候補日1件のみを生成させる
+        // (本テストの検証対象は「区分再判定」であり、一斉付与アルゴリズムではないため)。
+        $rule = PaidLeaveGrantRule::query()->create([
+            'name' => 'work_style固有(周年)',
+            'work_style_id' => $workStyle->id,
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
+            'is_active' => true,
+        ]);
+        foreach ([6 => 10, 18 => 11, 30 => 12, 42 => 14, 54 => 16, 66 => 18] as $months => $days) {
+            $rule->steps()->create(['continuous_service_months' => $months, 'grant_days' => $days]);
+        }
 
         $user = User::factory()->create(['hire_date' => '2026-09-13', 'employment_status' => 'active']);
         // work_style割当は、割当自体のReactorトリガー(setUp時点の再計算)による
