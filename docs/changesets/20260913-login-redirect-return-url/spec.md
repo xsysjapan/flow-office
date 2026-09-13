@@ -1,6 +1,6 @@
 # ログイン時のリダイレクト元URL復帰対応
 
-ステータス: レビュー中
+ステータス: 完了
 
 ## 変更要望(原文)
 URLを指定してログインする際に、リダイレクト元のURLに戻るように修正してください。
@@ -163,4 +163,21 @@ Open Redirect対策が漏れなく入っているかを確認する。
   技術的な実装対象・結論に変更なし。
 
 ## 実装結果
-未着手。
+- `frontend/src/auth/redirectTarget.ts`(新規): `getSafeRedirectTarget()`・
+  `POST_LOGIN_REDIRECT_STORAGE_KEY`を実装。
+- `frontend/src/auth/redirectTarget.test.ts`(新規): 8ケースのユニットテスト、全て成功。
+- `frontend/src/auth/RequireAuth.tsx`: 未認証時に`location.pathname + search`を
+  `redirect`クエリに載せて`/login`へ遷移するよう修正。
+- `frontend/src/pages/auth/LoginPage.tsx`: `redirect`クエリを`getSafeRedirectTarget()`で
+  検証し、ローカルログイン成功時はその値(無効なら`/`)へ`navigate`。Microsoftログイン
+  離脱前に`sessionStorage`へ保存。
+- `frontend/src/pages/auth/AuthCallbackPage.tsx`: SSOコールバック成功時に
+  `sessionStorage`から戻り先を読み出し・消費し、再検証の上で`navigate`。
+- `docs/06-usecases-auth.md`: UC-001へ1行追記。
+- 検証: `npm run test`(Vitestフルスイート)は929件中6件失敗・2件skipあり。失敗2ファイル
+  (`ApprovalsPage.test.tsx`関連、`useAuth must be used within an AuthProvider`エラー)は
+  今回の変更を`git stash`した状態でも同一内容・同一件数で再現することを確認済みであり、
+  本変更とは無関係な既存の不具合(pre-existing)。`npx tsc --noEmit -p tsconfig.app.json`は
+  エラーなし。新設した`redirectTarget.test.ts`(8件)は全て成功。
+- コミット: 実装コミットは本エントリ更新と合わせてプッシュ予定(コミットハッシュは
+  `git log`参照)。
