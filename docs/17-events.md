@@ -279,8 +279,10 @@ Projectorはコードから削除済みで、以後この名前空間から新�
 docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 - `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
-  (scheduleEntryId, scheduledOn, category, candidateGrantDays)。新規Scheduleエントリ作成
-  (新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
+  (scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate)。新規Schedule
+  エントリ作成(新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
+  `isDeterminate=false`の場合、エントリは`Scheduled`ではなく`NeedsReview`状態で作成される
+  (候補日数を確定できない場合。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
 - `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
   (scheduleEntryId, reason, previousScheduledOn, previousCategory,
   previousCandidateGrantDays)。再計算により既存エントリが置き換えられたことを記録する
