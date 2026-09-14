@@ -137,6 +137,50 @@ class ScheduleCandidateGeneratorTest extends TestCase
         $this->assertSame(['2026-04-01', '2027-04-01', '2028-04-01', '2029-04-01'], $dates);
     }
 
+    public function test_front_loaded_and_subsequent_grants_resolve_determinate_days_matching_nominal_tier(): void
+    {
+        // レビュー指摘の回帰テスト: continuousServiceMonthsを実際の暦月数
+        // (前倒しの場合6ヶ月未満になる)ではなく、名目上の付与回数ベースの月数
+        // (初回=first_grant_after_months、以降+12ずつ)で解決しないと、
+        // 前倒し付与エントリのstepsが一致せず常にNeedsReview(isDeterminate=false)に
+        // なってしまう不具合を検証する。
+        $workStyle = $this->createWorkStyle();
+        $rule = $this->createMassGrantRule($workStyle);
+        $rule->steps()->create(['continuous_service_months' => 6, 'grant_days' => 10]);
+        $rule->steps()->create(['continuous_service_months' => 18, 'grant_days' => 11]);
+
+        // 12月入社: 前倒しで2026-04-01が初回付与(実経過月数は4ヶ月)。
+        $user = User::factory()->create(['hire_date' => '2025-12-01', 'employment_status' => 'active']);
+        $this->assignWorkStyle($user, $workStyle, '2020-01');
+
+        $candidates = $this->generator()->candidatesFor($user, Carbon::parse('2025-01-01'), Carbon::parse('2028-12-31'));
+
+        $this->assertSame('2026-04-01', $candidates[0]['scheduledOn']);
+        $this->assertTrue($candidates[0]['isDeterminate'], '前倒しされた初回付与も候補日数を確定できること');
+        $this->assertSame(10.0, $candidates[0]['candidateGrantDays']);
+
+        $this->assertSame('2027-04-01', $candidates[1]['scheduledOn']);
+        $this->assertTrue($candidates[1]['isDeterminate']);
+        $this->assertSame(11.0, $candidates[1]['candidateGrantDays']);
+    }
+
+    public function test_six_month_branch_also_resolves_determinate_days(): void
+    {
+        $workStyle = $this->createWorkStyle();
+        $rule = $this->createMassGrantRule($workStyle);
+        $rule->steps()->create(['continuous_service_months' => 6, 'grant_days' => 10]);
+
+        // 4月入社: 一斉付与月(4月)より6ヶ月後(10月)の方が早いため6ヶ月後付与。
+        $user = User::factory()->create(['hire_date' => '2025-04-01', 'employment_status' => 'active']);
+        $this->assignWorkStyle($user, $workStyle, '2020-01');
+
+        $candidates = $this->generator()->candidatesFor($user, Carbon::parse('2025-01-01'), Carbon::parse('2026-12-31'));
+
+        $this->assertSame('2025-10-01', $candidates[0]['scheduledOn']);
+        $this->assertTrue($candidates[0]['isDeterminate']);
+        $this->assertSame(10.0, $candidates[0]['candidateGrantDays']);
+    }
+
     public function test_anniversary_type_rules_are_unaffected(): void
     {
         $this->seedNormalPolicyUpTo();

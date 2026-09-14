@@ -169,3 +169,32 @@ massGrantScheduledDates()`)・NeedsReview化(`isDeterminate`の伝播)が仕様�
 
 ステータスを`完了`とし、`origin/claude/paid-leave-domain-redesign-58ojrn`へpushして
 PR#112を更新する。
+
+### 追加修正(2026-09-14): コードレビューで発覚した2件のバグ修正
+
+`code-review`スキル(effort: high、対象`1ffb587..HEAD`)によるレビューで、テストでは
+検出されていなかった2件の実際のバグが見つかったため修正した。
+
+1. **`PaidLeaveController::updateRule`のデータ損失バグ**: `grant_cycle_type`/
+   `mass_grant_month`がリクエストに含まれない場合でも無条件に既定値
+   (`anniversary`/`null`)で上書きしていたため、既存の付与ルール編集フォーム
+   (これらのフィールドを送信しない)経由で一斉付与ルールを編集すると、
+   一斉付与設定が黙って消えていた。リクエストに`grant_cycle_type`が含まれる場合
+   のみこれらのフィールドを更新するpartial update方式に修正
+   (`backend/app/Http/Controllers/Api/PaidLeaveController.php`)。
+2. **前倒し付与エントリが常にNeedsReviewになるバグ**: `ScheduleCandidateGenerator`が
+   `continuousServiceMonths`を「入社日から実際のスケジュール日までの暦月数」で
+   計算していたため、前倒しされた初回付与日(6ヶ月未満で付与)では
+   `first_grant_after_months`(通常6)を下回り、`steps`のどの段も一致せず
+   常に確定不可(NeedsReview・0日)になっていた。`nominalMonths`
+   (名目上の継続勤務月数。初回=`first_grant_after_months`、以降+12ずつ)を
+   実際の暦月数とは別に算出し、`resolveGrantDays`の参照キーとして使うよう修正
+   (`backend/app/Domain/PaidLeaveSchedule/Support/ScheduleCandidateGenerator.php`の
+   `anniversaryScheduledDates`/`massGrantScheduledDates`が`{scheduledOn, nominalMonths}`
+   を返すよう変更)。
+
+テスト: `PaidLeaveGrantRuleAdminTest`に2件(未送信時の設定保持・明示送信時の
+切替が両方効くこと)、`ScheduleCandidateGeneratorTest`に2件(前倒し・6ヶ月後
+分岐それぞれで候補日数が確定しstepsの正しい段を参照すること)を追加。
+`php artisan test --filter=PaidLeave`: 212/212 green(208→212、+4)。
+`php artisan test`(フルスイート): 1083/1083 green(無回帰)。

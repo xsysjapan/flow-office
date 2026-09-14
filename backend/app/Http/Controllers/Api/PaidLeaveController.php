@@ -137,10 +137,17 @@ class PaidLeaveController extends Controller
             'steps.*.grant_days' => ['required', 'integer', 'min:0'],
         ]);
 
-        $data['grant_cycle_type'] = $data['grant_cycle_type'] ?? PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY;
-        $data['mass_grant_month'] = $data['grant_cycle_type'] === PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH
-            ? ($data['mass_grant_month'] ?? null)
-            : null;
+        // grant_cycle_type/mass_grant_monthはリクエストに含まれている場合のみ更新する。
+        // 既存の編集フォームはこれらのフィールドを送信しないため、無条件に既定値
+        // (anniversary/null)で上書きすると、一斉付与ルールの設定が編集のたびに
+        // 意図せずリセットされてしまう(未送信時は既存値を保持するpartial updateとする)。
+        if (array_key_exists('grant_cycle_type', $data)) {
+            $data['mass_grant_month'] = $data['grant_cycle_type'] === PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH
+                ? ($data['mass_grant_month'] ?? null)
+                : null;
+        } else {
+            unset($data['mass_grant_month']);
+        }
 
         $this->validateStepsAgainstStatutoryMinimum($data['work_style_id'] ?? null, $data['steps'] ?? []);
 

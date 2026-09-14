@@ -73,7 +73,7 @@ class ScheduleCandidateGenerator
 
         $candidates = [];
 
-        foreach ($scheduledDates as $scheduledOn) {
+        foreach ($scheduledDates as ['scheduledOn' => $scheduledOn, 'nominalMonths' => $nominalMonths]) {
             if ($scheduledOn->lt($from)) {
                 continue;
             }
@@ -86,8 +86,7 @@ class ScheduleCandidateGenerator
                 continue;
             }
 
-            $continuousServiceMonths = (int) $user->hire_date->diffInMonths($scheduledOn);
-            $result = $this->resolveGrantDays($rule, $category, $workStyle, $continuousServiceMonths);
+            $result = $this->resolveGrantDays($rule, $category, $workStyle, $nominalMonths);
 
             $candidates[] = [
                 'entryId' => (string) Str::uuid(),
@@ -127,7 +126,11 @@ class ScheduleCandidateGenerator
     }
 
     /**
-     * @return array<int, Carbon>
+     * `nominalMonths`は継続勤務月数の法定tier判定(`resolveGrantDays`のstep/Policy
+     * 参照キー)に使う「名目上の」継続勤務月数。周年方式は`scheduledOn`がちょうど
+     * `hire_date + nominalMonths`なので、実際の暦月数とnominalMonthsは常に一致する。
+     *
+     * @return array<int, array{scheduledOn: Carbon, nominalMonths: int}>
      */
     private function anniversaryScheduledDates(Carbon $hireDate, PaidLeaveGrantRule $rule, Carbon $to): array
     {
@@ -145,7 +148,7 @@ class ScheduleCandidateGenerator
                 break;
             }
 
-            $dates[] = $scheduledOn;
+            $dates[] = ['scheduledOn' => $scheduledOn, 'nominalMonths' => $months];
         }
 
         return $dates;
@@ -164,7 +167,15 @@ class ScheduleCandidateGenerator
      * 5. 2回目以降は、初回付与日より後の直近の「一斉付与月の1日」(初回付与日自体が
      *    既にその日である場合は翌年扱い)、以降は毎年。
      *
-     * @return array<int, Carbon>
+     * `nominalMonths`(法定tier判定用の名目継続勤務月数)は、実際の暦月数
+     * (`hire_date`から`scheduledOn`までの実日数ベースの経過月数)とは別に、
+     * 「これが何回目の付与か」から機械的に定める: 初回は前倒しの有無によらず
+     * 常に`first_grant_after_months`(例:6)、2回目以降は前回の`nominalMonths`+12
+     * (法定の1年ごとの加算)とする。前倒しで実際の経過月数が6ヶ月未満になっても、
+     * `steps`/法定Policyの参照キーには本来の「初回付与」時点の月数(6)を使うことで、
+     * 前倒し付与でも通常の付与日数テーブルが正しく参照される。
+     *
+     * @return array<int, array{scheduledOn: Carbon, nominalMonths: int}>
      */
     private function massGrantScheduledDates(Carbon $hireDate, PaidLeaveGrantRule $rule, Carbon $to): array
     {
@@ -184,6 +195,7 @@ class ScheduleCandidateGenerator
 
         $dates = [];
         $current = $firstGrantDate;
+        $nominalMonths = $firstGrantAfterMonths;
 
         // 安全弁: 無限ループ防止。
         for ($i = 0; $i < 600; $i++) {
@@ -191,8 +203,9 @@ class ScheduleCandidateGenerator
                 break;
             }
 
-            $dates[] = $current->copy();
+            $dates[] = ['scheduledOn' => $current->copy(), 'nominalMonths' => $nominalMonths];
             $current = $this->nextMassGrantMonthFirstDayAfter($current, $massGrantMonth);
+            $nominalMonths += 12;
         }
 
         return $dates;

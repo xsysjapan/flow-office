@@ -75,6 +75,69 @@ class PaidLeaveGrantRuleAdminTest extends TestCase
         $this->assertCount(1, $rule->steps()->get());
     }
 
+    public function test_updating_rule_without_grant_cycle_type_preserves_mass_grant_month_setting(): void
+    {
+        // docs/changesets/20260914-port-to-pr112/spec.md レビュー指摘: 既存の編集フォームは
+        // grant_cycle_type/mass_grant_monthを送信しないため、これらのフィールドを
+        // 常に既定値(anniversary/null)で上書きすると、一斉付与ルールの設定が
+        // 編集のたびに意図せずリセットされてしまう回帰を防ぐ。
+        $this->seedNormalPolicy();
+        $admin = $this->admin();
+        $rule = PaidLeaveGrantRule::query()->create([
+            'name' => '全社共通', 'work_style_id' => null, 'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6, 'grant_cycle_months' => 12, 'is_active' => true,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH, 'mass_grant_month' => 4,
+        ]);
+        $rule->steps()->create(['continuous_service_months' => 6, 'grant_days' => 10]);
+
+        // grant_cycle_type/mass_grant_monthを含まないリクエスト(既存の編集フォーム相当)。
+        $response = $this->actingAs($admin)->putJson("/api/paid-leave/grant-rules/{$rule->id}", [
+            'name' => '全社共通',
+            'min_attendance_rate' => 90,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'is_active' => true,
+            'steps' => [
+                ['continuous_service_months' => 6, 'grant_days' => 10],
+            ],
+        ]);
+
+        $response->assertOk();
+        $rule->refresh();
+        $this->assertSame(90, $rule->min_attendance_rate);
+        $this->assertSame(PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH, $rule->grant_cycle_type);
+        $this->assertSame(4, $rule->mass_grant_month);
+    }
+
+    public function test_updating_rule_can_still_switch_grant_cycle_type_when_sent_explicitly(): void
+    {
+        $this->seedNormalPolicy();
+        $admin = $this->admin();
+        $rule = PaidLeaveGrantRule::query()->create([
+            'name' => '全社共通', 'work_style_id' => null, 'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6, 'grant_cycle_months' => 12, 'is_active' => true,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_MASS_GRANT_MONTH, 'mass_grant_month' => 4,
+        ]);
+        $rule->steps()->create(['continuous_service_months' => 6, 'grant_days' => 10]);
+
+        $response = $this->actingAs($admin)->putJson("/api/paid-leave/grant-rules/{$rule->id}", [
+            'name' => '全社共通',
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'grant_cycle_type' => PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY,
+            'is_active' => true,
+            'steps' => [
+                ['continuous_service_months' => 6, 'grant_days' => 10],
+            ],
+        ]);
+
+        $response->assertOk();
+        $rule->refresh();
+        $this->assertSame(PaidLeaveGrantRule::CYCLE_TYPE_ANNIVERSARY, $rule->grant_cycle_type);
+        $this->assertNull($rule->mass_grant_month);
+    }
+
     public function test_update_rejects_step_below_statutory_minimum(): void
     {
         $this->seedNormalPolicy();
