@@ -11,6 +11,14 @@ import { defineConfig, devices } from "@playwright/test";
  * 投入を手動で行う必要はない(backend側の`.env`で`MICROSOFT_MOCK_ENABLED=true`が
  * 必須)。
  *
+ * `scenario-13-external-integration.spec.ts`だけは追加で mock-freee/ (port 9001)・
+ * mock-moneyforward/ (port 9002) の起動と、backend側`.env`の
+ * `FREEE_*`/`MF_EXPENSE_*`をlocalhost向けにコメントアウト解除する設定が必要
+ * (`.env`内の該当コメントを参照)。これらを起動せずに`npm run test:e2e`
+ * (全ファイル一括実行)を回すと、scenario-13だけが必ず失敗する
+ * (ECONNREFUSED 127.0.0.1:9001)。個別に`--filter`等でscenario-13を除外して
+ * 実行する場合は不要。
+ *
  * 実行: cd frontend && npm run test:e2e
  */
 export default defineConfig({
