@@ -198,3 +198,24 @@ PR#112を更新する。
 分岐それぞれで候補日数が確定しstepsの正しい段を参照すること)を追加。
 `php artisan test --filter=PaidLeave`: 212/212 green(208→212、+4)。
 `php artisan test`(フルスイート): 1083/1083 green(無回帰)。
+
+### 追加対応(2026-09-14): ドキュメントへの影響の反映漏れを解消
+
+changesetスキルの完了前チェック(本skill自体もこの時点で見直し・強化した)に
+照らして再確認したところ、当初の「ドキュメントへの影響」で予定していた
+docs/09・16・17への反映が未実施のままステータスを`完了`にしていたことが判明したため
+実施した。
+
+- `docs/09-usecases-paid-leave.md`(UC-P002): 削除済みの`GrantScheduledPaidLeaveHandler`
+  による旧フロー説明を、現行の`ScheduleCandidateGenerator`ベースのフロー
+  (事前生成→Assessment→管理者一括付与、一斉付与月方式、ルール不在時スキップ、
+  NeedsReview化、法定付与日数テーブルの編集UI)に置き換えた。
+- `docs/16-database-schema.md`: `paid_leave_grant_rules`へ`grant_cycle_type`/
+  `mass_grant_month`列を追記。加えて、元のPR#112実装時点から未記載だった
+  `paid_leave_schedule_entries`/`paid_leave_grant_policies`/
+  `paid_leave_proportional_grant_policies`の3テーブルも(今回のPOSTエンドポイント
+  追加を機に)新規追記した。
+- `docs/17-events.md`: `PaidLeaveScheduleEntryCreated`イベントへの
+  `isDeterminate`フィールド追加を反映。
+
+コミット: `1e8bb8a`。
