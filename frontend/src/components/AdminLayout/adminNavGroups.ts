@@ -91,8 +91,15 @@ export const adminNavGroups: AdminNavGroup[] = [
         permission: "attendance.manage",
       },
       {
+        to: "/admin/paid-leave/schedule",
+        label: "付与予定",
+        description: "将来の有給付与予定・出勤率判定を確認し、必要なら上書き・一括付与する",
+        feature: "paid_leave.requests",
+        permission: "leave.manage",
+      },
+      {
         to: "/admin/paid-leave",
-        label: "有給設定",
+        label: "付与ポリシー",
         description: "有給の付与・消化ルールを管理する",
         feature: "paid_leave.requests",
         permission: "leave.manage",

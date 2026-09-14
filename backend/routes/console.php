@@ -25,8 +25,10 @@ Schedule::command('users:sync-ms365')
     ->dailyAt('01:00')
     ->withoutOverlapping();
 
-// spec.md(docs/changesets/20260906-paid-leave-schedule-assessment): 有給の将来付与予定
-// Scheduleを1年先まで日次でロール生成する(実際のGrant発行は管理者の一括付与操作で行う)。
+// UC-P002: 有給付与Scheduleを毎日ローリング生成し、到来済みエントリの出勤率Assessmentを
+// 実行する(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md 論点6・10。
+// 旧`paid-leave:grant-scheduled`(日次全件評価バッチ)を置換。Grant自体は管理者が
+// 付与予定画面で確認した上で一括付与する — 自動確定はしない)。
 Schedule::command('paid-leave:roll-schedules')
     ->dailyAt('02:00')
     ->withoutOverlapping();

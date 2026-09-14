@@ -43,10 +43,10 @@ class PaidLeaveGrantRuleTargetUsersTest extends TestCase
         $response = $this->actingAs($eligible)->getJson("/api/paid-leave/grant-rules/{$rule->id}/target-users");
 
         $response->assertOk();
-        $names = collect($response->json('data'))->pluck('name');
+        $names = collect($response->json())->pluck('name');
         $this->assertTrue($names->contains('対象太郎'));
         $this->assertFalse($names->contains('未入社花子'));
-        $entry = collect($response->json('data'))->firstWhere('id', $eligible->id);
+        $entry = collect($response->json())->firstWhere('id', $eligible->id);
         $this->assertFalse($entry['paid_leave_auto_grant_enabled']);
     }
 
@@ -76,10 +76,10 @@ class PaidLeaveGrantRuleTargetUsersTest extends TestCase
             $response = $this->actingAs($matching)->getJson("/api/paid-leave/grant-rules/{$rule->id}/target-users");
 
             $response->assertOk();
-            $ids = collect($response->json('data'))->pluck('id');
+            $ids = collect($response->json())->pluck('id');
             $this->assertTrue($ids->contains($matching->id));
             $this->assertFalse($ids->contains($nonMatching->id));
-            $this->assertSame('シフト勤務', $response->json('data')[0]['work_style']);
+            $this->assertSame('シフト勤務', $response->json()[0]['work_style']);
         } finally {
             Carbon::setTestNow();
         }

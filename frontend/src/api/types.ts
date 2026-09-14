@@ -1033,6 +1033,20 @@ export interface PaidLeaveGrantRuleTargetUser {
   paid_leave_auto_grant_enabled: boolean;
 }
 
+/** 一括付与APIのエントリ単位の結果。 */
+export interface ApplyScheduledGrantsResultItem {
+  entry_id: string;
+  status: "granted" | "failed";
+  grant_id?: string | null;
+  error?: string;
+}
+
+export interface ApplyScheduledGrantsResult {
+  results: ApplyScheduledGrantsResultItem[];
+  success_count: number;
+  failure_count: number;
+}
+
 /** 特別休暇の名前付き種別マスタ(例: 誕生日休暇)。有効な種別が1件も無ければ
  *  特別休暇メニュー自体を表示しない。 */
 export interface SpecialLeaveType {

@@ -839,7 +839,9 @@ function PaidLeaveUsageCard() {
  * UC-P002 / UC-P007: 有給付与ルールの設定・手動付与・対象社員の使用状況確認・
  * 付与取消/申請取消を1画面にまとめて管理者・人事向けに提供する
  * (旧`PaidLeaveAdminPage`。spec.md論点11で「付与予定」画面(`PaidLeaveSchedulePage`)と
- * 分離し、こちらは付与ポリシー(独自ルール・法定Policy)専用のページへリネームした)。
+ * 分離し、こちらは付与ポリシー(独自ルール・法定Policy)専用のページへリネームした。
+ * 「付与予定」は独立ナビ項目を持たず、本ページからのドリルダウンでのみ到達する
+ * `docs/changesets/20260914-port-to-pr112/spec.md`参照)。
  */
 export function PaidLeavePolicyPage() {
   return (

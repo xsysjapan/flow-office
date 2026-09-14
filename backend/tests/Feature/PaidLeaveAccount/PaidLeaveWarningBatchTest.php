@@ -17,16 +17,14 @@ use Tests\TestCase;
 /**
  * UC-P005: 有給消滅警告を出す(バッチ) / UC-P006: 年5日取得義務を警告する(バッチ)。
  *
- * 旧UC-P002(有給を毎日自動付与するバッチ、`GrantScheduledPaidLeave`)は
- * docs/changesets/20260906-paid-leave-schedule-assessment/spec.md(論点10)により
- * `App\Domain\PaidLeaveSchedule`ドメイン(`paid-leave:roll-schedules`+管理者一括付与)へ
- * 置換され、`GrantScheduledPaidLeaveHandler`/`GrantScheduledPaidLeaveCommand`ごと削除した。
- * 該当のテストケース群も本ファイルから削除し、新ドメインの単体・Featureテスト
- * (tests/Unit/PaidLeaveSchedule/・tests/Feature/PaidLeaveSchedule/)に引き継いだ。
- * `WarnExpiringPaidLeave`/`WarnFiveDayObligation`は無変更で存続するため、そのテストは
- * このまま残す。
+ * `paid-leave:grant-scheduled`(旧`GrantScheduledPaidLeaveHandler`、日次全件評価バッチ)の
+ * 廃止(docs/changesets/20260906-paid-leave-schedule-assessment/spec.md Phase C・論点10)に
+ * 伴い、`tests/Feature/PaidLeaveAccount/PaidLeaveScheduledBatchTest.php`から
+ * `WarnExpiringPaidLeave`/`WarnFiveDayObligation`(いずれも本変更セットの対象外、無変更で
+ * 存続)のテストのみをこのファイルへ引き継ぐ。付与Schedule関連のテストは
+ * `tests/Feature/PaidLeaveSchedule/RollPaidLeaveSchedulesCommandTest.php`へ移行した。
  */
-class PaidLeaveScheduledBatchTest extends TestCase
+class PaidLeaveWarningBatchTest extends TestCase
 {
     use RefreshDatabase;
 

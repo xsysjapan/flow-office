@@ -297,6 +297,7 @@ use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantExpiry;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\PaidLeaveAccount\Commands\MigratePaidLeaveAccount;
 use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
 use App\Domain\PaidLeaveAccount\Handlers\CancelPaidLeaveUsageHandler;
@@ -305,7 +306,6 @@ use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantDateHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantExpiryHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
-use App\Domain\PaidLeaveAccount\Commands\MigratePaidLeaveAccount;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
 use App\Domain\PaidLeaveAccount\Handlers\MigratePaidLeaveAccountHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
@@ -630,6 +630,8 @@ return [
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
         MigratePaidLeaveAccount::class => MigratePaidLeaveAccountHandler::class,
 
+        // 付与Schedule/Assessment(docs/changesets/20260906-paid-leave-schedule-assessment/
+        // spec.md Phase A)。
         EnsureFutureScheduleGenerated::class => EnsureFutureScheduleGeneratedHandler::class,
         RecalculateFutureSchedule::class => RecalculateFutureScheduleHandler::class,
         RunAttendanceRateAssessment::class => RunAttendanceRateAssessmentHandler::class,

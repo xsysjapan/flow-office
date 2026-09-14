@@ -46,6 +46,14 @@ export async function apiFetch<T>(page: Page, path: string, init?: { method?: st
  * (ScenarioSeederが1回だけ付与する10日)を使い切ってしまう。テストの前提を
  * 満たすため、管理者としてログイン中の`page`を使って対象社員に有給を追加付与する。
  *
+ * `PaidLeaveAccountAggregate`は新規Grantに「非取消の現在最新Grantより後の日付
+ * (同日・過去日付は不可)」という不変条件を課す
+ * (docs/changesets/20260906-paid-leave-domain-redesign/spec.md 仕様確定事項)。
+ * 同一テスト実行内でこのヘルパーを同じ社員へ複数回呼ぶ(scenario-03の終日/半休の
+ * 各テストが同じ社員へ追加付与する等)と、常に「今日」を付与日にしていては2回目以降が
+ * 同日Grantとして拒否されるため、既存Grantの最新`granted_on`を取得し、それより後の
+ * 日付(今日以降)を付与日として使う。
+ *
  * 呼び出し前に `loginAs(page, SCENARIO_USERS.admin)` 済みであること。
  * (admin/hr_staffのSanctumトークンがlocalStorageに入っている前提)
  */
@@ -65,14 +73,31 @@ export async function grantAdditionalPaidLeave(page: Page, email: string, days: 
       if (!user) throw new Error(`E2E setup: user not found for ${email}`)
 
       const today = new Date().toISOString().slice(0, 10)
-      const expiresOn = `${Number(today.slice(0, 4)) + 2}-03-31`
+
+      const existingGrantsResponse = await fetch(`${apiBase}/paid-leave/grants/user/${user.id}`, { headers })
+      const existingGrants: Array<{ granted_on: string; status: string }> = existingGrantsResponse.ok
+        ? await existingGrantsResponse.json()
+        : []
+      const latestActiveGrantedOn = existingGrants
+        .filter((grant) => grant.status !== 'revoked')
+        .map((grant) => grant.granted_on.slice(0, 10))
+        .sort()
+        .at(-1)
+
+      let grantedOn = today
+      if (latestActiveGrantedOn !== undefined && latestActiveGrantedOn >= today) {
+        const nextDay = new Date(`${latestActiveGrantedOn}T00:00:00Z`)
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+        grantedOn = nextDay.toISOString().slice(0, 10)
+      }
+      const expiresOn = `${Number(grantedOn.slice(0, 4)) + 2}-03-31`
 
       const grantResponse = await fetch(`${apiBase}/paid-leave/grants`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           user_id: user.id,
-          granted_on: today,
+          granted_on: grantedOn,
           expires_on: expiresOn,
           granted_days: days,
           grant_reason: 'E2Eテスト用追加付与(scenario-03)',

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { localLogin } from '../../api/auth'
 import { useAuth } from '../../auth/useAuth'
+import { getSafeRedirectTarget, POST_LOGIN_REDIRECT_STORAGE_KEY } from '../../auth/redirectTarget'
 import { Button } from '../../components/Button/Button'
 import { ErrorMessage } from '../../components/ErrorMessage/ErrorMessage'
 import { FormField } from '../../components/FormField/FormField'
@@ -11,7 +12,9 @@ import { useOnboardingStatus } from '../../hooks/useOnboarding'
 export function LoginPage() {
   const { login, applySession } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { data: status } = useOnboardingStatus()
+  const safeRedirect = getSafeRedirectTarget(searchParams.get('redirect'))
 
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -31,6 +34,12 @@ export function LoginPage() {
     setError(null)
     setIsRedirecting(true)
     try {
+      // Microsoftへ離脱する前に戻り先を保存しておく(戻ってくるAuthCallbackPageで読み出す)。
+      if (safeRedirect) {
+        sessionStorage.setItem(POST_LOGIN_REDIRECT_STORAGE_KEY, safeRedirect)
+      } else {
+        sessionStorage.removeItem(POST_LOGIN_REDIRECT_STORAGE_KEY)
+      }
       await login()
     } catch {
       setError(new Error('ログインURLの取得に失敗しました。時間をおいて再度お試しください。'))
@@ -44,7 +53,7 @@ export function LoginPage() {
     try {
       const { token, user } = await localLogin(email, password)
       applySession(token, user)
-      navigate('/', { replace: true })
+      navigate(safeRedirect ?? '/', { replace: true })
     } catch (err) {
       setLocalLoginError(err)
       setIsLoggingIn(false)
