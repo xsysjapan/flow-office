@@ -36,6 +36,7 @@ class RollPaidLeaveSchedulesCommand extends Command
 
         $users = User::query()
             ->where('employment_status', 'active')
+            ->where('paid_leave_auto_grant_enabled', true)
             ->whereNotNull('hire_date')
             ->get();
 

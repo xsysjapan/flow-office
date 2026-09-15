@@ -382,7 +382,7 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
         $entry['manualOverride'] = [
             'reason' => $event->reason,
             'byUserId' => $event->operatorUserId,
-            'at' => null,
+            'at' => $event->createdAt()?->toIso8601String(),
         ];
     }
 

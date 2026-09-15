@@ -143,6 +143,27 @@ class RollPaidLeaveSchedulesCommandTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_it_skips_users_with_auto_grant_disabled(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-13'));
+        $this->seedNormalPolicy();
+        $workStyle = $this->createNormalWorkStyle();
+        $this->createAnniversaryRuleFor($workStyle);
+
+        $user = User::factory()->create([
+            'hire_date' => '2026-09-13',
+            'employment_status' => 'active',
+            'paid_leave_auto_grant_enabled' => false,
+        ]);
+        $this->assignWorkStyle($user, $workStyle);
+
+        $this->artisan('paid-leave:roll-schedules')->assertSuccessful();
+
+        $this->assertSame(0, PaidLeaveScheduleEntry::query()->where('user_id', $user->id)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_it_generates_no_entries_when_no_active_rule_matches_the_user(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-13'));

@@ -53,6 +53,13 @@ class ScheduleCandidateGenerator
             return [];
         }
 
+        // 有給自動付与が無効化されている社員はSchedule候補を生成しない
+        // (`RollPaidLeaveSchedulesCommand`・各Reactorの双方から呼ばれるため、
+        // 呼び出し側ではなくここで一元的にガードする)。
+        if (! $user->paid_leave_auto_grant_enabled) {
+            return [];
+        }
+
         $workStyle = $this->currentWorkStyleFor($user);
         $rule = $this->matchingRuleFor($workStyle);
 

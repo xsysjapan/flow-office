@@ -266,7 +266,7 @@ export function paidLeaveScheduleStatusLabel(status: PaidLeaveScheduleStatus): S
 const paidLeaveScheduleCategoryLabels: Record<PaidLeaveScheduleCategory, string> = {
   normal: '通常',
   proportional: '比例',
-  shift_based: 'シフト',
+  shift: 'シフト',
   needs_review: '要確認',
 }
 

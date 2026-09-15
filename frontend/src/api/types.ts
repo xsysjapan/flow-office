@@ -959,7 +959,7 @@ export interface PaidLeaveGrantPolicies {
 }
 
 /** 付与予定Scheduleエントリの区分(通常/比例/シフト勤務/要確認)。 */
-export type PaidLeaveScheduleCategory = "normal" | "proportional" | "shift_based" | "needs_review";
+export type PaidLeaveScheduleCategory = "normal" | "proportional" | "shift" | "needs_review";
 
 /** 付与予定Scheduleエントリの判定状態。 */
 export type PaidLeaveScheduleStatus =
