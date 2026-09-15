@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\PaidLeaveSchedule;
 
+use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
-use App\Domain\PaidLeaveSchedule\Support\ScheduleEntryStatus;
 use App\Models\AttendanceDay;
-use App\Models\CompanyCalendar;
+use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
 use App\Models\WorkStyle;
@@ -14,109 +14,207 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * 出勤率Assessment。spec.md論点9。
+ * `AttendanceRateAssessor`の単体テスト。既存`GrantScheduledPaidLeaveHandler::meetsAttendanceRate()`
+ * と同一の分母/分子定義を検証しつつ、NeedsReview拡張(データ不足・usage_start_date跨ぎ)を
+ * 確認する(spec.md 論点9、検証方法節)。
  */
 class AttendanceRateAssessorTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createWorkStyle(): WorkStyle
-    {
-        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
-        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+    private ?string $workStyleId = null;
 
-        return WorkStyle::query()->create([
-            'code' => 'standard-'.uniqid(), 'name' => '通常勤務', 'work_time_system' => 'fixed',
-            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
-            'default_start_time' => '09:00', 'default_end_time' => '18:00',
-            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+    private function workStyleId(): string
+    {
+        if ($this->workStyleId === null) {
+            $this->workStyleId = WorkStyle::query()->create([
+                'code' => 'TEST',
+                'name' => 'テスト勤務形態',
+                'work_time_system' => WorkStyle::WORK_TIME_SYSTEM_FIXED,
+                'workday_boundary_type' => WorkStyle::WORKDAY_BOUNDARY_MIDNIGHT,
+                'prescribed_daily_minutes' => 480,
+                'prescribed_weekly_minutes' => 2400,
+                'legal_holiday_rule' => WorkStyle::LEGAL_HOLIDAY_RULE_WEEKLY,
+            ])->id;
+        }
+
+        return $this->workStyleId;
+    }
+
+    private function scheduleWorkingDay(User $user, string $date, bool $isWorkingDay = true): void
+    {
+        EmployeeCalendarEntry::query()->create([
+            'user_id' => $user->id,
+            'work_date' => $date,
+            'work_style_id' => $this->workStyleId(),
+            'day_type' => $isWorkingDay ? 'weekday' : 'company_holiday',
+            'is_working_day' => $isWorkingDay,
         ]);
     }
 
-    private function seedSchedule(User $user, WorkStyle $workStyle, Carbon $start, int $days, int $attendedDays): void
+    private function recordAttendance(User $user, string $date, string $status = AttendanceDayStatus::CLOCKED_OUT, string $workType = 'normal'): void
     {
-        for ($i = 0; $i < $days; $i++) {
-            $date = $start->copy()->addDays($i);
-            EmployeeCalendarEntry::query()->create([
-                'user_id' => $user->id, 'work_date' => $date->toDateString(), 'work_style_id' => $workStyle->id,
-                'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
-                'planned_break_minutes' => 60,
-            ]);
+        AttendanceDay::query()->create([
+            'user_id' => $user->id,
+            'work_date' => $date,
+            'status' => $status,
+            'work_type' => $workType,
+        ]);
+    }
 
-            if ($i < $attendedDays) {
-                AttendanceDay::query()->create([
-                    'user_id' => $user->id, 'work_date' => $date->toDateString(),
-                    'status' => 'clocked_out', 'source' => 'live',
-                ]);
-            }
+    public function test_attendance_rate_at_exactly_80_percent_is_eligible(): void
+    {
+        $user = User::factory()->create();
+
+        // 分母5日、出勤4日 = 80%ちょうど。
+        for ($i = 1; $i <= 5; $i++) {
+            $this->scheduleWorkingDay($user, "2025-0{$i}-01");
         }
+        for ($i = 1; $i <= 4; $i++) {
+            $this->recordAttendance($user, "2025-0{$i}-01");
+        }
+
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-05-01'),
+            minAttendanceRate: 80.0,
+        );
+
+        $this->assertSame(5, $result->denominatorDays);
+        $this->assertSame(4, $result->attendanceDays);
+        $this->assertEqualsWithDelta(80.0, $result->attendanceRate, 0.001);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
     }
 
-    public function test_zero_denominator_days_is_needs_review(): void
+    public function test_attendance_rate_just_below_80_percent_is_not_eligible(): void
     {
-        $user = User::factory()->create(['hire_date' => '2024-01-01']);
+        $user = User::factory()->create();
 
-        $result = (new AttendanceRateAssessor)->assess($user, Carbon::parse('2025-10-01'), Carbon::parse('2026-09-30'));
+        for ($i = 1; $i <= 10; $i++) {
+            $this->scheduleWorkingDay($user, sprintf('2025-01-%02d', $i));
+        }
+        for ($i = 1; $i <= 7; $i++) {
+            $this->recordAttendance($user, sprintf('2025-01-%02d', $i));
+        }
 
-        $this->assertSame(ScheduleEntryStatus::NEEDS_REVIEW, $result['automaticResult']);
-        $this->assertSame(0, $result['denominatorDays']);
-        $this->assertNull($result['attendanceRate']);
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-01-31'),
+            minAttendanceRate: 80.0,
+        );
+
+        $this->assertEqualsWithDelta(70.0, $result->attendanceRate, 0.001);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE, $result->automaticResult);
     }
 
-    public function test_attendance_rate_80_or_more_is_eligible(): void
+    public function test_paid_leave_taken_days_count_as_attended(): void
     {
-        $user = User::factory()->create(['hire_date' => '2024-01-01']);
-        $workStyle = $this->createWorkStyle();
-        $periodStart = Carbon::parse('2026-01-01');
-        $this->seedSchedule($user, $workStyle, $periodStart, 10, 8);
+        $user = User::factory()->create();
 
-        $result = (new AttendanceRateAssessor)->assess($user, $periodStart, $periodStart->copy()->addDays(9));
+        $this->scheduleWorkingDay($user, '2025-01-01');
+        $this->scheduleWorkingDay($user, '2025-01-02');
+        $this->recordAttendance($user, '2025-01-01', AttendanceDayStatus::NOT_STARTED, 'paid_leave_full');
 
-        $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $result['automaticResult']);
-        $this->assertSame(10, $result['denominatorDays']);
-        $this->assertSame(8, $result['attendanceDays']);
-        $this->assertEquals(80.0, $result['attendanceRate']);
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-01-31'),
+            minAttendanceRate: 50.0,
+        );
+
+        $this->assertSame(1, $result->attendanceDays);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
     }
 
-    public function test_attendance_rate_below_80_is_not_eligible(): void
+    public function test_zero_denominator_is_needs_review(): void
     {
-        $user = User::factory()->create(['hire_date' => '2024-01-01']);
-        $workStyle = $this->createWorkStyle();
-        $periodStart = Carbon::parse('2026-01-01');
-        $this->seedSchedule($user, $workStyle, $periodStart, 10, 7);
+        $user = User::factory()->create();
 
-        $result = (new AttendanceRateAssessor)->assess($user, $periodStart, $periodStart->copy()->addDays(9));
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-01-31'),
+            minAttendanceRate: 80.0,
+        );
 
-        $this->assertSame(ScheduleEntryStatus::NOT_ELIGIBLE, $result['automaticResult']);
-        $this->assertEquals(70.0, $result['attendanceRate']);
+        $this->assertSame(0, $result->denominatorDays);
+        $this->assertNull($result->attendanceRate);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW, $result->automaticResult);
     }
 
-    public function test_period_spanning_before_usage_start_date_without_migration_data_is_needs_review(): void
+    public function test_period_crossing_usage_start_date_without_migrated_data_is_needs_review(): void
     {
-        $user = User::factory()->create(['hire_date' => '2024-01-01', 'usage_start_date' => '2026-01-05']);
-        $workStyle = $this->createWorkStyle();
-        $periodStart = Carbon::parse('2026-01-01');
-        // usage_start_date(2026-01-05)より前の期間にはAttendanceDayを一切作らない
-        // (移行データ無し)。
-        $this->seedSchedule($user, $workStyle, $periodStart, 10, 0);
+        $user = User::factory()->create();
+        $this->scheduleWorkingDay($user, '2025-01-01');
+        $this->recordAttendance($user, '2025-01-01');
 
-        $result = (new AttendanceRateAssessor)->assess($user, $periodStart, $periodStart->copy()->addDays(9));
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-06-01'),
+            minAttendanceRate: 80.0,
+            usageStartDate: Carbon::parse('2025-03-01'),
+            hasMigratedLegacyData: false,
+        );
 
-        $this->assertSame(ScheduleEntryStatus::NEEDS_REVIEW, $result['automaticResult']);
-        $this->assertNull($result['attendanceRate']);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW, $result->automaticResult);
+        $this->assertNull($result->attendanceRate);
     }
 
-    public function test_period_spanning_before_usage_start_date_with_migration_data_is_assessed_normally(): void
+    public function test_period_crossing_usage_start_date_with_migrated_data_is_assessed_normally(): void
     {
-        $user = User::factory()->create(['hire_date' => '2024-01-01', 'usage_start_date' => '2026-01-05']);
-        $workStyle = $this->createWorkStyle();
-        $periodStart = Carbon::parse('2026-01-01');
-        // usage_start_date以前にも移行データ(AttendanceDay)が存在する。
-        $this->seedSchedule($user, $workStyle, $periodStart, 10, 9);
+        $user = User::factory()->create();
+        $this->scheduleWorkingDay($user, '2025-01-01');
+        $this->recordAttendance($user, '2025-01-01');
 
-        $result = (new AttendanceRateAssessor)->assess($user, $periodStart, $periodStart->copy()->addDays(9));
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-06-01'),
+            minAttendanceRate: 80.0,
+            usageStartDate: Carbon::parse('2025-03-01'),
+            hasMigratedLegacyData: true,
+        );
 
-        $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $result['automaticResult']);
-        $this->assertEquals(90.0, $result['attendanceRate']);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
+    }
+
+    public function test_period_entirely_after_usage_start_date_is_assessed_normally(): void
+    {
+        $user = User::factory()->create();
+        $this->scheduleWorkingDay($user, '2025-04-01');
+        $this->recordAttendance($user, '2025-04-01');
+
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-04-01'),
+            periodEnd: Carbon::parse('2025-06-01'),
+            minAttendanceRate: 80.0,
+            usageStartDate: Carbon::parse('2025-03-01'),
+            hasMigratedLegacyData: false,
+        );
+
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
+    }
+
+    public function test_non_working_days_are_not_counted_in_denominator(): void
+    {
+        $user = User::factory()->create();
+
+        $this->scheduleWorkingDay($user, '2025-01-01', false);
+        $this->scheduleWorkingDay($user, '2025-01-02');
+        $this->recordAttendance($user, '2025-01-02');
+
+        $result = (new AttendanceRateAssessor())->assess(
+            userId: $user->id,
+            periodStart: Carbon::parse('2025-01-01'),
+            periodEnd: Carbon::parse('2025-01-31'),
+            minAttendanceRate: 80.0,
+        );
+
+        $this->assertSame(1, $result->denominatorDays);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
     }
 }

@@ -29,50 +29,78 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
 
 ## UC-P002: 有給を自動付与する
 
-1. バッチが付与対象者を抽出する
-2. 入社日、継続勤務期間、出勤率、勤務形態を確認する
-3. 付与ルールに基づき付与日数を決定する
-4. `PaidLeaveAccountAggregate`へ`GrantPaidLeave`Commandを発行し、`PaidLeaveGrantCreated`
-   イベントとしてGrantを記録する
-5. 有効期限を設定する
-6. 社員へ通知する
+> **旧実装からの置き換え(2026-09)**: 以前は`paid-leave:grant-scheduled`
+> (`GrantScheduledPaidLeaveHandler`)による「毎日全社員を評価しその場でGrant確定」の
+> 日次バッチ方式だったが、`App\Domain\PaidLeaveSchedule`ドメイン新設に伴いこの
+> ハンドラ・コマンドは削除された。現在は「事前生成 → 出勤率Assessment →
+> 管理者が確認の上で一括付与」の3段階フローに置き換わっている
+> (`docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`参照)。
 
-有給休暇の請求権は原則2年で時効消滅するため、付与単位ごとに有効期限を管理する
-(有効期限 = 付与日 + 2年)。(出典: チェック労働)
+1. `paid-leave:roll-schedules`コマンド(cron、日次実行、`routes/console.php`)が
+   `ScheduleCandidateGenerator`を使い、対象社員それぞれについて将来1年分の
+   付与予定日候補(`scheduledOn`・区分・候補日数)を算出し、`paid_leave_schedule_entries`
+   へエントリとして保存する(`App\Domain\PaidLeaveSchedule\Aggregates\
+   PaidLeaveScheduleAggregate`のイベントソーシング経由)。
+2. 人事担当者は管理画面(`/admin/paid-leave/schedule`、`付与ポリシー`画面
+   `/admin/paid-leave`からドリルダウンでのみ到達する)で、これから付与予定の
+   社員一覧・出勤率Assessment結果を事前に確認できる。
+3. 判定不能なエントリ(後述)は`NeedsReview`状態で表示され、担当者が内容を確認する。
+4. 担当者が`Eligible`のエントリを選び、管理画面から一括付与を実行すると
+   `App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave`が発行され、
+   `PaidLeaveGrantCreated`イベントとしてGrantが記録される(有効期限は
+   付与日+2年、UC-P002共通の既存Commandを再利用)。
 
-`paid-leave:grant-scheduled`コマンドとしてcronから毎日実行する(routes/console.php)。
-判定対象抽出・出勤率計算のロジック自体は再設計前と変わらず、`GrantScheduledPaidLeaveHandler`
-(既存の日次全件評価バッチ)が引き続き担う。今回の変更は「判定が確定した後、実際にどこへ
-Grantを記録するか」だけで、以下の通り新ドメインの`GrantPaidLeave` Commandを発行するだけの
-薄いラッパーに縮小されている(spec.md「実装方針の変更」)。
+### 対象社員・付与予定日の決定
 
 1. `users.hire_date`(入社日)が設定済みの社員を対象にする。MS365には入社日に相当する
    属性がないため同期対象外で、`user_profile.update` Permissionを持つ担当者が個別に設定する
    (`PUT /api/users/{user}/hire-date`)。
-2. 付与ルール(`paid_leave_grant_rules`)ごとに、`work_style_id` が指定されている場合は
-   当日その勤務形態が割り当てられている社員のみに絞り込む。
-3. 入社日からの継続勤務期間(完了月数)を求め、今日がその「月次記念日」(入社日と同じ日)
-   であり、かつ `first_grant_after_months` 以上かつ `grant_cycle_months` の周期に
-   ちょうど合致する月のみ付与対象とする(バッチは毎日実行されるが、実際に付与されるのは
-   対象者ごとに年1回程度)。
-4. 継続勤務期間に応じた付与日数は `paid_leave_grant_rule_steps` から、条件を満たす最大の
-   `continuous_service_months` の行を採用する。
-5. 出勤率(`min_attendance_rate`)は、直近 `grant_cycle_months` か月間の
-   `employee_calendar_entries`(勤務予定日)を分母、`attendance_days` が退勤済みまたは
-   有給消化済み(`work_type` が `paid_leave_` で始まる)の日を分子として計算する
-   (有給取得日は出勤したものとして扱う)。期間中に勤務予定日が1件も無い場合は判定不能として
-   付与しない。
-6. 同一社員に同日重複して付与しないよう、当日すでに付与済みの場合はスキップする
-   (`PaidLeaveAccountAggregate`の不変条件1「新規Grantは現在の最新Grantより後の日付」により、
-   同日付与自体もAggregate側で二重に拒否される)。
-7. `users.paid_leave_auto_grant_enabled = true` の社員のみを対象とする(ユーザーごとの
-   自動付与ON/OFF設定。UC-P00X参照)。特別休暇の自動付与も同様に
-   `users.special_leave_auto_grant_enabled = true` の社員のみが対象となる
-   (`GrantScheduledSpecialLeaveHandler`、種別を問わず一括で判定)。いずれも手動付与
-   (`GrantPaidLeave` / `GrantSpecialLeave`)には影響しない。
+2. `users.paid_leave_auto_grant_enabled = true`かつ`usage_start_date`設定済みの社員のみを
+   対象とする(UC-P00X参照)。
+3. 対象社員に一致する有効な付与ルール(`paid_leave_grant_rules`、`work_style_id`固有の
+   ルールを優先し、無ければ`work_style_id IS NULL`の全社共通ルールへフォールバック)が
+   **1件も存在しない場合、その社員のScheduleエントリは一切生成されない**
+   (以前は付与ルールが無くても既定値〈6ヶ月後・周年〉で機械的に生成されてしまう
+   不具合があったが修正済み。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+4. 付与サイクルは`grant_cycle_type`により2方式ある(`paid_leave_grant_rules`参照):
+   - `anniversary`(既定): 入社日起算の周年サイクル。初回は`first_grant_after_months`
+     ヶ月後、以降`grant_cycle_months`ヶ月ごと。
+   - `mass_grant_month`: 会社が指定した特定月(例: 4月)への一斉付与。初回付与日は、
+     入社日+`first_grant_after_months`(6ヶ月後の原則)と、直後の一斉付与月とを
+     比較し早い方(前倒し可、遅らせることはしない)。2回目以降は一斉付与月へ毎年揃う
+     (`ScheduleCandidateGenerator::massGrantScheduledDates()`)。
+5. `usage_start_date`(本システムでの有給管理開始日)より前の候補日は生成しない
+   (`hire_date`が本システム導入前の実際の入社日である社員向けのガード)。
 
-実際の付与処理(Grant作成・イベント記録・Teams通知)は既存のUC-P002手動付与
-(`GrantPaidLeave`)と共通のCommandを再利用する。
+### 付与候補日数の決定・判定不能時の扱い
+
+1. 一致した付与ルールの`paid_leave_grant_rule_steps`から、対象の継続勤務月数
+   (`mass_grant_month`方式で前倒しされた場合も、実際の暦月数ではなく「名目上の」
+   継続勤務月数〈初回=`first_grant_after_months`、以降+12ずつ〉を使う)を
+   カバーする最大の`continuous_service_months`の行を採用する。
+2. 付与ルールが無い場合(work_style固有・全社共通いずれも無い場合)は、その社員の
+   Scheduleエントリ自体が生成されない(上記参照)。付与ルールはあるが該当stepが
+   無い場合、`WorkStyle`の区分(通常/比例/シフト)が未確定(`NEEDS_REVIEW`)な場合、
+   法定Policy(`paid_leave_grant_policies`/`paid_leave_proportional_grant_policies`)に
+   該当行が無い場合は、いずれも「候補日数が確定できない」として扱い、エントリを
+   `Scheduled`ではなく`NeedsReview`状態で作成する(候補日数0で黙って`Scheduled`
+   扱いにしていた不具合を修正済み)。
+3. 出勤率(`min_attendance_rate`)は、直近`grant_cycle_months`か月間の
+   `employee_calendar_entries`(勤務予定日)を分母、`attendance_days`が退勤済みまたは
+   有給消化済み(`work_type`が`paid_leave_`で始まる)の日を分子として計算する
+   (有給取得日は出勤したものとして扱う)。期間中に勤務予定日が1件も無い場合は
+   判定不能として扱う。
+
+### 法定付与日数の設定
+
+通常付与(`paid_leave_grant_policies`)・比例付与(`paid_leave_proportional_grant_policies`)
+の法定日数表は、管理画面(`/admin/paid-leave`)から現在バージョンの参照・新バージョンの
+作成ができる(既存versionの行は変更しない)。編集フォームには「この表の変更は法令に
+基づく設定です。保存前に社労士等の専門家に確認してください。」という警告文を表示する。
+
+特別休暇の自動付与は`users.special_leave_auto_grant_enabled = true`の社員のみが対象で、
+`GrantScheduledSpecialLeaveHandler`が種別を問わず一括で判定する(本UC-P002の
+Schedule/Assessment化の対象外。今後の課題)。
 
 ## UC-P00X: 社員ごとの有給/特別休暇自動付与ON/OFFを設定する
 

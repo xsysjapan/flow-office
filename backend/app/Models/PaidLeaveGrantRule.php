@@ -11,9 +11,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 有給付与ルール (docs/09-usecases-paid-leave.md UC-P001)。
  * 法務判断が必要な値のためマスタ化し、ハードコードしない。
  */
-#[Fillable(['name', 'work_style_id', 'min_attendance_rate', 'first_grant_after_months', 'grant_cycle_months', 'is_active'])]
+#[Fillable(['name', 'work_style_id', 'min_attendance_rate', 'first_grant_after_months', 'grant_cycle_months', 'grant_cycle_type', 'mass_grant_month', 'is_active'])]
 class PaidLeaveGrantRule extends Model
 {
+    public const CYCLE_TYPE_ANNIVERSARY = 'anniversary';
+
+    public const CYCLE_TYPE_MASS_GRANT_MONTH = 'mass_grant_month';
+
     protected function casts(): array
     {
         return [

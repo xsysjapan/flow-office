@@ -3,262 +3,334 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
-use App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry;
 use App\Domain\PaidLeaveSchedule\Commands\OverrideScheduleAssessment;
 use App\Domain\PaidLeaveSchedule\Commands\RunAttendanceRateAssessment;
-use App\Domain\PaidLeaveSchedule\Support\ScheduleEntryStatus;
+use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\PaidLeaveScheduleEntryResource;
+use App\Models\PaidLeaveGrant;
+use App\Models\PaidLeaveGrantRule;
 use App\Models\PaidLeaveScheduleEntry;
+use App\Models\UserWorkStyleMonthlyAssignment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
-use Throwable;
 
 /**
- * 付与予定(Schedule)管理画面向けAPI
- * (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md Phase D)。
- * `paid_leave_schedule_entries`(Projection)を読み取り、`App\Domain\PaidLeaveSchedule`の
- * Commandを発行する。既存`PaidLeaveController`(付与ルール・申請・承認)とは別の新しい
- * リソース領域のため、専用Controllerとして分離する(ルートCLAUDE.md「効率的なコード参照」)。
+ * 有給付与予定Schedule/Assessmentの管理API
+ * (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md 実装対象Phase D)。
+ * 一覧・詳細はProjection Table(`paid_leave_schedule_entries`/`paid_leave_schedule_assessments`)を
+ * 読み取り、再判定・Override・一括付与は対応するCommandをCommandBus経由で発行する
+ * (ルートCLAUDE.md原則1「状態変更はCommand→CommandHandler→stored_eventsで行う」)。
+ * すべて管理者専用(`permission:leave.manage`、routes/api.php参照)。
  */
-#[OA\Tag(name: '有給付与予定', description: '付与予定一覧・出勤率Assessment・Override・一括付与')]
+#[OA\Tag(name: '有給休暇付与予定', description: '有給付与Schedule/Assessment管理(付与予定一覧・再判定・Override・一括付与)')]
 class PaidLeaveScheduleController extends Controller
 {
-    /**
-     * spec.md論点12の5フィルタタブに対応する`status`クエリパラメータ。`changed`は
-     * 永続化された状態ではなく`PaidLeaveScheduleEntry::needsReviewDueToConflict()`
-     * (個別修正済みエントリが再計算でNeedsReviewへ押し出された場合)から導出する
-     * 合成フィルタのため、`status`列の値そのものとは別に扱う。
-     */
-    private const STATUS_FILTERS = ['all', 'eligible', 'not_eligible', 'needs_review', 'changed'];
+    private const FILTER_ALL = 'all';
 
+    private const FILTER_ELIGIBLE = 'eligible';
+
+    private const FILTER_NOT_ELIGIBLE = 'not_eligible';
+
+    private const FILTER_NEEDS_REVIEW = 'needs_review';
+
+    private const FILTER_CHANGED = 'changed';
+
+    /**
+     * 付与予定一覧(依頼書§39・spec.md論点12)。5フィルタ:
+     * すべて/付与対象(eligible)/対象外(not_eligible)/要確認(needs_review)/変更あり(changed)。
+     *
+     * 「変更あり」の定義について: `PaidLeaveScheduleAggregate::recalculateFutureSchedule()`は
+     * 個別修正済み(`is_manually_overridden=true`)エントリを再計算対象から除外して保護するが
+     * (spec.md論点7)、Phase Aの時点では「保護対象から除外する」ことのみが保証されており、
+     * 保護後に条件変更があったかどうかの機械的な食い違い検知(NeedsReviewへの強制遷移)は
+     * Phase C以降の課題として未実装のまま残っている
+     * (`PaidLeaveScheduleAggregate::recalculateFutureSchedule()`のコメント参照)。
+     * そのため本フィルタは「個別修正が行われており、以後のルール・条件変更の影響を
+     * 受けずに固定されている(=管理者が変更の有無を目視確認すべき)エントリ」として
+     * `is_manually_overridden=true`を基準に実装する。
+     */
     #[OA\Get(
         path: '/paid-leave/schedule-entries',
-        operationId: 'paidLeave.scheduleEntries.index',
-        summary: '付与予定一覧を取得する',
-        tags: ['有給付与予定'],
-        parameters: [
-            new OA\Parameter(name: 'status', in: 'query', required: false, description: 'all(既定)/eligible/not_eligible/needs_review/changed', schema: new OA\Schema(type: 'string', enum: ['all', 'eligible', 'not_eligible', 'needs_review', 'changed'])),
-            new OA\Parameter(name: 'user_name', in: 'query', required: false, description: '社員名の部分一致検索', schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'scheduled_on_from', in: 'query', required: false, description: '付与予定日(scheduled_on)の期間絞り込み: 開始日(以上)', schema: new OA\Schema(type: 'string', format: 'date')),
-            new OA\Parameter(name: 'scheduled_on_to', in: 'query', required: false, description: '付与予定日(scheduled_on)の期間絞り込み: 終了日(以下)', schema: new OA\Schema(type: 'string', format: 'date')),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
-        ],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+        operationId: 'paidLeave.schedule.index',
+        summary: '有給付与予定Scheduleエントリ一覧を取得する',
+        tags: ['有給休暇付与予定'],
+        parameters: [new OA\Parameter(name: 'filter', in: 'query', schema: new OA\Schema(type: 'string', enum: ['all', 'eligible', 'not_eligible', 'needs_review', 'changed']))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden')],
     )]
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'status' => ['nullable', Rule::in(self::STATUS_FILTERS)],
-            'user_name' => ['nullable', 'string', 'max:200'],
-            'scheduled_on_from' => ['nullable', 'date'],
-            'scheduled_on_to' => ['nullable', 'date', 'after_or_equal:scheduled_on_from'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
+        $filter = $request->query('filter', self::FILTER_ALL);
+
+        $query = PaidLeaveScheduleEntry::query()->with('user', 'assessments')->orderBy('scheduled_on');
+
+        match ($filter) {
+            self::FILTER_ELIGIBLE => $query->where('status', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+            self::FILTER_NOT_ELIGIBLE => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+            self::FILTER_NEEDS_REVIEW => $query->where('status', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
+            self::FILTER_CHANGED => $query->where('is_manually_overridden', true),
+            default => null,
+        };
+
+        return response()->json([
+            'data' => $query->get()->map(fn (PaidLeaveScheduleEntry $entry) => $this->summarize($entry)),
         ]);
-
-        $status = $data['status'] ?? 'all';
-
-        $entries = PaidLeaveScheduleEntry::query()
-            ->with('user')
-            ->when($data['user_name'] ?? null, fn ($query, $name) => $query->whereHas(
-                'user',
-                fn ($userQuery) => $userQuery->where('name', 'like', '%'.$name.'%'),
-            ))
-            ->when($status === 'eligible', fn ($query) => $query->where('status', ScheduleEntryStatus::ELIGIBLE))
-            ->when($status === 'not_eligible', fn ($query) => $query->where('status', ScheduleEntryStatus::NOT_ELIGIBLE))
-            ->when($status === 'needs_review', fn ($query) => $query->where('status', ScheduleEntryStatus::NEEDS_REVIEW))
-            // 「変更あり」(spec.md論点12): 永続化された専用列を持たず、個別修正済み
-            // (manual_override_by_user_idあり)かつ再計算でNeedsReviewへ押し出された行を
-            // needsReviewDueToConflict()と同じ条件でクエリ側にも表現する。
-            ->when($status === 'changed', fn ($query) => $query
-                ->where('status', ScheduleEntryStatus::NEEDS_REVIEW)
-                ->whereNotNull('manual_override_by_user_id'))
-            // scheduled_onは`date`キャストだが、sqlite上は日付部分だけを保証しない
-            // 生文字列(datetime相当)で保存されうるため、他コントローラの日付列絞り込みと
-            // 同じく`whereDate`で日付部分のみを比較する(`whereBetween`/`where`の素の
-            // 文字列比較では、期間の開始日=終了日のような境界値が一致しなくなるバグが
-            // あった。E2E `scenario-15-paid-leave-schedule.spec.ts`で発見)。
-            ->when(
-                $data['scheduled_on_from'] ?? null,
-                fn ($query, $from) => $query->whereDate('scheduled_on', '>=', $from),
-            )
-            ->when(
-                $data['scheduled_on_to'] ?? null,
-                fn ($query, $to) => $query->whereDate('scheduled_on', '<=', $to),
-            )
-            ->orderBy('scheduled_on')
-            ->paginate($data['per_page'] ?? 50);
-
-        return PaidLeaveScheduleEntryResource::collection($entries);
-    }
-
-    #[OA\Get(
-        path: '/paid-leave/schedule-entries/{entry}',
-        operationId: 'paidLeave.scheduleEntries.show',
-        summary: '付与予定の詳細(Assessment内訳)を取得する',
-        tags: ['有給付与予定'],
-        parameters: [new OA\Parameter(name: 'entry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 404, description: 'Not found')],
-    )]
-    public function show(PaidLeaveScheduleEntry $entry): PaidLeaveScheduleEntryResource
-    {
-        return new PaidLeaveScheduleEntryResource($entry->load('user'));
     }
 
     /**
-     * 依頼書§40「再判定」: 同一条件で`AttendanceRateAssessor`を再実行する。
+     * 詳細(依頼書§40)。Assessment履歴(分母/分子/除外日内訳)を含む。
+     */
+    #[OA\Get(
+        path: '/paid-leave/schedule-entries/{scheduleEntry}',
+        operationId: 'paidLeave.schedule.show',
+        summary: '有給付与予定Scheduleエントリの詳細・Assessment履歴を取得する',
+        tags: ['有給休暇付与予定'],
+        parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden')],
+    )]
+    public function show(PaidLeaveScheduleEntry $scheduleEntry): JsonResponse
+    {
+        $scheduleEntry->load('user', 'assessments');
+
+        return response()->json([
+            'data' => array_merge($this->summarize($scheduleEntry), [
+                'is_manually_overridden' => $scheduleEntry->is_manually_overridden,
+                'manual_override_reason' => $scheduleEntry->manual_override_reason,
+                'cancelled_reason' => $scheduleEntry->cancelled_reason,
+                'grant_id' => $scheduleEntry->grant_id,
+                'assessments' => $scheduleEntry->assessments->map(fn ($assessment) => [
+                    'id' => $assessment->id,
+                    'period_start' => $assessment->period_start?->toDateString(),
+                    'period_end' => $assessment->period_end?->toDateString(),
+                    'denominator_days' => $assessment->denominator_days,
+                    'attendance_days' => $assessment->attendance_days,
+                    'excluded_days' => $assessment->excluded_days,
+                    'attendance_rate' => $assessment->attendance_rate,
+                    'policy_version' => $assessment->policy_version,
+                    'automatic_result' => $assessment->automatic_result,
+                    'final_result' => $assessment->final_result,
+                    'override_reason' => $assessment->override_reason,
+                    'overridden_by_user_id' => $assessment->overridden_by_user_id,
+                    'created_at' => $assessment->created_at?->toIso8601String(),
+                ]),
+            ]),
+        ]);
+    }
+
+    /**
+     * 再判定(依頼書§40「再判定」導線)。`AttendanceRateAssessor`を同一条件で再実行し、
+     * `RunAttendanceRateAssessment`を発行する。対象社員に適用中のルール
+     * (`paid_leave_grant_rules`。無ければ既定値)から`min_attendance_rate`/
+     * `grant_cycle_months`を解決し、判定期間は`[scheduled_on - grant_cycle_months, scheduled_on]`
+     * とする(`GrantScheduledPaidLeaveHandler::meetsAttendanceRate()`と同じ期間の考え方)。
      */
     #[OA\Post(
-        path: '/paid-leave/schedule-entries/{entry}/reassess',
-        operationId: 'paidLeave.scheduleEntries.reassess',
-        summary: '付与予定の出勤率Assessmentを再判定する',
-        tags: ['有給付与予定'],
-        parameters: [new OA\Parameter(name: 'entry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        path: '/paid-leave/schedule-entries/{scheduleEntry}/reassess',
+        operationId: 'paidLeave.schedule.reassess',
+        summary: '出勤率を再判定する',
+        tags: ['有給休暇付与予定'],
+        parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function reassess(PaidLeaveScheduleEntry $entry, CommandBus $commandBus): PaidLeaveScheduleEntryResource
+    public function reassess(PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus, AttendanceRateAssessor $assessor): JsonResponse
     {
+        $scheduleEntry->loadMissing('user');
+        $user = $scheduleEntry->user;
+
+        [$minAttendanceRate, $grantCycleMonths] = $this->resolveAssessmentParameters($user->id);
+
+        $periodEnd = $scheduleEntry->scheduled_on->copy();
+        $periodStart = $periodEnd->copy()->subMonths($grantCycleMonths);
+
+        $hasMigratedLegacyData = PaidLeaveGrant::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('cutover_metadata')
+            ->exists();
+
+        $result = $assessor->assess(
+            userId: $user->id,
+            periodStart: $periodStart,
+            periodEnd: $periodEnd,
+            minAttendanceRate: $minAttendanceRate,
+            usageStartDate: $user->usage_start_date,
+            hasMigratedLegacyData: $hasMigratedLegacyData,
+        );
+
         $commandBus->dispatch(new RunAttendanceRateAssessment(
-            userId: $entry->user_id,
-            entryId: $entry->id,
+            userId: $user->id,
+            scheduleEntryId: $scheduleEntry->id,
+            assessmentId: (string) Str::uuid(),
+            periodStart: $periodStart->toDateString(),
+            periodEnd: $periodEnd->toDateString(),
+            denominatorDays: $result->denominatorDays,
+            attendanceDays: $result->attendanceDays,
+            excludedDays: $result->excludedDays,
+            attendanceRate: $result->attendanceRate,
+            policyVersion: AttendanceRateAssessor::POLICY_VERSION,
+            automaticResult: $result->automaticResult,
         ));
 
-        return new PaidLeaveScheduleEntryResource($entry->refresh()->load('user'));
+        return response()->json(['data' => $this->summarize($scheduleEntry->refresh()->load('user', 'assessments'))]);
     }
 
     /**
-     * 依頼書§40「判定結果を上書き」: 最終判定をEligible/NotEligibleのいずれかへ確定させ、
-     * 理由を必須とする(spec.md画面設計「Override欄」)。
+     * 判定結果の上書き(依頼書§40「判定結果を上書き」)。理由は必須(Field Error)。
      */
     #[OA\Post(
-        path: '/paid-leave/schedule-entries/{entry}/override',
-        operationId: 'paidLeave.scheduleEntries.override',
-        summary: '付与予定の判定結果を上書きする',
-        tags: ['有給付与予定'],
-        parameters: [new OA\Parameter(name: 'entry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        path: '/paid-leave/schedule-entries/{scheduleEntry}/override',
+        operationId: 'paidLeave.schedule.override',
+        summary: '出勤率判定結果を上書きする',
+        tags: ['有給休暇付与予定'],
+        parameters: [new OA\Parameter(name: 'scheduleEntry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['final_result', 'reason'], properties: [new OA\Property(property: 'final_result', type: 'string', enum: ['Eligible', 'NotEligible']), new OA\Property(property: 'reason', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function override(Request $request, PaidLeaveScheduleEntry $entry, CommandBus $commandBus): PaidLeaveScheduleEntryResource
+    public function override(Request $request, PaidLeaveScheduleEntry $scheduleEntry, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'final_result' => ['required', Rule::in([ScheduleEntryStatus::ELIGIBLE, ScheduleEntryStatus::NOT_ELIGIBLE])],
-            'reason' => ['required', 'string', 'max:2000'],
+            'final_result' => ['required', Rule::in([
+                PaidLeaveScheduleAggregate::STATUS_ELIGIBLE,
+                PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE,
+            ])],
+            'reason' => ['required', 'string'],
         ]);
 
+        $scheduleEntry->loadMissing('user');
+
         $commandBus->dispatch(new OverrideScheduleAssessment(
-            userId: $entry->user_id,
-            entryId: $entry->id,
+            userId: $scheduleEntry->user_id,
+            scheduleEntryId: $scheduleEntry->id,
             finalResult: $data['final_result'],
             reason: $data['reason'],
             operatorUserId: $request->user()->id,
         ));
 
-        return new PaidLeaveScheduleEntryResource($entry->refresh()->load('user'));
+        return response()->json(['data' => $this->summarize($scheduleEntry->refresh()->load('user', 'assessments'))]);
     }
 
     /**
-     * `App\Domain\PaidLeaveSchedule\Commands\ManuallyEditScheduleEntry`に対応するAPI完全性
-     * 目的のエンドポイント。spec.md画面設計(実装前メモ・ワイヤーフレーム)はOverride導線
-     * (このentryの`final_result`をEligible/NotEligibleへ確定する操作)のみを具体化しており、
-     * 区分・候補日数そのものを直接書き換える専用フォームはUI上まだ設計されていない
-     * (spec.md「Phase D」原文コメント参照)。そのため入力を`category`/`candidate_grant_days`
-     * (任意項目、どちらか一方の指定でも可)+`reason`必須に絞った最小限の実装とする。
-     */
-    #[OA\Patch(
-        path: '/paid-leave/schedule-entries/{entry}',
-        operationId: 'paidLeave.scheduleEntries.manuallyEdit',
-        summary: '付与予定を手動で修正する',
-        tags: ['有給付与予定'],
-        parameters: [new OA\Parameter(name: 'entry', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['reason'], properties: [new OA\Property(property: 'category', type: 'string', nullable: true), new OA\Property(property: 'candidate_grant_days', type: 'number', nullable: true), new OA\Property(property: 'reason', type: 'string')])),
-        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
-    )]
-    public function manuallyEdit(Request $request, PaidLeaveScheduleEntry $entry, CommandBus $commandBus): PaidLeaveScheduleEntryResource
-    {
-        $data = $request->validate([
-            'category' => ['nullable', 'string', 'max:50'],
-            'candidate_grant_days' => ['nullable', 'numeric', 'min:0'],
-            'reason' => ['required', 'string', 'max:2000'],
-        ]);
-
-        $commandBus->dispatch(new ManuallyEditScheduleEntry(
-            userId: $entry->user_id,
-            entryId: $entry->id,
-            category: $data['category'] ?? null,
-            candidateGrantDays: isset($data['candidate_grant_days']) ? (float) $data['candidate_grant_days'] : null,
-            reason: $data['reason'],
-            operatorUserId: $request->user()->id,
-        ));
-
-        return new PaidLeaveScheduleEntryResource($entry->refresh()->load('user'));
-    }
-
-    /**
-     * 依頼書§39「一括付与」: 選択したエントリのうちEligibleのもののみ`GrantPaidLeave`を発行する。
-     * `ApplyScheduledGrants`は1社員(Schedule Aggregate)単位のCommandのため
-     * (spec.md「ドメインモデル」コメント参照)、複数社員をまたぐ選択はここで`user_id`単位に
-     * 束ねてから社員ごとに発行する。1社員分の失敗(Not Eligible混入・Aggregate例外等)が
-     * 他社員の処理を止めないよう、`paid-leave:migrate-accounts`と同じ「行単位で成功・失敗を
-     * 継続収集する」方針を踏襲し、エントリ単位の結果配列を返す(部分失敗を黙って握りつぶさない)。
+     * 一括付与(依頼書§39)。複数社員のエントリを一括で受け付け、社員(Aggregate)単位で
+     * `ApplyScheduledGrants`を発行する。既存`ManualGrantCard`の`runBulkGrant`/
+     * `ResultSummary`パターン(全体件数+行単位の成功/失敗)を踏襲したレスポンス形状にする
+     * (spec.md論点15-6)。Eligible以外のエントリはCommandHandler側で当該エントリのみ
+     * 失敗として扱われ、他のエントリには影響しない。
      */
     #[OA\Post(
-        path: '/paid-leave/schedule-entries/apply-grants',
-        operationId: 'paidLeave.scheduleEntries.applyGrants',
-        summary: '選択した付与予定を一括付与する',
-        tags: ['有給付与予定'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['entry_ids'], properties: [new OA\Property(property: 'entry_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
-        responses: [new OA\Response(response: 200, description: 'Successful response(結果はエントリ単位)'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
+        path: '/paid-leave/schedule-entries/bulk-grant',
+        operationId: 'paidLeave.schedule.bulkGrant',
+        summary: '選択したScheduleエントリを一括付与する',
+        tags: ['有給休暇付与予定'],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['schedule_entry_ids'], properties: [new OA\Property(property: 'schedule_entry_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'))])),
+        responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function applyGrants(Request $request, CommandBus $commandBus): JsonResponse
+    public function bulkGrant(Request $request, CommandBus $commandBus): JsonResponse
     {
         $data = $request->validate([
-            'entry_ids' => ['required', 'array', 'min:1'],
-            'entry_ids.*' => ['string', 'uuid'],
+            'schedule_entry_ids' => ['required', 'array', 'min:1'],
+            'schedule_entry_ids.*' => ['required', 'string', 'exists:paid_leave_schedule_entries,id'],
         ]);
 
-        $entries = PaidLeaveScheduleEntry::query()->whereIn('id', $data['entry_ids'])->get()->keyBy('id');
+        $entries = PaidLeaveScheduleEntry::query()
+            ->whereIn('id', $data['schedule_entry_ids'])
+            ->get()
+            ->groupBy('user_id');
 
         $results = [];
+        $successCount = 0;
+        $failureCount = 0;
 
-        foreach ($data['entry_ids'] as $entryId) {
-            $entry = $entries->get($entryId);
+        foreach ($entries as $userId => $userEntries) {
+            $outcome = $commandBus->dispatch(new ApplyScheduledGrants(
+                userId: (string) $userId,
+                scheduleEntryIds: $userEntries->pluck('id')->all(),
+                operatorUserId: $request->user()->id,
+            ));
 
-            if ($entry === null) {
-                $results[] = ['entry_id' => $entryId, 'status' => 'failed', 'error' => 'Scheduleエントリが見つかりません。'];
-
-                continue;
+            foreach ($outcome['granted'] as $granted) {
+                $results[] = [
+                    'schedule_entry_id' => $granted['scheduleEntryId'],
+                    'success' => true,
+                    'message' => null,
+                    'grant_id' => $granted['grantId'],
+                ];
+                $successCount++;
             }
 
-            if ($entry->status !== ScheduleEntryStatus::ELIGIBLE) {
-                $results[] = ['entry_id' => $entryId, 'status' => 'failed', 'error' => "Eligibleでないため付与できません(現在: {$entry->status})。"];
-
-                continue;
-            }
-
-            try {
-                $grantedIds = $commandBus->dispatch(new ApplyScheduledGrants(
-                    userId: $entry->user_id,
-                    entryIds: [$entryId],
-                    operatorUserId: $request->user()->id,
-                ));
-
-                $results[] = ['entry_id' => $entryId, 'status' => 'granted', 'grant_id' => $grantedIds[$entryId] ?? null];
-            } catch (Throwable $e) {
-                $results[] = ['entry_id' => $entryId, 'status' => 'failed', 'error' => $e->getMessage()];
+            foreach ($outcome['failed'] as $failed) {
+                $results[] = [
+                    'schedule_entry_id' => $failed['scheduleEntryId'],
+                    'success' => false,
+                    'message' => $failed['reason'],
+                    'grant_id' => null,
+                ];
+                $failureCount++;
             }
         }
 
-        $successCount = count(array_filter($results, fn (array $r) => $r['status'] === 'granted'));
-
         return response()->json([
-            'results' => $results,
             'success_count' => $successCount,
-            'failure_count' => count($results) - $successCount,
+            'failure_count' => $failureCount,
+            'results' => $results,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function summarize(PaidLeaveScheduleEntry $entry): array
+    {
+        return [
+            'id' => $entry->id,
+            'user_id' => $entry->user_id,
+            'user_name' => $entry->user?->name,
+            'scheduled_on' => $entry->scheduled_on?->toDateString(),
+            'category' => $entry->category,
+            'candidate_grant_days' => $entry->candidate_grant_days,
+            'status' => $entry->status,
+            'latest_assessment_id' => $entry->latest_assessment_id,
+            'is_manually_overridden' => $entry->is_manually_overridden,
+            // 一覧の「出勤率」列(フロントエンドPaidLeaveSchedulePage)用。最新Assessmentの値を
+            // そのまま返す(まだ判定が実行されていないエントリはnull)。
+            'attendance_rate' => $entry->relationLoaded('assessments')
+                ? $entry->assessments->last()?->attendance_rate
+                : null,
+        ];
+    }
+
+    /**
+     * 対象社員の現在の`WorkStyle`割当に一致する`paid_leave_grant_rules`
+     * (`is_active=true`)から`min_attendance_rate`/`grant_cycle_months`を解決する
+     * (`ScheduleCandidateGenerator::currentWorkStyleFor()`と同じ「現在時点で有効な
+     * user_work_style_monthly_assignments」を採用する考え方)。該当ルールが無ければ
+     * 既定値(80%・12ヶ月、現行`GrantScheduledPaidLeaveHandler`の既定と同じ)を使う。
+     *
+     * @return array{0: int, 1: int} [minAttendanceRate, grantCycleMonths]
+     */
+    private function resolveAssessmentParameters(string $userId): array
+    {
+        $currentYearMonth = Carbon::today()->format('Y-m');
+
+        $assignment = UserWorkStyleMonthlyAssignment::query()
+            ->where('user_id', $userId)
+            ->where('year_month', '<=', $currentYearMonth)
+            ->orderByDesc('year_month')
+            ->first();
+
+        $rule = $assignment !== null
+            ? PaidLeaveGrantRule::query()
+                ->where('work_style_id', $assignment->work_style_id)
+                ->where('is_active', true)
+                ->first()
+            : null;
+
+        return [
+            (int) ($rule->min_attendance_rate ?? 80),
+            max(1, (int) ($rule->grant_cycle_months ?? 12)),
+        ];
     }
 }

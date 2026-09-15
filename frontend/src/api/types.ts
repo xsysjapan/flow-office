@@ -937,19 +937,32 @@ export interface PaidLeaveGrantRule {
   steps?: PaidLeaveGrantRuleStep[];
 }
 
-/** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
-export interface PaidLeaveGrantRuleTargetUser {
-  id: string;
-  name: string;
-  work_style: string | null;
-  paid_leave_auto_grant_enabled: boolean;
+/** 法定通常付与表の1ステップ(継続勤務月数→付与日数)。 */
+export interface PaidLeaveGrantPolicyStep {
+  continuous_service_months: number;
+  grant_days: number;
 }
 
-/**
- * 付与予定(Schedule)の判定状態(`docs/changesets/20260906-paid-leave-schedule-assessment/spec.md`
- * §30の状態名をそのままバックエンドの`status`列の値として使う)。
- */
-export type PaidLeaveScheduleEntryStatus =
+/** 法定比例付与表の1ステップ(週所定労働日数区分×継続勤務月数→付与日数)。 */
+export interface PaidLeaveProportionalGrantPolicyStep {
+  weekly_scheduled_days_category: "1" | "2" | "3" | "4";
+  continuous_service_months: number;
+  grant_days: number;
+}
+
+/** 法定通常付与表・比例付与表(最新version、読み取り専用マトリクス表示用)。 */
+export interface PaidLeaveGrantPolicies {
+  version: string;
+  normal: PaidLeaveGrantPolicyStep[];
+  proportional_version: string;
+  proportional: PaidLeaveProportionalGrantPolicyStep[];
+}
+
+/** 付与予定Scheduleエントリの区分(通常/比例/シフト勤務/要確認)。 */
+export type PaidLeaveScheduleCategory = "normal" | "proportional" | "shift" | "needs_review";
+
+/** 付与予定Scheduleエントリの判定状態。 */
+export type PaidLeaveScheduleStatus =
   | "Scheduled"
   | "AssessmentPending"
   | "Eligible"
@@ -958,8 +971,23 @@ export type PaidLeaveScheduleEntryStatus =
   | "Granted"
   | "Cancelled";
 
-/** 付与予定1件の出勤率Assessment内訳(分母/分子/除外日・判定結果)。閲覧専用の属性表示のみに使う。 */
+/** 付与予定一覧行(`PaidLeaveScheduleController::index`のsummarize()と対応)。 */
+export interface PaidLeaveScheduleEntry {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  scheduled_on: string;
+  category: PaidLeaveScheduleCategory;
+  candidate_grant_days: number | null;
+  status: PaidLeaveScheduleStatus;
+  latest_assessment_id: string | null;
+  is_manually_overridden: boolean;
+  attendance_rate: number | null;
+}
+
+/** 出勤率Assessment(分母/分子/除外日の内訳と自動判定・上書き結果)。 */
 export interface PaidLeaveScheduleAssessment {
+  id: string;
   period_start: string | null;
   period_end: string | null;
   denominator_days: number | null;
@@ -967,26 +995,42 @@ export interface PaidLeaveScheduleAssessment {
   excluded_days: number | null;
   attendance_rate: number | null;
   policy_version: string | null;
-  automatic_result: PaidLeaveScheduleEntryStatus | null;
-  final_result: PaidLeaveScheduleEntryStatus | null;
+  automatic_result: PaidLeaveScheduleStatus | null;
+  final_result: PaidLeaveScheduleStatus | null;
   override_reason: string | null;
+  overridden_by_user_id: string | null;
+  created_at: string | null;
 }
 
-/** `PaidLeaveScheduleEntryResource`(付与予定一覧・詳細)。 */
-export interface PaidLeaveScheduleEntry {
-  id: string;
-  user_id: string;
-  user_name: string | null;
-  scheduled_on: string | null;
-  category: string | null;
-  candidate_grant_days: number | null;
-  status: PaidLeaveScheduleEntryStatus;
-  needs_review_due_to_conflict: boolean;
+/** 付与予定Scheduleエントリの詳細(`PaidLeaveScheduleController::show`)。Assessment履歴を含む。 */
+export interface PaidLeaveScheduleEntryDetail extends PaidLeaveScheduleEntry {
   manual_override_reason: string | null;
-  manual_override_by_user_id: string | null;
-  manual_override_at: string | null;
-  granted_paid_leave_grant_id: string | null;
-  assessment: PaidLeaveScheduleAssessment;
+  cancelled_reason: string | null;
+  grant_id: string | null;
+  assessments: PaidLeaveScheduleAssessment[];
+}
+
+/** 一括付与1件分の結果。 */
+export interface PaidLeaveScheduleBulkGrantResult {
+  schedule_entry_id: string;
+  success: boolean;
+  message: string | null;
+  grant_id: string | null;
+}
+
+/** 一括付与の実行結果(`ManualGrantCard`の`ResultSummary`パターンに合わせた全体件数+行単位内訳)。 */
+export interface PaidLeaveScheduleBulkGrantResponse {
+  success_count: number;
+  failure_count: number;
+  results: PaidLeaveScheduleBulkGrantResult[];
+}
+
+/** 付与ルールの対象条件にマッチする社員の軽量一覧(対象社員セクション用)。 */
+export interface PaidLeaveGrantRuleTargetUser {
+  id: string;
+  name: string;
+  work_style: string | null;
+  paid_leave_auto_grant_enabled: boolean;
 }
 
 /** 一括付与APIのエントリ単位の結果。 */

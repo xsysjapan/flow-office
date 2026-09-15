@@ -532,7 +532,7 @@ return [
         // Migration専用(Phase 9)。Command/Handlerは未実装だがイベント名を予約しておく。
         'paid_leave_account.migrated' => PaidLeaveAccountMigrated::class,
 
-        // PaidLeaveScheduleAggregate(社員単位の将来付与予定Schedule。
+        // PaidLeaveScheduleAggregate(社員単位の付与予定Schedule/Assessment集約。
         // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
         'paid_leave_schedule.entry_created' => PaidLeaveScheduleEntryCreated::class,
         'paid_leave_schedule.entry_superseded' => PaidLeaveScheduleEntrySuperseded::class,

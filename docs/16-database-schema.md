@@ -1013,8 +1013,17 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - min_attendance_rate
 - first_grant_after_months
 - grant_cycle_months
+- grant_cycle_type(`anniversary`(既定、hire_date起算の周年サイクル)/
+  `mass_grant_month`(会社が指定した特定月への一斉付与。前倒しアルゴリズムは
+  `ScheduleCandidateGenerator::massGrantScheduledDates()`参照))
+- mass_grant_month(nullable, 1-12。`grant_cycle_type=mass_grant_month`のときのみ使用)
 - is_active
 - created_at / updated_at
+
+`work_style_id IS NULL`の全社共通ルールが1件、migrationで冪等に投入される
+(`grant_cycle_type=mass_grant_month`, `mass_grant_month=4`)。対象社員に一致する
+有効なルールが(work_style固有・全社共通のいずれも)存在しない場合、その社員の
+Schedule候補は生成されない(`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
 
 ## paid_leave_grant_rule_steps
 
@@ -1023,6 +1032,66 @@ backend/側は、既存の日次編集(UC-A005)・月次提出(UC-A008)のAPIと
 - continuous_service_months
 - grant_days
 - created_at / updated_at
+
+## paid_leave_schedule_entries(将来の付与予定のProjection)
+
+`App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId =
+`userId`)のイベントから再構築するProjection。`ScheduleCandidateGenerator`
+(`backend/app/Domain/PaidLeaveSchedule/Support/`)が対象社員の`paid_leave_grant_rules`・
+`WorkStyle`から将来の候補日・区分・候補日数を算出し、`RollPaidLeaveSchedulesCommand`
+(cron)がCommandを発行してエントリを作成する。
+
+- id(uuid、scheduleEntryId)
+- user_id
+- scheduled_on(付与予定日)
+- category(`GrantCategoryClassifier`の区分: 通常/比例/シフト/要確認)
+- candidate_grant_days(付与候補日数。区分・日数が確定できない場合は0)
+- status(`Scheduled` / `AssessmentPending` / `Eligible` / `NotEligible` / `NeedsReview` /
+  `Granted` / `Cancelled`。対象ルールのsteps/法定Policyに該当する行が無く候補日数を
+  確定できない場合は`Scheduled`ではなく`NeedsReview`で作成される。
+  `docs/changesets/20260914-port-to-pr112/spec.md`参照)
+- latest_assessment_id
+- is_manually_overridden / manual_override_reason / manual_override_by_user_id /
+  manual_override_at(管理者による手動判定上書き)
+- grant_id(付与確定後、`paid_leave_grants`側のIDを紐付け)
+- cancelled_reason
+
+## paid_leave_grant_policies(通常付与の法定日数マスタ)
+
+労働基準法第39条第1項・第2項の通常付与日数表。`continuous_service_months`
+(継続勤務月数)ごとに`grant_days`を持ち、`version`で世代管理する(過去の
+Assessment/Grantの根拠を変えずに新版を追加できるようにするため。CLAUDE.md原則8)。
+
+- id
+- version(`v1`, `v2`, ...の文字列。`currentVersion()`が最大versionを採用)
+- continuous_service_months
+- grant_days
+- effective_from(nullable)
+- is_active
+- created_at / updated_at
+
+管理画面(`/admin/paid-leave`)から`GET/POST /paid-leave/grant-policies`で参照・
+新バージョン作成ができる。POSTは全行を受け取り新versionとして一括insertし、
+既存versionの行は変更しない(`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
+
+## paid_leave_proportional_grant_policies(比例付与の法定日数マスタ)
+
+労働基準法第39条第3項・労働基準法施行規則第24条の3・別表第1の比例付与日数表。
+`weekly_scheduled_days_category`(週所定労働日数区分、`'1'`〜`'4'`)×
+`continuous_service_months`ごとに`grant_days`を持つ。versionでの世代管理は
+`paid_leave_grant_policies`と同様。
+
+- id
+- version
+- weekly_scheduled_days_category
+- continuous_service_months
+- grant_days
+- effective_from(nullable)
+- is_active
+- created_at / updated_at
+
+`GET/POST /paid-leave/proportional-grant-policies`(上記と同様の参照・新バージョン
+作成パターン)。
 
 ## paid_leave_grants (有給付与の正のProjection)
 

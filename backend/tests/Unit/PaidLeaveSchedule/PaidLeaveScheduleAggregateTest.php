@@ -11,186 +11,240 @@ use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryGranted;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryManuallyEdited;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntrySuperseded;
-use App\Domain\PaidLeaveSchedule\Support\GrantCategory;
-use App\Domain\PaidLeaveSchedule\Support\ScheduleEntryStatus;
 use Tests\TestCase;
 
 /**
  * PaidLeaveScheduleAggregateの単体テスト。すべてEvent→Aggregate replay→Commandの結果を
- * 検証する形式で行う(`PaidLeaveAccountAggregateTest`と同じ`::fake()`イディオム)。
- * 状態の検証は`when()`のコールバック内(recordThat直後、applyPaidLeave...が適用済み)で
- * 行う(`::fake()`はDBへ永続化しないため、`::retrieve()`で読み直すことはできない)。
- * docs/changesets/20260906-paid-leave-schedule-assessment/spec.md Phase A。
+ * 検証する形式で行い、Projection(Eloquent)は一切使わない
+ * (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md 検証方法)。
  */
 class PaidLeaveScheduleAggregateTest extends TestCase
 {
     private const USER = 'user-1';
 
-    private const ENTRY = 'entry-1';
+    // ---- Schedule生成(新入社員・月次ローリング・1年先まで保証) ----
 
-    // ---- エントリ作成 ----
-
-    public function test_entry_is_created_as_scheduled(): void
+    public function test_new_hire_schedule_generation_creates_all_candidates(): void
     {
         PaidLeaveScheduleAggregate::fake(self::USER)
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->createEntry(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0);
-                $this->assertSame(ScheduleEntryStatus::SCHEDULED, $aggregate->entry(self::ENTRY)['status']);
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e1', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ['entryId' => 'e2', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0],
+                ]);
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated('e2', '2026-04-01', 'normal', 11.0),
             ]);
     }
 
-    public function test_duplicate_entry_id_is_rejected(): void
+    public function test_monthly_rolling_generation_is_idempotent_for_existing_entries(): void
+    {
+        // 既に存在するscheduledOnはスキップされ、新規分(1年先までの追加ロール)だけ作られる。
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e1-dup', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ['entryId' => 'e2', 'scheduledOn' => '2026-10-01', 'category' => 'normal', 'candidateGrantDays' => 11.0],
+                ]);
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated('e2', '2026-10-01', 'normal', 11.0),
+            ]);
+    }
+
+    public function test_one_year_ahead_horizon_guarantee_generates_missing_far_entry(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryCreated('e2', '2026-04-01', 'normal', 11.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                // cronロールが実行され、1年先(2026-10-01)まで存在保証を要求する。
+                $aggregate->ensureFutureScheduleGenerated([
+                    ['entryId' => 'e1-dup', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ['entryId' => 'e2-dup', 'scheduledOn' => '2026-04-01', 'category' => 'normal', 'candidateGrantDays' => 11.0],
+                    ['entryId' => 'e3', 'scheduledOn' => '2026-10-01', 'category' => 'normal', 'candidateGrantDays' => 12.0],
+                ]);
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated('e3', '2026-10-01', 'normal', 12.0),
+            ]);
+    }
+
+    // ---- 再計算(条件変更時・過去確定不変・個別修正保護) ----
+
+    public function test_recalculation_supersedes_entry_when_content_changed(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ], 'work_style変更');
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntrySuperseded('e1', 'work_style変更', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
+    public function test_recalculation_is_noop_when_content_unchanged(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'e1-dup', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ], '定期再計算');
+            })
+            ->assertNotRecorded([
+                PaidLeaveScheduleEntrySuperseded::class,
+                PaidLeaveScheduleEntryCreated::class,
+            ]);
+    }
+
+    public function test_recalculation_cancels_entry_no_longer_needed(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([], '退職予定日確定');
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCancelled('e1', '退職予定日確定'),
+            ]);
+    }
+
+    public function test_past_confirmed_granted_entry_is_immutable_under_recalculation(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                // 同じscheduledOnで内容が異なる再計算を要求しても、確定済みentryは触らない。
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ], '再計算');
+            })
+            ->assertRecorded([
+                // Granted済みのe1は別日付とみなされないため、新規に(同日付だが別)エントリが作られる。
+                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
+    public function test_manually_edited_entry_is_not_silently_overwritten_by_recalculation(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ], '再計算');
+            })
+            ->assertNotRecorded([
+                PaidLeaveScheduleEntrySuperseded::class,
+                PaidLeaveScheduleEntryCancelled::class,
+            ]);
+    }
+
+    // ---- Assessment ----
+
+    public function test_attendance_rate_assessment_eligible_transitions_state(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->runAttendanceRateAssessment(
+                    'e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1',
+                    PaidLeaveScheduleAggregate::STATUS_ELIGIBLE,
+                );
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+            ]);
+    }
+
+    public function test_assessment_below_80_percent_is_not_eligible(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->runAttendanceRateAssessment(
+                    'e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1',
+                    PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE,
+                );
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+            ]);
+    }
+
+    public function test_needs_review_assessment_result_is_recorded(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->runAttendanceRateAssessment(
+                    'e1', 'a1', '2025-04-01', '2025-10-01', 0, 0, 0, null, 'v1',
+                    PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW,
+                );
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 0, 0, 0, null, 'v1', PaidLeaveScheduleAggregate::STATUS_NEEDS_REVIEW),
+            ]);
+    }
+
+    public function test_assessment_on_granted_entry_is_rejected(): void
     {
         $this->expectException(DomainRuleException::class);
 
         PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->createEntry(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0);
-            });
-    }
-
-    // ---- Supersede: 非上書きエントリは差し替えられる ----
-
-    public function test_supersede_on_non_overridden_entry_replaces_values(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->supersedeEntry(self::ENTRY, 'work_style変更', GrantCategory::PROPORTIONAL, 7.0);
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(GrantCategory::PROPORTIONAL, $entry['category']);
-                $this->assertSame(7.0, $entry['candidateGrantDays']);
-                $this->assertSame(ScheduleEntryStatus::SCHEDULED, $entry['status']);
-            })
-            ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded(
-                    self::USER, self::ENTRY, 'work_style変更', GrantCategory::REGULAR, 11.0,
-                    false, GrantCategory::PROPORTIONAL, 7.0, false,
-                ),
-            ]);
-    }
-
-    // ---- Supersede: 個別修正済みエントリは食い違えばNeedsReviewへ、内容は保持 ----
-
-    public function test_supersede_on_manually_overridden_entry_pushes_to_needs_review_without_discarding_manual_content(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleEntryManuallyEdited(self::USER, self::ENTRY, GrantCategory::SHIFT, 5.0, '本人希望によりシフト区分へ修正', 'hr-1', '2026-09-01T00:00:00+09:00'),
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->supersedeEntry(self::ENTRY, 'policy変更', GrantCategory::REGULAR, 11.0);
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(ScheduleEntryStatus::NEEDS_REVIEW, $entry['status']);
-                // 個別修正内容自体(category/candidateGrantDays)は保持される。
-                $this->assertSame(GrantCategory::SHIFT, $entry['category']);
-                $this->assertSame(5.0, $entry['candidateGrantDays']);
-                $this->assertNotNull($entry['manualOverride']);
-            })
-            ->assertRecorded([
-                new PaidLeaveScheduleEntrySuperseded(
-                    self::USER, self::ENTRY, 'policy変更', GrantCategory::SHIFT, 5.0,
-                    true, GrantCategory::REGULAR, 11.0, true,
-                ),
-            ]);
-    }
-
-    public function test_supersede_on_manually_overridden_entry_is_noop_when_new_result_matches(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleEntryManuallyEdited(self::USER, self::ENTRY, GrantCategory::REGULAR, 11.0, '確認済み', 'hr-1', '2026-09-01T00:00:00+09:00'),
-            ])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->supersedeEntry(self::ENTRY, 'policy変更', GrantCategory::REGULAR, 11.0);
-            })
-            ->assertNotRecorded(PaidLeaveScheduleEntrySuperseded::class);
-    }
-
-    // ---- Assessment記録がステータスを導出する ----
-
-    public function test_recording_assessment_drives_status_to_eligible(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->recordAssessment(
-                    self::ENTRY, '2025-10-01', '2026-09-30', 200, 190, 0, 95.0, 'v1', ScheduleEntryStatus::ELIGIBLE,
-                );
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $entry['status']);
-                $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $entry['assessment']['finalResult']);
-            })
-            ->assertRecorded([
-                new PaidLeaveScheduleAssessmentRecorded(self::USER, self::ENTRY, '2025-10-01', '2026-09-30', 200, 190, 0, 95.0, 'v1', ScheduleEntryStatus::ELIGIBLE),
-            ]);
-    }
-
-    public function test_recording_assessment_drives_status_to_not_eligible(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->recordAssessment(
-                    self::ENTRY, '2025-10-01', '2026-09-30', 200, 100, 0, 50.0, 'v1', ScheduleEntryStatus::NOT_ELIGIBLE,
-                );
-
-                $this->assertSame(ScheduleEntryStatus::NOT_ELIGIBLE, $aggregate->entry(self::ENTRY)['status']);
-            });
-    }
-
-    // ---- 既存Overrideは自動再判定で黙って上書きされない ----
-
-    public function test_existing_override_is_not_silently_clobbered_by_fresh_automatic_assessment(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleAssessmentRecorded(self::USER, self::ENTRY, '2025-10-01', '2026-09-30', 200, 100, 0, 50.0, 'v1', ScheduleEntryStatus::NOT_ELIGIBLE),
-                new PaidLeaveScheduleAssessmentOverridden(self::USER, self::ENTRY, ScheduleEntryStatus::ELIGIBLE, '育休復帰による特例', 'hr-1', '2026-09-01T00:00:00+09:00'),
-            ])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                // 再度自動Assessorを実行しても、再びNotEligibleが出たとする。
-                $aggregate->recordAssessment(
-                    self::ENTRY, '2025-10-02', '2026-10-01', 200, 100, 0, 50.0, 'v1', ScheduleEntryStatus::NOT_ELIGIBLE,
-                );
-
-                $entry = $aggregate->entry(self::ENTRY);
-                // Override済みのfinalResult(Eligible)が維持され、ステータスもEligibleのまま。
-                $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $entry['status']);
-                $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $entry['assessment']['finalResult']);
-                // ただし自動判定自体の値は最新化される(比較材料として)。
-                $this->assertSame(ScheduleEntryStatus::NOT_ELIGIBLE, $entry['assessment']['automaticResult']);
+                $aggregate->runAttendanceRateAssessment('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE);
             });
     }
 
     // ---- Override ----
 
-    public function test_override_transitions_status_per_final_result(): void
+    public function test_override_not_eligible_to_eligible(): void
     {
         PaidLeaveScheduleAggregate::fake(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleAssessmentRecorded(self::USER, self::ENTRY, '2025-10-01', '2026-09-30', 200, 100, 0, 50.0, 'v1', ScheduleEntryStatus::NOT_ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->overrideAssessment(self::ENTRY, ScheduleEntryStatus::ELIGIBLE, '休職期間を除外して再計算', 'hr-1', '2026-09-01T00:00:00+09:00');
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(ScheduleEntryStatus::ELIGIBLE, $entry['status']);
-                $this->assertNotNull($entry['manualOverride']);
+                $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '育休からの復職を考慮', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleAssessmentOverridden(self::USER, self::ENTRY, ScheduleEntryStatus::ELIGIBLE, '休職期間を除外して再計算', 'hr-1', '2026-09-01T00:00:00+09:00'),
+                new PaidLeaveScheduleAssessmentOverridden('e1', 'a1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '育休からの復職を考慮', 'admin-1'),
             ]);
     }
 
@@ -199,90 +253,138 @@ class PaidLeaveScheduleAggregateTest extends TestCase
         $this->expectException(DomainRuleException::class);
 
         PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->overrideAssessment(self::ENTRY, ScheduleEntryStatus::ELIGIBLE, '理由', 'hr-1', '2026-09-01T00:00:00+09:00');
+                $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '理由', 'admin-1');
             });
     }
 
-    // ---- 手動編集 ----
+    // ---- 個別修正 ----
 
-    public function test_manual_edit_marks_manual_override(): void
-    {
-        PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
-            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->manuallyEditEntry(self::ENTRY, GrantCategory::PROPORTIONAL, 7.0, '契約変更のため', 'hr-1', '2026-09-01T00:00:00+09:00');
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(GrantCategory::PROPORTIONAL, $entry['category']);
-                $this->assertSame(7.0, $entry['candidateGrantDays']);
-                $this->assertNotNull($entry['manualOverride']);
-            })
-            ->assertRecorded([
-                new PaidLeaveScheduleEntryManuallyEdited(self::USER, self::ENTRY, GrantCategory::PROPORTIONAL, 7.0, '契約変更のため', 'hr-1', '2026-09-01T00:00:00+09:00'),
-            ]);
-    }
-
-    // ---- 付与 ----
-
-    public function test_apply_grant_only_works_from_eligible_and_records_grant_id(): void
+    public function test_manual_edit_is_recorded_and_protected(): void
     {
         PaidLeaveScheduleAggregate::fake(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleAssessmentRecorded(self::USER, self::ENTRY, '2025-10-01', '2026-09-30', 200, 190, 0, 95.0, 'v1', ScheduleEntryStatus::ELIGIBLE),
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->applyGrant(self::ENTRY, 'grant-1', 'hr-1');
-
-                $entry = $aggregate->entry(self::ENTRY);
-                $this->assertSame(ScheduleEntryStatus::GRANTED, $entry['status']);
-                $this->assertSame('grant-1', $entry['grantId']);
+                $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '個別事情による調整', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryGranted(self::USER, self::ENTRY, 'grant-1', 'hr-1'),
+                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '個別事情による調整', 'admin-1'),
             ]);
     }
 
-    public function test_apply_grant_from_non_eligible_is_rejected(): void
+    public function test_manual_edit_on_cancelled_entry_is_rejected(): void
     {
         $this->expectException(DomainRuleException::class);
 
         PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCancelled('e1', '対象外'),
+            ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->applyGrant(self::ENTRY, 'grant-1', 'hr-1');
+                $aggregate->manuallyEditScheduleEntry('e1', ['candidateGrantDays' => 9.0], '調整', 'admin-1');
+            });
+    }
+
+    // ---- 付与(ApplyScheduledGrants経由) ----
+
+    public function test_grant_entry_transitions_eligible_to_granted(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->grantEntry('e1', 'grant-1', 'admin-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ]);
+    }
+
+    public function test_grant_entry_on_not_eligible_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->grantEntry('e1', 'grant-1', 'admin-1');
+            });
+    }
+
+    public function test_grant_entry_twice_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 18, 0, 90.0, 'v1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->grantEntry('e1', 'grant-2', 'admin-1');
             });
     }
 
     // ---- 取消 ----
 
-    public function test_cancel_works_from_non_terminal_state(): void
+    public function test_cancel_entry_is_recorded(): void
     {
         PaidLeaveScheduleAggregate::fake(self::USER)
-            ->given([new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0)])
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+            ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->cancelEntry(self::ENTRY, '退職のため', 'hr-1');
-
-                $this->assertSame(ScheduleEntryStatus::CANCELLED, $aggregate->entry(self::ENTRY)['status']);
+                $aggregate->cancelEntry('e1', '退職確定');
             })
             ->assertRecorded([
-                new PaidLeaveScheduleEntryCancelled(self::USER, self::ENTRY, '退職のため', 'hr-1'),
+                new PaidLeaveScheduleEntryCancelled('e1', '退職確定'),
             ]);
     }
 
-    public function test_cancel_from_granted_is_rejected(): void
+    public function test_cancel_already_granted_entry_is_rejected(): void
     {
         $this->expectException(DomainRuleException::class);
 
         PaidLeaveScheduleAggregate::fake(self::USER)
             ->given([
-                new PaidLeaveScheduleEntryCreated(self::USER, self::ENTRY, '2026-10-01', GrantCategory::REGULAR, 11.0),
-                new PaidLeaveScheduleEntryGranted(self::USER, self::ENTRY, 'grant-1', 'hr-1'),
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
             ])
             ->when(function (PaidLeaveScheduleAggregate $aggregate) {
-                $aggregate->cancelEntry(self::ENTRY, '理由', 'hr-1');
+                $aggregate->cancelEntry('e1', '取消');
             });
+    }
+
+    // ---- entry()状態確認 ----
+
+    public function test_entry_state_reflects_assessment_and_final_result(): void
+    {
+        $capturedEntry = null;
+
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'normal', 10.0),
+                new PaidLeaveScheduleAssessmentRecorded('e1', 'a1', '2025-04-01', '2025-10-01', 20, 10, 0, 50.0, 'v1', PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) use (&$capturedEntry) {
+                $aggregate->overrideScheduleAssessment('e1', PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, '復職考慮', 'admin-1');
+                $capturedEntry = $aggregate->entry('e1');
+            });
+
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $capturedEntry['status']);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $capturedEntry['assessments']['a1']['finalResult']);
+        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE, $capturedEntry['assessments']['a1']['automaticResult']);
     }
 }
