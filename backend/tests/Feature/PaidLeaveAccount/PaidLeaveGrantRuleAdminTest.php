@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\PaidLeaveAccount;
 
+use App\Jobs\ReapplyPaidLeaveSchedulePolicyJob;
 use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveGrantRule;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -200,6 +202,44 @@ class PaidLeaveGrantRuleAdminTest extends TestCase
         ]);
 
         $response->assertCreated();
+    }
+
+    public function test_store_and_update_dispatch_the_schedule_reapply_job(): void
+    {
+        // docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md:
+        // 付与ルールの作成・編集は、未確定Scheduleをポリシー変更に追従させる
+        // ReapplyPaidLeaveSchedulePolicyJobを発行する。
+        Queue::fake();
+        $this->seedNormalPolicy();
+        $admin = $this->admin();
+
+        $response = $this->actingAs($admin)->postJson('/api/paid-leave/grant-rules', [
+            'name' => '全社員',
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'is_active' => true,
+            'steps' => [
+                ['continuous_service_months' => 6, 'grant_days' => 10],
+            ],
+        ]);
+        $response->assertCreated();
+        $ruleId = $response->json('id');
+
+        Queue::assertPushed(ReapplyPaidLeaveSchedulePolicyJob::class, 1);
+
+        $this->actingAs($admin)->putJson("/api/paid-leave/grant-rules/{$ruleId}", [
+            'name' => '全社員',
+            'min_attendance_rate' => 80,
+            'first_grant_after_months' => 6,
+            'grant_cycle_months' => 12,
+            'is_active' => true,
+            'steps' => [
+                ['continuous_service_months' => 6, 'grant_days' => 11],
+            ],
+        ])->assertOk();
+
+        Queue::assertPushed(ReapplyPaidLeaveSchedulePolicyJob::class, 2);
     }
 
     public function test_active_rule_cannot_be_physically_deleted(): void

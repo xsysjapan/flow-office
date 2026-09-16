@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\PaidLeaveAccount;
 
+use App\Jobs\ReapplyPaidLeaveSchedulePolicyJob;
 use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveProportionalGrantPolicy;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -89,6 +91,33 @@ class PaidLeaveGrantPolicyAdminTest extends TestCase
         // 以降のcurrentVersion()/日数解決は新versionを参照する
         $this->assertSame('v2', PaidLeaveGrantPolicy::latestVersion());
         $this->assertSame(11.0, PaidLeaveGrantPolicy::grantDaysFor(6, 'v2'));
+    }
+
+    public function test_store_normal_and_proportional_policy_dispatch_the_schedule_reapply_job(): void
+    {
+        // docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md:
+        // 法定付与ポリシーの新バージョン作成は、未確定Scheduleをポリシー変更に追従させる
+        // ReapplyPaidLeaveSchedulePolicyJobを発行する。
+        Queue::fake();
+        $this->seedNormalPolicy();
+        $this->seedProportionalPolicy();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->postJson('/api/paid-leave/grant-policies', [
+            'rows' => [
+                ['continuous_service_months' => 6, 'grant_days' => 11],
+            ],
+        ])->assertCreated();
+
+        Queue::assertPushed(ReapplyPaidLeaveSchedulePolicyJob::class, 1);
+
+        $this->actingAs($admin)->postJson('/api/paid-leave/proportional-grant-policies', [
+            'rows' => [
+                ['weekly_scheduled_days_category' => '4', 'continuous_service_months' => 6, 'grant_days' => 8],
+            ],
+        ])->assertCreated();
+
+        Queue::assertPushed(ReapplyPaidLeaveSchedulePolicyJob::class, 2);
     }
 
     public function test_store_rejects_duplicate_continuous_service_months(): void

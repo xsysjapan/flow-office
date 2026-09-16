@@ -267,7 +267,10 @@
 ### 検証コマンド実行結果
 
 - `cd backend && php artisan test --filter=PaidLeaveSchedule`: 83/83 pass
-- `cd backend && php artisan test`: 1084/1084 pass
+- `cd backend && php artisan test`: 1086/1086 pass(自己レビューで発見したテストカバレッジの
+  抜け=「4つのエンドポイントが実際にJobをdispatchすることを検証するテストが無かった」を
+  `PaidLeaveGrantRuleAdminTest`・`PaidLeaveGrantPolicyAdminTest`に`Queue::fake()`+
+  `Queue::assertPushed()`で追加。2件で+2テスト)
 - `vendor/bin/pint`(変更ファイルのみ): 適用済み(braces_position/ordered_imports等)
 
 ### 副次対応: CI(`migrate-mysql`ジョブ)のエラー修正
