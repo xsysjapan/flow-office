@@ -164,6 +164,42 @@ class PaidLeaveScheduleAggregateTest extends TestCase
             ]);
     }
 
+    public function test_manually_edited_entry_is_recreated_when_override_manual_edits_is_true(): void
+    {
+        // docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md: 法定付与ポリシー・
+        // 付与ルール変更トリガーに限り、個別修正済みエントリも保護せず再作成する。
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryManuallyEdited('e1', ['candidateGrantDays' => 9.0], '手動調整', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([
+                    ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                ], '法定付与ポリシーの変更', overrideManualEdits: true);
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntrySuperseded('e1', '法定付与ポリシーの変更', '2025-10-01', 'proportional', 9.0),
+                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
+    public function test_granted_entry_is_still_immutable_even_with_override_manual_edits(): void
+    {
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule([], '法定付与ポリシーの変更', overrideManualEdits: true);
+            })
+            ->assertNotRecorded([
+                PaidLeaveScheduleEntrySuperseded::class,
+                PaidLeaveScheduleEntryCancelled::class,
+            ]);
+    }
+
     // ---- Assessment ----
 
     public function test_attendance_rate_assessment_eligible_transitions_state(): void

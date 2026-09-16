@@ -71,25 +71,28 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     /**
      * hire_date/usage_start_date/work_style_id割当/独自ルール変更等の条件変更時に、対象社員の
-     * 未来Scheduleを再計算する。`Granted`/`Cancelled`の確定済みエントリと、個別修正済み
-     * (`manuallyEditScheduleEntry`実行済み)エントリは対象外とする(依頼書§28)。
+     * 未来Scheduleを再計算する。`Granted`/`Cancelled`の確定済みエントリは常に対象外とする。
+     * 個別修正済み(`manuallyEditScheduleEntry`実行済み)エントリは、既定では対象外とするが
+     * (依頼書§28)、`$overrideManualEdits`が`true`の場合はこの保護を無視する
+     * (法定付与ポリシー・付与ルール自体が変更された場合。未確定の予定は個別修正の有無に
+     * 関わらず新しい内容に追従させる、docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
      *
      * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
      */
-    public function recalculateFutureSchedule(array $candidates, string $reason): self
+    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false): self
     {
         $desiredByScheduledOn = [];
         foreach ($candidates as $candidate) {
             $desiredByScheduledOn[$candidate['scheduledOn']] = $candidate;
         }
 
-        // 既存の再計算対象エントリ(確定済み・個別修正済みを除く)を走査する。
+        // 既存の再計算対象エントリ(確定済みを除く。個別修正済みは$overrideManualEdits次第)を走査する。
         foreach ($this->entries as $entryId => $entry) {
             if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
                 continue;
             }
 
-            if ($entry['manualOverride'] !== null) {
+            if ($entry['manualOverride'] !== null && ! $overrideManualEdits) {
                 // 個別修正済みエントリは黙って上書きしない(依頼書§28)。内容の食い違い検知
                 // (NeedsReviewへの強制遷移)はPhase C以降、法定Policyが揃ってから
                 // 実際の条件比較として実装する。Phase Aでは「保護対象から除外する」

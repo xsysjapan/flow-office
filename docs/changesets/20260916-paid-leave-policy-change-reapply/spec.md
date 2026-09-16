@@ -1,6 +1,6 @@
 # paid-leave-policy-change-reapply
 
-ステータス: レビュー中
+ステータス: 完了
 
 ## 変更要望(原文)
 > 展開するデータはそもそもポリシーに合わせて確認のたびに見直しをお願いします。予定はそもそもユーザーの確認以外はできません。
@@ -219,4 +219,62 @@
 「付与済みは対象外、未確定のみ」の確認)を経て、論点1・2・6の決定に反映済み。
 
 ## 実装結果
-未着手
+
+- `backend/app/Domain/PaidLeaveSchedule/Aggregates/PaidLeaveScheduleAggregate.php`:
+  `recalculateFutureSchedule()`に第3引数`bool $overrideManualEdits = false`を追加。
+  `true`時は個別修正済み(`manualOverride !== null`)エントリの保護をスキップする。
+  `Granted`/`Cancelled`は従来通り常に対象外。
+- `backend/app/Domain/PaidLeaveSchedule/Commands/RecalculateFutureSchedule.php`:
+  同名の`overrideManualEdits`プロパティ(既定`false`)を追加。
+- `backend/app/Domain/PaidLeaveSchedule/Handlers/RecalculateFutureScheduleHandler.php`:
+  追加引数をaggregateへ橋渡し。
+- `backend/app/Jobs/ReapplyPaidLeaveSchedulePolicyJob.php`(新規): DBキュー経由で
+  対象社員全員(`RollPaidLeaveSchedulesCommand`と同条件)の`candidatesFor()`を再計算し、
+  `overrideManualEdits: true`で`RecalculateFutureSchedule`を発行する。
+- `backend/app/Http/Controllers/Api/PaidLeaveController.php`: `storeRule`・`updateRule`・
+  `storeGrantPolicy`・`storeProportionalGrantPolicy`から、DB更新後に
+  `ReapplyPaidLeaveSchedulePolicyJob::dispatch()`を呼ぶよう変更。`destroyRule`は対象外
+  (論点3の通り)。
+- テスト追加:
+  - `backend/tests/Unit/PaidLeaveSchedule/PaidLeaveScheduleAggregateTest.php`:
+    `overrideManualEdits`によって個別修正済みエントリが再作成されること・
+    `Granted`エントリは`overrideManualEdits`でも不変であることの単体テスト2件。
+  - `backend/tests/Feature/PaidLeaveSchedule/ReapplyPaidLeaveSchedulePolicyJobTest.php`(新規):
+    Job実行により、個別修正済みの未確定エントリがルール変更後の内容に再作成されること、
+    Grant済みエントリは一切変更されないことをEnd-to-End(実DB経由)で検証する2件。
+- ドキュメント: `docs/09-usecases-paid-leave.md`にUC-P011bを追加し、本仕様(トリガー・
+  対象社員・個別修正の扱い)を記載。`docs/17-events.md`は新規イベント種別を追加していない
+  ため変更なし(受け入れ条件・「ドキュメントへの影響」の通り)。
+
+### 受け入れ条件の充足確認
+
+- 法定通常/比例付与ポリシーの新バージョン作成・付与ルールの作成/編集で未確定エントリが
+  新内容に再作成される → `ReapplyPaidLeaveSchedulePolicyJobTest`で確認(◯)
+- `Granted`/`Cancelled`エントリは変更されない →
+  `test_it_does_not_touch_granted_entries`・`PaidLeaveScheduleAggregateTest::test_granted_entry_is_still_immutable_even_with_override_manual_edits`で確認(◯)
+- 個別修正済み未確定エントリもポリシー変更時は保護されない →
+  `test_it_recreates_unconfirmed_entries_including_manually_edited_ones`・
+  `PaidLeaveScheduleAggregateTest::test_manually_edited_entry_is_recreated_when_override_manual_edits_is_true`で確認(◯)
+- 既存トリガー(`hire_date`変更等)では個別修正保護が維持される(回帰なし) →
+  既存の`test_manually_edited_entry_is_not_silently_overwritten_by_recalculation`が
+  デフォルト引数のまま変更なくPASSすることで確認(◯)
+- ポリシー・ルール変更APIはJob完了を待たず返る(非同期) → `ShouldQueue`実装・
+  `dispatch()`呼び出しで確認(◯)。既定の`QUEUE_CONNECTION=sync`のテスト環境では
+  同期実行されるが、本番相当の`database`ドライバでは非同期になる(`docs/02-tech-stack.md`)
+- 関連テストが全てPASSする →
+  `cd backend && php artisan test`: 1084/1084 pass(新規4件含む)
+
+### 検証コマンド実行結果
+
+- `cd backend && php artisan test --filter=PaidLeaveSchedule`: 83/83 pass
+- `cd backend && php artisan test`: 1084/1084 pass
+- `vendor/bin/pint`(変更ファイルのみ): 適用済み(braces_position/ordered_imports等)
+
+### 副次対応: CI(`migrate-mysql`ジョブ)のエラー修正
+
+本タスク着手時、PR#112のCI `migrate-mysql`ジョブが失敗していた
+(`2026_09_13_000000_create_paid_leave_grant_policies_table.php`のunique制約の
+自動生成インデックス名`paid_leave_grant_policies_version_continuous_service_months_unique`が
+68文字でMySQLの識別子長制限64文字を超過)。本変更セットのスコープには含まれないが、
+CI通過に必須のため合わせて修正した。`unique(['version', 'continuous_service_months'])`に
+明示的な短い名前(`paid_leave_grant_policies_version_months_unique`、47文字)を指定。

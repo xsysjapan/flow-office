@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Console\Commands\MigratePaidLeaveAccountsCommand;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
@@ -23,6 +24,7 @@ use App\Http\Resources\PaidLeaveGrantRuleTargetUserResource;
 use App\Http\Resources\PaidLeaveRequestResource;
 use App\Http\Resources\PaidLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
+use App\Jobs\ReapplyPaidLeaveSchedulePolicyJob;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantPolicy;
@@ -45,6 +47,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -105,6 +108,8 @@ class PaidLeaveController extends Controller
             $rule->steps()->create($step);
         }
 
+        ReapplyPaidLeaveSchedulePolicyJob::dispatch("付与ルール「{$rule->name}」の作成");
+
         return (new PaidLeaveGrantRuleResource($rule->load('steps')))->response()->setStatusCode(201);
     }
 
@@ -160,6 +165,8 @@ class PaidLeaveController extends Controller
         foreach ($data['steps'] ?? [] as $step) {
             $rule->steps()->create($step);
         }
+
+        ReapplyPaidLeaveSchedulePolicyJob::dispatch("付与ルール「{$rule->name}」の編集");
 
         return response()->json((new PaidLeaveGrantRuleResource($rule->load('steps')))->toArray($request));
     }
@@ -280,7 +287,7 @@ class PaidLeaveController extends Controller
 
         $months = array_map(fn (array $row) => $row['continuous_service_months'], $data['rows']);
         if (count($months) !== count(array_unique($months))) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'rows' => ['continuous_service_monthsは重複できません。'],
             ]);
         }
@@ -300,6 +307,8 @@ class PaidLeaveController extends Controller
 
             return $version;
         });
+
+        ReapplyPaidLeaveSchedulePolicyJob::dispatch("法定通常付与表({$version})の作成");
 
         $rows = PaidLeaveGrantPolicy::query()
             ->where('version', $version)
@@ -336,7 +345,7 @@ class PaidLeaveController extends Controller
             $data['rows'],
         );
         if (count($keys) !== count(array_unique($keys))) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'rows' => ['weekly_scheduled_days_categoryとcontinuous_service_monthsの組み合わせは重複できません。'],
             ]);
         }
@@ -357,6 +366,8 @@ class PaidLeaveController extends Controller
 
             return $version;
         });
+
+        ReapplyPaidLeaveSchedulePolicyJob::dispatch("法定比例付与表({$version})の作成");
 
         $rows = PaidLeaveProportionalGrantPolicy::query()
             ->where('version', $version)
@@ -514,7 +525,7 @@ class PaidLeaveController extends Controller
      * 大量移行はartisanコマンド`paid-leave:migrate-accounts`(CSV/JSON一括投入、行単位で
      * 成功・失敗を継続収集する)を使う想定で、本エンドポイントは1社員分の疎通・単発修正用。
      *
-     * @see \App\Console\Commands\MigratePaidLeaveAccountsCommand
+     * @see MigratePaidLeaveAccountsCommand
      */
     #[OA\Post(
         path: '/paid-leave/migrate',
@@ -902,7 +913,7 @@ class PaidLeaveController extends Controller
                     $validator->errors()->add($field, $message);
                 }
             }
-            throw new \Illuminate\Validation\ValidationException($validator);
+            throw new ValidationException($validator);
         }
     }
 

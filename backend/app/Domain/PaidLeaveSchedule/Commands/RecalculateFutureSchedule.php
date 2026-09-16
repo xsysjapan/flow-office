@@ -16,10 +16,14 @@ class RecalculateFutureSchedule implements Command
 {
     /**
      * @param  array<int, CandidateEntry>  $candidates  最新条件で算出した「あるべき」Schedule一覧
+     * @param  bool  $overrideManualEdits  trueの場合、個別修正済み(`manuallyEditScheduleEntry`実行済み)
+     *                                     エントリも再作成の対象に含める(法定付与ポリシー・付与ルール変更トリガーのみtrueで発行する。
+     *                                     docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)
      */
     public function __construct(
         public readonly string $userId,
         public readonly array $candidates,
         public readonly string $reason,
+        public readonly bool $overrideManualEdits = false,
     ) {}
 }

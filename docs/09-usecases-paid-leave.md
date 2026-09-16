@@ -451,6 +451,26 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 収集して継続する(部分失敗許容)。既存の`paid_leave_grant_rules`ベースのバッチ判定
 (UC-P001/UC-P002)とは独立した別ドメインであり、両者は共存しない(cutover的な置換)。
 
+## UC-P011b: 法定付与ポリシー・付与ルール変更時に付与予定を再作成する
+
+1. 人事担当者・管理者が付与ルール(`POST`/`PUT /paid-leave/grant-rules`)、または法定
+   通常付与表・比例付与表の新バージョン(`POST /paid-leave/grant-policies`・
+   `POST /paid-leave/proportional-grant-policies`)を作成・編集する
+2. リクエスト成功後、`App\Jobs\ReapplyPaidLeaveSchedulePolicyJob`がDBキュー経由で
+   非同期に発行される(管理画面の保存操作はJob完了を待たない)
+3. Jobは`paid-leave:roll-schedules`と同じ対象社員条件(`employment_status=active`・
+   `hire_date`設定済み・`paid_leave_auto_grant_enabled=true`)で全社員を走査し、
+   `ScheduleCandidateGenerator`で最新のルール・法定Policyに基づく候補を算出し直した上で
+   `RecalculateFutureSchedule`(`overrideManualEdits: true`)を発行する
+4. `Granted`/`Cancelled`の確定済みエントリは対象外(常に不変)。それ以外の未確定エントリは、
+   UC-P014で個別修正(`ManuallyEditScheduleEntry`)済みであっても保護されず、新しい内容へ
+   再作成される(内容が変わらない社員は冪等に何もしない)
+
+法定付与ポリシー・付与ルールの内容そのものが変わった場合、確定していない付与予定は
+「あくまで見込み」であり、ユーザー確認(UC-P014のOverride含む)の有無に関わらず最新の
+ルールに追従させる、という運用判断による
+(docs/changesets/20260916-paid-leave-policy-change-reapply/spec.md)。
+
 ## UC-P012: 出勤率Assessmentを実行する
 
 1. `RunAttendanceRateAssessment` Commandにより、対象エントリの直近期間の勤務予定日数

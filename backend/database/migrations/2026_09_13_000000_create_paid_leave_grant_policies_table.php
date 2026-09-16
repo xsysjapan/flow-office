@@ -23,7 +23,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['version', 'continuous_service_months']);
+            $table->unique(['version', 'continuous_service_months'], 'paid_leave_grant_policies_version_months_unique');
             $table->index(['is_active']);
         });
     }

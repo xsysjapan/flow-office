@@ -17,7 +17,7 @@ class RecalculateFutureScheduleHandler implements CommandHandler
         assert($command instanceof RecalculateFutureSchedule);
 
         PaidLeaveScheduleAggregate::retrieve($command->userId)
-            ->recalculateFutureSchedule($command->candidates, $command->reason)
+            ->recalculateFutureSchedule($command->candidates, $command->reason, $command->overrideManualEdits)
             ->persist();
 
         return null;
