@@ -39,7 +39,7 @@ return new class extends Migration
             $table->boolean('is_manually_overridden')->default(false);
             $table->string('manual_override_reason')->nullable();
             $table->foreignUuid('manual_override_by_user_id')->nullable()
-                ->constrained('users', 'id', 'paid_leave_schedule_entries_manual_override_by_user_id_foreign_v2');
+                ->constrained('users', 'id', 'pl_schedule_entries_override_by_user_id_foreign_v2');
             $table->timestamp('manual_override_at')->nullable();
             $table->uuid('grant_id')->nullable();
             $table->string('cancelled_reason')->nullable();
