@@ -203,6 +203,78 @@ class PaidLeaveScheduleAggregateTest extends TestCase
             ]);
     }
 
+    public function test_granted_entry_is_superseded_when_include_granted_entries_is_true(): void
+    {
+        // 過去分洗い替えコマンド専用: includeGrantedEntries=true の場合、
+        // Grantedエントリも洗い替え対象に含める(Cancelled のみ保護)。
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule(
+                    [
+                        ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ],
+                    '過去分洗い替え',
+                    overrideManualEdits: false,
+                    includeGrantedEntries: true
+                );
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntrySuperseded('e1', '過去分洗い替え', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
+    public function test_granted_entry_is_protected_when_include_granted_entries_is_false(): void
+    {
+        // デフォルト(includeGrantedEntries=false): Grantedエントリは保護。
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryGranted('e1', 'grant-1', 'admin-1'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule(
+                    [
+                        ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ],
+                    '再計算',
+                    overrideManualEdits: false,
+                    includeGrantedEntries: false  // 明示的に指定(デフォルトと同じ)
+                );
+            })
+            ->assertNotRecorded([
+                PaidLeaveScheduleEntrySuperseded::class,
+                PaidLeaveScheduleEntryCancelled::class,
+            ]);
+    }
+
+    public function test_cancelled_entry_is_always_protected_even_with_include_granted_entries(): void
+    {
+        // Cancelled エントリは includeGrantedEntries の値に関わらず常に保護。
+        PaidLeaveScheduleAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveScheduleEntryCreated('e1', '2025-10-01', 'proportional', 8.0),
+                new PaidLeaveScheduleEntryCancelled('e1', '一度目の取消'),
+            ])
+            ->when(function (PaidLeaveScheduleAggregate $aggregate) {
+                $aggregate->recalculateFutureSchedule(
+                    [
+                        ['entryId' => 'e1-v2', 'scheduledOn' => '2025-10-01', 'category' => 'normal', 'candidateGrantDays' => 10.0],
+                    ],
+                    '再計算',
+                    overrideManualEdits: false,
+                    includeGrantedEntries: true
+                );
+            })
+            ->assertRecorded([
+                new PaidLeaveScheduleEntryCreated('e1-v2', '2025-10-01', 'normal', 10.0),
+            ]);
+    }
+
     // ---- Assessment ----
 
     public function test_attendance_rate_assessment_eligible_transitions_state(): void

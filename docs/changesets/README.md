@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20260919-paid-leave-schedule-rebuild](./20260919-paid-leave-schedule-rebuild/spec.md) | 過去の有給休暇付与予定を取消+再作成する運用コマンド(付与ルール指定・管理画面実行)の追加 | 実装中 |
+| [20260919-paid-leave-schedule-rebuild](./20260919-paid-leave-schedule-rebuild/spec.md) | 過去の有給休暇付与予定を取消+再作成する運用コマンド(付与ルール指定・管理画面実行)の追加 | 完了 |
 | [20260919-prod-migration-history-collision](./20260919-prod-migration-history-collision/spec.md) | 本番マイグレーション履歴衝突によるデプロイ失敗の是正 | 完了 |
 | [20260916-paid-leave-policy-change-reapply](./20260916-paid-leave-policy-change-reapply/spec.md) | 法定付与ポリシー・付与ルール変更時に未確定Scheduleを再作成する | 完了 |
 | [20260914-form-submit-dom-detach-bug](./20260914-form-submit-dom-detach-bug/spec.md) | フォーム送信ボタンがクリック中にDOMから外れる不具合の調査記録 | 検討中 |
