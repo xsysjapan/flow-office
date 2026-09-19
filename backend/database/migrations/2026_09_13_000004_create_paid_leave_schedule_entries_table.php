@@ -26,7 +26,11 @@ return new class extends Migration
 
         Schema::create('paid_leave_schedule_entries', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('user_id')->constrained('users');
+            // MySQLは外部キー制約名がスキーマ全体で一意である必要があり、`Schema::rename()`後も
+            // 旧テーブル(`_legacy`)側の制約名(`paid_leave_schedule_entries_user_id_foreign`等)は
+            // そのまま残る。自動生成名だと衝突するため、明示的に別名を指定する
+            // (`constrained()`の第3引数)。
+            $table->foreignUuid('user_id')->constrained('users', 'id', 'paid_leave_schedule_entries_user_id_foreign_v2');
             $table->date('scheduled_on');
             $table->string('category');
             $table->decimal('candidate_grant_days', 4, 1);
@@ -34,7 +38,8 @@ return new class extends Migration
             $table->uuid('latest_assessment_id')->nullable();
             $table->boolean('is_manually_overridden')->default(false);
             $table->string('manual_override_reason')->nullable();
-            $table->foreignUuid('manual_override_by_user_id')->nullable()->constrained('users');
+            $table->foreignUuid('manual_override_by_user_id')->nullable()
+                ->constrained('users', 'id', 'paid_leave_schedule_entries_manual_override_by_user_id_foreign_v2');
             $table->timestamp('manual_override_at')->nullable();
             $table->uuid('grant_id')->nullable();
             $table->string('cancelled_reason')->nullable();
