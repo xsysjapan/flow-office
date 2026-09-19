@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,7 @@ import * as usersApi from '../../api/users'
 import type {
   Paginated,
   PaidLeaveGrant,
+  PaidLeaveGrantPolicies,
   PaidLeaveGrantRule,
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveUsage,
@@ -27,6 +28,13 @@ const rule: PaidLeaveGrantRule = {
   steps: [{ continuous_service_months: 6, grant_days: 10 }],
 }
 
+const policies: PaidLeaveGrantPolicies = {
+  version: 'v1',
+  normal: [{ continuous_service_months: 6, grant_days: 10 }],
+  proportional_version: 'v1',
+  proportional: [{ weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 7 }],
+}
+
 const targetUser: User = {
   id: 'user-3',
   name: '対象社員',
@@ -40,6 +48,7 @@ const targetUser: User = {
 function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/paid-leave') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantRules').mockResolvedValue(rules)
+  vi.spyOn(paidLeaveApi, 'fetchPaidLeaveGrantPolicies').mockResolvedValue(policies)
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -51,11 +60,39 @@ function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/
 }
 
 describe('PaidLeavePolicyPage', () => {
-  it('lists existing grant rules with their steps', async () => {
+  it('links to the schedule page', async () => {
+    renderPage()
+    expect(await screen.findByRole('link', { name: '付与予定を確認' })).toHaveAttribute('href', '/admin/paid-leave/schedule')
+  })
+
+  it('lists existing grant rules with a sentence preview and steps table', async () => {
     renderPage()
 
     expect(await screen.findByText('正社員標準ルール')).toBeInTheDocument()
-    expect(screen.getByText('継続勤務6か月→10日')).toBeInTheDocument()
+    const ruleItem = screen.getByText('正社員標準ルール').closest('li')!
+    expect(
+      within(ruleItem).getByText('入社日から6か月後に最初の付与。以後12か月ごとに、付与テーブルに沿って日数が増えていきます。出勤率が0.8%未満の月は付与されません。'),
+    ).toBeInTheDocument()
+    expect(within(ruleItem).getByText('6か月')).toBeInTheDocument()
+    expect(within(ruleItem).getByText('10日')).toBeInTheDocument()
+  })
+
+  it('shows the statutory grant policy matrix as a read-only reference (no toggle)', async () => {
+    renderPage()
+
+    expect(await screen.findByText('法定付与日数(参考・自動適用)')).toBeInTheDocument()
+    expect(await screen.findByText('週4日')).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  })
+
+  it('disables deleting an active rule with a reason, and allows deleting an inactive one', async () => {
+    renderPage([rule, { ...rule, id: 2, name: '無効ルール', is_active: false }])
+
+    await screen.findByText('正社員標準ルール')
+    const deleteButtons = screen.getAllByRole('button', { name: '削除' })
+    expect(deleteButtons[0]).toBeDisabled()
+    expect(screen.getByText('有効なルールは削除できません。先に無効化してください。')).toBeInTheDocument()
+    expect(deleteButtons[1]).toBeEnabled()
   })
 
   it('creates a new grant rule with the entered values', async () => {
@@ -171,6 +208,66 @@ describe('PaidLeavePolicyPage', () => {
 
     await waitFor(() =>
       expect(usersApi.updatePaidLeaveAutoGrantEnabled).toHaveBeenCalledWith('user-4', true),
+    )
+  })
+
+  it('creates a new normal grant policy version with a statutory-review warning', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveGrantPolicyVersion').mockResolvedValue({
+      version: 'v2',
+      normal: [{ continuous_service_months: 6, grant_days: 11 }],
+    })
+
+    renderPage()
+
+    await screen.findByText('週4日')
+    const normalSection = screen.getByText(/通常付与\(週所定労働日数5日以上/).closest('div')!
+    await userEvent.click(within(normalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。'),
+    ).toBeInTheDocument()
+
+    const monthsInput = within(dialog).getByLabelText('継続勤務(か月)') as HTMLInputElement
+    const daysInput = within(dialog).getByLabelText('付与日数') as HTMLInputElement
+    expect(monthsInput).toHaveValue(6)
+    await userEvent.clear(daysInput)
+    await userEvent.type(daysInput, '11')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveGrantPolicyVersion).toHaveBeenCalledWith([
+        { continuous_service_months: 6, grant_days: 11 },
+      ]),
+    )
+  })
+
+  it('creates a new proportional grant policy version', async () => {
+    vi.spyOn(paidLeaveApi, 'createPaidLeaveProportionalGrantPolicyVersion').mockResolvedValue({
+      version: 'v2',
+      proportional: [{ weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 8 }],
+    })
+
+    renderPage()
+
+    await screen.findByText('週4日')
+    const proportionalSection = screen.getByText(/比例付与\(週所定労働日数4日以下/).closest('div')!
+    await userEvent.click(within(proportionalSection).getByRole('button', { name: '新しいバージョンを作成' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByText('この表の変更は法令に基づく設定です。保存前に社労士等の専門家に確認してください。')
+
+    const daysInput = within(dialog).getByLabelText('付与日数') as HTMLInputElement
+    await userEvent.clear(daysInput)
+    await userEvent.type(daysInput, '8')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '新しいバージョンを保存' }))
+
+    await waitFor(() =>
+      expect(paidLeaveApi.createPaidLeaveProportionalGrantPolicyVersion).toHaveBeenCalledWith([
+        { weekly_scheduled_days_category: '4', continuous_service_months: 6, grant_days: 8 },
+      ]),
     )
   })
 })

@@ -6,6 +6,8 @@ use App\Domain\Attendance\Events\UserWorkStyleAssignedForMonth;
 use App\Domain\Attendance\Events\WorkStyleUpdated;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
+use App\Models\User;
 use App\Models\UserWorkStyleMonthlyAssignment;
 use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
@@ -37,14 +39,14 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
         'prescribed_weekly_minutes',
     ];
 
-    public function __construct(private readonly CommandBus $commandBus) {}
+    public function __construct(
+        private readonly CommandBus $commandBus,
+        private readonly ScheduleCandidateGenerator $generator,
+    ) {}
 
     public function onUserWorkStyleAssignedForMonth(UserWorkStyleAssignedForMonth $event): void
     {
-        $this->commandBus->dispatch(new RecalculateFutureSchedule(
-            userId: $event->userId,
-            reason: 'work_style_id割当の変更',
-        ));
+        $this->recalculate($event->userId, 'work_style_id割当の変更');
     }
 
     public function onWorkStyleUpdated(WorkStyleUpdated $event): void
@@ -66,10 +68,25 @@ class RecalculateScheduleOnWorkStyleChangedReactor extends Reactor
             ->pluck('user_id');
 
         foreach ($userIds as $userId) {
-            $this->commandBus->dispatch(new RecalculateFutureSchedule(
-                userId: $userId,
-                reason: 'WorkStyleの区分判定関連列の変更',
-            ));
+            $this->recalculate($userId, 'WorkStyleの区分判定関連列の変更');
         }
+    }
+
+    private function recalculate(string $userId, string $reason): void
+    {
+        $user = User::find($userId);
+
+        if ($user === null) {
+            return;
+        }
+
+        $from = Carbon::today();
+        $candidates = $this->generator->candidatesFor($user, $from, $from->copy()->addYear());
+
+        $this->commandBus->dispatch(new RecalculateFutureSchedule(
+            userId: $userId,
+            candidates: $candidates,
+            reason: $reason,
+        ));
     }
 }

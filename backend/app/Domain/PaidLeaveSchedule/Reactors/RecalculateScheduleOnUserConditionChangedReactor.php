@@ -4,9 +4,12 @@ namespace App\Domain\PaidLeaveSchedule\Reactors;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveSchedule\Commands\RecalculateFutureSchedule;
+use App\Domain\PaidLeaveSchedule\Support\ScheduleCandidateGenerator;
 use App\Domain\UserManagement\Events\PaidLeaveAutoGrantEnabledSet;
 use App\Domain\UserManagement\Events\UserHireDateSet;
 use App\Domain\UserManagement\Events\UserUsageStartDateSet;
+use App\Models\User;
+use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
@@ -27,7 +30,10 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  */
 class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
 {
-    public function __construct(private readonly CommandBus $commandBus) {}
+    public function __construct(
+        private readonly CommandBus $commandBus,
+        private readonly ScheduleCandidateGenerator $generator,
+    ) {}
 
     public function onUserHireDateSet(UserHireDateSet $event): void
     {
@@ -46,6 +52,19 @@ class RecalculateScheduleOnUserConditionChangedReactor extends Reactor
 
     private function recalculate(string $userId, string $reason): void
     {
-        $this->commandBus->dispatch(new RecalculateFutureSchedule(userId: $userId, reason: $reason));
+        $user = User::find($userId);
+
+        if ($user === null) {
+            return;
+        }
+
+        $from = Carbon::today();
+        $candidates = $this->generator->candidatesFor($user, $from, $from->copy()->addYear());
+
+        $this->commandBus->dispatch(new RecalculateFutureSchedule(
+            userId: $userId,
+            candidates: $candidates,
+            reason: $reason,
+        ));
     }
 }

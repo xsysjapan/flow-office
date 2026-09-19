@@ -1,9 +1,15 @@
 import { apiFetch } from './client'
 import type {
   PaidLeaveGrant,
+  PaidLeaveGrantPolicies,
+  PaidLeaveGrantPolicyStep,
   PaidLeaveGrantRule,
   PaidLeaveGrantRuleTargetUser,
+  PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
+  PaidLeaveScheduleBulkGrantResponse,
+  PaidLeaveScheduleEntry,
+  PaidLeaveScheduleEntryDetail,
   PaidLeaveType,
   PaidLeaveUsage,
   StoredEvent,
@@ -33,6 +39,44 @@ export interface CreatePaidLeaveGrantRuleInput {
 
 export function createPaidLeaveGrantRule(input: CreatePaidLeaveGrantRuleInput): Promise<PaidLeaveGrantRule> {
   return apiFetch('/paid-leave/grant-rules', { method: 'POST', body: input })
+}
+
+/** spec.md 論点15-1: ルール内容の編集(steps含む全置換)。 */
+export function updatePaidLeaveGrantRule(
+  id: number,
+  input: CreatePaidLeaveGrantRuleInput,
+): Promise<PaidLeaveGrantRule> {
+  return apiFetch(`/paid-leave/grant-rules/${id}`, { method: 'PUT', body: input })
+}
+
+/** 無効化済み(is_active=false)のルールのみ削除できる(バックエンド側で強制)。 */
+export function deletePaidLeaveGrantRule(id: number): Promise<void> {
+  return apiFetch(`/paid-leave/grant-rules/${id}`, { method: 'DELETE' })
+}
+
+/** 法定通常付与表・比例付与表(最新version)。ルール編集フォームの参考値・読み取り専用マトリクス表示に使う。 */
+export function fetchPaidLeaveGrantPolicies(): Promise<PaidLeaveGrantPolicies> {
+  return apiFetch<{ data: PaidLeaveGrantPolicies }>('/paid-leave/grant-policies').then((res) => res.data)
+}
+
+/** 法定通常付与表の新バージョンを作成する(spec.md Feature 5)。既存versionは変更されない。 */
+export function createPaidLeaveGrantPolicyVersion(
+  rows: PaidLeaveGrantPolicyStep[],
+): Promise<{ version: string; normal: PaidLeaveGrantPolicyStep[] }> {
+  return apiFetch<{ data: { version: string; normal: PaidLeaveGrantPolicyStep[] } }>('/paid-leave/grant-policies', {
+    method: 'POST',
+    body: { rows },
+  }).then((res) => res.data)
+}
+
+/** 法定比例付与表の新バージョンを作成する(spec.md Feature 5)。既存versionは変更されない。 */
+export function createPaidLeaveProportionalGrantPolicyVersion(
+  rows: PaidLeaveProportionalGrantPolicyStep[],
+): Promise<{ version: string; proportional: PaidLeaveProportionalGrantPolicyStep[] }> {
+  return apiFetch<{ data: { version: string; proportional: PaidLeaveProportionalGrantPolicyStep[] } }>(
+    '/paid-leave/proportional-grant-policies',
+    { method: 'POST', body: { rows } },
+  ).then((res) => res.data)
 }
 
 /** ルールの対象条件(雇用形態/勤務体系)にマッチする社員の軽量一覧を取得する(対象社員セクション用)。 */
@@ -101,4 +145,51 @@ export function fetchMyPaidLeaveHistory(): Promise<StoredEvent[]> {
 /** UC-P007: 管理者・人事担当者が対象社員の有給履歴を取得する。 */
 export function fetchPaidLeaveHistoryForUser(userId: string): Promise<StoredEvent[]> {
   return apiFetch(`/paid-leave/history/user/${userId}`)
+}
+
+export type PaidLeaveScheduleFilter = 'all' | 'eligible' | 'not_eligible' | 'needs_review' | 'changed'
+
+/** 付与予定Scheduleエントリ一覧(spec.md論点12の5フィルタ)。 */
+export function fetchPaidLeaveScheduleEntries(filter: PaidLeaveScheduleFilter = 'all'): Promise<PaidLeaveScheduleEntry[]> {
+  return apiFetch<{ data: PaidLeaveScheduleEntry[] }>('/paid-leave/schedule-entries', { query: { filter } }).then(
+    (res) => res.data,
+  )
+}
+
+/** 付与予定Scheduleエントリの詳細(Assessment履歴込み)。 */
+export function fetchPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntryDetail> {
+  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}`).then(
+    (res) => res.data,
+  )
+}
+
+/** 出勤率を同一条件で再判定する(依頼書§40「再判定」導線)。 */
+export function reassessPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntryDetail> {
+  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}/reassess`, {
+    method: 'POST',
+  }).then((res) => res.data)
+}
+
+export interface OverridePaidLeaveScheduleAssessmentInput {
+  final_result: 'Eligible' | 'NotEligible'
+  reason: string
+}
+
+/** 判定結果の上書き(理由必須、依頼書§40「判定結果を上書き」導線)。 */
+export function overridePaidLeaveScheduleAssessment(
+  scheduleEntryId: string,
+  input: OverridePaidLeaveScheduleAssessmentInput,
+): Promise<PaidLeaveScheduleEntryDetail> {
+  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}/override`, {
+    method: 'POST',
+    body: input,
+  }).then((res) => res.data)
+}
+
+/** 選択したEligibleエントリを一括付与する(spec.md論点15-6、既存ManualGrantCardのResultSummaryパターンを踏襲)。 */
+export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): Promise<PaidLeaveScheduleBulkGrantResponse> {
+  return apiFetch('/paid-leave/schedule-entries/bulk-grant', {
+    method: 'POST',
+    body: { schedule_entry_ids: scheduleEntryIds },
+  })
 }

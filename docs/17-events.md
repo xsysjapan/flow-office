@@ -274,36 +274,35 @@ Projectorはコードから削除済みで、以後この名前空間から新�
 ## PaidLeaveSchedule(`App\Domain\PaidLeaveSchedule\Events\`)
 
 `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`(AggregateId = `userId`)
-が発行する。docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照。
-`paid-leave:roll-schedules`バッチ(1年先までのローリング生成)・Assessment実行・
-Override・一括付与(`paid-leave/schedule-entries*`API)で発行される。docs/09-usecases-paid-leave.md
-UC-P011以降を参照。
+が発行する。`config/event-sourcing.php`に`paid_leave_schedule.*`エイリアスで登録される。
+将来付与予定Schedule・出勤率Assessmentを扱う(Phase A、
+docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 - `paid_leave_schedule.entry_created` → `PaidLeaveScheduleEntryCreated`
-  (userId, entryId, scheduledOn, category, candidateGrantDays)。
-  `EnsureFutureScheduleGenerated`によりScheduleエントリが新規作成された。
+  (scheduleEntryId, scheduledOn, category, candidateGrantDays, isDeterminate)。新規Schedule
+  エントリ作成(新入社員展開・月次ローリング生成・再計算での再作成のいずれからも発行される)。
+  `isDeterminate=false`の場合、エントリは`Scheduled`ではなく`NeedsReview`状態で作成される
+  (候補日数を確定できない場合。`docs/changesets/20260914-port-to-pr112/spec.md`参照)。
 - `paid_leave_schedule.entry_superseded` → `PaidLeaveScheduleEntrySuperseded`
-  (userId, entryId, reason, previousCategory, previousCandidateGrantDays,
-  wasManuallyOverridden, newCategory?, newCandidateGrantDays?, pushedToNeedsReview)。
-  `RecalculateFutureSchedule`により非確定(Granted/Cancelled以外)のエントリが新しい
-  算出結果で置き換えられた、または手動修正済みのため置き換えられずNeedsReviewへ
-  押し出されたことを記録する。
-- `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
-  (userId, entryId, category?, candidateGrantDays?, reason, byUserId, at)。管理者が
-  区分・候補付与日数を手動修正した。以後`RecalculateFutureSchedule`から保護される
-  (`manualOverride`フラグ)。
+  (scheduleEntryId, reason, previousScheduledOn, previousCategory,
+  previousCandidateGrantDays)。再計算により既存エントリが置き換えられたことを記録する
+  (置き換え前の内容も監査用に保持)。
 - `paid_leave_schedule.assessment_recorded` → `PaidLeaveScheduleAssessmentRecorded`
-  (userId, entryId, periodStart, periodEnd, denominatorDays, attendanceDays,
-  excludedDays, attendanceRate?, policyVersion, automaticResult)。
-  `AttendanceRateAssessor`による最新の出勤率判定結果を記録する。
+  (scheduleEntryId, assessmentId, periodStart, periodEnd, denominatorDays, attendanceDays,
+  excludedDays, attendanceRate, policyVersion, automaticResult)。出勤率Assessment結果を記録し、
+  エントリの状態を`automaticResult`(Eligible/NotEligible/NeedsReview)へ遷移させる。
 - `paid_leave_schedule.assessment_overridden` → `PaidLeaveScheduleAssessmentOverridden`
-  (userId, entryId, finalResult, reason, byUserId, at)。管理者が自動判定結果を上書きした。
-  以後、導出ステータスは自動判定より`finalResult`を優先する。
+  (scheduleEntryId, assessmentId, finalResult, reason, operatorUserId)。管理者による判定結果の
+  上書き(理由必須)。
+- `paid_leave_schedule.entry_manually_edited` → `PaidLeaveScheduleEntryManuallyEdited`
+  (scheduleEntryId, changes, reason, operatorUserId)。Scheduleエントリの個別修正。以後の
+  自動再計算(`recalculateFutureSchedule`)の対象から除外される。
 - `paid_leave_schedule.entry_granted` → `PaidLeaveScheduleEntryGranted`
-  (userId, entryId, grantId, operatorUserId)。管理者の一括付与操作(`ApplyScheduledGrants`)
-  により`PaidLeaveAccountAggregate::grant()`成功後、Scheduleエントリ側をGrantedへ遷移する。
+  (scheduleEntryId, grantId, operatorUserId)。管理者の一括付与操作でEligibleエントリを
+  Grantedへ遷移させる(実際の`PaidLeaveAccount\Commands\GrantPaidLeave`発行はHandlerが担う)。
 - `paid_leave_schedule.entry_cancelled` → `PaidLeaveScheduleEntryCancelled`
-  (userId, entryId, reason?, byUserId?)。Scheduleエントリの取消。
+  (scheduleEntryId, reason)。エントリが不要になった場合の取消(再計算での削除・
+  管理者操作の両方から発行されうる)。
 
 ## SpecialLeave
 

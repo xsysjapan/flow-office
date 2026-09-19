@@ -2,22 +2,46 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * 有給付与の時効(労働基準法115条、既定2年)。spec.md 論点4。version管理。
+ * 有給休暇の時効(労働基準法第115条、既定2年)マスタ(spec.md 論点4)。
+ * `version`単位で世代管理する。
  */
+#[Fillable(['version', 'expiry_years', 'effective_from', 'is_active'])]
 class PaidLeaveGrantExpiryPolicy extends Model
 {
-    protected $table = 'paid_leave_grant_expiry_policy';
-
-    protected $fillable = ['version', 'expiry_years'];
+    public const DEFAULT_EXPIRY_YEARS = 2;
 
     /**
-     * 現在有効な版の時効年数(最大version)。行が1件も無い場合は法定既定値2年。
+     * 単一マスタのため単数形テーブル名(`paid_leave_grant_expiry_policy`)を使う。
      */
-    public static function currentExpiryYears(): int
+    protected $table = 'paid_leave_grant_expiry_policy';
+
+    protected function casts(): array
     {
-        return (int) (static::query()->orderByDesc('version')->value('expiry_years') ?? 2);
+        return [
+            'expiry_years' => 'integer',
+            'effective_from' => 'date',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public static function expiryYearsFor(string $version): int
+    {
+        return static::query()
+            ->where('version', $version)
+            ->where('is_active', true)
+            ->value('expiry_years') ?? self::DEFAULT_EXPIRY_YEARS;
+    }
+
+    public static function latestVersion(): ?string
+    {
+        return static::query()
+            ->where('is_active', true)
+            ->orderByDesc('effective_from')
+            ->orderByDesc('id')
+            ->value('version');
     }
 }

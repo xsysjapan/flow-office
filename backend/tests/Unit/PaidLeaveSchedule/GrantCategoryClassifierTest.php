@@ -2,79 +2,122 @@
 
 namespace Tests\Unit\PaidLeaveSchedule;
 
-use App\Domain\PaidLeaveSchedule\Support\GrantCategory;
 use App\Domain\PaidLeaveSchedule\Support\GrantCategoryClassifier;
-use App\Models\CompanyCalendar;
-use App\Models\WorkStyle;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * 通常/比例/シフト区分判定。spec.md「仕様確定事項」参照。
- * 週5日以上/週30時間以上/年217日以上 → 通常、is_shift_based → シフト、
- * 必要な列が未入力 → NeedsReview。
+ * `GrantCategoryClassifier`の単体テスト。DBアクセスを行わない純粋なロジックテストのため、
+ * `WorkStyle`モデルの代わりに必要な属性だけを持つstdClassスタブで検証する
+ * (spec.md 論点3-4、依頼書§34-35)。
  */
 class GrantCategoryClassifierTest extends TestCase
 {
-    use RefreshDatabase;
-
-    private function makeWorkStyle(array $overrides = []): WorkStyle
+    private function stub(array $attrs): object
     {
-        $calendar = CompanyCalendar::query()->create(['name' => '2026年度', 'week_starts_on' => 1]);
-        $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
-
-        return WorkStyle::query()->create(array_merge([
-            'code' => 'standard-'.uniqid(), 'name' => '勤務形態', 'work_time_system' => 'fixed',
-            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 1600,
-            'default_start_time' => '09:00', 'default_end_time' => '18:00', 'default_break_minutes' => 60,
-            'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
-        ], $overrides));
+        return (object) array_merge([
+            'weekly_scheduled_days' => null,
+            'annual_scheduled_days' => null,
+            'prescribed_weekly_minutes' => null,
+            'is_shift_based' => false,
+        ], $attrs);
     }
 
-    public function test_weekly_scheduled_days_5_or_more_is_regular(): void
+    public function test_weekly_scheduled_days_five_or_more_is_normal(): void
     {
-        $workStyle = $this->makeWorkStyle(['weekly_scheduled_days' => 5]);
-        $this->assertSame(GrantCategory::REGULAR, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['weekly_scheduled_days' => 5]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_NORMAL, $result);
     }
 
-    public function test_weekly_scheduled_days_4_is_not_regular_by_itself(): void
+    public function test_weekly_scheduled_days_four_is_not_normal_by_itself(): void
     {
-        $workStyle = $this->makeWorkStyle(['weekly_scheduled_days' => 4]);
-        $this->assertSame(GrantCategory::PROPORTIONAL, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['weekly_scheduled_days' => 4, 'annual_scheduled_days' => 100]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_PROPORTIONAL, $result);
     }
 
-    public function test_weekly_minutes_1800_or_more_is_regular(): void
+    public function test_prescribed_weekly_minutes_1800_or_more_is_normal(): void
     {
-        $workStyle = $this->makeWorkStyle(['prescribed_weekly_minutes' => 1800, 'weekly_scheduled_days' => 4]);
-        $this->assertSame(GrantCategory::REGULAR, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['prescribed_weekly_minutes' => 1800]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_NORMAL, $result);
     }
 
-    public function test_annual_scheduled_days_217_or_more_is_regular(): void
+    public function test_prescribed_weekly_minutes_just_below_threshold_is_not_normal_by_itself(): void
     {
-        $workStyle = $this->makeWorkStyle(['annual_scheduled_days' => 217, 'weekly_scheduled_days' => 3]);
-        $this->assertSame(GrantCategory::REGULAR, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['prescribed_weekly_minutes' => 1799, 'weekly_scheduled_days' => 3, 'annual_scheduled_days' => 150]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_PROPORTIONAL, $result);
     }
 
-    public function test_annual_scheduled_days_216_is_not_regular_by_itself(): void
+    public function test_annual_scheduled_days_217_or_more_is_normal(): void
     {
-        $workStyle = $this->makeWorkStyle(['annual_scheduled_days' => 216, 'weekly_scheduled_days' => 3]);
-        $this->assertSame(GrantCategory::PROPORTIONAL, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['annual_scheduled_days' => 217]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_NORMAL, $result);
     }
 
-    public function test_is_shift_based_is_shift_regardless_of_other_fields(): void
+    public function test_annual_scheduled_days_216_is_not_normal_by_itself(): void
     {
-        $workStyle = $this->makeWorkStyle(['is_shift_based' => true, 'weekly_scheduled_days' => 5]);
-        $this->assertSame(GrantCategory::SHIFT, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['annual_scheduled_days' => 216, 'weekly_scheduled_days' => 3]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_PROPORTIONAL, $result);
     }
 
-    public function test_missing_all_required_fields_is_needs_review(): void
+    public function test_is_shift_based_is_shift_when_not_normal(): void
     {
-        $workStyle = $this->makeWorkStyle();
-        $this->assertSame(GrantCategory::NEEDS_REVIEW, (new GrantCategoryClassifier)->classify($workStyle));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['is_shift_based' => true, 'weekly_scheduled_days' => 3, 'annual_scheduled_days' => 100]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_SHIFT, $result);
     }
 
-    public function test_null_work_style_is_needs_review(): void
+    public function test_shift_based_takes_precedence_over_missing_data(): void
     {
-        $this->assertSame(GrantCategory::NEEDS_REVIEW, (new GrantCategoryClassifier)->classify(null));
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['is_shift_based' => true]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_SHIFT, $result);
+    }
+
+    public function test_otherwise_is_proportional(): void
+    {
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['weekly_scheduled_days' => 3, 'annual_scheduled_days' => 150]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_PROPORTIONAL, $result);
+    }
+
+    public function test_missing_required_attributes_needs_review(): void
+    {
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub([]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_NEEDS_REVIEW, $result);
+    }
+
+    public function test_missing_annual_days_only_still_classifiable_from_weekly_days(): void
+    {
+        $classifier = new GrantCategoryClassifier();
+
+        $result = $classifier->classify($this->stub(['weekly_scheduled_days' => 2, 'annual_scheduled_days' => null]));
+
+        $this->assertSame(GrantCategoryClassifier::CATEGORY_PROPORTIONAL, $result);
     }
 }
