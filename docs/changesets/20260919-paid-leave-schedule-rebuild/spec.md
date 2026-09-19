@@ -21,6 +21,18 @@
   バージョン選択は対象外)
 - 対象期間: 開始日・終了日を必須入力にする
 
+> 既存の運用コマンド実行画面はselect入力部品を持たない、との確認への回答:
+> IDをテキスト入力で構いませんが、空欄の場合は全ポリシーを対象としてください
+
+> また、洗い替えコマンドは予定に対してのみ有効でGrantには影響しないようにしてください。
+> 確定済みの予定も削除して構いませんが、grantは外さないでください
+> 予定の開始終了も任意にしてください
+
+(補足質問への回答)
+- ルールID・開始日・終了日を全て空欄にした場合(全社員・全期間の一括洗い替え)の
+  リスクは許容する
+- 現在運用中の会社はまだトライアルでデータ量の懸念は不要
+
 ## 背景・目的
 `docs/changesets/20260916-paid-leave-policy-change-reapply/`で、法定付与ポリシー・
 付与ルールの変更時に**未来分**の未確定Scheduleエントリを自動再作成する仕組みを
@@ -61,6 +73,20 @@
   Schedule生成のみを行う。既存エントリの見直しはしない)。
 - `Granted`(付与済み・確定済み)エントリは原則1・14により無条件では書き換えない
   (取消は別途`PaidLeaveGrantRevoked`等、Account側の専用取消操作が既に存在する)。
+- Granted状態のScheduleエントリとAccount側`paid_leave_grants`の関係(調査結果):
+  - Scheduleエントリが`Granted`になるのは`PaidLeaveScheduleAggregate::grantEntry()`が
+    発行する`PaidLeaveScheduleEntryGranted`イベント(`grantId`・`operatorUserId`を保持)。
+    `PaidLeaveScheduleProjector`がこの`grantId`を`paid_leave_schedule_entries.grant_id`列に
+    保存する(Aggregate内部状態には保持しない)。
+  - Scheduleエントリの取消・置き換え時に発行される`PaidLeaveScheduleEntryCancelled`・
+    `PaidLeaveScheduleEntrySuperseded`イベントは、いずれも`grantId`を含まない。
+  - `App\Domain\PaidLeaveAccount`側にはSchedule側イベントを購読するReactor/Listenerが
+    存在せず、`paid_leave_grants`は`PaidLeaveAccountAggregate`自身のイベント
+    (`PaidLeaveGrantCreated`等)のみで更新される一方向の関係。
+  - 結論: `FINALIZED_STATUSES`ガードで`Granted`エントリを`recalculateFutureSchedule()`/
+    `cancelEntry()`の対象に含めても、アーキテクチャ上Account側`paid_leave_grants`への
+    書き込みは一切発生しない(イベントに`grantId`が乗らず、Account側がSchedule側の
+    イベントを監視していないため)。
 - `backend/app/Domain/PaidLeaveSchedule/Support/ScheduleCandidateGenerator.php`の
   `matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule`(private):
   対象社員の`WorkStyle`に一致する`work_style_id`固定の有効ルールを優先し、
@@ -94,12 +120,20 @@
 - 選択肢:
   - A. `FINALIZED_STATUSES`(`Granted`/`Cancelled`)以外の未確定エントリのみを
        洗い替え対象とする(`recalculateFutureSchedule`と同じ考え方)
-  - B. `Granted`(付与済み)も含めて全ステータスを洗い替え対象とする
-- 決定: A
-- 理由: 原則1・14により、付与済み(`Granted`)は既にAccount側の残高・使用実績に
-  紐づく確定済みの権利であり、Schedule側からの一括書き換え対象にすべきではない。
-  付与済みエントリの是正が必要な場合は既存の`RevokePaidLeaveGrant`
-  (`leave.manage`権限、最新Grantのみ取消可)を使う運用とし、本コマンドの対象外とする。
+  - B. `Granted`(付与済み・確定済み)も含めて洗い替え対象とする。ただしAccount側
+       `paid_leave_grants`(実際の付与)には一切影響させない
+  - C. `Granted`も含めて洗い替え対象とし、紐づくAccount側の付与も
+       `RevokePaidLeaveGrant`で連動して取り消す
+- 決定: B
+- 理由: ユーザーから「確定済みの予定も削除して構わないが、Grantは外さないでほしい」と
+  明示的な指示があった。調査の結果、Schedule側の取消・置き換えイベント
+  (`PaidLeaveScheduleEntryCancelled`/`PaidLeaveScheduleEntrySuperseded`)は
+  `grantId`を保持せず、`App\Domain\PaidLeaveAccount`側もSchedule側イベントを
+  一切購読していないため、`Granted`エントリを取消+再作成してもAccount側
+  `paid_leave_grants`への書き込みはアーキテクチャ上発生しない。これによりBが
+  安全に実現できる。Cはユーザーの明示的な指示に反するため採用しない。
+  `Cancelled`(既に取消済み)は再度取消す意味が無いため、引き続き対象外とする
+  (対象は`Granted`を含む「`Cancelled`以外の全ステータス」)。
 
 ### 論点2: 対象範囲の指定方法
 - 選択肢:
@@ -156,6 +190,26 @@
   この表示改善は行わない(対象外に明記)が、運用上わかりにくい場合は別途
   「ルール一覧にIDを表示する」変更セットを検討されたい。
 
+### 論点2d: 対象期間(開始日・終了日)を任意にした場合の扱い
+- 選択肢:
+  - A. 開始日・終了日それぞれ未指定時は、社員ごとに「入社日」〜「今日+1年」
+       (既存の`RollPaidLeaveSchedulesCommand`等が使う未来分生成の範囲と同じ考え方)を
+       デフォルトとして使う
+  - B. 開始日・終了日とも未指定時は、社員の`paid_leave_schedule_entries`に実在する
+       最古の`scheduled_on`〜最新の`scheduled_on`を動的に取得して範囲とする
+  - C. 開始日未指定は`1900-01-01`等の固定の遠い過去日、終了日未指定は`9999-12-31`等の
+       固定の遠い未来日を使う(実質無制限)
+- 決定: A
+- 理由: ユーザーから「期間も任意にしてほしい」「トライアル運用中でデータ量の懸念は
+  不要」との明示的な指示があり、全項目空欄(全社員・全期間の一括洗い替え)を許容する
+  前提。Bは対象範囲が既存データに依存し、`ScheduleCandidateGenerator::candidatesFor()`
+  はそもそも「入社日以降」の範囲でしか意味のある候補を生成しないため、既存データの
+  最小/最大日付を動的取得する複雑さに見合わない。Cは`candidatesFor()`が内部で
+  `hire_date`以前を弾く実装(調査済み)のため、`1900-01-01`を渡しても実質的にAと
+  同じ結果になる一方、日付として不自然で意図が読み取りにくい。Aは各社員にとって
+  意味のある最大範囲(入社日〜合理的な未来の境界)をそのまま使えるため、
+  最も自然かつ安全な既定値。
+
 ### 論点3: 実行経路
 - 選択肢:
   - A. 新規Artisanコマンドを、サーバー運用者がCLIから実行する(UIなし)
@@ -197,11 +251,11 @@
   `#[AdminExecutable]`属性を付けて既存の運用コマンド実行画面(`/admin/commands`)に
   登録する。
   - オプション: `--rule-id=<int>`(省略可。`text` control)、`--from=<YYYY-MM-DD>`
-    (必須。日付文字列)、`--to=<YYYY-MM-DD>`(必須、`from`以降)、`--reason=<text>`
-    (必須、取消イベントの理由として記録)。
+    (省略可。`text` control)、`--to=<YYYY-MM-DD>`(省略可。`text` control。指定時は
+    `from`以降)、`--reason=<text>`(必須、取消イベントの理由として記録)。
     - `rules`: `'rule-id' => ['nullable', 'integer', 'exists:paid_leave_grant_rules,id']`、
-      `'from' => ['required', 'date_format:Y-m-d']`、
-      `'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from']`、
+      `'from' => ['nullable', 'date_format:Y-m-d']`、
+      `'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from']`、
       `'reason' => ['required', 'string', 'max:255']`。
     - `ui`: `rule-id`/`from`/`to`/`reason`いずれも`text` control(既存3種類の中で
       日付・自由入力に対応できるのは`text`のみ。`year-month`は年月単位でしか
@@ -213,11 +267,24 @@
       `ScheduleCandidateGenerator`の`matchingRuleFor(currentWorkStyleFor($user))`
       (可視性を実装時に見直す。論点2b)の解決結果が指定ルールIDと一致する社員のみ。
     - `--rule-id`未指定時: 上記の対象社員条件を満たす全社員(論点2の決定D)。
+  - 対象期間の決定(論点2d): 社員ごとに`$from`は指定値、未指定なら`$user->hire_date`、
+    `$to`は指定値、未指定なら`today + 1年`を用いる。
   - 処理: 対象社員ごとに`ScheduleCandidateGenerator::candidatesFor($user, $from, $to)`
-    で対象期間の候補を算出し、`RecalculateFutureSchedule($userId, $candidates, $reason, overrideManualEdits: true)`
-    を発行する(`overrideManualEdits: true`により個別修正済みエントリも洗い替え対象に含める)。
-  - `Granted`エントリは対象外(論点1)。`recalculateFutureSchedule`の既存ロジックが
-    `FINALIZED_STATUSES`として自動的に除外するため、コマンド側で追加のフィルタは不要。
+    で対象期間の候補を算出し、`RecalculateFutureSchedule($userId, $candidates, $reason, overrideManualEdits: true, includeGrantedEntries: true)`
+    を発行する(`overrideManualEdits: true`により個別修正済みエントリも、
+    `includeGrantedEntries: true`により`Granted`エントリも洗い替え対象に含める)。
+  - `PaidLeaveScheduleAggregate::recalculateFutureSchedule()`に第4引数
+    `bool $includeGrantedEntries = false`を追加する(デフォルト`false`で既存呼び出し元
+    ―`RecalculateScheduleOnUserConditionChangedReactor`・
+    `RecalculateScheduleOnWorkStyleChangedReactor`・`ReapplyPaidLeaveSchedulePolicyJob`―
+    の挙動は変更しない)。`true`の場合、`FINALIZED_STATUSES`の判定を
+    `Cancelled`のみに縮小し(`Granted`は対象に含める)、内容不一致の`Granted`エントリも
+    通常のSupersede処理(既存エントリを`PaidLeaveScheduleEntrySuperseded`で無効化し、
+    新しい候補を`PaidLeaveScheduleEntryCreated`で作成)に乗せる。この際、
+    `PaidLeaveScheduleEntrySuperseded`/`PaidLeaveScheduleEntryCancelled`は`grantId`を
+    含まない既存のイベント構造のまま変更しない(論点1の安全性根拠)ため、
+    Account側`paid_leave_grants`への書き込みは一切発生しない。
+  - `Cancelled`エントリは常に対象外のまま(再取消の意味が無いため)。
   - 対象期間に過去日付を含められるよう、`recalculateFutureSchedule`/`candidatesFor`が
     過去日付を理由に候補生成・比較をスキップしていないことを実装時に確認し、
     もしガードが存在する場合はコマンド呼び出し経路に限り除去する
@@ -232,23 +299,26 @@
     非対話的に`Artisan::call()`するため、対話的な確認プロンプトは機能しない
     (標準入力を待てず、ジョブがハング/失敗する)。
 - 新規イベント種別・新規Command種別は追加しない(既存の`RecalculateFutureSchedule`
-  Command・既存のSupersede/Cancelイベントを流用する。論点4)。
+  Command・既存のSupersede/Cancelイベントを流用する。論点4)。`RecalculateFutureSchedule`
+  Commandクラスに同名の`bool $includeGrantedEntries = false`プロパティを追加し、
+  `RecalculateFutureScheduleHandler`からaggregateへ橋渡しする。
 
 ## 受け入れ条件
 - 管理画面(`/admin/commands`)に「有給休暇付与予定の再作成」(仮称)コマンドが表示され、
-  `admin_command.execute`権限を持つ管理者が付与ルールID(省略可)・開始日・終了日・
-  理由を入力して実行できる。
-- ルールIDを指定して実行すると、そのルールに現在マッチする社員のうち、指定期間内の
-  `Granted`/`Cancelled`以外のScheduleエントリが取消され、最新のルール・ポリシーに
-  基づく新しいエントリが作成される(`stored_events`に取消イベント・作成イベントが
-  追記される。既存イベントの削除・書き換えは発生しない)。
-- ルールIDを空欄にして実行すると、対象社員条件を満たす全社員について同様の洗い替えが
-  行われる。
+  `admin_command.execute`権限を持つ管理者が付与ルールID(省略可)・開始日(省略可)・
+  終了日(省略可)・理由(必須)を入力して実行できる。
+- ルールIDを指定して実行すると、そのルールに現在マッチする社員のうち、対象期間内の
+  `Cancelled`以外の(`Granted`を含む)Scheduleエントリが取消され、最新のルール・
+  ポリシーに基づく新しいエントリが作成される(`stored_events`に取消イベント・
+  作成イベントが追記される。既存イベントの削除・書き換えは発生しない)。
+- ルールID・開始日・終了日を全て空欄にして実行すると、対象社員条件を満たす全社員
+  について、各社員の入社日〜今日+1年の範囲で同様の洗い替えが行われる。
+- `Granted`エントリが洗い替え対象になった場合でも、Account側`paid_leave_grants`
+  (実際の付与レコード)は一切変更されない(取消・作成いずれのイベントも発生しない)。
 - 同一パラメータで再実行し、内容に変化が無い場合は取消・再作成が発生しない(冪等)。
-- `Granted`エントリは本コマンド実行前後で一切変更されない。
-- `from`・`to`・`reason`のいずれかが未指定、または`to`が`from`より前の場合、
-  実行は失敗し(バリデーションエラー)何も変更されない。存在しない`rule-id`を
-  指定した場合も同様に失敗する。
+- `reason`が未指定、または`to`が`from`より前の場合(両方指定時のみ判定)、実行は
+  失敗し(バリデーションエラー)何も変更されない。存在しない`rule-id`を指定した
+  場合も同様に失敗する。
 - 対象社員の一部でエラーが発生しても、他社員の処理は継続され、実行結果に
   成功/失敗の内訳が残る。
 - 実行のたびに`admin_command_runs`に実行者・パラメータ・結果が記録される。
@@ -259,15 +329,17 @@
   (論点2c。既存の`text`/`checkbox`/`year-month`のみで実装する)。
 - 付与ポリシー画面(`/admin/paid-leave`)でのルールID表示改善(論点2c懸念事項。
   必要であれば別変更セットで対応)。
-- `Granted`(付与済み)エントリの洗い替え・取消(論点1。既存の`RevokePaidLeaveGrant`を使う)。
+- Account側の実際の付与(`paid_leave_grants`)の取消・変更(論点1。是正が必要な場合は
+  既存の`RevokePaidLeaveGrant`を使う)。
 - 新規イベント種別の追加(論点4)。
 - スケジューリング(cron等での定期自動実行)。本コマンドは運用者が都度手動実行する
   想定であり、自動トリガーは設けない。
 
 ## ドキュメントへの影響
 - `docs/09-usecases-paid-leave.md`: 管理画面(`/admin/commands`)から過去分Schedule
-  エントリを取消+再作成できるコマンドの存在・実行方法(ルールID省略可・期間必須)・
-  対象範囲(`Granted`除外)を追記する。
+  エントリを取消+再作成できるコマンドの存在・実行方法(ルールID・開始日・終了日は
+  いずれも省略可)・対象範囲(`Granted`も対象、ただしAccount側の実際の付与には
+  影響しない)を追記する。
 - `docs/17-events.md`: 変更なし(新規イベント種別を追加しないため)。
 - 他のdocsファイルは変更なし。
 
@@ -277,13 +349,26 @@
 ## 実装対象
 - `backend/app/Console/Commands/RebuildPaidLeaveScheduleCommand.php`(新規、
   シグネチャ`paid-leave:schedule:rebuild`、`#[AdminExecutable]`属性付与)
+- `backend/app/Domain/PaidLeaveSchedule/Aggregates/PaidLeaveScheduleAggregate.php`
+  (`recalculateFutureSchedule()`に第4引数`bool $includeGrantedEntries = false`を追加。
+  `true`時は`FINALIZED_STATUSES`判定を`Cancelled`のみに縮小する)
+- `backend/app/Domain/PaidLeaveSchedule/Commands/RecalculateFutureSchedule.php`
+  (同名の`includeGrantedEntries`プロパティ追加)
+- `backend/app/Domain/PaidLeaveSchedule/Handlers/RecalculateFutureScheduleHandler.php`
+  (追加引数をaggregateへ橋渡し)
 - `backend/app/Domain/PaidLeaveSchedule/Support/ScheduleCandidateGenerator.php`
   (`matchingRuleFor()`を対象社員解決に再利用できるよう可視性・呼び出し口を調整。
   論点2b)
-- テスト: `backend/tests/Feature/Console/RebuildPaidLeaveScheduleCommandTest.php`(新規)
-  - ルールID指定時に該当社員のみが対象になること、ルールID未指定時に全対象社員が
-    対象になること、過去日付エントリの取消+再作成、冪等性(2回目no-op)、
-    `Granted`除外、必須項目未指定・存在しないrule-idでのバリデーションエラーを検証
+- テスト:
+  - `backend/tests/Unit/PaidLeaveSchedule/PaidLeaveScheduleAggregateTest.php`に
+    `includeGrantedEntries: true`で`Granted`エントリが洗い替えられること・
+    デフォルト(`false`)では従来どおり`Granted`が保護されることの単体テストを追加
+  - `backend/tests/Feature/Console/RebuildPaidLeaveScheduleCommandTest.php`(新規):
+    ルールID指定時に該当社員のみが対象になること、ルールID未指定時に全対象社員が
+    対象になること、開始日・終了日を省略した場合に社員ごとの入社日〜今日+1年が
+    使われること、過去日付・`Granted`エントリの取消+再作成、冪等性(2回目no-op)、
+    `Granted`エントリ洗い替え後もAccount側`paid_leave_grants`が一切変更されないこと、
+    `reason`未指定・存在しないrule-idでのバリデーションエラーを検証
   - `backend/tests/Feature/AdminCommand/`配下の既存テストパターンに沿って、
     `POST /admin/commands/{command}/runs`経由での実行(`AdminCommandController`・
     `RunAdminCommandJob`込み)も1件検証する
@@ -312,6 +397,15 @@
   AskUserQuestionで確認したところ、「IDをテキスト入力で構わない、空欄の場合は
   全ポリシーを対象に」との回答を得たため、論点2の決定をD(ルールID省略可)に、
   論点2cを新設して`text` control採用を確定。
+- 追記5: 「洗い替えコマンドは予定に対してのみ有効でGrantには影響しないように
+  してください。確定済みの予定も削除して構いませんが、grantは外さないでください」
+  「予定の開始終了も任意にしてください」との要望を受け、調査により`Granted`エントリの
+  取消・置き換えイベントがAccount側`paid_leave_grants`に波及しない設計であることを
+  確認。論点1の決定をB(`Granted`も対象、Accountには無影響)に変更し、
+  `includeGrantedEntries`引数を新設。対象期間(開始日・終了日)も省略可能とし、
+  未指定時のデフォルト範囲を定める論点2dを新設(決定A: 入社日〜今日+1年)。
+  AskUserQuestionにより、全項目空欄時の広範囲な一括洗い替えのリスクは許容する旨、
+  および対象企業がトライアル運用中でデータ量の懸念が無い旨を確認済み。
 
 ## 実装結果
 未着手
