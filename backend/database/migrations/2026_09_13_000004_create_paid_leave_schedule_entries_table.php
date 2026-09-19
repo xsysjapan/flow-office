@@ -2,18 +2,28 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     /**
-     * `App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate`のProjection。
-     * 主キーはCommandHandler側で発番されるscheduleEntryId(UUID)であり、行の新規作成
-     * (PaidLeaveScheduleEntryCreated)自体もProjector経由で行う
-     * (.claude/skills/add-projection「集約ルートのUUID化」参照)。
+     * `2026_09_09_100003_create_paid_leave_schedule_entries_table.php`が作った旧スキーマ
+     * (出勤率Assessmentの内訳を`assessment_*`列としてこのテーブルへ直接フラット化して
+     * 持つ設計)を、Assessmentを独立したProjection Table
+     * (`paid_leave_schedule_assessments`、次のマイグレーションで作成)に切り出す新設計へ
+     * 移行する。
+     *
+     * Assessment内訳データの移行(`paid_leave_schedule_assessments`へのINSERTと、この
+     * テーブルの`latest_assessment_id`の補完)は、そのテーブルがまだ存在しないためここでは
+     * 行えない。旧テーブル(`_legacy`)は次の
+     * `2026_09_13_000005_create_paid_leave_schedule_assessments_table.php`側で読み取って
+     * から削除するので、このマイグレーションでは削除しない。
      */
     public function up(): void
     {
+        Schema::rename('paid_leave_schedule_entries', 'paid_leave_schedule_entries_legacy');
+
         Schema::create('paid_leave_schedule_entries', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained('users');
@@ -33,6 +43,28 @@ return new class extends Migration
             $table->index(['user_id', 'status']);
             $table->index(['scheduled_on', 'status']);
         });
+
+        foreach (DB::table('paid_leave_schedule_entries_legacy')->orderBy('created_at')->get() as $legacyRow) {
+            DB::table('paid_leave_schedule_entries')->insert([
+                'id' => $legacyRow->id,
+                'user_id' => $legacyRow->user_id,
+                'scheduled_on' => $legacyRow->scheduled_on,
+                'category' => $legacyRow->category,
+                'candidate_grant_days' => $legacyRow->candidate_grant_days,
+                'status' => $legacyRow->status,
+                'latest_assessment_id' => null,
+                'is_manually_overridden' => $legacyRow->manual_override_by_user_id !== null,
+                'manual_override_reason' => $legacyRow->manual_override_reason !== null
+                    ? mb_substr($legacyRow->manual_override_reason, 0, 255)
+                    : null,
+                'manual_override_by_user_id' => $legacyRow->manual_override_by_user_id,
+                'manual_override_at' => $legacyRow->manual_override_at,
+                'grant_id' => $legacyRow->granted_paid_leave_grant_id,
+                'cancelled_reason' => null,
+                'created_at' => $legacyRow->created_at,
+                'updated_at' => $legacyRow->updated_at,
+            ]);
+        }
     }
 
     public function down(): void
