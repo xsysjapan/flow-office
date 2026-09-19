@@ -14,6 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20260919-prod-migration-history-collision](./20260919-prod-migration-history-collision/spec.md) | 本番マイグレーション履歴衝突によるデプロイ失敗の是正 | 完了 |
 | [20260916-paid-leave-policy-change-reapply](./20260916-paid-leave-policy-change-reapply/spec.md) | 法定付与ポリシー・付与ルール変更時に未確定Scheduleを再作成する | 完了 |
 | [20260914-form-submit-dom-detach-bug](./20260914-form-submit-dom-detach-bug/spec.md) | フォーム送信ボタンがクリック中にDOMから外れる不具合の調査記録 | 検討中 |
 | [20260914-port-to-pr112](./20260914-port-to-pr112/spec.md) | PR#112への差分移植(ナビ再編・特定月一斉付与・NeedsReview化・利用開始日ガード・法定付与日数テーブル編集UI) | 完了 |
