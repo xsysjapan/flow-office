@@ -18,8 +18,9 @@ import { apiFetch, fetchUserIdByEmail } from './support/api'
  *
  * 両名とも`hire_date`が2023-04-01と古いため、`paid-leave:roll-schedules`(1年先までの
  * ローリング生成)を実行すると、6か月後・以降12か月周期の複数の`scheduled_on`が
- * 「現在」以前(過去)になり、生成と同時に出勤率Assessmentまで自動実行される
- * (`RollPaidLeaveSchedulesCommand`は`scheduled_on <= 今日`のエントリのみAssessmentする)。
+ * 「現在」以前(過去)を含む形で生成される。`RollPaidLeaveSchedulesCommand`は候補の
+ * 生成のみを行い、出勤率Assessmentの自動実行は行わない(Assessmentは
+ * UC-P012「再判定」ボタン、またはUC-P013の詳細パネル操作で個別に実行する)。
  *
  * 実際の出勤率(=Eligible/NotEligibleどちらになるか)はScenarioSeederが生成する
  * シフト予定・実績次第で確定的に予測できないため、本テストは自動判定の結果そのものは
@@ -70,11 +71,10 @@ interface SchedulePage {
 test.describe('シナリオ18: 付与Schedule/Assessmentから一括付与まで', () => {
   test.beforeAll(() => {
     // UC-P011: paid-leave:roll-schedulesを実行し、Schedule生成(1年先までのローリング
-    // 生成)+到来済みエントリのAssessmentを行う(scenario-08と同じ、artisanをホストで
-    // 直接叩くパターン)。
+    // 生成)を行う(scenario-08と同じ、artisanをホストで直接叩くパターン)。
     const output = execSync('php artisan paid-leave:roll-schedules', { cwd: BACKEND_DIR, encoding: 'utf-8' })
-    expect(output).toContain('Schedule生成')
-    expect(output).toMatch(/Schedule生成 \d+ 件 \/ Assessment実行 \d+ 件 \/ 失敗 0 件/)
+    expect(output).toContain('Scheduleエントリ候補')
+    expect(output).toMatch(/\d+ 名の社員について、Scheduleエントリ候補 \d+ 件を確認・生成しました。/)
   })
 
   test('Schedule生成後、対象社員の付与予定が一覧に表示され、区分がWorkStyleに応じて分岐する', async ({ page }) => {
