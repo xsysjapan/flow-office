@@ -161,6 +161,9 @@ class PaidLeaveScheduleAggregateTest extends TestCase
             ->assertNotRecorded([
                 PaidLeaveScheduleEntrySuperseded::class,
                 PaidLeaveScheduleEntryCancelled::class,
+                // 保護対象の候補が「残った候補」として二重に新規作成されないことも確認する
+                // (同じscheduledOnに対する重複エントリの回帰防止)。
+                PaidLeaveScheduleEntryCreated::class,
             ]);
     }
 

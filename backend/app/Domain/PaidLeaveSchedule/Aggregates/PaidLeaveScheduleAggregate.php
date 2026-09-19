@@ -97,6 +97,10 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
                 // (NeedsReviewへの強制遷移)はPhase C以降、法定Policyが揃ってから
                 // 実際の条件比較として実装する。Phase Aでは「保護対象から除外する」
                 // (=一切触らない)ことのみを保証する。
+                // 同じscheduledOnの候補をここで消費しておかないと、下部の「残った候補を
+                // 新規作成する」ループでこのエントリと重複する新規エントリが作られてしまう。
+                unset($desiredByScheduledOn[$entry['scheduledOn']]);
+
                 continue;
             }
 

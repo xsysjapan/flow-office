@@ -10,6 +10,7 @@ use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
 use Illuminate\Support\Carbon;
+use Throwable;
 
 /**
  * 管理者の一括付与操作。対象各Scheduleエントリについて`GrantPaidLeave`を発行し、
@@ -34,6 +35,8 @@ class ApplyScheduledGrantsHandler implements CommandHandler
         $failed = [];
 
         foreach ($command->scheduleEntryIds as $scheduleEntryId) {
+            $grantId = null;
+
             try {
                 $aggregate = PaidLeaveScheduleAggregate::retrieve($command->userId);
                 $entry = $aggregate->entry($scheduleEntryId);
@@ -64,7 +67,33 @@ class ApplyScheduledGrantsHandler implements CommandHandler
 
                 $granted[] = ['scheduleEntryId' => $scheduleEntryId, 'grantId' => $grantId];
             } catch (DomainRuleException $e) {
+                if ($grantId !== null) {
+                    // GrantPaidLeave(実際の付与)は既に成功しており、Schedule側の
+                    // grantEntry()だけが失敗した(例: 状態不整合)。付与自体を取り消す
+                    // 手段は無い(依頼書の設計上、付与取消は別の専用操作)ため、
+                    // サイレントに握りつぶさず必ずログへ残し、Schedule側の紐付けが
+                    // 手動対応待ちであることが分かるメッセージにする。
+                    report($e);
+                    $failed[] = [
+                        'scheduleEntryId' => $scheduleEntryId,
+                        'reason' => "付与(grant_id={$grantId})は成功しましたが、Scheduleエントリへの反映に失敗しました。手動確認が必要です: {$e->getMessage()}",
+                    ];
+
+                    continue;
+                }
+
                 $failed[] = ['scheduleEntryId' => $scheduleEntryId, 'reason' => $e->getMessage()];
+            } catch (Throwable $e) {
+                report($e);
+
+                if ($grantId !== null) {
+                    $failed[] = [
+                        'scheduleEntryId' => $scheduleEntryId,
+                        'reason' => "付与(grant_id={$grantId})は成功しましたが、Scheduleエントリへの反映に失敗しました。手動確認が必要です: {$e->getMessage()}",
+                    ];
+                } else {
+                    $failed[] = ['scheduleEntryId' => $scheduleEntryId, 'reason' => '予期しないエラーが発生しました。管理者へ連絡してください。'];
+                }
             }
         }
 
