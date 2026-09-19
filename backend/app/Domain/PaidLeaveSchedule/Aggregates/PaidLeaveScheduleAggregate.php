@@ -71,7 +71,10 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
 
     /**
      * hire_date/usage_start_date/work_style_id割当/独自ルール変更等の条件変更時に、対象社員の
-     * 未来Scheduleを再計算する。`Granted`/`Cancelled`の確定済みエントリは常に対象外とする。
+     * 未来Scheduleを再計算する。デフォルト(`$includeGrantedEntries=false`)では、`Granted`/`Cancelled`の
+     * 確定済みエントリは常に対象外とする。`$includeGrantedEntries=true`の場合、`Cancelled`のみを対象外とし、
+     * `Granted`エントリも洗い替え対象に含める(過去分Schedule再作成コマンド用。
+     * docs/changesets/20260919-paid-leave-schedule-rebuild/spec.md)。
      * 個別修正済み(`manuallyEditScheduleEntry`実行済み)エントリは、既定では対象外とするが
      * (依頼書§28)、`$overrideManualEdits`が`true`の場合はこの保護を無視する
      * (法定付与ポリシー・付与ルール自体が変更された場合。未確定の予定は個別修正の有無に
@@ -79,16 +82,23 @@ class PaidLeaveScheduleAggregate extends AggregateRoot
      *
      * @param  array<int, array{entryId: string, scheduledOn: string, category: string, candidateGrantDays: float}>  $candidates
      */
-    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false): self
+    public function recalculateFutureSchedule(array $candidates, string $reason, bool $overrideManualEdits = false, bool $includeGrantedEntries = false): self
     {
         $desiredByScheduledOn = [];
         foreach ($candidates as $candidate) {
             $desiredByScheduledOn[$candidate['scheduledOn']] = $candidate;
         }
 
-        // 既存の再計算対象エントリ(確定済みを除く。個別修正済みは$overrideManualEdits次第)を走査する。
+        // 既存の再計算対象エントリを走査する。確定済みの扱いは$includeGrantedEntries次第:
+        // - false(デフォルト): FINALIZED_STATUSES(Granted/Cancelled)を対象外
+        // - true(過去分洗い替え用): Cancelledのみを対象外、Grantedも対象に含める
+        // 個別修正済みは$overrideManualEdits次第。
         foreach ($this->entries as $entryId => $entry) {
-            if (in_array($entry['status'], self::FINALIZED_STATUSES, true)) {
+            $excludedStatuses = $includeGrantedEntries
+                ? [self::STATUS_CANCELLED]
+                : self::FINALIZED_STATUSES;
+
+            if (in_array($entry['status'], $excludedStatuses, true)) {
                 continue;
             }
 

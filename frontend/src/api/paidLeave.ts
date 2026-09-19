@@ -7,9 +7,6 @@ import type {
   PaidLeaveGrantRuleTargetUser,
   PaidLeaveProportionalGrantPolicyStep,
   PaidLeaveRequest,
-  PaidLeaveScheduleBulkGrantResponse,
-  PaidLeaveScheduleEntry,
-  PaidLeaveScheduleEntryDetail,
   PaidLeaveType,
   PaidLeaveUsage,
   StoredEvent,
@@ -147,49 +144,3 @@ export function fetchPaidLeaveHistoryForUser(userId: string): Promise<StoredEven
   return apiFetch(`/paid-leave/history/user/${userId}`)
 }
 
-export type PaidLeaveScheduleFilter = 'all' | 'eligible' | 'not_eligible' | 'needs_review' | 'changed'
-
-/** 付与予定Scheduleエントリ一覧(spec.md論点12の5フィルタ)。 */
-export function fetchPaidLeaveScheduleEntries(filter: PaidLeaveScheduleFilter = 'all'): Promise<PaidLeaveScheduleEntry[]> {
-  return apiFetch<{ data: PaidLeaveScheduleEntry[] }>('/paid-leave/schedule-entries', { query: { filter } }).then(
-    (res) => res.data,
-  )
-}
-
-/** 付与予定Scheduleエントリの詳細(Assessment履歴込み)。 */
-export function fetchPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntryDetail> {
-  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}`).then(
-    (res) => res.data,
-  )
-}
-
-/** 出勤率を同一条件で再判定する(依頼書§40「再判定」導線)。 */
-export function reassessPaidLeaveScheduleEntry(scheduleEntryId: string): Promise<PaidLeaveScheduleEntryDetail> {
-  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}/reassess`, {
-    method: 'POST',
-  }).then((res) => res.data)
-}
-
-export interface OverridePaidLeaveScheduleAssessmentInput {
-  final_result: 'Eligible' | 'NotEligible'
-  reason: string
-}
-
-/** 判定結果の上書き(理由必須、依頼書§40「判定結果を上書き」導線)。 */
-export function overridePaidLeaveScheduleAssessment(
-  scheduleEntryId: string,
-  input: OverridePaidLeaveScheduleAssessmentInput,
-): Promise<PaidLeaveScheduleEntryDetail> {
-  return apiFetch<{ data: PaidLeaveScheduleEntryDetail }>(`/paid-leave/schedule-entries/${scheduleEntryId}/override`, {
-    method: 'POST',
-    body: input,
-  }).then((res) => res.data)
-}
-
-/** 選択したEligibleエントリを一括付与する(spec.md論点15-6、既存ManualGrantCardのResultSummaryパターンを踏襲)。 */
-export function bulkGrantPaidLeaveScheduleEntries(scheduleEntryIds: string[]): Promise<PaidLeaveScheduleBulkGrantResponse> {
-  return apiFetch('/paid-leave/schedule-entries/bulk-grant', {
-    method: 'POST',
-    body: { schedule_entry_ids: scheduleEntryIds },
-  })
-}

@@ -110,8 +110,10 @@ class ScheduleCandidateGenerator
     /**
      * 対象社員の`WorkStyle`に一致する`paid_leave_grant_rules`を優先し、無ければ
      * `work_style_id`がnullの全社共通ルールをフォールバックとして採用する。
+     * 外部(RebuildPaidLeaveScheduleCommand等)から「ある社員が現在どのルールにマッチするか」
+     * を解決する用途で使用される(docs/changesets/20260919-paid-leave-schedule-rebuild/spec.md)。
      */
-    private function matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule
+    public function matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule
     {
         if ($workStyle !== null) {
             $specific = PaidLeaveGrantRule::query()
@@ -233,7 +235,7 @@ class ScheduleCandidateGenerator
         return $candidate;
     }
 
-    private function currentWorkStyleFor(User $user): ?WorkStyle
+    public function currentWorkStyleFor(User $user): ?WorkStyle
     {
         $currentYearMonth = Carbon::today()->format('Y-m');
 

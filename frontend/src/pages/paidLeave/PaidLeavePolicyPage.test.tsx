@@ -60,11 +60,6 @@ function renderPage(rules: PaidLeaveGrantRule[] = [rule], initialPath = '/admin/
 }
 
 describe('PaidLeavePolicyPage', () => {
-  it('links to the schedule page', async () => {
-    renderPage()
-    expect(await screen.findByRole('link', { name: '付与予定を確認' })).toHaveAttribute('href', '/admin/paid-leave/schedule')
-  })
-
   it('lists existing grant rules with a sentence preview and steps table', async () => {
     renderPage()
 

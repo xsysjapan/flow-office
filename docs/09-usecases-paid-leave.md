@@ -102,6 +102,43 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
 `GrantScheduledSpecialLeaveHandler`が種別を問わず一括で判定する(本UC-P002の
 Schedule/Assessment化の対象外。今後の課題)。
 
+### 過去の付与予定Scheduleエントリを再作成する(データ是正用)
+
+付与ルール・法定付与ポリシーの変更時に、`paid-leave:roll-schedules`コマンド(日次cron)により
+未来分のScheduleエントリ自動再計算が行われる一方、**過去日付のエントリについては自動再計算
+の対象外**である(既存エントリの変更は避け、新規トラブル時のリスクを最小化する設計)。
+
+過去分のScheduleエントリにデータ不整合(ルール変更の取り込みミス、移行エラーなど)が見つかった
+場合、管理者は以下のコマンドで是正できる:
+
+```bash
+# CLI から直接実行、または管理画面(/admin/commands)から実行可能
+php artisan paid-leave:schedule:rebuild \
+  --rule-id=123 \
+  --from=2025-01-01 \
+  --to=2026-12-31 \
+  --reason="ルール変更の取り込みミスを是正"
+```
+
+実行内容:
+
+1. オプション`--rule-id`(整数、省略可): 付与ルール ID を指定すると、そのルールに**現在マッチする**
+   社員のみが対象になる。未指定時は対象社員条件(`employment_status=active`かつ`hire_date`設定済みかつ
+   `paid_leave_auto_grant_enabled=true`)を満たす全社員が対象。
+2. オプション`--from`・`--to`(YYYY-MM-DD形式、いずれも省略可): 対象期間を指定する。
+   - `--from`未指定: 各社員の`hire_date`
+   - `--to`未指定: 今日 + 1年
+3. オプション`--reason`(必須): 取消イベントの理由として`stored_events`に記録される。
+4. **Granted エントリ(確定済み付与)も取消+再作成される**が、Account側の実際の付与(`paid_leave_grants`)
+   には一切影響しない(イベントアーキテクチャ上、Schedule側の取消イベントが Account を購読しない)。
+5. **冪等性**: 内容が変わらないエントリについては取消・再作成が発生しない(2回実行しても1回目と
+   同じ結果)。
+6. **エラー耐性**: 対象社員の一部でエラーが発生しても、他の社員の処理は継続される。実行結果
+   (対象者数・成功/失敗件数)はコンソール出力・`admin_command_runs`テーブルに記録される。
+
+Cancelled(既に取消済み)エントリは再度取消の対象外とするため、対象は`Cancelled`以外の全ステータス
+(Scheduled, AssessmentPending, Eligible, NotEligible, NeedsReview, Granted)。
+
 ## UC-P00X: 社員ごとの有給/特別休暇自動付与ON/OFFを設定する
 
 出向者・休職者・契約上休暇を個別管理する社員など、付与ルールの対象条件には合致するが
