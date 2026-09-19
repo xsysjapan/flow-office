@@ -11,18 +11,29 @@
   「取消イベントを追記して既存エントリを無効化し、新規の付与予定イベントを追記して
   再作成する」方式とする
 
+> 管理画面のUIから実行できるようにしてください。懸念があれば確認をお願いします。
+> 管理画面のUIはすでにあるコマンド実行用の画面です
+
+> また、社員を指定せず、ポリシーを指定するだけで更新できるようにしてください
+
+(補足質問への回答)
+- 指定対象: 付与ルール(`paid_leave_grant_rules`)を1件選択する方式(法定付与ポリシーの
+  バージョン選択は対象外)
+- 対象期間: 開始日・終了日を必須入力にする
+
 ## 背景・目的
 `docs/changesets/20260916-paid-leave-policy-change-reapply/`で、法定付与ポリシー・
 付与ルールの変更時に**未来分**の未確定Scheduleエントリを自動再作成する仕組みを
 実装済み(`PaidLeaveScheduleAggregate::recalculateFutureSchedule()`)。しかし対象は
 `candidatesFor($user, today, today+1年)`であり、**過去日付のエントリ**は対象外。
 過去分のScheduleエントリにデータ不整合(誤ったCommand再生・移行時の取り込みミス等)が
-見つかった場合、既存の仕組みでは是正できず、管理者が過去分を明示的に指定して
-洗い替え(取消+再作成)できるコマンドが必要。
+見つかった場合、既存の仕組みでは是正できず、管理者が「どの付与ルールに紐づく社員を」
+「どの過去期間について」洗い替えるかを画面から指定して実行できる必要がある。
 
 なお、本要望と並行して、フロントエンドの「付与予定」管理画面
-(`/admin/paid-leave/schedule`)は本セッションの別対応で削除済み。よって本コマンドは
-UIを持たない運用者向けのArtisanコマンドとして提供する。
+(`/admin/paid-leave/schedule`)は本セッションの別対応で削除済み。本コマンドは
+新規UIを作らず、既存の**運用コマンド実行画面**(`/admin/commands`、
+`frontend/src/pages/admin/AdminCommandsPage.tsx`)から実行できるようにする。
 
 ## 現状(As-Is)
 - `backend/app/Domain/PaidLeaveSchedule/Aggregates/PaidLeaveScheduleAggregate.php`
@@ -50,6 +61,32 @@ UIを持たない運用者向けのArtisanコマンドとして提供する。
   Schedule生成のみを行う。既存エントリの見直しはしない)。
 - `Granted`(付与済み・確定済み)エントリは原則1・14により無条件では書き換えない
   (取消は別途`PaidLeaveGrantRevoked`等、Account側の専用取消操作が既に存在する)。
+- `backend/app/Domain/PaidLeaveSchedule/Support/ScheduleCandidateGenerator.php`の
+  `matchingRuleFor(?WorkStyle $workStyle): ?PaidLeaveGrantRule`(private):
+  対象社員の`WorkStyle`に一致する`work_style_id`固定の有効ルールを優先し、
+  無ければ`work_style_id`がnullの全社共通ルールをフォールバックとして採用する。
+  現状privateであり、外部(社員側からルールを逆引きする用途)からは呼べない。
+- 既存の**運用コマンド実行画面**の実装一式(調査結果):
+  - UI: `frontend/src/pages/admin/AdminCommandsPage.tsx`(ルート`/admin/commands`、
+    管理メニュー「システム」グループ内「運用コマンド」)。パラメータ入力は
+    `#[AdminExecutable(ui: [...])]`属性で宣言した`checkbox`/`year-month`/`text`の
+    3種類のcontrolのみサポート。
+  - Backend: `app/Http/Controllers/Api/AdminCommandController.php`
+    (`GET /admin/commands`・`GET /admin/command-runs`・
+    `POST /admin/commands/{command}/runs`)。実行は`App\Jobs\RunAdminCommandJob`が
+    DBキュー経由で`Artisan::call()`を呼ぶ非同期方式。
+  - 登録方式: `app/Console/Commands/`にArtisan Commandクラスを作り、
+    `#[AdminExecutable(label: ..., rules: [...], ui: [...])]`属性を付けるだけで
+    `AdminCommandRegistry`のリフレクション自動検出により画面に現れる
+    (例: `MigrateAttendanceWorkClassificationsCommand.php`)。
+  - 権限: `admin_command.view`(閲覧)・`admin_command.execute`(実行)、
+    前提フィーチャー`administration.settings`。
+  - 監査: 実行のたびに`admin_command_runs`テーブルへ実行者・パラメータ・
+    ステータス・出力/エラーが記録される(既存の仕組みをそのまま利用できる)。
+  - 実行前確認: `ConfirmActionDialog`(「処理はDBキューへ投入されます」の
+    確認ダイアログ)が既に共通で表示される。
+  - 重複実行防止: `without_overlapping`オプションで`Cache::lock()`による
+    1時間ロックが可能(既存の仕組み)。
 
 ## 仕様検討
 
@@ -67,25 +104,69 @@ UIを持たない運用者向けのArtisanコマンドとして提供する。
 ### 論点2: 対象範囲の指定方法
 - 選択肢:
   - A. 社員ID(複数可)+対象期間(開始日・終了日)を必須指定させる
-  - B. 全社員一括・期間指定なし(全期間)で洗い替えを行う
+  - B. 付与ルール(`paid_leave_grant_rules`)のIDを1件指定+対象期間(開始日・終了日)を
+       必須指定させ、そのルールが現在マッチする社員を自動的に対象とする
+  - C. 全社員一括・期間指定なし(全期間)で洗い替えを行う
+  - D. Bをベースに、ルールIDを**省略可能**にし、未指定時は対象社員条件を満たす
+       全社員(全ルール横断)を対象とする
+- 決定: D
+- 理由: ユーザーから「社員を指定せず、ポリシーを指定するだけで更新できるように」に
+  続けて「(ルール)IDが空欄の場合は全ポリシーを対象としてください」との追加要望が
+  あった。ルールを絞った是正(特定ルール変更時の是正)と、全社的な洗い替え
+  (是正内容が広範囲に及ぶ場合)の両方を1つのコマンドでカバーできる。対象期間は
+  誤操作の影響範囲を限定するため、ルールID指定の有無に関わらず必須のまま維持する
+  (ユーザー確認済み)。
+
+### 論点2b: 「付与ルールにマッチする社員」の解決方法
+- 選択肢:
+  - A. `ScheduleCandidateGenerator::matchingRuleFor()`を`public`(または`protected`+
+       新規publicメソッド経由)に変更し、`RollPaidLeaveSchedulesCommand`と同じ対象社員
+       条件(`employment_status=active`かつ`hire_date`設定済みかつ
+       `paid_leave_auto_grant_enabled=true`)の全社員について
+       `matchingRuleFor(currentWorkStyleFor($user))`を呼び、解決結果のルールIDが
+       選択したルールIDと一致する社員だけを対象とする
+  - B. `paid_leave_grant_rules.work_style_id`が指定ルールと一致する`WorkStyle`を持つ
+       社員だけをSQLで直接絞り込む(全社共通ルールへのフォールバック判定は行わない)
 - 決定: A
-- 理由: 過去分の洗い替えは既存データを取消+再作成する破壊力の大きい操作であり、
-  対象を明示的に絞らせることで誤操作の影響範囲を限定する。全社員・無期限の
-  一括実行を許すと、意図しない大量の取消イベントが`stored_events`に追記される
-  リスクがある。
+- 理由: Bは「specific work_style向けの有効ルールが無い場合に全社共通ルールへ
+  フォールバックする」という`ScheduleCandidateGenerator`の既存マッチングロジックを
+  再実装することになり、ロジックの二重管理・将来の仕様変更時の不整合リスクを生む。
+  Aは既存のマッチングロジックをそのまま再利用でき(原則9「業務ロジックを複製しない」に
+  合致)、全社共通ルール(`work_style_id=null`)を選択した場合も「specific work_style
+  向けルールが存在しない社員」だけを正しく対象にできる。
+  `matchingRuleFor()`の可視性変更(`private`→`internal`用に`public`化、またはテスト用
+  トレイトへの切り出し)は実装時の詳細としてimplementerに委ねる。
+  ルールID未指定時(論点2決定D)は、この絞り込みを行わず対象社員条件を満たす全社員を
+  対象とする。
+
+### 論点2c: ルールID入力部品と未指定時の扱い
+- 選択肢:
+  - A. 既存の運用コマンド実行画面(`/admin/commands`)が持つ`checkbox`/`year-month`/
+       `text`の3種類のUI controlのみで実装する(ルールIDは`text`で数値文字列として
+       入力させ、空欄可とする)
+  - B. `AdminExecutable`のUIフレームワーク自体に`select`(ドロップダウン)controlを
+       新設し、付与ルール一覧を取得して選ばせる
+- 決定: A
+- 理由: ユーザーから「IDをテキスト入力で構わない、空欄の場合は全ポリシーを対象に」と
+  明示的な指示があった。Bは既存の共通UIフレームワーク(他の運用コマンドにも影響する
+  横断的な変更)を拡張する必要があり、本変更セットのスコープを超える。
+- 懸念事項: `/admin/paid-leave`(付与ポリシー画面)には現状ルールIDが画面上に
+  直接表示されておらず、ルール編集リンク(`/admin/paid-leave/rules/{id}/edit`)の
+  URLからIDを読み取る必要がある(視認性が良くない)。本変更セットのスコープでは
+  この表示改善は行わない(対象外に明記)が、運用上わかりにくい場合は別途
+  「ルール一覧にIDを表示する」変更セットを検討されたい。
 
 ### 論点3: 実行経路
 - 選択肢:
-  - A. Artisanコマンド(`php artisan paid-leave:schedule:rebuild`)として、
-     サーバー運用者がCLIから実行する
-  - B. 管理者向けAPI(`leave.manage`権限)+フロントエンド操作画面として提供する
-- 決定: A
-- 理由: 対応する「付与予定」管理画面(`/admin/paid-leave/schedule`)は本セッションの
-  別対応で削除済みであり、Bには新規UIの追加が必要になる。過去分の洗い替えは
-  データ不整合是正のための低頻度な運用者向け操作であり、
-  `MigratePaidLeaveAccountsCommand`と同様にArtisanコマンドとして提供する方が
-  既存パターンに沿う。将来、頻度が上がりUIが必要になった場合は別変更セットで
-  API化を検討する。
+  - A. 新規Artisanコマンドを、サーバー運用者がCLIから実行する(UIなし)
+  - B. 既存の運用コマンド実行画面(`/admin/commands`、`AdminCommandController`)に
+       `#[AdminExecutable]`属性付きのArtisanコマンドとして登録し、管理者がWeb UIから
+       実行する
+- 決定: B
+- 理由: ユーザーから「既にある運用コマンド実行用の管理画面から実行できるように」との
+  明示的な指示があった。既存の仕組み(`admin_command.execute`権限チェック、
+  `admin_command_runs`への実行監査ログ、実行前確認ダイアログ、DBキュー経由の
+  非同期実行)をそのまま流用でき、新規のAPI・認可・監査の仕組みを別途作る必要がない。
 
 ### 論点4: 取消+再作成に使うイベント
 - 選択肢:
@@ -111,12 +192,29 @@ UIを持たない運用者向けのArtisanコマンドとして提供する。
   `recalculateFutureSchedule`の既存挙動と同じであり、特別扱いしない。
 
 ## 仕様確定事項(まとめ)
-- 新規Artisanコマンド`paid-leave:schedule:rebuild`を追加する。
-  - 引数/オプション: `--user=<userId>`(複数指定可、必須。少なくとも1件)、
-    `--from=<YYYY-MM-DD>`(必須)、`--to=<YYYY-MM-DD>`(必須、`from`以降)、
-    `--reason=<text>`(必須、取消イベントの理由として記録)。
-  - 処理: 指定された各ユーザーについて、`ScheduleCandidateGenerator::candidatesFor($user, $from, $to)`
-    で対象期間の最新候補を算出し、`RecalculateFutureSchedule($userId, $candidates, $reason, overrideManualEdits: true)`
+- 新規Artisanコマンド`RebuildPaidLeaveScheduleCommand`(シグネチャ
+  `paid-leave:schedule:rebuild`)を`backend/app/Console/Commands/`に追加し、
+  `#[AdminExecutable]`属性を付けて既存の運用コマンド実行画面(`/admin/commands`)に
+  登録する。
+  - オプション: `--rule-id=<int>`(省略可。`text` control)、`--from=<YYYY-MM-DD>`
+    (必須。日付文字列)、`--to=<YYYY-MM-DD>`(必須、`from`以降)、`--reason=<text>`
+    (必須、取消イベントの理由として記録)。
+    - `rules`: `'rule-id' => ['nullable', 'integer', 'exists:paid_leave_grant_rules,id']`、
+      `'from' => ['required', 'date_format:Y-m-d']`、
+      `'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from']`、
+      `'reason' => ['required', 'string', 'max:255']`。
+    - `ui`: `rule-id`/`from`/`to`/`reason`いずれも`text` control(既存3種類の中で
+      日付・自由入力に対応できるのは`text`のみ。`year-month`は年月単位でしか
+      指定できず日単位の`from`/`to`には使えないため採用しない)。
+  - 対象社員の決定:
+    - `--rule-id`指定時: `RollPaidLeaveSchedulesCommand`と同じ対象社員条件
+      (`employment_status=active`かつ`hire_date`設定済みかつ
+      `paid_leave_auto_grant_enabled=true`)を満たす社員のうち、
+      `ScheduleCandidateGenerator`の`matchingRuleFor(currentWorkStyleFor($user))`
+      (可視性を実装時に見直す。論点2b)の解決結果が指定ルールIDと一致する社員のみ。
+    - `--rule-id`未指定時: 上記の対象社員条件を満たす全社員(論点2の決定D)。
+  - 処理: 対象社員ごとに`ScheduleCandidateGenerator::candidatesFor($user, $from, $to)`
+    で対象期間の候補を算出し、`RecalculateFutureSchedule($userId, $candidates, $reason, overrideManualEdits: true)`
     を発行する(`overrideManualEdits: true`により個別修正済みエントリも洗い替え対象に含める)。
   - `Granted`エントリは対象外(論点1)。`recalculateFutureSchedule`の既存ロジックが
     `FINALIZED_STATUSES`として自動的に除外するため、コマンド側で追加のフィルタは不要。
@@ -124,40 +222,52 @@ UIを持たない運用者向けのArtisanコマンドとして提供する。
     過去日付を理由に候補生成・比較をスキップしていないことを実装時に確認し、
     もしガードが存在する場合はコマンド呼び出し経路に限り除去する
     (`RollPaidLeaveSchedulesCommand`等、既存の未来月生成用途の挙動は変更しない)。
-  - 1ユーザーの失敗が他ユーザーに影響しないよう、`RollPaidLeaveSchedulesCommand`と
-    同様にユーザー単位でtry/catchし、失敗はログ(`report($e)`)+コンソール出力で
-    継続する。
-  - 実行前に対象ユーザー数・期間をコンソールに表示し、`--force`オプションが
-    無い場合は確認プロンプト(`$this->confirm()`)を出す(破壊力の大きい操作のため、
-    誤操作防止。CI/バッチ実行用に`--force`で確認をスキップ可能にする)。
+  - 1社員の失敗が他社員に影響しないよう、`RollPaidLeaveSchedulesCommand`と
+    同様に社員単位でtry/catchし、失敗はログ(`report($e)`)+コンソール出力で継続する。
+    実行結果(対象社員数・成功/失敗件数)はコンソール出力に残し、
+    `admin_command_runs`の実行ログ(既存の仕組み)にも出力として記録される。
+  - 実行前確認は、既存の運用コマンド実行画面が共通で表示する`ConfirmActionDialog`
+    (「処理はDBキューへ投入されます」)にのみ委ね、コマンド側で対話的な確認
+    (`$this->confirm()`)は行わない。UI経由の実行は`RunAdminCommandJob`が
+    非対話的に`Artisan::call()`するため、対話的な確認プロンプトは機能しない
+    (標準入力を待てず、ジョブがハング/失敗する)。
 - 新規イベント種別・新規Command種別は追加しない(既存の`RecalculateFutureSchedule`
   Command・既存のSupersede/Cancelイベントを流用する。論点4)。
 
 ## 受け入れ条件
-- `php artisan paid-leave:schedule:rebuild --user=<id> --from=<過去日> --to=<過去日> --reason=<text> --force`
-  を実行すると、指定ユーザー・期間内の`Granted`/`Cancelled`以外のScheduleエントリが
-  取消され、最新のルール・ポリシーに基づく新しいエントリが作成される
-  (`stored_events`に取消イベント・作成イベントが追記される。既存イベントの削除・
-  書き換えは発生しない)。
-- 同一コマンドを再実行し、内容に変化が無い場合は取消・再作成が発生しない(冪等)。
+- 管理画面(`/admin/commands`)に「有給休暇付与予定の再作成」(仮称)コマンドが表示され、
+  `admin_command.execute`権限を持つ管理者が付与ルールID(省略可)・開始日・終了日・
+  理由を入力して実行できる。
+- ルールIDを指定して実行すると、そのルールに現在マッチする社員のうち、指定期間内の
+  `Granted`/`Cancelled`以外のScheduleエントリが取消され、最新のルール・ポリシーに
+  基づく新しいエントリが作成される(`stored_events`に取消イベント・作成イベントが
+  追記される。既存イベントの削除・書き換えは発生しない)。
+- ルールIDを空欄にして実行すると、対象社員条件を満たす全社員について同様の洗い替えが
+  行われる。
+- 同一パラメータで再実行し、内容に変化が無い場合は取消・再作成が発生しない(冪等)。
 - `Granted`エントリは本コマンド実行前後で一切変更されない。
-- `--user`・`--from`・`--to`・`--reason`のいずれかが未指定の場合、コマンドはエラー
-  終了し何も変更しない。
-- `--force`未指定時は確認プロンプトが表示され、拒否すると何も変更されない。
-- 対象ユーザーの一部でエラーが発生しても、他ユーザーの処理は継続され、最終的に
-  成功/失敗の内訳がコンソールに表示される。
+- `from`・`to`・`reason`のいずれかが未指定、または`to`が`from`より前の場合、
+  実行は失敗し(バリデーションエラー)何も変更されない。存在しない`rule-id`を
+  指定した場合も同様に失敗する。
+- 対象社員の一部でエラーが発生しても、他社員の処理は継続され、実行結果に
+  成功/失敗の内訳が残る。
+- 実行のたびに`admin_command_runs`に実行者・パラメータ・結果が記録される。
 - 関連する自動テスト(新規追加分・既存のPaidLeaveSchedule関連)が全てPASSする。
 
 ## 対象外
-- 管理者向けAPI・フロントエンド画面としての提供(論点3。将来必要になれば別変更セット)。
+- `AdminExecutable`のUIフレームワークへの`select`(ドロップダウン)control新設
+  (論点2c。既存の`text`/`checkbox`/`year-month`のみで実装する)。
+- 付与ポリシー画面(`/admin/paid-leave`)でのルールID表示改善(論点2c懸念事項。
+  必要であれば別変更セットで対応)。
 - `Granted`(付与済み)エントリの洗い替え・取消(論点1。既存の`RevokePaidLeaveGrant`を使う)。
 - 新規イベント種別の追加(論点4)。
 - スケジューリング(cron等での定期自動実行)。本コマンドは運用者が都度手動実行する
   想定であり、自動トリガーは設けない。
 
 ## ドキュメントへの影響
-- `docs/09-usecases-paid-leave.md`: 過去分Scheduleエントリの洗い替え用Artisanコマンドの
-  存在・実行方法・対象範囲(`Granted`除外)を追記する。
+- `docs/09-usecases-paid-leave.md`: 管理画面(`/admin/commands`)から過去分Schedule
+  エントリを取消+再作成できるコマンドの存在・実行方法(ルールID省略可・期間必須)・
+  対象範囲(`Granted`除外)を追記する。
 - `docs/17-events.md`: 変更なし(新規イベント種別を追加しないため)。
 - 他のdocsファイルは変更なし。
 
@@ -166,21 +276,42 @@ UIを持たない運用者向けのArtisanコマンドとして提供する。
 
 ## 実装対象
 - `backend/app/Console/Commands/RebuildPaidLeaveScheduleCommand.php`(新規、
-  シグネチャ`paid-leave:schedule:rebuild`)
-- `backend/app/Console/Kernel.php`(コマンド登録が自動発見でない場合のみ確認・追記)
+  シグネチャ`paid-leave:schedule:rebuild`、`#[AdminExecutable]`属性付与)
+- `backend/app/Domain/PaidLeaveSchedule/Support/ScheduleCandidateGenerator.php`
+  (`matchingRuleFor()`を対象社員解決に再利用できるよう可視性・呼び出し口を調整。
+  論点2b)
 - テスト: `backend/tests/Feature/Console/RebuildPaidLeaveScheduleCommandTest.php`(新規)
-  - 過去日付エントリの取消+再作成、冪等性(2回目no-op)、`Granted`除外、
-    未指定オプションでのエラー終了、`--force`無しの確認プロンプト拒否ケースを検証
+  - ルールID指定時に該当社員のみが対象になること、ルールID未指定時に全対象社員が
+    対象になること、過去日付エントリの取消+再作成、冪等性(2回目no-op)、
+    `Granted`除外、必須項目未指定・存在しないrule-idでのバリデーションエラーを検証
+  - `backend/tests/Feature/AdminCommand/`配下の既存テストパターンに沿って、
+    `POST /admin/commands/{command}/runs`経由での実行(`AdminCommandController`・
+    `RunAdminCommandJob`込み)も1件検証する
 - `docs/09-usecases-paid-leave.md`の追記
 
 ## 検証方法
 - `cd backend && php artisan test --filter=RebuildPaidLeaveScheduleCommand`
 - `cd backend && php artisan test --filter=PaidLeaveSchedule`
+- `cd backend && php artisan test --filter=AdminCommand`
 - `cd backend && php artisan test`(フルスイート)
 
 ## レビュー履歴
-初版。AskUserQuestionでの確認により、対象=有給休暇付与予定(Scheduleドメイン)、
-削除方式=取消イベント追記+再作成イベント追記、の2点を確定済み。
+- 初版。AskUserQuestionでの確認により、対象=有給休暇付与予定(Scheduleドメイン)、
+  削除方式=取消イベント追記+再作成イベント追記、の2点を確定済み。
+- 追記1: 「管理画面のUIから実行できるようにしてほしい(既存のコマンド実行用画面を
+  使う)」との要望を受け、実行経路をArtisan CLI単体からの実行(論点3旧決定A)から
+  既存の運用コマンド実行画面(`/admin/commands`)への`#[AdminExecutable]`登録
+  (論点3決定B)に変更。UI経由の非対話実行のため、CLIの対話的確認プロンプト
+  (`$this->confirm()`)は撤回し、既存UIの`ConfirmActionDialog`に委ねる方式に変更。
+- 追記2: 「社員を指定せず、ポリシーを指定するだけで更新できるように」との要望を
+  受け、対象範囲の指定方法を社員ID指定(論点2旧決定A)から付与ルールID指定
+  (論点2決定B→D)に変更。ルールにマッチする社員の解決方法を論点2bとして追加。
+- 追記3: AskUserQuestionでの確認により、指定対象=付与ルール(法定付与ポリシーの
+  バージョンではない)、対象期間の開始日・終了日は必須、の2点を確定。
+- 追記4: 「既存のコマンド実行画面はselect入力部品を持たない」ことを確認し
+  AskUserQuestionで確認したところ、「IDをテキスト入力で構わない、空欄の場合は
+  全ポリシーを対象に」との回答を得たため、論点2の決定をD(ルールID省略可)に、
+  論点2cを新設して`text` control採用を確定。
 
 ## 実装結果
 未着手
