@@ -16,7 +16,6 @@ test("管理者が各種マスタ管理画面にアクセスできる", async ({
     "/admin/work-styles",
     "/admin/shifts",
     "/admin/paid-leave",
-    "/admin/paid-leave/schedule",
     "/admin/request-types",
     "/admin/users",
     "/admin/groups",

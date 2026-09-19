@@ -43,7 +43,6 @@ import { WorkStylesPage } from "./pages/workCalendar/WorkStylesPage";
 import { ShiftsPage } from "./pages/workCalendar/ShiftsPage";
 import { PaidLeaveGrantRuleEditPage } from "./pages/paidLeave/PaidLeaveGrantRuleEditPage";
 import { PaidLeavePolicyPage } from "./pages/paidLeave/PaidLeavePolicyPage";
-import { PaidLeaveSchedulePage } from "./pages/paidLeave/PaidLeaveSchedulePage";
 import { SpecialLeaveAdminPage } from "./pages/specialLeave/SpecialLeaveAdminPage";
 import { CompensatoryLeaveAdminPage } from "./pages/compensatoryLeave/CompensatoryLeaveAdminPage";
 import { AttendanceReferencePage } from "./pages/attendance/AttendanceReferencePage";
@@ -237,10 +236,6 @@ function App() {
             <Route path="work-styles" element={<WorkStylesPage />} />
             <Route path="shifts" element={<ShiftsPage />} />
             <Route path="paid-leave" element={<PaidLeavePolicyPage />} />
-            <Route
-              path="paid-leave/schedule"
-              element={<PaidLeaveSchedulePage />}
-            />
             <Route
               path="paid-leave/rules/:ruleId/edit"
               element={<PaidLeaveGrantRuleEditPage />}

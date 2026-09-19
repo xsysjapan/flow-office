@@ -13,8 +13,6 @@ import type {
   ExpensePaymentBearer,
   LegalHolidayWarning,
   PaidLeaveRequestStatus,
-  PaidLeaveScheduleCategory,
-  PaidLeaveScheduleStatus,
   PaidLeaveType,
   PunchStatus,
   PunchType,
@@ -247,31 +245,6 @@ export function paidLeaveRequestStatusLabel(status: PaidLeaveRequestStatus): Sta
 
 export function shiftSwapRequestStatusLabel(status: ShiftSwapRequestStatus): StatusMeta {
   return shiftSwapRequestStatusMeta[status]
-}
-
-const paidLeaveScheduleStatusMeta: Record<PaidLeaveScheduleStatus, StatusMeta> = {
-  Scheduled: { label: '予定', tone: 'neutral' },
-  AssessmentPending: { label: '判定待ち', tone: 'neutral' },
-  Eligible: { label: '付与対象', tone: 'success' },
-  NotEligible: { label: '対象外', tone: 'warning' },
-  NeedsReview: { label: '要確認', tone: 'warning' },
-  Granted: { label: '付与済み', tone: 'success' },
-  Cancelled: { label: '取消', tone: 'neutral' },
-}
-
-export function paidLeaveScheduleStatusLabel(status: PaidLeaveScheduleStatus): StatusMeta {
-  return paidLeaveScheduleStatusMeta[status]
-}
-
-const paidLeaveScheduleCategoryLabels: Record<PaidLeaveScheduleCategory, string> = {
-  normal: '通常',
-  proportional: '比例',
-  shift: 'シフト',
-  needs_review: '要確認',
-}
-
-export function paidLeaveScheduleCategoryLabel(category: PaidLeaveScheduleCategory): string {
-  return paidLeaveScheduleCategoryLabels[category]
 }
 
 export function paidLeaveTypeLabel(leaveType: PaidLeaveType): string {
