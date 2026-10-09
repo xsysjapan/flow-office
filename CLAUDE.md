@@ -104,7 +104,11 @@ Bearerトークン方式(Cookieベースではない)。
    流れで行う。例外は個別仕様で明示する。`system_settings`は管理者専用APIから直接更新するが、
    監査用イベントを同一トランザクションで`stored_events`へ記録する。
 2. **Projectionは再生成可能な派生データ**: 画面表示用テーブルはイベントから再生成できる
-   前提で設計する。Projectionを直接手で書き換えない。
+   前提で設計する。Projectionを直接手で書き換えない。**ReadModel(Projection)はイベントと
+   常に同期させ、イベントを`stored_events`に記録せずにReadModelだけを更新することは、
+   データ補正・運用コマンド・マイグレーション・Handler内の補助的な更新であっても認めない**。
+   補正が必要な場合は補正用のCommand/Eventを追加してイベントとして記録し、Projectorで
+   反映する(再生成しても同じ結果になることを保証する)。
 3. **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /
    `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。入力・編集は必ず
    日次単位で行わせ、`attendance_months`はその日次実績を集計・確定した結果であり、
