@@ -1,6 +1,6 @@
 # 休暇設定(work_type)を休暇イベントから決定し、勤怠編集で消えた過去分を補正する
 
-ステータス: レビュー中
+ステータス: 実装中
 
 ## 変更要望(原文)
 > 代休バッジは表示されましたが、おそらく代休が設定されていた日の労働時間を更新した際に
@@ -163,8 +163,8 @@
   - ユーザーの許可: 補正方法の確認で「既存イベントを書き換え」が選択された。ただし
     `data-correction`スキルに従い、対象範囲・書き換え後の値を本変更セットで提示したうえで
     改めて明示的な許可を得る(下記「未確定・要確認事項」)。
-- 未確定・要確認事項: **対象イベント・範囲・書き換え後の値(「仕様確定事項」の補正の項)で
-  イベント履歴を書き換えることの明示的な許可**
+- 未確定・要確認事項: なし(2026-10-09 ユーザーが「仕様確定事項」の補正の項の対象・範囲・
+  書き換え内容でのイベント履歴の直接修正を明示的に許可)
 
 ### 論点7: 補正後の再計算
 - 選択肢:
@@ -175,8 +175,9 @@
 - 理由: 記録済みの日次計算結果・月次スナップショットは誤った`work_type`で算出されており、
   Bでは月次集計の休暇日数が直らない。日次計算の再実行は計算結果の新しいイベントを記録する
   通常の計算処理であり、ReadModelの直接書き換えにはあたらない。
-- 未確定・要確認事項: 日次計算を再実行する既存の手段の有無は実装前にinvestigatorで確認し、
-  無ければ再計算コマンドを追加する(実装方針のみの確認で、仕様判断は不要)。
+- 未確定・要確認事項: なし(日次計算を再実行する既存コマンドは無いことを確認。
+  日次計算は各Handlerが`AttendanceCalculator::calculate()`→`AttendanceDayAggregate::calculate()->persist()`で
+  記録しているため、同じ処理を呼ぶ再計算コマンドを追加する)
 
 ## 仕様確定事項(まとめ)
 
@@ -195,7 +196,10 @@
   - `paid_leave_account.usage_cancelled`/`special_leave.usage_reversed`/
     `compensatory_leave.usage_reversed`: 対応表から勤怠日を特定し、その`work_type`が当該休暇の
     値であればnullに戻す(既存の取消Handlerと同じ挙動)。
-- 休暇の申請・取消Handlerから`attendance_days`の直接create/saveを削除する。
+- 休暇の申請・取消Handlerから`attendance_days`の直接create/saveを削除する。Handlerが
+  直後に行っている日次計算(`AttendanceCalculator::calculate()`)は、usageイベントの永続化
+  (=同期Projectorによる`work_type`反映)の後に行う順序にし、行の取得は永続化後に
+  `AttendanceDay`を読み直して行う。
 - 対応表はマイグレーションで追加するProjectionテーブルとし、リビルドで再生成できること。
 
 ### 勤怠の作成・編集(論点4)
@@ -221,8 +225,13 @@
     一覧を出力する。`--apply`指定時のみ、バックアップテーブル(名前は引数指定、既存なら拒否)へ
     `stored_events`をコピーしてから1トランザクションで書き換える。
   - 冪等: `workTypeProvided`キーがあるイベントは対象外。
-- 書き換え後の手順(本番): `projections:rebuild AttendanceDayProjector` → 休暇値が変わった日の
-  日次計算の再実行 → `attendance:recalculate-month-snapshots`(対象月)。手順と確認用SELECTを
+- 日次計算の再計算コマンド`attendance:recalculate-days`(`#[AdminExecutable]`)を追加する。
+  `--from`/`--to`(勤務日、必須)と任意の`--user=*`で対象を絞り、既定は試し実行(対象件数・
+  勤怠日一覧の表示のみ)、`--apply`で各勤怠日に`AttendanceCalculator::calculate()`→
+  `AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist()`を実行する
+  (既存Handlerと同じ呼び出し方)。
+- 書き換え後の手順(本番): `projections:rebuild AttendanceDayProjector` →
+  `attendance:recalculate-days`(補正対象の勤務日の範囲) → `attendance:recalculate-month-snapshots`(対象月)。手順と確認用SELECTを
   `docs/`の運用手順に記載する。
 - 本番での実行は、試し実行結果をユーザーが確認してからユーザーの指示で行う。
 
@@ -281,6 +290,8 @@
   休暇イベントからProjectorで決める根本対応と、`data-correction`スキルに沿った過去イベントの
   直接修正による補正(ユーザーが補正方法として「既存イベントを書き換え」を選択)に全面改訂。
   タイトルを変更。
+- 2026-10-09 ユーザーがイベント履歴の直接修正(補正コマンドの対象・範囲・書き換え内容)を明示的に
+  許可し、変更セットを承認。日次計算の再計算コマンドを仕様確定事項に追加。ステータスを実装中に更新。
 
 ## 実装結果
 未着手
