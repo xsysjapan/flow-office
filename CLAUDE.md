@@ -107,8 +107,9 @@ Bearerトークン方式(Cookieベースではない)。
    前提で設計する。Projectionを直接手で書き換えない。**ReadModel(Projection)はイベントと
    常に同期させ、イベントを`stored_events`に記録せずにReadModelだけを更新することは、
    データ補正・運用コマンド・マイグレーション・Handler内の補助的な更新であっても認めない**。
-   補正が必要な場合は補正用のCommand/Eventを追加してイベントとして記録し、Projectorで
-   反映する(再生成しても同じ結果になることを保証する)。
+   補正が必要な場合は`.claude/skills/data-correction`に従い、まず過去のイベント履歴の
+   直接修正を検討し、それが不可能・不適切な場合のみ補正用のCommand/Eventを追記する。
+   いずれもProjectorのリビルドで反映する(再生成しても同じ結果になることを保証する)。
 3. **勤怠の正は日次実績・勤務予定・有給付与**: `employee_shift_assignments` /
    `attendance_days` / `attendance_breaks` / `paid_leave_grants` が正。入力・編集は必ず
    日次単位で行わせ、`attendance_months`はその日次実績を集計・確定した結果であり、
