@@ -118,6 +118,14 @@ describe('statusLabels', () => {
       label: '特別休暇(時間休)',
       tone: 'info',
     })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'compensatory_leave_full' })).toEqual({
+      label: '代休(全休)',
+      tone: 'info',
+    })
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'compensatory_leave_am_half' })).toEqual({
+      label: '代休(午前半休)',
+      tone: 'info',
+    })
   })
 
   it('maps work location types to a Japanese label and lists them as select options', () => {

@@ -80,6 +80,11 @@ describe('AttendanceDayRow', () => {
     expect(screen.getByText('特別休暇(全休)')).toBeInTheDocument()
   })
 
+  it('shows a leave-specific label for a full-day compensatory leave day', () => {
+    renderRow({ day: { ...day, work_type: 'compensatory_leave_full' } })
+    expect(screen.getByText('代休(全休)')).toBeInTheDocument()
+  })
+
   it('shows 未入力 when there is no record for the day', () => {
     renderRow({ day: undefined })
     expect(screen.getByText('未入力')).toBeInTheDocument()
