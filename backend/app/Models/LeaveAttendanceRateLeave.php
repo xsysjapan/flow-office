@@ -22,4 +22,6 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class LeaveAttendanceRateLeave extends Model
 {
+    public $timestamps = false;
+
 }

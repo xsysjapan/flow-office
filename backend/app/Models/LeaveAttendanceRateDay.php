@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class LeaveAttendanceRateDay extends Model
 {
+    public $timestamps = false;
+
     protected function casts(): array
     {
         return [

@@ -43,6 +43,8 @@ tools: Read, Edit, Write, Grep, Glob, Bash
   マイグレーションで制約を外すときはMySQLの外部キーの依存(外部キー→索引の順に撤去)も確認する。
   索引・一意制約・外部キーの自動名(`{table}_{columns}_{unique|index|foreign}`)はMySQLの64文字制限を超えることがあるので、
   長いテーブル名では明示名を付ける。
+- モデルを新設したら、対応するテーブルの列とモデルの`$timestamps`・`$fillable`・キャストを突き合わせる(ビュー用の
+  テーブルに`created_at`/`updated_at`が無いなら`public $timestamps = false;`)。
 - 仕様上の判断が必要な曖昧点に実装中に気づいた場合は、推測で仕様を作らず、
   その論点を明記して依頼元に差し戻す。
 

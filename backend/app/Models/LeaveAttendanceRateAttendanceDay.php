@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class LeaveAttendanceRateAttendanceDay extends Model
 {
+    public $timestamps = false;
+
     public $incrementing = false;
 
     protected $keyType = 'string';
