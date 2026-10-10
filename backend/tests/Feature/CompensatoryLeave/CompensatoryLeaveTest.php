@@ -211,6 +211,13 @@ class CompensatoryLeaveTest extends TestCase
         $this->assertNull($grant->expires_on);
     }
 
+    /** 実労働420分の休日出勤を半日単位(閾値600分)で記録し、確定済みの0.5日の付与を作る。 */
+    private function halfDayGrantOfHalfDay(User $employee): void
+    {
+        SystemSetting::current()->update(['compensatory_leave_half_day_threshold_minutes' => 600]);
+
+        $this->confirmedGrant($employee, '2026-08-08', 'half_day');
+    }
     private function confirmedGrant(User $employee, string $workDate = '2026-08-08', string $unit = 'daily'): CompensatoryLeaveGrant
     {
         SystemSetting::current()->update(['compensatory_leave_enabled' => true, 'compensatory_leave_unit' => $unit]);
@@ -274,8 +281,9 @@ class CompensatoryLeaveTest extends TestCase
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
-        $grant = $this->confirmedGrant($employee);
-        $grant->update(['granted_days' => 0.5, 'remaining_days' => 0.5]);
+        // 付与0.5日は残数を直接書き換えず、半日単位の休日出勤(閾値以下の実労働)から勤怠のイベントで作る。
+        $this->halfDayGrantOfHalfDay($employee);
+        $grant = CompensatoryLeaveGrant::query()->where('user_id', $employee->id)->firstOrFail();
 
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
@@ -306,8 +314,9 @@ class CompensatoryLeaveTest extends TestCase
         SystemSetting::current()->update(['compensatory_leave_requires_approval' => false]);
 
         $employee = User::factory()->create();
-        $grant = $this->confirmedGrant($employee);
-        $grant->update(['granted_days' => 0.5, 'remaining_days' => 0.5]);
+        // 付与0.5日は残数を直接書き換えず、半日単位の休日出勤(閾値以下の実労働)から勤怠のイベントで作る。
+        $this->halfDayGrantOfHalfDay($employee);
+        $grant = CompensatoryLeaveGrant::query()->where('user_id', $employee->id)->firstOrFail();
 
         $workStyle = $this->makeWorkStyle();
         $this->makeWorkingDayShift($employee, $workStyle, '2026-09-10');
