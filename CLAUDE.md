@@ -149,6 +149,12 @@ Bearerトークン方式(Cookieベースではない)。
     発生したケースのみを扱うものとして設計し、申請不要で処理される業務データを無理に
     統合ワークフロー側に取り込まない(docs/03-architecture.md 3.9、
     docs/10-usecases-workflow.md参照)。
+15. **文脈(ドメイン)間はイベントで連携する(コレオグラフィー)**: 各文脈は自分の集約・
+    テーブルだけを書き込み、他の文脈の集約を操作したり、他の文脈のテーブル(ReadModelを含む)を
+    直接読み書きしたりしない。他の文脈の変化には、そのイベントを購読するReactor(自文脈の
+    Commandを発行する)またはProjector(自文脈の読み取りビューを作る)で反応する。1回の操作から
+    始まる連鎖は同期Reactorで1トランザクションとし、Reactorから発行するCommandは冪等にする
+    (docs/03-architecture.md)。
 
 これらはバックエンドAPIの設計原則。詳細は `docs/03-architecture.md` と
 `docs/20-implementation-notes.md` を参照。
