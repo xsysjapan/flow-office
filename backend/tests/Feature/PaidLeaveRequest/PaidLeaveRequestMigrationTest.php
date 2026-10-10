@@ -57,6 +57,9 @@ class PaidLeaveRequestMigrationTest extends TestCase
     /** 旧系統(cutover前)の申請の対象日。 */
     private const LEGACY_DATE = '2026-08-10';
 
+    /** 旧系統(cutover前)の差戻し申請の対象日。承認済みの申請と同じ日だと、再提出で全休の併存が衝突するため別日にする。 */
+    private const LEGACY_RETURNED_DATE = '2026-08-12';
+
     /** cutover後の系統の申請の対象日。 */
     private const DATE = '2026-08-11';
 
@@ -286,7 +289,7 @@ class PaidLeaveRequestMigrationTest extends TestCase
 
         // 旧系統(cutover前): 差戻し(消化記録は取消済みのため無し)。
         $returnedLegacy = $this->uuid();
-        $this->legacyRequested($returnedLegacy, self::LEGACY_DATE);
+        $this->legacyRequested($returnedLegacy, self::LEGACY_RETURNED_DATE);
         $this->legacyReturned($returnedLegacy);
 
         // cutover後の系統: 申請中(未確定の消化記録あり)。

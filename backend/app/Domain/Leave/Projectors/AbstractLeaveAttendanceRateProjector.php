@@ -370,8 +370,13 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function createLeave(string $leaveKind, string $leaveRequestId, string $source, array $attributes, bool $takeover = false): void
+    private function createLeave(string $leaveKind, ?string $leaveRequestId, string $source, array $attributes, bool $takeover = false): void
     {
+        // 申請IDが無いイベントは行を作れないため無視する(例外にしない)。
+        if ($leaveRequestId === null) {
+            return;
+        }
+
         $existing = $this->findLeave($leaveKind, $leaveRequestId);
         if (! $takeover && $existing !== null && $existing->source !== $source) {
             return;
@@ -394,8 +399,12 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function transitionLeave(string $leaveKind, string $leaveRequestId, string $source, array $attributes, ?string $onlyFrom = null): void
+    private function transitionLeave(string $leaveKind, ?string $leaveRequestId, string $source, array $attributes, ?string $onlyFrom = null): void
     {
+        if ($leaveRequestId === null) {
+            return;
+        }
+
         $leave = $this->findLeave($leaveKind, $leaveRequestId);
         if ($leave === null || $leave->source !== $source) {
             return;
@@ -429,8 +438,12 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
         $this->refresh($leave->user_id, $leave->work_date);
     }
 
-    private function findLeave(string $leaveKind, string $leaveRequestId): ?Model
+    private function findLeave(string $leaveKind, ?string $leaveRequestId): ?Model
     {
+        if ($leaveRequestId === null) {
+            return null;
+        }
+
         return $this->leaveQuery()
             ->where('leave_kind', $leaveKind)
             ->where('leave_request_id', $leaveRequestId)
