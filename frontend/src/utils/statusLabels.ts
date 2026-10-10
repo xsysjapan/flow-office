@@ -6,6 +6,7 @@ import type {
   AssetLendingStatus,
   AssetLoanRequestStatus,
   AssetManagementType,
+  AttendanceDayLeave,
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
@@ -151,46 +152,33 @@ export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMet
   return attendanceDayStatusMeta[status]
 }
 
-const PAID_LEAVE_WORK_TYPE_PREFIX = 'paid_leave_'
-const SPECIAL_LEAVE_WORK_TYPE_PREFIX = 'special_leave_'
-const COMPENSATORY_LEAVE_WORK_TYPE_PREFIX = 'compensatory_leave_'
-
-/**
- * 全休の有給・特別休暇・代休はバックエンドが意図的に attendance_days.status を 'clocked_out' に
- * しているため(「退勤忘れ」警告の誤検知を避けるため。backend/app/Domain/Attendance/
- * Services/AttendanceCalculator.php 参照)、statusだけを見ると休暇日なのに「退勤済み」と
- * 表示されてしまう。attendance_days.work_type(paid_leave_ / special_leave_ / compensatory_leave_ 接頭辞,
- * PaidLeaveType::toAttendanceWorkType() / SpecialLeaveWorkType::toAttendanceWorkType() /
- * CompensatoryLeaveWorkType::toAttendanceWorkType() 参照)を優先して見る。
- */
-function leaveWorkTypeLabel(workType: string | null | undefined): string | null {
-  if (!workType) return null
-  if (workType.startsWith(PAID_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(PAID_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `有給休暇(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  if (workType.startsWith(SPECIAL_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(SPECIAL_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `特別休暇(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  if (workType.startsWith(COMPENSATORY_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(COMPENSATORY_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `代休(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  return null
+const LEAVE_KIND_LABELS: Record<AttendanceDayLeave['leave_kind'], string> = {
+  paid: '有給休暇',
+  special: '特別休暇',
+  compensatory: '代休',
 }
 
 /**
- * 勤怠日1件分の表示ラベル。全休の有給・特別休暇・代休はwork_typeから休暇種別・取得単位を
- * 表示し、それ以外はattendanceDayStatusLabel()と同じstatusベースの表示にフォールバックする。
+ * 勤怠日の休暇(休暇ビュー`leaves`の行)を表示文言にする。種類と取得単位を示す
+ * (例: 有給休暇(全休)・代休(午前半休))。複数あれば複数返す。
+ * 休暇は勤怠日のstatusやwork_type(作業内容)では表さないため、表示は必ずこの一覧から行う。
+ */
+export function attendanceDayLeaveLabels(leaves: AttendanceDayLeave[] | undefined): string[] {
+  return (leaves ?? []).map((leave) => `${LEAVE_KIND_LABELS[leave.leave_kind]}(${paidLeaveTypeLabels[leave.unit]})`)
+}
+
+/**
+ * 勤怠日1件分の表示ラベル。休暇がある日は休暇ラベルを表示し(複数は「・」で連結)、
+ * 休暇が無い日はattendanceDayStatusLabel()と同じstatusベースの表示にフォールバックする。
+ * 休暇の日は status が 'clocked_out' になっていなくても休暇ラベルを優先する。
  */
 export function attendanceDayDisplayLabel(day: {
   status: AttendanceDayStatus
-  work_type: string | null | undefined
+  leaves?: AttendanceDayLeave[]
 }): StatusMeta {
-  const leaveLabel = leaveWorkTypeLabel(day.work_type)
-  if (leaveLabel) {
-    return { label: leaveLabel, tone: 'info' }
+  const labels = attendanceDayLeaveLabels(day.leaves)
+  if (labels.length > 0) {
+    return { label: labels.join('・'), tone: 'info' }
   }
   return attendanceDayStatusLabel(day.status)
 }
@@ -212,14 +200,15 @@ export function attendanceScheduleHolidayLabel(schedule: ScheduleHolidayInfo | n
 
 interface AttendanceDayRecordInfo {
   status: AttendanceDayStatus
-  work_type: string | null | undefined
+  leaves?: AttendanceDayLeave[]
   actual_start_at?: string | null
   actual_end_at?: string | null
 }
 
 function hasActualAttendanceRecord(day: AttendanceDayRecordInfo | null | undefined): boolean {
   if (!day) return false
-  return day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at)
+  // 休暇だけの日(実績なし・休暇あり)も、休暇ラベルを所定休日より優先して見せるため記録ありとする。
+  return day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at) || (day.leaves?.length ?? 0) > 0
 }
 
 /**

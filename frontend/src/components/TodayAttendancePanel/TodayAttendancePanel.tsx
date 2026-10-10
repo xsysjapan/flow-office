@@ -18,6 +18,7 @@ import {
 import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
+import { isFullDayLeave } from '../../utils/attendanceLeaves'
 import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
 import type { AttendanceDay, FlexSettlementSummary } from '../../api/types'
 
@@ -256,7 +257,8 @@ export function TodayAttendancePanel() {
             )}
 
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-              {day.status === 'not_started' && (
+              {/* 全休の日は出勤しない(バックエンドも出勤を422で拒否する)ため出勤ボタンを出さない。 */}
+              {day.status === 'not_started' && !isFullDayLeave(day.leaves) && (
                 <Button onClick={() => clockIn.mutate()} isLoading={clockIn.isPending}>
                   出勤
                 </Button>

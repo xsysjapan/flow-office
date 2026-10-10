@@ -930,12 +930,26 @@ describe('AttendanceDayPage', () => {
         returned_at: null,
         cancelled_at: null,
       }
-      const paidLeaveDay: AttendanceDay = { ...recordedDay, work_type: 'paid_leave_full' }
+      const paidLeaveDay: AttendanceDay = {
+        ...recordedDay,
+        leaves: [
+          {
+            leave_kind: 'paid',
+            unit: 'full',
+            hours: null,
+            minutes: null,
+            special_leave_type_id: null,
+            request_id: approvedPaidLeaveRequest.id,
+            workflow_request_id: 'workflow-1',
+            request_status: 'approved',
+          },
+        ],
+      }
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
       vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
       vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
-      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, work_type: null })
+      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, leaves: [] })
       vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
       const createPaidLeaveRequestSpy = vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest')
       renderPage([paidLeaveDay])

@@ -386,6 +386,15 @@ describe('WorkflowRequestDetailPage', () => {
     expect(screen.queryByRole('button', { name: '却下' })).not.toBeInTheDocument()
   })
 
+  it('does not show a reject button for a request that has a business subject (subject_type), even if asset_loan', async () => {
+    currentUser = approver
+    vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)
+    renderPage({ ...assetLoanRequest, subject_type: 'paid_leave_request' })
+
+    await screen.findByRole('button', { name: '承認する' })
+    expect(screen.queryByRole('button', { name: '却下' })).not.toBeInTheDocument()
+  })
+
   it('rejects an asset_loan request with a reason via the confirmation dialog', async () => {
     currentUser = approver
     vi.spyOn(assetApi, 'getAsset').mockResolvedValue(asset)

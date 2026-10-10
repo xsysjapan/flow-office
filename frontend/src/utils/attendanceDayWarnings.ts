@@ -1,4 +1,5 @@
 import type { AttendanceDay } from '../api/types'
+import { isFullDayLeave } from './attendanceLeaves'
 
 /**
  * 休憩不足の警告文言(労基法34条: 労働時間6時間超で休憩45分未満、労働時間8時間超で休憩60分未満)。
@@ -23,7 +24,8 @@ export function dayWarnings(date: string, day: AttendanceDay | undefined, today:
   if (hasAbsence) warnings.push('欠勤')
 
   // 欠勤として処理済みの不就労時間を、重ねて打刻漏れとして警告しない。
-  if (isPast && day.status !== 'clocked_out' && !hasAbsence) warnings.push('打刻漏れ')
+  // 全休の日は出勤しない前提のため打刻漏れとして警告しない(休暇ビューの全休で判定)。
+  if (isPast && day.status !== 'clocked_out' && !hasAbsence && !isFullDayLeave(day.leaves)) warnings.push('打刻漏れ')
 
   if (day.calculation) {
     const workedMinutes = day.calculation.work_minutes

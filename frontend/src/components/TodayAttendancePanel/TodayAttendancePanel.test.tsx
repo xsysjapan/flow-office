@@ -65,6 +65,51 @@ describe('TodayAttendancePanel', () => {
     expect(screen.getByText('未出勤')).toBeInTheDocument()
   })
 
+  it('hides the clock-in button and shows the leave label on a full-day leave', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue({
+      ...notStartedDay,
+      leaves: [
+        {
+          leave_kind: 'paid',
+          unit: 'full',
+          hours: null,
+          minutes: null,
+          special_leave_type_id: null,
+          request_id: 'request-1',
+          workflow_request_id: 'workflow-1',
+          request_status: 'approved',
+        },
+      ],
+    })
+
+    renderPanel()
+
+    expect(await screen.findByText('有給休暇(全休)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '出勤' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the clock-in button on a half-day leave', async () => {
+    vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue({
+      ...notStartedDay,
+      leaves: [
+        {
+          leave_kind: 'paid',
+          unit: 'am_half',
+          hours: null,
+          minutes: null,
+          special_leave_type_id: null,
+          request_id: 'request-1',
+          workflow_request_id: 'workflow-1',
+          request_status: 'approved',
+        },
+      ],
+    })
+
+    renderPanel()
+
+    expect(await screen.findByRole('button', { name: '出勤' })).toBeInTheDocument()
+  })
+
   it('links to the current day attendance detail', async () => {
     vi.spyOn(attendanceApi, 'fetchToday').mockResolvedValue(notStartedDay)
 

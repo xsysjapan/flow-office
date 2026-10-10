@@ -41,6 +41,7 @@ import type {
   AttendanceDay,
   AttendanceDayDefaults,
   AttendancePunch,
+  AttendanceDayLeave,
   CompensatoryLeaveRequest,
   PaidLeaveRequest,
   PaidLeaveType,
@@ -77,6 +78,7 @@ import {
   useCancelSpecialLeaveRequest,
   useCreateSpecialLeaveRequest,
   useMySpecialLeaveRequests,
+  useSpecialLeaveTypeNames,
 } from '../../hooks/useSpecialLeave'
 import { breakShortfallWarning } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown } from '../../utils/attendanceWeeklyTotals'
@@ -556,23 +558,14 @@ function DeleteDayDialog({ day, onDeleted }: { day: AttendanceDay; onDeleted: (p
 
 type LeaveKind = 'none' | 'paid' | 'special' | 'compensatory'
 
-const LEAVE_WORK_TYPE_PREFIXES: Array<{ kind: LeaveKind; prefix: string }> = [
-  { kind: 'paid', prefix: 'paid_leave_' },
-  { kind: 'special', prefix: 'special_leave_' },
-  { kind: 'compensatory', prefix: 'compensatory_leave_' },
-]
-
 /**
- * attendance_days.work_typeのセンチネル値(例: `paid_leave_full`)から休暇の種類と
- * 取得単位を判定する(backend側の PaidLeaveType::toAttendanceWorkType 等と対応)。
+ * 勤怠日の休暇ビュー(`leaves`)から、休暇欄の初期値(現在の休暇の種類と取得単位)を判定する。
+ * 休暇は作業内容(work_type)では表さない。複数ある場合は先頭の休暇を初期値にする。
  */
-function detectLeaveDesignation(workType: string | null | undefined): { kind: LeaveKind; unit: PaidLeaveType | null } {
-  for (const { kind, prefix } of LEAVE_WORK_TYPE_PREFIXES) {
-    if (workType?.startsWith(prefix)) {
-      return { kind, unit: workType.slice(prefix.length) as PaidLeaveType }
-    }
-  }
-  return { kind: 'none', unit: null }
+function detectLeaveDesignation(leaves: AttendanceDayLeave[] | undefined): { kind: LeaveKind; unit: PaidLeaveType | null } {
+  const leave = leaves?.[0]
+  if (!leave) return { kind: 'none', unit: null }
+  return { kind: leave.leave_kind, unit: leave.unit }
 }
 
 function findLeaveRequestForDate<T extends { target_date: string; status: string }>(
@@ -597,8 +590,8 @@ interface LeaveDesignationLists {
  * (勤怠編集の一部として休暇の申請・取消を行うという設計方針。root CLAUDE.md
  * 「休暇の考え方」参照)。
  */
-function useLeaveDesignationController(date: string, initialWorkType: string | null | undefined, lists: LeaveDesignationLists) {
-  const initial = detectLeaveDesignation(initialWorkType)
+function useLeaveDesignationController(date: string, initialLeaves: AttendanceDayLeave[] | undefined, lists: LeaveDesignationLists) {
+  const initial = detectLeaveDesignation(initialLeaves)
   const existingPaid = findLeaveRequestForDate(lists.paidLeaveRequests, date)
   const existingSpecial = findLeaveRequestForDate(lists.specialLeaveRequests, date)
   const existingCompensatory = findLeaveRequestForDate(lists.compensatoryLeaveRequests, date)
@@ -713,7 +706,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
   )
   const updateDay = useUpdateAttendanceDay()
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
-  const leaveController = useLeaveDesignationController(day.work_date, day.work_type, leaveLists)
+  const leaveController = useLeaveDesignationController(day.work_date, day.leaves, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
   useUnsavedChangesGuard(true)
 
@@ -726,7 +719,7 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
           actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
           actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
           breaks: buildBreaksPayload(rows, offset),
-          work_type: leaveController.kind === 'none' ? workType || null : null,
+          work_type: workType || null,
           work_location_type: workLocationType || null,
           note: note || null,
           leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
@@ -774,12 +767,10 @@ function DayEditForm({ day, onDone, leaveLists }: { day: AttendanceDay; onDone: 
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
       </label>
 
-      {leaveController.kind === 'none' && (
-        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          作業内容
-          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-        </label>
-      )}
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        作業内容
+        <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+      </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         勤務形態区分
         <NativeSelect
@@ -878,7 +869,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
   }, [date, defaults, resetRows])
 
   const breakWarning = useBreakShortfallWarning(actualStartAt, actualEndAt, rows)
-  const leaveController = useLeaveDesignationController(date, null, leaveLists)
+  const leaveController = useLeaveDesignationController(date, undefined, leaveLists)
   const [leaveError, setLeaveError] = useState<Error | null>(null)
   const isDirty = Boolean(
     actualStartAt || actualEndAt || note || workType || reason || rows.some((r) => r.start || r.end) || leaveController.kind !== 'none',
@@ -895,7 +886,7 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         actual_start_at: combineDatetimeLocalWithOffset(actualStartAt, offset),
         actual_end_at: combineDatetimeLocalWithOffset(actualEndAt, offset),
         breaks: buildBreaksPayload(rows, offset),
-        work_type: leaveController.kind === 'none' ? workType || null : null,
+        work_type: workType || null,
         work_location_type: workLocationType || null,
         note: note || null,
         leave_segments: buildLeaveSegmentsPayload(leaveSegmentRows, offset),
@@ -946,12 +937,10 @@ function DayCreateForm({ date, leaveLists }: { date: string; leaveLists: LeaveDe
         <Input value={offset} placeholder="+09:00" pattern="^[+-]\d{2}:\d{2}$" onChange={(e) => setOffset(e.target.value)} />
       </label>
 
-      {leaveController.kind === 'none' && (
-        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-          作業内容
-          <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
-        </label>
-      )}
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        作業内容
+        <Input value={workType} onChange={(e) => setWorkType(e.target.value)} />
+      </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         勤務形態区分
         <NativeSelect
@@ -1245,6 +1234,7 @@ export function AttendanceDayPage() {
   const [isAdjustingCalculation, setIsAdjustingCalculation] = useState(false)
   const [isShiftSwapOpen, setIsShiftSwapOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<ApprovedLeaveTarget | null>(null)
+  const specialLeaveTypeNames = useSpecialLeaveTypeNames()
 
   const monday = date ? formatDate(mondayOf(new Date(`${date}T00:00:00`))) : ''
   const { data: weekDays, isLoading, error } = useWeek(monday)
@@ -1394,7 +1384,7 @@ export function AttendanceDayPage() {
                   title="この日の集計"
                   totals={day.calculation}
                   absenceDays={day.calculation.absence_minutes ? absenceDays : undefined}
-                  specialLeaveBreakdown={specialLeaveTypeBreakdown([day])}
+                  specialLeaveBreakdown={specialLeaveTypeBreakdown([day], specialLeaveTypeNames)}
                 />
 
                 <div className="flex items-center gap-2">

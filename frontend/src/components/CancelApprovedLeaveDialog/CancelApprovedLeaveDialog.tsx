@@ -15,8 +15,8 @@ export interface ApprovedLeaveTarget {
 
 /**
  * 承認済みの休暇(有給・特別休暇・代休)の承認を取り消す確認ダイアログ。取消により、
- * 消化済みの残数が戻り、対象日の勤怠区分(work_type)もクリアされる
- * (Cancel{PaidLeave,SpecialLeave,CompensatoryLeave}RequestHandler参照)。月次勤怠が
+ * 消化済みの残数が戻り、対象日の勤怠から休暇の表示(休暇ビュー`leaves`)が外れる
+ * (Cancel{PaidLeave,SpecialLeave,CompensatoryLeave}RequestHandler参照。作業内容`work_type`は変わらない)。月次勤怠が
  * 既に確定済みの場合はAPI側で拒否される。日次勤怠画面のケバブメニューと、週次・月次
  * 画面の各日行のケバブメニューの両方から使う(承認済み休暇の取消操作を1箇所にまとめる)。
  */
@@ -52,7 +52,7 @@ export function CancelApprovedLeaveDialog({
         <DialogHeader>
           <DialogTitle>{target?.label}の承認を取り消しますか?</DialogTitle>
           <DialogDescription>
-            消化済みの残数が戻り、この日の勤怠区分もクリアされます。月次勤怠が既に確定済みの場合は取り消せません。
+            消化済みの残数が戻り、この日の勤怠から休暇の表示が外れます(作業内容や勤怠の実績は変わりません)。月次勤怠が既に確定済みの場合は取り消せません。
           </DialogDescription>
         </DialogHeader>
         {mutation.error && <ErrorMessage error={mutation.error} />}

@@ -42,12 +42,12 @@ describe('statusLabels', () => {
     expect(attendanceDayStatusLabel('clocked_out')).toEqual({ label: '退勤済み', tone: 'success' })
   })
 
-  it('falls back to the status label when work_type is not a leave day (attendanceDayDisplayLabel)', () => {
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: null })).toEqual({
+  it('falls back to the status label when the day has no leave (attendanceDayDisplayLabel)', () => {
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out' })).toEqual({
       label: '退勤済み',
       tone: 'success',
     })
-    expect(attendanceDayDisplayLabel({ status: 'working', work_type: undefined })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'working', leaves: [] })).toEqual({
       label: '勤務中',
       tone: 'info',
     })
@@ -59,7 +59,7 @@ describe('statusLabels', () => {
     ).toEqual({ label: '法定休日', tone: 'danger' })
     expect(
       attendanceRowDisplayLabel(
-        { status: 'not_started', work_type: null, actual_start_at: null, actual_end_at: null },
+        { status: 'not_started', actual_start_at: null, actual_end_at: null },
         { is_legal_holiday: false, is_company_holiday: true, is_working_day: false },
       ),
     ).toEqual({ label: '所定休日', tone: 'warning' })
@@ -69,63 +69,112 @@ describe('statusLabels', () => {
     // 休日出勤で実績があるのに、休日バッジに隠れて「退勤済み」等が見えなくなっていた不具合の回帰確認。
     expect(
       attendanceRowDisplayLabel(
-        { status: 'clocked_out', work_type: null, actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: '2026-08-15T18:00:00+09:00' },
+        { status: 'clocked_out', actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: '2026-08-15T18:00:00+09:00' },
         { is_legal_holiday: true, is_company_holiday: false, is_working_day: false },
       ),
     ).toEqual({ label: '退勤済み', tone: 'success' })
     expect(
       attendanceRowDisplayLabel(
-        { status: 'working', work_type: null, actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: null },
+        { status: 'working', actual_start_at: '2026-08-15T09:00:00+09:00', actual_end_at: null },
         { is_legal_holiday: false, is_company_holiday: true, is_working_day: false },
       ),
     ).toEqual({ label: '勤務中', tone: 'info' })
+  })
+
+  it('shows the leave label over the schedule holiday for a leave-only day (attendanceRowDisplayLabel)', () => {
+    expect(
+      attendanceRowDisplayLabel(
+        {
+          status: 'not_started',
+          actual_start_at: null,
+          actual_end_at: null,
+          leaves: [
+            {
+              leave_kind: 'compensatory',
+              unit: 'full',
+              hours: null,
+              minutes: null,
+              special_leave_type_id: null,
+              request_id: 'request-1',
+              workflow_request_id: null,
+              request_status: 'submitted',
+            },
+          ],
+        },
+        { is_legal_holiday: false, is_company_holiday: true, is_working_day: false },
+      ),
+    ).toEqual({ label: '代休(全休)', tone: 'info' })
   })
 
   it('falls back to 未入力 when there is neither a schedule holiday nor an attendance record (attendanceRowDisplayLabel)', () => {
     expect(attendanceRowDisplayLabel(undefined, undefined)).toEqual({ label: '未入力', tone: 'neutral' })
   })
 
-  it('shows a leave-specific label instead of the clocked_out override (attendanceDayDisplayLabel)', () => {
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_full' })).toEqual({
+  it('shows the leave labels from leaves instead of the status (attendanceDayDisplayLabel)', () => {
+    const leave = (
+      leave_kind: 'paid' | 'special' | 'compensatory',
+      unit: 'full' | 'am_half' | 'pm_half' | 'hourly',
+    ) => ({
+      leave_kind,
+      unit,
+      hours: null,
+      minutes: null,
+      special_leave_type_id: null,
+      request_id: 'request-1',
+      workflow_request_id: null,
+      request_status: 'approved' as const,
+    })
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('paid', 'full')] })).toEqual({
       label: '有給休暇(全休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_am_half' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('paid', 'am_half')] })).toEqual({
       label: '有給休暇(午前半休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_pm_half' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('paid', 'pm_half')] })).toEqual({
       label: '有給休暇(午後半休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'paid_leave_hourly' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('paid', 'hourly')] })).toEqual({
       label: '有給休暇(時間休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_full' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('special', 'full')] })).toEqual({
       label: '特別休暇(全休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_am_half' })).toEqual({
-      label: '特別休暇(午前半休)',
-      tone: 'info',
-    })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_pm_half' })).toEqual({
-      label: '特別休暇(午後半休)',
-      tone: 'info',
-    })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'special_leave_hourly' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('special', 'hourly')] })).toEqual({
       label: '特別休暇(時間休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'compensatory_leave_full' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', leaves: [leave('compensatory', 'full')] })).toEqual({
       label: '代休(全休)',
       tone: 'info',
     })
-    expect(attendanceDayDisplayLabel({ status: 'clocked_out', work_type: 'compensatory_leave_am_half' })).toEqual({
+    expect(attendanceDayDisplayLabel({ status: 'clocked_out', leaves: [leave('compensatory', 'am_half')] })).toEqual({
       label: '代休(午前半休)',
       tone: 'info',
     })
+  })
+
+  it('joins multiple leaves of one day into one label (attendanceDayDisplayLabel)', () => {
+    const leave = (
+      leave_kind: 'paid' | 'special' | 'compensatory',
+      unit: 'full' | 'am_half' | 'pm_half' | 'hourly',
+    ) => ({
+      leave_kind,
+      unit,
+      hours: null,
+      minutes: null,
+      special_leave_type_id: null,
+      request_id: `request-${leave_kind}-${unit}`,
+      workflow_request_id: null,
+      request_status: 'submitted' as const,
+    })
+    expect(
+      attendanceDayDisplayLabel({ status: 'not_started', leaves: [leave('paid', 'am_half'), leave('compensatory', 'pm_half')] }),
+    ).toEqual({ label: '有給休暇(午前半休)・代休(午後半休)', tone: 'info' })
   })
 
   it('maps work location types to a Japanese label and lists them as select options', () => {
