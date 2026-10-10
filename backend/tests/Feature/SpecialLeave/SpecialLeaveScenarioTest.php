@@ -206,7 +206,7 @@ class SpecialLeaveScenarioTest extends TestCase
             ->assertJsonPath('status', 'cancelled');
 
         $this->assertSame(WorkflowRequestStatus::CANCELLED, WorkflowRequest::query()->findOrFail($workflowRequestId)->status);
-        $this->assertNull($this->specialLeaveOn($employee->id, self::DATE));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, self::DATE));
         $this->assertNull($this->dayOf($employee));
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
         $this->assertSame(3.0, $this->remainingOf($grant));
@@ -233,7 +233,7 @@ class SpecialLeaveScenarioTest extends TestCase
 
         $this->assertSame(WorkflowRequestStatus::APPROVED, WorkflowRequest::query()->findOrFail($workflowRequestId)->status);
         $this->assertSame(3.0, $this->remainingOf($grant));
-        $this->assertNull($this->specialLeaveOn($employee->id, self::DATE));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, self::DATE));
         $this->assertNull($this->dayOf($employee));
         // 口座Projectorの結果: 取消された消化記録と充当は残らない(旧Projectorは書き換えない)。
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
@@ -258,7 +258,7 @@ class SpecialLeaveScenarioTest extends TestCase
         ])->assertSuccessful();
 
         $this->assertSame('cancelled', SpecialLeaveRequest::query()->findOrFail($requestId)->status);
-        $this->assertNull($this->specialLeaveOn($employee->id, self::DATE));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, self::DATE));
         $this->assertSame(3.0, $this->remainingOf($grant));
     }
 

@@ -6,6 +6,7 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDayLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveGrant;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
@@ -321,11 +322,11 @@ class SpecialLeaveRequestTest extends TestCase
 
         // リフレッシュ休暇の残高が無いため消化計画は空。誕生日休暇のgrantは変化しない。
         $this->assertEquals(3.0, (float) $birthdayGrant->refresh()->remaining_days);
-        // 申請時点で作られた未確定行(is_confirmed=false)は、消化計画が空のため承認時に
-        // 確定されないまま残る(special_leave.usedが1件も発行されないため)。
+        // 残高が無くても承認は拒否されず確定する(論点17)。充当できなかった全量が未充当日数として記録される。
         $usage = SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->firstOrFail();
-        $this->assertFalse($usage->is_confirmed);
+        $this->assertTrue((bool) $usage->is_confirmed);
         $this->assertNull($usage->special_leave_grant_id);
+        $this->assertEquals(1.0, (float) $usage->unallocated_days);
     }
 
     /**
@@ -536,7 +537,7 @@ class SpecialLeaveRequestTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('status', 'cancelled');
 
-        $this->assertNull($this->specialLeaveOn($employee->id, '2026-08-10'));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
         $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first());
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
     }
@@ -612,7 +613,7 @@ class SpecialLeaveRequestTest extends TestCase
         $this->assertEquals(3.0, (float) $grant->refresh()->remaining_days);
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
 
-        $this->assertNull($this->specialLeaveOn($employee->id, '2026-08-10'));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
         $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first());
     }
 
@@ -647,7 +648,7 @@ class SpecialLeaveRequestTest extends TestCase
 
         $this->assertEquals(3.0, (float) $grant->refresh()->remaining_days);
         $day->refresh();
-        $this->assertNull($this->specialLeaveOn($employee->id, '2026-08-10'));
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
         $this->assertSame('clocked_out', $day->status);
     }
 
@@ -790,7 +791,7 @@ class SpecialLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
-        WorkflowRequest::query()->where('subject_id', $requestId)->delete();
+        LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->delete();
 
         $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")->assertStatus(422);
 

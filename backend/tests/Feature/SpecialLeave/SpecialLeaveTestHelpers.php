@@ -39,6 +39,20 @@ trait SpecialLeaveTestHelpers
      * 対象日の特別休暇の休暇ビューの行(勤怠が休暇申請のイベントから作る。無ければnull)。
      * 休暇は勤怠日の作業内容・statusではなく、この休暇ビューで確認する(論点1・9・10)。
      */
+    /**
+     * 対象日に有効な特別休暇(申請中・承認済み)だけを返す。差戻し・取消の行は状態付きで残るため、
+     * 「休暇が無い」の確認はこちらを使う(休暇ビューは差戻し・取消の行を残す。WP5a決定)。
+     */
+    private function activeSpecialLeaveOn(string $userId, string $date): ?AttendanceDayLeave
+    {
+        return AttendanceDayLeave::query()
+            ->where('user_id', $userId)
+            ->whereDate('work_date', $date)
+            ->where('leave_kind', AttendanceDayLeave::KIND_SPECIAL)
+            ->whereIn('request_status', [AttendanceDayLeave::STATUS_SUBMITTED, AttendanceDayLeave::STATUS_APPROVED])
+            ->first();
+    }
+
     private function specialLeaveOn(string $userId, string $date): ?AttendanceDayLeave
     {
         return AttendanceDayLeave::query()
