@@ -5,13 +5,15 @@ namespace App\Domain\SpecialLeave\Projectors;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Models\SpecialLeaveRequest;
 use App\Models\SpecialLeaveRequestStatus;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
- * special_leave.*(申請系)イベントから special_leave_requests を作成・更新する。
+ * special_leave.*(申請系)イベントから special_leave_requests を作成・更新する(休暇申請文脈のProjector。
+ * 申請テーブルを更新できるのはこのProjectorだけ)。行の存在を前提とする更新は、行が無ければ何もしない。
  */
 class SpecialLeaveRequestProjector extends Projector
 {
@@ -48,6 +50,14 @@ class SpecialLeaveRequestProjector extends Projector
         SpecialLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => SpecialLeaveRequestStatus::RETURNED,
             'returned_at' => $event->createdAt(),
+        ]);
+    }
+
+    /** 差戻し後の再提出。申請中に戻す(新しい消化記録は残数側、勤怠の反映は勤怠側が作る)。 */
+    public function onSpecialLeaveRequestResubmitted(SpecialLeaveRequestResubmitted $event): void
+    {
+        SpecialLeaveRequest::query()->whereKey($event->aggregateRootUuid())->update([
+            'status' => SpecialLeaveRequestStatus::SUBMITTED,
         ]);
     }
 

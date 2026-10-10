@@ -14,10 +14,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 主キーはUUID(HasUuids)。理由はPaidLeaveGrantと同じ(この行自体もPaidLeaveRequestProjectorが
  * stored_eventsから作成・更新する)。
  */
-#[Fillable(['id', 'request_group_id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
+#[Fillable(['id', 'input_source', 'request_group_id', 'user_id', 'approver_user_id', 'status', 'leave_type', 'target_date', 'hours', 'requested_days', 'reason', 'submitted_at', 'approved_at', 'returned_at', 'cancelled_at'])]
 class PaidLeaveRequest extends Model
 {
     use HasUuids;
+
+    /** 行を作った入力系統(input_source)。PaidLeaveRequestProjector.php のクラスdoc参照。 */
+    public const SOURCE_LEGACY_PAID = 'legacy_paid';
+
+    public const SOURCE_PAID_ACCOUNT = 'paid_account';
+
+    public const SOURCE_PAID_REQUEST = 'paid_request';
 
     public $incrementing = false;
 

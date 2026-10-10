@@ -33,6 +33,7 @@ use App\Domain\AssetNumbering\Events\AssetNumberRuleConfigured;
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
+use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\AttendanceDayCreated;
@@ -96,6 +97,15 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantCancelled;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantConfirmed;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantManuallyGranted;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantRemoved;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantSynced;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountMigrated;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageCancelled;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageConfirmed;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageDesignated;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
@@ -105,6 +115,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestResubmitted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageDesignated;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
@@ -158,6 +169,13 @@ use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleMigrated;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged as PaidLeaveAccountGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated as PaidLeaveAccountGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged as PaidLeaveAccountGrantDateChanged;
@@ -170,6 +188,12 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccou
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed as PaidLeaveAccountUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated as PaidLeaveAccountUsageDesignated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountMigrated;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
@@ -186,6 +210,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveGrantRevoked;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsageDesignated;
@@ -409,6 +434,7 @@ return [
         'attendance_day.live_status_synced' => AttendanceDayLiveStatusSynced::class,
         'attendance_day.synced_from_punches' => AttendanceDaySyncedFromPunches::class,
         'attendance_day.break_auto_inserted' => AttendanceBreakAutoInserted::class,
+        'attendance_day.corrected' => AttendanceDayCorrected::class,
 
         'attendance_punch.recorded' => AttendancePunchRecorded::class,
         'attendance_punch.corrected' => AttendancePunchCorrected::class,
@@ -532,6 +558,16 @@ return [
         // Migration専用(Phase 9)。Command/Handlerは未実装だがイベント名を予約しておく。
         'paid_leave_account.migrated' => PaidLeaveAccountMigrated::class,
 
+        // PaidLeaveRequestAggregate(有給申請の申請状態の集約。旧paid_leave.*(廃止済み)とは別名)。
+        // docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 論点4・仕様確定事項C・I参照。
+        'paid_leave_request.requested' => PaidLeaveRequestLifecycleRequested::class,
+        'paid_leave_request.shared' => PaidLeaveRequestLifecycleShared::class,
+        'paid_leave_request.approved' => PaidLeaveRequestLifecycleApproved::class,
+        'paid_leave_request.returned' => PaidLeaveRequestLifecycleReturned::class,
+        'paid_leave_request.resubmitted' => PaidLeaveRequestLifecycleResubmitted::class,
+        'paid_leave_request.cancelled' => PaidLeaveRequestLifecycleCancelled::class,
+        'paid_leave_request.migrated' => PaidLeaveRequestLifecycleMigrated::class,
+
         // PaidLeaveScheduleAggregate(社員単位の付与予定Schedule/Assessment集約。
         // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
         'paid_leave_schedule.entry_created' => PaidLeaveScheduleEntryCreated::class,
@@ -547,11 +583,33 @@ return [
         'special_leave.request_approved' => SpecialLeaveRequestApproved::class,
         'special_leave.request_returned' => SpecialLeaveRequestReturned::class,
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
+        'special_leave.request_resubmitted' => SpecialLeaveRequestResubmitted::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.usage_designated' => SpecialLeaveUsageDesignated::class,
         'special_leave.used' => SpecialLeaveUsed::class,
         'special_leave.usage_reversed' => SpecialLeaveUsageReversed::class,
         'special_leave.grant_revoked' => SpecialLeaveGrantRevoked::class,
+
+        // SpecialLeaveAccountAggregate(利用者単位の特別休暇口座集約。付与・消化記録・充当の残数を一括で持つ。
+        // 集約IDは利用者IDからの派生UUID)。docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 仕様確定事項D参照。
+        'special_leave_account.grant_registered' => SpecialLeaveAccountGrantRegistered::class,
+        'special_leave_account.grant_revoked' => SpecialLeaveAccountGrantRevoked::class,
+        'special_leave_account.usage_designated' => SpecialLeaveAccountUsageDesignated::class,
+        'special_leave_account.usage_confirmed' => SpecialLeaveAccountUsageConfirmed::class,
+        'special_leave_account.usage_cancelled' => SpecialLeaveAccountUsageCancelled::class,
+        'special_leave_account.migrated' => SpecialLeaveAccountMigrated::class,
+
+        // CompensatoryLeaveAccountAggregate(利用者単位の代休口座集約。付与・消化記録・充当の残数を一括で持つ。
+        // 集約IDは利用者IDからの派生UUID)。docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 仕様確定事項D参照。
+        'compensatory_leave_account.grant_synced' => CompensatoryLeaveAccountGrantSynced::class,
+        'compensatory_leave_account.grant_removed' => CompensatoryLeaveAccountGrantRemoved::class,
+        'compensatory_leave_account.grant_confirmed' => CompensatoryLeaveAccountGrantConfirmed::class,
+        'compensatory_leave_account.grant_manually_granted' => CompensatoryLeaveAccountGrantManuallyGranted::class,
+        'compensatory_leave_account.grant_cancelled' => CompensatoryLeaveAccountGrantCancelled::class,
+        'compensatory_leave_account.usage_designated' => CompensatoryLeaveAccountUsageDesignated::class,
+        'compensatory_leave_account.usage_confirmed' => CompensatoryLeaveAccountUsageConfirmed::class,
+        'compensatory_leave_account.usage_cancelled' => CompensatoryLeaveAccountUsageCancelled::class,
+        'compensatory_leave_account.migrated' => CompensatoryLeaveAccountMigrated::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
         'compensatory_leave.manually_granted' => CompensatoryLeaveManuallyGranted::class,
@@ -566,6 +624,7 @@ return [
         'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,
         'compensatory_leave.request_returned' => CompensatoryLeaveRequestReturned::class,
         'compensatory_leave.request_cancelled' => CompensatoryLeaveRequestCancelled::class,
+        'compensatory_leave.request_resubmitted' => CompensatoryLeaveRequestResubmitted::class,
 
         'shift_swap.requested' => ShiftSwapRequested::class,
         'shift_swap.request_approved' => ShiftSwapRequestApproved::class,

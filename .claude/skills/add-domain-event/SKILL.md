@@ -47,6 +47,17 @@ Projection Table の流れを守る (`docs/03-architecture.md`)。新しい業�
 巻き戻したいときは既存イベントを消さず、`*.cancelled`/`*.returned`のような新しい別イベント
 として`stored_events`に追記する。締め後の巻戻しを許可する場合は権限を限定する。
 
+## 他の文脈のイベントに反応する場合(Reactor)
+
+ルート`CLAUDE.md`原則15。他の文脈の変化には、そのイベントを購読するReactorから自文脈のCommandを発行して反応する
+(他文脈の集約・テーブルを直接操作しない)。詳細は`docs/03-architecture.md` 3.10・`docs/29`。
+
+- Reactorから発行するCommandは`bool $viaReactor = false`と`?string $initiatedByUserId`を持ち、起点の操作者は起点の
+  イベントのpayloadから引き継ぐ。`viaReactor=true`のHandlerは、対象が既に目的の状態なら何もせず正常終了する(冪等)。
+- Reactorが必要とする値は起点のイベントに持たせ、他文脈のテーブルを読まない(不足する項目はイベントの末尾に既定値付きで追加)。
+- 同じイベント内ではProjectorがReactorより先に処理される。Projectorは行が無ければ何もしない(順序非依存。`findOrFail`を使わない)。
+- 連鎖全体を通すシナリオテストを書く(`.claude/skills/domain-test`)。
+
 ## チェックリスト (実装後)
 
 - [ ] `docs/17-events.md` に新イベントを追記した
@@ -54,3 +65,4 @@ Projection Table の流れを守る (`docs/03-architecture.md`)。新しい業�
 - [ ] イベントを書かずに状態だけ変える経路がない
 - [ ] Projectionはイベントから再生成可能 (直接書き換えていない)
 - [ ] `docs/20-implementation-notes.md` のチェックリストに抵触していない
+- [ ] 他文脈のイベントに反応する場合、Reactor経由のCommandが冪等(`viaReactor`)で、他文脈のテーブルを読んでいない

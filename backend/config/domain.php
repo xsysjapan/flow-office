@@ -67,6 +67,7 @@ use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
+use App\Domain\Attendance\Commands\ApplyLeaveToAttendanceDay;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
@@ -79,6 +80,7 @@ use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
+use App\Domain\Attendance\Commands\CorrectAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
@@ -104,9 +106,12 @@ use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
 use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
+use App\Domain\Attendance\Commands\RecalculateAttendanceDailyCalculation;
+use App\Domain\Attendance\Commands\RecalculateAttendanceDayForLeave;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
+use App\Domain\Attendance\Commands\ReleaseLeaveFromAttendanceDay;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
@@ -129,6 +134,7 @@ use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
 use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
+use App\Domain\Attendance\Handlers\ApplyLeaveToAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
@@ -141,6 +147,7 @@ use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CorrectCompanyCalendarYearFiscalYearHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\CorrectAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\CreateDefaultWorkStyleHandler;
@@ -166,9 +173,12 @@ use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\PublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
+use App\Domain\Attendance\Handlers\RecalculateAttendanceDailyCalculationHandler;
+use App\Domain\Attendance\Handlers\RecalculateAttendanceDayForLeaveHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\RegisterHolidayCalendarSourceHandler;
+use App\Domain\Attendance\Handlers\ReleaseLeaveFromAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
@@ -202,26 +212,6 @@ use App\Domain\BackOffice\Handlers\ChangeBackOfficeTaskStatusHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromAttendanceMonthApprovalHandler;
 use App\Domain\BackOffice\Handlers\CreateBackOfficeTaskFromExpenseClaimApprovalHandler;
-use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveGrantCancellation;
-use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
-use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
-use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
-use App\Domain\CompensatoryLeave\Commands\ConfirmCompensatoryLeaveGrantsForMonth;
-use App\Domain\CompensatoryLeave\Commands\GrantCompensatoryLeave;
-use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
-use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
-use App\Domain\CompensatoryLeave\Commands\ReturnCompensatoryLeaveRequest;
-use App\Domain\CompensatoryLeave\Commands\SyncCompensatoryLeaveGrant;
-use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveGrantCancellationHandler;
-use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveRequestHandler;
-use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveGrantHandler;
-use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveRequestHandler;
-use App\Domain\CompensatoryLeave\Handlers\ConfirmCompensatoryLeaveGrantsForMonthHandler;
-use App\Domain\CompensatoryLeave\Handlers\GrantCompensatoryLeaveHandler;
-use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveGrantCancellationHandler;
-use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveHandler;
-use App\Domain\CompensatoryLeave\Handlers\ReturnCompensatoryLeaveRequestHandler;
-use App\Domain\CompensatoryLeave\Handlers\SyncCompensatoryLeaveGrantHandler;
 use App\Domain\Device\Commands\ClaimDevicePairing;
 use App\Domain\Device\Commands\DeleteDevice;
 use App\Domain\Device\Commands\DisableDevice;
@@ -281,12 +271,14 @@ use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\ResubmitPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\ResubmitPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
@@ -308,6 +300,8 @@ use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
 use App\Domain\PaidLeaveAccount\Handlers\MigratePaidLeaveAccountHandler;
+use App\Domain\PaidLeaveRequest\Commands\MigratePaidLeaveRequest;
+use App\Domain\PaidLeaveRequest\Handlers\MigratePaidLeaveRequestHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
@@ -335,6 +329,7 @@ use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
+use App\Domain\SpecialLeave\Commands\ResubmitSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeave\Handlers\ApproveSpecialLeaveRequestHandler;
@@ -342,6 +337,49 @@ use App\Domain\SpecialLeave\Handlers\CancelSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\ResubmitSpecialLeaveRequestHandler;
+use App\Domain\SpecialLeaveAccount\Commands\CancelSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\DesignateSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\MigrateSpecialLeaveAccount;
+use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
+use App\Domain\SpecialLeaveAccount\Commands\RevokeSpecialLeaveAccountGrant;
+use App\Domain\SpecialLeaveAccount\Handlers\CancelSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\ConfirmSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\DesignateSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\MigrateSpecialLeaveAccountHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\RegisterSpecialLeaveGrantHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\RevokeSpecialLeaveAccountGrantHandler;
+use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
+use App\Domain\CompensatoryLeave\Commands\ResubmitCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Commands\ReturnCompensatoryLeaveRequest;
+use App\Domain\CompensatoryLeave\Handlers\ApproveCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\CancelCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\RequestCompensatoryLeaveHandler;
+use App\Domain\CompensatoryLeave\Handlers\ResubmitCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeave\Handlers\ReturnCompensatoryLeaveRequestHandler;
+use App\Domain\CompensatoryLeaveAccount\Commands\ApproveCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeaveAccount\Commands\CancelCompensatoryLeaveUsage;
+use App\Domain\CompensatoryLeaveAccount\Commands\ConfirmCompensatoryLeaveGrantsForPeriod;
+use App\Domain\CompensatoryLeaveAccount\Commands\ConfirmCompensatoryLeaveUsage;
+use App\Domain\CompensatoryLeaveAccount\Commands\DesignateCompensatoryLeaveUsage;
+use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeave;
+use App\Domain\CompensatoryLeaveAccount\Commands\MigrateCompensatoryLeaveAccount;
+use App\Domain\CompensatoryLeaveAccount\Commands\RequestCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeaveAccount\Commands\RevokeCompensatoryLeaveAccountGrant;
+use App\Domain\CompensatoryLeaveAccount\Commands\SyncCompensatoryLeaveAccountGrant;
+use App\Domain\CompensatoryLeaveAccount\Handlers\ApproveCompensatoryLeaveGrantCancellationHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\CancelCompensatoryLeaveUsageHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\ConfirmCompensatoryLeaveGrantsForPeriodHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\ConfirmCompensatoryLeaveUsageHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\DesignateCompensatoryLeaveUsageHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\GrantCompensatoryLeaveHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\MigrateCompensatoryLeaveAccountHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\RequestCompensatoryLeaveGrantCancellationHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\RevokeCompensatoryLeaveAccountGrantHandler;
+use App\Domain\CompensatoryLeaveAccount\Handlers\SyncCompensatoryLeaveAccountGrantHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\RevokeSpecialLeaveGrantHandler;
 use App\Domain\UserManagement\Commands\AddMembership;
@@ -548,11 +586,16 @@ return [
         EndBreak::class => EndBreakHandler::class,
         ClockOut::class => ClockOutHandler::class,
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
+        CorrectAttendanceDay::class => CorrectAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
         AllocateAttendanceWeeklyOvertime::class => AllocateAttendanceWeeklyOvertimeHandler::class,
         EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
+        ApplyLeaveToAttendanceDay::class => ApplyLeaveToAttendanceDayHandler::class,
+        RecalculateAttendanceDailyCalculation::class => RecalculateAttendanceDailyCalculationHandler::class,
+        RecalculateAttendanceDayForLeave::class => RecalculateAttendanceDayForLeaveHandler::class,
+        ReleaseLeaveFromAttendanceDay::class => ReleaseLeaveFromAttendanceDayHandler::class,
 
         CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
         UpdateCompanyCalendar::class => UpdateCompanyCalendarHandler::class,
@@ -618,6 +661,7 @@ return [
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
         CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
+        ResubmitPaidLeaveRequest::class => ResubmitPaidLeaveRequestHandler::class,
 
         GrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
         ChangePaidLeaveGrantAmount::class => ChangePaidLeaveGrantAmountHandler::class,
@@ -629,6 +673,7 @@ return [
         CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
         MigratePaidLeaveAccount::class => MigratePaidLeaveAccountHandler::class,
+        MigratePaidLeaveRequest::class => MigratePaidLeaveRequestHandler::class,
 
         // 付与Schedule/Assessment(docs/changesets/20260906-paid-leave-schedule-assessment/
         // spec.md Phase A)。
@@ -646,22 +691,35 @@ return [
         ReturnSpecialLeaveRequest::class => ReturnSpecialLeaveRequestHandler::class,
         CancelSpecialLeaveRequest::class => CancelSpecialLeaveRequestHandler::class,
         RevokeSpecialLeaveGrant::class => RevokeSpecialLeaveGrantHandler::class,
+        ResubmitSpecialLeaveRequest::class => ResubmitSpecialLeaveRequestHandler::class,
+        RegisterSpecialLeaveGrant::class => RegisterSpecialLeaveGrantHandler::class,
+        RevokeSpecialLeaveAccountGrant::class => RevokeSpecialLeaveAccountGrantHandler::class,
+        DesignateSpecialLeaveUsage::class => DesignateSpecialLeaveUsageHandler::class,
+        ConfirmSpecialLeaveUsage::class => ConfirmSpecialLeaveUsageHandler::class,
+        CancelSpecialLeaveUsage::class => CancelSpecialLeaveUsageHandler::class,
+        MigrateSpecialLeaveAccount::class => MigrateSpecialLeaveAccountHandler::class,
 
         RequestShiftSwap::class => RequestShiftSwapHandler::class,
         ApproveShiftSwapRequest::class => ApproveShiftSwapRequestHandler::class,
         ReturnShiftSwapRequest::class => ReturnShiftSwapRequestHandler::class,
         CancelShiftSwapRequest::class => CancelShiftSwapRequestHandler::class,
 
-        SyncCompensatoryLeaveGrant::class => SyncCompensatoryLeaveGrantHandler::class,
-        GrantCompensatoryLeave::class => GrantCompensatoryLeaveHandler::class,
-        ConfirmCompensatoryLeaveGrantsForMonth::class => ConfirmCompensatoryLeaveGrantsForMonthHandler::class,
         RequestCompensatoryLeave::class => RequestCompensatoryLeaveHandler::class,
         ApproveCompensatoryLeaveRequest::class => ApproveCompensatoryLeaveRequestHandler::class,
         ReturnCompensatoryLeaveRequest::class => ReturnCompensatoryLeaveRequestHandler::class,
         CancelCompensatoryLeaveRequest::class => CancelCompensatoryLeaveRequestHandler::class,
-        CancelCompensatoryLeaveGrant::class => CancelCompensatoryLeaveGrantHandler::class,
+        ResubmitCompensatoryLeaveRequest::class => ResubmitCompensatoryLeaveRequestHandler::class,
+
+        SyncCompensatoryLeaveAccountGrant::class => SyncCompensatoryLeaveAccountGrantHandler::class,
+        GrantCompensatoryLeave::class => GrantCompensatoryLeaveHandler::class,
+        ConfirmCompensatoryLeaveGrantsForPeriod::class => ConfirmCompensatoryLeaveGrantsForPeriodHandler::class,
+        RevokeCompensatoryLeaveAccountGrant::class => RevokeCompensatoryLeaveAccountGrantHandler::class,
         RequestCompensatoryLeaveGrantCancellation::class => RequestCompensatoryLeaveGrantCancellationHandler::class,
         ApproveCompensatoryLeaveGrantCancellation::class => ApproveCompensatoryLeaveGrantCancellationHandler::class,
+        DesignateCompensatoryLeaveUsage::class => DesignateCompensatoryLeaveUsageHandler::class,
+        ConfirmCompensatoryLeaveUsage::class => ConfirmCompensatoryLeaveUsageHandler::class,
+        CancelCompensatoryLeaveUsage::class => CancelCompensatoryLeaveUsageHandler::class,
+        MigrateCompensatoryLeaveAccount::class => MigrateCompensatoryLeaveAccountHandler::class,
     ],
 
     /*

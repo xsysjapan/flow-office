@@ -53,7 +53,11 @@ export function WeekAttendancePage() {
   const { data: schedule } = useShiftAssignments(user?.id ?? '', dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
-  const { totals: weeklyTotals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
+  const specialLeaveTypeNames = new Map((specialLeaveTypes ?? []).map((type) => [type.id, type.name]))
+  const { totals: weeklyTotals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(
+    data ?? [],
+    specialLeaveTypeNames,
+  )
   const unallocatedWeeklyMinutes = weeklyOvertime?.unallocated_weekly_statutory_excess_overtime_minutes ?? 0
 
   function applySuggestedAllocation() {

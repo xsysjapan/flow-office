@@ -3,8 +3,10 @@
 namespace Tests\Feature\SpecialLeave;
 
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDayLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveGrant;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
@@ -25,6 +27,7 @@ use Tests\TestCase;
 class SpecialLeaveRequestTest extends TestCase
 {
     use RefreshDatabase;
+    use SpecialLeaveTestHelpers;
 
     private function createWorkingDayShift(User $user, string $date, int $prescribedDailyMinutes = 480): EmployeeCalendarEntry
     {
@@ -57,7 +60,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -93,8 +96,8 @@ class SpecialLeaveRequestTest extends TestCase
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
         $this->assertNotNull($day);
-        $this->assertSame('special_leave_full', $day->work_type);
-        $this->assertSame('clocked_out', $day->status);
+        $this->assertSame('full', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
+        $this->assertSame('approved', $this->specialLeaveOn($employee->id, '2026-08-10')?->request_status);
         $this->assertSame(1, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
 
         $this->assertEquals(1.0, $day->calculation->special_leave_days);
@@ -127,7 +130,7 @@ class SpecialLeaveRequestTest extends TestCase
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
         $this->assertNotNull($day);
-        $this->assertSame('special_leave_full', $day->work_type);
+        $this->assertSame('full', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
         $this->assertSame(0, SpecialLeaveGrant::query()->where('user_id', $employee->id)->count());
     }
 
@@ -138,7 +141,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -155,7 +158,7 @@ class SpecialLeaveRequestTest extends TestCase
         $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")->assertOk();
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('special_leave_hourly', $day->work_type);
+        $this->assertSame('hourly', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
         $this->assertEquals(120, $day->calculation->special_leave_minutes);
         $this->assertEquals(0.0, (float) $day->calculation->special_leave_days);
     }
@@ -172,7 +175,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $grant = SpecialLeaveGrant::query()->create([
+        $grant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
@@ -192,7 +195,7 @@ class SpecialLeaveRequestTest extends TestCase
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
         $this->assertNotNull($day);
-        $this->assertSame('special_leave_full', $day->work_type);
+        $this->assertSame('full', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
     }
 
     public function test_request_consumes_across_multiple_grants_preferring_the_one_expiring_soonest_and_using_the_non_expiring_one_last(): void
@@ -202,12 +205,12 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $neverExpires = SpecialLeaveGrant::query()->create([
+        $neverExpires = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2025-07-01', 'expires_on' => null,
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
         ]);
-        $expiringSoon = SpecialLeaveGrant::query()->create([
+        $expiringSoon = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => '2026-12-31',
             'granted_days' => 0.3, 'used_days' => 0, 'remaining_days' => 0.3,
@@ -243,7 +246,7 @@ class SpecialLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated();
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -264,7 +267,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -301,7 +304,7 @@ class SpecialLeaveRequestTest extends TestCase
         $refresh = $this->createType('リフレッシュ休暇');
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $birthdayGrant = SpecialLeaveGrant::query()->create([
+        $birthdayGrant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $birthday->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -319,11 +322,11 @@ class SpecialLeaveRequestTest extends TestCase
 
         // リフレッシュ休暇の残高が無いため消化計画は空。誕生日休暇のgrantは変化しない。
         $this->assertEquals(3.0, (float) $birthdayGrant->refresh()->remaining_days);
-        // 申請時点で作られた未確定行(is_confirmed=false)は、消化計画が空のため承認時に
-        // 確定されないまま残る(special_leave.usedが1件も発行されないため)。
+        // 残高が無くても承認は拒否されず確定する(論点17)。充当できなかった全量が未充当日数として記録される。
         $usage = SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->firstOrFail();
-        $this->assertFalse($usage->is_confirmed);
+        $this->assertTrue((bool) $usage->is_confirmed);
         $this->assertNull($usage->special_leave_grant_id);
+        $this->assertEquals(1.0, (float) $usage->unallocated_days);
     }
 
     /**
@@ -343,7 +346,7 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -370,7 +373,7 @@ class SpecialLeaveRequestTest extends TestCase
         ]);
         SystemSetting::current()->update(['default_work_style_id' => $defaultWorkStyle->id]);
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -392,7 +395,7 @@ class SpecialLeaveRequestTest extends TestCase
         $other = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -414,7 +417,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -433,9 +436,10 @@ class SpecialLeaveRequestTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('status', 'returned');
 
-        // 差戻し通知には、特別休暇申請の履歴画面へのリンクが付く。
+        // 差戻しの通知はワークフロー側が1回だけ送る(二重通知の解消。特別休暇側は送らない)。
+        // 申請者への通知は差戻しの1件だけ(承認依頼の通知は承認者へ届く)。
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
-        $this->assertStringEndsWith('/special-leave/history', $employeeNotifications[0]['detail_url']);
+        $this->assertCount(1, $employeeNotifications);
     }
 
     /**
@@ -450,7 +454,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $grant = SpecialLeaveGrant::query()->create([
+        $grant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
             'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
@@ -486,7 +490,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        $grant = SpecialLeaveGrant::query()->create([
+        $grant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
             'granted_days' => 0.5, 'used_days' => 0, 'remaining_days' => 0.5,
@@ -510,7 +514,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -523,18 +527,18 @@ class SpecialLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
-        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
+        // 未承認の取消でも、申請時点で反映済みの休暇ビュー(attendance_day_leaves)と
         // 未確定のspecial_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが必要)。
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('special_leave_full', $day->work_type);
+        $this->assertSame('full', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
         $this->assertSame(1, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
 
         $response = $this->actingAs($employee)->postJson("/api/special-leave/requests/{$requestId}/cancel");
         $response->assertOk();
         $response->assertJsonPath('status', 'cancelled');
 
-        $day->refresh();
-        $this->assertNull($day->work_type);
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
+        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first());
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
     }
 
@@ -551,7 +555,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -584,7 +588,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        $grant = SpecialLeaveGrant::query()->create([
+        $grant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -600,7 +604,7 @@ class SpecialLeaveRequestTest extends TestCase
 
         $this->assertEquals(2.0, (float) $grant->refresh()->remaining_days);
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('special_leave_full', $day->work_type);
+        $this->assertSame('full', $this->specialLeaveOn($employee->id, '2026-08-10')?->unit);
 
         $response = $this->actingAs($employee)->postJson("/api/special-leave/requests/{$requestId}/cancel");
         $response->assertOk();
@@ -609,9 +613,8 @@ class SpecialLeaveRequestTest extends TestCase
         $this->assertEquals(3.0, (float) $grant->refresh()->remaining_days);
         $this->assertSame(0, SpecialLeaveUsage::query()->where('special_leave_request_id', $requestId)->count());
 
-        $day->refresh();
-        $this->assertNull($day->work_type);
-        $this->assertSame('not_started', $day->status);
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
+        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first());
     }
 
     /**
@@ -624,7 +627,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        $grant = SpecialLeaveGrant::query()->create([
+        $grant = $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -645,7 +648,7 @@ class SpecialLeaveRequestTest extends TestCase
 
         $this->assertEquals(3.0, (float) $grant->refresh()->remaining_days);
         $day->refresh();
-        $this->assertNull($day->work_type);
+        $this->assertNull($this->activeSpecialLeaveOn($employee->id, '2026-08-10'));
         $this->assertSame('clocked_out', $day->status);
     }
 
@@ -655,7 +658,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -685,7 +688,7 @@ class SpecialLeaveRequestTest extends TestCase
         $approver = User::factory()->create();
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -702,6 +705,35 @@ class SpecialLeaveRequestTest extends TestCase
         $this->actingAs($approver)->getJson('/api/special-leave/requests/to-approve')->assertOk()->assertJsonCount(1);
     }
 
+    public function test_responses_include_the_workflow_request_id_of_the_request(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $type = $this->createType();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        $this->grantSpecialLeave([
+            'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
+            'granted_on' => '2026-07-01', 'expires_on' => null,
+            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $workflowRequestId = LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->value('workflow_request_id');
+        $this->assertNotNull($workflowRequestId);
+
+        $this->actingAs($employee)->getJson('/api/special-leave/requests/mine')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->getJson('/api/special-leave/requests/to-approve')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")
+            ->assertOk()->assertJsonPath('workflow_request_id', $workflowRequestId);
+    }
+
     /**
      * workflow_requests.subject_id はイベント(WorkflowRequestDrafted)から投影されるため、
      * Projectionを再生成しても失われない(ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。
@@ -714,7 +746,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -746,7 +778,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -775,7 +807,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -788,7 +820,7 @@ class SpecialLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
-        WorkflowRequest::query()->where('subject_id', $requestId)->delete();
+        LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->delete();
 
         $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")->assertStatus(422);
 
@@ -802,7 +834,7 @@ class SpecialLeaveRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,

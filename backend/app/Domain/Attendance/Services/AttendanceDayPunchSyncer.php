@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
@@ -10,10 +11,8 @@ use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceLeaveSegment;
 use App\Models\AttendancePunch;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveUsage;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
-use App\Models\SpecialLeaveUsage;
 use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
@@ -56,6 +55,7 @@ class AttendanceDayPunchSyncer
         private readonly AttendanceStandardBreakInserter $standardBreakInserter,
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
         private readonly AttendanceTimeRounder $timeRounder,
+        private readonly AttendanceDayLeaves $attendanceDayLeaves,
     ) {}
 
     /**
@@ -84,13 +84,19 @@ class AttendanceDayPunchSyncer
             ->whereDate('work_date', $workDate)
             ->first();
 
-        if ($day !== null && $day->source !== AttendanceDaySource::PUNCH) {
+        if ($day !== null && ! in_array($day->source, [AttendanceDaySource::PUNCH, AttendanceDaySource::LEAVE], true)) {
             // 画面からの操作・日次編集で既に確定した日は、打刻ログで上書きしない。
+            // 休暇だけの日(source=leave)は打刻で上書きできる(source=punchと同じ扱い)。
             return null;
         }
 
         if ($day !== null && $day->status === AttendanceDayStatus::CLOCKED_OUT) {
             // 既に退勤済みの日は、以降の打刻ログでは状態を変えない。
+            return null;
+        }
+
+        if ($this->attendanceDayLeaves->isFullDayLeave($userId, $workDate)) {
+            // 全休の日は打刻を取り込まない(出勤不可と同じ。休暇ビューで判定: 論点9)。打刻ログは記録済み。
             return null;
         }
 
@@ -252,7 +258,7 @@ class AttendanceDayPunchSyncer
         $this->standardBreakInserter->insertIfApplicable($aggregate, $transientDay);
 
         $calculation = $this->calculator->calculate($transientDay);
-        $aggregate->calculate($calculation);
+        $aggregate->calculate($calculation, $transientDay->user_id, $transientDay->work_date->toDateString());
 
         return $aggregate;
     }
@@ -298,19 +304,6 @@ class AttendanceDayPunchSyncer
                 ? AttendanceLeaveSegment::query()->where('attendance_day_id', $existingDay->id)->get()
                 : collect(),
         );
-        $day->setRelation(
-            'paidLeaveUsages',
-            $existingDay !== null
-                ? PaidLeaveUsage::query()->where('attendance_day_id', $existingDay->id)->get()
-                : collect(),
-        );
-        $day->setRelation(
-            'specialLeaveUsages',
-            $existingDay !== null
-                ? SpecialLeaveUsage::query()->where('attendance_day_id', $existingDay->id)->get()
-                : collect(),
-        );
-
         $calendarEntry = $calendarEntryId !== null
             ? EmployeeCalendarEntry::query()->with('workStyle.calendar')->find($calendarEntryId)
             : null;

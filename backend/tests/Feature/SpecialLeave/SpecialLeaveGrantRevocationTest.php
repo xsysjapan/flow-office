@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\SpecialLeave;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\DesignateSpecialLeaveUsage;
 use App\Models\Role;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -53,7 +57,26 @@ class SpecialLeaveGrantRevocationTest extends TestCase
         $employee = User::factory()->create();
 
         $grantId = $this->grantFor($hr, $employee);
-        SpecialLeaveGrant::query()->whereKey($grantId)->update(['used_days' => 1, 'remaining_days' => 4]);
+
+        // 1日消化する(申請に対応する消化記録を作り、付与へ充当する。特別休暇口座のコマンドで記録する)。
+        $requestId = (string) Str::uuid();
+        $typeId = (int) SpecialLeaveType::query()->value('id');
+        $commandBus = app(CommandBus::class);
+        $commandBus->dispatch(new DesignateSpecialLeaveUsage(
+            userId: (string) $employee->id,
+            requestId: $requestId,
+            specialLeaveTypeId: $typeId,
+            usedOn: '2026-08-10',
+            usageType: 'full',
+            usedDays: 1.0,
+            usedMinutes: null,
+        ));
+        $commandBus->dispatch(new ConfirmSpecialLeaveUsage(
+            userId: (string) $employee->id,
+            requestId: $requestId,
+            requiresGrant: true,
+        ));
+        $this->assertEquals(1.0, (float) SpecialLeaveGrant::query()->findOrFail($grantId)->used_days);
 
         $this->actingAs($hr)->postJson("/api/special-leave/grants/{$grantId}/revoke")->assertStatus(422);
         $this->assertSame('active', SpecialLeaveGrant::query()->findOrFail($grantId)->status);

@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\MonthlyOvertimeCalculator;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -53,24 +54,38 @@ class AttendanceDayResource extends JsonResource
                 fn () => $this->leaveSegments->map(fn ($segment) => new AttendanceLeaveSegmentResource($segment, $utcOffsetMinutes)),
             ),
             'calculation' => $this->whenLoaded('calculation', fn () => $this->calculation ? new AttendanceDailyCalculationResource($this->calculation) : null),
-            // 特別休暇の種類ごとの内訳を週次集計(client-side aggregation)向けに提供する。
-            // 通常は1日1種類だが、複数grantにまたがる場合は行が分かれるためそのまま配列で返す
-            // (frontend/src/utils/attendanceWeeklyTotals.tsで種類ごとにグルーピングする)。
-            'special_leave_usages' => $this->whenLoaded(
-                'specialLeaveUsages',
-                fn () => $this->specialLeaveUsages->map(fn ($usage) => [
-                    'special_leave_type_id' => $usage->grant?->special_leave_type_id ?? $usage->request?->special_leave_type_id,
-                    'special_leave_type_name' => $usage->grant?->specialLeaveType?->name ?? $usage->request?->specialLeaveType?->name,
-                    'usage_type' => $usage->usage_type,
-                    'used_days' => (float) $usage->used_days,
-                    'used_minutes' => $usage->used_minutes,
-                ]),
-            ),
+            // その日の休暇(休暇ビュー attendance_day_leaves の申請中・承認済み)。休暇ラベル・全休判定は
+            // この一覧から行う(作業内容 work_type は休暇を表さない: 論点10)。複数あれば複数返す。
+            'leaves' => $this->leavesOn($workDate),
             // 月60時間超残業(参考情報)。表示のたびに都度計算し、snapshotには含めない
             // (docs/07-usecases-attendance.md「月60時間超残業判定」参照)。
             'monthly_overtime' => $this->whenLoaded('calculation', fn () => $this->calculation
                 ? app(MonthlyOvertimeCalculator::class)->calculateForDate($this->user_id, $this->work_date->toDateString())
                 : null),
         ];
+    }
+
+    /**
+     * @return list<array{leave_kind: string, unit: string, hours: float|null, minutes: int|null, special_leave_type_id: int|null, request_id: string, workflow_request_id: string|null, request_status: string}>
+     */
+    private function leavesOn(?string $workDate): array
+    {
+        if ($workDate === null || $this->user_id === null) {
+            return [];
+        }
+
+        return collect(app(AttendanceDayLeaves::class)->activeFor($this->user_id, $workDate))
+            ->map(fn (array $leave): array => [
+                'leave_kind' => $leave['leave_kind'],
+                'unit' => $leave['unit'],
+                'hours' => $leave['hours'] === null ? null : (float) $leave['hours'],
+                'minutes' => $leave['minutes'],
+                'special_leave_type_id' => $leave['special_leave_type_id'],
+                'request_id' => $leave['leave_request_id'],
+                'workflow_request_id' => $leave['workflow_request_id'],
+                'request_status' => $leave['request_status'],
+            ])
+            ->values()
+            ->all();
     }
 }

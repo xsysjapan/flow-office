@@ -3,16 +3,17 @@
 namespace App\Domain\PaidLeaveSchedule\Support;
 
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
-use App\Models\AttendanceDay;
-use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeCalendarEntry;
+use App\Domain\Leave\Support\LeaveAttendanceRateJudgement;
+use App\Models\LeaveAttendanceRateDay;
 use Illuminate\Support\Carbon;
 
 /**
- * 出勤率Assessmentの分母/分子算出をステートレスに行う。既存
- * `GrantScheduledPaidLeaveHandler::meetsAttendanceRate()`と同一の分母/分子定義
- * (直近期間の`EmployeeCalendarEntry.is_working_day`を分母、`AttendanceDay.status='clocked_out'
- * OR work_type LIKE 'paid_leave_%'`を分子)を踏襲しつつ、以下の場合は自動80%未満判定にせず
+ * 出勤率Assessmentの分母/分子算出をステートレスに行う。分母/分子の定義は従来の
+ * `GrantScheduledPaidLeaveHandler::meetsAttendanceRate()`と同じ(仕様確定事項F・論点9)。
+ * 入力は有給の出勤率ビュー(`leave_attendance_rate_days`)だけで、勤怠日・カレンダーのテーブルは読まない。
+ * - 分母: 対象期間の`is_working_day`の日(カレンダーの割当イベント由来)。
+ * - 分子: 退勤済み ∪ 全休の休暇(3種) ∪ 有給の半休・時間休(`LeaveAttendanceRateJudgement`)。
+ * 以下の場合は自動80%未満判定にせず
  * `NeedsReview`として返す(依頼書§31/§32):
  * - 分母日数が0件(判定材料が無い)。
  * - Assessment期間が対象社員の`usage_start_date`より前を含み、かつ旧システムからの
@@ -44,15 +45,14 @@ class AttendanceRateAssessor
             );
         }
 
-        $scheduledDates = EmployeeCalendarEntry::query()
+        $scheduledDays = LeaveAttendanceRateDay::query()
             ->where('user_id', $userId)
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $periodStart->toDateString())
             ->whereDate('work_date', '<=', $periodEnd->toDateString())
-            ->pluck('work_date')
-            ->map(fn ($date) => $date->toDateString());
+            ->get();
 
-        if ($scheduledDates->isEmpty()) {
+        if ($scheduledDays->isEmpty()) {
             return new AttendanceRateAssessmentResult(
                 denominatorDays: 0,
                 attendanceDays: 0,
@@ -63,19 +63,13 @@ class AttendanceRateAssessor
             );
         }
 
-        $attendedDates = AttendanceDay::query()
-            ->where('user_id', $userId)
-            ->whereDate('work_date', '>=', $periodStart->toDateString())
-            ->whereDate('work_date', '<=', $periodEnd->toDateString())
-            ->where(function ($query) {
-                $query->where('status', AttendanceDayStatus::CLOCKED_OUT)
-                    ->orWhere('work_type', 'like', 'paid_leave_%');
-            })
-            ->pluck('work_date')
-            ->map(fn ($date) => $date->toDateString());
-
-        $denominatorDays = $scheduledDates->count();
-        $attendanceDays = $scheduledDates->intersect($attendedDates)->count();
+        $denominatorDays = $scheduledDays->count();
+        $attendanceDays = $scheduledDays->filter(fn (LeaveAttendanceRateDay $day) => LeaveAttendanceRateJudgement::countsAsAttended(
+            $day->attended,
+            $day->full_leave_kinds ?? [],
+            $day->partial_leave_kinds ?? [],
+            [LeaveAttendanceRateJudgement::KIND_PAID],
+        ))->count();
         $rate = ($attendanceDays / $denominatorDays) * 100;
 
         $automaticResult = $rate >= $minAttendanceRate

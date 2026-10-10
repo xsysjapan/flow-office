@@ -40,6 +40,7 @@ const submittedRequest: CompensatoryLeaveRequest = {
   approved_at: null,
   returned_at: null,
   cancelled_at: null,
+  workflow_request_id: null,
 }
 
 function renderPage(

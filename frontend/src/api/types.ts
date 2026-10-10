@@ -663,15 +663,21 @@ export interface AttendanceDay {
   monthly_overtime?: MonthlyOvertimeReference | null;
   planned_start_at?: string | null;
   planned_end_at?: string | null;
-  /** その日の特別休暇消化の内訳(種類ごと)。通常は1件だが、失効日の異なる複数grantに
-   *  またがる場合は複数件になりうる(週次画面での種類別集計に使う。AttendanceDayResource参照)。 */
-  special_leave_usages?: Array<{
-    special_leave_type_id: string;
-    special_leave_type_name: string;
-    usage_type: "full" | "am_half" | "pm_half" | "hourly";
-    used_days: number;
-    used_minutes: number | null;
-  }>;
+  /** その日の休暇(休暇ビューの申請中・承認済みの行)。休暇ラベル・全休判定はこの一覧から行う。
+   *  複数あれば複数返る。work_type は作業内容であり休暇を表さない(AttendanceDayResource参照)。 */
+  leaves?: AttendanceDayLeave[];
+}
+
+/** 勤怠日の休暇1行(休暇ビュー)。request_statusは申請中(submitted)か承認済み(approved)のみ。 */
+export interface AttendanceDayLeave {
+  leave_kind: "paid" | "special" | "compensatory";
+  unit: "full" | "am_half" | "pm_half" | "hourly";
+  hours: number | null;
+  minutes: number | null;
+  special_leave_type_id: number | null;
+  request_id: string;
+  workflow_request_id: string | null;
+  request_status: "submitted" | "approved";
 }
 
 export type PunchType = "clock_in" | "break_start" | "break_end" | "clock_out";
@@ -898,6 +904,8 @@ export interface CompensatoryLeaveRequest {
   requested_days: number;
   requested_minutes: number | null;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;
@@ -920,6 +928,8 @@ export interface PaidLeaveRequest {
   hours: number | null;
   requested_days: number;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;
@@ -1050,6 +1060,8 @@ export interface SpecialLeaveRequest {
   hours: number | null;
   requested_days: number;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;

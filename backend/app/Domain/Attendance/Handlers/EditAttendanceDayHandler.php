@@ -92,7 +92,7 @@ class EditAttendanceDayHandler implements CommandHandler
             ->persist();
 
         $day = AttendanceDay::query()->findOrFail($command->attendanceDayId)
-            ->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle');
+            ->load('breaks', 'leaveSegments', 'calendarEntry.workStyle');
 
         // 手動編集で休憩を1件も入力しなかった場合も、打刻経路と同じ規則で標準休憩を
         // 補完する(勤務形態のauto_break_enabled。操作経路ごとに計算ロジックを複製しない)。
@@ -103,7 +103,7 @@ class EditAttendanceDayHandler implements CommandHandler
 
         $calculation = $this->calculator->calculate($day);
 
-        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation, $day->user_id, $day->work_date->toDateString())->persist();
 
         return AttendanceDay::query()->findOrFail($command->attendanceDayId);
     }

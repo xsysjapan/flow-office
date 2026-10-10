@@ -10,6 +10,9 @@ use App\Domain\EventSourcing\Contracts\Command;
  * `App\Domain\PaidLeaveAccount\Projectors\PaidLeaveUsageAllocationProjector::createPaidLeaveRequestIfNeeded`が`paid_leave_requests`
  * (有給固有の申請パラメータ。docs/changesets/20260906-paid-leave-domain-redesign/spec.md
  * 論点10)をイベントから再生成できるようにするため、イベントにそのまま乗せて運ぶ。
+ *
+ * viaReactor=true(Reactorからの発行)の場合、同じ有給申請IDの有効な消化記録が既にあれば何もしない(冪等)。
+ * initiatedByUserId は連鎖の起点となった操作者(システム処理ならnull)。
  */
 class DesignatePaidLeaveUsage implements Command
 {
@@ -25,5 +28,7 @@ class DesignatePaidLeaveUsage implements Command
         public readonly ?string $reason = null,
         public readonly ?string $requestGroupId = null,
         public readonly ?float $hours = null,
+        public readonly bool $viaReactor = false,
+        public readonly ?string $initiatedByUserId = null,
     ) {}
 }

@@ -26,6 +26,7 @@ import {
   useWeek,
 } from '../../hooks/useAttendance'
 import { useShiftAssignments } from '../../hooks/useEmployeeShiftAssignments'
+import { useSpecialLeaveTypeNames } from '../../hooks/useSpecialLeave'
 import { dayWarnings } from '../../utils/attendanceDayWarnings'
 import { specialLeaveTypeBreakdown, weeklyAttendanceTotals } from '../../utils/attendanceWeeklyTotals'
 import { isoToLocalDatetimeLiteral, isoToTimeLiteral } from '../../utils/offsetDateTime'
@@ -297,7 +298,8 @@ export function WeeklyReferenceView({
   const { data: schedule } = useShiftAssignments(userId, dates[0], dates[6])
   const daysByDate = new Map((data ?? []).map((day) => [day.work_date, day]))
   const scheduleByDate = new Map((schedule ?? []).map((entry) => [entry.work_date, entry]))
-  const { totals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [])
+  const specialLeaveTypeNames = useSpecialLeaveTypeNames()
+  const { totals, absenceDays, workedDays, specialLeaveBreakdown } = weeklyAttendanceTotals(data ?? [], specialLeaveTypeNames)
 
   return (
     <>
@@ -416,6 +418,7 @@ export function DailyReferenceView({
   const monday = formatDate(mondayOf(new Date(`${date}T00:00:00`)))
   const { data, isLoading, error } = useWeek(monday, userId)
   const { data: scheduleDays } = useShiftAssignments(userId, monday, addDays(monday, 6))
+  const specialLeaveTypeNames = useSpecialLeaveTypeNames()
   const day = data?.find((d) => d.work_date === date)
   const schedule = scheduleDays?.find((entry) => entry.work_date === date)
   const statusMeta = day || schedule ? attendanceRowDisplayLabel(day, schedule) : null
@@ -534,7 +537,7 @@ export function DailyReferenceView({
               title="この日の集計"
               totals={day.calculation}
               absenceDays={day.calculation.absence_minutes ? 1 : undefined}
-              specialLeaveBreakdown={specialLeaveTypeBreakdown([day])}
+              specialLeaveBreakdown={specialLeaveTypeBreakdown([day], specialLeaveTypeNames)}
             />
           )}
         </div>

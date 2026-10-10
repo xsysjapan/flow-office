@@ -23,12 +23,13 @@ class AdminCommandTest extends TestCase
 
         $commands = collect($response->json('data'))->keyBy('name');
         $this->assertSame(
-            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-month-snapshots', 'paid-leave:schedule:rebuild'],
+            ['attendance:migrate-work-classifications', 'attendance:normalize-calculation-events', 'attendance:rebuild-calculation-projections', 'attendance:recalculate-days', 'attendance:recalculate-month-snapshots', 'paid-leave:schedule:rebuild'],
             $commands->keys()->sort()->values()->all(),
         );
         $this->assertSame('apply', $commands['attendance:migrate-work-classifications']['parameters'][0]['name']);
         $this->assertSame('apply', $commands['attendance:normalize-calculation-events']['parameters'][0]['name']);
         $this->assertSame('year-month', $commands['attendance:recalculate-month-snapshots']['parameters'][0]['name']);
+        $this->assertContains('from', collect($commands['attendance:recalculate-days']['parameters'])->pluck('name')->all());
         $this->assertNotContains('migrate:fresh', $response->json('data.*.name'));
     }
 

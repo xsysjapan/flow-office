@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Workflow;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
@@ -296,10 +299,11 @@ class WorkflowRequestSubjectTest extends TestCase
     private function submitPaidLeaveRequest(User $employee, User $approver, string $targetDate, ?string $requestGroupId = null): array
     {
         $this->createWorkingDayShift($employee, $targetDate);
-        PaidLeaveGrant::query()->firstOrCreate(
-            ['user_id' => $employee->id, 'granted_on' => '2025-07-01'],
-            ['expires_on' => '2027-06-30', 'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10],
-        );
+        // 承認時の残数チェックは付与を集約側で持つ必要があるため、コマンドで付与する。
+        // 付与は利用者ごとに1回だけ(同一利用者への2回目以降の付与は日付の順序制約に違反するため行わない)。
+        if (! PaidLeaveGrant::query()->where('user_id', $employee->id)->exists()) {
+            app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        }
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => $targetDate,
@@ -326,10 +330,19 @@ class WorkflowRequestSubjectTest extends TestCase
     {
         $this->createWorkingDayShift($employee, $targetDate);
         $type ??= SpecialLeaveType::query()->create(['name' => '慶弔休暇', 'is_active' => true]);
-        SpecialLeaveGrant::query()->firstOrCreate(
-            ['user_id' => $employee->id, 'special_leave_type_id' => $type->id, 'granted_on' => '2026-07-01'],
-            ['expires_on' => null, 'granted_days' => 5, 'used_days' => 0, 'remaining_days' => 5],
-        );
+        // 特別休暇の付与は口座集約へコマンドで記録する(1種別・1日付につき1回だけ)。
+        if (! SpecialLeaveGrant::query()->where('user_id', $employee->id)->where('special_leave_type_id', $type->id)
+            ->whereDate('granted_on', '2026-07-01')->exists()) {
+            app(CommandBus::class)->dispatch(new RegisterSpecialLeaveGrant(
+                userId: (string) $employee->id,
+                grantId: (string) Str::uuid(),
+                specialLeaveTypeId: (int) $type->id,
+                grantedOn: '2026-07-01',
+                expiresOn: null,
+                grantedDays: 5.0,
+                grantReason: null,
+            ));
+        }
 
         $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
             'special_leave_type_id' => $type->id,

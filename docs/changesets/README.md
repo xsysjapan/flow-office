@@ -1,6 +1,6 @@
 # 変更セット
 
-規模のある変更(新しいAPI/画面/イベントの追加など)は、実装前にこのディレクトリ配下へ
+コード変更を伴う変更(不具合修正・小規模修正を含む)は、実装前にこのディレクトリ配下へ
 `YYYYMMDD-変更名/spec.md` として仕様検討ドキュメント(変更セット)を作成し、ユーザーの
 レビューを経てから実装に入る。作成手順・テンプレートは `.claude/skills/changeset/SKILL.md`
 を参照。
@@ -14,6 +14,8 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
+| [20261009-keep-leave-work-type-on-edit](./20261009-keep-leave-work-type-on-edit/spec.md) | 休暇まわり(申請・承認/休暇申請/残数・使用管理/勤怠)をイベント連携で独立させる | 実装中 |
+| [20261009-compensatory-leave-badge](./20261009-compensatory-leave-badge/spec.md) | 代休を取得した勤怠日に代休バッジが表示されない不具合の修正 | 完了 |
 | [20260919-paid-leave-schedule-rebuild](./20260919-paid-leave-schedule-rebuild/spec.md) | 過去の有給休暇付与予定を取消+再作成する運用コマンド(付与ルール指定・管理画面実行)の追加 | 完了 |
 | [20260919-prod-migration-history-collision](./20260919-prod-migration-history-collision/spec.md) | 本番マイグレーション履歴衝突によるデプロイ失敗の是正 | 完了 |
 | [20260916-paid-leave-policy-change-reapply](./20260916-paid-leave-policy-change-reapply/spec.md) | 法定付与ポリシー・付与ルール変更時に未確定Scheduleを再作成する | 完了 |

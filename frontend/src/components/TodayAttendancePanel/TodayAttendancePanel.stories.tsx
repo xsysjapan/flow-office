@@ -56,6 +56,24 @@ export const NotStarted: Story = {
   render: withSeededToday(baseDay),
 }
 
+export const FullDayLeave: Story = {
+  render: withSeededToday({
+    ...baseDay,
+    leaves: [
+      {
+        leave_kind: 'paid',
+        unit: 'full',
+        hours: null,
+        minutes: null,
+        special_leave_type_id: null,
+        request_id: 'request-1',
+        workflow_request_id: 'workflow-1',
+        request_status: 'approved',
+      },
+    ],
+  }),
+}
+
 export const Working: Story = {
   render: withSeededToday({
     ...baseDay,

@@ -22,12 +22,4 @@ final class PaidLeaveType
     {
         return [self::FULL, self::AM_HALF, self::PM_HALF, self::HOURLY];
     }
-
-    /**
-     * attendance_days.work_type に反映する際の値 (docs/16-database-schema.md attendance_days)。
-     */
-    public static function toAttendanceWorkType(string $leaveType): string
-    {
-        return "paid_leave_{$leaveType}";
-    }
 }

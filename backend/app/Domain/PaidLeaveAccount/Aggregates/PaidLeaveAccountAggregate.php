@@ -33,9 +33,11 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 6. Allocationは`usedOn`基準で有効なGrantのみ対象(処理日・承認日は不使用)。
  * 7. 空き発生時は未充当Usageを`usedOn`昇順に自動Allocationする。既存Allocationは
  *    組み替えない(常に「残りの不足分」だけを追加充当する)。
+ *    残数が不足していても承認(`confirmUsage`)は拒否せず、充当できた分だけ充当し残りは未充当のまま残す
+ *    (docs/changesets/20261009-keep-leave-work-type-on-edit 論点17の改訂)。
  *
  * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>, originalGrantedOn?: ?string, originalGrantedDays?: ?float, cutoverMetadata?: ?array}
- * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int}
+ * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int}
  */
 class PaidLeaveAccountAggregate extends AggregateRoot
 {
@@ -46,6 +48,14 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     private array $usages = [];
 
     private int $usageSequence = 0;
+
+    /**
+     * 有給申請ID→最後に指定されたusageId(取消済みを含む)。`PaidLeaveUsageDesignated`の
+     * `paidLeaveRequestId`から構築する。
+     *
+     * @var array<string, string>
+     */
+    private array $usageIdByPaidLeaveRequestId = [];
 
     public function grant(
         string $grantId,
@@ -279,6 +289,48 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         $this->allocateUnallocatedUsages();
 
         return $this;
+    }
+
+    /**
+     * 有給申請IDに対して最後に指定されたusageIdを返す(取消済みのusageも含む)。未指定ならnull。
+     */
+    public function usageIdForRequest(string $paidLeaveRequestId): ?string
+    {
+        return $this->usageIdByPaidLeaveRequestId[$paidLeaveRequestId] ?? null;
+    }
+
+    /**
+     * usageの状態を返す。存在しなければnull。
+     *
+     * @return null|'designated'|'confirmed'|'cancelled'
+     */
+    public function usageStatus(string $usageId): ?string
+    {
+        $usage = $this->usages[$usageId] ?? null;
+
+        if ($usage === null) {
+            return null;
+        }
+
+        if ($usage['cancelled']) {
+            return 'cancelled';
+        }
+
+        return $usage['confirmed'] ? 'confirmed' : 'designated';
+    }
+
+    /**
+     * 同じ有給申請IDに、取消されていない消化記録が1件でもあるかを返す。
+     */
+    public function hasActiveUsageForRequest(string $paidLeaveRequestId): bool
+    {
+        foreach ($this->usages as $usage) {
+            if ($usage['paidLeaveRequestId'] === $paidLeaveRequestId && ! $usage['cancelled']) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -530,6 +582,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         $this->usages[$event->usageId] = [
             'workflowRequestId' => $event->workflowRequestId,
             'attendanceDayId' => $event->attendanceDayId,
+            'paidLeaveRequestId' => $event->paidLeaveRequestId,
             'usedOn' => $event->usedOn,
             'usedDays' => $event->usedDays,
             'confirmed' => false,
@@ -537,6 +590,10 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             'allocations' => [],
             'order' => $this->usageSequence++,
         ];
+
+        if ($event->paidLeaveRequestId !== null) {
+            $this->usageIdByPaidLeaveRequestId[$event->paidLeaveRequestId] = $event->usageId;
+        }
     }
 
     protected function applyPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void

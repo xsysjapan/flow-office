@@ -20,6 +20,7 @@ use Tests\TestCase;
 class SpecialLeaveAdminCancelRequestTest extends TestCase
 {
     use RefreshDatabase;
+    use SpecialLeaveTestHelpers;
 
     private function createWorkingDayShift(User $user, string $date): void
     {
@@ -63,7 +64,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -97,7 +98,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-10');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -121,7 +122,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
         $type = $this->createType();
         $this->createWorkingDayShift($employee, '2026-08-11');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
@@ -150,7 +151,7 @@ class SpecialLeaveAdminCancelRequestTest extends TestCase
         $this->createWorkingDayShift($employee, '2026-08-10');
         $this->createWorkingDayShift($employee, '2026-08-12');
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null,
             'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,

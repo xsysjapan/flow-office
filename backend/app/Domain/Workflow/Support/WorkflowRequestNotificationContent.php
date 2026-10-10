@@ -134,7 +134,7 @@ final class WorkflowRequestNotificationContent
             self::PAID_LEAVE_REQUEST => new self(
                 title: '有給休暇申請が差戻されました',
                 summary: "有給休暇申請が差し戻されました: {$comment}",
-                detailUrl: FrontendUrl::path('/paid-leave/requests'),
+                detailUrl: FrontendUrl::path('/paid-leave/history'),
             ),
             self::SPECIAL_LEAVE_REQUEST => new self(
                 title: '特別休暇申請が差戻されました',

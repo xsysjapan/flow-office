@@ -24,6 +24,11 @@ class RejectWorkflowRequestHandler implements CommandHandler
 
         $workflowRequest = WorkflowRequest::query()->findOrFail($command->workflowRequestId);
 
+        // 業務側(subject_type)を持つ申請は、却下すると業務側が申請中のまま残り行き詰まるため却下できない(論点16)。
+        if ($workflowRequest->subject_type !== null) {
+            throw new DomainRuleException('業務と連携した申請は却下できません。差戻しを使ってください。');
+        }
+
         if ($workflowRequest->status !== WorkflowRequestStatus::SUBMITTED) {
             throw new DomainRuleException('提出済みの申請のみ却下できます。');
         }
