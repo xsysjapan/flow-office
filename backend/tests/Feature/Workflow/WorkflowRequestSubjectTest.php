@@ -4,6 +4,7 @@ namespace Tests\Feature\Workflow;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
 use App\Jobs\SendNotificationJob;
 use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
@@ -329,10 +330,19 @@ class WorkflowRequestSubjectTest extends TestCase
     {
         $this->createWorkingDayShift($employee, $targetDate);
         $type ??= SpecialLeaveType::query()->create(['name' => '慶弔休暇', 'is_active' => true]);
-        SpecialLeaveGrant::query()->firstOrCreate(
-            ['user_id' => $employee->id, 'special_leave_type_id' => $type->id, 'granted_on' => '2026-07-01'],
-            ['expires_on' => null, 'granted_days' => 5, 'used_days' => 0, 'remaining_days' => 5],
-        );
+        // 特別休暇の付与は口座集約へコマンドで記録する(1種別・1日付につき1回だけ)。
+        if (! SpecialLeaveGrant::query()->where('user_id', $employee->id)->where('special_leave_type_id', $type->id)
+            ->whereDate('granted_on', '2026-07-01')->exists()) {
+            app(CommandBus::class)->dispatch(new RegisterSpecialLeaveGrant(
+                userId: (string) $employee->id,
+                grantId: (string) Str::uuid(),
+                specialLeaveTypeId: (int) $type->id,
+                grantedOn: '2026-07-01',
+                expiresOn: null,
+                grantedDays: 5.0,
+                grantReason: null,
+            ));
+        }
 
         $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
             'special_leave_type_id' => $type->id,

@@ -5,13 +5,17 @@ namespace Tests\Feature\CompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest;
 use App\Domain\EventSourcing\CommandBus;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDayLeave;
 use App\Models\AttendanceDaySource;
+use App\Models\AttendanceMonth;
+use App\Models\AttendanceMonthStatus;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveUsage;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkflowRequest;
+use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -249,5 +253,198 @@ class CompensatoryLeaveScenarioTest extends TestCase
 
         // 休日出勤の実績が無くなったため、未確定(下書き)の付与は外れる(同期はイベントから行う)。
         $this->assertFalse(CompensatoryLeaveGrant::query()->whereKey($grantId)->exists());
+    }
+
+    /** ワークフロー側からの取消(申請中): 代休申請・消化記録・休暇ビューが取消になり、残数が戻り、休暇だけの勤怠日が消える。 */
+    public function test_cancelling_the_workflow_of_a_pending_request_cancels_the_request_usage_and_leave_day(): void
+    {
+        $employee = User::factory()->create();
+        $grant = $this->holidayWorkGrantedAndConfirmed($employee);
+        $approver = User::factory()->create();
+        $requestId = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
+        $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+        $this->assertNotNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first());
+
+        $this->actingAs($employee)->postJson('/api/workflow-requests/'.$this->workflowIdOf($requestId).'/cancel', [
+            'reason' => '取り下げ',
+        ])->assertSuccessful();
+
+        $this->assertSame('cancelled', CompensatoryLeaveRequest::query()->whereKey($requestId)->value('status'));
+        $this->assertSame('cancelled', WorkflowRequest::query()->where('subject_id', $requestId)->value('status'));
+        $this->assertLeaveRow($employee, '2026-09-10', 'cancelled');
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first());
+        $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+    }
+
+    /** ワークフロー側からの取消(差戻し中): 差戻しで消化記録と勤怠日は既に外れているため、申請と休暇ビューの状態だけが変わり、残数は変わらない。 */
+    public function test_cancelling_the_workflow_of_a_returned_request_cancels_the_request_and_keeps_the_balance(): void
+    {
+        $employee = User::factory()->create();
+        $grant = $this->holidayWorkGrantedAndConfirmed($employee);
+        $approver = User::factory()->create();
+        $requestId = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/return", [
+            'comment' => '日付を見直してください',
+        ])->assertOk();
+        $this->assertLeaveRow($employee, '2026-09-10', 'returned');
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+        $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+
+        $this->actingAs($employee)->postJson('/api/workflow-requests/'.$this->workflowIdOf($requestId).'/cancel', [
+            'reason' => '取り下げ',
+        ])->assertSuccessful();
+
+        $this->assertSame('cancelled', CompensatoryLeaveRequest::query()->whereKey($requestId)->value('status'));
+        $this->assertSame('cancelled', WorkflowRequest::query()->where('subject_id', $requestId)->value('status'));
+        $this->assertLeaveRow($employee, '2026-09-10', 'cancelled');
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+        $this->assertNull(AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first());
+        $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+    }
+
+    /**
+     * 締め済み(月次提出済み)の日: 申請・承認・差戻し・取消・再提出(ワークフロー側の取消を含む)は全て拒否され、
+     * どの文脈の状態(申請・ワークフロー・休暇ビュー・残数・消化記録・勤怠日・イベント件数)も変わらない。
+     */
+    public function test_closed_month_rejects_every_transition_and_no_context_changes(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $grant = $this->holidayWorkGrantedAndConfirmed($employee);
+
+        // 9月の申請: 申請中のもの(締め後に承認・差戻し・取消を試す)と、差戻し中のもの(締め後に再提出・取消を試す)。
+        $pending = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
+        $returned = $this->requestCompensatoryLeave($employee, $approver, '2026-09-11');
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$returned}/return", [
+            'comment' => '日付を見直してください',
+        ])->assertOk();
+        $pendingWorkflowId = $this->workflowIdOf($pending);
+        $returnedWorkflowId = $this->workflowIdOf($returned);
+
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-09/submit', [
+            'approver_user_id' => User::factory()->create()->id,
+        ])->assertSuccessful();
+        $this->assertSame(AttendanceMonthStatus::SUBMITTED, AttendanceMonth::query()
+            ->where('user_id', $employee->id)->where('year_month', '2026-09')->value('status'));
+
+        $this->makeCompensatoryWorkingDayShift($employee, WorkStyle::query()->firstOrFail(), '2026-09-12');
+        $before = $this->compensatoryStateOf($employee, $grant->id);
+
+        $this->actingAs($employee)->postJson('/api/compensatory-leave/requests', [
+            'target_date' => '2026-09-12',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+            'reason' => '代休消化',
+        ])->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日への申請');
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$pending}/approve")->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の承認');
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$pending}/return", [
+            'comment' => '差戻し',
+        ])->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の差戻し');
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$pending}/cancel")->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の取消(申請者)');
+
+        $this->actingAs($employee)->postJson("/api/workflow-requests/{$pendingWorkflowId}/cancel", [
+            'reason' => '取り下げ',
+        ])->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の取消(ワークフロー側)');
+
+        $this->actingAs($employee)->postJson("/api/workflow-requests/{$returnedWorkflowId}/submit")->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の再提出');
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$returned}/cancel")->assertStatus(422);
+        $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の差戻し中の取消');
+    }
+
+    /**
+     * 移行後の申請: 移行コマンドで口座へ引き継いだ付与(本変更前の付与)を、新しい申請の承認・取消が使う。
+     */
+    public function test_requests_after_the_migration_use_the_migrated_grant(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->makeCompensatoryWorkStyle();
+        $grantId = $this->legacyCompensatoryGrant($employee);
+
+        $this->artisan('compensatory-leave:migrate-to-account', ['--apply' => true])->assertSuccessful();
+        $this->assertTrue($this->compensatoryAccountOf($employee)->isMigrated());
+
+        $requestId = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
+        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")
+            ->assertOk()
+            ->assertJsonPath('status', 'approved');
+
+        $this->assertEquals(0.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
+        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('used_days'));
+        $this->assertDatabaseHas('compensatory_leave_usages', [
+            'compensatory_leave_request_id' => $requestId,
+            'is_confirmed' => true,
+            'unallocated_days' => 0.0,
+        ]);
+        $this->assertLeaveRow($employee, '2026-09-10', 'approved');
+
+        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled');
+
+        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
+        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
+        $this->assertLeaveRow($employee, '2026-09-10', 'cancelled');
+    }
+
+    /** 本変更前の代休付与(旧テーブル)。移行テストと同じ作り方で、移行コマンドの入力を再現する。 */
+    private function legacyCompensatoryGrant(User $user, string $workDate = '2026-08-08'): string
+    {
+        $grantId = (string) Str::uuid();
+
+        CompensatoryLeaveGrant::query()->create([
+            'id' => $grantId,
+            'user_id' => $user->id,
+            'source' => 'manual',
+            'attendance_day_id' => null,
+            'work_date' => $workDate,
+            'granted_days' => 1.0,
+            'granted_minutes' => null,
+            'used_days' => 0,
+            'used_minutes' => null,
+            'remaining_days' => 1.0,
+            'remaining_minutes' => null,
+            'status' => 'confirmed',
+            'confirmed_at' => now(),
+            'expires_on' => null,
+            'grant_reason' => null,
+        ]);
+
+        return $grantId;
+    }
+
+    /**
+     * 代休の文脈ごとの状態(申請・ワークフロー・休暇ビュー・残数・消化記録・勤怠日・イベント件数)。
+     * 拒否された操作の前後で比べ、どの文脈も変わっていないことを確かめる。
+     *
+     * @return array<string, mixed>
+     */
+    private function compensatoryStateOf(User $employee, string $grantId): array
+    {
+        return [
+            'requests' => CompensatoryLeaveRequest::query()->where('user_id', $employee->id)->orderBy('id')->pluck('status', 'id')->all(),
+            'workflows' => WorkflowRequest::query()->where('subject_type', 'compensatory_leave_request')->orderBy('id')->pluck('status', 'id')->all(),
+            'leaves' => AttendanceDayLeave::query()->where('user_id', $employee->id)
+                ->where('leave_kind', AttendanceDayLeave::KIND_COMPENSATORY)
+                ->orderBy('leave_request_id')->pluck('request_status', 'leave_request_id')->all(),
+            'remaining' => (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'),
+            'usages' => CompensatoryLeaveUsage::query()->count(),
+            'days' => AttendanceDay::query()->where('user_id', $employee->id)->orderBy('id')->pluck('source')->all(),
+            'events' => \DB::table('stored_events')->count(),
+        ];
     }
 }

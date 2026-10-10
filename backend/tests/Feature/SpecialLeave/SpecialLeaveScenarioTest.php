@@ -5,12 +5,12 @@ namespace Tests\Feature\SpecialLeave;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\ResubmitSpecialLeaveRequest;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayLeave;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveGrant;
 use App\Models\Role;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveRequest;
@@ -319,10 +319,7 @@ class SpecialLeaveScenarioTest extends TestCase
             'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
             'granted_on' => '2026-07-01', 'expires_on' => null, 'granted_days' => 3,
         ]);
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => self::DATE,
             'leave_type' => 'full',
