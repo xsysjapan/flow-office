@@ -177,6 +177,12 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled as PaidLeaveAccou
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed as PaidLeaveAccountUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated as PaidLeaveAccountUsageDesignated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentOverridden;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountMigrated;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
+use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleAssessmentRecorded;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCancelled;
 use App\Domain\PaidLeaveSchedule\Events\PaidLeaveScheduleEntryCreated;
@@ -569,6 +575,15 @@ return [
         'special_leave.used' => SpecialLeaveUsed::class,
         'special_leave.usage_reversed' => SpecialLeaveUsageReversed::class,
         'special_leave.grant_revoked' => SpecialLeaveGrantRevoked::class,
+
+        // SpecialLeaveAccountAggregate(利用者単位の特別休暇口座集約。付与・消化記録・充当の残数を一括で持つ。
+        // 集約IDは利用者IDからの派生UUID)。docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 仕様確定事項D参照。
+        'special_leave_account.grant_registered' => SpecialLeaveAccountGrantRegistered::class,
+        'special_leave_account.grant_revoked' => SpecialLeaveAccountGrantRevoked::class,
+        'special_leave_account.usage_designated' => SpecialLeaveAccountUsageDesignated::class,
+        'special_leave_account.usage_confirmed' => SpecialLeaveAccountUsageConfirmed::class,
+        'special_leave_account.usage_cancelled' => SpecialLeaveAccountUsageCancelled::class,
+        'special_leave_account.migrated' => SpecialLeaveAccountMigrated::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
         'compensatory_leave.manually_granted' => CompensatoryLeaveManuallyGranted::class,

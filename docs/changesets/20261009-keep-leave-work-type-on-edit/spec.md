@@ -661,6 +661,9 @@
   再生のため残置)とのクラス名衝突を避けるため、新ドメイン`App\Domain\PaidLeaveRequest`に置き、イベントクラス名は
   `PaidLeaveRequestLifecycle{Requested,Shared,Approved,Returned,Resubmitted,Cancelled,Migrated}`とする(イベント名は
   `paid_leave_request.*`のまま)。implementerが衝突を検出して停止したため委譲元で決定。
+- 2026-10-10 実装中の決定(WP4a 特別休暇の口座集約): 充当の有効判定は承認日ではなく利用日基準(現行どおり。`confirmUsage`は
+  `$today`を取らない)。取消済みの付与からは充当しない(現行は取消済みでも残数が残り充当できてしまう潜在不具合のため、意図的な
+  変更として是正)。同じ失効日の付与は登録順。集約IDは`UserManagementStreamId::for('special_leave_account', userId)`。
 
 ## 実装結果
 未着手
