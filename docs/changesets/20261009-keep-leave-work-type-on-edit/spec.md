@@ -231,15 +231,21 @@
 
 ### 論点13: cutover前の有給
 - 前提: 有給は新しい残数管理への移行(cutover)時に、移行前の個別の消化記録を再現していない
-  (`PaidLeaveAccountAggregate.php:283-300`、`docs/09:448`)。cutover前の有給の日は休暇の各イベントに現れない。
+  (`PaidLeaveAccountAggregate.php:283-300`、`docs/09:448`)。
+- 本番確認(2026-10-10、ユーザー実行): 旧`paid_leave.requested`/`request_shared`/`request_approved`/`usage_designated`が
+  各8件(2026-08-31〜2026-09-04記録、対象日2026-08-10〜2026-09-04、全休7件・午後半休1件、全て承認済み、取消なし)。
+  8件とも新ドメインの`paid_leave_account.usage_designated`に対応する記録は無い(二重記録なし)。新ドメインの最初の
+  イベントは2026-09-11。
 - 選択肢:
-  - A. 本番の`stored_events`に旧`paid_leave.*`イベントが残っていれば、勤怠の休暇ビューがそれも入力にする
-  - B. cutover前の期間は対象外とする(休暇ビューに出ない。cutover前の月は締め済みでスナップショットを再計算しない)
-  - C. cutover前の有給の日を表す補正イベントを追記する
-- 決定: 本番確認後に決める。確認SQL:
-  `SELECT event_class, COUNT(*), MIN(created_at), MAX(created_at) FROM stored_events WHERE event_class LIKE 'paid_leave.%' GROUP BY event_class;`
-  と、cutover日以前の勤怠日で`work_type LIKE 'paid_leave_%'`の件数・月の締め状況。
-- 未確定・要確認事項: 本番確認の結果
+  - A. 勤怠の休暇ビュー・有給申請の新Projectorが、旧`paid_leave.*`イベントも入力にする
+  - B. cutover前は対象外にする
+  - C. 補正イベントを追記する
+- 決定: A。旧`paid_leave.requested`(申請中)・`paid_leave.request_approved`(承認済み)から休暇ビューの行と
+  `paid_leave_requests`の状態を作る(旧イベントの集約ID=申請ID)。論点4の境界条件に「旧`paid_leave.*`を持つ申請ID
+  は旧イベントで作る」を加える(3系統: 旧`paid_leave.*`/cutover後〜本変更前の`paid_leave_account.*`/本変更後の
+  `paid_leave_request.*`。申請IDごとに排他)。
+- 理由: 旧イベントが唯一の記録で二重にならず、履歴を変えずにリビルドで再現できる。
+- 未確定・要確認事項: なし
 
 ### 論点14: 締め・ロックと月次提出のガード
 - 決定: 締め・ロック(`AttendanceEditGuard`)の判定は勤怠文脈が持つ。休暇の各Handlerは呼ばない。締め済みの日に
@@ -427,6 +433,8 @@
   例外なし(論点14)。残数不足は3種とも承認拒否(論点17)。論点12はリハーサルで確定。論点13は本番の`paid_leave.*`
   イベント(requested/request_shared/request_approved/usage_designated 各8件、2026-08-31〜2026-09-04)を確認済みで、
   新ドメインとの二重記録の有無を追加確認中。
+- 2026-10-10 論点13: 本番確認の結果、旧`paid_leave.*`の8申請は新ドメインに記録が無く二重にならないため、旧イベントも
+  休暇ビュー・有給申請Projectorの入力にする(A)と決定。これで全論点の要確認事項が解消。仕様確定事項の記載へ進む。
 
 ## 実装結果
 未着手
