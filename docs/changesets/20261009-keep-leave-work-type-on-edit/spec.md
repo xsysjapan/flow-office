@@ -1,4 +1,4 @@
-# 休暇設定(work_type)を休暇イベントから決定し、勤怠編集で消えた過去分を補正する
+# 休暇を消化記録(usage)から求め、勤怠日の work_type に休暇値を持たせない
 
 ステータス: 検討中
 
@@ -7,7 +7,7 @@
 > ラベルが取れてしまったような気がします。代休だけでなく有給や、特別休暇もですが、
 > 当該日の労働時間を編集しても休暇設定が無効にならないように対応をお願いします。
 
-(レビュー時の追加要望)
+(レビュー時の追加要望・指摘)
 > 勤怠入力でwork_typeを設定できるのであれば申請する意味が消えてしまいます。
 > また、work_typeを変更することで各休暇のusageが作成されるのか確認してください。
 > もし矛盾を発生させるのであれば、画面からの書き換えは無効です。
@@ -17,270 +17,252 @@
 
 > Eventと同期して欲しいので、ReadModelのみを変更することはデータ補正であっても許容できません。
 
-> 既存のイベントから、画面からの勤怠更新をしている箇所のwork_typeの使用方法を調べて
-> 使用されていなければ、過去に遡って画面からの更新は無かったことにしてください。
-> その上でイベントをリビルドしたいです。
-
-> 過去の記録を補正して欲しいです。(補正方法の確認に対し「既存イベントを書き換え」を選択)
+> 元々work_typeは所定労働日もしくは所定休日・法定休日の区分を表すものと考えていましたが、
+> 代休は所定労働日扱い＋休暇と考えられます。休暇をwork_typeに入れるのは誤りでは？
+> (方針比較に対し)Bに方針を変更してください。
 
 ## 背景・目的
-休暇の設定(`attendance_days.work_type`の休暇値)は休暇申請・取消でのみ変化し、常に休暇の
-消化記録(usage)と対応しているべきである。現状は(1)勤怠編集で休暇値が消える、(2)申請なしで
-休暇値を書ける、(3)休暇値がイベントに記録されずReadModelだけに直接書かれている、の3点で
-勤怠集計・残高・イベント履歴が食い違っている。休暇値をイベントから決まるようにし、本番で既に
-消えた休暇値をイベント履歴の補正+リビルドで戻す。
+休暇(有給・特別休暇・代休)の設定が勤怠の編集で消える不具合の修正として始まったが、調査の結果、
+休暇の正データ(申請と消化記録)とは別に、勤怠日の`work_type`へ休暇値をイベントなしでコピーして
+いることが根本原因と判明した。休暇の有無・種別・取得単位を消化記録から求めるように改め、
+`work_type`から休暇の意味を取り除く。これにより編集で消える・申請なしで書ける・再生成で
+再現できないという問題をまとめて解消し、本番で消えた休暇表示も消化記録から復元される。
 
 ## 現状(As-Is)
+詳細な行番号・置き換え対象一覧は`assets/impact-usage-derivation.md`。
 
-### 休暇値の書き込み
-- 休暇申請・取消のHandlerは、勤怠側のイベントを記録せずに`attendance_days`を直接
-  create/saveして`work_type`を設定・解除している(**設計原則2違反**):
-  有給 `RequestPaidLeaveHandler.php:179-193`/`CancelPaidLeaveRequestHandler.php:78,96`、
-  特別休暇 `RequestSpecialLeaveHandler.php:156-170`/`CancelSpecialLeaveRequestHandler.php:91-99`、
-  代休 `RequestCompensatoryLeaveHandler.php:140-159`/`CancelCompensatoryLeaveRequestHandler.php:66-103`。
-  全休では`status`も`clocked_out`に直接書き換えている。対象日の勤怠行が無ければ直接createする
-  (`attendance_day.created`イベントが無い行ができる)。
-- 休暇側で記録されているイベント(`backend/config/event-sourcing.php`):
+- 休暇の申請・取消Handlerは、消化記録のイベント(`*.usage_designated`/`usage_cancelled`/
+  `usage_reversed`)を記録したうえで、勤怠日を**イベントなしで**直接create/saveし、`work_type`を
+  休暇値(`paid_leave_*`/`special_leave_*`/`compensatory_leave_*`)に、全休なら`status`を
+  `clocked_out`にしている。取消でnull/`not_started`に戻す。
+- 勤怠の作成・編集(`attendance_day.created`/`edited`)は`work_type`を無条件に上書きし、日次画面は
+  休暇日に`work_type: null`を送る(`AttendanceDayPage.tsx:729,898`)。→ 編集で休暇値が消える。
+  作成・編集APIは任意文字列を受け付ける。→ 申請なしで休暇値を書ける。
+- 日次画面は「作業内容」欄の自由文字列を`work_type`に保存し(`14b64bc`、2026-08-07〜)、
+  `work_type`をそのまま「作業内容」として表示する(`AttendanceDayPage.tsx:1464-1470`)。
+  このため休暇日には「作業内容: paid_leave_full」のような表示になる。
+- 休暇値の読み手: 勤怠計算(`AttendanceCalculator.php:125-161`、全休・半休の日数と半休の所定半減。
+  時間休はすでに消化記録から集計)、出勤率(`AttendanceRateAssessor.php:70-73`、
+  `GrantScheduledSpecialLeaveHandler.php:176-181`)、フロントの休暇ラベル(`statusLabels.ts`)・
+  休暇指定UI(`AttendanceDayPage.tsx:566-580`)。代休は勤怠計算に算入されていない。
+- 消化記録: `paid_leave_usages`(取消は`cancelled=true`で行が残る)、`special_leave_usages`・
+  `compensatory_leave_usages`(取消で行削除)。いずれも`attendance_day_id`・`usage_type`
+  (full/am_half/pm_half/hourly)・`is_confirmed`を持つ。申請時点で行が作られ(未確定)、承認で確定、
+  差戻しでは行が残る。
+- 同日の休暇併存の重複チェックが非対称(有給・特別は有給・特別のみ、代休は3種)。
+- 勤怠APIは特別休暇の消化記録だけをeager loadし、有給・代休は返していない。
+- 日次計算の一括再実行コマンドは無い。
 
-  | 操作 | event_class | 勤怠日の特定に使えるpayload |
-  |---|---|---|
-  | 有給 申請 | `paid_leave_account.usage_designated`(aggregate=userId) | usageId, attendanceDayId, usedOn, usageType |
-  | 有給 取消 | `paid_leave_account.usage_cancelled` | usageIdのみ(designatedをusageIdで引く) |
-  | 特別休暇 申請 | `special_leave.usage_designated` | userId, attendanceDayId, usedOn, usageType |
-  | 特別休暇 取消 | `special_leave.usage_reversed` | userId, attendanceDayId, usedOn, usageType |
-  | 代休 申請 | `compensatory_leave.usage_designated` | userId, attendanceDayId, usedOn, usageType |
-  | 代休 取消 | `compensatory_leave.usage_reversed` | userId, attendanceDayId, usedOn, usageType |
-
-  承認・差戻しでは`work_type`は変わらない。
-
-### 勤怠編集
-- `attendance_day.created`/`attendance_day.edited`のpayloadに`workType`があり、
-  `AttendanceDayProjector.php:27-42`(created: updateOrCreate)/`:48-56`(edited: findOrFail)が
-  無条件に反映する。作成・編集API(`AttendanceController.php:387,435`)は任意文字列を受け付け、
-  未送信はnullになる。
-- 日次画面(`AttendanceDayPage.tsx`)は、休暇日の保存で`work_type: null`を送る(`:729`、作成`:898`)。
-  休暇日でない日は「作業内容」欄(`:777-782`、作成`:952`)の自由文字列を`work_type`として送る。
-  編集フォームの初期値が`day.work_type`(`:695`)のため、休暇日を「休暇なし」に切り替えると
-  `paid_leave_full`等が作業内容欄に入った状態になる。
-- 一括パターン入力(`GeneratePatternAttendanceDaysHandler.php:100,114`)は常にnullを送る。
-  MCPは`work_type`を送らない(未送信=null)。
-- 「作業内容」として`work_type`に自由入力するUIは`14b64bc`(2026-08-07)から存在する。
-  休暇以外の日の`work_type`(作業内容)は画面表示用途で使われている
-  (`AttendanceDayPage.tsx:1464-1469`、`AttendanceReferencePage.tsx:515-520`)。
-
-### usageと集計
-- `work_type`を変えてもusageは作られない。残高はusageイベントのみから算出、勤怠集計の
-  有給・特別休暇日数は`work_type`から算出(`AttendanceCalculator.php:125-160`)。
-  `AttendanceRateAssessor.php:72`・`GrantScheduledSpecialLeaveHandler.php:179-180`も`work_type`を参照。
-- 承認不要設定(`*_leave_requires_approval=false`)時も休暇申請APIが申請→承認→usage作成を
-  1トランザクションで行い、日次画面の休暇指定UIもこのAPIを呼ぶ。
-
-### リビルド
-- 勤怠系Projectorにリセット処理は無い。`projections:rebuild`(Spatie replay)で
-  `AttendanceDayProjector`を再生すると、既存行に対し最後の`created`/`edited`の`workType`で
-  上書きされ、休暇Handlerの直接書き込みは再現されない。
-- `attendance:rebuild-calculation-projections`は記録済みの`attendance_day.calculated`を再生する
-  だけで再計算しない。`attendance:recalculate-month-snapshots`は対象月の勤怠を
-  `AttendanceCalculator`で再計算する(`work_type`を読む)。
-- イベント書き換えの前例: `NormalizeAttendanceCalculationEventsCommand`
-  (`#[AdminExecutable]`、既定は件数表示のみ、`--apply`でバックアップテーブル作成→1トランザクションで
-  `event_properties`をUPDATE)、`StoredEventHistoryNormalizer`(docs/32)。
+## 設計前提の検証
+- 正データと派生データ:
+  - 休暇の正: 休暇申請(`*_leave_requests`)と消化のイベント。消化記録テーブル(`*_leave_usages`)は
+    そのイベントから作られるProjection。**勤怠日の`work_type`の休暇値は、イベントを伴わずに
+    Handlerが書いたコピーで、正データの二重化かつ設計原則2違反**。全休時の`status=clocked_out`も
+    同様にイベントを伴わない直接書き込み。
+  - 日の区分(所定労働日/所定休日/法定休日): `attendance_days.day_classification`(勤怠計算が
+    カレンダーから判定する派生値)。代休日は「所定労働日+休暇」として、区分と休暇を別々に
+    表現できる。休暇を区分の列で表す必要はない。
+  - 作業内容: 利用者が勤怠の作成・編集で入力する正データで、`attendance_day.created`/`edited`の
+    `workType`として記録されている。
+- 定義と実態: `docs/16-database-schema.md:565-568`は`work_type`を「有給区分」と定義するが、
+  実装では休暇値(Handlerが書く)と作業内容(画面が書く)の2つの意味で使われている。1つの列が
+  2つの意味を持っていることが、編集で休暇値が消える直接の原因。
+- 原因の分類: **設計の誤り**(休暇の正データの二重化と、列の意味の混在)。対症療法(編集時に
+  休暇値を守る・休暇値の入力を拒否する・休暇イベントから休暇値を反映する)ではなく、休暇を
+  勤怠日に保存しない設計に改める。
 
 ## 仕様検討
 
-### 論点1: 休暇値をどこで決めるか(根本対応)
+### 論点1: 休暇の持ち方
 - 選択肢:
-  - A. 休暇Handlerの直接書き込みをやめ、`AttendanceDayProjector`が休暇の
-    `usage_designated`/`usage_cancelled`/`usage_reversed`を購読して`work_type`(と全休時の
-    `status`)を設定・解除する
-  - B. 休暇Handlerから勤怠側の新しいCommand/Event(休暇値の設定・解除)を発行する
-- 決定: A
-- 理由: 休暇イベントは既に本番の`stored_events`に記録されているため、Projectorの改修だけで
-  過去分も含めてリビルドで休暇値を再現できる。Bでは過去分のイベントが存在しないため、
-  別途イベントを追記する必要がある。
+  - A. `work_type`に休暇値を残し、休暇イベントからProjectorで反映する(前案)
+  - B. 勤怠日に休暇を保存せず、勤怠日に紐づく消化記録から求める
+- 決定: B
+- 理由: 休暇の正(申請・消化記録)が既にあり、勤怠日にコピーを持つ理由がない。Aは二重管理を
+  イベント化するだけで、列の意味の混在も残る。Bなら本番で消えた休暇表示も、消化記録が残って
+  いるため読み方を変えるだけで戻る(イベント履歴の書き換えが不要)。
 - 未確定・要確認事項: なし
 
-### 論点2: 有給の取消イベント(usageIdのみ)から勤怠日を特定する方法
+### 論点2: どの消化記録を「その日の休暇」とみなすか
 - 選択肢:
-  - A. Projectorが`paid_leave_account.usage_designated`受信時に「usageId→勤怠日」の対応を
-    勤怠側のProjectionテーブルに保持し、取消時に引く
-  - B. 取消受信時に`paid_leave_usages`(有給側Projection)を参照する
+  - A. 取り消されていない消化記録すべて(申請中・差戻し中・承認済み・承認済みだが未充当を含む)
+  - B. 承認済み(確定)の消化記録のみ
 - 決定: A
-- 理由: Bはリビルド時に有給側Projectorとの再生順序に依存する。Aは勤怠Projector内で完結し、
-  再生順序に依存しない。特別休暇・代休も同じ対応表で扱い、ロジックを揃える。
+- 理由: 現行の`work_type`は申請時に設定され取消でのみ解除されるため、Aが現行の表示・集計と同じ
+  挙動になる。今回は休暇の持ち方の是正であり、休暇として扱う範囲(業務ルール)は変えない。
+  申請中・差戻し中かどうかは休暇情報に申請の状態として含め、画面で区別できるようにする。
 - 未確定・要確認事項: なし
 
-### 論点3: 休暇申請時に勤怠日の行が無い場合
+### 論点3: 同じ日に複数種類の休暇がある場合
 - 選択肢:
-  - A. Projectorが`usage_designated`受信時に、payloadの`attendanceDayId`・対象者・`usedOn`で
-    行をupdateOrCreateする
-  - B. 休暇Handlerから`CreateAttendanceDay`を発行して先に行を作る
+  - A. 種類ごとに独立して扱う(勤怠計算は有給日数・特別休暇日数をそれぞれの消化記録から求め、
+    画面は休暇ごとにバッジを表示)。あわせて、新規申請時の重複チェックを3種とも「有給・特別休暇・
+    代休のいずれかの有効な申請がある日は拒否」に揃える
+  - B. 優先順位を決めて1つだけ扱う
 - 決定: A
-- 理由: 過去に休暇Handlerが直接作った行(`created`イベント無し)も、既存の`usage_designated`から
-  再現できる。Bは過去分を再現できない。
+- 理由: 消化記録は種類ごとに独立しており、各集計列(有給日数・特別休暇日数)もそれぞれに対応する
+  ため、優先順位という新しい業務ルールを作る必要がない。重複チェックの非対称は、同日に複数の
+  全休が併存するという矛盾を生む既存の不具合であり、同じ日の休暇の扱いに直結するため本変更で揃える。
+  既に併存している本番データは、Aにより両方が表示・集計される(現行は最後に書かれた1つだけ)。
 - 未確定・要確認事項: なし
 
-### 論点4: 勤怠の作成・編集での`work_type`の扱い(今後)
+### 論点4: 全休日の`status=clocked_out`直接書き込み(打刻漏れ警告の回避)
 - 選択肢:
-  - A. `EditAttendanceDay`/`CreateAttendanceDay`に`work_location_type`と同じ
-    「`work_type`を変更するか」のフラグ(`workTypeProvided`)を導入し、休暇日の編集では
-    Handlerがフラグをfalseにしてイベントに記録する(Projectorは`work_type`に触れない)。
-    休暇値でない日に休暇値を送られたら422で拒否する。休暇以外の日の作業内容の自由文字列は
-    従来どおり反映する。
-  - B. 勤怠の作成・編集イベントの`workType`を常に無視する
+  - A. 休暇Handlerは`status`を書かない。打刻漏れ警告・出勤率など`status`で「出勤または休暇」を
+    判定している箇所に、全休の消化記録の有無を条件として加える
+  - B. 全休時に勤怠のCommand/Eventで`status`を`clocked_out`にする
 - 決定: A
-- 理由: 休暇以外の日の「作業内容」は画面で使われている正当な入力のため、Bでは失われる。
-  Aなら休暇値は休暇イベントだけが決め、作業内容は従来どおり残る。休暇日の編集は
-  「`work_type`を変更しない編集」として記録され、要望どおり画面からの書き換えは無効になる。
+- 理由: 全休は「退勤した」わけではなく、`status`を休暇の表現に流用すること自体が論点1と同じ
+  意味の混在である。Bは混在をイベント化するだけになる。
 - 未確定・要確認事項: なし
 
-### 論点5: 申請不要(承認不要設定)の場合の登録経路
+### 論点5: 休暇申請時に勤怠日の行が無い場合
 - 選択肢:
-  - A. 既存の休暇申請API(承認不要時は申請・承認・usage作成を一括で行う)を唯一の経路とする
-  - B. 承認不要時に限り勤怠編集で休暇値を書けるようにし、そこからusageを作る
+  - A. 休暇Handlerが`CreateAttendanceDay`(勤怠側のCommand)を発行して行を作ってから、消化記録の
+    イベントを記録する
+  - B. 現状どおり休暇Handlerが直接createする
 - 決定: A
-- 理由: Aで「申請不要なら登録できる・usageも作られる」が既に満たされ、日次画面の休暇指定UIも
-  このAPIを使っている。勤怠編集に休暇ドメインの業務を持ち込まない(原則14)。
+- 理由: 消化記録は勤怠日IDを必須とするため行は必要だが、Bは設計原則2違反。Aなら行の作成が
+  `attendance_day.created`として記録され、再生成で再現できる。
 - 未確定・要確認事項: なし
 
-### 論点6: 本番で消えた休暇値の補正方法(`data-correction`スキル)
+### 論点6: `work_type`列の今後
 - 選択肢:
-  - A. 過去のイベント履歴を直接修正する: 休暇が有効な期間(`usage_designated`以降、取消以前)に
-    記録された`attendance_day.edited`/`attendance_day.created`のうち、`workType`が休暇値でない
-    ものに`workTypeProvided: false`を付与して「`work_type`を変更しなかった編集」に書き換える。
-    その後リビルドする。
-  - B. 補正イベントを追記する(休暇値を戻すイベントを新設して記録)
+  - A. 列名はそのままで、意味を「作業内容」(利用者入力の自由文字列)に一本化する。休暇値の解釈・
+    書き込みを全て削除し、ドキュメントの定義を改める。日次画面は休暇日でも作業内容欄を表示し、
+    入力値をそのまま送る
+  - B. 列とイベントのキーを`work_description`等に改名する
 - 決定: A
-- 理由:
-  - 技術的に可能: 対象イベントは`event_class`と、休暇イベントとの`created_at`の前後関係で
-    機械的に特定できる。書き換え後の値(`workTypeProvided: false`)は一意に決まる。論点1〜4の
-    改修後にリビルドすれば、休暇値は休暇イベントから再現され、書き換えた編集イベントは
-    `work_type`に触れないため、正しい最終状態になる。
-  - 改竄の妥当性: 対象の`workType`は、日次画面が休暇日に常にnullを送る不具合(`:729`)・
-    一括パターン入力・MCPの未送信によって記録された値で、利用者が「休暇を外す」意図で
-    行った操作ではない(休暇の解除は休暇取消という別操作で行われ、usageも残っている)。
-    書き換えは不具合で誤って記録された事実を正しく記録し直すものである。
-  - ユーザーの許可: 補正方法の確認で「既存イベントを書き換え」が選択された。ただし
-    `data-correction`スキルに従い、対象範囲・書き換え後の値を本変更セットで提示したうえで
-    改めて明示的な許可を得る(下記「未確定・要確認事項」)。
-- 未確定・要確認事項: なし(2026-10-09 ユーザーが「仕様確定事項」の補正の項の対象・範囲・
-  書き換え内容でのイベント履歴の直接修正を明示的に許可)
+- 理由: 改名は記録済みイベント(`workType`キー)の変換を伴い、今回の目的(休暇の正の一本化)に
+  対して影響が大きい。意味の一本化はAで達成できる。改名は別の変更セットで扱う。
+- 未確定・要確認事項: なし
 
-### 論点7: 補正後の再計算
+### 論点7: 既存の勤怠日に残っている休暇値・イベントの無い行(本番データ)
+- 現状: 休暇Handlerが書いた休暇値は勤怠日の行にだけ存在し、イベントには無い。また休暇Handlerが
+  直接作った勤怠日の行には`attendance_day.created`が無い。どちらもReadModelがイベントと
+  同期していない状態で、論点1〜6の改修後も残る(休暇値は読まれなくなるが、作業内容として
+  表示されてしまう)。
 - 選択肢:
-  - A. リビルド後、休暇値が変わった日について日次計算を再実行し、月次スナップショットを
-    `attendance:recalculate-month-snapshots`で再計算する
-  - B. `AttendanceDayProjector`のリビルドのみ行う
-- 決定: A
-- 理由: 記録済みの日次計算結果・月次スナップショットは誤った`work_type`で算出されており、
-  Bでは月次集計の休暇日数が直らない。日次計算の再実行は計算結果の新しいイベントを記録する
-  通常の計算処理であり、ReadModelの直接書き換えにはあたらない。
-- 未確定・要確認事項: なし(日次計算を再実行する既存コマンドは無いことを確認。
-  日次計算は各Handlerが`AttendanceCalculator::calculate()`→`AttendanceDayAggregate::calculate()->persist()`で
-  記録しているため、同じ処理を呼ぶ再計算コマンドを追加する)
+  - A. 本変更セットに含めて、`data-correction`スキルの手順で補正する
+  - B. 別の変更セット(データ補正専用)に分け、本変更セットでは読み手が休暇値を解釈しないこと
+    までを行う
+- 決定: B(ただし本変更セットのリリースと同時に補正できるよう、補正の変更セットを続けて作成する)
+- 理由: イベントの無い行の補正は、行ごとのイベント列(`attendance_day.calculated`等の後続
+  イベントの有無・aggregate_versionの採番)の調査と、`data-correction`スキルの判断(履歴の直接
+  修正の可否・ユーザーの明示的な許可)が必要で、論点1〜6とは独立して検討すべき規模がある。
+  論点1〜6だけで、休暇の表示・集計は消化記録から正しく求まる。
+- 未確定・要確認事項: 補正の変更セットのリリースまでの間、既存の休暇値が「作業内容」欄に
+  表示されたままになることを許容するか(許容しない場合は、補正までの間の表示の扱いを本変更
+  セットで決める)
+
+### 論点8: 本番の勤怠計算の再計算
+- 決定: 日次計算を一括で再実行するコマンド`attendance:recalculate-days`(`#[AdminExecutable]`、
+  `--from`/`--to`必須・`--user=*`任意、既定は試し実行、`--apply`で各勤怠日について
+  `AttendanceCalculator::calculate()`→`AttendanceDayAggregate::calculate()->persist()`)を追加し、
+  リリース後に実行する。提出済み・承認済み・締め済みの月は`attendance:recalculate-month-snapshots`で
+  再計算する。
+- 理由: 記録済みの日次計算・月次スナップショットは、消えた休暇値や`work_type`前提で算出されている。
+  再計算は計算結果のイベントを新しく追記する通常の処理で、履歴の書き換えやReadModelの直接変更には
+  あたらない。
+- 未確定・要確認事項: なし
+
+### 論点9: 申請不要(承認不要設定)の場合
+- 決定: 変更なし。承認不要時も休暇申請APIが申請・承認・消化記録の作成を一括で行っており、
+  日次画面の休暇指定UIもこのAPIを使う。勤怠の作成・編集から休暇を設定する経路は作らない。
+- 理由: 要望の「申請不要なら登録でき、消化記録も作られる」は既存の経路で満たされている。
+- 未確定・要確認事項: なし
 
 ## 仕様確定事項(まとめ)
 
-### 休暇値の判定
-- `work_type`が`paid_leave_`/`special_leave_`/`compensatory_leave_`で始まる値を休暇値とする。
-  有給側にも`PaidLeaveType::isPaidLeaveWorkType`を追加し、3種の判定を1か所の静的メソッドに
-  まとめる。
+### 休暇情報の求め方
+- 勤怠日の休暇 = その勤怠日IDに紐づく、取り消されていない消化記録(有給は`cancelled=false`、
+  特別休暇・代休は行が存在するもの)。
+- 種類(`paid`/`special`/`compensatory`)ごとに、取得単位は`usage_type`で判定する(`used_days`は
+  残数不足時に部分量になるため使わない)。特別休暇・代休でgrantごとに複数行ある場合は、
+  申請単位で1件にまとめる。
+- 勤怠モデルに有給・代休の消化記録のrelationを追加し(特別休暇は既存)、勤怠APIの一覧・日次・
+  今日の取得でeager loadする。
 
-### Projector(論点1〜3)
-- `AttendanceDayProjector`(または同じ`attendance_days`を扱う勤怠側Projector)が以下を購読する。
-  - `paid_leave_account.usage_designated`/`special_leave.usage_designated`/
-    `compensatory_leave.usage_designated`: `attendanceDayId`の行をupdateOrCreate
-    (対象者・勤務日はpayload、有給はaggregate uuid=userIdと`usedOn`)し、`work_type`を
-    `<種別>_leave_<usageType>`に設定する。`usageType`が全休なら`status`を`clocked_out`にする
-    (既存Handlerと同じ条件)。usageId→勤怠日IDの対応を勤怠側の対応表に保存する。
-  - `paid_leave_account.usage_cancelled`/`special_leave.usage_reversed`/
-    `compensatory_leave.usage_reversed`: 対応表から勤怠日を特定し、その`work_type`が当該休暇の
-    値であればnullに戻す(既存の取消Handlerと同じ挙動)。
-- 休暇の申請・取消Handlerから`attendance_days`の直接create/saveを削除する。Handlerが
-  直後に行っている日次計算(`AttendanceCalculator::calculate()`)は、usageイベントの永続化
-  (=同期Projectorによる`work_type`反映)の後に行う順序にし、行の取得は永続化後に
-  `AttendanceDay`を読み直して行う。
-- 対応表はマイグレーションで追加するProjectionテーブルとし、リビルドで再生成できること。
+### 勤怠API(`AttendanceDayResource`)
+- `leaves`配列を追加する。各要素: `kind`(paid/special/compensatory)、`unit`(full/am_half/
+  pm_half/hourly)、`hours`/`minutes`(時間休の場合)、`request_id`、`request_status`
+  (submitted/approved/returned)、`is_confirmed`、特別休暇は種類名。
+- `work_type`は作業内容としてそのまま返す(休暇値の解釈はしない)。
 
-### 勤怠の作成・編集(論点4)
-- `CreateAttendanceDay`/`EditAttendanceDay`/`AttendanceDayCreated`/`AttendanceDayEdited`に
-  `workTypeProvided`(bool)を追加する。旧イベント(キー無し)は`true`として扱う。
-- 編集Handler: 編集前の`work_type`が休暇値なら`workTypeProvided=false`でイベントを記録する
-  (送られた値は無視、エラーにしない)。休暇値でない日にコマンドの`workType`が休暇値なら
-  ドメイン例外→422(「休暇は休暇申請から設定してください」、フィールド`work_type`)。
-  それ以外は従来どおり。
-- 作成Handler: コマンドの`workType`が休暇値なら422。
-- Projector: `workTypeProvided=false`なら`work_type`に触れない。
-- フロント: 編集フォームの`workType`初期値は、`day.work_type`が休暇値なら空文字にする
-  (`AttendanceDayPage.tsx:695`)。それ以外の送信値・休暇指定UIは変更しない。
+### バックエンドの読み手
+- `AttendanceCalculator`: 有給・特別休暇の全休・半休の日数と半休の所定労働半減を、`work_type`
+  ではなく当日の消化記録から求める(計算結果は現行と同じ。代休の算入は対象外)。
+- `AttendanceRateAssessor`・`GrantScheduledSpecialLeaveHandler`: 休暇日の判定を消化記録の有無に
+  置き換える。`status`で出勤を判定している箇所は、全休の消化記録がある日も現行と同じ扱いになる
+  よう条件を加える。
+- 勤怠日の削除ガード(`DeleteAttendanceDayHandler`)に代休の消化記録を加える。
+- 取込差分検出(`AttendanceDifferenceDetector`)の休暇判定で、取消済みの有給を除外する。
 
-### 補正コマンド(論点6・7)
-- `#[AdminExecutable]`の運用コマンドを追加する(前例: `NormalizeAttendanceCalculationEventsCommand`)。
-  - 対象: `attendance_day.edited`/`attendance_day.created`で、`workTypeProvided`キーが無く、
-    `workType`が休暇値でなく、同じ勤怠日について「`usage_designated`以降・対応する取消以前」に
-    記録されたもの(`stored_events.id`の順序で判定)。
-  - 書き換え: `event_properties`に`workTypeProvided: false`を追加する(`workType`の値自体は
-    残す)。
-  - 既定は試し実行で、対象イベントID・勤怠日・利用者・日付・現在の`workType`・期待される休暇値の
-    一覧を出力する。`--apply`指定時のみ、バックアップテーブル(名前は引数指定、既存なら拒否)へ
-    `stored_events`をコピーしてから1トランザクションで書き換える。
-  - 冪等: `workTypeProvided`キーがあるイベントは対象外。
-- 日次計算の再計算コマンド`attendance:recalculate-days`(`#[AdminExecutable]`)を追加する。
-  `--from`/`--to`(勤務日、必須)と任意の`--user=*`で対象を絞り、既定は試し実行(対象件数・
-  勤怠日一覧の表示のみ)、`--apply`で各勤怠日に`AttendanceCalculator::calculate()`→
-  `AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist()`を実行する
-  (既存Handlerと同じ呼び出し方)。
-- 書き換え後の手順(本番): `projections:rebuild AttendanceDayProjector` →
-  `attendance:recalculate-days`(補正対象の勤務日の範囲) → `attendance:recalculate-month-snapshots`(対象月)。手順と確認用SELECTを
-  `docs/`の運用手順に記載する。
-- 本番での実行は、試し実行結果をユーザーが確認してからユーザーの指示で行う。
+### 休暇の申請・取消Handler
+- 勤怠日への直接create/save(`work_type`・`status`)を全て削除する。
+- 勤怠日の行が無い場合は`CreateAttendanceDay`を発行して作成してから消化記録のイベントを記録する。
+- 申請直後・取消直後の日次計算は、消化記録のイベントの記録後に行う。
+- 新規申請の重複チェックを3種とも「有給・特別休暇・代休のいずれかの有効な申請(申請中・承認済み)
+  がある日は拒否」に揃える。
+
+### フロントエンド
+- 休暇ラベル・バッジ(`statusLabels.ts`等)は`leaves`から表示する(複数あれば複数表示)。
+  全休のみの日は現行と同じく状態バッジの代わりに休暇ラベルを表示する。
+- 打刻漏れ警告(`attendanceDayWarnings.ts`)は、全休の休暇がある日を対象外にする。
+- 日次画面の休暇指定UIは、`work_type`ではなく`leaves`から現在の休暇を判定する。
+- 日次画面の作業内容欄は休暇日でも表示し、入力値をそのまま`work_type`として送る
+  (休暇日にnullを送る処理を削除)。
+
+### 再計算
+- `attendance:recalculate-days`を追加する(論点8)。
 
 ## 受け入れ条件
-- 有給・特別休暇・代休(全休・半休)の日に日次編集API(`work_type` null/未送信/休暇以外の値)で
-  出退勤時刻を変更すると、時刻は更新され、休暇値・usage・残高は変化しない。
-- 休暇値でない日に作成・編集APIで休暇値を送ると422になり、何も変化しない。
-- 休暇値でない日の作業内容(自由文字列)は従来どおり保存・表示される。
-- 休暇の申請・取消で`work_type`が設定・解除され、その際`attendance_days`の更新は
-  イベント(休暇のusageイベント)経由のProjectorでのみ行われる(Handlerに直接書き込みが無い)。
-- 空の`attendance_days`・対応表から`AttendanceDayProjector`をリビルドすると、休暇の
-  申請→編集→取消を含むシナリオで、リビルド前と同じ`work_type`・`status`になる(テストで検証)。
-- 補正コマンドの試し実行は対象一覧を出すだけで何も変更しない。`--apply`で対象イベントだけに
-  `workTypeProvided: false`が付き、バックアップテーブルが作られる。再実行しても対象0件。
-  補正+リビルド後、編集で消えていた休暇値が戻り、取消済みの休暇は戻らない(テストで検証)。
-- 既存のbackend/frontendテストが全てPASSする。
+- 有給・特別休暇・代休を申請した日の勤怠を編集しても、休暇の表示・集計・残高は変わらない。
+- 勤怠の作成・編集APIで`work_type`にどんな値を送っても、休暇の表示・集計・消化記録は変わらない。
+- 休暇の申請・取消で勤怠日が直接更新されない(勤怠日の行の作成は`attendance_day.created`
+  イベントを伴う)。
+- 週次・月次・日次・今日の勤怠画面で、休暇(申請中・差戻し中を含む)がバッジ表示される。
+  同日に複数の休暇があればすべて表示される。全休の日に打刻漏れ警告が出ない。
+- 勤怠計算の有給日数・特別休暇日数・半休の所定労働時間、出勤率の判定が、改修前と同じ入力に
+  対して同じ結果になる(既存テストを消化記録ベースに書き換えて確認)。
+- 有給・特別休暇・代休のいずれかが有効な日に、別の種類の休暇を新規申請すると拒否される。
+- `attendance:recalculate-days`は既定で何も変更せず、`--apply`で対象日の日次計算イベントを記録する。
+- backend/frontendのテストがCIで全てPASSする。
 
 ## 対象外
-- 代休の`work_type`が`AttendanceCalculator`の休暇日数集計に含まれていない件(別途仕様判断)
-- 日次画面の休暇指定UIの見た目・操作の変更(初期値の修正以外)
-- `AttendanceDayPage.test.tsx`の既存`it.skip`の解消
-- MCP側(`mcp/`)の変更
-- 本番での補正コマンドの実行そのもの(手順の用意まで)
+- 既存の勤怠日に残る休暇値と、`attendance_day.created`の無い勤怠日の補正(論点7。別の変更セット)
+- `work_type`の改名(論点6)
+- 代休を勤怠計算の休暇日数に算入するかどうか
+- 休暇として扱う範囲(申請中・差戻し中を含める現行ルール)の見直し
+- MCP側の変更(勤怠の`work_type`を読み書きしていない)
+- 本番での再計算コマンドの実行そのもの(手順の用意まで)
 
 ## ドキュメントへの影響
-- `docs/07-usecases-attendance.md`: 日次勤怠の作成・編集で休暇値は設定・変更できない
-  (休暇日の編集では維持、休暇値の新規指定は422)旨を追記。
-- `docs/09-usecases-paid-leave.md`(および特別休暇・代休の該当章): 休暇の申請・取消による
-  勤怠の休暇値の設定・解除が、usageイベントを購読するProjectorで行われる旨を追記。
-- `docs/17-events.md`: `attendance_day.created`/`edited`の`workTypeProvided`追加と、
-  勤怠Projectorが購読する休暇イベントを追記。
-- `docs/16-database-schema.md`: 対応表(Projectionテーブル)を追記。
-- 補正コマンドの運用手順(実行順・確認用SELECT)を`docs/`の運用手順(docs/32と同じ扱い)に追記。
+- `docs/16-database-schema.md`(565-568, 596, 917): `work_type`の定義を「作業内容」に改め、
+  休暇は消化記録から求める旨を記載。`paid_leave_days`の算出元を消化記録に修正。
+- `docs/07-usecases-attendance.md`(115, 136, 439): 勤怠の休暇表示・編集の記述を修正。
+- `docs/09-usecases-paid-leave.md`(90, 212-216, 607-616)と特別休暇・代休の該当箇所:
+  申請・取消で勤怠日を直接更新しない旨、重複チェックの統一を記載。
+- `docs/testing/scenario-tests.md:149`、`docs/29-event-sourcing-framework-migration.md:510`:
+  `work_type`の休暇値前提の記述を修正。
+- 再計算コマンドの運用手順を`docs/`の運用手順に追記。
 
 ## モック・アセット
-なし
+- `assets/impact-usage-derivation.md`: 影響範囲の調査結果(置き換え対象の一覧)
 
 ## 実装対象
-- backend: 休暇値判定、`AttendanceDayProjector`(休暇イベント購読・`workTypeProvided`)、
-  対応表のマイグレーション・モデル、勤怠の作成・編集のCommand/Event/Handler(`workTypeProvided`・
-  422)、休暇の申請・取消Handler(直接書き込みの削除)、補正コマンド、(必要なら)日次計算の
-  再実行コマンド、テスト
-- frontend: `AttendanceDayPage.tsx:695`の初期値とテスト
+- backend: 勤怠モデルのrelation、勤怠APIリソース・コントローラのeager load、`AttendanceCalculator`、
+  `AttendanceRateAssessor`、`GrantScheduledSpecialLeaveHandler`、`DeleteAttendanceDayHandler`、
+  `AttendanceDifferenceDetector`、休暇の申請・取消Handler(3種)、`attendance:recalculate-days`、テスト
+- frontend: `api`の型、`statusLabels.ts`、`attendanceDayWarnings.ts`、`AttendanceDayPage.tsx`、
+  週次・月次・今日・参照画面の休暇表示、テスト・story、e2e(`scenario-03-paid-leave.spec.ts`)
 - docs: 上記「ドキュメントへの影響」
 
 ## 検証方法
-- `cd backend && php artisan test`
-- `cd backend && vendor/bin/pint --test`
-- `cd frontend && npx vitest run --project=unit src/pages/attendance` と `npm run lint`
+- backend: CI(`.github/workflows/tests.yml`、PHP 8.4)。この作業環境はPHP 8.3のためローカルでは
+  実行できない(次回以降はPHP 8.4の環境で作業する)。
+- `cd backend && vendor/bin/pint --test`(CI)
+- `cd frontend && npm test && npm run lint`(ローカル)
 
 ## レビュー履歴
 - 2026-10-09 初版(休暇日の編集で休暇値を維持する)
@@ -311,6 +293,9 @@
   - 提示前に`changeset`スキルの独立設計レビューを行う。
   - 影響範囲(usageテーブル構造、休暇値の全読み手、テスト・docs、決めるべき論点)は
     `assets/impact-usage-derivation.md`に調査結果を保存済み。
+- 2026-10-10 `changeset`スキルの改訂手順(設計前提の検証)に従い、方針Bで変更セットを作り直した。
+  論点1〜9を新規に検討。前案(休暇イベント購読Projector・`workTypeProvided`・イベント履歴の
+  直接修正・休暇値の入力拒否)は全て破棄。
 
 ## 実装結果
 未着手

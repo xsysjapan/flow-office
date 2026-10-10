@@ -14,7 +14,7 @@
 
 | フォルダ | タイトル | ステータス |
 |---|---|---|
-| [20261009-keep-leave-work-type-on-edit](./20261009-keep-leave-work-type-on-edit/spec.md) | 休暇をusageから導出し、work_typeに休暇値を持たせない(作り直し中) | 検討中 |
+| [20261009-keep-leave-work-type-on-edit](./20261009-keep-leave-work-type-on-edit/spec.md) | 休暇を消化記録(usage)から求め、勤怠日の work_type に休暇値を持たせない | 検討中 |
 | [20261009-compensatory-leave-badge](./20261009-compensatory-leave-badge/spec.md) | 代休を取得した勤怠日に代休バッジが表示されない不具合の修正 | 完了 |
 | [20260919-paid-leave-schedule-rebuild](./20260919-paid-leave-schedule-rebuild/spec.md) | 過去の有給休暇付与予定を取消+再作成する運用コマンド(付与ルール指定・管理画面実行)の追加 | 完了 |
 | [20260919-prod-migration-history-collision](./20260919-prod-migration-history-collision/spec.md) | 本番マイグレーション履歴衝突によるデプロイ失敗の是正 | 完了 |
