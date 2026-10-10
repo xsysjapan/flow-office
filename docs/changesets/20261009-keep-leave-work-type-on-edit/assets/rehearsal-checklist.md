@@ -1,13 +1,20 @@
 # リリース前リハーサル手順書(変更セット 20261009-keep-leave-work-type-on-edit)
 
-本番相当データ(本番DBの複製)で、休暇まわりの移行・補正・検証を通しで行うための手順書。
+本番相当データ(本番DBの複製)で、休暇まわりの`stored_events`の作り直し(論点18)の試し実行・本実行・複製DBでの検証・
+入れ替え・リビルド・再計算・ロールバックを通しで行うための手順書。
 ユーザーがこの手順のとおりに実行し、結果を「8. 結果の記録欄」に書き込むことを想定する。
 
-- 対象の変更: PR #115(draft)。head ブランチ `claude/claude-md-delegation-rules`。実施時の commit を「1.2」に記録する。
-- 根拠: `spec.md`(論点12・13・17、仕様確定事項I・H、実装中の決定(a)〜(h))、`docs/27-release-runbook.md` 3.1、
-  `docs/32-stored-event-history-normalization.md` の休暇まわりの補正の節、`.claude/skills/data-correction/SKILL.md`。
+- 対象の変更: PR #115(draft)。head ブランチ `claude/claude-md-delegation-rules`。**WP10(変換コマンド・旧系統の削除)の実装後**に行う。
+  実施時の commit を「1-2」に記録する。
+- 根拠: `spec.md`(論点12・13・17・18、仕様確定事項H)、`assets/event-rebuild-mapping.md`(変換規則と7章の実行手順)、
+  `.claude/skills/data-correction/SKILL.md`(「`stored_events`の作り直しの進め方」)、`docs/27-release-runbook.md` 3.1。
+- 方針: 移行イベント・補正イベントは作らない。旧イベント列から新しいイベント構成の列を決定的に生成し、元の発生順にid・版を振り直した
+  表を作り、複製DBで検証してから入れ替える。移行コマンド・補正候補の検出コマンドは使わない(WP10で削除)。
+- 変換コマンドの名前 `leave:rebuild-event-store` とオプション(`--apply`・`--swap`)は仮称(`event-rebuild-mapping.md` 7章)。
+  WP10の実装に合わせて読み替える。
 - 表記: **要確認** は、コードや既存資料から確定できず、実施前にユーザーまたは委譲元が決める箇所。
-- 本番DBへの書き込みは、この手順書の対象外。本番で実行するのはユーザーの指示による(data-correction ステップ2・安全手順)。
+- 本番DBへの書き込みは、この手順書の対象外。本番での作り直しは、変換規則と試し実行の結果を示してユーザーの明示的な許可を得てから行う
+  (data-correction「本番での実行にはユーザーの明示的な許可を得る」)。
 
 ---
 
@@ -19,12 +26,19 @@
 SELECT DATABASE() AS db, VERSION() AS mysql_version, @@hostname AS host;
 ```
 
-期待: `db` がリハーサル用DB名(この手順では `flow_office_rehearsal`)。本番のDB名だった場合は、そこで中止する。
+期待: `db` がリハーサル用DB名。この手順では2つのDBを使う。
 
-### 0-2. リハーサル環境で通知・外部連携を止める(移行コマンドを実行する前に行う)
+| DB名 | 役割 |
+|---|---|
+| `flow_office_rehearsal` | 本番役。作り直しの試し実行・`--apply`・`--swap`・リビルド・再計算を行う |
+| `flow_office_verify` | 複製DB。`stored_events_rebuilt`を`stored_events`として入れ、リビルドして比較する(3-5) |
 
-移行コマンドは同期Reactorを通じて通知を発行する。DBの複製には本番の設定が入っているため、そのままでは本番利用者へ
-メールが送信される可能性がある。
+本番のDB名だった場合は、そこで中止する。
+
+### 0-2. リハーサル環境で通知・外部連携を止める(リビルド・再計算の前に行う)
+
+`event-sourcing:replay` ではReactorは走らないが、日次計算の再計算(`attendance:recalculate-days`)はCommandを通るため、
+同期Reactor・通知が動く可能性がある。DBの複製には本番の設定が入っているため、そのままでは本番利用者へメールが送信される可能性がある。
 
 ```sql
 -- メール通知(GraphMailNotifier)を止める。送信先の設定はsystem_settingsにある(要確認: 本番のTeams・Entra設定の有無)
@@ -34,6 +48,7 @@ UPDATE system_settings SET notification_mail_enabled = 0;
 - `.env` は `MAIL_MAILER=log` にする。
 - キューワーカー(`php artisan queue:work`)を起動しない。cron を設定しない。
 - `SyncUsersFromMs365Command`・freee/MoneyForward連携・定時の付与コマンド(`GrantScheduledSpecialLeaveCommand`等)は実行しない。
+- `flow_office_verify` にも同じ設定を行う。
 
 ### 0-3. 出力の保存
 
@@ -41,7 +56,7 @@ UPDATE system_settings SET notification_mail_enabled = 0;
 本手順書の `mysql ... -B -e` の出力は、タブ区切り・ヘッダ付きで保存される。
 
 ```bash
-mkdir -p ~/rehearsal-20261009/{before,after,rebuild}
+mkdir -p ~/rehearsal-20261009/{before,dryrun,verify,after,rebuild,backup}
 ```
 
 ### 0-4. SQLの互換性
@@ -59,29 +74,29 @@ mysql -h <リハーサルホスト> -u <ユーザー> -p -D flow_office_rehearsa
 
 ### 1-1. 本番DBの複製
 
-既存の運用手順(複製の専用手順)は無い。`docs/32` の補正は2026-08-10のSQLエクスポートを基準にしている。
-以下は一般的な手順で、**要確認**(本番の接続方式・権限・MySQLバージョン)。
+既存の運用手順(複製の専用手順)は無い。以下は一般的な手順で、**要確認**(本番の接続方式・権限・MySQLバージョン)。
 
 ```bash
 # 本番側: 読み取りのみ(書き込みしない)
 mysqldump --single-transaction --routines --triggers --no-tablespaces \
   -h <本番ホスト> -u <ユーザー> -p <本番DB名> | gzip > ~/rehearsal-20261009/prod-copy.sql.gz
 
-# リハーサル用DBへ投入
+# リハーサル用DB(本番役)へ投入
 mysql -h <リハーサルホスト> -u <ユーザー> -p -e \
   "CREATE DATABASE flow_office_rehearsal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 gunzip -c ~/rehearsal-20261009/prod-copy.sql.gz | mysql -h <リハーサルホスト> -u <ユーザー> -p flow_office_rehearsal
 ```
 
-- 複製の時刻は、本番の休暇の申請・承認・付与取消を止めた時点(docs/27 3.1 の1番)が望ましい。
+- 複製の時刻は、本番の休暇の申請・承認・付与取消を止めた時点が望ましい。
 - 複製ファイルには個人情報・認証情報が含まれる。保存先と削除の方法はユーザーの規程に従う。
 - 投入後、0-1 で接続先を確認する。
 - `stored_events` の件数を本番側で控えておく(2-B15 の値と照合する)。
 
 ### 1-2. 配備するブランチ
 
-- ブランチ: `claude/claude-md-delegation-rules`(PR #115 の head)。
+- ブランチ: `claude/claude-md-delegation-rules`(PR #115 の head。WP10を含むこと)。
 - 実施時の commit: `git rev-parse HEAD` の値を記録する。 ____________________
+- 旧コード(本番で動いている origin/main 系)の commit も記録する(5-6 のロールバックで再配備する)。 ____________________
 
 ### 1-3. PHPとComposer
 
@@ -103,21 +118,24 @@ cp .env.example .env
   `php artisan key:generate` を実行すると復号できなくなる。**要確認**: 暗号化カラムの一覧。
 - `APP_ENV=production`、`APP_DEBUG=false`(docs/27 §3 の .env 設定に従う)。
 - `MAIL_MAILER=log`(0-2)。
+- 複製DBでの検証(3-5)用に、`DB_DATABASE=flow_office_verify` の `.env` を持つ別のアプリ配置(または同じ配置で `.env` を切り替える)を用意する。
 
 ```bash
 php artisan config:clear && php artisan route:clear && php artisan view:clear
 ```
 
-### 1-5. 移行前の記録
+### 1-5. 作り直し前の記録
 
-**migrate の前に**、2 の記録をすべて取得する。migrate の後では旧スキーマの値を取り直せない。
+**作り直し・migrate の前に**、2 の記録をすべて取得する。作り直しの後では旧イベント・旧スキーマの値を取り直せない
+(元の表は `stored_events_before_rebuild_*` として残るが、ReadModelは作り直される)。
 
 ---
 
-## 2. 移行前の記録(migrate の前に、旧スキーマのDBで実行)
+## 2. 作り直し前の記録(作り直し・migrate の前に、旧スキーマのDBで実行)
 
-各SQLを `~/rehearsal-20261009/before/` に保存する。比較の基準として、6章で同じSQLを移行後に再実行する。
-**このSQLは旧スキーマ(migrate前)でのみ動く。** 以下のテーブル・列はマイグレーション前から存在するものだけを使っている。
+各SQLを `~/rehearsal-20261009/before/` に保存する。比較の基準として、3-5(複製DB)と6章で同じSQLを作り直し後に再実行する。
+**このSQLは旧スキーマ(migrate前)で取得する。** 以下のテーブル・列はマイグレーション前から存在するものだけを使っている
+(作り直し後も同じ列が残る想定。WP10で削除する列は使っていない)。
 
 ### B01. 月次スナップショット(提出以降の月)
 
@@ -314,7 +332,7 @@ WHERE d.status = 'clocked_out' AND d.actual_start_at IS NULL AND d.actual_end_at
 GROUP BY d.work_type
 ORDER BY days DESC;
 
--- (2)の基準: 勤怠日の最初のイベントに attendance_day.created が無い日(prerequisites の (a1)(a2))
+-- (2)の基準: 勤怠日の最初のイベントに attendance_day.created が無い日(prerequisites の (a1)(a2))。作り直しで created を補う日
 SELECT COUNT(*) AS no_created,
        SUM(EXISTS(SELECT 1 FROM stored_events e
                   WHERE e.aggregate_uuid = d.id AND e.event_class LIKE 'attendance_day.%')) AS with_other_events
@@ -330,7 +348,7 @@ WHERE event_class IN ('attendance_day.created', 'attendance_day.edited')
 GROUP BY event_class;
 ```
 
-- 注意: (2)の`no_created`は目安。正式な候補は `leave:correction-report` の (2) を使う(5章)。
+- 注意: (2)の`no_created`は目安。正式な件数は作り直しの試し実行(3-2)の「`created`を補う勤怠日」の件数を使う。
 
 ### B13. 休暇に紐づく申請(統合ワークフロー)の状態
 
@@ -348,7 +366,7 @@ ORDER BY subject_type, status;
 SELECT status, COUNT(*) AS months FROM attendance_months GROUP BY status ORDER BY status;
 ```
 
-### B15. イベントの件数(移行で増える件数の基準)
+### B15. イベントの件数(作り直しで変わる件数の基準)
 
 ```sql
 SELECT COUNT(*) AS stored_events_total, MAX(id) AS max_id FROM stored_events;
@@ -362,29 +380,382 @@ ORDER BY prefix;
 
 ### 2の見方
 
-- B09 の申請が 8 件でなければ、spec の前提(2026-10-10 の確認)と本番の状態が違う。移行の前に止めて確認する。
-- B02 と B01 は、移行後の6-2の比較の基準になる。移行は月次の値を変えない設計(論点3)のため、差分が出た場合は6-2の「期待する差分」と照合する。
+- B09 の申請が 8 件でなければ、spec の前提(2026-10-10 の確認)と本番の状態が違う。作り直しの前に止めて確認する。
+- B01〜B15 は、3-5(複製DB)と6-2の比較の基準になる。差分は6-2の「期待する差分」(変換規則で意図した差)と照合する。
 
 ---
 
-## 3. リリース手順の通し実行(docs/27 §3.1 の順)
+## 3. 作り直しの試し実行・本実行・複製DBでの検証(`event-rebuild-mapping.md` 7章の1〜5)
 
-### 3-1. メンテナンス窓の模擬
+変換コマンド `leave:rebuild-event-store`(仮称)は、旧イベントクラスに依存せず `stored_events` の生のJSONを読む。
+3-1〜3-4 は `flow_office_rehearsal`(本番役・旧スキーマのまま)で、3-5 は `flow_office_verify` で行う。
 
-本番では、休暇の申請・承認・付与取消の操作を止める(docs/27 3.1 の1番)。リハーサルでは、止めた時刻を記録する。
+- **要確認 R1**: 変換コマンドは新しいコードに含まれる。旧スキーマのDB(migrate前)に対して実行できること(読むのは
+  `stored_events` だけで、新しいテーブルを前提にしないこと)をWP10の実装で確認する。
 
-### 3-2. マイグレーション
+### 3-1. 事前条件の確認
+
+試し実行が自動で確認するが、同じ内容をSQLでも確認して記録する。
+
+```sql
+-- (1) 新しい種類のイベントが0件(期待: 0行)。paid_leave_account.* のうち新しい種類はWP10の一覧で確認する(要確認)
+SELECT event_class, COUNT(*) AS events
+FROM stored_events
+WHERE event_class LIKE 'paid_leave_request.%'
+   OR event_class LIKE 'special_leave_account.%'
+   OR event_class LIKE 'compensatory_leave_account.%'
+GROUP BY event_class;
+
+-- (2) 補正ログが0件(テーブルが無ければ0件として扱う。本番の旧スキーマには無い想定)
+SELECT COUNT(*) AS corrections FROM stored_event_corrections;
+
+-- (3) スナップショットが0件(要確認: spatie のスナップショットのテーブル名)
+SELECT COUNT(*) AS snapshots FROM snapshots;
+
+-- (4) cutover のイベントの件数(2.3の突き合わせの対象)
+SELECT COUNT(*) AS cutover_events, MIN(created_at) AS first_at, MAX(created_at) AS last_at
+FROM stored_events
+WHERE event_class = 'paid_leave_account.migrated';
+```
+
+- (1)(2)(3) のいずれかが0件でなければ、作り直しは行わない(試し実行も失敗する)。補正ログがある場合は旧id→新idの対応表を
+  残す必要がある(`event-rebuild-mapping.md` 6章)ため、委譲元に報告する。
+
+### 3-2. 試し実行(既定)
+
+```bash
+cd <リハーサル用アプリ>/backend
+php artisan leave:rebuild-event-store | tee ~/rehearsal-20261009/dryrun/rebuild-dryrun.txt
+```
+
+見方(`event-rebuild-mapping.md` 7章の2):
+
+| 出力 | 期待 | 違った時 |
+|---|---|---|
+| 申請・付与・勤怠日ごとの変換結果の件数(旧イベント数 → 新イベント数) | 件数を記録する | 2.1・2.2・2.4 の規則で説明できない増減があれば止める |
+| 扱えない並びの一覧(申請・付与・勤怠日ごと) | **0件**(1件でもあれば試し実行は失敗する) | 推測で埋めない。並びごとに原因を確認し、変換規則を決めて変更セットを更新してから再実行する |
+| cutover の付与の突き合わせ(再現・`carried_over`・不一致) | 不一致 **0件**。`carried_over` の件数と内容を記録する | 不一致の付与は原因を確認し、変換規則を決めてから進む(2.3) |
+| 差戻し/取消/却下の判定結果(申請ごと) | 下のSQLのワークフローの状態と一致する | 一致しない申請を個別に確認する |
+| `created` を補う勤怠日(2.4)と、そのうち `source=leave` にする日 | B12 の `no_created` と照合する | 差があれば理由を確認する |
+| 休暇値を書き換える `created`/`edited`(2.4) | B12 の (3) の件数と一致する | 差があれば理由を確認する |
+| 置く `attendance_day.deleted`(休暇の解除で空になった勤怠日、後続のイベントが無いもの) | 件数を記録する | 後続のイベントがあって置かなかった日も一覧で確認する |
+| 既定値nullの項目の補完(2.5) | 補完できない項目0件 | 補完元が無いものは扱えない並びとして扱う |
+
+差戻し/取消/却下の判定と突き合わせるワークフローの状態(旧スキーマ。`workflow_requests` の `subject_type`・`subject_id`):
+
+```sql
+SELECT w.subject_type, w.status AS workflow_status,
+       COALESCE(p.status, s.status, c.status) AS request_status, COUNT(*) AS requests
+FROM workflow_requests w
+LEFT JOIN paid_leave_requests p         ON w.subject_type = 'paid_leave_request'         AND p.id = w.subject_id
+LEFT JOIN special_leave_requests s      ON w.subject_type = 'special_leave_request'      AND s.id = w.subject_id
+LEFT JOIN compensatory_leave_requests c ON w.subject_type = 'compensatory_leave_request' AND c.id = w.subject_id
+WHERE w.subject_type IN ('paid_leave_request', 'special_leave_request', 'compensatory_leave_request')
+GROUP BY w.subject_type, w.status, COALESCE(p.status, s.status, c.status)
+ORDER BY w.subject_type, w.status;
+```
+
+- `workflow_status = rejected` かつ `request_status = submitted` の件数 = 却下として `*.cancelled`・`usage_cancelled` にする件数。
+- `workflow_status = returned` の件数 = 差戻しの状態で終わる申請の件数(cutover後の有給の差戻しはワークフローのイベントから組み立てる)。
+- `request_status` が NULL の行(業務側の申請が見つからないワークフロー)は件数を記録し、試し実行の扱えない並びと照合する。
+
+### 3-3. 書き込みを止める(本番の手順の模擬)とバックアップ
+
+本番では次を止める。リハーサルでは各操作の時刻を記録し、5-6 の再開までの時間(メンテナンス窓)を測る。
+
+1. メンテナンスモード: `php artisan down`
+2. スケジューラ(cron)・キューワーカーの停止
+3. 打刻端末・外部API・MCP(`mcp/`)からの受付の停止
+
+停止の後、DB全体のバックアップを取る(5-7 のロールバックで使う。ReadModelもスキーマも含む)。
+
+```bash
+mysqldump --single-transaction --routines --triggers --no-tablespaces \
+  -h <リハーサルホスト> -u <ユーザー> -p flow_office_rehearsal | gzip > ~/rehearsal-20261009/backup/before-rebuild.sql.gz
+```
+
+### 3-4. `--apply`(新しい表 `stored_events_rebuilt` に書く)
+
+```bash
+php artisan leave:rebuild-event-store --apply | tee ~/rehearsal-20261009/dryrun/rebuild-apply.txt
+```
+
+- 休暇以外のイベントも同じ順で写し、id・版を振り直す。`stored_events` は変わらない。
+- 出力の件数が 3-2 の試し実行と一致することを確認する。
+
+確認のSQL:
+
+```sql
+-- (1) 件数(作り直し前と後)
+SELECT (SELECT COUNT(*) FROM stored_events) AS before_total,
+       (SELECT COUNT(*) FROM stored_events_rebuilt) AS rebuilt_total,
+       (SELECT MAX(id) FROM stored_events_rebuilt) AS rebuilt_max_id;
+
+-- (2) 接頭辞ごとの件数(作り直し前と後を並べて保存する)
+SELECT SUBSTRING_INDEX(event_class, '.', 1) AS prefix, COUNT(*) AS events FROM stored_events GROUP BY prefix ORDER BY prefix;
+SELECT SUBSTRING_INDEX(event_class, '.', 1) AS prefix, COUNT(*) AS events FROM stored_events_rebuilt GROUP BY prefix ORDER BY prefix;
+
+-- (3) 集約ごとの版が1から欠けなく連番(期待: 0行)
+SELECT aggregate_uuid, COUNT(*) AS n, MIN(aggregate_version) AS min_v, MAX(aggregate_version) AS max_v
+FROM stored_events_rebuilt
+WHERE aggregate_uuid IS NOT NULL
+GROUP BY aggregate_uuid
+HAVING MIN(aggregate_version) <> 1 OR MAX(aggregate_version) <> COUNT(*);
+
+-- (4) (aggregate_uuid, aggregate_version) の重複(期待: 0行)
+SELECT aggregate_uuid, aggregate_version, COUNT(*) AS n
+FROM stored_events_rebuilt
+WHERE aggregate_uuid IS NOT NULL
+GROUP BY aggregate_uuid, aggregate_version
+HAVING COUNT(*) > 1;
+
+-- (5) id順に並べたときの発生日時の逆転の数(作り直し前と後を比べる。増えていれば理由を確認する)
+SELECT COUNT(*) AS inversions FROM stored_events a JOIN stored_events b ON b.id = (SELECT MIN(id) FROM stored_events WHERE id > a.id)
+WHERE b.created_at < a.created_at;
+SELECT COUNT(*) AS inversions FROM stored_events_rebuilt a JOIN stored_events_rebuilt b ON b.id = a.id + 1
+WHERE b.created_at < a.created_at;
+
+-- (6) 変換対象外のイベントが、種類・集約・版・発生日時・内容とも変わっていない(期待: 0)
+SELECT COUNT(*) AS changed_or_missing
+FROM stored_events o
+WHERE o.event_class NOT REGEXP '^(paid_leave|special_leave|compensatory_leave|attendance_day)'
+  AND NOT EXISTS (SELECT 1 FROM stored_events_rebuilt n
+                  WHERE n.aggregate_uuid <=> o.aggregate_uuid
+                    AND n.aggregate_version <=> o.aggregate_version
+                    AND n.event_class = o.event_class
+                    AND n.created_at = o.created_at
+                    AND n.event_properties = o.event_properties);
+```
+
+- (5) の作り直し前のSQLは、元の id が飛び飛びでも動くように書いた(件数が多いと遅い。**要確認**: 所要時間)。
+- (6) は `meta_data` を比べない(`aggregate-root-version` 等が更新されるため。6章)。`workflow_request.*` は変換の入力に使うが
+  書き換えないので、(6) の対象に含まれる。
+
+### 3-5. 複製DBでの検証(`flow_office_verify`)
+
+作り直し後の表から全Projectorをリビルドし、作り直し前のReadModel(2章の記録)と比べる。差が「意図した差」だけであることを確認する。
+
+```bash
+# 3-4 の後の flow_office_rehearsal(stored_events_rebuilt を含む)を複製する
+mysqldump --single-transaction --routines --triggers --no-tablespaces \
+  -h <リハーサルホスト> -u <ユーザー> -p flow_office_rehearsal | gzip > ~/rehearsal-20261009/verify/verify-src.sql.gz
+mysql -h <リハーサルホスト> -u <ユーザー> -p -e \
+  "CREATE DATABASE flow_office_verify CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+gunzip -c ~/rehearsal-20261009/verify/verify-src.sql.gz | mysql -h <リハーサルホスト> -u <ユーザー> -p flow_office_verify
+```
+
+```sql
+-- flow_office_verify で実行する(0-1 で接続先を確認してから)
+RENAME TABLE stored_events TO stored_events_original, stored_events_rebuilt TO stored_events;
+```
+
+以降は `DB_DATABASE=flow_office_verify` の `.env` の新しいコードで、5-3〜5-4 と同じ手順を行う(migrate・外部キーの確認・権限カタログ・
+全ReadModelを空にして全Projectorをリビルド)。続けて、5-5 の日次計算の再計算を試し実行で行い、変わる日の一覧を保存する。
+
+比較:
+
+1. 2章の B01〜B15 を `flow_office_verify` で実行し、`~/rehearsal-20261009/verify/` に保存する。
+2. `diff ~/rehearsal-20261009/before/B02.tsv ~/rehearsal-20261009/verify/B02.tsv` のように差分を取る。
+3. 差分を6-2の「期待する差分」と照合する。6-3 の照合も `flow_office_verify` で行う。
+4. 説明できない差分が1件でもあれば、5章(入れ替え)に進まない。
+
+---
+
+## 4. 確認事項(a)〜(h)(spec「実装中の決定」のリハーサル確認事項を作り直しに合わせて改めたもの)
+
+各項目は、作り直し前の記録(2)・試し実行(3-2)・複製DBでの検証(3-5)の結果で確認する。SQLは作り直しの前(旧スキーマ)に実行する。
+
+### (a) 現行で残数不足のまま承認された消化記録
+
+- 作り直しでの扱い: 承認は `*.used` の有無にかかわらず `usage_confirmed` にし、充当は `*.used`・`usage_allocated` がある分だけ。
+  残りは未充当量(申請日数 − 充当合計)として確定イベントに記録する(`event-rebuild-mapping.md` 2.1・5章、論点17)。
+- 確認: 件数と不足量を記録し、3-5 の消化記録(`unallocated_days`)と一致するか見る。
+
+```sql
+-- 特別休暇
+SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(u.used_days), 0) AS allocated_days
+FROM special_leave_requests r
+LEFT JOIN special_leave_usages u
+       ON u.special_leave_request_id = r.id AND u.special_leave_grant_id IS NOT NULL
+WHERE r.status = 'approved'
+GROUP BY r.id, r.user_id, r.target_date, r.requested_days
+HAVING COALESCE(SUM(u.used_days), 0) < r.requested_days - 0.001
+ORDER BY r.target_date;
+
+-- 代休(取得単位が時間の申請は(b)で見る)
+SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(u.used_days), 0) AS allocated_days
+FROM compensatory_leave_requests r
+LEFT JOIN compensatory_leave_usages u
+       ON u.compensatory_leave_request_id = r.id AND u.is_confirmed = 1 AND u.compensatory_leave_grant_id IS NOT NULL
+WHERE r.status = 'approved' AND r.leave_type <> 'hourly'
+GROUP BY r.id, r.user_id, r.target_date, r.requested_days
+HAVING COALESCE(SUM(u.used_days), 0) < r.requested_days - 0.001
+ORDER BY r.target_date;
+```
+
+- 特別休暇のうち残数を要しない種別は `*.used` が出ないため、この件数に入る。作り直しでは `*.used` が無い申請を「残数を要しない」
+  (`requiresGrant=false`、未充当量0)と判定する(5章)。**要確認 R7**: 残数を要する種別で `*.used` が無い申請(残数0で承認されたもの)が
+  あると、この判定で「要しない」に分類される。種別の現在の設定と突き合わせ、該当があれば変換規則を決める。
+
+### (b) 時間単位で分数が null の申請・消化記録
+
+- 作り直しでの扱い: 時間休の `hours` は旧 `usedMinutes`÷60、代休の分数は旧 `used` の `usedMinutes`・申請の `requestedMinutes` から求める
+  (5章)。求められない申請は扱えない並びとして試し実行が失敗する想定(**要確認 R8**: WP10の実装での扱い)。
+
+```sql
+-- 期待: 0件
+SELECT 'special' AS kind, COUNT(*) AS requests FROM special_leave_requests
+WHERE leave_type = 'hourly' AND hours IS NULL AND status IN ('submitted', 'approved')
+UNION ALL
+SELECT 'compensatory', COUNT(*) FROM compensatory_leave_requests
+WHERE leave_type = 'hourly' AND requested_minutes IS NULL AND status IN ('submitted', 'approved');
+
+-- 消化記録の側(期待: 0件)
+SELECT 'special' AS kind, COUNT(*) FROM special_leave_usages WHERE usage_type = 'hourly' AND used_minutes IS NULL
+UNION ALL
+SELECT 'compensatory', COUNT(*) FROM compensatory_leave_usages WHERE usage_type = 'hourly' AND used_minutes IS NULL;
+```
+
+- 違った時に決めること: 件数が 1 以上なら、正しい分数をどう決めるかをユーザーに確認し、変換規則に加えてから進む。
+
+### (c) 代休の付与一覧の残数表示(下書きを含む)
+
+- 確認: 現行の残数表示は下書き(`draft`)の付与を含む。作り直し後も同じに保つか。
+- 期待: 件数と残数の合計を記録する(B05)。3-5 の B05 と一致する。
+- 違った時に決めること: 「下書きを含む」を維持する(仕様「表示用Projectorで対応」)か、表示から外すか。
+  判断はユーザーが行う(変更セットの決定に反する場合は変更セットを更新)。
+
+### (d) 全Projectorのリビルドの所要時間と行数
+
+- 確認: 5-4(と 3-5)の全ReadModelのリビルドの所要時間と、主なテーブルの行数。
+- 期待:
+  - `attendance_day_leaves` の行数 = 休暇申請の総数(差戻し・取消の行も `request_status` を変えて残るため)。
+  - 所要時間(5-4 のリビルド+5-5 の再計算): 本番のメンテナンス窓に収まるか。収まらない場合は、ユーザーがメンテナンス窓の長さを判断する。
+
+```sql
+SELECT leave_kind, request_status, COUNT(*) AS rows_count
+FROM attendance_day_leaves
+GROUP BY leave_kind, request_status
+ORDER BY leave_kind, request_status;
+```
+
+- 違った時に決めること: 行数の不一致は6-3の照合で差分を特定する。
+
+### (e) cutover後の `paid_leave_account.usage_designated` で `paidLeaveRequestId` が null のもの
+
+- 作り直しでの扱い: cutover後の有給は口座イベントを申請ごとに組み立てる(2.1)ため、申請IDの無い消化記録は申請に結び付けられない。
+  扱えない並びとして試し実行が失敗する想定(**要確認 R8**)。
+
+```sql
+-- 期待: 0件
+SELECT COUNT(*) AS without_request_id
+FROM stored_events
+WHERE event_class = 'paid_leave_account.usage_designated'
+  AND (JSON_EXTRACT(event_properties, '$.paidLeaveRequestId') IS NULL
+       OR JSON_TYPE(JSON_EXTRACT(event_properties, '$.paidLeaveRequestId')) = 'NULL');
+
+-- 内容の確認(件数が少ない場合)
+SELECT id, aggregate_uuid, created_at,
+       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usageId'))  AS usage_id,
+       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usedOn'))   AS used_on,
+       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usedDays')) AS used_days
+FROM stored_events
+WHERE event_class = 'paid_leave_account.usage_designated'
+  AND (JSON_EXTRACT(event_properties, '$.paidLeaveRequestId') IS NULL
+       OR JSON_TYPE(JSON_EXTRACT(event_properties, '$.paidLeaveRequestId')) = 'NULL')
+ORDER BY id;
+```
+
+- **要確認**: `usedOn`・`usedDays` のキー名は `PaidLeaveAccountUsageDesignated` のプロパティ名で推定した。結果が空なら、キー名を確認する。
+- 違った時に決めること: 件数が 1 以上なら、対応する申請を特定する方法(対象日・利用者での突き合わせ等)をユーザーと決め、変換規則に加える。
+
+### (f) 承認済み・未充当の消化記録の未充当量
+
+- 作り直しでの扱い: 未充当量は 0 として扱わず、申請日数 − 充当合計を記録する(a)。cutover前の有給8件は、cutoverの付与を旧付与と
+  突き合わせて旧イベントで再現できれば(2.3)、充当まで再現されるため未充当にならない。
+- 有給の確認(旧スキーマ):
+
+```sql
+-- cutover前の8件(B09)は消化記録が無いため出る。それ以外は件数を記録する
+SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(a.allocated_days), 0) AS allocated_days
+FROM paid_leave_requests r
+LEFT JOIN paid_leave_usages u ON u.paid_leave_request_id = r.id AND u.cancelled = 0
+LEFT JOIN paid_leave_usage_allocations a ON a.usage_id = u.usage_id
+WHERE r.status = 'approved'
+GROUP BY r.id, r.user_id, r.target_date, r.requested_days
+HAVING COALESCE(SUM(a.allocated_days), 0) < r.requested_days - 0.001
+ORDER BY r.target_date;
+```
+
+- 期待: 3-5 で、cutover前の8件に消化記録と充当がある(6-3 (6))。特別・代休は (a) の件数と同じ件数が未充当量ありになる。
+- 違った時に決めること: 8件の充当が再現されない場合は、3-2 のcutoverの突き合わせ結果(再現・`carried_over`・不一致)を確認する。
+
+### (g) 差戻し/取消/却下の判定とワークフローの状態の突き合わせ
+
+- 確認: 3-2 の試し実行の差戻し/取消/却下の判定結果を、3-2 のSQL(ワークフローの状態)と申請ごとに突き合わせる。
+  - ワークフローが無い休暇申請(申請不要の承認で作られたもの以外): 件数を記録し、理由を確認する。
+  - 差戻し済みで消化記録が取り消されていない申請(論点12の候補(1)): 作り直しで差戻しの位置に `usage_cancelled` が置かれる件数と一致する。
+  - 却下済みのワークフローで申請中の休暇: 作り直しで `*.cancelled` になる件数と一致する。
+- 違った時に決めること: 一致しない申請を個別に確認し、変換規則の不足であれば変更セットを更新してから再実行する。
+
+### (h) 旧システムが直接作った勤怠日の扱い
+
+- 作り直しでの扱い(2.4): `attendance_day.created` が無い勤怠日は、最初のイベントの直前に `created` を置く(内容はReadModelの現在値。
+  休暇の処理が作った日は `source=leave`、全休のために書かれた `clocked_out` は `not_started`)。休暇の解除で空になった勤怠日は、後続の
+  イベントが無い場合だけ `deleted` を置く。
+- 確認: 3-2 の「`created` を補う勤怠日」の件数・内訳(source・status)を B12 と照合する。3-5 で B12 の休暇値・全休の `clocked_out`・
+  `no_created` が 0 件になる。
+- 違った時に決めること: 「休暇の処理が作った日」の判定(source=leave にするか)が実態と違う日があれば、判定の条件をユーザーと決める。
+
+---
+
+## 5. 入れ替え・リビルド・再計算・再開・ロールバック(`event-rebuild-mapping.md` 7章の6〜8とロールバック)
+
+5章は 3-5 の比較と4章の確認がすべて済んでから行う。本番では、この前に変換規則と試し実行・複製DBでの比較の結果を示し、
+ユーザーの明示的な許可を得る(許可の日時と内容を `spec.md` のレビュー履歴に記録する)。
+
+### 5-1. 前提の確認
+
+- 3-2 の扱えない並び 0件、cutoverの不一致 0件。
+- 3-5 の差分がすべて「意図した差」。
+- 4章の (a)〜(h) の判断が決まっている。
+- 3-3 のバックアップ(`backup/before-rebuild.sql.gz`)がある。
+
+### 5-2. 入れ替え(`--swap`)
+
+```bash
+php artisan leave:rebuild-event-store --swap | tee ~/rehearsal-20261009/after/rebuild-swap.txt
+```
+
+コマンドが行うこと(同じ内容のSQL。1文で原子的):
+
+```sql
+RENAME TABLE stored_events TO stored_events_before_rebuild_YYYYMMDDHHMMSS,
+             stored_events_rebuilt TO stored_events;
+ALTER TABLE stored_events AUTO_INCREMENT = <新しい最大id + 1>;
+```
+
+```sql
+-- 確認: 次に振られるidが最大id+1であること
+SELECT MAX(id) + 1 AS expected_next_id FROM stored_events;
+SELECT AUTO_INCREMENT FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stored_events';
+```
+
+- 元の表の名前(`stored_events_before_rebuild_*`)を記録する。 ____________________
+
+### 5-3. 旧系統を削除した新しいコードの配備とマイグレーション
 
 ```bash
 cd <リハーサル用アプリ>/backend
 php artisan migrate --force
-php artisan migrate:status | tail -n 15
+php artisan migrate:status | tail -n 20
+php artisan access-control:sync-catalog
 ```
 
-- 対象は `2026_10_10_000001`〜`000009`。docs/27 3.1 は `000001`〜`000008` と書いているが、リポジトリには `000009`(補正ログ `stored_event_corrections`)がある。
-  **要確認**: docs/27 の記述を `000009` まで直すかどうか。
+- 対象は本変更のマイグレーション(`2026_10_10_*`。WP10の列削除を含む)。**要確認 R10**: docs/27 3.1 の migrate の範囲の記述。
 
-外部キーの撤去を確認する(MySQL)。
+外部キーの撤去と列を確認する(MySQL)。
 
 ```sql
 -- 期待: 0行
@@ -411,360 +782,60 @@ WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'compensatory_leave_grants'
   AND COLUMN_NAME = 'attendance_day_id'
   AND NON_UNIQUE = 0;
+
+-- 期待: 0行(WP10で削除する列が残っていないこと。列名はWP10の実装に合わせて読み替える)
+SELECT TABLE_NAME, COLUMN_NAME
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND ((COLUMN_NAME = 'input_source')
+    OR (COLUMN_NAME = 'stored_event_id' AND TABLE_NAME IN ('paid_leave_usages', 'special_leave_usages', 'compensatory_leave_usages')));
 ```
 
-### 3-3. 権限カタログの同期
+### 5-4. 全ReadModelを空にして全Projectorをリビルド
 
-```bash
-php artisan access-control:sync-catalog
-```
+作り直しでは、休暇の処理が直接作った勤怠日にも `created` が置かれるため、勤怠日・日次計算・月次を含む**全ReadModel**を空にしてよい
+(旧手順の「勤怠日を空にしない」は不要になった)。Projectorは `replay` の前に状態を消さないため、必ず空にしてから再生する。
 
-### 3-4. 新設Projectorのテーブルを空にして再生成
-
-Projectorは自動検出で有効になる。過去分は `event-sourcing:replay` で反映する。
-**空にするのは下表のテーブルだけ。** 勤怠日・日次計算・月次のテーブルは空にしない(理由は下の注意を参照)。
-
-| Projector | 書き込むテーブル | 空にする |
-|---|---|---|
-| `LeaveRequestWorkflowLinkProjector` | `leave_request_workflow_links` | する |
-| `PaidLeaveRequestProjector` | `paid_leave_requests`、`paid_leave_request_usage_links` | する(対応表と同時) |
-| `AttendanceDayLeaveProjector` | `attendance_day_leaves`、`attendance_day_leave_paid_usages` | する |
-| `CompensatoryGrantDayViewProjector` | `compensatory_grant_day_views`、`compensatory_grant_day_view_allocations` | する |
-| `CompensatoryLeaveHolidayWorkProjector` | `compensatory_holiday_work_days` | する |
-| `LeaveAttendanceRateProjector`(PaidLeaveSchedule) | `leave_attendance_rate_days`、`leave_attendance_rate_leaves`、`leave_attendance_rate_attendance_days` | する |
-| `SpecialLeaveAttendanceRateProjector` | `special_leave_attendance_rate_days`、`special_leave_attendance_rate_leaves`、`special_leave_attendance_rate_attendance_days` | する |
-| `SpecialLeaveAccountProjector` / `CompensatoryLeaveAccountProjector` 等の口座系 | `special_leave_grants`・`special_leave_usages`・`compensatory_leave_grants` 等(旧Projectorと共有) | **要確認 R1**。3-4では空にしない。6-4で扱う |
+- 空にするテーブルの一覧は、Projectorの書き込み先から機械的に作ったもの(WP10の成果物)を使う。
+  **要確認 R2**: 一覧の作り方と、一覧に `stored_events.id` を参照する列を持つ表(`workflow_request_history_entries`・
+  `expense_claim_history_entries` の `stored_event_id`)が含まれること。
 
 ```sql
--- 空にする(リハーサルのみ。外部キーが残るテーブルがあるため、一時的に検査を止める)
+-- 空にする(一覧のテーブルをすべて。外部キーが残るテーブルがあるため、一時的に検査を止める)
 SET FOREIGN_KEY_CHECKS = 0;
-TRUNCATE TABLE leave_request_workflow_links;
-TRUNCATE TABLE paid_leave_request_usage_links;
-TRUNCATE TABLE paid_leave_requests;
-TRUNCATE TABLE attendance_day_leave_paid_usages;
-TRUNCATE TABLE attendance_day_leaves;
-TRUNCATE TABLE compensatory_grant_day_view_allocations;
-TRUNCATE TABLE compensatory_grant_day_views;
-TRUNCATE TABLE compensatory_holiday_work_days;
-TRUNCATE TABLE leave_attendance_rate_attendance_days;
-TRUNCATE TABLE leave_attendance_rate_leaves;
-TRUNCATE TABLE leave_attendance_rate_days;
-TRUNCATE TABLE special_leave_attendance_rate_attendance_days;
-TRUNCATE TABLE special_leave_attendance_rate_leaves;
-TRUNCATE TABLE special_leave_attendance_rate_days;
+TRUNCATE TABLE <一覧のテーブル>;
+-- ...
 SET FOREIGN_KEY_CHECKS = 1;
 ```
 
-各Projectorを再生する(1つずつ。時間を記録する)。
-
 ```bash
-time php artisan event-sourcing:replay LeaveRequestWorkflowLinkProjector --force
-time php artisan event-sourcing:replay PaidLeaveRequestProjector --force
-time php artisan event-sourcing:replay AttendanceDayLeaveProjector --force
-time php artisan event-sourcing:replay CompensatoryGrantDayViewProjector --force
-time php artisan event-sourcing:replay CompensatoryLeaveHolidayWorkProjector --force
-time php artisan event-sourcing:replay LeaveAttendanceRateProjector --force
-time php artisan event-sourcing:replay SpecialLeaveAttendanceRateProjector --force
+time php artisan event-sourcing:replay --force | tee ~/rehearsal-20261009/after/replay-all.txt
 ```
 
-- 引数は `docs/29` の例(`php artisan event-sourcing:replay AttachmentProjector`)に従った。**要確認**: この環境では
-  spatie の replay コマンドのソースが参照できないため、引数名と `--force` の挙動は既存コード
-  (`RebuildProjectionsCommand`)の使い方で推定している。最初の1件の出力で確認する。
-- 順序は非依存のはず(仕様確定事項A「Projectorの順序非依存」)。**要確認**: 逆順で再生しても6-4と同じ結果になるか。
-- 記録: 各Projectorの所要時間、対象テーブルの行数(再生後)。
+- **要確認 R11**: spatie の replay コマンドの引数と挙動(引数なしで全Projector、`--force`)。最初の実行の出力で確認する。
+- 記録: 所要時間、主なテーブルの行数。
 
-**注意(勤怠日を空にしない理由)**: 「休暇の処理が勤怠日を直接作った」行(`attendance_day.created` が無い日。候補(2))は、
-イベントから再生すると消える。勤怠日・日次計算・月次のテーブルを空にして再生すると、候補(2)の行が消えるため、
-補正(5章)の後でしか勤怠のProjectorは再生しない。
+### 5-5. 日次計算の再計算(締め・提出済みの月も含む)
 
-### 3-5. 移行コマンド(特別休暇 → 代休 → 有給の申請)
-
-順序は docs/27 3.1 の4〜6番に従う。**各コマンドは既定で試し実行。確認してから `--apply` を付ける。**
-
-#### (i) 特別休暇の口座への移行
-
-```bash
-php artisan special-leave:migrate-to-account            # 試し実行
-php artisan special-leave:migrate-to-account --apply    # 本実行(件数を確認してから)
-php artisan special-leave:migrate-to-account            # 再実行(冪等。全員 skip(移行済み) になること)
-```
-
-見方:
-- 表の列: `user_id` / `result`(`dry-run`・`migrated`・`skip(移行済み)`・`skip(引き継ぎ対象なし)`・`NG`)/ `grants` / `usages`。
-- 最後の行: `対象 N 名 / 引き継ぎ N 名 / 対象外 N 名 / 失敗 N 名`。**失敗は0名。** 1名でも失敗すれば、表の下に error が出て終了コードが失敗になる。その時は本実行しない。
-- 件数の照合(B04・B08の結果と比べる):
-  - 付与の件数 = `SELECT COUNT(*) FROM special_leave_grants;`(全員分。移行前は全件が対象)
-  - 消化記録の件数 = `SELECT COUNT(*) FROM special_leave_requests WHERE status IN ('submitted', 'approved');`
-  - 一致しない場合は、対象外・失敗の利用者を個別に確認する。
-
-#### (ii) 代休の口座への移行
-
-```bash
-php artisan compensatory-leave:migrate-to-account
-php artisan compensatory-leave:migrate-to-account --apply
-php artisan compensatory-leave:migrate-to-account
-```
-
-- 照合: 付与 = `SELECT COUNT(*) FROM compensatory_leave_grants;`、消化記録 = `SELECT COUNT(*) FROM compensatory_leave_requests WHERE status IN ('submitted', 'approved');`
-- 代休は差戻し・取消の申請を含めない(コマンドの仕様)。
-
-#### (iii) 有給申請の引き継ぎ
-
-```bash
-php artisan paid-leave:migrate-requests            # 試し実行
-php artisan paid-leave:migrate-requests --apply
-php artisan paid-leave:migrate-requests            # 再実行(全件 skip(引き継ぎ済み) になること)
-```
-
-見方:
-- 表の列: `paid_leave_request_id` / `現在の状態` / `結果` / `警告`。
-- 最後の行: `対象 N 件 / 引き継ぎ N 件 / 引き継ぎ済みのため対象外 N 件 / 却下済みワークフローのため取消として引き継ぐ N 件 / 警告 N 件 / 失敗 N 件`。
-- 対象件数の照合: `SELECT COUNT(*) FROM paid_leave_requests WHERE input_source IS NULL OR input_source <> 'paid_request';`
-  (3-4 の直後は `paid_request` が無いので、全件が対象になる想定。)
-- 警告の種類と件数は(g)で見る。失敗は0件。
-- 却下済みの取消件数の照合:
+作り直しでは日次計算を変換しない(`event-rebuild-mapping.md` 2.4)。休暇値を直した日と休暇のある日を再計算する。
+締め・提出済みの月も再計算する(2026-10-10 ユーザー決定)。月次スナップショットは変えず、差のある月を一覧にして報告する。
 
 ```sql
--- 期待: 「却下済みワークフローのため取消として引き継ぐ」件数と一致する
-SELECT COUNT(*) AS rejected_pending
-FROM paid_leave_requests r
-JOIN leave_request_workflow_links l ON l.leave_request_id = r.id AND l.leave_kind = 'paid'
-JOIN workflow_requests w ON w.id = l.workflow_request_id
-WHERE r.status = 'submitted' AND w.status = 'rejected';
+-- 再計算の期間の目安: 休暇のある日と、休暇値を直した日の最小・最大
+SELECT MIN(work_date) AS from_date, MAX(work_date) AS to_date FROM attendance_day_leaves;
 ```
-
-- 有給の引き継ぎは、却下済みの申請の未確定の消化記録も取り消す(口座の `CancelPaidLeaveUsage`)。
-  dry-run ではこの取消は実行されない。本実行後の件数を6-2で確認する。
-
----
-
-## 4. 確認事項(a)〜(h)(spec「実装中の決定」のリハーサル確認事項)
-
-各項目は、移行前の記録(2)・試し実行(3-5)の結果で確認する。
-
-### (a) 現行で残数不足のまま承認された消化記録の引き継ぎ
-
-- 確認: 承認済みの申請で、充当された日数(旧 `*_usages` の合計)が申請日数に届かないもの。移行は不足のまま引き継ぐ。
-- 実施: **移行前**(旧スキーマ)に実行する。
-
-```sql
--- 特別休暇
-SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(u.used_days), 0) AS allocated_days
-FROM special_leave_requests r
-LEFT JOIN special_leave_usages u
-       ON u.special_leave_request_id = r.id AND u.special_leave_grant_id IS NOT NULL
-WHERE r.status = 'approved'
-GROUP BY r.id, r.user_id, r.target_date, r.requested_days
-HAVING COALESCE(SUM(u.used_days), 0) < r.requested_days - 0.001
-ORDER BY r.target_date;
-
--- 代休(取得単位が時間の申請は(b)で見る)
-SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(u.used_days), 0) AS allocated_days
-FROM compensatory_leave_requests r
-LEFT JOIN compensatory_leave_usages u
-       ON u.compensatory_leave_request_id = r.id AND u.is_confirmed = 1 AND u.compensatory_leave_grant_id IS NOT NULL
-WHERE r.status = 'approved' AND r.leave_type <> 'hourly'
-GROUP BY r.id, r.user_id, r.target_date, r.requested_days
-HAVING COALESCE(SUM(u.used_days), 0) < r.requested_days - 0.001
-ORDER BY r.target_date;
-```
-
-- 期待: 件数を記録する。0件でなくてもよい(現行で残数不足の承認があり得るため)。
-- **要確認**: 特別休暇のうち残数を要しない種別は消化記録(`special_leave_usages`)が出ないため、この件数に入る。
-  種別の区分で除外して読む。
-- 違った時に決めること: 件数が多い、または不足量が大きい場合、「移行は不足のまま引き継ぐ」(実装の現状)で
-  よいかを決める。(f) と合わせて判断する。
-
-### (b) 時間単位で分数が null の消化記録
-
-- 確認: 移行が分数を必須にしているため、分数が無い時間休は移行できない(特別休暇)。代休は `requested_minutes` が
-  null のとき 0 分として扱われる(`MigrateCompensatoryLeaveToAccountCommand`の `(int) $request->requested_minutes`)。
-
-```sql
--- 期待: 0件
-SELECT 'special' AS kind, COUNT(*) AS requests FROM special_leave_requests
-WHERE leave_type = 'hourly' AND hours IS NULL AND status IN ('submitted', 'approved')
-UNION ALL
-SELECT 'compensatory', COUNT(*) FROM compensatory_leave_requests
-WHERE leave_type = 'hourly' AND requested_minutes IS NULL AND status IN ('submitted', 'approved');
-
--- 消化記録の側(期待: 0件)
-SELECT 'special' AS kind, COUNT(*) FROM special_leave_usages WHERE usage_type = 'hourly' AND used_minutes IS NULL
-UNION ALL
-SELECT 'compensatory', COUNT(*) FROM compensatory_leave_usages WHERE usage_type = 'hourly' AND used_minutes IS NULL;
-```
-
-- 違った時に決めること: 件数が 1 以上なら、正しい分数をどう決めるかをユーザーに確認する。
-  分数を補う場合は data-correction(ステップ2の許可が必要)で扱う。代休の 0 分扱いは、そのまま引き継ぐか決める。
-
-### (c) 代休の付与一覧の残数表示(下書きを含む)
-
-- 確認: 現行の残数表示は下書き(`draft`)の付与を含む。移行後も同じに保つか。
-- 期待: 件数と残数の合計を記録する(B05)。
-- 違った時に決めること: 「移行後も下書きを含む」を維持する(仕様「表示用Projectorで対応」)か、表示から外すか。
-  判断はユーザーが行う(変更セットの決定に反する場合は変更セットを更新)。
-
-### (d) 新設Projectorのリビルドの所要時間と件数の一致
-
-- 確認: 3-4 の各Projectorの所要時間。再生後の行数が、(3-4 の空にする前の行数)と、移行前の記録(B08の申請件数)に一致するか。
-- 期待:
-  - `attendance_day_leaves` の行数 = 申請中・承認済みの休暇申請の件数(B08の `submitted`・`approved` の合計。移行前の申請を含む)。
-    ※ 差戻し・取消の行も残るため、行数の合計は「申請の総数」と一致する。
-  - 所要時間: 本番のメンテナンス窓に収まるか。収まらない場合は、ユーザーがメンテナンス窓の長さを判断する。
-- 確認のSQL:
-
-```sql
-SELECT leave_kind, request_status, COUNT(*) AS rows_count
-FROM attendance_day_leaves
-GROUP BY leave_kind, request_status
-ORDER BY leave_kind, request_status;
-```
-
-- 違った時に決めること: 行数の不一致は6-3の照合で差分を特定する。所要時間が長すぎる場合は、Projector単位で再生するか、
-  メンテナンス窓の時間を見直す。
-
-### (e) cutover後の `paid_leave_account.usage_designated` で `paidLeaveRequestId` が null のもの
-
-- 確認: 休暇ビューは申請IDが無い消化記録を無視する(仕様)。件数を把握する。
-
-```sql
--- 期待: 件数を記録する(0件ならこの論点は終わり)
-SELECT COUNT(*) AS without_request_id
-FROM stored_events
-WHERE event_class = 'paid_leave_account.usage_designated'
-  AND (JSON_EXTRACT(event_properties, '$.paidLeaveRequestId') IS NULL
-       OR JSON_TYPE(JSON_EXTRACT(event_properties, '$.paidLeaveRequestId')) = 'NULL');
-
--- 内容の確認(件数が少ない場合)
-SELECT id, aggregate_uuid, created_at,
-       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usageId'))  AS usage_id,
-       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usedOn'))   AS used_on,
-       JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.usedDays')) AS used_days
-FROM stored_events
-WHERE event_class = 'paid_leave_account.usage_designated'
-  AND (JSON_EXTRACT(event_properties, '$.paidLeaveRequestId') IS NULL
-       OR JSON_TYPE(JSON_EXTRACT(event_properties, '$.paidLeaveRequestId')) = 'NULL')
-ORDER BY id;
-```
-
-- **要確認**: `usedOn`・`usedDays` のキー名は `PaidLeaveAccountUsageDesignated` のプロパティ名で推定した。結果が空なら、キー名を確認する。
-- 違った時に決めること: 件数が 1 以上なら、その消化記録は休暇として見えない(休暇ビューの対象外)。この扱いを受け入れるかを決める。
-
-### (f) 承認済み・未充当の消化記録の未充当量(移行では 0 として扱う)
-
-- 確認: (a) の結果のうち、未充当量(申請日数 − 充当合計)の大きさ。cutover前の有給8件は消化記録が無いため、この確認にも入る。
-- 有給の確認(移行前・旧スキーマ):
-
-```sql
--- 期待: cutover前の8件(B09)が出る(消化記録なし)。それ以外は件数を記録する
-SELECT r.id, r.user_id, r.target_date, r.requested_days, COALESCE(SUM(a.allocated_days), 0) AS allocated_days
-FROM paid_leave_requests r
-LEFT JOIN paid_leave_usages u ON u.paid_leave_request_id = r.id AND u.cancelled = 0
-LEFT JOIN paid_leave_usage_allocations a ON a.usage_id = u.usage_id
-WHERE r.status = 'approved'
-GROUP BY r.id, r.user_id, r.target_date, r.requested_days
-HAVING COALESCE(SUM(a.allocated_days), 0) < r.requested_days - 0.001
-ORDER BY r.target_date;
-```
-
-- 期待: 特別・代休は (a) の件数と合わせて記録する。有給はcutover前の8件が出る(取消は拒否される仕様)。
-- 違った時に決めること: 特別・代休で未充当量が 0 でない件数が多ければ、移行データに未充当量を持たせるかを決める
-  (現状は 0 として扱う)。持たせる場合は移行の入力と実装の変更が必要なので、変更セットを更新してから実施する。
-
-### (g) `paid-leave:migrate-requests` の警告件数
-
-- 確認: 試し実行の表の `警告` 列を、警告の種類ごとに数える。
-
-| 警告(表示される文言) | 意味 | 期待 | 違った時 |
-|---|---|---|---|
-| `ワークフローの対応が無い(承認・差戻しの連動が効かない。要確認)` | 対応表(`leave_request_workflow_links`)に申請が無い | 0件が望ましい | 申請ごとに、ワークフローが無い理由を確認する |
-| `差戻しなのに消化記録が取り消されていない(要確認)` | 差戻し済みの申請で消化記録が残る(候補(1)) | 件数を記録 | 5章の候補(1)で扱う |
-| `承認済みだが消化記録が無い(cutover後の申請として想定外。要確認)` | cutover後の申請で消化記録が無い | 0件が望ましい(cutover前8件は `legacy_paid` のため警告は出ない) | 申請ごとに確認する |
 
 ```bash
-php artisan paid-leave:migrate-requests | tee ~/rehearsal-20261009/before/paid-migrate-dryrun.txt
+# 試し実行(既定。書き込みなし)。期間は上のSQLと 3-2 の休暇値を書き換えた日を含める
+php artisan attendance:recalculate-days --from=<from_date> --to=<to_date> | tee ~/rehearsal-20261009/after/recalc-dryrun.txt
+# 本実行
+php artisan attendance:recalculate-days --from=<from_date> --to=<to_date> --apply | tee ~/rehearsal-20261009/after/recalc-apply.txt
+# 月次スナップショットとの差(dry-run のみ。スナップショットは更新しない)
+php artisan attendance:recalculate-month-snapshots --dry-run | tee ~/rehearsal-20261009/after/snapshot-diff.txt
 ```
 
-- 違った時に決めること: 警告は、申請ごとに確認し、5章の候補(1)の判断に反映する。
-
-### (h) 旧システムが直接作った勤怠日の扱い
-
-- 確認: 休暇の処理が直接作った勤怠日(`attendance_day.created` が無い日)の件数と内容。
-- 実施: 5章の候補(2)の出力を使う。B12(`no_created`)は目安。
-- 期待: 件数と内訳(最初のイベントの種類・行の有無)を記録する。
-- 違った時に決めること:
-  - 補正方法は、docs/32 の推奨どおり「補正イベント(`attendance_day.corrected` を今の時点に追記)」にする。
-    欠けた `created` を過去の版へ挿入する方法は採らない(挿入は行わない)。
-  - **補正コマンドの本体は未実装**(docs/32 の「残課題」)。`CorrectAttendanceDay` は存在するが、
-    これを一括で発行する運用コマンドが無い。実施には実装が必要で、その前にユーザーが内容を承認する(data-correction ステップ3)。
-  - 手順の順序(R3。5-4)を確定してから行う。
-
----
-
-## 5. 補正候補の確認(`leave:correction-report`)
-
-### 5-1. 実行のタイミング
-
-- 3-5(移行)の**後**、6-4(勤怠のProjectorの再構築)の**前**に実行する。
-- **要確認 R2**: 候補(1)の検出器は旧イベント(`*.usage_designated` 等)を読み、移行の結果(`migrated`)で除外しない。
-  また、cutover後の有給で差戻しの状態は `workflow_request.returned` で表されるが、検出器の差戻し判定は
-  `paid_leave_request.*` の状態だけを見る。そのため、移行の前に実行すると件数が少なく出る。
-  移行後の件数が 0 にならない場合は、検出器の仕様を確認する。
-
-```bash
-cd <リハーサル用アプリ>/backend
-php artisan leave:correction-report --limit=50 | tee ~/rehearsal-20261009/after/correction-report.txt
-```
-
-出力の見方: 各候補の `件数` と `採りうる方法`(`[推奨]` / `[不採用候補]`)、そして一覧(先頭 N 件)。
-
-### 5-2. 候補ごとの判断
-
-| 候補 | 内容 | 推奨(docs/32) | 判断の観点 | 直接修正の条件 |
-|---|---|---|---|---|
-| (1) | 差戻しの休暇の、未取消の消化記録 | 補正イベント(今の時点の取消を口座集約の取消で追記) | 差戻しは利用者の操作の記録であり、不具合による誤記録ではない。承認・差戻しの記録は書き換えない(原則13) | 採らない |
-| (2) | 休暇の処理が直接作った勤怠日(`created` 無し) | 補正イベント(`attendance_day.corrected`) | 欠けた `created` を過去へ挿入しない | 採らない(挿入は直接修正として扱わない) |
-| (3) | 編集イベント(created・edited)の休暇値(`workType` = `paid_leave_*` 等) | 直接修正(`workType` を `null` へ。版は変えない) | 休暇の処理が複写した値で、利用者の入力ではない。改竄の妥当性がある | ユーザーの明示的な許可が必要 |
-| (4) | 勤怠日に残る休暇値・全休の `status` | (2)(3)の後に再生成し、残った行だけ補正イベント | 勤怠日は投影。直接UPDATEは行わない(原則2) | 採らない |
-
-- (1)〜(4) の件数は `leave:correction-report` の出力で確認する。B12 の件数と比べて、差があれば理由を確認する。
-- 補正の対象の**件数**と**修正前後の値の例**を、ユーザーに提示する。
-
-### 5-3. 直接修正(候補(3))の許可依頼
-
-data-correction ステップ2の手順により、一般的な「直してほしい」は許可とみなさない。次の形式で明示的な許可を得て、
-許可の日時と内容を `spec.md` のレビュー履歴に記録する。
-
-> 候補(3)の `stored_events` のうち `attendance_day.created` / `attendance_day.edited` の `workType` が休暇値
-> (`paid_leave_*` / `special_leave_*` / `compensatory_leave_*`)のもの **N 件** の payload の `workType` を
-> `null` に書き換えてよいか。版(`aggregate_version`)は変えない。修正前の payload は補正ログに残す。
-> 対象の一覧(抜粋): ______。許可しますか?
-
-### 5-4. 補正の順序(R3)
-
-docs/32 の候補表は順序を示していない。次の順序を**提案**する。最終的な順序は、ユーザーが承認する。
-
-1. (2) 補正イベント `attendance_day.corrected` を追記し、`created` が無い日の行を補完する。
-2. (3) 直接修正(`workType` の休暇値を `null` に)。
-3. 勤怠のProjectorを再生する(`AttendanceDayProjector`・`AttendanceDailyCalculationProjector`・`AttendanceWeeklyOvertimeAllocationProjector` 等)。
-4. (4) 残った勤怠日の休暇値・全休の `status` に補正イベントを追記する。
-5. 日次計算の再計算(5-5)と、月次スナップショットの確認(6-5)。
-
-- (2) を (3) より先に行う理由: (2) を行わずに勤怠のProjectorを再生すると、`created` の無い行が消える(3-4の注意)。
-- **要確認 R3**: この順序を変更セットに記録するかどうか。
-
-### 5-5. 補正の実施と日次計算の再計算
-
-- 補正コマンドの本体(`StoredEventCorrectionCommand` の子クラス、`CorrectAttendanceDay` を発行する運用コマンド)は
-  **未実装**(docs/32 の残課題)。リハーサルでは検出と判断までを行い、本実行は実装後・許可後に行う。
-- 補正後の日次計算は次のコマンドで確認する(既定は試し実行。締め・提出済みの日は一覧に印が付く)。
-
-```bash
-php artisan attendance:recalculate-days --from=2026-08-01 --to=2026-10-10 | tee ~/rehearsal-20261009/after/recalc-dryrun.txt
-```
-
-- 見る点: `[除外]`(手動調整済みで対象外になった日)の件数が、`attendance_day.daily_calculation_adjusted` を持つ
-  日の数と合うか。`[変更]` の内容が、休暇の表示・月次の値に意図しない変化を起こしていないか。
+- 見る点: `[除外]`(手動調整済みで対象外になった日)の件数が、`attendance_day.daily_calculation_adjusted` を持つ日の数と合うか。
+  `[変更]` の内容が、休暇値の削除・休暇ビューへの切り替えで説明できるか。締め・提出済みの日の印。
 
 ```sql
 -- 手動調整された勤怠日の数(期間で絞るなら aggregate_uuid と勤怠日を結合する)
@@ -773,43 +844,63 @@ FROM stored_events
 WHERE event_class = 'attendance_day.daily_calculation_adjusted';
 ```
 
-- 本実行(`--apply`)は、ユーザーの許可後に行う。
-- 記録: 件数・判断・日時を `spec.md` の「実装中の決定」に書く。
+- 報告: 提出時のスナップショットと差のある月(利用者・年月・項目・差)の一覧を `spec.md` の「実装中の決定」に記録し、ユーザーに報告する。
+
+### 5-6. 確認の後、書き込みを再開する
+
+6章の検証が済んだら、`php artisan up`、スケジューラ・キューワーカーの再開、打刻端末・API・MCPの受付の再開を行う。
+3-3 の停止から再開までの時間を記録する(本番のメンテナンス窓の見積もり)。
+
+### 5-7. ロールバック(リハーサルで1回試す)
+
+5-6 の再開までに問題があれば、表とReadModelとコードを同時に戻す(新しいコードは旧イベントを読めず、旧コードは新しいイベントを読めないため)。
+
+1. 表を戻す:
+   ```sql
+   RENAME TABLE stored_events TO stored_events_rebuilt_failed,
+                stored_events_before_rebuild_YYYYMMDDHHMMSS TO stored_events;
+   ```
+2. ReadModel(とマイグレーションで変わったスキーマ)を 3-3 のバックアップから戻す。5-3 の migrate でスキーマが変わっているため、
+   実際には DB 全体を `backup/before-rebuild.sql.gz` から戻すのが確実(書き込みは止めているので失われるデータは無い)。
+3. 旧コード(1-2 で記録した commit)を再配備する。
+
+- リハーサルでは、6章の記録を保存した後に `flow_office_rehearsal` で1回行い、所要時間と、戻した後の B15(イベント件数)・B02 が
+  作り直し前(2章)と一致することを確認する。
 
 ---
 
-## 6. 移行後の検証
+## 6. 作り直し後の検証(`flow_office_rehearsal`、5-5 の後。3-5 では `flow_office_verify` で同じことを行う)
 
-### 6-1. 外部キーと列(3-2と同じSQL)
+### 6-1. 外部キーと列(5-3と同じSQL)
 
-3-2 の SQL を再実行し、期待どおりであることを確認する。
+5-3 の SQL を再実行し、期待どおりであることを確認する。
 
-### 6-2. 移行前の記録(B01〜B15)との比較
+### 6-2. 作り直し前の記録(B01〜B15)との比較
 
-移行後に、2章のSQL(B01〜B15)を同じ順で実行し、`~/rehearsal-20261009/after/` に保存する。
-差分は次のように確認する。
+作り直し後に、2章のSQL(B01〜B15)を同じ順で実行し、`~/rehearsal-20261009/after/` に保存する。差分は次のように確認する。
 
 ```bash
 diff ~/rehearsal-20261009/before/B02.tsv ~/rehearsal-20261009/after/B02.tsv > ~/rehearsal-20261009/after/diff-B02.txt
 ```
 
-期待する差分(移行は月次の値を変えないという設計。差分が出た場合は、下の表と照合する):
+期待する差分(変換規則で意図した差だけが出る):
 
 | 基準 | 期待 | 差分が出た場合 |
 |---|---|---|
-| B01 月次スナップショット | 変わらない(移行は再計算しない) | 差分があれば、再計算(`attendance:recalculate-month-snapshots`)が走った可能性。原因を確認する |
-| B02 月次の日次集計 | 変わらない(休暇だけの日も同じ日次計算) | 差分は、5章の補正(候補(4)・(2))・論点15の削除による変化を照合する |
-| B03・B04・B05 付与の残数 | 変わらない | 差分は(c)の下書き・(f)の未充当の扱いで説明できるか確認する |
-| B06 残高キャッシュ | 変わらない(再計算で一致する) | 6-4のリビルド結果と合わせて確認する |
-| B07 消化記録 | 特別・代休は、差戻しの申請の消化記録が移行で減る(移行は差戻し分を含めない)。有給は旧系統の取消の表し方が未確認(R8) | 減る件数が、(a)〜(g)・候補(1)の件数と一致するか確認する。有給は R8 の結果で判断する |
-| B08 申請の状態 | 変わらない | 差分が出たら、6-3の照合で該当の申請を特定する |
-| B09 cutover前8件 | 8件のまま。休暇ビュー(6-3)に8件出る | 8件が出なければ、6-3の照合を先に確認する |
+| B01 月次スナップショット | 変わらない(提出イベントは書き換えず、5-5 でもスナップショットは更新しない) | 差分があれば、スナップショットの再計算が走った可能性。原因を確認する |
+| B02 月次の日次集計 | 休暇値を直した日・休暇のある日の再計算(5-5)、論点15の空の勤怠日の削除(`day_count` が減る)で変わる | 変わった日が 5-5 の `[変更]` と 3-2 の `deleted` の一覧で説明できるか確認する |
+| B03 有給付与 | 残数は変わらない。cutoverでシステム外から持ち込んだ付与は `source = carried_over` に変わる(付与IDは同じ) | `carried_over` の件数が 3-2 の突き合わせ結果と一致するか確認する |
+| B04・B05 特別休暇・代休の付与 | 変わらない | 差分は(c)の下書き・(a)(f)の未充当で説明できるか確認する |
+| B06 残高キャッシュ | 差し戻された休暇の消化記録の取消で `pending_days` が減る以外は変わらない | 減った量が (g) の差戻し未取消の件数と合うか確認する |
+| B07 消化記録 | 差し戻された休暇の消化記録が取り消される(減る)。cutover前の有給8件は消化記録が新しくできる(増える)。却下済みの申請中の休暇の消化記録が取り消される | 増減が (f)(g) と 3-2 の件数で説明できるか確認する。**要確認 R9**: 旧系統の有給の消化記録の取消の表し方 |
+| B08 申請の状態 | 却下済みワークフローの申請中の休暇が `cancelled` になる。それ以外は変わらない | 差分が出たら、6-3の照合で該当の申請を特定する |
+| B09 cutover前8件 | 8件のまま承認済み。休暇ビュー(6-3)に8件出る | 8件が出なければ、6-3の照合を先に確認する |
 | B10 出勤率の判定 | 保存された判定は変わらない(再判定はしない) | 6-3の出勤率の照合を参照 |
-| B11 特別休暇の自動付与 | 変わらない | 差分は、移行で付与の登録が口座に変わったことによるか確認する |
-| B12 休暇値・全休 | 候補(3)・(4)の補正後は、休暇値と全休の `clocked_out` が 0 件になる | 補正前は残る(想定どおり)。補正後に残った件数を記録する |
-| B13 休暇に紐づく申請 | 変わらない | 却下済みの申請中の休暇が取消になった件数(3-5 (iii))と合うか確認する |
+| B11 特別休暇の自動付与 | 変わらない | 差分は、付与の登録が口座集約のイベントに変わったことによるか確認する |
+| B12 休暇値・全休 | 休暇値・全休の `clocked_out`・`no_created` がすべて 0 件 | 残った行を個別に確認する(2.4 の規則で扱えていない) |
+| B13 休暇に紐づく申請 | 変わらない(ワークフローのイベントは書き換えない) | 差分があれば 3-4 (6) を確認する |
 | B14 月次の状態 | 変わらない | 差分があれば、締め・提出の操作が行われていないか確認する |
-| B15 イベント件数 | 増えるのは、移行(`*_migrated`・`paid_leave_request.migrated`)と補正のイベントだけ | 件数の増え方を、移行の件数と照合する |
+| B15 イベント件数 | 総数・最大idが変わる(分割・統合・`created`/`deleted` の追加)。休暇・勤怠以外の接頭辞の件数は変わらない。旧接頭辞(`paid_leave`・`special_leave`・`compensatory_leave`の旧種類)は0件になり、新しい接頭辞(`paid_leave_request` 等)ができる | 件数の増減を 3-2・3-4 の出力と照合する |
 
 ### 6-3. 休暇ビューと申請の照合
 
@@ -845,64 +936,64 @@ FROM attendance_day_leaves v
 WHERE v.request_status IN ('submitted', 'approved')
   AND NOT EXISTS (SELECT 1 FROM attendance_days d WHERE d.user_id = v.user_id AND d.work_date = v.work_date);
 
--- (6) cutover前の有給8件が休暇ビューに出る(期待: 8行、request_status = approved、source = legacy_paid)
-SELECT v.leave_request_id, v.request_status, v.source, v.work_date, v.unit
+-- (6) cutover前の有給8件が休暇ビューに出て、消化記録がある(期待: 8行、request_status = approved、usages >= 1)
+SELECT v.leave_request_id, v.request_status, v.work_date, v.unit,
+       (SELECT COUNT(*) FROM paid_leave_usages u
+         WHERE u.paid_leave_request_id = v.leave_request_id AND u.cancelled = 0) AS usages
 FROM attendance_day_leaves v
 WHERE v.leave_kind = 'paid'
   AND v.leave_request_id IN (SELECT id FROM paid_leave_requests
                              WHERE target_date BETWEEN '2026-08-10' AND '2026-09-04')
 ORDER BY v.work_date;
 
--- (7) 勤怠日の source の内訳(移行で新しい勤怠日が作られていないこと。期待: 移行前(B12)と同じ)
+-- (7) 勤怠日の source の内訳(作り直しで `created` を補った日のうち、休暇の処理が作った日は leave になる)
 SELECT source, COUNT(*) AS days FROM attendance_days GROUP BY source ORDER BY source;
 ```
 
-- (6) の `source` は、旧系統の行は `legacy_paid`、cutover後の行は `paid_account` になる(`attendance_day_leaves.source` の値の定義)。
-  期待と違う場合は、どの系統で作られたかを確認する。
+- (6) で `usages` が 0 の申請は、cutoverの付与が旧イベントで再現できなかった(`carried_over`)利用者の申請。3-2 の突き合わせ結果と照合する。
+- (7) の `leave` の件数は、3-2 の「`created` を補う勤怠日のうち `source=leave` にする日」から、論点15で削除した日を引いた件数になる。
 - 出勤率の照合(B10 との比較): 有給の出勤率ビュー `leave_attendance_rate_days` の分母・分子が、B10 の保存された判定と
-  一致するかを、利用者×期間で確認する。**要確認**: 判定の分母の定義(`is_working_day` の扱い)を、保存された判定と
-  照らして確認する。
+  一致するかを、利用者×期間で確認する。**要確認**: 判定の分母の定義(`is_working_day` の扱い)を、保存された判定と照らして確認する。
 
 ### 6-4. 空からの全件リビルドで同じ状態になることの確認(受け入れ条件)
 
-対象は、休暇申請・残数・勤怠の休暇ビュー(受け入れ条件の「勤怠・休暇申請・残数の各Projectorを空から全件リビルド」)。
-
-**手順(a) 状態の保存**: 6-2 の後、次の SQL を `~/rehearsal-20261009/rebuild/` に保存する(`-N -B`。`id` と `created_at`・`updated_at` は含めない)。
+**手順(a) 状態の保存**: 6-2 の後、次の SQL を `~/rehearsal-20261009/rebuild/state-before.tsv` に保存する
+(`-N -B`。連番の `id` と `created_at`・`updated_at` は含めない。勤怠日の `id` は集約IDなので含める)。
 
 ```sql
 -- 休暇ビュー
 SELECT leave_kind, leave_request_id, user_id, work_date, unit, hours, minutes, special_leave_type_id,
-       workflow_request_id, request_status, source
+       workflow_request_id, request_status
 FROM attendance_day_leaves ORDER BY leave_kind, leave_request_id;
 
 -- 休暇ビューの消化記録(有給)
 SELECT usage_id, leave_request_id FROM attendance_day_leave_paid_usages ORDER BY usage_id;
 
 -- 有給申請
-SELECT id, input_source, user_id, approver_user_id, status, leave_type, target_date, hours, requested_days,
+SELECT id, user_id, approver_user_id, status, leave_type, target_date, hours, requested_days,
        request_group_id, submitted_at, approved_at, returned_at, cancelled_at
 FROM paid_leave_requests ORDER BY id;
 
 -- 申請と業務の対応表
 SELECT workflow_request_id, leave_kind, leave_request_id FROM leave_request_workflow_links ORDER BY workflow_request_id;
 
--- 有給の付与・消化・充当・残高(口座由来の行)
-SELECT id, user_id, granted_on, expires_on, granted_days, allocated_days, remaining_days, status FROM paid_leave_grants ORDER BY id;
+-- 有給の付与・消化・充当・残高
+SELECT id, user_id, granted_on, expires_on, granted_days, allocated_days, remaining_days, status, source FROM paid_leave_grants ORDER BY id;
 SELECT usage_id, user_id, used_on, used_days, used_minutes, usage_type, confirmed, cancelled, paid_leave_request_id
-FROM paid_leave_usages WHERE usage_id IS NOT NULL ORDER BY usage_id;
+FROM paid_leave_usages ORDER BY usage_id;
 SELECT usage_id, grant_id, allocated_days FROM paid_leave_usage_allocations ORDER BY usage_id, grant_id;
 SELECT user_id, available_days, pending_days, unallocated_days FROM paid_leave_balances ORDER BY user_id;
 
--- 特別休暇・代休の付与と消化(**要確認 R1**: 旧Projectorと共有の行)
+-- 特別休暇・代休の付与と消化
 SELECT id, user_id, special_leave_type_id, granted_on, expires_on, granted_days, used_days, remaining_days, status
 FROM special_leave_grants ORDER BY id;
 SELECT usage_id, user_id, used_on, used_days, used_minutes, usage_type, is_confirmed, unallocated_days
-FROM special_leave_usages WHERE usage_id IS NOT NULL ORDER BY usage_id;
+FROM special_leave_usages ORDER BY usage_id;
 SELECT id, user_id, source, work_date, granted_days, granted_minutes, used_days, used_minutes,
        remaining_days, remaining_minutes, status, expires_on
 FROM compensatory_leave_grants ORDER BY id;
 SELECT usage_id, user_id, used_on, used_days, used_minutes, usage_type, is_confirmed, unallocated_days, unallocated_minutes
-FROM compensatory_leave_usages WHERE usage_id IS NOT NULL ORDER BY usage_id;
+FROM compensatory_leave_usages ORDER BY usage_id;
 
 -- 代休の休日出勤・付与ビュー
 SELECT user_id, work_date, is_holiday_day, work_minutes FROM compensatory_holiday_work_days ORDER BY user_id, work_date;
@@ -914,44 +1005,35 @@ SELECT user_id, work_date, is_working_day, attended, full_leave_kinds, partial_l
 FROM leave_attendance_rate_days ORDER BY user_id, work_date;
 SELECT user_id, work_date, is_working_day, attended, work_style_id, full_leave_kinds, partial_leave_kinds
 FROM special_leave_attendance_rate_days ORDER BY user_id, work_date;
+
+-- 勤怠日・日次計算(作り直し後は勤怠も空から再生成できる)
+SELECT id, user_id, work_date, status, source, work_type FROM attendance_days ORDER BY id;
+SELECT attendance_day_id, prescribed_work_minutes, work_minutes, payroll_work_minutes, paid_leave_days, paid_leave_minutes,
+       special_leave_days, special_leave_minutes
+FROM attendance_daily_calculations ORDER BY attendance_day_id;
 ```
 
-**手順(b) 空にして再生**: 空にするテーブルは 3-4 の表と、(a)で保存した表に対応するものだけ。
-(3-4 と同じ方法で TRUNCATE → `event-sourcing:replay`。Projectorの一覧は 3-4 の表。)
+- 列名はWP10の実装(削除した列)に合わせて読み替える。
 
-```bash
-mysql -h <H> -u <U> -p -D flow_office_rehearsal -e "<3-4 と同じ TRUNCATE 文>"
-php artisan event-sourcing:replay PaidLeaveRequestProjector --force
-php artisan event-sourcing:replay AttendanceDayLeaveProjector --force
-# ...(3-4 の Projector をすべて)
-```
+**手順(b) 空にして再生**: 5-4 と同じ方法で、全ReadModelを空にして全Projectorを再生する。
 
-**手順(c) 比較**: (a) と同じSQLを `after-rebuild/` に保存し、差分を取る。
+**手順(c) 比較**: (a) と同じSQLを `state-after.tsv` に保存し、差分を取る。
 
 ```bash
 diff ~/rehearsal-20261009/rebuild/state-before.tsv ~/rehearsal-20261009/rebuild/state-after.tsv && echo SAME
 ```
 
-- 期待: 差分なし。
-- **要確認 R1**: `special_leave_grants`・`special_leave_usages`・`compensatory_leave_grants` は、旧Projector
-  (`SpecialLeaveGrantProjector`・`SpecialLeaveUsageProjector`・`CompensatoryLeaveGrantProjector` 等。旧イベントを
-  まだ読む)と新しい口座のProjectorが、同じテーブルへ書く。全件リビルドで、旧Projectorが古いイベントから作った行と、
-  口座のProjectorが作った行が両方残るかもしれない。(b)の結果が (a) と違う場合は、この点を最初に確認する。
-  ここで解決しなければ、受け入れ条件「全件リビルドで同じ状態」は未確認のまま。
-- **順序の確認(任意だが推奨)**: (b) を、Projectorの再生の順序を逆にして行い、(a) と同じになるか確認する(順序非依存)。
+- 期待: 差分なし(旧Projectorと口座のProjectorが同じテーブルに書く問題は、旧Projectorの旧イベント処理の削除(WP10)で無くなる)。
+- 日次計算は 5-5 の再計算のイベントから再生されるため、(a) と同じになる。
+- **順序の確認(任意だが推奨)**: Projectorを逆順で1つずつ再生し、(a) と同じになるか確認する(順序非依存)。
 
-### 6-5. 日次計算の再計算と月次スナップショットの確認(dry-run)
+### 6-5. 日次計算の再計算の冪等性
 
 ```bash
-# 日次計算: 変わる値の一覧(既定は試し実行。書き込みなし)
-php artisan attendance:recalculate-days --from=2026-08-01 --to=2026-10-10 | tee ~/rehearsal-20261009/after/recalc-dryrun-2.txt
-
-# 月次スナップショット: 再計算すると変わる月の一覧(dry-run)
-php artisan attendance:recalculate-month-snapshots --dry-run | tee ~/rehearsal-20261009/after/snapshot-dryrun.txt
+php artisan attendance:recalculate-days --from=<from_date> --to=<to_date> | tee ~/rehearsal-20261009/after/recalc-dryrun-2.txt
 ```
 
-- 期待: `変更あり 0 件`、または変わる日の理由が5章・6-2で説明できる。
-- 手動調整された日は `[除外]` になり、上書きされない(受け入れ条件)。
+- 期待: 5-5 の本実行の後なので `変更あり 0 件`。手動調整された日は `[除外]` になり、上書きされない(受け入れ条件)。
 
 ### 6-6. 主要画面での目視確認
 
@@ -961,34 +1043,42 @@ php artisan attendance:recalculate-month-snapshots --dry-run | tee ~/rehearsal-2
 |---|---|---|
 | 勤怠の日次 `/attendance/days/:date` | 休暇日の休暇ラベル(`leaves` から表示)。複数の休暇がある場合は複数表示 | 休暇ラベルが出る。全休・半休・時間休は、状態バッジの代わりに休暇ラベル |
 | 同 | 休暇日の**時刻・作業内容の編集**をしても、休暇ラベルが消えない(不具合の再現確認。変更要望) | 消えない。作業内容(`work_type`)は休暇に影響しない |
-| 同 | 作業内容欄は休暇日でも表示され、入力値がそのまま保存される | 表示・保存される |
-| 勤怠の今日 `/attendance/today`・打刻 | 全休の日は出勤できない。打刻を取り込まない。半休の日は打刻できる | 全休: 出勤不可・警告なし。半休: 打刻可 |
-| 勤怠の週・月 `/attendance/week`・`/attendance/months` | 休暇日数(有給・特別)と代休の付与表示。締めの状態 | 移行前(B01・B02)の値と一致する |
-| 有給 `/paid-leave`・`/paid-leave/history`・`/paid-leave/grants/mine` | 残数。差戻しの申請の表示と「提出する」「取消」の導線 | 差戻しの申請が出る。再提出(申請詳細へ)・取消の導線がある |
+| 同 | 作業内容欄は休暇日でも表示され、入力値がそのまま保存される。休暇値だった日の作業内容は休暇値の前の値(無ければ空) | 表示・保存される |
+| 勤怠の今日 `/attendance/today`・打刻 | 全休の日は出勤できない。打刻を取り込まない。半休の日は打刻できる。休暇だけの日(`source=leave`)に打刻が取り込まれる | 全休: 出勤不可・警告なし。半休: 打刻可 |
+| 勤怠の週・月 `/attendance/week`・`/attendance/months` | 休暇日数(有給・特別)と代休の付与表示。締めの状態 | 作り直し前(B01・B02)の値と一致する(5-5 の差の一覧に載った日を除く) |
+| 有給 `/paid-leave`・`/paid-leave/history`・`/paid-leave/grants/mine` | 残数。差戻しの申請の表示と「提出する」「取消」の導線。持ち込みの付与(`carried_over`)の表示 | 差戻しの申請が出る。再提出(申請詳細へ)・取消の導線がある。`carried_over` の付与が表示される |
 | 特別休暇 `/special-leave`・`/special-leave/history` | 同上 | 同上 |
 | 代休 `/compensatory-leave`・`/compensatory-leave/history/mine`・`/compensatory-leave/grants/mine` | 同上。付与一覧の下書き表示(c) | 同上 |
+| 休暇の履歴画面(イベント一覧) | 旧`event_type`名が出ず、新しいイベントで履歴が表示される | 表示される |
 | 申請詳細 `/requests/:id` | 業務側(休暇)の申請に「却下」が出ない。差戻しの休暇は「提出する」が出る | 却下が出ない。提出が出る |
 | 取消ダイアログ(承認済みの休暇の取消) | 「勤怠区分もクリアされます」の文言が無い | 文言が無い |
-| cutover前の有給8件(`/paid-leave/history`・勤怠の日次) | 8件が表示される。承認済み。取消しようとすると「移行前の申請のため取消できません…」と出る | 8件表示・取消は拒否 |
+| cutover前の有給8件(`/paid-leave/history`・勤怠の日次) | 8件が表示される。承認済み。消化記録まで再現できた申請は、通常の承認済み申請と同じく取消できる(締め済みの月は論点14で拒否) | 8件表示・取消の可否が上のとおり |
 | 締め済みの日の休暇 | 申請・取消がエラーになり、状態が変わらない | エラー。どの画面の表示も変わらない |
 | 承認済みの休暇を管理者が取消 | 取消が成功する。ワークフローは承認済みのまま | 成功。申請詳細で承認済みのまま |
 
 - 目視で見つけた不具合は、このファイルの8章に書く。修正は変更セットを更新してから行う(コードは直接触らない)。
+- 監査ログAPIの `event_id` は作り直しで変わる(`event-rebuild-mapping.md` 6章)。外部に返すidが変わることをリリースノートに記載する。
 
 ---
 
-## 7. 補正・移行の順序の一覧(実施の順)
+## 7. 実施の順(一覧)
 
-1. 1章: 複製・commit・composer・`.env`(APP_KEY は本番と同じ)・通知の停止(0-2)
-2. 2章: 移行前の記録 B01〜B15 と (a)(b)(c)(e)(f)(g)の試し実行の確認(旧スキーマ・migrateの前)
-3. 3-1〜3-3: メンテナンス窓の模擬・migrate・外部キーの確認・権限カタログ
-4. 3-4: 新設Projectorのテーブルを空にして再生(勤怠のテーブルは空にしない)
-5. 3-5: 移行コマンド (i)(ii)(iii) の試し実行 → 件数の確認 → `--apply` → 再実行で全件 skip
-6. 5章: `leave:correction-report` → 判断 → (承認後に)補正(実装後)
-7. 6-2〜6-3: 比較と照合
-8. 6-4: 空からのリビルド(勤怠のProjectorは補正の後)
-9. 6-5: 日次計算・月次スナップショットの dry-run
-10. 6-6: 目視確認
+1. 1章: 複製・commit(新旧)・composer・`.env`(APP_KEY は本番と同じ)・通知の停止(0-2)
+2. 2章: 作り直し前の記録 B01〜B15 と、4章 (a)(b)(e)(f) のSQL(旧スキーマ・作り直しの前)
+3. 3-1: 事前条件の確認
+4. 3-2: 試し実行と見方(扱えない並び0件・cutoverの不一致0件・判定の突き合わせ)
+5. 3-3: 書き込みの停止(模擬)とDB全体のバックアップ
+6. 3-4: `--apply`(`stored_events_rebuilt`)と確認のSQL
+7. 3-5: 複製DB(`flow_office_verify`)での入れ替え・migrate・全Projectorのリビルド・再計算の試し実行・比較
+8. 4章: 確認事項 (a)〜(h) の判断
+9. (本番ではここでユーザーの明示的な許可を得る)
+10. 5-2: `--swap`
+11. 5-3: 新しいコードの配備・migrate・外部キーと列の確認・権限カタログ
+12. 5-4: 全ReadModelを空にして全Projectorをリビルド
+13. 5-5: 日次計算の再計算(締め・提出済みの月も含む)とスナップショットとの差の一覧
+14. 6章: 比較・照合・リビルドの再現性・冪等性・画面
+15. 5-6: 書き込みの再開(停止から再開までの時間を記録)
+16. 5-7: ロールバックの試行(リハーサルのみ。6章の記録を保存した後)
 
 ---
 
@@ -999,54 +1089,56 @@ php artisan attendance:recalculate-month-snapshots --dry-run | tee ~/rehearsal-2
 | 項目 | 件数・結果 | 判断(何をするか) | 実施日 | 担当 | 備考 |
 |---|---|---|---|---|---|
 | 1-1 複製(本番の stored_events 件数 / 複製の件数) | | | | | |
-| 1-2 commit | | | | | |
+| 1-2 commit(新 / 旧) | | | | | |
 | 1-4 APP_KEY の設定 | | | | | |
 | 0-2 通知の停止(system_settings) | | | | | |
 | B01〜B15(保存先) | | | | | |
 | B09 cutover前8件 | | | | | 8件か |
-| 3-2 migrate・外部キーの確認 | | | | | |
-| 3-4 Projector(1)LeaveRequestWorkflowLink | | | | | 秒・行数 |
-| 3-4 Projector(2)PaidLeaveRequest | | | | | 秒・行数 |
-| 3-4 Projector(3)AttendanceDayLeave | | | | | 秒・行数 |
-| 3-4 Projector(4)〜(7) | | | | | 秒・行数 |
-| 3-5 (i) 特別休暇 試し実行 / 本実行 | 失敗 __名、付与 __件、消化記録 __件 | | | | |
-| 3-5 (ii) 代休 試し実行 / 本実行 | 失敗 __名、付与 __件、消化記録 __件 | | | | |
-| 3-5 (iii) 有給申請 試し実行 / 本実行 | 対象 __件、警告 __件、失敗 __件 | | | | |
+| 3-1 事前条件(新種類 / 補正ログ / スナップショット / cutoverイベント) | __ / __ / __ / __ | | | | |
+| 3-2 試し実行: 変換件数 | 申請 __ / 付与 __ / 勤怠日 __ | | | | |
+| 3-2 扱えない並び | __件 | | | | 0件か |
+| 3-2 cutoverの突き合わせ | 再現 __ / carried_over __ / 不一致 __ | | | | |
+| 3-2 差戻し / 取消 / 却下の判定 | __ / __ / __ | | | | ワークフローと一致か |
+| 3-2 `created` を補う勤怠日(うち source=leave)/ 休暇値の書き換え / `deleted` | __(__) / __ / __ | | | | |
+| 3-3 停止の時刻・バックアップ | | | | | |
+| 3-4 `--apply`(総数 / 版の連続性 / 重複 / 対象外の変化) | __ / __行 / __行 / __ | | | | |
+| 3-5 複製DBでの比較 | 説明できない差分 __件 | | | | |
 | (a) 残数不足のまま承認 | 特別 __件 / 代休 __件 | | | | |
 | (b) 時間単位で分数 null | 申請 __件 / 消化 __件 | | | | |
 | (c) 代休の下書き | 件数 __ / 残数合計 __ | | | | |
-| (d) 所要時間・行数の一致 | 所要 __秒 / 行数一致 有・無 | | | | |
+| (d) リビルドの所要時間・行数 | 所要 __秒 / 行数一致 有・無 | | | | |
 | (e) paidLeaveRequestId が null | __件 | | | | |
 | (f) 未充当量(特別・代休・有給) | 特別 __件 / 代休 __件 / 有給 __件 | | | | |
-| (g) 警告の種類ごとの件数 | 対応無し __ / 差戻し未取消 __ / 承認で消化無し __ | | | | |
+| (g) 判定とワークフローの突き合わせ | 不一致 __件 / ワークフロー無し __件 | | | | |
 | (h) 直接作られた勤怠日 | __件(内訳: ) | | | | |
-| 候補(1) 差戻しの未取消 | __件 | | | | |
-| 候補(2) created 無しの勤怠日 | __件 | | | | |
-| 候補(3) 編集イベントの休暇値 | __件 | | | | 許可の日時 |
-| 候補(4) 勤怠日の休暇値・全休 | __件 | | | | |
+| 5-2 `--swap`(元の表の名前・AUTO_INCREMENT) | | | | | |
+| 5-3 migrate・外部キーと列の確認 | | | | | |
+| 5-4 全Projectorのリビルド | 所要 __秒 | | | | |
+| 5-5 再計算(変更 / 除外)・スナップショットとの差のある月 | __ / __ ・ __か月 | | | | 一覧の保存先 |
 | 6-2 差分(B01〜B15) | | | | | |
 | 6-3 照合(1)〜(7) | 不一致 __件 | | | | |
-| 6-4 リビルドの差分 | 差分 __行 | | | | R1 の結果 |
-| 6-5 日次・月次 dry-run | 変更 __件 / 除外 __件 | | | | |
+| 6-4 リビルドの差分 | 差分 __行 | | | | |
+| 6-5 再計算の冪等性 | 変更 __件 | | | | |
 | 6-6 画面 | 不具合 __件 | | | | |
+| 5-6 停止から再開までの時間 | | | | | メンテナンス窓 |
+| 5-7 ロールバックの所要時間・一致 | | | | | |
 
 ---
 
 ## 9. 要確認の一覧(実施前に決める・確認する)
 
-- **R1(重要)**: 特別休暇・代休の付与・消化は、旧Projectorと口座のProjectorが同じテーブルに書く。全件リビルド(6-4)で
-  同じ状態になるかは、コードからは確定できない。
-- **R2**: 候補(1)の検出器は、移行後の状態(`migrated`)を除外しない。cutover後の有給の差戻しは `workflow_request.returned` で
-  表されるが、差戻し判定に含まれていない。移行後の件数が 0 にならない場合は、検出器の仕様を確認する。
-- **R3**: 補正の順序(2)→(3)→勤怠のProjector再構築→(4)。docs/32 の表は順序を示していない。変更セットに記録するか。
-- **R4**: 補正コマンド本体(`StoredEventCorrectionCommand` の子クラス、`CorrectAttendanceDay` の一括発行)は未実装。
-  直接修正・補正イベントの本実行には実装が必要。
+- **R1**: 変換コマンドを旧スキーマ(migrate前)のDBに対して実行できるか(読むのは `stored_events` だけであること)。
+- **R2(重要)**: 空にする全ReadModelのテーブルの一覧(Projectorの書き込み先から機械的に作る。WP10の成果物)。`stored_events.id` を参照する
+  `workflow_request_history_entries`・`expense_claim_history_entries` を含むこと。
+- **R3**: 3-1 の「新しい種類のイベント」の一覧(`paid_leave_account.*` のうち本変更で増えた種類)と、スナップショットのテーブル名。
+- **R4**: 変換コマンド(`leave:rebuild-event-store`、仮称)とオプション名はWP10の実装に合わせて読み替える(WP10は未着手)。
 - **R5**: 本番DBの複製の手順(mysqldump のオプション・権限・MySQLのバージョン)は既存の資料に無い。
 - **R6**: 暗号化された値の復号のため、リハーサルの `APP_KEY` は本番の値を使う。暗号化カラムの一覧は未確認。
-- **R7**: 特別休暇のうち残数を要しない種別は消化記録が無いため、(a)・(f) の件数に入る。種別の区分で除外する。
-- **R8**: 旧系統の有給の消化記録の取消の表し方(`paid_leave_usages.cancelled` が旧系統の行で使われるか)。
-- **R9**: 代休の時間単位で分数が null の申請は、移行で 0 分として扱われる(例外にならない)。
-- **R10**: docs/27 3.1 の migrate の範囲(`000001`〜`000008`)と、リポジトリの `000009`(補正ログ)の不一致。
-- **R11**: spatie の replay コマンドの引数と挙動(`--force`・短いクラス名)は、既存コードの使い方から推定した。
+- **R7**: 特別休暇の「残数を要する/要しない」は `*.used` の有無で判定する(承認時点の種別の設定の履歴が無いため)。残数を要する種別で
+  `*.used` が無い申請があれば、判定が実態と違う。
+- **R8**: (b) 分数が求められない時間休、(e) 申請IDの無い有給の消化記録を、変換コマンドが扱えない並びとして失敗させるか(WP10の実装で確認)。
+- **R9**: 旧系統の有給の消化記録の取消の表し方(`paid_leave_usages.cancelled` が旧系統の行で使われていたか)。B07 の比較の読み方に影響する。
+- **R10**: docs/27 3.1 の migrate の範囲の記述と、リポジトリのマイグレーション(`2026_10_10_*`。補正ログ `stored_event_corrections` を含む)の対応。
+- **R11**: spatie の replay コマンドの引数と挙動(引数なしで全Projector、`--force`)は、既存コードの使い方から推定した。
 - **R12**: `attendance_daily_calculations.attendance_day_id` が 1 日 1 行か(B02 の合計の前提)。
-- **R13**: 6-3 (7) の `attendance_days.source` の `leave` の扱い(論点3の `source=leave` は、移行では作られない想定)。
+- **R13**: 3-4 (5) の作り直し前の逆転数のSQLは件数が多いと遅い。所要時間を見て、必要なら抽出範囲を絞る。

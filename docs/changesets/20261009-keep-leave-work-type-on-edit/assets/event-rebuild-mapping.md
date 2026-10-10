@@ -89,7 +89,7 @@
 
 候補(1)(差し戻された休暇の未取消の消化記録)は2.1の差戻しの規則で、候補(2)〜(4)は2.4で、作り直しの中で直す。
 `attendance_day.corrected`・`CorrectAttendanceDay`・補正候補の検出コマンドは不要になるので削除する(少数のイベントを直す
-`StoredEventCorrector`は残す)。
+`StoredEventCorrector`と補正コマンドの基底`StoredEventCorrectionCommand`・補正ログは、部分的な書き換え用に残す)。
 
 ## 4. 作り直し後に削除するもの
 
@@ -103,6 +103,8 @@
   ガード、`LeaveCorrectionCandidateDetector`・`LeaveCorrectionReportCommand`・`onAttendanceDayCorrected`
 - 移行の入口: 移行コマンド4つ(`special-leave:migrate-to-account`・`compensatory-leave:migrate-to-account`・`paid-leave:migrate-requests`・
   `paid-leave:migrate-accounts`)、`/paid-leave/migrate` API と `MigratePaidLeaveAccount` のCommand/Handler
+- 休暇ビュー(`attendance_day_leaves`)・出勤率ビューの系統を表す`source`列の値(`legacy_paid`・`paid_account`等)と系統の切り替え
+  (休暇申請のイベントだけを入力にする。差戻し・取消で行を残し`request_status`を更新する方式は、履歴を画面で追えるため維持する)
 - 列: 消化記録の`stored_event_id`、`paid_leave_grants`の移行監査列(cutoverの情報はイベントの`meta_data`に残す)とその表示
 - フロントエンドの履歴表示の旧`event_type`名
 

@@ -92,7 +92,7 @@
   付与確定)は、休暇の連鎖とは別の向きの連携として維持する。
 - **テスト(原則16、`domain-test`スキル)**: 本変更で新設・変更する業務ルール(口座集約の残数・充当・取消、休暇申請の
   状態遷移、付与日数換算・有効期限、同じ日の衝突判定、締め判定、論点15の削除条件、出勤率の判定、休暇ビューから勤怠
-  計算への入力変換、まとめ申請の兄弟承認の対象判定、再提出の可否、`migrated`による引き継ぎ、午前・午後の休暇の組合せ)は、
+  計算への入力変換、まとめ申請の兄弟承認の対象判定、再提出の可否、`stored_events`の作り直しの変換規則(論点18)、午前・午後の休暇の組合せ)は、
   テストで直接呼べる単位(Aggregate/判定・計算クラス)に置き、ルールのテストで正常・境界・異常を
   確かめる。文脈間の連鎖は、受け入れ条件の各シナリオをUI非依存のシナリオテスト(API/Command起点、SQLite)で通し、
   各ステップ後にワークフロー・休暇申請・消化記録/残高・勤怠(休暇ビュー・日次計算)の状態を確認する。失敗系は全文脈の
@@ -119,9 +119,9 @@
   - 入力: 休暇申請文脈のイベント(有給`paid_leave_request.*`(新設、論点4)、特別`special_leave_request.*`、
     代休`compensatory_leave_request.*`の申請・承認・差戻し・取消)。各行は休暇の種類・取得単位・時間数・
     申請ID・申請状態(申請中/承認済み)を持つ。
-  - 過去分: 有給の申請イベントは本変更以前に存在しないため、有給は`paid_leave_account.usage_designated/
-    usage_confirmed/usage_cancelled`(cutover以降)からも同じ行を作る(論点4の境界条件と同じ規則で二重に
-    作らない)。cutover前の有給は論点13。
+  - 過去分: 本変更前の休暇(cutover前の有給を含む)は、論点18の`stored_events`の作り直しで最初から
+    `paid_leave_request.*`・`special_leave_request.*`・`compensatory_leave_request.*`として記録し直すため、入力は
+    上記の休暇申請文脈のイベントだけで足りる(旧`paid_leave.*`・`paid_leave_account.*`を入力にしない)。
   - 休暇として扱う範囲: 申請中・承認済み(差戻し・取消で外れる)。現行の`work_type`(申請時に設定・取消で解除)と
     同じく、計算は申請中から休暇として扱う。差戻しは本変更で休暇から外れる(論点5)。
 - 理由: 申請状態(申請中/承認済み)は休暇申請の事実であり、消化記録のイベントだけでは区別できない
@@ -148,12 +148,11 @@
 - 決定: 有給申請の集約`PaidLeaveRequestAggregate`を新設し、`paid_leave_request.requested/approved/
   returned/cancelled`を記録する。`paid_leave_requests`は休暇申請側の新Projectorが作り、残数側
   (`PaidLeaveUsageAllocationProjector`)からは申請テーブルの更新を削除する。
-- 境界条件: 本変更前の申請は、仕様確定事項Iの`paid_leave_request.migrated`で新しい集約へ引き継ぐ。各Projector
-  (申請テーブル・勤怠の休暇ビュー・出勤率ビュー)は申請IDごとに、`migrated`(または`requested`)より前は旧系統
-  (旧`paid_leave.*`、cutover後の`paid_leave_account.*`+`workflow_request.returned`)で、それ以後は
-  `paid_leave_request.*`(`migrated`を含む)だけで状態を作る。`migrated`以後に記録された旧系統のイベント
-  (`paid_leave_account.usage_confirmed`等)は申請状態の入力にしない。新イベント名は旧`paid_leave.*`
-  (廃止済み・記録元なし)と別にする。
+- 境界条件: 本変更前の申請(旧`paid_leave.*`、cutover後の`paid_leave_account.*`+`workflow_request.*`)は、論点18の
+  `stored_events`の作り直しで、元の発生順のまま`paid_leave_request.*`(申請集約)と`paid_leave_account.*`(口座集約の
+  消化記録)に変換して記録し直す。各Projector(申請テーブル・勤怠の休暇ビュー・出勤率ビュー)は`paid_leave_request.*`
+  だけで状態を作り、旧系統との切り替え(系統の判定・`input_source`)は持たない。新イベント名は旧`paid_leave.*`
+  (作り直しで無くなる)と別にする。
 - 未確定・要確認事項: なし
 
 ### 論点5: 差戻し・再申請・取消(設計書`docs/09:315-316`への準拠)
@@ -182,9 +181,10 @@
   申請集約は申請状態だけを持つ。
   - 集約ID: `userId`をそのまま使うと有給の口座集約とストリームIDが衝突するため、種類ごとの派生ID
     (既存の`UserManagementStreamId`と同じ方式)を使う。
-  - 既存の付与集約・消化記録: 移行用の補正イベント(口座開設時に既存の付与・未取消の消化記録の状態を引き継ぐ
-    イベント)を今の時点に追記して口座集約へ移す(`data-correction`ステップ3。過去への挿入はしない)。旧イベントを
-    購読する既存Projectorは、移行イベント以前の分の再生に引き続き使う。
+  - 既存の付与集約・消化記録: 論点18の`stored_events`の作り直しで、旧付与集約・旧申請集約のイベント(`*.granted`・
+    `*.usage_designated`・`*.used`・`*.usage_reversed`等)を、元の発生順のまま口座集約のイベントに変換して記録し直す
+    (`assets/event-rebuild-mapping.md` 2.1・2.2)。移行イベント(`*_account.migrated`)は作らず、旧イベントクラス・旧集約・
+    旧Projectorの旧イベント処理は作り直しの後に削除する。
   - 代休の付与は休日出勤の日次計算から同期されている(`SyncCompensatoryLeaveGrantOnAttendanceDayCalculatedReactor`)。
     同期先を代休の口座集約に変える(勤怠→残数のイベント連携は維持)。
   - 消化記録の`attendance_day_id`: 残数文脈は勤怠日を知らない。新規の消化記録には設定せず、列・イベントの項目は
@@ -235,16 +235,22 @@
 - 未確定・要確認事項: なし
 
 ### 論点12: 本番データの補正(`data-correction`スキル)
-- 決定: 補正の対象・件数・方法(書き換え・削除・追記)は、移行前のリハーサル(本番相当データ)で確定させ、その時点で
-  直接修正(書き換え・削除)についてユーザーの明示的な許可を得る(ユーザー指示)。本変更セットでは方針と補正コマンドの
-  枠組みまでを定める:
-  - 対象の候補: (1)差し戻された休暇の未取消の消化記録、(2)休暇の処理が直接作った勤怠日(`attendance_day.created`が
-    無い)、(3)編集イベントに入った休暇値、(4)勤怠日に残る休暇値・全休の`status`。
-  - 挿入は行わない(`data-correction`スキル)。追記する補正イベントは、復元対象の状態(勤怠日・休憩・不就労区間・
-    日次計算・手動調整・週40時間配賦など)を全て含む補正専用イベントとする。
-  - 消化記録→勤怠日・消化記録→申請テーブルの外部キーを撤去する(論点6)。リビルドするProjectorの順序をリハーサルで確定する。
-  - 補正コマンドは既定で試し実行、`--apply`でバックアップテーブル作成→1トランザクション。
-- 未確定・要確認事項: なし(リハーサルで確定)
+- 決定(2026-10-10 論点18により改訂): 補正は論点18の`stored_events`の作り直しの中で、変換規則として行う。補正イベント・
+  補正専用のコマンドは作らない。対象・件数は作り直しの試し実行(本番相当データでのリハーサル)で確認し、本番での実行は
+  変換規則と試し実行の結果を示してユーザーの明示的な許可を得てから行う(ユーザー指示)。
+  - 対象の候補と直し方(`assets/event-rebuild-mapping.md` 2.1・2.4・3章):
+    (1)差し戻された休暇の未取消の消化記録 → 差戻しの変換規則で`usage_cancelled`を差戻しの位置に置く。
+    (2)休暇の処理が直接作った勤怠日(`attendance_day.created`が無い) → その勤怠日の最初のイベントの直前に`created`を置く
+    (内容はReadModelの現在値)。過去への挿入も、id・版を元の発生順で振り直すため再生順の問題が無い。
+    (3)編集イベントに入った休暇値 → `workType`を作業内容の値(休暇値の前の値、無ければnull)に書き換える。
+    (4)勤怠日に残る休暇値・全休の`status` → (2)(3)の規則で置く`created`の値を直す。
+  - 日次計算・手動調整・週40時間配賦は作り直しの中では変換せず、作り直しの後に`attendance:recalculate-days`で再計算する
+    (締め・提出済みの月も対象。提出時のスナップショットとの差は一覧で報告する。論点18のユーザー決定)。
+  - 消化記録→勤怠日・消化記録→申請テーブルの外部キーを撤去する(論点6)。作り直しの後は全ReadModelを空にして全Projectorを
+    リビルドする(空にするテーブルの一覧は手順書に載せる)。
+  - 作り直しのコマンドは既定で試し実行、`--apply`で別表`stored_events_rebuilt`に書き、複製DBで検証してから`--swap`で入れ替える
+    (元の表はバックアップとして残す)。
+- 未確定・要確認事項: なし(件数・判定結果はリハーサルで確認。論点18)
 
 ### 論点13: cutover前の有給
 - 前提: 有給は新しい残数管理への移行(cutover)時に、移行前の個別の消化記録を再現していない
@@ -257,11 +263,14 @@
   - A. 勤怠の休暇ビュー・有給申請の新Projectorが、旧`paid_leave.*`イベントも入力にする
   - B. cutover前は対象外にする
   - C. 補正イベントを追記する
-- 決定: A。旧`paid_leave.requested`(申請中)・`paid_leave.request_approved`(承認済み)から休暇ビューの行と
-  `paid_leave_requests`の状態を作る(旧イベントの集約ID=申請ID)。論点4の境界条件に「旧`paid_leave.*`を持つ申請ID
-  は旧イベントで作る」を加える(切り替えは論点4の境界条件に従う。3系統: 旧`paid_leave.*`/cutover後〜本変更前の`paid_leave_account.*`/本変更後の
-  `paid_leave_request.*`。申請IDごとに排他)。
-- 理由: 旧イベントが唯一の記録で二重にならず、履歴を変えずにリビルドで再現できる。
+  - D. 論点18の`stored_events`の作り直しで、旧`paid_leave.*`を`paid_leave_request.*`(申請集約)と`paid_leave_account.*`
+    (口座集約の付与・消化記録)に変換して記録し直す
+- 決定: D(2026-10-10 論点18で置き換え。当初はAと決定し、旧イベントを休暇ビュー・有給申請Projectorの入力にしていた)。
+  旧イベントの集約ID=申請IDを有給申請集約のIDに引き継ぐ。cutover時の付与は付与IDと残数で旧付与と突き合わせ
+  (`assets/event-rebuild-mapping.md` 2.3)、旧イベントで再現できれば消化記録まで再現する。その場合8件は通常の承認済み申請と
+  同じく取消できる(2026-10-10 ユーザー決定)。
+- 理由: 旧イベントが唯一の記録で二重にならない(Aと同じ)。加えて、Projectorが旧`paid_leave.*`を読む必要が無くなり、
+  旧イベントクラスと系統の切り替えをコードから除ける。
 - 未確定・要確認事項: なし
 
 ### 論点14: 締め・ロックと月次提出のガード
@@ -370,10 +379,8 @@
 - 申請Handlerは他文脈の集約・テーブルを読み書きしない(勤怠日・勤怠計算・締め判定・他の休暇申請の重複チェック・
   残数Projectionの読み取りを全て削除)。
 - 申請テーブル(`paid_leave_requests`・`special_leave_requests`・`compensatory_leave_requests`)は休暇申請文脈の
-  Projectorだけが更新する。`paid_leave_requests`のProjectorの入力は申請IDごとに排他の3系統(論点4の境界条件・論点13。
-  `migrated`より前は旧系統、以後は新イベント):
-  旧`paid_leave.requested/request_approved`、cutover後〜本変更前の`paid_leave_account.usage_designated/usage_confirmed/
-  usage_cancelled`+`workflow_request.returned`、本変更後の`paid_leave_request.*`。
+  Projectorだけが更新する。`paid_leave_requests`のProjectorの入力は`paid_leave_request.*`だけ(本変更前の申請も論点18の
+  作り直しでこのイベントになる。論点4の境界条件・論点13)。系統の切り替え(`input_source`列)は持たない。
 
 ### D. 残数・使用文脈(`App\Domain\PaidLeaveAccount`・新設の特別休暇/代休の口座)
 - 有給: `PaidLeaveAccountAggregate`を維持。Reactor:
@@ -385,12 +392,16 @@
 - 特別休暇・代休: 利用者単位の口座集約`SpecialLeaveAccountAggregate`・`CompensatoryLeaveAccountAggregate`を新設
   (集約IDは種類ごとの派生ID。`UserManagementStreamId`と同じ方式)。付与の残数と消化記録(作成・確定(付与への充当)・
   取消)を持つ。イベント: `special_leave_account.*`・`compensatory_leave_account.*`(付与・付与取消・消化の作成・
-  確定・取消・移行)。Reactorは有給と同じ対応。代休の付与は`attendance_day.calculated`を受ける既存の同期Reactorの
+  確定・取消)。Reactorは有給と同じ対応。代休の付与は`attendance_day.calculated`を受ける既存の同期Reactorの
   同期先を口座集約に変える(勤怠日テーブルを直接読まず、計算イベントの内容(利用者・日付・休日労働時間)を使う。
   不足する情報は計算イベントに追加する)。
-- 移行: 運用コマンドで、利用者ごとに既存の付与集約・消化記録の現在の状態(付与残・未取消の消化記録。差し戻された
-  申請の消化記録は含めない)を`*_account.migrated`イベントとして今の時点に追記する。Projectorは同じテーブルに元の
-  IDでupsertする。移行以前の旧イベントは既存Projectorで再生する(移行イベントは同じ行を上書きするだけ)。
+- 既存データ: 論点18の`stored_events`の作り直しで、旧付与集約・旧申請集約のイベントを口座集約のイベントとして元の発生順に
+  記録し直す(差し戻された申請の消化記録は差戻しの位置で取り消す)。移行イベント(`*_account.migrated`)・移行コマンド・
+  口座集約の`migrate()`/`migrateGrants()`は持たない。口座のProjectorは口座集約のイベントだけを読み、旧Projector
+  (`SpecialLeaveGrantProjector`・`SpecialLeaveUsageProjector`・`CompensatoryLeaveGrantProjector`)の旧イベント処理と
+  `stored_events`の直接読み取りは削除する。
+- 有給の付与の`source`に`carried_over`(cutover時にシステム外から持ち込んだ残高。論点18)を追加し、Projector・画面で表示する。
+  cutoverの情報は付与イベントの`meta_data`に残し、`paid_leave_grants`の移行監査列は削除する。
 - 消化記録テーブル: 勤怠日への外部キー・申請テーブルへの外部キーを撤去し、`attendance_day_id`を任意にする
   (新規には設定しない)。
 
@@ -398,7 +409,7 @@
 - 休暇ビュー`attendance_day_leaves`(新設Projection): 列=id、user_id、work_date、leave_kind(paid/special/
   compensatory)、unit(full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、request_id、
   workflow_request_id、request_status(submitted/approved)、source_event_id。入力=休暇申請文脈のイベント
-  (論点2、有給は論点4の境界条件の3系統と`paid_leave_request.migrated`)。差戻し・取消では行を残し`request_status`をreturned/cancelledにする(読み手は申請中・承認済みだけを扱う。実装中の決定(WP5a))。
+  (論点2。本変更前の休暇も論点18の作り直しで同じイベントになるため、旧系統は読まない)。差戻し・取消では行を残し`request_status`をreturned/cancelledにする(読み手は申請中・承認済みだけを扱う。実装中の決定(WP5a))。
 - Reactor(休暇申請のイベント→勤怠のCommand):
   - 申請・再申請 → `ApplyLeaveToAttendanceDay`: 締め判定(論点14、全遷移)と同じ日の衝突チェック(論点7、判定対象から
     今回の休暇自身を除く)を行い、違反なら例外。勤怠日が無ければ`attendance_day.created`(`source=leave`、
@@ -432,7 +443,7 @@
 - 判定は現行の結果と同じにする: Assessorの分子=退勤済み ∪ 全休の休暇(3種) ∪ 有給の半休・時間休。Grantの分子=
   退勤済み ∪ 全休の休暇(3種) ∪ 有給・特別の半休・時間休。分母日と重なる日だけを数える。午前半休と午後半休が
   (種類を問わず)そろう日は全休の休暇として扱う(仕様確定事項I。現行は後から書いた片方だけが効いていたための差で、
-  意図的な変更)。入力に`paid_leave_request.migrated`等の引き継ぎイベントを含める。
+  意図的な変更)。本変更前の休暇・勤怠も論点18の作り直しで同じイベントになるため、引き継ぎ用の入力は持たない。
 - 勤怠のイベントに不足する情報があれば勤怠のイベントに追加する(利用者・日付は`attendance_day.created`等が持つ)。
 
 ### G. フロントエンド
@@ -444,16 +455,17 @@
 - `CancelApprovedLeaveDialog`等の「勤怠区分もクリアされます」の文言を修正。
 
 ### I. 最終設計レビューで確定した事項
-- **本変更前に申請された申請の引き継ぎ**: 運用コマンドで、既存の全ての有給申請(旧`paid_leave.*`の8件、cutover後の申請)に
-  ついて現在の状態(申請中/差戻し/承認済み/取消、対象日・取得単位・時間数・ワークフローID・まとめ申請ID・対応する消化記録ID)を
-  `paid_leave_request.migrated`として今の時点に追記する。以後の承認・差戻し・取消・再提出は全て`PaidLeaveRequestAggregate`で
-  処理する。特別・代休の口座の`*_account.migrated`には申請ID→消化記録IDの対応を含める。これにより論点4・13の3系統の
-  入力は「`migrated`以前の再生」にだけ使われる(論点4の境界条件)。
-- **消化記録の無い引き継ぎ済み有給の取消**: cutover前の8件(承認済み・消化記録なし。cutover時に残数へ反映済み)は、
-  システム上の取消を拒否する(「移行前の申請のため取消できません。付与日数の調整で対応してください」)。対象日は
-  2026年8月〜9月4日で、締め済みであれば論点14により元々取消できない。
-- **差し戻された申請の消化記録(特別・代休の移行時)**: `*_account.migrated`から除外した差戻し分の消化記録は、補正(H)で
-  取消イベントを追記して行を残さない。
+- **本変更前に申請された申請の引き継ぎ(論点18で改訂)**: 既存の全ての休暇申請(旧`paid_leave.*`の8件、cutover後の有給申請、
+  特別・代休の申請)は、`stored_events`の作り直しで申請ごとの状態機械により、申請集約の`*.requested`/`shared`/`approved`/
+  `returned`/`resubmitted`/`cancelled`と口座集約の`usage_designated`/`usage_confirmed`/`usage_cancelled`に変換して元の発生順に
+  記録し直す(`assets/event-rebuild-mapping.md` 2.1)。消化記録のusageIdは申請IDと再提出の回数から決める(cutover後の乱数の
+  usageIdは引き継ぐ)。以後の承認・差戻し・取消・再提出は全て新しい集約で処理する。`paid_leave_request.migrated`・
+  `*_account.migrated`は作らない。
+- **cutover前の有給の取消(論点18で改訂)**: cutover前の8件は、作り直しで消化記録まで再現できた場合、通常の承認済み申請と
+  同じく取消できる(2026-10-10 ユーザー決定)。`PaidLeaveRequestAggregate`の「移行前の申請の取消を拒否」は削除する。
+  対象日は2026年8月〜9月4日で、締め済みであれば論点14により取消できない。
+- **差し戻された申請の消化記録(論点18で改訂)**: 作り直しの差戻しの規則で、差戻しの位置に`usage_cancelled`を置く
+  (承認済みの充当があれば先に解放)。再提出は新しいusageIdで`usage_designated`を置く。
 - **月次APIの代休付与表示のビュー**: 勤怠側が代休の口座のイベントから作り、利用者×日付で付与(日数・時間・確定状況・
   充当量)を持つ。
 - **代休付与の連携(原則15)**: 付与の同期Reactorは`attendance_day.calculated`・`daily_calculation_adjusted`・`deleted`を
@@ -463,11 +475,12 @@
   ビューを読む。月次確定での付与確定(`ConfirmCompensatoryLeaveGrantsForMonthHandler`)は口座集約に付け替え、月の判定は
   文字列の前方一致ではなく日付範囲で行う。`compensatory_leave_grants.attendance_day_id`の外部キー(unique)も撤去する。
 - **出勤率の入力**: `attendance_day.synced_from_punches`は退勤済みとして扱う(Projectorと同じ)。勤怠日IDと利用者・日付の対応は
-  `created`・`synced_from_punches`・`live_status_synced`・補正専用イベントから持つ。「現行と同じ結果」は補正(H)後のデータに
-  対する約束とする。差し戻された有給は本変更で休暇から外れるため出勤扱いにならない(意図的な変更)。
+  `created`・`synced_from_punches`・`live_status_synced`から持つ(休暇の処理が直接作った勤怠日も、論点18の作り直しで
+  `created`を持つ)。「現行と同じ結果」は作り直し後のデータに対する約束とする。差し戻された有給は本変更で休暇から外れるため出勤扱いにならない(意図的な変更)。
 - **同じ日に午前・午後で別の休暇がある場合の勤怠計算**: 午前半休と午後半休がそろう日は全休と同じく扱い、所定労働時間は
   半分にしない(全休と同じP)。休暇日数は種類ごとに0.5ずつ。半休が1つだけの日は現行どおり所定労働時間を半分にする。
-- **時間休の分数**: 休暇ビューの`minutes`は`round(hours * 60)`(現行の消化記録の算出と同じ)。
+- **時間休の分数**: 休暇ビューの`minutes`は`round(hours * 60)`(現行の消化記録の算出と同じ)。作り直しで本変更前の申請の
+  `hours`は旧`usedMinutes`÷60から求める(`assets/event-rebuild-mapping.md` 5章)ため、元の分数と一致する。
 - **勤怠のイベントの必須項目**: 勤怠が休暇に反応して記録する`attendance_day.created`/`deleted`の`createdByUserId`/
   `deletedByUserId`には連鎖の起点の操作者(休暇の申請者・承認者・取消者)を入れる(システム処理で操作者がいない場合は
   申請者)。`utcOffsetMinutes`は利用者の既定タイムゾーン、`punchLogAction`は打刻ログを変更しない値とする。
@@ -475,15 +488,23 @@
   配賦のいずれかがある日は削除しない(再計算する)。
 - **通知**: 現行の休暇Handlerが送っている通知を一覧化し(WP3で作成して委譲元がレビュー)、同じ契機・同じ受信者で、状態を
   確定させた文脈のHandlerから送る。連鎖内で同じ通知を二重に送らない。
-- **既に却下済みの休暇ワークフロー**: 却下済みのワークフローに紐づく休暇申請が申請中のまま残っていれば、`migrated`時に
-  取消として引き継ぐ(リハーサルで件数を確認する)。
+- **既に却下済みの休暇ワークフロー(論点18で改訂)**: 却下済みのワークフローに紐づく休暇申請が申請中のまま残っていれば、作り直しで
+  却下の位置に申請集約の`*.cancelled`と口座集約の`usage_cancelled`を置く(リハーサルで件数を確認する)。
 
-### H. 補正(論点12)
-- 補正コマンドの枠組み(試し実行既定、`--apply`、バックアップテーブル、1トランザクション、版の連続性検証)と、補正専用
-  イベント(勤怠日の現在の正しい状態一式を含む)を用意する。対象・件数・方法はリハーサルで確定し許可を得る。
-- 勤怠日Projectorにリセット処理(全件再生成)を追加する。
+### H. `stored_events`の作り直しと補正(論点12・18)
+- 変換コマンド`leave:rebuild-event-store`(仮称): 旧イベントクラスに依存せず`stored_events`の生のJSONを読み、申請・付与・勤怠日
+  ごとの状態機械で新しいイベント列を作る(`assets/event-rebuild-mapping.md`)。既定は試し実行(件数・扱えない並びの一覧・cutoverの
+  付与の突き合わせ・差戻し/取消/却下の判定)、`--apply`で`stored_events_rebuilt`に書く(休暇以外のイベントも同じ順で写し、id・版を
+  振り直す)、`--swap`で`RENAME TABLE`により入れ替える。事前条件(新しい種類のイベント0件・補正ログ0件・スナップショット0件)を
+  自動で確認する。変換規則はテストで固定する。
+- 作り直しで、新しいコードが既定値nullで受けている項目(特別・代休の申請イベントの`userId`・`targetDate`・`requiresGrant`、勤怠の
+  計算イベントの`userId`・`workDate`ほか)を全て補完し、作り直し後は既定値・nullガードを削除する。
+- 補正イベント(`attendance_day.corrected`)・`CorrectAttendanceDay`・補正候補の検出(`leave:correction-report`)は作らない
+  (論点12。少数のイベントを直す`StoredEventCorrector`は残す)。
+- 勤怠日Projectorの全件再生成は、テーブルを空にして`event-sourcing:replay`する。
 - 日次計算の一括再計算コマンド`attendance:recalculate-days`(`#[AdminExecutable]`、`--from`/`--to`必須、`--user=*`、
-  既定は試し実行、手動調整済みの日は除外し一覧出力)。
+  既定は試し実行、手動調整済みの日は除外し一覧出力)。作り直しの後、休暇値を直した日と休暇のある日を、締め・提出済みの月も
+  含めて再計算し、月次の提出時のスナップショットと差のある月を一覧にして報告する。
 
 ## 受け入れ条件
 - 休暇3種それぞれについて、申請・承認・差戻し・申請者による取消・管理者による取消・ワークフロー側からの取消・
@@ -496,14 +517,20 @@
 - 休暇日の勤怠を編集しても休暇の表示・集計・残高は変わらない。`work_type`は休暇に影響しない。
 - 全休の日は出勤不可・打刻を取り込まない・打刻漏れ警告が出ない。半休の日は打刻できる。
 - 休暇だけの日(勤怠が`source=leave`で記録)も月次の休暇日数・給与連携に含まれ、同じ休暇データに対して改修前と同じ値になる。
-- 同じイベントを2回処理しても各文脈の状態が変わらない。却下済みのワークフローに紐づく申請中の休暇が取消として引き継がれる。
-  まとめ申請で兄弟の一部が差戻し中でも承認が通る。cutover前の有給の取消は拒否される。
+- 同じイベントを2回処理しても各文脈の状態が変わらない。却下済みのワークフローに紐づく申請中の休暇が、作り直しで取消として
+  記録される。まとめ申請で兄弟の一部が差戻し中でも承認が通る。cutover前の有給は、作り直しで消化記録まで再現された場合に
+  通常の承認済み申請と同じく取消できる。
 - 休暇の各Handlerが他文脈の集約・テーブルを直接読み書きしていない(コードレビュー)。
 - 同じイベントを購読する複数のReactorの実行順を入れ替えても結果が同じ。通知が重複しない。
-- 勤怠・休暇申請・残数の各Projectorを空から全件リビルドしても、リビルド前と同じ状態になる(補正後の本番相当
-  データで確認)。手動調整した日は補正後の再計算で上書きされない。
+- 勤怠・休暇申請・残数の各Projectorを空から全件リビルドしても、リビルド前と同じ状態になる(作り直し後の本番相当
+  データで確認)。手動調整した日は作り直し後の再計算で上書きされない。
+- `stored_events`の作り直し(論点18): 変換規則(申請・付与・勤怠日ごとの状態機械、cutoverの付与の突き合わせ、勤怠日の`created`の
+  補完と休暇値の書き換え、既定値nullの項目の補完)がテストで固定されている。本番相当データで試し実行の扱えない並び・cutoverの
+  不一致が0件で、複製DBで作り直し後の表から全Projectorをリビルドした結果と作り直し前のReadModelとの差が、意図した差(差し戻された
+  休暇の消化記録の取消、休暇値の削除、論点15の空の勤怠日の削除、`carried_over`の付与等)だけである。作り直し後のコードに移行
+  イベント・旧イベントクラス・旧系統の読み替え(`input_source`)・移行コマンド・補正イベントが残っていない。
 - 再提出で承認まで通る、業務側を持つ申請は却下できない、残数不足でも承認され充当できた分だけ充当される(3種)、休暇の解除で空の勤怠日が
-  削除される、出勤率の判定結果が補正後データで変わらない、`source=leave`の日に打刻が取り込まれる、本変更前に申請された
+  削除される、出勤率の判定結果が作り直し後のデータで変わらない、`source=leave`の日に打刻が取り込まれる、本変更前に申請された
   申請を本変更後に承認・差戻し・取消できる、cutover前8件が休暇ビューに表示される、午前有給+午後代休の日の計算が上記I
   のとおりになる。
 - 本変更で新設・変更した業務ルールごとのテストと、受け入れ条件の各シナリオを通すUI非依存のシナリオテストが存在し、
@@ -523,14 +550,21 @@
 - `docs/29-event-sourcing-framework-migration.md:312-322`: Reactorの定義に冪等性・`viaReactor`を追記。
 - `docs/09-usecases-paid-leave.md`ほか特別休暇・代休・勤怠(`docs/07`)・ワークフロー(`docs/10` UC-W004/W005)の
   ユースケース、`docs/16-database-schema.md`(`work_type`、`attendance_day_leaves`、各申請テーブルの所有者、
-  口座集約、消化記録の`attendance_day_id`)、`docs/17-events.md`(新イベント・購読関係)、`docs/32`(補正手順)。
+  口座集約、消化記録の`attendance_day_id`、`paid_leave_grants.source`の`carried_over`、削除する列(`input_source`・消化記録の
+  `stored_event_id`・付与の移行監査列))、`docs/17-events.md`(新イベント・購読関係、作り直しで無くなる旧イベント・移行イベント・
+  `attendance_day.corrected`の削除)、`docs/32`(休暇まわりの補正を補正イベントから`stored_events`の作り直しに改める)、
+  `docs/27-release-runbook.md`(移行コマンドの手順を作り直しの手順(書き込み停止・`--apply`・複製DBでの検証・`--swap`・
+  リビルド・再計算・ロールバック)に置き換える。監査ログAPIの`event_id`が変わることをリリースノートに記載)。
+- `.claude/skills/data-correction`: 「データ移行は`stored_events`の作り直しで行う」に改訂済み。
 - `.claude/skills/add-domain-event`: 文脈間の連携はReactor+冪等Commandで行う旨を追記。
 - OpenAPIの注釈(`special_leave_usages`→`leaves`)、`docs/04-domains`(文脈の責務)、`docs/13`(通知の送信元)。
 
 ## モック・アセット
 - `assets/`配下の調査結果(`impact-usage-derivation.md`、`returned-resubmit-and-overlap.md`、
   `other-request-types-return-resubmit.md`、`data-correction-prerequisites.md`、`context-coupling.md`、
-  `monthly-items-and-attendance-rate.md`)
+  `monthly-items-and-attendance-rate.md`、`domain-unit-test-coverage.md`、`paid-leave-wiring-map.md`)
+- `assets/event-rebuild-mapping.md`: `stored_events`の作り直しの変換規則・削除するもの・実行手順(論点18)
+- `assets/rehearsal-checklist.md`: 本番相当データでのリハーサル手順書(作り直しの試し実行・検証)
 
 ## 実装対象
 文脈単位の作業パッケージ(WP)に分け、implementerへ順に委譲する(依存のないものは並列)。各WPでテストを追加し、
@@ -541,13 +575,14 @@
 |---|---|---|---|
 | WP1 共通基盤 | `viaReactor`・`initiatedByUserId`の規約、冪等ガードの共通化、Projectorの行なし許容 | `App\Domain\EventSourcing`、各Projector | - |
 | WP2 申請・承認 | 却下の制限、`CancelWorkflowRequest`・`ApproveWorkflowRequest`の`viaReactor`、取消Reactorの3種統一、有給の提出Reactor・兄弟ワークフロー承認Reactorの新設 | `App\Domain\Workflow` | WP1・WP3のイベント定義 |
-| WP3 休暇申請 | `PaidLeaveRequestAggregate`・`paid_leave_request.*`(`migrated`含む)、ワークフロー対応表、兄弟承認の移設(申請・承認側の休暇テーブル読み取りの削除を含む)、通知の一覧化と移設、申請Projector(有給は3系統)、特別・代休の申請集約から使用操作を削除・`request_resubmitted`、ワークフローイベントのReactor、申請Handlerから他文脈操作を削除 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`、`Workflow/Reactors`の休暇系 | WP1・WP2 |
-| WP4 残数・使用 | 有給口座のReactor化・申請テーブル更新の削除、特別・代休の口座集約・イベント・Projector・移行コマンド、代休付与同期の付け替え、消化記録の外部キー撤去・`attendance_day_id`任意化 | `App\Domain\PaidLeaveAccount`、新設の口座、マイグレーション | WP3 |
+| WP3 休暇申請 | `PaidLeaveRequestAggregate`・`paid_leave_request.*`、ワークフロー対応表、兄弟承認の移設(申請・承認側の休暇テーブル読み取りの削除を含む)、通知の一覧化と移設、申請Projector(`paid_leave_request.*`だけを読む。実装済みの`migrated`・3系統の切り替えはWP10で削除)、特別・代休の申請集約から使用操作を削除・`request_resubmitted`、ワークフローイベントのReactor、申請Handlerから他文脈操作を削除 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`、`Workflow/Reactors`の休暇系 | WP1・WP2 |
+| WP4 残数・使用 | 有給口座のReactor化・申請テーブル更新の削除、特別・代休の口座集約・イベント・Projector(実装済みの移行コマンド・`migrated`はWP10で削除)、代休付与同期の付け替え、消化記録の外部キー撤去・`attendance_day_id`任意化 | `App\Domain\PaidLeaveAccount`、新設の口座、マイグレーション | WP3 |
 | WP5 勤怠 | `attendance_day_leaves`、`ApplyLeaveToAttendanceDay`/`ReleaseLeaveFromAttendanceDay`とReactor、`source=leave`、衝突チェック・締め判定、勤怠計算の休暇入力、出勤可否・打刻取り込み・警告・未出勤件数・月次提出ガード、API`leaves`、勤怠日Projectorのリセット、`attendance:recalculate-days`、`work_type`の休暇解釈の削除 | `App\Domain\Attendance`、`AttendanceController`、`AttendanceDayResource` | WP3 |
 | WP6 出勤率ビュー | `leave_attendance_rate_days`とProjector、`AttendanceRateAssessor`・`GrantScheduledSpecialLeaveHandler`の入力置き換え | `PaidLeaveSchedule`・`SpecialLeave` | WP3・WP5 |
 | WP7 フロントエンド | `leaves`の型・表示、打刻漏れ・出勤ボタン、日次画面の休暇判定・作業内容欄、申請詳細の却下非表示、休暇画面の差戻し表示と導線、文言修正、e2e | `frontend/src` | WP5 |
-| WP8 補正の枠組み | 補正コマンドの枠組み・補正専用イベント(対象と内容はリハーサルで確定) | `App\Console\Commands`、`App\Domain\Attendance` | WP4・WP5 |
+| WP8 補正の枠組み | (論点18で置き換え)実装済みの補正専用イベント`attendance_day.corrected`・`CorrectAttendanceDay`・`leave:correction-report`はWP10で削除する。補正コマンドの基底・`StoredEventCorrector`は少数のイベントを直す補正用に残す | `App\Console\Commands`、`App\Domain\Attendance` | WP4・WP5 |
 | WP9 docs | 「ドキュメントへの影響」の全件 | `docs/`、`.claude/skills/add-domain-event` | 全WP |
+| WP10 イベント構成の作り直し | (1)変換コマンド`leave:rebuild-event-store`(仮称。生JSONを読む、申請・付与・勤怠日ごとの状態機械、cutoverの付与の突き合わせと`carried_over`、勤怠日の`created`の補完・休暇値の書き換え、既定値nullの項目の補完、事前条件の確認、試し実行既定・`--apply`で`stored_events_rebuilt`・`--swap`、変換規則のテスト。仕様確定事項H、`assets/event-rebuild-mapping.md` 2・5・6・7章)。(2)旧系統の削除: 旧イベントクラスと別名(`config/event-sourcing.php`)、旧集約、旧Projectorの旧イベント処理と`stored_events`の直接読み取り、`PaidLeaveRequestProjector`・`AttendanceDayLeaveProjector`・出勤率ビューの系統の切り替え(`input_source`列)、既定値nullのガード、消化記録の`stored_event_id`列・付与の移行監査列とその表示、フロントの旧`event_type`名(同4章)。(3)移行コマンドと補正イベントの削除: 移行コマンド4つ(`special-leave:migrate-to-account`・`compensatory-leave:migrate-to-account`・`paid-leave:migrate-requests`・`paid-leave:migrate-accounts`)、`/paid-leave/migrate` APIと`MigratePaidLeaveAccount`、`*_account.migrated`・`paid_leave_request.migrated`、各口座集約の`migrate()`・`migrateGrants()`、`PaidLeaveRequestAggregate`の移行前申請の取消拒否、`attendance_day.corrected`・`CorrectAttendanceDay`・`onAttendanceDayCorrected`・`LeaveCorrectionCandidateDetector`・`LeaveCorrectionReportCommand`。(4)手順書: `assets/rehearsal-checklist.md`、`docs/27`・`docs/32`の作り直しの手順(空にするReadModelのテーブル一覧をProjectorの書き込み先から機械的に作って載せる) | `App\Console\Commands`、`App\Domain\PaidLeave`・`PaidLeaveRequest`・`PaidLeaveAccount`・`SpecialLeave`・`CompensatoryLeave`・`Attendance`・`PaidLeaveSchedule`、マイグレーション、`frontend/src`、`docs/` | WP1〜WP9 |
 
 ## 検証方法
 - backend: CI(PHP 8.4)。この作業環境はPHP 8.3のためローカルでは実行できない。
@@ -622,7 +657,7 @@
   直接参照、休暇では勤怠日の行を作らない等)は本版の論点に置き換えた。
 - 2026-10-10 独立設計レビュー(同等モデル)の指摘。blocker4件は委譲元で検証済み:
   - B1: 論点12(1)(2)の「履歴への挿入+版の振り直し」は、replayが`stored_events.id`順のため挿入イベントが最後に
-    再生され再現できない。→ `data-correction`スキルに「直接修正は書き換え・削除のみ、挿入は扱わない」を追記して是正。
+    再生され再現できない。→ `data-correction`スキルに「直接修正は書き換え・削除のみ、挿入は扱わない」を追記して是正。(論点18で置き換え)
   - B2: 特別・代休には「申請を取り消さずに未確定の消化記録だけを取り消す」イベントが無い(`SpecialLeaveUsageProjector`の
     取消は`request_cancelled`のみ・検証済み)。差戻し補正には新イベントが要り、論点6とも絡む。
   - B3: 有給はcutover時に過去の個別Usage履歴を再現していない(`PaidLeaveAccountAggregate.php:283-300`、`docs/09:448`・
@@ -644,7 +679,7 @@
   追加。論点2の入力を休暇申請のイベントに変更(申請状態の区別のため)、論点3をBに変更、論点4に新旧イベントの境界条件、
   論点5に承認済みワークフローは変えない・管理者取消・複数日まとめ申請、論点6に集約ID・移行(追記)・代休付与同期・
   `attendance_day_id`任意化、論点7の衝突チェックを勤怠文脈へ移動、論点9の出勤率は対象種類を現行維持、論点12を
-  書き換え・削除・追記で再構成(挿入を撤回)、論点13(cutover前の有給)・14(締め・ロック)・15(取消後の勤怠日)を追加。
+  書き換え・削除・追記で再構成(挿入を撤回)、論点13(cutover前の有給)・14(締め・ロック)・15(取消後の勤怠日)を追加。(論点6の移行(追記)・論点12の補正・論点4の境界条件は論点18で置き換え)
 
 - 2026-10-10 2回目の独立設計レビュー(同等モデル)。前回B1・B2・M3は解消、B3・B4・M1・M4〜M7は部分、M2は未解消。新たな指摘
   (主要箇所は委譲元で検証済み):
@@ -667,7 +702,7 @@
   イベント(requested/request_shared/request_approved/usage_designated 各8件、2026-08-31〜2026-09-04)を確認済みで、
   新ドメインとの二重記録の有無を追加確認中。
 - 2026-10-10 論点13: 本番確認の結果、旧`paid_leave.*`の8申請は新ドメインに記録が無く二重にならないため、旧イベントも
-  休暇ビュー・有給申請Projectorの入力にする(A)と決定。これで全論点の要確認事項が解消。仕様確定事項の記載へ進む。
+  休暇ビュー・有給申請Projectorの入力にする(A)と決定。これで全論点の要確認事項が解消。仕様確定事項の記載へ進む。(論点18で置き換え)
 - 2026-10-10 論点3を再検討しA(勤怠が自分の集約で休暇だけの日を記録)に変更(ユーザー決定)。調査で、休暇だけの日も日次計算
   イベントが所定労働時間等を記録し月次・給与連携・Excelが使っていることが判明し、ReadModelのみでは値がイベントで固定されない
   ため。論点15を「休暇の解除で、勤怠が記録しただけの空の勤怠日は勤怠が削除する」に変更。
@@ -679,16 +714,16 @@
   フローのため兄弟承認を休暇申請側+逆方向Reactorに整理、ワークフローID→申請の対応表を休暇申請側に新設、本変更前の申請を
   `migrated`で引き継ぎ、有給の提出Reactor、出勤率の入力の穴、代休付与連携の原則15違反と外部キー、午前・午後の別休暇の計算、
   時間休分の算出、月次提出ガードを有給に限定、WPの束ね方、勤怠イベントの必須項目、削除条件、通知、受け入れ条件・docsの漏れ。
-  午前・午後で別の休暇がそろう日は全休と同じ扱い(所定を半分にしない)と委譲元で決定(ユーザーに報告)。
+  午前・午後で別の休暇がそろう日は全休と同じ扱い(所定を半分にしない)と委譲元で決定(ユーザーに報告)。(`migrated`による引き継ぎは論点18で置き換え)
 - 2026-10-10 最終設計レビュー後の再確認の指摘を反映: 3系統の切り替えを`migrated`基準に統一(論点4・13・C・E・F)、逆方向連携に
   勤怠→代休の口座を追加、午前・午後の別休暇がそろう日を出勤可否・警告・出勤率でも全休扱い、兄弟承認は申請中のみ・
   `ApproveWorkflowRequest`の`viaReactor`、drafted Reactorの`workflow_requests`読み取り削除、cutover前8件の取消は拒否
-  (委譲元で決定、ユーザーに報告)、論点5の再申請の記述を論点8に合わせて修正、テスト一覧・受け入れ条件の追加、WP2の依存。
+  (委譲元で決定、ユーザーに報告)、論点5の再申請の記述を論点8に合わせて修正、テスト一覧・受け入れ条件の追加、WP2の依存。(3系統の切り替えとcutover前8件の取消拒否は論点18で置き換え)
 - 2026-10-10 ユーザーが変更セットを承認(「実装をお願いします」)。ステータスを実装中に更新。
 - 2026-10-10 実装中の決定: 有給申請の新しい集約・イベントは、旧イベントクラス(`App\Domain\PaidLeave\Events\PaidLeaveRequestApproved`等、
   再生のため残置)とのクラス名衝突を避けるため、新ドメイン`App\Domain\PaidLeaveRequest`に置き、イベントクラス名は
   `PaidLeaveRequestLifecycle{Requested,Shared,Approved,Returned,Resubmitted,Cancelled,Migrated}`とする(イベント名は
-  `paid_leave_request.*`のまま)。implementerが衝突を検出して停止したため委譲元で決定。
+  `paid_leave_request.*`のまま)。implementerが衝突を検出して停止したため委譲元で決定。(`Migrated`は論点18で置き換え)
 - 2026-10-10 実装中の決定(WP4a 特別休暇の口座集約): 充当の有効判定は承認日ではなく利用日基準(現行どおり。`confirmUsage`は
   `$today`を取らない)。取消済みの付与からは充当しない(現行は取消済みでも残数が残り充当できてしまう潜在不具合のため、意図的な
   変更として是正)。同じ失効日の付与は登録順。集約IDは`UserManagementStreamId::for('special_leave_account', userId)`。
@@ -699,18 +734,18 @@
   充当(利用日基準・失効日昇順・無期限最後)・取消時の戻し・残数)。論点17により充当不足は例外。時間単位の消化は分数を必須にした
   (現行は分数nullで充当なしのまま承認されていた)。**リハーサルで確認する事項**: (a)現行で残数不足のまま承認された消化記録の引き継ぎ方
   (migrateは不足のまま引き継ぐ)、(b)時間単位で分数がnullの既存の消化記録の有無(migrateが拒否するため)、(c)付与一覧の残数表示が
-  現行は下書きを含む点を移行後も維持するか(表示用Projectorで対応)。機能無効時の下書き・手動付与の扱いは現行どおり。
+  現行は下書きを含む点を移行後も維持するか(表示用Projectorで対応)。機能無効時の下書き・手動付与の扱いは現行どおり。(移行に関する(a)(b)は論点18で置き換え)
 - 2026-10-10 実装中の決定(WP5a 勤怠の休暇ビュー): `attendance_day_leaves`は差戻し・取消で行を削除せず`request_status`をreturned/cancelledに
   する(系統の切り替え判定に行を使うため。読み手は問い合わせクラス経由で申請中・承認済みだけを扱う)。**リリース手順・リハーサルの確認事項**:
   (d)新設Projector(対応表・休暇ビュー)は自動検出で有効になるため、リリース時に対象テーブルを空にして`event-sourcing:replay`で過去分を
-  反映する、(e)cutover後の`paid_leave_account.usage_designated`で`paidLeaveRequestId`がnullのものの件数(休暇ビューは無視する)。
+  反映する、(e)cutover後の`paid_leave_account.usage_designated`で`paidLeaveRequestId`がnullのものの件数(休暇ビューは無視する)。(系統の切り替えと(d)(e)は論点18で置き換え)
 - 2026-10-10 実装中の決定(P1 有給の口座): 集約が申請ID→usageIdを保持し(既存イベントの`paidLeaveRequestId`から構築)、確定・取消は申請IDでも
   指定可能。Reactor経由(`viaReactor`)の二重指定・二重確定・二重取消は何もしない。確定時の残数不足は例外(論点17。誤差1e-9は許容)。
   テストで付与をイベントなしで直接INSERTしていたものは、集約が付与を知らず承認できないため、付与コマンドによる作成に置き換えた
-  (本番の付与はcutover時の`paid_leave_account.migrated`イベントで集約に登録済みのため影響なし)。
+  (本番の付与はcutover時の`paid_leave_account.migrated`イベントで集約に登録済みのため影響なし)。(論点18で置き換え)
 - 2026-10-10 実装中の決定(P1のCI対応): 論点17の残数不足の拒否は承認経路(`PaidLeaveAccountAggregate::approveUsage`、
   `ConfirmPaidLeaveUsageHandler`)にだけ適用し、過去の消化記録の再生・移行(`confirmUsage`)は従来どおり部分充当を許す
-  (過去の事実の引き継ぎであり新たな承認ではないため)。
+  (過去の事実の引き継ぎであり新たな承認ではないため)。(移行は論点18で置き換え)
 - 2026-10-10 **論点17を改訂(ユーザー指摘)**: 承認時の残数不足は拒否しない(既存の設計方針)。以前の確認で委譲元が「拒否」を推奨
   選択肢として提示し、既存方針との矛盾を示さなかったため誤って決定として記録していた。P1(有給)・WP4a/4b(特別・代休の口座集約)に
   入れた不足時の例外を撤回し、部分充当で確定する(特別・代休は不足量を記録)。受け入れ条件の「残数不足で承認が拒否される」を削除。
@@ -718,10 +753,10 @@
   (系統は`input_source`列で管理)。`paid_leave_usages`の`paid_leave_request_id`・`attendance_day_id`の外部キーを撤去(Projectorの実行順に
   依存しないため。仕様確定事項Dの先行実施)。migratedは元の提出・承認・差戻し・取消日時を任意項目で持つ。承認者nullは申請者を入れる
   (承認不要時の現行と同じ)。リリース時は`paid_leave_requests`・`paid_leave_request_usage_links`・`leave_request_workflow_links`を空にして
-  一緒にリビルドする(差戻しの判定が対応表に依存するため)。
+  一緒にリビルドする(差戻しの判定が対応表に依存するため)。(3系統+migrated・`input_source`は論点18で置き換え)
 - 2026-10-10 論点17改訂の実装: 有給は部分充当の現行挙動に戻し(P1の拒否を撤回)、特別・代休の口座集約は不足でも確定し未充当量
   (`unallocatedDays`/`unallocatedMinutes`)を確定イベントに記録する。**リハーサル確認事項**: (f)移行(migrated)で引き継ぐ過去の
-  「承認済み・未充当」の消化記録の未充当量は現状0として扱われるため、移行データに未充当量を持たせるかを件数を見て決める。
+  「承認済み・未充当」の消化記録の未充当量は現状0として扱われるため、移行データに未充当量を持たせるかを件数を見て決める。(論点18で置き換え)
 - 2026-10-10 実装中の決定(WP5後半): 勤怠日Projectorの全件再生成は、既存Projectorと同じくテーブルを空にして`event-sourcing:replay`する方式
   とし、専用のリセット処理は追加しない(仕様確定事項Hの「リセット処理」はこの手順で満たす)。`attendance:recalculate-days`は締め・提出済みの
   日も対象に含め一覧に印を付ける(月次スナップショットは変えない)。月次APIの特別休暇の内訳は休暇ビューの承認済みのみ(現行どおり)。
@@ -729,36 +764,43 @@
 - 2026-10-10 実装中の決定(特別休暇の配線替え): 付与の登録・取消は口座集約で記録する。リリース手順: 新コードの配備直後に
   `special-leave:migrate-to-account --apply`を実行する(未実行の間は旧付与の取消・旧申請の承認が口座に反映されない)。移行の冪等は口座の
   `migrated`の有無で判定し、移行前に新しい流れで登録された付与・申請は除外する。旧Projectorは口座の消化記録ID(`usage_id`)を持たない旧来の
-  行だけを扱う。取消時の消化記録は現行どおり行を削除する。
+  行だけを扱う。取消時の消化記録は現行どおり行を削除する。(論点18で置き換え)
 - 2026-10-10 実装中の決定(代休の配線替え): 付与の同期・手動付与・月次確定・付与取消(申請・承認)は代休の口座集約で記録する。付与の同期は
   勤怠の計算イベント(`attendance_day.calculated`・`daily_calculation_adjusted`に利用者・勤務日・日区分・実労働分を末尾に追加)の内容で判定し、
   手動付与は代休の口座側の休日出勤ビューで判定する。月次APIの代休表示は勤怠側の付与ビューを読む。旧付与集約とそのCommand/Handlerは削除する
   (旧イベントとProjectorは移行前の再生用に残す)。リリース手順: 新設Projectorのテーブルを空にして`event-sourcing:replay`の後、
-  `compensatory-leave:migrate-to-account --apply`を実行する。
+  `compensatory-leave:migrate-to-account --apply`を実行する。(移行コマンドと旧イベントの残置は論点18で置き換え)
 - 2026-10-10 実装中の決定(WP6・WP7・有給の引き継ぎ): 出勤率ビューは有給(`leave_attendance_rate_*`)と特別休暇
   (`special_leave_attendance_rate_*`。自動付与の勤務形態の絞り込みのため`work_style_id`を持つ)の各文脈に置き、判定は共有の
   `App\Domain\Leave\Support\LeaveAttendanceRateJudgement`、Projectorは共通の抽象基底を継承する。フロントの差し戻された休暇の再提出は、
   休暇申請APIに`workflow_request_id`を追加して申請詳細へ直接リンクする(後続で対応)。休暇の履歴画面(イベント一覧)には差戻しの導線を
   付けない。有給の引き継ぎ(`paid-leave:migrate-requests`)で、却下済みワークフローの申請中は取消として引き継ぎ口座の未確定消化記録も
-  取り消す。**リハーサル確認事項**: (g)引き継ぎコマンドの警告(対応ワークフローが無い申請等)の件数、(h)旧システムが直接作った勤怠日の扱い(WP8)。
+  取り消す。**リハーサル確認事項**: (g)引き継ぎコマンドの警告(対応ワークフローが無い申請等)の件数、(h)旧システムが直接作った勤怠日の扱い(WP8)。(有給の引き継ぎコマンドと(g)(h)は論点18で置き換え)
+- 2026-10-10 論点18を独立設計レビュー(blocker8・major9)に基づき改訂、spec全体と手順書を方式Bに合わせた
 
 ## 実装結果
 2026-10-10 実装完了(PR #115、ドラフト)。全WPを同じブランチで実装し、CI(PHP 8.4のPHPUnit全件・MySQLでのマイグレーション・
 フロントのビルド)で確認した。コーディングは全てimplementerに委譲し、委譲ごとのレビュー・CIでの失敗と是正は
 `docs/delegation-reviews/202610.md`に記録した。
+その後、論点18(既存データの引き継ぎを移行イベントから`stored_events`の作り直しへ変更)によりWP10を追加した(未着手。下記の
+残課題)。以下のうち移行イベント・移行コマンド・補正イベントに関する実装はWP10で削除する。
 
 - WP2 申請・承認: 業務側を持つ申請の却下を拒否、取消・承認のReactor経由(冪等)。
 - WP3 休暇申請: 有給申請集約(`paid_leave_request.*`)・特別休暇/代休の申請集約を申請状態のみに、再提出イベント、ワークフローID↔申請の
   対応表、各文脈のReactor。差戻しの二重通知を解消。
-- WP4 残数・使用: 有給口座の申請ID対応・冪等化、特別休暇・代休の口座集約とProjector・移行コマンド、代休付与の同期を計算イベントの
+- WP4 残数・使用: 有給口座の申請ID対応・冪等化、特別休暇・代休の口座集約とProjector・移行コマンド(論点18で置き換え)、代休付与の同期を計算イベントの
   内容で。残数不足でも承認し部分充当(論点17改訂)。
 - WP5 勤怠: 休暇ビュー、休暇の反映・解除(締め・衝突・`source=leave`の作成/削除)、勤怠計算の休暇入力、全休の出勤可否・打刻・警告、
   月次提出ガード、API`leaves`、`attendance:recalculate-days`。
 - WP6 出勤率ビュー(有給・特別休暇)、WP7 フロントエンド(`leaves`、却下非表示、差戻しの導線、全休の表示)、WP8 補正の枠組み
-  (`attendance_day.corrected`・補正コマンドの基底・`leave:correction-report`)、WP9 ドキュメント(docs/03・04・07・09・10・13・16・17・
-  27・29・32)。有給申請の引き継ぎコマンド`paid-leave:migrate-requests`。
-- 受け入れ条件: 本番相当データでの確認(リビルドの一致・出勤率・cutover前8件の表示・補正後の再計算)はリハーサルで行う。それ以外は
+  (`attendance_day.corrected`・補正コマンドの基底・`leave:correction-report`。補正コマンドの基底以外は論点18で置き換え)、WP9 ドキュメント(docs/03・04・07・09・10・13・16・17・
+  27・29・32)。有給申請の引き継ぎコマンド`paid-leave:migrate-requests`(論点18で置き換え)。
+- 受け入れ条件: 本番相当データでの確認(作り直しの試し実行・複製DBでのリビルドの比較・出勤率・cutover前8件の表示と取消・作り直し後の
+  再計算)はリハーサルで行う。それ以外は
   シナリオテストで確認済み。
-- 残課題(対象外): 本番の補正の対象・方法と補正コマンド本体(リハーサル後、直接修正はユーザーの許可を得てから)、
-  リハーサル確認事項(a)〜(h)、`ShiftSwapRequestController`・`ExpenseClaimController`の`workflow_requests`直読み(休暇以外)、
+- 残課題: WP10(変換コマンド`leave:rebuild-event-store`の実装と変換規則のテスト、旧系統・移行コマンド・補正イベントの削除、
+  docs/27・docs/32の手順の改訂)、`assets/rehearsal-checklist.md`に沿ったリハーサル(試し実行の扱えない並び・cutoverの不一致・
+  差戻し/取消/却下の判定・複製DBでの比較の差分・再計算で値が変わる日、論点18の要確認事項)、本番での作り直しの実行(変換規則と
+  試し実行の結果を示してユーザーの明示的な許可を得てから)。
+- 残課題(対象外): `ShiftSwapRequestController`・`ExpenseClaimController`の`workflow_requests`直読み(休暇以外)、
   docs/17の勤怠の旧イベント名の表記、フロントのStorybook・e2eの実行、既存の`useAuth`による単体テスト6件の失敗(本変更前から)。
