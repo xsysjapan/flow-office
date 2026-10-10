@@ -5,12 +5,14 @@ namespace App\Domain\Attendance\Aggregates;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
 use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
+use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDayCreated;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -166,6 +168,65 @@ class AttendanceDayAggregate extends AggregateRoot
             $lateNightPrescribedMinutes,
             $lateNightNonPrescribedMinutes,
             $allocatedByUserId,
+        ));
+
+        return $this;
+    }
+
+    /**
+     * 補正専用イベント(attendance_day.corrected)を追記する。勤怠日の現在の正しい状態一式を渡す(論点12・仕様確定事項H)。
+     * 同じ補正IDの再実行の抑止はCommandHandlerが行う(このメソッドは常に1件追記する)。
+     *
+     * @param  array<int, array{start: string, end: string|null}>  $breaks
+     * @param  array<int, array{start: string, end: string, note: string|null}>  $leaveSegments
+     * @param  array<string, mixed>|null  $dailyCalculation
+     * @param  array<string, mixed>|null  $weeklyOvertimeAllocation
+     */
+    public function correct(
+        string $correctionId,
+        string $userId,
+        string $workDate,
+        ?string $calendarEntryId,
+        string $status,
+        string $source,
+        int $utcOffsetMinutes,
+        ?string $actualStartAt,
+        ?string $actualEndAt,
+        ?string $workType,
+        ?string $workLocationType,
+        ?string $note,
+        ?string $dayClassification,
+        array $breaks,
+        array $leaveSegments,
+        ?array $dailyCalculation,
+        ?array $weeklyOvertimeAllocation,
+        string $reason,
+        string $correctedByUserId,
+    ): self {
+        if (trim($correctionId) === '' || trim($reason) === '') {
+            throw new DomainRuleException('補正IDと補正理由は必須です。');
+        }
+
+        $this->recordThat(new AttendanceDayCorrected(
+            correctionId: $correctionId,
+            userId: $userId,
+            workDate: $workDate,
+            calendarEntryId: $calendarEntryId,
+            status: $status,
+            source: $source,
+            utcOffsetMinutes: $utcOffsetMinutes,
+            actualStartAt: $actualStartAt,
+            actualEndAt: $actualEndAt,
+            workType: $workType,
+            workLocationType: $workLocationType,
+            note: $note,
+            dayClassification: $dayClassification,
+            breaks: $breaks,
+            leaveSegments: $leaveSegments,
+            dailyCalculation: $dailyCalculation,
+            weeklyOvertimeAllocation: $weeklyOvertimeAllocation,
+            reason: $reason,
+            correctedByUserId: $correctedByUserId,
         ));
 
         return $this;

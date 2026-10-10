@@ -111,6 +111,43 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 .env変更後に再実行し忘れると古いキャッシュのまま動き、原因が分かりにくい不具合になる
 (疑わしい挙動が出たら`config:clear && route:clear && view:clear`で一旦切り分ける)。
 
+### 3.1 休暇まわりの連携変更(変更セット `20261009-keep-leave-work-type-on-edit`)のリリース手順
+
+休暇の申請・残数・勤怠を文脈間のイベント連携に切り替えたリリース。新設Projectorは自動検出で有効に
+なるため、過去分は`event-sourcing:replay`で反映する。以下の順序で行う(仕様確定事項A〜I、
+論点12・13・17の補正・移行はリハーサルで件数を確認してから`--apply`する)。
+
+1. 休暇の申請・承認・付与取消の操作を止める(メンテナンス窓)。移行コマンドの完了までは、旧付与の取消・
+   旧申請の承認が口座に反映されない。
+2. backend/を配備し`php artisan migrate --force`を実行する(マイグレーション`2026_10_10_000001`〜`000008`)。
+   外部キーの撤去は外部キー→索引の順で行われる(MySQL)。
+3. 新設Projectorのテーブルを空にして`php artisan event-sourcing:replay`を実行する。対象は
+   `leave_request_workflow_links`・`attendance_day_leaves`・`attendance_day_leave_paid_usages`・
+   `paid_leave_request_usage_links`・`paid_leave_requests`・`leave_attendance_rate_*`・
+   `special_leave_attendance_rate_*`・`compensatory_grant_day_views`(+`_allocations`)。
+   `paid_leave_requests`・`paid_leave_request_usage_links`・`leave_request_workflow_links`は一緒に空にする
+   (差戻しの判定が対応表に依存するため)。
+4. `php artisan special-leave:migrate-to-account`(試し実行)で件数を確認し、`--apply`で実行する。
+   移行の冪等は口座の`migrated`の有無で判定する。
+5. `php artisan compensatory-leave:migrate-to-account`(試し実行)→`--apply`。
+6. `php artisan paid-leave:migrate-requests`(試し実行)→`--apply`。本変更前に申請された有給申請を
+   `paid_leave_request.migrated`として引き継ぐ。消化記録の無い引き継ぎ済みの承認済み申請
+   (cutover前の8件)は取消できない(付与日数の調整で対応する)。
+7. 休暇まわりの画面で、差戻し・再申請・取消・休暇日の勤怠表示を確認する(docs/27 7章の疎通確認に加える)。
+
+リハーサル(本番相当データ)で確認する事項。結果は変更セットの`spec.md`の「実装中の決定」に記録する。
+
+- (a) 現行で残数不足のまま承認された消化記録の引き継ぎ方(移行は不足のまま引き継ぐ)。
+- (b) 時間単位で分数がnullの既存の消化記録の件数(移行が拒否するため)。
+- (c) 付与一覧の残数表示が下書きを含む点を移行後も維持するか(表示用Projectorで対応)。
+- (d) 新設Projectorのリビルド(手順3)の所要時間と、対象テーブルを空にしてからの件数の一致。
+- (e) cutover後の`paid_leave_account.usage_designated`で`paidLeaveRequestId`がnullのものの件数
+  (休暇ビューは無視する)。
+- (f) 移行で引き継ぐ「承認済み・未充当」の消化記録の未充当量(現状0として扱う)を、件数を見て
+  移行データに持たせるかの判断。
+- (g) `paid-leave:migrate-requests`の警告件数(対応するワークフローが無い申請等)。
+- (h) 旧システムが直接作った勤怠日の扱い(補正の手順。docs/32)。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

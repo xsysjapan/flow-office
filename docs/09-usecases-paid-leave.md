@@ -86,10 +86,12 @@ UC-P011の`paid-leave:roll-schedules`に置換される。
    `Scheduled`ではなく`NeedsReview`状態で作成する(候補日数0で黙って`Scheduled`
    扱いにしていた不具合を修正済み)。
 3. 出勤率(`min_attendance_rate`)は、直近`grant_cycle_months`か月間の
-   `employee_calendar_entries`(勤務予定日)を分母、`attendance_days`が退勤済みまたは
-   有給消化済み(`work_type`が`paid_leave_`で始まる)の日を分子として計算する
-   (有給取得日は出勤したものとして扱う)。期間中に勤務予定日が1件も無い場合は
-   判定不能として扱う。
+   `employee_calendar_entries`(勤務予定日)を分母、勤怠が退勤済みの日または有給の
+   休暇(全休・半休・時間休)の日を分子として計算する(有給取得日は出勤したものとして扱う)。
+   分子の入力は有給の出勤率ビュー(`leave_attendance_rate_days`・`leave_attendance_rate_leaves`。
+   勤怠のイベントと休暇申請のイベントから作る。変更セット`20261009-keep-leave-work-type-on-edit`
+   の論点9)で、勤怠日の`work_type`は読まない。差し戻された有給は休暇から外れるため出勤扱いにならない。
+   期間中に勤務予定日が1件も無い場合は判定不能として扱う。
 
 ### 法定付与日数の設定
 
@@ -204,25 +206,62 @@ cancelled)は独立ステータス系列として引き続き管理するが、�
 
 1. 承認者が有給申請を確認する
 2. 問題なければ承認する
-3. 対象日の勤怠に有給区分を反映する
+3. 承認により、`PaidLeaveRequestAggregate`が申請を承認済みにし(`paid_leave_request.approved`)、
+   有給の口座(`PaidLeaveAccountAggregate`)が`ConfirmPaidLeaveUsage`で消化記録を確定する
+   (`paid_leave_request.approved`を受けるReactor)
 4. `PaidLeaveAccountAggregate`が最新のGrant時系列に対しAllocationを実行し、Usageを確定する
 5. `PaidLeaveUsageConfirmed`イベント・Allocation結果に応じた`PaidLeaveUsageAllocated`
    イベント(0〜複数件)を記録する
+6. 勤怠の休暇ビュー(`attendance_day_leaves`)の申請状態を承認済みにし、対象日の勤怠を日次計算し直す
+   (勤怠文脈のReactor。勤怠日が無ければ`source=leave`で作る。論点3・5)
 
-手順3(対象日の勤怠に有給区分を反映する)は `attendance_days.work_type` に
-`paid_leave_full` / `paid_leave_am_half` / `paid_leave_pm_half` / `paid_leave_hourly`
-のいずれかを設定する。全休の場合は出退勤操作が発生しないため、締め忘れ(打刻漏れ)として
-警告されないよう `attendance_days.status` を `clocked_out` 扱いにする。この反映自体は
-Workflow/申請側のReactorが担い、`work_type`は申請時点(承認前)から反映される(UC-P003)。
+手順3〜6は各文脈のReactorが同じ連鎖の中で行い、利用者の承認操作1回で全体が1トランザクションになる。
+承認者は対象日の勤怠を直接書き換えない(勤怠の`work_type`には有給区分を書かない。変更セット
+`20261009-keep-leave-work-type-on-edit`の論点10)。休暇の有無・種類・取得単位は勤怠の休暇ビュー
+から判定される。
 
-手順4(Allocation)は「Allocationの算出アルゴリズム」節の通り。承認済みの日次勤怠が既に
-締め(ロック)済みの場合は承認できない(修正申請ワークフローを使う)。
+手順4(Allocation)は「Allocationの算出アルゴリズム」節の通り。残数が不足していても承認は拒否せず、
+充当できた分だけ充当する(論点17。有給は従来どおり部分充当)。承認済みの日次勤怠が既に締め(ロック)済みの場合は
+承認できない(論点14。締め済みの日は申請・承認・差戻し・取消・再提出の全ての遷移を拒否する。修正申請
+ワークフローを使う)。
 
 承認・差戻し・取消は、汎用申請(workflow_requests)やバックオフィス処理と同様、独立した
-ステータス系列(`paid_leave_requests.status`: submitted → approved / returned / cancelled)
-で管理する(承認とバックオフィス処理を分ける方針と同じ考え方)。差戻しは承認者のみ行える。
-取消は申請者自身のみ行え、提出中(未承認)・承認済みのいずれの申請も取り消せる
+ステータス系列(申請の状態`PaidLeaveRequestAggregate`: 申請中 → 承認済み / 差戻し / 取消。
+差戻しからは再申請・取消)で管理する(承認とバックオフィス処理を分ける方針と同じ考え方)。差戻しは承認者のみ行える。
+取消は申請者自身または管理者が行え、提出中(未承認)・承認済みのいずれの申請も取り消せる
 (承認済みの取消の詳細は「実装上のポイント」参照)。
+申請の状態の正は`paid_leave_request.*`イベント(休暇申請文脈)で、`paid_leave_requests`は
+休暇申請文脈のProjectorが作る。残数側は申請テーブルを更新しない。
+
+### 差戻し・再申請・取消(休暇の共通ルール、変更セット論点5・8)
+
+有給・特別休暇・代休とも、差戻し・再申請・取消は次のとおり(有給の設計書`docs/09:315-316`の
+「差戻しで未確定の消化記録を取り消し、再提出は新規の消化記録」に揃えた。特別・代休も同じ)。
+
+- **差戻し**: ワークフローが差し戻されると、休暇の申請は申請前の状態(差戻し)に戻る。残数側は未確定の
+  消化記録を取り消す(残高に含まれない)。勤怠の休暇ビューから外れ、勤怠は該当日を再計算する
+  (休暇だけの日なら論点3・15の解除ルールで空の勤怠日を削除する)。差戻し中の申請は承認できず、申請者が
+  「提出する」で再提出するか、取り消す。
+- **再申請**: 差戻しから申請詳細の「提出する」で同じ内容のまま再提出する(`workflow_request.submitted`)。休暇の
+  申請は申請中に戻り、残数側は新しい消化記録を作る。再提出では対象日・取得単位を変えられない。内容を変える場合は
+  取消して新規に申請する。差し戻された休暇は申請前の状態のため、月次提出のガードの対象外(下書きと同じ)。
+- **取消(申請中・承認済み)**: 申請者または管理者が取り消すと、休暇申請が取消になり、残数側が消化記録を取り消す
+  (承認済みは充当を解除し残高を戻す)。勤怠は該当日を再計算する。申請中ならワークフローも取り消す。
+  **承認済みのワークフローは取り消さない**(承認は取り消せない。設計原則13)。業務側の取消は休暇申請のイベントとして残る。
+- **ワークフロー側からの取消**: 申請中・差戻し中のワークフローが取り消されると、休暇申請も取り消す。
+- **却下**: 業務側(`subject_type`)を持つ申請は却下できない(変更セット論点16)。差し戻しを使う。
+- **締め済みの日**: 締め(ロック)済みの日にかかる休暇は、申請・承認・差戻し・取消・再提出の全ての遷移で
+  拒否する(変更セット論点14。管理者の例外は設けない。締め済みの月の休暇を変える場合は先に月次の確定取消を行う)。
+- **同じ日の衝突**: 同じ日に休暇が重なる場合は勤怠文脈が判定する(変更セット論点7。全休を含む併存・同じ半休の重複・
+  休暇の合計が所定労働時間を超える組合せを拒否する。午前有給+午後代休は通る)。
+
+### 有給申請の引き継ぎ(本変更前の申請)
+
+本変更前に申請された有給は、運用コマンド`paid-leave:migrate-requests`が現在の状態を
+`paid_leave_request.migrated`として今の時点に追記して、新しい申請の集約に引き継ぐ(変更セット
+仕様確定事項I)。引き継ぎ後の承認・差戻し・取消・再提出は全て新しい集約で処理する。cutover前(旧`paid_leave.*`)の
+8件のうち消化記録の無い承認済みの申請は、システム上の取消を拒否する(「移行前の申請のため取消できません。
+付与日数の調整で対応してください」)。
 
 期間指定でまとめて申請した複数日分(同じ`request_group_id`を持つ行)は、承認者がそのうち
 1件を承認する操作だけで、まだ提出中の残りの日もまとめて承認する(1日ごとに個別承認する
@@ -305,19 +344,21 @@ Grant追加・増額・有効期限延長・Usage取消によるAllocation解除
 「申請(進行状況)」の正は`workflow_requests`側、「有給固有の申請内容」の正は
 `paid_leave_requests`側という分離を維持する(CLAUDE.md原則14)。
 
-- 申請提出時: 有給固有のCommand(`RequestPaidLeaveHandler`等、既存のCommandクラス・
-  ルーティング・Workflow Reactorからのディスパッチ先は維持)が、内部で
-  `PaidLeaveAccountAggregate::designateUsage()`を呼ぶ(`DesignatePaidLeaveUsage`
-  Command経由)。`paid_leave_requests`には日数・区分・対象日等の有給固有パラメータを
-  そのまま保持する。
-- 承認時: `ApprovePaidLeaveRequestHandler`が`ConfirmPaidLeaveUsage`を発行し、
-  Aggregate内でAllocationが実行される。
-- 差戻し・取消(承認前): `ReturnPaidLeaveRequestHandler`/`CancelPaidLeaveRequestHandler`が
-  未確定Usageを`CancelPaidLeaveUsage`で取り消す(再提出時は新規Usageを作成する)。
-- 承認済み申請の取消: `CancelPaidLeaveRequestHandler`が`CancelPaidLeaveUsage`を発行し、
-  Allocationを解除して残高を復元する(旧ドメインではAllocation済みGrantの取消は
-  ブロックされていたが、新ドメインの不変条件6「取消時に全Allocationを解除」により
-  取消可能・残高復元が正しい挙動である。cutover時の意図的な仕様変更)。
+- 申請提出時: `RequestPaidLeaveHandler`は有給の申請集約(`PaidLeaveRequestAggregate`)に
+  `paid_leave_request.requested`を記録し、`paid_leave_request.shared`で申請・承認文脈のReactor
+  (`SubmitWorkflowRequestOnPaidLeaveRequestSharedReactor`)へワークフローの提出を依頼する
+  (提出をHandler内で直接行わない。変更セット論点4・仕様確定事項C)。残数側は
+  `paid_leave_request.requested`を受けるReactorが`DesignatePaidLeaveUsage`を発行し、
+  `PaidLeaveAccountAggregate`が申請IDで消化記録を作る。申請Handlerは勤怠日・残数・他の申請を読み書きしない。
+- 承認時: 申請・承認文脈の承認が`workflow_request.approved`を発行し、休暇申請文脈が
+  `paid_leave_request.approved`を記録する。残数側は`ConfirmPaidLeaveUsage`で消化記録を確定する。
+  まとめ申請の兄弟(申請中のもの)は休暇申請文脈が承認し、申請・承認文脈が兄弟のワークフローを承認する
+  (逆方向のReactor。差戻し中・取消済み・承認済みの兄弟は対象外)。
+- 差戻し・再申請・取消: 上の「差戻し・再申請・取消(休暇の共通ルール)」のとおり。差戻しでは残数側が未確定の
+  消化記録を取り消し、再提出(`workflow_request.submitted`)では新しい消化記録を作る。
+- 承認済み申請の取消: `paid_leave_request.cancelled`を受けて残数側が`CancelPaidLeaveUsage`を発行し、
+  Allocationを解除して残高を復元する。承認済みのワークフローは取り消さない(設計原則13)。
+- 申請の状態の正は休暇申請文脈(`paid_leave_request.*`)。残数側は申請テーブルを更新しない。
 
 `paid_leave_requests`のAPI応答形状(`/paid-leave/grants`・`/requests`・`/usages`・
 `/history`・`/grant-rules`)はcutover前後で変更していない。応答フィールドは
@@ -603,17 +644,18 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   まだ提出中の他の行もまとめて承認される。差戻しは対象外で、日ごとに個別に行う。
 - **承認済み申請の取消**: 有給・特別休暇・代休のいずれも、承認済みの申請を申請者本人が
   即座に取り消せる(承認者の再承認は不要)。有給は`CancelPaidLeaveUsage`によりAllocationを
-  解除して残高を復元する(特別休暇・代休は引き続き旧構造の`*_grant`へ取消イベントを記録して
-  残数を戻す)。対象日の`attendance_days.work_type`もクリアし、全休で実際の打刻が無い
-  場合はステータスも未入力(`not_started`)へ巻き戻す(半休・時間休は実際の打刻由来の
-  ステータスをそのまま維持する)。対象日を含む月次勤怠が既に提出・承認・締め済みの場合は
+  解除して残高を復元する(特別休暇・代休は口座集約の取消イベント`*_account.usage_cancelled`で
+  残数を戻す)。対象日の勤怠は`work_type`を書き換えない(休暇値を持たない。変更セット論点10)。
+  勤怠は休暇ビューから休暇が外れた日を再計算し、休暇だけで作られた空の勤怠日(`source=leave`)は
+  削除して休暇の前の状態に戻す(論点15)。対象日を含む月次勤怠が既に提出・承認・締め済みの場合は
   取消できない(`AttendanceEditGuard::assertMutable`が他の編集操作と同じ基準で拒否する。
   修正が必要な場合は修正申請ワークフローを使う)。期間指定でまとめて承認された申請の取消は
   1件ずつ個別に行う(承認のようなグループ単位のカスケードはない)。
-- 既知の制約: `attendance_daily_calculations`(日次集計)は現時点で `work_type` を区別せず
+- 既知の制約: `attendance_daily_calculations`(日次集計)は現時点で休暇の種類を区別せず
   `actual_start_at`/`actual_end_at` のみから計算する。全休日は労働時間が0分として集計される
-  (欠勤ではなく有給消化であることは `attendance_days.work_type` で判別できるが、給与計算上の
-  「有給分の賃金換算」は本実装のスコープ外。給与計算ソフト側で `work_type` を見て加算する、
+  (欠勤ではなく有給消化であることは勤怠の休暇ビュー(`attendance_day_leaves`)で判別できる。
+  `work_type`は作業内容のみで休暇を表さない。給与計算上の
+  「有給分の賃金換算」は本実装のスコープ外。給与計算ソフト側で休暇ビューを見て加算する、
   または後続フェーズで日次集計に有給分を組み込む対応が必要)。
 - 承認画面Allocation Preview API・Grant管理UI・社員別有給画面は、今回の再設計のスコープ外
   (spec.md「対象外」参照)。ドメインロジック(Aggregate・Allocation算出)自体は完成済みの
@@ -623,21 +665,45 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   (docs/changesets/20260906-paid-leave-schedule-assessment/spec.md)で実装済み
   (UC-P011〜UC-P015参照)。
 
+## 特別休暇の申請と残数(口座集約、変更セット`20261009-keep-leave-work-type-on-edit`)
+
+特別休暇は、申請の状態と残数・使用を別の文脈で持つ(設計原則15)。
+
+- 申請の状態(申請中・差戻し・承認済み・取消)は休暇申請文脈の`special_leave.*`が持つ。
+  申請の提出は申請・承認文脈のReactor(`SubmitWorkflowRequestOnSpecialLeaveRequestSharedReactor`)が行う。
+- 付与の残数と消化記録(作成・確定・取消)は利用者単位の口座集約`SpecialLeaveAccountAggregate`
+  (`special_leave_account.*`)が持つ。申請時に消化記録を作り、承認時に付与へ充当し、差戻し・取消で消化記録を
+  取り消す(Reactor: `SpecialLeaveUsageOnSpecialLeaveRequestReactor`)。
+- 付与は`special_leave_account.grant_registered`で登録し、取消は`special_leave_account.grant_revoked`で記録する。
+  既存の付与・消化は`special-leave:migrate-to-account --apply`(運用コマンド)で口座へ移す(docs/32)。
+- 承認時に残数が不足していても承認は拒否せず、充当できた分だけ充当し、充当できなかった分は
+  `unallocatedDays`として確定イベントに記録する(論点17)。
+- 差戻し・再申請・取消・締め・同じ日の衝突の扱いは「差戻し・再申請・取消(休暇の共通ルール)」のとおり。
+- 休暇の有無は勤怠の休暇ビュー(`attendance_day_leaves`)で判定し、勤怠日の`work_type`は使わない。
+- 出勤率(自動付与の判定)は、特別休暇の出勤率ビュー(`special_leave_attendance_rate_days`・
+  `special_leave_attendance_rate_leaves`)を読む。全休の特別休暇は出勤扱い、半休・時間休は分母に応じて数える
+  (現行の判定結果を維持する。論点9)。
+
 ## 代休(`App\Domain\CompensatoryLeave`)
 
-有給・特別休暇とは異なり、代休の付与(Grant)は申請ではなく休日出勤の勤怠実績
-(`attendance_days`)から自動導出される。所定休日・法定休日に実働がある日次勤怠が
-保存される都度、`AttendanceDayCalculated`/`AttendanceDailyCalculationAdjusted`/
-`AttendanceDayDeleted` を購読するReactorが`SyncCompensatoryLeaveGrant`コマンドを発行し、
-`compensatory_leave_grants`(status=draft)を1対1(`attendance_day_id`ユニーク)で同期する。
+有給・特別休暇とは異なり、代休の付与(Grant)は申請ではなく休日出勤の勤怠実績から自動導出される。
+所定休日・法定休日に実働がある日次勤怠が保存される都度、勤怠の`attendance_day.calculated`・
+`attendance_day.daily_calculation_adjusted`・`attendance_day.deleted`を購読する同期Reactor
+(`SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor`)が、代休の口座集約
+(`CompensatoryLeaveAccountAggregate`)へ`compensatory_leave_account.grant_synced`を記録する(変更セット
+仕様確定事項D・原則15)。同期は計算イベントの利用者・勤務日・日区分・実労働分で判定し、勤怠日のテーブルは読まない。
 休日出勤でなくなった・実績が削除された場合、draft状態のGrantのみ取り消す
 (確定済みGrantは触らない。整合性は月次確認画面の警告`compensatory_leave_warnings`で扱う)。
 代休は今回の有給ドメイン再設計の対象外で、引き続き従来通りの独立ドメインとして実装されている。
+付与の残数と消化記録(申請→作成、承認→充当、差戻し・取消→解除)は代休の口座集約が持つ。
+申請の状態は`compensatory_leave.*`(休暇申請文脈)が持つ。
 
 月次勤怠の提出(`AttendanceMonthSubmitted`)を受けて、対象月のdraft Grantを一括で
-`confirmed`に確定する(`system_settings.compensatory_leave_valid_days`が設定されていれば
+`confirmed`に確定する(口座集約の`compensatory_leave_account.grant_confirmed`。月の判定は
+文字列の前方一致ではなく日付範囲で行う。`system_settings.compensatory_leave_valid_days`が設定されていれば
 提出時点からのN日後を`expires_on`とし、未設定なら無期限)。確定後のGrantのみが消化申請
 (`compensatory_leave_requests`、特別休暇と同じ申請・承認・消化のフロー)の対象になる。
+申請の差戻しでは未確定の消化記録を取り消し、再提出では新しい消化記録を作る(「差戻し・再申請・取消」参照)。
 取得単位(全休/半休/時間単位)は`system_settings.compensatory_leave_unit`
 (`daily`/`half_day`/`hourly`)で制限し、半休判定の閾値は
 `compensatory_leave_half_day_threshold_minutes`で設定する。未使用の確定済みGrantは
@@ -654,18 +720,21 @@ Permission)が管理者操作として代休を手動付与できる。付与理
 **同じ換算ルール**(`system_settings.compensatory_leave_unit`等、
 `App\Domain\CompensatoryLeave\Services\CompensatoryLeaveGrantCalculator`)で付与日数を
 算出する(`POST /compensatory-leave/grants`、`GrantCompensatoryLeave`
-Command/`GrantCompensatoryLeaveHandler`)。対象日に休日出勤の実績が無い場合はエラーになる。
+Command/`GrantCompensatoryLeaveHandler`)。対象日に休日出勤の実績があるかは、代休の口座側の休日出勤ビュー
+(`compensatory_holiday_work_days`。計算イベントから作る)で確認する。Handlerは勤怠日のテーブルを読まない。
+対象日に休日出勤の実績が無い場合はエラーになる。
 
 手動付与は承認不要のため、作成と同時に`status=confirmed`となり(月次提出による確定
-ステップを経ない)、`compensatory_leave_grants.source`に`manual`を記録して自動導出分
-(`attendance`)と区別する。手動付与には元になった`attendance_days`行への1:1紐付けが
-無いため`attendance_day_id`はnullのままとなる。
+ステップを経ない)、口座集約の`compensatory_leave_account.grant_manually_granted`で記録する。
+付与には元になった勤怠日への紐付けを持たない(`compensatory_leave_grants.attendance_day_id`の
+外部キーとユニーク制約は撤去済み)。
 
 管理者は`POST /compensatory-leave/grants/{grant}/revoke`で代休Grantを直接取り消せる
 (`source`が`attendance`/`manual`のどちらでも利用可能)。既存の社員起点の
 取消申請→承認フロー(上記、`request-cancellation`/`grant-cancellations/{id}/approve`)とは
-別の、承認を経ない管理者専用の即時取消経路であり、既存の`CancelCompensatoryLeaveGrant`
-Command/Handlerをそのまま再利用する(`used_days`が0より大きい場合は同様に取消不可)。
+別の、承認を経ない管理者専用の即時取消経路であり、代休の口座集約の付与取消
+(`compensatory_leave_account.grant_cancelled`)で行う(`used_days`が0より大きい場合は同様に取消不可)。
+旧付与集約とそのCommand/Handlerは口座集約へ置き換えて削除した(旧イベントは移行前の再生用に残す)。
 
 有給・特別休暇のUC-P007と同様、`GET /compensatory-leave/history/mine`(本人)・
 `GET /compensatory-leave/history/user/{userId}`(`leave.manage` Permission)で

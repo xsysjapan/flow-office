@@ -371,7 +371,7 @@
 - 休暇ビュー`attendance_day_leaves`(新設Projection): 列=id、user_id、work_date、leave_kind(paid/special/
   compensatory)、unit(full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、request_id、
   workflow_request_id、request_status(submitted/approved)、source_event_id。入力=休暇申請文脈のイベント
-  (論点2、有給は論点4の境界条件の3系統と`paid_leave_request.migrated`)。差戻し・取消で行を削除する。
+  (論点2、有給は論点4の境界条件の3系統と`paid_leave_request.migrated`)。差戻し・取消では行を残し`request_status`をreturned/cancelledにする(読み手は申請中・承認済みだけを扱う。実装中の決定(WP5a))。
 - Reactor(休暇申請のイベント→勤怠のCommand):
   - 申請・再申請 → `ApplyLeaveToAttendanceDay`: 締め判定(論点14、全遷移)と同じ日の衝突チェック(論点7、判定対象から
     今回の休暇自身を除く)を行い、違反なら例外。勤怠日が無ければ`attendance_day.created`(`source=leave`、

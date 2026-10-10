@@ -80,6 +80,7 @@ use App\Domain\Attendance\Commands\CloseAttendanceMonth;
 use App\Domain\Attendance\Commands\CorrectAttendancePunch;
 use App\Domain\Attendance\Commands\CorrectCompanyCalendarYearFiscalYear;
 use App\Domain\Attendance\Commands\CreateAttendanceDay;
+use App\Domain\Attendance\Commands\CorrectAttendanceDay;
 use App\Domain\Attendance\Commands\CreateCompanyCalendar;
 use App\Domain\Attendance\Commands\CreateCompanyCalendarYear;
 use App\Domain\Attendance\Commands\CreateDefaultWorkStyle;
@@ -146,6 +147,7 @@ use App\Domain\Attendance\Handlers\CloseAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\CorrectAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\CorrectCompanyCalendarYearFiscalYearHandler;
 use App\Domain\Attendance\Handlers\CreateAttendanceDayHandler;
+use App\Domain\Attendance\Handlers\CorrectAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarHandler;
 use App\Domain\Attendance\Handlers\CreateCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\CreateDefaultWorkStyleHandler;
@@ -584,6 +586,7 @@ return [
         EndBreak::class => EndBreakHandler::class,
         ClockOut::class => ClockOutHandler::class,
         CreateAttendanceDay::class => CreateAttendanceDayHandler::class,
+        CorrectAttendanceDay::class => CorrectAttendanceDayHandler::class,
         EditAttendanceDay::class => EditAttendanceDayHandler::class,
         AdjustAttendanceDailyCalculation::class => AdjustAttendanceDailyCalculationHandler::class,
         AllocateAttendanceWeeklyOvertime::class => AllocateAttendanceWeeklyOvertimeHandler::class,

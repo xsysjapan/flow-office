@@ -3,14 +3,17 @@
 namespace App\Domain\Attendance\Projectors;
 
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
+use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDayCreated;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
+use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
 use App\Models\AttendanceDayStatus;
+use App\Models\AttendanceWeeklyOvertimeAllocation;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
@@ -127,6 +130,53 @@ class AttendanceDayProjector extends Projector
         $day = AttendanceDay::query()->updateOrCreate(['id' => $event->aggregateRootUuid()], $attributes);
 
         $this->replaceBreaks($day, $event->breaks);
+    }
+
+    /**
+     * 補正イベント: 勤怠日・休憩・不就労区間・日次計算・週40時間の配賦を、イベントに記録した状態で全て置き換える。
+     * 行が無ければ作る(欠落した attendance_day.created の補完)。日次計算・配賦は記録値をそのまま置く(差分を再適用しない)。
+     * 1イベントで勤怠日の子テーブルまで書くのは、Projectorの実行順に依存せず(行の存在を前提にしない)同じ結果を得るため。
+     */
+    public function onAttendanceDayCorrected(AttendanceDayCorrected $event): void
+    {
+        $attendanceDayId = $event->aggregateRootUuid();
+
+        $day = AttendanceDay::query()->updateOrCreate(
+            ['id' => $attendanceDayId],
+            [
+                'user_id' => $event->userId,
+                'work_date' => $event->workDate,
+                'calendar_entry_id' => $event->calendarEntryId,
+                'status' => $event->status,
+                'source' => $event->source,
+                'utc_offset_minutes' => $event->utcOffsetMinutes,
+                'actual_start_at' => $this->parse($event->actualStartAt),
+                'actual_end_at' => $this->parse($event->actualEndAt),
+                'work_type' => $event->workType,
+                'work_location_type' => $event->workLocationType,
+                'note' => $event->note,
+                'day_classification' => $event->dayClassification,
+            ],
+        );
+
+        $this->replaceBreaks($day, $event->breaks);
+        $this->replaceLeaveSegments($day, $event->leaveSegments);
+
+        if ($event->dailyCalculation === null) {
+            AttendanceDailyCalculation::query()->where('attendance_day_id', $attendanceDayId)->delete();
+        } else {
+            AttendanceDailyCalculation::query()->updateOrCreate(
+                ['attendance_day_id' => $attendanceDayId],
+                $event->dailyCalculation,
+            );
+        }
+
+        AttendanceWeeklyOvertimeAllocation::query()->where('attendance_day_id', $attendanceDayId)->delete();
+        if ($event->weeklyOvertimeAllocation !== null) {
+            AttendanceWeeklyOvertimeAllocation::query()->create(
+                ['attendance_day_id' => $attendanceDayId] + $event->weeklyOvertimeAllocation,
+            );
+        }
     }
 
     public function onAttendanceBreakAutoInserted(AttendanceBreakAutoInserted $event): void

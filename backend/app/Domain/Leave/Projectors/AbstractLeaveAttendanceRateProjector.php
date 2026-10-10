@@ -2,6 +2,7 @@
 
 namespace App\Domain\Leave\Projectors;
 
+use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDayCreated;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\Attendance\Events\AttendanceDayEdited;
@@ -125,6 +126,12 @@ abstract class AbstractLeaveAttendanceRateProjector extends Projector
     public function onAttendanceDaySyncedFromPunches(AttendanceDaySyncedFromPunches $event): void
     {
         $this->recordAttendance($event->aggregateRootUuid(), $event->userId, $event->workDate, true);
+    }
+
+    /** 補正イベントは勤怠日の利用者・日付と出勤状態を今の値で置く(欠落していた行の補完を含む)。 */
+    public function onAttendanceDayCorrected(AttendanceDayCorrected $event): void
+    {
+        $this->recordAttendance($event->aggregateRootUuid(), $event->userId, $event->workDate, $event->status === J::STATUS_CLOCKED_OUT);
     }
 
     public function onAttendanceDayLiveStatusSynced(AttendanceDayLiveStatusSynced $event): void

@@ -33,6 +33,7 @@ use App\Domain\AssetNumbering\Events\AssetNumberRuleConfigured;
 use App\Domain\Attachment\Events\AttachmentDownloaded;
 use App\Domain\Attachment\Events\AttachmentUploaded;
 use App\Domain\Attendance\Events\AttendanceBreakAutoInserted;
+use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\AttendanceDayCreated;
@@ -433,6 +434,7 @@ return [
         'attendance_day.live_status_synced' => AttendanceDayLiveStatusSynced::class,
         'attendance_day.synced_from_punches' => AttendanceDaySyncedFromPunches::class,
         'attendance_day.break_auto_inserted' => AttendanceBreakAutoInserted::class,
+        'attendance_day.corrected' => AttendanceDayCorrected::class,
 
         'attendance_punch.recorded' => AttendancePunchRecorded::class,
         'attendance_punch.corrected' => AttendancePunchCorrected::class,
