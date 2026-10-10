@@ -142,12 +142,12 @@ class LeaveCorrectionReportTest extends TestCase
         $dayB = $this->uuid();
         $dayC = $this->uuid();
 
-        $this->createDay($dayA, 'paid_leave_full', 'not_started');
-        $this->createDay($dayB, 'normal', 'not_started');
+        $this->createDay($dayA, '2026-10-05', 'paid_leave_full', 'not_started');
+        $this->createDay($dayB, '2026-10-06', 'normal', 'not_started');
         AttendanceDayAggregate::retrieve($dayB)
             ->edit(540, null, null, 'not_started', 'compensatory_leave_full', null, false, null, [], [], 'test', $this->employee->id)
             ->persist();
-        $this->createDay($dayC, null, 'clocked_out');
+        $this->createDay($dayC, '2026-10-07', null, 'clocked_out');
 
         $candidate = $this->candidate(LeaveCorrectionCandidateDetector::CANDIDATE_LEAVE_VALUE_IN_EVENTS);
 
@@ -168,9 +168,9 @@ class LeaveCorrectionReportTest extends TestCase
         $fullDayWithoutActual = $this->uuid();
         $workedDay = $this->uuid();
 
-        $this->createDay($withLeaveValue, 'paid_leave_full', 'not_started');
-        $this->createDay($fullDayWithoutActual, null, 'clocked_out');
-        $this->createDay($workedDay, null, 'clocked_out', '2026-10-07T09:00:00+09:00', '2026-10-07T18:00:00+09:00');
+        $this->createDay($withLeaveValue, '2026-10-08', 'paid_leave_full', 'not_started');
+        $this->createDay($fullDayWithoutActual, '2026-10-09', null, 'clocked_out');
+        $this->createDay($workedDay, '2026-10-10', null, 'clocked_out', '2026-10-10T09:00:00+09:00', '2026-10-10T18:00:00+09:00');
 
         $candidate = $this->candidate(LeaveCorrectionCandidateDetector::CANDIDATE_LEAVE_VALUE_ON_DAYS);
 
@@ -183,7 +183,7 @@ class LeaveCorrectionReportTest extends TestCase
 
     public function test_the_report_changes_nothing_and_prints_each_candidate(): void
     {
-        $this->createDay($this->uuid(), 'paid_leave_full', 'not_started');
+        $this->createDay($this->uuid(), '2026-10-05', 'paid_leave_full', 'not_started');
         $eventsBefore = DB::table('stored_events')->count();
         $daysBefore = DB::table('attendance_days')->count();
 
@@ -231,12 +231,12 @@ class LeaveCorrectionReportTest extends TestCase
         $this->event($this->employee->id, $version, $eventClass, $properties + ['userId' => $this->employee->id]);
     }
 
-    private function createDay(string $dayId, ?string $workType, string $status, ?string $actualStart = null, ?string $actualEnd = null): void
+    private function createDay(string $dayId, string $workDate, ?string $workType, string $status, ?string $actualStart = null, ?string $actualEnd = null): void
     {
         AttendanceDayAggregate::retrieve($dayId)
             ->create(
                 userId: $this->employee->id,
-                workDate: '2026-10-05',
+                workDate: $workDate,
                 calendarEntryId: null,
                 status: $status,
                 source: 'manual',
