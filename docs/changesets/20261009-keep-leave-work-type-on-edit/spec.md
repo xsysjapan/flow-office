@@ -296,6 +296,31 @@
 - 2026-10-10 `changeset`スキルの改訂手順(設計前提の検証)に従い、方針Bで変更セットを作り直した。
   論点1〜9を新規に検討。前案(休暇イベント購読Projector・`workTypeProvided`・イベント履歴の
   直接修正・休暇値の入力拒否)は全て破棄。
+- 2026-10-10 独立設計レビュー(同等モデルのサブエージェント)の指摘(委譲元で主要箇所を検証済み):
+  - blocker: 論点2「取り消されていない消化記録すべて」は現行と同じではない。差し戻された申請は取消も
+    再承認もできず(`CancelPaidLeaveRequestHandler.php:61`等)、重複チェックが差戻しを除外するため
+    同日に再申請でき、二重計上になる。
+  - blocker: 本変更単独のリリースで、既存の全休(`status=clocked_out`)を取り消した日に出勤・打刻が
+    できなくなる(`ClockInHandler.php:40`、`AttendanceDayPunchSyncer.php:86-93`)。旧休暇値が作業内容
+    欄の初期値から編集イベントに記録されてしまう。
+  - major: `status`を「出勤または休暇」として読む箇所の洗い出し不足(`DevicePunchController.php:92`、
+    `TodayAttendancePanel.tsx`、`AttendanceDayRow.tsx:55`、`statusLabels.ts:222`、PunchSyncer)。
+  - major: 半休の所定半減は代休にも効いている(`AttendanceCalculator.php:157-158`は接頭辞を見ない)。
+    As-Isの「代休は未算入」は日数のみ正しく、所定半減については誤り。
+  - major: 論点5で勤怠日の行を作らない選択肢が未検討。有給の`attendance_day_id`はnullable。
+    `CreateAttendanceDay`は`source=MANUAL`の行を作り以後の打刻が反映されない。
+  - major: 論点8の再計算は手動調整を解除する(`AttendanceDailyCalculationProjector.php:87`)。補正前の
+    行への計算イベント追記・月次再計算との二重実行・実行順序の考慮が必要。
+  - major: 論点3「いずれかの有効な申請があれば拒否」は異なる種類の半休の組合せも拒否する業務ルール変更。
+  - minor: 休暇ラベルは半休・時間休でも状態バッジの代わりに表示されている、`leaves`の返却範囲・
+    eager loadの粒度、docs/16の行番号、UI文言(`CancelApprovedLeaveDialog.tsx:55`)・OpenAPI注釈の更新漏れ、
+    削除ガードが取消済み有給も拒否する既存不具合。
+- 2026-10-10 レビュー指摘に対するユーザー決定:
+  - 差戻し: 再申請で置き換え(取消)できるなら休暇として扱う。再申請できない場合は再申請できるようにする。
+  - 重複チェック: 3種共通で、時間が重なる組合せ(全休を含む併存・同じ半休の重複)だけを拒否する。
+  - 本番データの補正: 本変更セットに含める(`data-correction`スキルの手順で検討)。
+  - 休暇では勤怠日の行を作らない(休暇は対象者と日付で勤怠日と紐づける)。
+  → 論点2・3・5・7を改訂する。差戻しの再申請と補正の前提事実をinvestigatorで調査中。
 
 ## 実装結果
 未着手
