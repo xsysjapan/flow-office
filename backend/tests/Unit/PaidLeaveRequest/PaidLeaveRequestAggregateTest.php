@@ -291,7 +291,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
                 $aggregate->cancel('user-1', '予定変更');
             })
             ->assertRecorded([
-                new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: '予定変更'),
+                new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: '予定変更', userId: 'user-1'),
             ]);
     }
 
@@ -313,7 +313,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
                 $aggregate->cancel('admin-1', '管理者による取消');
             })
             ->assertRecorded([
-                new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'admin-1', reason: '管理者による取消'),
+                new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'admin-1', reason: '管理者による取消', userId: 'user-1'),
             ]);
     }
 
