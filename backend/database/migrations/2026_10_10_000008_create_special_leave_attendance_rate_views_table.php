@@ -40,7 +40,7 @@ return new class extends Migration
             $table->string('request_status');
             $table->string('source');
 
-            $table->unique(['leave_kind', 'leave_request_id']);
+            $table->unique(['leave_kind', 'leave_request_id'], 'sl_att_rate_leaves_kind_request_unique');
             $table->index(['user_id', 'work_date']);
             $table->index('usage_id');
         });
@@ -51,7 +51,7 @@ return new class extends Migration
             $table->date('work_date');
             $table->boolean('clocked_out');
 
-            $table->index(['user_id', 'work_date']);
+            $table->index(['user_id', 'work_date'], 'sl_att_rate_att_days_user_date_index');
         });
     }
 
