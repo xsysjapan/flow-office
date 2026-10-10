@@ -11,14 +11,12 @@ use PHPUnit\Framework\TestCase;
 /**
  * LeaveCalculationInput(休暇ビュー→日次計算への入力変換)の検証。DB非依存。
  *
- * 単一休暇の期待値は、現行 AttendanceCalculator::calculate の休暇まわり(AttendanceCalculator.php:125-161)と
- * 同じ値になるように定めている。現行の該当コード:
- * - :125-129 $paidLeaveDays = match ($day->work_type) { paid_leave_full => 1.0, paid_leave_am_half/pm_half => 0.5, default => 0.0 }
- * - :130-134 $paidLeaveMinutes = 有給の消化記録のうち usage_type=hourly の used_minutes の合計
- * - :135-142 $specialLeaveDays = special_leave_full => 1.0, special_leave_am_half/pm_half => 0.5, default => 0.0
- * - :143-145 $specialLeaveMinutes = 特別休暇の消化記録のうち usage_type=hourly の used_minutes の合計
- * - :153-161 半休(work_type が _am_half/_pm_half で終わる)の日は $prescribedWorkMinutes = intdiv(P, 2)。全休・通常日・時間休は変えない。
- * 代休(work_type=compensatory_*)は日数・時間休分数に数えない(:125-145 の match に該当しない)。
+ * 入力は休暇ビュー(attendance_day_leaves)の有効な休暇の行(leave_kind・unit・minutes)。勤怠日の作業内容
+ * (work_type)と消化記録は読まない(論点10)。単一休暇の期待値は、休暇の日数・時間休分数・所定労働時間の規則
+ * (LeaveCalculationInput のdocblock参照)で定める:
+ * - 有給・特別の日数: 全休=1.0、午前・午後の半休=0.5。代休は日数に数えない。
+ * - 有給・特別の時間休分数: 時間休(hourly)のminutesの合計。代休は数えない。
+ * - 所定労働時間: 半休が1つだけの日は intdiv(P, 2)。全休・午前+午後の半休がそろう日・時間休・通常日はPのまま。
  */
 class LeaveCalculationInputTest extends TestCase
 {
@@ -37,7 +35,7 @@ class LeaveCalculationInputTest extends TestCase
         $compensatory = AttendanceDayLeave::KIND_COMPENSATORY;
 
         return [
-            // 有給: 全休=paid_leave_full(日数1.0)、半休=paid_leave_*_half(0.5, 所定はintdiv)、時間休=hourly分数
+            // 有給: 全休(日数1.0)、半休(0.5, 所定はintdiv)、時間休(hourly分数)
             'paid full' => [$paid, PaidLeaveType::FULL, null, [1.0, 0.0, 0, 0, 480, true]],
             'paid am_half' => [$paid, PaidLeaveType::AM_HALF, null, [0.5, 0.0, 0, 0, 240, false]],
             'paid pm_half' => [$paid, PaidLeaveType::PM_HALF, null, [0.5, 0.0, 0, 0, 240, false]],

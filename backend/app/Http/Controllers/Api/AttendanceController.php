@@ -196,7 +196,7 @@ class AttendanceController extends Controller
         );
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $targetUserId)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
@@ -681,7 +681,7 @@ class AttendanceController extends Controller
         $userId = $this->resolveViewableUserId($request, $data['user_id'] ?? null, [$yearMonth], '他の社員の月次勤怠を閲覧する権限がありません。');
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
             ->orderBy('work_date')

@@ -7,10 +7,13 @@ use App\Domain\Attendance\Commands\RecalculateAttendanceDayForLeave;
 use App\Domain\Attendance\Commands\ReleaseLeaveFromAttendanceDay;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Models\AuthenticationKeyType;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayLeave;
 use App\Models\CompanyCalendar;
+use App\Models\Device;
+use App\Models\DeviceOwnerType;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
@@ -18,7 +21,9 @@ use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -364,5 +369,192 @@ class AttendanceLeaveScenarioTest extends TestCase
         ));
         $this->assertNull($this->dayOn($employee, '2026-08-10'));
         $this->assertSame(0, AttendanceDay::query()->count());
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
+    /** 出勤APIの「今日」を2026-08-10(社員の既定タイムゾーン)に固定する。 */
+    private function freezeToday(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10 10:00:00', 'Asia/Tokyo'));
+    }
+
+    // ---- 全休・半休と出勤・打刻・未出勤の判定(休暇ビュー。論点9・仕様確定事項I) ----
+
+    public function test_a_full_day_paid_leave_blocks_clock_in_and_the_today_api_shows_the_leave(): void
+    {
+        $this->freezeToday();
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $requestId = $this->requestLeave($employee, $approver, '2026-08-10', 'full');
+        $this->approveLeave($approver, $requestId);
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', '本日は全休の休暇のため出勤できません。');
+
+        // 出勤できない: 打刻は記録されず、休暇だけの日の状態(未開始)は変わらない。
+        $this->assertSame(0, DB::table('attendance_punches')->count());
+        $this->assertSame('not_started', $this->dayOn($employee, '2026-08-10')->status);
+
+        // 今日の勤怠の応答に休暇が載る(status ではなく leaves で休暇を判定する)。
+        $this->actingAs($employee)->getJson('/api/attendance/today')
+            ->assertOk()
+            ->assertJsonPath('leaves.0.leave_kind', 'paid')
+            ->assertJsonPath('leaves.0.unit', 'full')
+            ->assertJsonPath('leaves.0.request_id', $requestId)
+            ->assertJsonPath('leaves.0.request_status', 'approved');
+    }
+
+    public function test_morning_and_afternoon_half_day_leaves_also_block_clock_in(): void
+    {
+        $this->freezeToday();
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $amId = $this->requestLeave($employee, $approver, '2026-08-10', 'am_half');
+        $pmId = $this->requestLeave($employee, $approver, '2026-08-10', 'pm_half');
+        $this->approveLeave($approver, $amId);
+        $this->approveLeave($approver, $pmId);
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', '本日は全休の休暇のため出勤できません。');
+        $this->assertSame(0, DB::table('attendance_punches')->count());
+    }
+
+    public function test_a_half_day_leave_still_allows_clock_in(): void
+    {
+        $this->freezeToday();
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $this->requestLeave($employee, $approver, '2026-08-10', 'am_half');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'working');
+    }
+
+    public function test_returning_the_full_day_leave_allows_clock_in_again(): void
+    {
+        $this->freezeToday();
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $requestId = $this->requestLeave($employee, $approver, '2026-08-10', 'full');
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertUnprocessable();
+
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/return", ['comment' => '日程を確認してください'])->assertOk();
+
+        // 差戻しで休暇が外れると、その日は全休ではなくなり出勤できる。休暇の応答からも外れる。
+        $this->actingAs($employee)->getJson('/api/attendance/today')->assertOk()->assertJsonPath('leaves', []);
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'working');
+    }
+
+    public function test_a_full_day_leave_is_not_counted_as_a_missing_punch(): void
+    {
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-03');
+        $this->workingDay($employee, '2026-08-04');
+        // 全休の日(08-03)は打刻漏れの対象外。半休だけの日(08-04)は勤務すべき日なので対象に残る。
+        $this->requestLeave($employee, $approver, '2026-08-03', 'full');
+        $this->requestLeave($employee, $approver, '2026-08-04', 'am_half');
+
+        $this->actingAs($employee)->postJson('/api/users/me/authentication-keys', [
+            'key_type' => AuthenticationKeyType::NFC_UID,
+            'display_name' => 'カード',
+            'raw_key_value' => 'NFC-LEAVE-001',
+        ])->assertCreated();
+        // 社員としての認証を解除してから、端末(Sanctum)として打刻する。
+        $this->app['auth']->forgetGuards();
+        $device = Device::factory()->create([
+            'owner_type' => DeviceOwnerType::ORGANIZATION_SHARED,
+            'default_work_location_type' => 'office',
+        ]);
+        Sanctum::actingAs($device, ['recorder:punch']);
+
+        $this->postJson('/api/device-punches', [
+            'work_date' => '2026-08-10',
+            'punch_type' => 'clock_in',
+            'punched_at' => '2026-08-10T09:00:00+09:00',
+            'authentication_key_value' => 'NFC-LEAVE-001',
+        ])
+            ->assertSuccessful()
+            ->assertJsonPath('attendance_summary.missing_punch_count', 1);
+    }
+
+    // ---- 有給申請中の月次提出のガード(論点14) ----
+
+    public function test_a_submitted_paid_leave_blocks_the_month_submission_until_it_is_returned(): void
+    {
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $requestId = $this->requestLeave($employee, $approver, '2026-08-10', 'full');
+
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-08/submit', ['approver_user_id' => $approver->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', '対象月に未承認の有給申請があります。有給申請の承認を完了してから月次勤怠を提出してください。');
+        $this->assertSame(0, DB::table('attendance_months')->where('user_id', $employee->id)->count());
+
+        // 差し戻された有給は申請前の状態のため、月次提出を妨げない。
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/return", ['comment' => '日程を確認してください'])->assertOk();
+
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-08/submit', ['approver_user_id' => $approver->id])
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'submitted');
+    }
+
+    public function test_an_approved_paid_leave_does_not_block_the_month_submission(): void
+    {
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $requestId = $this->requestLeave($employee, $approver, '2026-08-10', 'full');
+        $this->approveLeave($approver, $requestId);
+
+        $this->actingAs($employee)->postJson('/api/attendance/months/2026-08/submit', ['approver_user_id' => $approver->id])
+            ->assertSuccessful()
+            ->assertJsonPath('status', 'submitted');
+    }
+
+    // ---- 勤怠APIの leaves(休暇ビューの有効な行) ----
+
+    public function test_the_month_api_returns_the_leaves_of_each_day_and_no_consumption_list(): void
+    {
+        [$employee, $approver] = $this->people();
+        $this->grantPaidLeave($employee);
+        $this->workingDay($employee, '2026-08-10');
+        $this->workingDay($employee, '2026-08-11');
+        $fullId = $this->requestLeave($employee, $approver, '2026-08-10', 'full');
+        $this->requestLeave($employee, $approver, '2026-08-11', 'am_half');
+        $this->requestLeave($employee, $approver, '2026-08-11', 'pm_half');
+
+        $response = $this->actingAs($employee)->getJson('/api/attendance/months/2026-08')->assertOk();
+        $days = collect($response->json('days'))->keyBy('work_date');
+
+        $this->assertArrayNotHasKey('special_leave_usages', $days['2026-08-10']);
+        $this->assertSame(1, count($days['2026-08-10']['leaves']));
+        $leave = $days['2026-08-10']['leaves'][0];
+        $this->assertSame('paid', $leave['leave_kind']);
+        $this->assertSame('full', $leave['unit']);
+        $this->assertNull($leave['special_leave_type_id']);
+        $this->assertSame($fullId, $leave['request_id']);
+        $this->assertSame('submitted', $leave['request_status']);
+        $this->assertNotNull($leave['workflow_request_id']);
+
+        $this->assertCount(2, $days['2026-08-11']['leaves']);
+        $this->assertSame(['am_half', 'pm_half'], collect($days['2026-08-11']['leaves'])->pluck('unit')->sort()->values()->all());
     }
 }

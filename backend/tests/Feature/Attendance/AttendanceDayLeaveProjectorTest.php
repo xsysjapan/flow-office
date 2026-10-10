@@ -25,6 +25,7 @@ use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
 use App\Domain\Workflow\Events\WorkflowRequestReturned;
@@ -417,6 +418,53 @@ class AttendanceDayLeaveProjectorTest extends TestCase
             $this->assertStatus(AttendanceDayLeave::KIND_SPECIAL, $requestId, $expected);
             $this->assertSame(AttendanceDayLeave::SOURCE_SPECIAL, $this->row(AttendanceDayLeave::KIND_SPECIAL, $requestId)->source);
         }
+    }
+
+    public function test_special_leave_request_returned_then_resubmitted_restores_only_the_returned_row(): void
+    {
+        $userId = $this->uuid();
+        $requestId = $this->uuid();
+        $this->projector()->onSpecialLeaveRequested((new SpecialLeaveRequested(
+            userId: $userId,
+            specialLeaveTypeId: 3,
+            targetDate: self::DATE,
+            leaveType: PaidLeaveType::FULL,
+            hours: null,
+            requestedDays: 1.0,
+            approverUserId: $this->uuid(),
+            reason: null,
+        ))->setAggregateRootUuid($requestId));
+
+        $this->projector()->onSpecialLeaveRequestReturned(
+            (new SpecialLeaveRequestReturned(returnedByUserId: $this->uuid(), comment: '差戻し'))->setAggregateRootUuid($requestId),
+        );
+        $this->assertStatus(AttendanceDayLeave::KIND_SPECIAL, $requestId, AttendanceDayLeave::STATUS_RETURNED);
+
+        $this->projector()->onSpecialLeaveRequestResubmitted(
+            (new SpecialLeaveRequestResubmitted(resubmittedByUserId: $this->uuid()))->setAggregateRootUuid($requestId),
+        );
+        $this->assertStatus(AttendanceDayLeave::KIND_SPECIAL, $requestId, AttendanceDayLeave::STATUS_SUBMITTED);
+        $this->assertSame(AttendanceDayLeave::SOURCE_SPECIAL, $this->row(AttendanceDayLeave::KIND_SPECIAL, $requestId)->source);
+
+        // 差戻し中でない行(承認済み)は再提出の通知で変わらない。
+        $approvedId = $this->uuid();
+        $this->projector()->onSpecialLeaveRequested((new SpecialLeaveRequested(
+            userId: $userId,
+            specialLeaveTypeId: 3,
+            targetDate: self::DATE,
+            leaveType: PaidLeaveType::FULL,
+            hours: null,
+            requestedDays: 1.0,
+            approverUserId: $this->uuid(),
+            reason: null,
+        ))->setAggregateRootUuid($approvedId));
+        $this->projector()->onSpecialLeaveRequestApproved(
+            (new SpecialLeaveRequestApproved(approvedByUserId: $this->uuid()))->setAggregateRootUuid($approvedId),
+        );
+        $this->projector()->onSpecialLeaveRequestResubmitted(
+            (new SpecialLeaveRequestResubmitted(resubmittedByUserId: $this->uuid()))->setAggregateRootUuid($approvedId),
+        );
+        $this->assertStatus(AttendanceDayLeave::KIND_SPECIAL, $approvedId, AttendanceDayLeave::STATUS_APPROVED);
     }
 
     public function test_compensatory_leave_request_approved_returned_and_cancelled(): void

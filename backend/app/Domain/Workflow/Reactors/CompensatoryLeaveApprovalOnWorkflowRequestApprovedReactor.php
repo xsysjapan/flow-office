@@ -19,7 +19,7 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  *
  * 期間指定でまとめて申請した複数日分(同じ`request_group_id`を持つ行)は、この
  * うち1件が承認されたタイミングで、まだ提出中の他の行もまとめて承認する
- * (PaidLeaveApprovalOnWorkflowRequestApprovedReactorと同じ考え方。承認者が期間全体を
+ * (PaidLeaveRequest\Reactors\PaidLeaveApprovalOnWorkflowRequestReactorと同じ考え方。承認者が期間全体を
  * 1回の操作で承認できるようにするため)。差戻しは対象外(日ごとに個別差戻しする)。
  */
 class CompensatoryLeaveApprovalOnWorkflowRequestApprovedReactor extends Reactor

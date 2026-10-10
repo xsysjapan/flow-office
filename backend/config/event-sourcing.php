@@ -208,6 +208,7 @@ use App\Domain\SpecialLeave\Events\SpecialLeaveGrantRevoked;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveUsageDesignated;
@@ -579,6 +580,7 @@ return [
         'special_leave.request_approved' => SpecialLeaveRequestApproved::class,
         'special_leave.request_returned' => SpecialLeaveRequestReturned::class,
         'special_leave.request_cancelled' => SpecialLeaveRequestCancelled::class,
+        'special_leave.request_resubmitted' => SpecialLeaveRequestResubmitted::class,
         'special_leave.request_shared' => SpecialLeaveRequestShared::class,
         'special_leave.usage_designated' => SpecialLeaveUsageDesignated::class,
         'special_leave.used' => SpecialLeaveUsed::class,

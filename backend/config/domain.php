@@ -105,6 +105,7 @@ use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
 use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
+use App\Domain\Attendance\Commands\RecalculateAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\RecalculateAttendanceDayForLeave;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
@@ -170,6 +171,7 @@ use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\PublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
+use App\Domain\Attendance\Handlers\RecalculateAttendanceDailyCalculationHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceDayForLeaveHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
@@ -343,6 +345,7 @@ use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
+use App\Domain\SpecialLeave\Commands\ResubmitSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\RevokeSpecialLeaveGrant;
 use App\Domain\SpecialLeave\Handlers\ApproveSpecialLeaveRequestHandler;
@@ -350,6 +353,19 @@ use App\Domain\SpecialLeave\Handlers\CancelSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\GrantScheduledSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\GrantSpecialLeaveHandler;
 use App\Domain\SpecialLeave\Handlers\RequestSpecialLeaveHandler;
+use App\Domain\SpecialLeave\Handlers\ResubmitSpecialLeaveRequestHandler;
+use App\Domain\SpecialLeaveAccount\Commands\CancelSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\DesignateSpecialLeaveUsage;
+use App\Domain\SpecialLeaveAccount\Commands\MigrateSpecialLeaveAccount;
+use App\Domain\SpecialLeaveAccount\Commands\RegisterSpecialLeaveGrant;
+use App\Domain\SpecialLeaveAccount\Commands\RevokeSpecialLeaveAccountGrant;
+use App\Domain\SpecialLeaveAccount\Handlers\CancelSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\ConfirmSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\DesignateSpecialLeaveUsageHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\MigrateSpecialLeaveAccountHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\RegisterSpecialLeaveGrantHandler;
+use App\Domain\SpecialLeaveAccount\Handlers\RevokeSpecialLeaveAccountGrantHandler;
 use App\Domain\SpecialLeave\Handlers\ReturnSpecialLeaveRequestHandler;
 use App\Domain\SpecialLeave\Handlers\RevokeSpecialLeaveGrantHandler;
 use App\Domain\UserManagement\Commands\AddMembership;
@@ -562,6 +578,7 @@ return [
         EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
         ApplyLeaveToAttendanceDay::class => ApplyLeaveToAttendanceDayHandler::class,
+        RecalculateAttendanceDailyCalculation::class => RecalculateAttendanceDailyCalculationHandler::class,
         RecalculateAttendanceDayForLeave::class => RecalculateAttendanceDayForLeaveHandler::class,
         ReleaseLeaveFromAttendanceDay::class => ReleaseLeaveFromAttendanceDayHandler::class,
 
@@ -658,6 +675,13 @@ return [
         ReturnSpecialLeaveRequest::class => ReturnSpecialLeaveRequestHandler::class,
         CancelSpecialLeaveRequest::class => CancelSpecialLeaveRequestHandler::class,
         RevokeSpecialLeaveGrant::class => RevokeSpecialLeaveGrantHandler::class,
+        ResubmitSpecialLeaveRequest::class => ResubmitSpecialLeaveRequestHandler::class,
+        RegisterSpecialLeaveGrant::class => RegisterSpecialLeaveGrantHandler::class,
+        RevokeSpecialLeaveAccountGrant::class => RevokeSpecialLeaveAccountGrantHandler::class,
+        DesignateSpecialLeaveUsage::class => DesignateSpecialLeaveUsageHandler::class,
+        ConfirmSpecialLeaveUsage::class => ConfirmSpecialLeaveUsageHandler::class,
+        CancelSpecialLeaveUsage::class => CancelSpecialLeaveUsageHandler::class,
+        MigrateSpecialLeaveAccount::class => MigrateSpecialLeaveAccountHandler::class,
 
         RequestShiftSwap::class => RequestShiftSwapHandler::class,
         ApproveShiftSwapRequest::class => ApproveShiftSwapRequestHandler::class,

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
+use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\SpecialLeave\Commands\ApproveSpecialLeaveRequest as ApproveSpecialLeaveRequestCommand;
+use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
 use App\Domain\SpecialLeave\Commands\CancelSpecialLeaveRequest;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
@@ -22,6 +24,7 @@ use App\Http\Resources\SpecialLeaveTypeResource;
 use App\Http\Resources\SpecialLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
@@ -31,8 +34,6 @@ use App\Models\SpecialLeaveType;
 use App\Models\SpecialLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkflowRequest;
-use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -314,7 +315,7 @@ class SpecialLeaveController extends Controller
 
         if ($requiresApproval) {
             // UC-P003: 特別休暇申請はworkflow_requestの下書き作成を起点にする。SpecialLeaveRequest集約への
-            // RequestSpecialLeaveはSpecialLeaveRequestOnWorkflowRequestDraftedReactorが発行する
+            // RequestSpecialLeaveはSpecialLeaveRequestOnWorkflowRequestReactorが発行する
             // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
             // SpecialLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
             // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
@@ -422,12 +423,13 @@ class SpecialLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function approveRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
+    public function approveRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): SpecialLeaveRequestResource
     {
         // UC-P004: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
         // ApproveWorkflowRequestを発行する。
         $commandBus->dispatch(new ApproveWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->workflowRequestIdFor(
+                $links,
                 $specialLeaveRequest,
                 '対応する申請が見つからないため承認できません。',
             ),
@@ -446,14 +448,15 @@ class SpecialLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function returnRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
+    public function returnRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): SpecialLeaveRequestResource
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
         // UC-P004 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
         // ReturnWorkflowRequestを発行する。
         $commandBus->dispatch(new ReturnWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->workflowRequestIdFor(
+                $links,
                 $specialLeaveRequest,
                 '対応する申請が見つからないため差し戻せません。',
             ),
@@ -557,29 +560,27 @@ class SpecialLeaveController extends Controller
             userId: $userId,
             grantModelClass: SpecialLeaveGrant::class,
             requestModelClass: SpecialLeaveRequest::class,
+            // 付与・消化記録は利用者単位の特別休暇口座の集約のイベント(集約IDは利用者から派生)に記録される。
+            additionalAggregateIds: [SpecialLeaveAccountAggregate::streamIdFor($userId)],
         );
 
         return StoredEventResource::collection($events);
     }
 
     /**
-     * 承認・差戻し対象のworkflow_request(subject_type=special_leave_request)を特定する。
+     * 承認・差戻し対象のワークフローIDを対応表(leave_request_workflow_links)から特定する。
+     * workflow_requestsは読まない(原則15。休暇申請文脈の対応表だけで申請を特定する)。
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
      */
-    private function submittedWorkflowRequestId(SpecialLeaveRequest $specialLeaveRequest, string $message): string
+    private function workflowRequestIdFor(LeaveRequestWorkflowLinks $links, SpecialLeaveRequest $specialLeaveRequest, string $message): string
     {
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::SPECIAL_LEAVE_REQUEST)
-            ->where('subject_id', $specialLeaveRequest->id)
-            ->where('status', WorkflowRequestStatus::SUBMITTED)
-            ->latest()
-            ->first();
+        $workflowRequestId = $links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_SPECIAL, (string) $specialLeaveRequest->id);
 
-        if ($workflowRequest === null) {
+        if ($workflowRequestId === null) {
             throw new DomainRuleException($message);
         }
 
-        return $workflowRequest->id;
+        return $workflowRequestId;
     }
 }

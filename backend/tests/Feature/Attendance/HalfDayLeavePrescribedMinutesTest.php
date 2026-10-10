@@ -4,7 +4,7 @@ namespace Tests\Feature\Attendance;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
-use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
+use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeCalendarEntry;
@@ -12,7 +12,6 @@ use App\Models\SpecialLeaveType;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -56,16 +55,16 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         }
 
         $type = SpecialLeaveType::query()->create(['name' => 'テスト休暇'.uniqid(), 'is_active' => true]);
-        SpecialLeaveRequestAggregate::retrieve((string) Str::uuid())->request(
+        // 申請のCommand経由で申請する(休暇ビューは申請のイベントから作られ、勤怠日は勤怠のReactorが作る)。
+        app(CommandBus::class)->dispatch(new RequestSpecialLeave(
             userId: $user->id,
             specialLeaveTypeId: $type->id,
             targetDate: $workDate,
             leaveType: $unit,
             hours: $hours,
-            requestedDays: $unit === 'full' ? 1.0 : 0.5,
             approverUserId: $approver->id,
             reason: null,
-        )->persist();
+        ));
     }
 
     private function recordDay(

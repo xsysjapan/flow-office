@@ -2,39 +2,28 @@
 
 namespace App\Domain\SpecialLeave\Handlers;
 
-use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
-use App\Domain\Attendance\Services\AttendanceCalculator;
-use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\RequestSpecialLeave;
-use App\Domain\SpecialLeave\SpecialLeaveWorkType;
-use App\Models\AttendanceDay;
-use App\Models\AttendanceDaySource;
-use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveRequest;
-use App\Models\PaidLeaveRequestStatus;
 use App\Models\PaidLeaveType;
 use App\Models\SpecialLeaveRequest;
-use App\Models\SpecialLeaveRequestStatus;
 use App\Models\SpecialLeaveType;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * 特別休暇を申請する。有給休暇(RequestPaidLeaveHandler)と同じ考え方に揃え、勤怠(実績)を
- * 先に作る/編集するという通常の業務フローに合わせ、申請した時点で対象日の勤怠
- * (attendance_days.work_type)へ即座に反映する(承認を待たない。承認は
- * ApproveSpecialLeaveRequestHandlerとして別途行われる「事後の確認・記録」に位置づけが変わり、
- * 実際の消化(special_leave_grantの残数減算)のみを承認時に行う)。残数が不足していても
- * 申請(=勤怠への反映)自体は成立させる。残数・消化は特別休暇種別(special_leave_type_id)
- * ごとにスコープする。有給とはビジネスロジックを分けて実装し、法定の要件を持つ有給側の
- * ルールには一切影響しない。
+ * 特別休暇を申請する。特別休暇申請の集約(SpecialLeaveRequestAggregate)へ申請を記録するだけで、
+ * 他の文脈の集約・テーブルは読み書きしない(原則15)。
+ *
+ * - 種別の有効性・勤務予定日でない日の申請拒否・時間休の入力検証は、この文脈のルールとして残す。
+ * - 残数の消化記録(特別休暇口座)・勤怠の休暇(勤怠のReactor)・ワークフローの提出は、記録された
+ *   `special_leave.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う。
+ * - 同日の休暇の衝突・締め判定は勤怠文脈が休暇の反映時に行う(違反なら連鎖全体が取り消される)。
+ * - viaReactor=true(workflow_request.drafted からのReactor発行)で、同じ申請IDが既に申請済みなら何もしない(冪等)。
  *
  * @implements CommandHandler<RequestSpecialLeave>
  */
@@ -42,13 +31,18 @@ class RequestSpecialLeaveHandler implements CommandHandler
 {
     public function __construct(
         private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
-        private readonly AttendanceCalculator $calculator,
-        private readonly AttendanceEditGuard $guard,
     ) {}
 
     public function handle(Command $command): SpecialLeaveRequest
     {
         assert($command instanceof RequestSpecialLeave);
+
+        $requestId = $command->requestId ?? (string) Str::uuid();
+        $aggregate = SpecialLeaveRequestAggregate::retrieve($requestId);
+
+        if ($command->viaReactor && $aggregate->status() !== 'none') {
+            return SpecialLeaveRequest::query()->findOrFail($requestId);
+        }
 
         $specialLeaveType = SpecialLeaveType::query()->findOrFail($command->specialLeaveTypeId);
         if (! $specialLeaveType->is_active) {
@@ -75,127 +69,28 @@ class RequestSpecialLeaveHandler implements CommandHandler
             }
         }
 
-        if ($this->alreadyHasLeaveOnDate($command->userId, $command->targetDate)) {
-            throw new DomainRuleException('この日は既に有給または特別休暇を申請済みです。');
-        }
-
         $requestedDays = $this->resolveRequestedDays($command, $workStyle);
 
-        // 対象日の勤怠が編集可能(月次未確定)であることを、勤怠反映の前に確認する
-        // (ここで弾かれれば申請自体を作らない。修正が必要な場合は修正申請ワークフローを使う)。
-        $existingDay = AttendanceDay::query()
-            ->where('user_id', $command->userId)
-            ->whereDate('work_date', $command->targetDate)
-            ->first();
-        $this->guard->assertMutable($existingDay, $command->userId, $command->targetDate);
+        $aggregate->request(
+            userId: $command->userId,
+            specialLeaveTypeId: $command->specialLeaveTypeId,
+            targetDate: $command->targetDate,
+            leaveType: $command->leaveType,
+            hours: $command->hours,
+            requestedDays: $requestedDays,
+            approverUserId: $command->approverUserId,
+            reason: $command->reason,
+            requestGroupId: $command->requestGroupId,
+        );
 
-        // 承認を待たず、申請した時点で対象日の勤怠へ即座に反映する(このファイル冒頭のコメント参照)。
-        $day = $this->reflectOnAttendanceDay($command, $existingDay);
-
-        $requestId = $command->requestId ?? (string) Str::uuid();
-        $usedMinutes = $command->hours !== null ? (int) round($command->hours * 60) : null;
-
-        $aggregate = SpecialLeaveRequestAggregate::retrieve($requestId)
-            ->request(
-                userId: $command->userId,
-                specialLeaveTypeId: $command->specialLeaveTypeId,
-                targetDate: $command->targetDate,
-                leaveType: $command->leaveType,
-                hours: $command->hours,
-                requestedDays: $requestedDays,
-                approverUserId: $command->approverUserId,
-                reason: $command->reason,
-                requestGroupId: $command->requestGroupId,
-            )
-            // special_leave_usagesへgrant未確定の行を作る(承認時にどのgrantから消化するかが
-            // 決まった時点で確定済みへ更新される。SpecialLeaveUsageProjector参照)。勤怠側は
-            // この行の存在だけで休暇設定の有無を判定でき、special_leave_requestsを見に行く
-            // 必要が無くなる(ルートCLAUDE.md「操作経路と業務ロジックを分離する」と同じ考え方で、
-            // ドメインをまたいだ参照を避ける)。
-            ->designateUsage(
-                userId: $command->userId,
-                attendanceDayId: $day->id,
-                usedOn: $command->targetDate,
-                usedDays: $requestedDays,
-                usedMinutes: $usedMinutes,
-                usageType: $command->leaveType,
-            );
-
-        // workflow_requestが指定されている場合、SpecialLeaveRequestSharedイベントを発行して
-        // workflow_requestの提出を促す(ReactorからのRequestSpecialLeaveのみこのIDを持つ)。
+        // ワークフローと対応する申請は提出を記録する(ワークフローの提出はWorkflow側のReactorが行う)。
         if ($command->workflowRequestId !== null) {
             $aggregate->share(workflowRequestId: $command->workflowRequestId);
         }
 
         $aggregate->persist();
 
-        // 通知はSubmitWorkflowRequestHandlerが一括して送るため、ここでは送らない
-        // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)
-
-        $calculation = $this->calculator->calculate(
-            $day->refresh()->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
-        );
-        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
-
         return SpecialLeaveRequest::query()->findOrFail($requestId);
-    }
-
-    /**
-     * 対象日の勤怠(attendance_days)へ特別休暇区分を反映する。
-     */
-    private function reflectOnAttendanceDay(RequestSpecialLeave $command, ?AttendanceDay $existingDay): AttendanceDay
-    {
-        $day = $existingDay;
-
-        if ($day === null) {
-            $calendarEntry = EmployeeCalendarEntry::query()
-                ->where('user_id', $command->userId)
-                ->whereDate('work_date', $command->targetDate)
-                ->first();
-
-            $day = AttendanceDay::query()->create([
-                'user_id' => $command->userId,
-                'work_date' => $command->targetDate,
-                'calendar_entry_id' => $calendarEntry?->id,
-                'status' => AttendanceDayStatus::NOT_STARTED,
-                'source' => AttendanceDaySource::MANUAL,
-            ]);
-        }
-
-        $day->work_type = SpecialLeaveWorkType::toAttendanceWorkType($command->leaveType);
-        if ($command->leaveType === PaidLeaveType::FULL) {
-            // 全休は出退勤操作が発生しないため、締め忘れとして警告されないよう完了扱いにする。
-            $day->status = AttendanceDayStatus::CLOCKED_OUT;
-        }
-        $day->save();
-
-        return $day;
-    }
-
-    /**
-     * 同じ日にactive(提出中・承認済み)な有給または特別休暇の申請が既にあるか。
-     * attendance_days.work_typeは1日1件しか値を持てないため、どちらの休暇であっても
-     * 二重申請を防ぐ必要がある。
-     */
-    private function alreadyHasLeaveOnDate(string $userId, string $targetDate): bool
-    {
-        $activeStatuses = [PaidLeaveRequestStatus::SUBMITTED, PaidLeaveRequestStatus::APPROVED];
-
-        $hasPaidLeave = PaidLeaveRequest::query()
-            ->where('user_id', $userId)
-            ->whereDate('target_date', $targetDate)
-            ->whereIn('status', $activeStatuses)
-            ->exists();
-
-        if ($hasPaidLeave) {
-            return true;
-        }
-
-        return SpecialLeaveRequest::query()
-            ->where('user_id', $userId)
-            ->whereDate('target_date', $targetDate)
-            ->whereIn('status', [SpecialLeaveRequestStatus::SUBMITTED, SpecialLeaveRequestStatus::APPROVED])
-            ->exists();
     }
 
     private function resolveRequestedDays(RequestSpecialLeave $command, ?WorkStyle $workStyle): float

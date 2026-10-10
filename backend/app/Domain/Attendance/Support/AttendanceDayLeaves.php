@@ -42,6 +42,42 @@ final class AttendanceDayLeaves
     }
 
     /**
+     * その日が全休か(有効な休暇で判定。FullDayLeavePolicy参照)。
+     */
+    public function isFullDayLeave(string $userId, string $workDate): bool
+    {
+        return FullDayLeavePolicy::isFullDay($this->activeFor($userId, $workDate));
+    }
+
+    /**
+     * 期間内(両端を含む)で全休の日の一覧(Y-m-d)。有効な休暇の日ごとに判定する。
+     *
+     * @return list<string>
+     */
+    public function fullDayLeaveDatesIn(string $userId, string $from, string $to): array
+    {
+        return collect($this->activeForRange($userId, $from, $to))
+            ->groupBy('work_date')
+            ->filter(fn ($leaves): bool => FullDayLeavePolicy::isFullDay($leaves->values()->all()))
+            ->keys()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 期間内(両端を含む)に、指定の種類の申請中(submitted)の休暇があるか。差戻し・承認済みは含まない。
+     */
+    public function hasSubmittedOfKindIn(string $userId, string $leaveKind, string $from, string $to): bool
+    {
+        return AttendanceDayLeave::query()
+            ->where('user_id', $userId)
+            ->where('leave_kind', $leaveKind)
+            ->where('request_status', AttendanceDayLeave::STATUS_SUBMITTED)
+            ->whereBetween('work_date', [$from, $to])
+            ->exists();
+    }
+
+    /**
      * 休暇1件(申請ID)の行を状態によらず返す。差戻し・取消の行も返す(対象日・利用者を引くため)。
      * 行が無ければ null。
      *

@@ -39,7 +39,6 @@ final class LeaveCalculationInput
         $specialLeaveDays = 0.0;
         $paidLeaveMinutes = 0;
         $specialLeaveMinutes = 0;
-        $hasFullDayLeave = false;
         $amHalfCount = 0;
         $pmHalfCount = 0;
 
@@ -48,9 +47,7 @@ final class LeaveCalculationInput
             $unit = $leave['unit'];
             $minutes = (int) ($leave['minutes'] ?? 0);
 
-            if ($unit === PaidLeaveType::FULL) {
-                $hasFullDayLeave = true;
-            } elseif ($unit === PaidLeaveType::AM_HALF) {
+            if ($unit === PaidLeaveType::AM_HALF) {
                 $amHalfCount++;
             } elseif ($unit === PaidLeaveType::PM_HALF) {
                 $pmHalfCount++;
@@ -76,7 +73,7 @@ final class LeaveCalculationInput
             // 代休(compensatory)は日数・時間休分数に数えない(現行どおり)。
         }
 
-        $isFullDayLeave = $hasFullDayLeave || ($amHalfCount > 0 && $pmHalfCount > 0);
+        $isFullDayLeave = FullDayLeavePolicy::isFullDay($activeLeaves);
         $halfCount = $amHalfCount + $pmHalfCount;
 
         $effectivePrescribedMinutes = match (true) {

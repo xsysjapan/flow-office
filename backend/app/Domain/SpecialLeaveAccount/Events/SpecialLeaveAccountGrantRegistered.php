@@ -5,7 +5,8 @@ namespace App\Domain\SpecialLeaveAccount\Events;
 use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
- * 利用者の特別休暇口座に付与を登録する。`expiresOn`がnullの付与は失効しない(無期限)。
+ * 特別休暇の付与の登録(special_leave_account.grant_registered)。
+ * 口座の集約IDは利用者から派生させるため、付与行の利用者IDをイベントに持つ(末尾。Projectorが使う)。
  */
 class SpecialLeaveAccountGrantRegistered extends ShouldBeStored
 {
@@ -16,5 +17,6 @@ class SpecialLeaveAccountGrantRegistered extends ShouldBeStored
         public readonly ?string $expiresOn,
         public readonly float $grantedDays,
         public readonly ?string $grantReason,
+        public readonly ?string $userId = null,
     ) {}
 }

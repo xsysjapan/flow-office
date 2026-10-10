@@ -5,8 +5,8 @@ namespace App\Domain\SpecialLeaveAccount\Events;
 use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 
 /**
- * 休暇申請に対応する消化記録を作成する(申請時。まだ付与へは充当していない)。
- * `usageType`は取得単位(全休/半休/時間休)。
+ * 特別休暇の消化記録の作成(special_leave_account.usage_designated。申請時。充当はまだ行わない)。
+ * 利用者IDは末尾(Projectorが消化記録の行の利用者を作るために使う)。
  */
 class SpecialLeaveAccountUsageDesignated extends ShouldBeStored
 {
@@ -18,5 +18,6 @@ class SpecialLeaveAccountUsageDesignated extends ShouldBeStored
         public readonly string $usageType,
         public readonly float $usedDays,
         public readonly ?int $usedMinutes,
+        public readonly ?string $userId = null,
     ) {}
 }

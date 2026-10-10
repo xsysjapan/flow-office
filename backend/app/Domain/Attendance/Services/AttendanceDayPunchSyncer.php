@@ -3,6 +3,7 @@
 namespace App\Domain\Attendance\Services;
 
 use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDaySource;
@@ -54,6 +55,7 @@ class AttendanceDayPunchSyncer
         private readonly AttendanceStandardBreakInserter $standardBreakInserter,
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
         private readonly AttendanceTimeRounder $timeRounder,
+        private readonly AttendanceDayLeaves $attendanceDayLeaves,
     ) {}
 
     /**
@@ -90,6 +92,11 @@ class AttendanceDayPunchSyncer
 
         if ($day !== null && $day->status === AttendanceDayStatus::CLOCKED_OUT) {
             // 既に退勤済みの日は、以降の打刻ログでは状態を変えない。
+            return null;
+        }
+
+        if ($this->attendanceDayLeaves->isFullDayLeave($userId, $workDate)) {
+            // 全休の日は打刻を取り込まない(出勤不可と同じ。休暇ビューで判定: 論点9)。打刻ログは記録済み。
             return null;
         }
 

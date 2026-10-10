@@ -47,7 +47,11 @@ class AttendanceDayProjector extends Projector
 
     public function onAttendanceDayEdited(AttendanceDayEdited $event): void
     {
-        $day = AttendanceDay::query()->findOrFail($event->aggregateRootUuid());
+        // 行の存在を前提にしない(再生の順序に依存させない)。行が無ければ作成済みの行を待たず何もしない。
+        $day = AttendanceDay::query()->find($event->aggregateRootUuid());
+        if ($day === null) {
+            return;
+        }
 
         $day->utc_offset_minutes = $event->utcOffsetMinutes;
         $day->actual_start_at = $this->parse($event->actualStartAt);

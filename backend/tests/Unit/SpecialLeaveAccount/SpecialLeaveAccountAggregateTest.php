@@ -697,7 +697,23 @@ class SpecialLeaveAccountAggregateTest extends TestCase
         ], $results);
     }
 
-    public function test_migrate_is_rejected_when_account_is_not_empty(): void
+    public function test_migrate_is_allowed_when_a_new_grant_was_registered_before_migration(): void
+    {
+        $migratedGrant = ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 3.0, 'revoked' => false];
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new SpecialLeaveAccountGrantRegistered('g0', self::TYPE, '2026-04-01', null, 1.0, null),
+            ])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use ($migratedGrant) {
+                $aggregate->migrate([$migratedGrant], []);
+            })
+            ->assertRecorded([
+                new SpecialLeaveAccountMigrated([$migratedGrant], []),
+            ]);
+    }
+
+    public function test_migrate_rejects_a_grant_id_that_already_exists_in_the_account(): void
     {
         $this->expectException(DomainRuleException::class);
 
@@ -706,7 +722,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountGrantRegistered('g0', self::TYPE, '2026-04-01', null, 1.0, null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate([], []);
+                $aggregate->migrate([
+                    ['grantId' => 'g0', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => false],
+                ], []);
             });
     }
 

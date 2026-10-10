@@ -11,12 +11,11 @@ use App\Models\WorkflowRequestStatus;
 use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
 
 /**
- * UC-P003: 特別休暇申請の取消はSpecialLeaveRequest集約側で行われるため、起点となった
- * workflow_requestがsubmittedのまま取り残され、統合申請一覧に承認待ちとして
- * 残り続けてしまう。ここから`CancelWorkflowRequest`を発行して同期させる。
+ * 特別休暇申請の取消(`special_leave.request_cancelled`)を受けて、対応するワークフローを取り消す。
  *
- * CancelWorkflowRequestHandlerは「申請者本人のみ取消可能」を要求するため、
- * 取消操作を行った利用者(=特別休暇申請の申請者)のIDをそのまま渡す。
+ * 申請中・差戻し中のワークフローだけを取り消す(承認済みは状態を変えない。設計原則13)。
+ * viaReactor=trueのため本人チェックは行わず、既に取消済みなら何もしない(冪等)。
+ * 有給のCancelWorkflowRequestOnPaidLeaveRequestCancelledReactorと同じ形。
  */
 class CancelWorkflowRequestOnSpecialLeaveRequestCancelledReactor extends Reactor
 {
@@ -34,10 +33,14 @@ class CancelWorkflowRequestOnSpecialLeaveRequestCancelledReactor extends Reactor
             return;
         }
 
+        $cancelledByUserId = $event->cancelledByUserId ?? $workflowRequest->applicant_user_id;
+
         $this->commandBus->dispatch(new CancelWorkflowRequest(
             workflowRequestId: $workflowRequest->id,
-            cancelledByUserId: $event->cancelledByUserId,
+            cancelledByUserId: $cancelledByUserId,
             reason: '特別休暇申請が取り消されました。',
+            viaReactor: true,
+            initiatedByUserId: $cancelledByUserId,
         ));
     }
 }

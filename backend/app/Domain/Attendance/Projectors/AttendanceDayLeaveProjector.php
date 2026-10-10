@@ -24,6 +24,7 @@ use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
+use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestReturned;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequested;
@@ -271,6 +272,18 @@ class AttendanceDayLeaveProjector extends Projector
         $this->transition(AttendanceDayLeave::KIND_SPECIAL, $event->aggregateRootUuid(), AttendanceDayLeave::SOURCE_SPECIAL, [
             'request_status' => AttendanceDayLeave::STATUS_RETURNED,
         ]);
+    }
+
+    /** 差戻し中の特別休暇の再提出: 差戻しの行だけを申請中に戻す(申請中・承認済み・取消の行は変えない)。 */
+    public function onSpecialLeaveRequestResubmitted(SpecialLeaveRequestResubmitted $event): void
+    {
+        $leave = $this->find(AttendanceDayLeave::KIND_SPECIAL, $event->aggregateRootUuid());
+        if ($leave === null || $leave->source !== AttendanceDayLeave::SOURCE_SPECIAL
+            || $leave->request_status !== AttendanceDayLeave::STATUS_RETURNED) {
+            return;
+        }
+
+        $leave->update(['request_status' => AttendanceDayLeave::STATUS_SUBMITTED]);
     }
 
     public function onSpecialLeaveRequestCancelled(SpecialLeaveRequestCancelled $event): void

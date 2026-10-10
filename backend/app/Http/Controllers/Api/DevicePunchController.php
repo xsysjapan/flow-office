@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Services\AttendanceCalculator;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Domain\AuthenticationKey\Services\AuthenticationKeyResolver;
 use App\Domain\EventSourcing\CommandBus;
 use App\Http\Controllers\Controller;
@@ -85,17 +86,24 @@ class DevicePunchController extends Controller
             ->where('user_id', $targetUserId)
             ->whereDate('work_date', $data['work_date'])
             ->first();
+        // 全休の日は出勤しないのが正しいため、打刻漏れの警告の対象にしない(休暇ビューで判定: 論点9)。
+        $fullDayLeaveDates = app(AttendanceDayLeaves::class)->fullDayLeaveDatesIn(
+            $targetUserId,
+            $punch->work_date->copy()->subDays(31)->toDateString(),
+            $punch->work_date->copy()->subDay()->toDateString(),
+        );
         $missingPunchCount = AttendanceDay::query()
             ->where('user_id', $targetUserId)
             ->whereDate('work_date', '>=', $punch->work_date->copy()->subDays(31))
             ->whereDate('work_date', '<', $punch->work_date)
             ->where('status', '!=', AttendanceDayStatus::CLOCKED_OUT)
+            ->whereNotIn('work_date', $fullDayLeaveDates)
             ->whereDoesntHave('calculation', fn ($query) => $query->where('absence_minutes', '>', 0))
             ->count();
         $workMinutes = null;
         if ($data['punch_type'] === PunchType::CLOCK_OUT && $attendanceDay?->status === AttendanceDayStatus::CLOCKED_OUT) {
             $calculation = $attendanceCalculator->calculate(
-                $attendanceDay->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'),
+                $attendanceDay->load('breaks', 'leaveSegments', 'calendarEntry.workStyle'),
             );
             $workMinutes = $calculation['work_minutes'];
         }

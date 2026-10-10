@@ -73,6 +73,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         ?string $expiresOn,
         float $grantedDays,
         ?string $grantReason,
+        ?string $userId = null,
     ): self {
         if (isset($this->grants[$grantId])) {
             throw new DomainRuleException("Grant [{$grantId}] は既に存在します。");
@@ -85,6 +86,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
             expiresOn: $expiresOn,
             grantedDays: $grantedDays,
             grantReason: $grantReason,
+            userId: $userId,
         ));
 
         return $this;
@@ -131,6 +133,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         string $usageType,
         float $usedDays,
         ?int $usedMinutes,
+        ?string $userId = null,
     ): self {
         if (isset($this->usages[$usageId])) {
             throw new DomainRuleException("Usage [{$usageId}] は既に存在します。");
@@ -150,6 +153,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
             usageType: $usageType,
             usedDays: $usedDays,
             usedMinutes: $usedMinutes,
+            userId: $userId,
         ));
 
         return $this;
@@ -236,10 +240,10 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
      *
      * @throws DomainRuleException 口座が空でない・ID重複・存在しない付与への充当・付与超過・種類の不一致
      */
-    public function migrate(array $grants, array $usages): self
+    public function migrate(array $grants, array $usages, ?string $userId = null): self
     {
-        if ($this->migrated || $this->grants !== [] || $this->usages !== []) {
-            throw new DomainRuleException('特別休暇口座が空の場合のみ引き継ぎできます。');
+        if ($this->migrated) {
+            throw new DomainRuleException('この特別休暇口座は既に引き継ぎ済みです。');
         }
 
         $grantIds = [];
@@ -248,6 +252,10 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         foreach ($grants as $grant) {
             if (isset($grantsById[$grant['grantId']])) {
                 throw new DomainRuleException("移行データ内でGrant ID [{$grant['grantId']}] が重複しています。");
+            }
+
+            if (isset($this->grants[$grant['grantId']])) {
+                throw new DomainRuleException("Grant [{$grant['grantId']}] は既に口座に存在します。");
             }
 
             $grantsById[$grant['grantId']] = $grant;
@@ -267,6 +275,10 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
                 throw new DomainRuleException("移行データ内で申請 [{$usage['requestId']}] の消化記録が重複しています。");
             }
 
+            if (isset($this->requestIndex[$usage['requestId']])) {
+                throw new DomainRuleException("申請 [{$usage['requestId']}] の消化記録は既に口座にあります。");
+            }
+
             if (! in_array($usage['status'], [self::STATUS_DESIGNATED, self::STATUS_CONFIRMED], true)) {
                 throw new DomainRuleException('移行できる消化記録の状態は申請中(designated)・確定(confirmed)のみです。');
             }
@@ -276,7 +288,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
             }
 
             foreach ($usage['allocations'] as $allocation) {
-                $grant = $grantsById[$allocation['grantId']] ?? null;
+                $grant = $grantsById[$allocation['grantId']] ?? $this->knownGrant((string) $allocation['grantId']);
 
                 if ($grant === null || $grant['revoked']) {
                     throw new DomainRuleException("移行データの充当先 Grant [{$allocation['grantId']}] が存在しないか取消済みです。");
@@ -294,7 +306,10 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         }
 
         foreach ($allocatedByGrant as $grantId => $days) {
-            if ($days > $grantsById[$grantId]['grantedDays']) {
+            $known = $grantsById[$grantId] ?? $this->knownGrant((string) $grantId);
+            // 口座に既にある付与は、移行前に登録された新しい付与の充当分を差し引いた残りを超えられない。
+            $alreadyUsed = isset($this->grants[$grantId]) ? $this->usedDaysOf((string) $grantId) : 0.0;
+            if ($days + $alreadyUsed > $known['grantedDays']) {
                 throw new DomainRuleException("Grant [{$grantId}] の充当合計が付与日数を超えています。");
             }
         }
@@ -302,6 +317,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         $this->recordThat(new SpecialLeaveAccountMigrated(
             grants: $grants,
             usages: $usages,
+            userId: $userId,
         ));
 
         return $this;
@@ -313,6 +329,48 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     public function usageIdForRequest(string $requestId): ?string
     {
         return $this->requestIndex[$requestId] ?? null;
+    }
+
+    /**
+     * 申請に有効な消化記録(申請中・確定)があるか。Reactor経由の二重作成を防ぐ冪等判定に使う。
+     */
+    public function hasActiveUsageForRequest(string $requestId): bool
+    {
+        $usageId = $this->requestIndex[$requestId] ?? null;
+
+        return $usageId !== null && $this->activeUsage($usageId);
+    }
+
+    /** 既存データの引き継ぎ(special_leave_account.migrated)が済んでいるか。移行は利用者ごとに一度だけ行う。 */
+    public function isMigrated(): bool
+    {
+        return $this->migrated;
+    }
+
+    /** 付与が口座に登録済みか(移行対象から、新しい流れで登録済みの付与を除くために使う)。 */
+    public function hasGrant(string $grantId): bool
+    {
+        return isset($this->grants[$grantId]);
+    }
+
+    /**
+     * 口座に既にある付与の移行時の情報(移行データの付与と同じ形)。無ければnull。
+     *
+     * @return array{specialLeaveTypeId: int, grantedDays: float, revoked: bool}|null
+     */
+    private function knownGrant(string $grantId): ?array
+    {
+        $grant = $this->grants[$grantId] ?? null;
+
+        if ($grant === null) {
+            return null;
+        }
+
+        return [
+            'specialLeaveTypeId' => $grant['specialLeaveTypeId'],
+            'grantedDays' => $grant['grantedDays'],
+            'revoked' => $grant['revoked'],
+        ];
     }
 
     public function hasUsage(string $usageId): bool

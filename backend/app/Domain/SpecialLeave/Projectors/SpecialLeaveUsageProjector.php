@@ -96,9 +96,12 @@ class SpecialLeaveUsageProjector extends Projector
      */
     public function onSpecialLeaveRequestCancelled(SpecialLeaveRequestCancelled $event): void
     {
+        // 旧来の行(usage_idを持たない)だけを対象にする。新しい流れの消化記録は特別休暇口座のProjector
+        // (SpecialLeaveAccountProjector)が作って取り消すため、ここで二重に書き換えない。
         SpecialLeaveUsage::query()
             ->where('special_leave_request_id', $event->aggregateRootUuid())
             ->where('is_confirmed', false)
+            ->whereNull('usage_id')
             ->delete();
     }
 }

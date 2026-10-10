@@ -35,6 +35,7 @@ final class LeaveHistoryQuery
      *         集約ルートがgrant/request単位ではなく社員単位(aggregate_uuid = userId)の
      *         ドメインを追加で含める場合、そのevent_classの接頭辞(例: 'paid_leave_account.')
      *         を渡す。
+     * @param  array<int, string>  $additionalAggregateIds  grant/request以外の集約(例: 特別休暇口座の集約ID。利用者から派生する)のID。
      * @return Collection<int, object>
      */
     public static function eventsForUser(
@@ -42,10 +43,11 @@ final class LeaveHistoryQuery
         string $grantModelClass,
         string $requestModelClass,
         array $userScopedEventClassPrefixes = [],
+        array $additionalAggregateIds = [],
     ): Collection {
         $grantIds = $grantModelClass::query()->where('user_id', $userId)->pluck('id');
         $requestIds = $requestModelClass::query()->where('user_id', $userId)->pluck('id');
-        $aggregateIds = $grantIds->merge($requestIds);
+        $aggregateIds = $grantIds->merge($requestIds)->merge($additionalAggregateIds);
 
         return EloquentStoredEvent::query()
             ->where(function ($query) use ($aggregateIds, $userId, $userScopedEventClassPrefixes) {
