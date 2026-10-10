@@ -151,6 +151,10 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         string $status,
         ?string $usageId,
         bool $hasUsage,
+        ?string $submittedAt = null,
+        ?string $approvedAt = null,
+        ?string $returnedAt = null,
+        ?string $cancelledAt = null,
     ): self {
         if ($this->status !== self::STATUS_NONE) {
             throw new DomainRuleException('既に引き継ぎ済み、または申請済みの有給申請です。');
@@ -172,6 +176,10 @@ class PaidLeaveRequestAggregate extends AggregateRoot
             status: $status,
             usageId: $usageId,
             hasUsage: $hasUsage,
+            submittedAt: $submittedAt,
+            approvedAt: $approvedAt,
+            returnedAt: $returnedAt,
+            cancelledAt: $cancelledAt,
         ));
 
         return $this;

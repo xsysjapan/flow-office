@@ -79,7 +79,7 @@
 - **書き込み**: 各文脈は自分の集約・テーブルだけを書き込む(ルート`CLAUDE.md`設計原則15)。
 - **連鎖の実行**: Reactorは同期実行。1回の利用者操作から始まる連鎖全体が1トランザクションで、途中の
   Reactor/Handlerで例外が出れば全体が取り消され、利用者にはそのエラーが返る。業務ルール違反(締め済み・
-  同日の休暇の衝突・残数不足で承認できない等)は、そのルールを持つ文脈が自分のCommand内で例外を投げて表す。
+  同日の休暇の衝突等)は、そのルールを持つ文脈が自分のCommand内で例外を投げて表す。
 - **実行者と認可**: 利用者・管理者の操作はControllerと入口のCommandで認可する。Reactorが発行するCommandは
   `initiatedByUserId`(連鎖の起点となった操作者。イベントのメタデータから引き継ぐ)と`viaReactor=true`を持ち、
   利用者向けの認可(本人確認・権限)は行わず、状態のガードのみ行う。
@@ -351,7 +351,7 @@
 ### D. 残数・使用文脈(`App\Domain\PaidLeaveAccount`・新設の特別休暇/代休の口座)
 - 有給: `PaidLeaveAccountAggregate`を維持。Reactor:
   - `paid_leave_request.requested`/`.resubmitted` → `DesignatePaidLeaveUsage`
-  - `paid_leave_request.approved` → `ConfirmPaidLeaveUsage`(残数不足は例外。論点17)
+  - `paid_leave_request.approved` → `ConfirmPaidLeaveUsage`(残数不足でも確定し、充当できた分だけ充当。論点17)
   - `paid_leave_request.returned`/`.cancelled` → `CancelPaidLeaveUsage`(承認済みは充当解除)
   - 対応する消化記録は申請IDで特定する(口座集約内で申請ID→usageIdを保持)。
   - `PaidLeaveUsageAllocationProjector`から`paid_leave_requests`の更新処理を削除する。
@@ -515,7 +515,7 @@
 | WP1 共通基盤 | `viaReactor`・`initiatedByUserId`の規約、冪等ガードの共通化、Projectorの行なし許容 | `App\Domain\EventSourcing`、各Projector | - |
 | WP2 申請・承認 | 却下の制限、`CancelWorkflowRequest`・`ApproveWorkflowRequest`の`viaReactor`、取消Reactorの3種統一、有給の提出Reactor・兄弟ワークフロー承認Reactorの新設 | `App\Domain\Workflow` | WP1・WP3のイベント定義 |
 | WP3 休暇申請 | `PaidLeaveRequestAggregate`・`paid_leave_request.*`(`migrated`含む)、ワークフロー対応表、兄弟承認の移設(申請・承認側の休暇テーブル読み取りの削除を含む)、通知の一覧化と移設、申請Projector(有給は3系統)、特別・代休の申請集約から使用操作を削除・`request_resubmitted`、ワークフローイベントのReactor、申請Handlerから他文脈操作を削除 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`、`Workflow/Reactors`の休暇系 | WP1・WP2 |
-| WP4 残数・使用 | 有給口座のReactor化・申請テーブル更新の削除・残数不足の拒否、特別・代休の口座集約・イベント・Projector・移行コマンド、代休付与同期の付け替え、消化記録の外部キー撤去・`attendance_day_id`任意化 | `App\Domain\PaidLeaveAccount`、新設の口座、マイグレーション | WP3 |
+| WP4 残数・使用 | 有給口座のReactor化・申請テーブル更新の削除、特別・代休の口座集約・イベント・Projector・移行コマンド、代休付与同期の付け替え、消化記録の外部キー撤去・`attendance_day_id`任意化 | `App\Domain\PaidLeaveAccount`、新設の口座、マイグレーション | WP3 |
 | WP5 勤怠 | `attendance_day_leaves`、`ApplyLeaveToAttendanceDay`/`ReleaseLeaveFromAttendanceDay`とReactor、`source=leave`、衝突チェック・締め判定、勤怠計算の休暇入力、出勤可否・打刻取り込み・警告・未出勤件数・月次提出ガード、API`leaves`、勤怠日Projectorのリセット、`attendance:recalculate-days`、`work_type`の休暇解釈の削除 | `App\Domain\Attendance`、`AttendanceController`、`AttendanceDayResource` | WP3 |
 | WP6 出勤率ビュー | `leave_attendance_rate_days`とProjector、`AttendanceRateAssessor`・`GrantScheduledSpecialLeaveHandler`の入力置き換え | `PaidLeaveSchedule`・`SpecialLeave` | WP3・WP5 |
 | WP7 フロントエンド | `leaves`の型・表示、打刻漏れ・出勤ボタン、日次画面の休暇判定・作業内容欄、申請詳細の却下非表示、休暇画面の差戻し表示と導線、文言修正、e2e | `frontend/src` | WP5 |
@@ -687,6 +687,11 @@
 - 2026-10-10 **論点17を改訂(ユーザー指摘)**: 承認時の残数不足は拒否しない(既存の設計方針)。以前の確認で委譲元が「拒否」を推奨
   選択肢として提示し、既存方針との矛盾を示さなかったため誤って決定として記録していた。P1(有給)・WP4a/4b(特別・代休の口座集約)に
   入れた不足時の例外を撤回し、部分充当で確定する(特別・代休は不足量を記録)。受け入れ条件の「残数不足で承認が拒否される」を削除。
+- 2026-10-10 実装中の決定(P2a 有給申請テーブル): `paid_leave_requests`は休暇申請文脈の`PaidLeaveRequestProjector`が3系統+migratedから作る
+  (系統は`input_source`列で管理)。`paid_leave_usages`の`paid_leave_request_id`・`attendance_day_id`の外部キーを撤去(Projectorの実行順に
+  依存しないため。仕様確定事項Dの先行実施)。migratedは元の提出・承認・差戻し・取消日時を任意項目で持つ。承認者nullは申請者を入れる
+  (承認不要時の現行と同じ)。リリース時は`paid_leave_requests`・`paid_leave_request_usage_links`・`leave_request_workflow_links`を空にして
+  一緒にリビルドする(差戻しの判定が対応表に依存するため)。
 
 ## 実装結果
 未着手
