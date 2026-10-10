@@ -657,6 +657,10 @@
   `ApproveWorkflowRequest`の`viaReactor`、drafted Reactorの`workflow_requests`読み取り削除、cutover前8件の取消は拒否
   (委譲元で決定、ユーザーに報告)、論点5の再申請の記述を論点8に合わせて修正、テスト一覧・受け入れ条件の追加、WP2の依存。
 - 2026-10-10 ユーザーが変更セットを承認(「実装をお願いします」)。ステータスを実装中に更新。
+- 2026-10-10 実装中の決定: 有給申請の新しい集約・イベントは、旧イベントクラス(`App\Domain\PaidLeave\Events\PaidLeaveRequestApproved`等、
+  再生のため残置)とのクラス名衝突を避けるため、新ドメイン`App\Domain\PaidLeaveRequest`に置き、イベントクラス名は
+  `PaidLeaveRequestLifecycle{Requested,Shared,Approved,Returned,Resubmitted,Cancelled,Migrated}`とする(イベント名は
+  `paid_leave_request.*`のまま)。implementerが衝突を検出して停止したため委譲元で決定。
 
 ## 実装結果
 未着手
