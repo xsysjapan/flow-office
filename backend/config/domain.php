@@ -298,6 +298,8 @@ use App\Domain\PaidLeaveAccount\Handlers\ConfirmPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\DesignatePaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\GrantPaidLeaveHandler as PaidLeaveAccountGrantPaidLeaveHandler;
 use App\Domain\PaidLeaveAccount\Handlers\MigratePaidLeaveAccountHandler;
+use App\Domain\PaidLeaveRequest\Commands\MigratePaidLeaveRequest;
+use App\Domain\PaidLeaveRequest\Handlers\MigratePaidLeaveRequestHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RaisePaidLeaveGrantWarningHandler;
 use App\Domain\PaidLeaveAccount\Handlers\RevokePaidLeaveGrantHandler as PaidLeaveAccountRevokePaidLeaveGrantHandler;
 use App\Domain\PaidLeaveSchedule\Commands\ApplyScheduledGrants;
@@ -668,6 +670,7 @@ return [
         CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
         MigratePaidLeaveAccount::class => MigratePaidLeaveAccountHandler::class,
+        MigratePaidLeaveRequest::class => MigratePaidLeaveRequestHandler::class,
 
         // 付与Schedule/Assessment(docs/changesets/20260906-paid-leave-schedule-assessment/
         // spec.md Phase A)。
