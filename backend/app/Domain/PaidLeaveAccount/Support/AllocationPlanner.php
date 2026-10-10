@@ -13,13 +13,11 @@ namespace App\Domain\PaidLeaveAccount\Support;
  *   空き(grantedDays - allocated済み合計)があるものを expiresOn 昇順(近い順)に充当する。
  * - Step 2: Step 1で不足が残る場合、usedOnより後のgrantedOnを持つ未取消Grantのうち
  *   grantedOnが最も近い1件のみを対象に、残り不足分だけ充当を試みる(複数件へは進まない)。
- * - Step 3: それでも不足が残る場合、残りは充当せず未充当のまま返す。確定の可否
- *   (論点17の残数不足の拒否)は呼び出し側(集約)が`shortageOf()`で判定する。
+ * - Step 3: それでも不足が残る場合、残りは充当せず未充当のまま残す(呼び出し側で
+ *   confirm自体は失敗させない)。
  */
 class AllocationPlanner
 {
-    private const EPSILON = 1e-9;
-
     /**
      * @param  array<int, array{grantId: string, grantedOn: string, expiresOn: string, grantedDays: float, revoked: bool, allocatedTotal: float}>  $grants
      * @return array<int, array{grantId: string, allocatedDays: float}>
@@ -76,19 +74,6 @@ class AllocationPlanner
 
         // Step 3: 残余があっても失敗にはせず、未充当のまま返す(呼び出し側が判断する)。
         return $plan;
-    }
-
-    /**
-     * `plan()`の結果が必要量を満たさない場合の不足日数を返す(満たせば0.0)。
-     * 浮動小数点の誤差(EPSILON以下)は不足とみなさない。計画のアルゴリズムは変えない。
-     *
-     * @param  array<int, array{grantId: string, allocatedDays: float}>  $plan
-     */
-    public function shortageOf(float $requiredDays, array $plan): float
-    {
-        $shortage = $requiredDays - array_sum(array_column($plan, 'allocatedDays'));
-
-        return $shortage > self::EPSILON ? $shortage : 0.0;
     }
 
     /**

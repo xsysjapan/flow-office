@@ -199,27 +199,37 @@ class PaidLeaveUsageIdempotencyTest extends TestCase
         );
     }
 
-    public function test_confirm_is_rejected_without_recording_anything_when_balance_is_insufficient(): void
+    public function test_confirm_succeeds_with_partial_allocation_when_balance_is_insufficient_and_is_recorded_once(): void
     {
+        // 論点17改訂: 残数(10日)不足の11日分でも承認は拒否せず、充当できた10日分だけ充当して確定する。
         $user = User::factory()->create();
         $this->grantFor($user);
         $requestId = (string) Str::uuid();
         $usageId = $this->designate($user, $requestId, viaReactor: false, usedDays: 11.0);
         $countBefore = $this->eventCount($user);
 
-        foreach ([true, false] as $viaReactor) {
-            $this->assertRejected(
-                fn () => $this->bus()->dispatch(new ConfirmPaidLeaveUsage(
-                    userId: $user->id,
-                    usageId: $usageId,
-                    confirmedByUserId: $user->id,
-                    viaReactor: $viaReactor,
-                )),
-            );
-        }
+        $this->bus()->dispatch(new ConfirmPaidLeaveUsage(
+            userId: $user->id,
+            usageId: $usageId,
+            confirmedByUserId: $user->id,
+            viaReactor: false,
+        ));
 
-        $this->assertSame($countBefore, $this->eventCount($user));
-        $this->assertSame('designated', $this->aggregate($user)->usageStatus($usageId));
+        // PaidLeaveUsageConfirmed と PaidLeaveUsageAllocated(10日分)の2件だけが記録される。
+        $countAfterFirst = $this->eventCount($user);
+        $this->assertSame($countBefore + 2, $countAfterFirst);
+        $this->assertSame('confirmed', $this->aggregate($user)->usageStatus($usageId));
+
+        // Reactorからの再実行は既に確定済みなので、何も記録されない(冪等)。
+        $this->bus()->dispatch(new ConfirmPaidLeaveUsage(
+            userId: $user->id,
+            usageId: $usageId,
+            confirmedByUserId: $user->id,
+            viaReactor: true,
+        ));
+
+        $this->assertSame($countAfterFirst, $this->eventCount($user));
+        $this->assertSame('confirmed', $this->aggregate($user)->usageStatus($usageId));
     }
 
     // ---- Cancel ----
