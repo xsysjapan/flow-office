@@ -81,12 +81,34 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     private bool $migrated = false;
 
+    /** 集約が対象とする利用者(forUserで束縛する。イベントの利用者IDに使う)。 */
+    private ?string $userId = null;
+
     /**
      * 利用者IDから代休口座の集約IDを決定的に派生させる。方式は既存の`UserManagementStreamId`(UUIDv5)に従う。
      */
     public static function streamIdFor(string $userId): string
     {
         return UserManagementStreamId::for('compensatory_leave_account', $userId);
+    }
+
+    /**
+     * この集約が対象とする利用者を束縛する(集約IDは`streamIdFor`で決める)。全ての操作の前に呼ぶ。
+     */
+    public function forUser(string $userId): self
+    {
+        $this->userId = $userId;
+
+        return $this;
+    }
+
+    private function requireUserId(): string
+    {
+        if ($this->userId === null) {
+            throw new \LogicException('代休口座の操作の前に利用者を束縛してください(forUser)。');
+        }
+
+        return $this->userId;
     }
 
     // ---- 付与 ----
@@ -127,6 +149,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         if (! $this->isHolidayWork($isHolidayDay, $workMinutes)) {
             if ($existingGrantId !== null) {
                 $this->recordThat(new CompensatoryLeaveAccountGrantRemoved(
+                    userId: $this->requireUserId(),
                     grantId: $existingGrantId,
                     reason: self::REMOVE_REASON_NO_HOLIDAY_WORK,
                 ));
@@ -142,6 +165,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         [$grantedDays, $grantedMinutes] = (new CompensatoryLeaveGrantConversion)->resolve($unit, $halfDayThresholdMinutes, $workMinutes);
 
         $this->recordThat(new CompensatoryLeaveAccountGrantSynced(
+            userId: $this->requireUserId(),
             grantId: $existingGrantId ?? $newGrantId,
             sourceWorkDate: $sourceWorkDate,
             grantedDays: $grantedDays,
@@ -178,6 +202,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
             }
 
             $this->recordThat(new CompensatoryLeaveAccountGrantConfirmed(
+                userId: $this->requireUserId(),
                 grantId: (string) $grantId,
                 confirmedAt: $confirmedAt,
                 expiresOn: $expiresOn,
@@ -217,6 +242,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         [$grantedDays, $grantedMinutes] = (new CompensatoryLeaveGrantConversion)->resolve($unit, $halfDayThresholdMinutes, $workMinutes);
 
         $this->recordThat(new CompensatoryLeaveAccountGrantManuallyGranted(
+            userId: $this->requireUserId(),
             grantId: $newGrantId,
             sourceWorkDate: $sourceWorkDate,
             grantedDays: $grantedDays,
@@ -247,6 +273,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new CompensatoryLeaveAccountGrantCancelled(
+            userId: $this->requireUserId(),
             grantId: $grantId,
             cancelledByUserId: $cancelledByUserId,
             reason: $reason,
@@ -287,6 +314,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new CompensatoryLeaveAccountUsageDesignated(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             requestId: $requestId,
             usedOn: $usedOn,
@@ -342,6 +370,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         );
 
         $this->recordThat(new CompensatoryLeaveAccountUsageConfirmed(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             allocations: $allocations,
             unallocatedDays: $hourly ? 0.0 : $unallocatedAmount,
@@ -377,6 +406,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new CompensatoryLeaveAccountUsageCancelled(
+            userId: $this->requireUserId(),
             usageId: $usageId,
             releasedAllocations: $releasedAllocations,
             reason: $reason,
@@ -388,7 +418,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     // ---- 引き継ぎ ----
 
     /**
-     * 既存データの引き継ぎ。口座が空のときだけ1回実行できる。
+     * 既存データの引き継ぎ。口座が引き継ぎ済みでないときだけ1回実行できる。移行前に新しい流れで登録された付与・
+     * 消化記録は呼び出し側(運用コマンド)が移行データから除外する(既存の付与ID・消化記録IDとの重複だけを拒否する)。
      *
      * 引き継ぎ対象の消化記録は申請中(designated)・確定(confirmed)のみ。差戻し・取消済みは含めない
      * (呼び出し側で除外する)。現行の不足のまま承認された履歴(充当合計<消化日数)はそのまま引き継ぐ
@@ -402,8 +433,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
      */
     public function migrate(array $grants, array $usages): self
     {
-        if ($this->migrated || $this->grants !== [] || $this->usages !== []) {
-            throw new DomainRuleException('代休口座が空の場合のみ引き継ぎできます。');
+        if ($this->migrated) {
+            throw new DomainRuleException('この代休口座は既に引き継ぎ済みです。');
         }
 
         $grantsById = [];
@@ -411,6 +442,10 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         foreach ($grants as $grant) {
             if (isset($grantsById[$grant['grantId']])) {
                 throw new DomainRuleException("移行データ内でGrant ID [{$grant['grantId']}] が重複しています。");
+            }
+
+            if (isset($this->grants[$grant['grantId']])) {
+                throw new DomainRuleException("Grant [{$grant['grantId']}] は既に口座に存在します。");
             }
 
             if (! in_array($grant['source'], [self::GRANT_SOURCE_SYNC, self::GRANT_SOURCE_MANUAL], true)) {
@@ -430,6 +465,10 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         $allocatedMinutesByGrant = [];
 
         foreach ($usages as $usage) {
+            if (isset($this->usages[$usage['usageId']])) {
+                throw new DomainRuleException("Usage [{$usage['usageId']}] は既に口座に存在します。");
+            }
+
             if (in_array($usage['usageId'], $usageIds, true)) {
                 throw new DomainRuleException("移行データ内でUsage ID [{$usage['usageId']}] が重複しています。");
             }
@@ -482,6 +521,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         }
 
         $this->recordThat(new CompensatoryLeaveAccountMigrated(
+            userId: $this->requireUserId(),
             grants: $grants,
             usages: $usages,
         ));
@@ -497,6 +537,12 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     public function usageIdForRequest(string $requestId): ?string
     {
         return $this->requestIndex[$requestId] ?? null;
+    }
+
+    /** 既存データの引き継ぎ(migrate)が済んでいるか。 */
+    public function isMigrated(): bool
+    {
+        return $this->migrated;
     }
 
     public function hasUsage(string $usageId): bool
@@ -532,6 +578,18 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     public function grantStatus(string $grantId): ?string
     {
         return $this->grants[$grantId]['status'] ?? null;
+    }
+
+    /**
+     * 付与が未使用か(充当の合計が0。日単位・時間単位とも)。付与が無ければfalse。
+     */
+    public function isGrantUnused(string $grantId): bool
+    {
+        if (! isset($this->grants[$grantId])) {
+            return false;
+        }
+
+        return $this->usedDaysOf($grantId) <= 0 && $this->usedMinutesOf($grantId) <= 0;
     }
 
     /**
@@ -575,6 +633,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountGrantSynced(CompensatoryLeaveAccountGrantSynced $event): void
     {
+        $this->userId = $event->userId;
+
         $this->grants[$event->grantId] = [
             'source' => self::GRANT_SOURCE_SYNC,
             'sourceWorkDate' => $event->sourceWorkDate,
@@ -588,17 +648,23 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountGrantRemoved(CompensatoryLeaveAccountGrantRemoved $event): void
     {
+        $this->userId = $event->userId;
+
         unset($this->grants[$event->grantId]);
     }
 
     protected function applyCompensatoryLeaveAccountGrantConfirmed(CompensatoryLeaveAccountGrantConfirmed $event): void
     {
+        $this->userId = $event->userId;
+
         $this->grants[$event->grantId]['status'] = self::GRANT_CONFIRMED;
         $this->grants[$event->grantId]['expiresOn'] = $event->expiresOn;
     }
 
     protected function applyCompensatoryLeaveAccountGrantManuallyGranted(CompensatoryLeaveAccountGrantManuallyGranted $event): void
     {
+        $this->userId = $event->userId;
+
         $this->grants[$event->grantId] = [
             'source' => self::GRANT_SOURCE_MANUAL,
             'sourceWorkDate' => $event->sourceWorkDate,
@@ -612,11 +678,15 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountGrantCancelled(CompensatoryLeaveAccountGrantCancelled $event): void
     {
+        $this->userId = $event->userId;
+
         $this->grants[$event->grantId]['status'] = self::GRANT_CANCELLED;
     }
 
     protected function applyCompensatoryLeaveAccountUsageDesignated(CompensatoryLeaveAccountUsageDesignated $event): void
     {
+        $this->userId = $event->userId;
+
         $this->usages[$event->usageId] = [
             'requestId' => $event->requestId,
             'usedOn' => $event->usedOn,
@@ -634,6 +704,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountUsageConfirmed(CompensatoryLeaveAccountUsageConfirmed $event): void
     {
+        $this->userId = $event->userId;
+
         $this->usages[$event->usageId]['status'] = self::USAGE_CONFIRMED;
         $this->usages[$event->usageId]['unallocatedDays'] = $event->unallocatedDays;
         $this->usages[$event->usageId]['unallocatedMinutes'] = $event->unallocatedMinutes;
@@ -645,6 +717,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountUsageCancelled(CompensatoryLeaveAccountUsageCancelled $event): void
     {
+        $this->userId = $event->userId;
+
         $this->usages[$event->usageId]['status'] = self::USAGE_CANCELLED;
         $this->usages[$event->usageId]['unallocatedDays'] = 0.0;
         $this->usages[$event->usageId]['unallocatedMinutes'] = 0;
@@ -657,6 +731,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
     protected function applyCompensatoryLeaveAccountMigrated(CompensatoryLeaveAccountMigrated $event): void
     {
+        $this->userId = $event->userId;
+
         $this->migrated = true;
 
         foreach ($event->grants as $grant) {

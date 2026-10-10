@@ -10,6 +10,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class CompensatoryLeaveAccountGrantRemoved extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $grantId,
         public readonly string $reason,
     ) {}

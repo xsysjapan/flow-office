@@ -81,7 +81,7 @@ class LeaveAttendanceDayRecorder
 
         $calculation = $this->calculator->calculate($fresh);
 
-        AttendanceDayAggregate::retrieve($fresh->id)->calculate($calculation)->persist();
+        AttendanceDayAggregate::retrieve($fresh->id)->calculate($calculation, $fresh->user_id, $fresh->work_date->toDateString())->persist();
     }
 
     public function dayOf(string $userId, string $workDate): ?AttendanceDay

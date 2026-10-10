@@ -258,7 +258,7 @@ class AttendanceDayPunchSyncer
         $this->standardBreakInserter->insertIfApplicable($aggregate, $transientDay);
 
         $calculation = $this->calculator->calculate($transientDay);
-        $aggregate->calculate($calculation);
+        $aggregate->calculate($calculation, $transientDay->user_id, $transientDay->work_date->toDateString());
 
         return $aggregate;
     }

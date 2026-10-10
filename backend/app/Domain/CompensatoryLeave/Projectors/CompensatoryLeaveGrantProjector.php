@@ -187,6 +187,7 @@ class CompensatoryLeaveGrantProjector extends Projector
     }
 
     /**
+     * 口座の消化記録(usage_idを持つ行)は代休口座のProjectorが扱うため、ここでは旧来の行だけを対象にする。
      * 未承認(submitted)のまま取消された場合、grant消化はまだ発生していないため
      * (compensatory_leave.usage_reversedは発行されない)、承認前の設定行
      * (is_confirmed=false)をここで削除する。承認済みの取消はonCompensatoryLeaveUsageReversedが
@@ -198,6 +199,7 @@ class CompensatoryLeaveGrantProjector extends Projector
         CompensatoryLeaveUsage::query()
             ->where('compensatory_leave_request_id', $event->aggregateRootUuid())
             ->where('is_confirmed', false)
+            ->whereNull('usage_id')
             ->delete();
     }
 

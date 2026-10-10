@@ -5,6 +5,7 @@ namespace App\Domain\Attendance\Projectors;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestResubmitted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\PaidLeave\Events\PaidLeaveRequestApproved;
@@ -334,6 +335,18 @@ class AttendanceDayLeaveProjector extends Projector
         $this->transition(AttendanceDayLeave::KIND_COMPENSATORY, $event->aggregateRootUuid(), AttendanceDayLeave::SOURCE_COMPENSATORY, [
             'request_status' => AttendanceDayLeave::STATUS_RETURNED,
         ]);
+    }
+
+    /** 差戻し中の代休の再提出: 差戻しの行だけを申請中に戻す(申請中・承認済み・取消の行は変えない)。 */
+    public function onCompensatoryLeaveRequestResubmitted(CompensatoryLeaveRequestResubmitted $event): void
+    {
+        $leave = $this->find(AttendanceDayLeave::KIND_COMPENSATORY, $event->aggregateRootUuid());
+        if ($leave === null || $leave->source !== AttendanceDayLeave::SOURCE_COMPENSATORY
+            || $leave->request_status !== AttendanceDayLeave::STATUS_RETURNED) {
+            return;
+        }
+
+        $leave->update(['request_status' => AttendanceDayLeave::STATUS_SUBMITTED]);
     }
 
     public function onCompensatoryLeaveRequestCancelled(CompensatoryLeaveRequestCancelled $event): void

@@ -103,12 +103,12 @@ class CompensatoryLeaveHistoryTest extends TestCase
         $response->assertOk();
 
         $eventTypes = collect($response->json())->pluck('event_type')->all();
-        $this->assertContains('compensatory_leave.manually_granted', $eventTypes);
+        $this->assertContains('compensatory_leave_account.grant_manually_granted', $eventTypes);
         $this->assertContains('compensatory_leave.requested', $eventTypes);
         $this->assertContains('compensatory_leave.request_approved', $eventTypes);
 
         // 時系列(新しい順)であることを確認する: 承認が付与より後のインデックス=先頭側に来る。
-        $grantedIndex = array_search('compensatory_leave.manually_granted', $eventTypes, true);
+        $grantedIndex = array_search('compensatory_leave_account.grant_manually_granted', $eventTypes, true);
         $approvedIndex = array_search('compensatory_leave.request_approved', $eventTypes, true);
         $this->assertLessThan($grantedIndex, $approvedIndex);
     }
@@ -140,7 +140,7 @@ class CompensatoryLeaveHistoryTest extends TestCase
 
         $response = $this->actingAs($admin)->getJson("/api/compensatory-leave/history/user/{$employee->id}");
         $response->assertOk();
-        $this->assertContains('compensatory_leave.manually_granted', collect($response->json())->pluck('event_type')->all());
+        $this->assertContains('compensatory_leave_account.grant_manually_granted', collect($response->json())->pluck('event_type')->all());
 
         $this->actingAs($hr)->getJson("/api/compensatory-leave/history/user/{$employee->id}")->assertOk();
     }

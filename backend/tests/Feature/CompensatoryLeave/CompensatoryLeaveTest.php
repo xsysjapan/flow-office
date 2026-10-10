@@ -234,7 +234,7 @@ class CompensatoryLeaveTest extends TestCase
 
         // 消化する代休の対象日は、Grantの元になった月(2026-08、既に月次提出済み)とは別の月に
         // する。提出済み月に属する日次勤怠はAttendanceEditGuardにより編集(承認時の
-        // work_type反映)が禁止されるため(通常の運用でも、稼いだ代休を後日の別月に
+        // 休暇の反映)が禁止されるため(通常の運用でも、稼いだ代休を後日の別月に
         // 消化するのが自然な流れ)。
         $approver = User::factory()->create();
         $workStyle = $this->makeWorkStyle();
@@ -258,8 +258,10 @@ class CompensatoryLeaveTest extends TestCase
         $this->assertEquals(1.0, (float) $grant->used_days);
         $this->assertEquals(0.0, (float) $grant->remaining_days);
 
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->firstOrFail();
-        $this->assertSame('compensatory_leave_full', $day->work_type);
+        // 休日の勤怠は休暇ビュー(attendance_day_leaves)に代休の行として反映される(work_typeは使わない)。
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'approved',
+        ]);
     }
 
     /**
@@ -289,9 +291,9 @@ class CompensatoryLeaveTest extends TestCase
 
         $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
 
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
-        $this->assertNotNull($day);
-        $this->assertSame('compensatory_leave_full', $day->work_type);
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'submitted',
+        ]);
     }
 
     /**
@@ -490,8 +492,10 @@ class CompensatoryLeaveTest extends TestCase
         $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertOk();
 
         $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
-        $this->assertSame('compensatory_leave_full', $day->work_type);
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->firstOrFail();
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'approved',
+        ]);
 
         $response = $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel");
         $response->assertOk();
@@ -500,9 +504,11 @@ class CompensatoryLeaveTest extends TestCase
         $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
         $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
 
-        $day->refresh();
-        $this->assertNull($day->work_type);
-        $this->assertSame('not_started', $day->status);
+        // 休暇だけで記録された勤怠日(実績なし)は、休暇の取消で削除される(論点15)。
+        $this->assertNull(AttendanceDay::query()->find($day->id));
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'cancelled',
+        ]);
     }
 
     /**
@@ -533,8 +539,8 @@ class CompensatoryLeaveTest extends TestCase
         $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
 
         $this->assertEquals(1.0, (float) $grant->refresh()->remaining_days);
+        // 実績がある勤怠日は取り消しても削除されず、日次計算をやり直す(ステータスは打刻由来のまま)。
         $day->refresh();
-        $this->assertNull($day->work_type);
         $this->assertSame('clocked_out', $day->status);
     }
 
@@ -581,11 +587,12 @@ class CompensatoryLeaveTest extends TestCase
             'reason' => '代休消化',
         ])->assertCreated()->json('id');
 
-        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
-        // 未確定のcompensatory_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが
-        // 必要。PaidLeaveRequestTestの同名テストと同じ考え方)。
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->first();
-        $this->assertSame('compensatory_leave_full', $day->work_type);
+        // 未承認の取消でも、申請時点で反映された休暇ビューの行と未確定の消化記録は巻き戻される
+        // (承認済みの取消と同じ巻き戻しが必要。PaidLeaveRequestTestの同名テストと同じ考え方)。
+        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-09-10')->firstOrFail();
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'submitted',
+        ]);
         $this->assertSame(1, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
 
         $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")->assertOk();
@@ -593,8 +600,10 @@ class CompensatoryLeaveTest extends TestCase
         $workflowRequest = WorkflowRequest::query()->where('subject_id', $requestId)->firstOrFail();
         $this->assertSame('cancelled', $workflowRequest->status);
 
-        $day->refresh();
-        $this->assertNull($day->work_type);
+        $this->assertNull(AttendanceDay::query()->find($day->id));
+        $this->assertDatabaseHas('attendance_day_leaves', [
+            'user_id' => $employee->id, 'work_date' => '2026-09-10', 'leave_kind' => 'compensatory', 'request_status' => 'cancelled',
+        ]);
         $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
     }
 

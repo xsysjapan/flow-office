@@ -103,7 +103,7 @@ class EditAttendanceDayHandler implements CommandHandler
 
         $calculation = $this->calculator->calculate($day);
 
-        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation)->persist();
+        AttendanceDayAggregate::retrieve($day->id)->calculate($calculation, $day->user_id, $day->work_date->toDateString())->persist();
 
         return AttendanceDay::query()->findOrFail($command->attendanceDayId);
     }

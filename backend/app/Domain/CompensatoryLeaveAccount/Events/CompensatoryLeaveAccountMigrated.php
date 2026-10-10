@@ -19,6 +19,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class CompensatoryLeaveAccountMigrated extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly array $grants,
         public readonly array $usages,
     ) {}

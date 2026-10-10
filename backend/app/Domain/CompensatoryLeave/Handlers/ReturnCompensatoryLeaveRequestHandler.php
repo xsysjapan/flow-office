@@ -7,47 +7,34 @@ use App\Domain\CompensatoryLeave\Commands\ReturnCompensatoryLeaveRequest;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Jobs\SendNotificationJob;
-use App\Models\CompensatoryLeaveRequest;
-use App\Models\CompensatoryLeaveRequestStatus;
-use App\Models\User;
-use App\Support\FrontendUrl;
 
 /**
+ * 代休申請を差し戻す。申請の集約へ差戻しを記録するだけで、消化記録の取消(残数)と勤怠の解除は
+ * `compensatory_leave.request_returned`を受ける各文脈のReactorが行う(原則15)。
+ *
+ * 差戻しの通知はワークフロー側が1回だけ送る(二重通知の解消。特別休暇と同じ)。
+ * viaReactor=true で既に差戻し中なら何もしない(冪等)。
+ *
  * @implements CommandHandler<ReturnCompensatoryLeaveRequest>
  */
 class ReturnCompensatoryLeaveRequestHandler implements CommandHandler
 {
-    public function handle(Command $command): CompensatoryLeaveRequest
+    public function handle(Command $command): mixed
     {
         assert($command instanceof ReturnCompensatoryLeaveRequest);
 
-        $request = CompensatoryLeaveRequest::query()->findOrFail($command->compensatoryLeaveRequestId);
+        $aggregate = CompensatoryLeaveRequestAggregate::retrieve($command->compensatoryLeaveRequestId);
 
-        if ($request->status !== CompensatoryLeaveRequestStatus::SUBMITTED) {
-            throw new DomainRuleException('提出済みの代休申請のみ差戻しできます。');
+        if ($command->viaReactor && $aggregate->isReturned()) {
+            return null;
         }
 
-        if ($request->approver_user_id !== $command->returnedByUserId) {
+        if (! $command->viaReactor && $aggregate->approverUserId() !== $command->returnedByUserId) {
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
-        CompensatoryLeaveRequestAggregate::retrieve($request->id)
-            ->returnRequest($command->returnedByUserId, $command->comment)
-            ->persist();
+        $aggregate->returnRequest($command->returnedByUserId, $command->comment)->persist();
 
-        $request = $request->refresh();
-
-        $applicant = User::find($request->user_id);
-        if ($applicant !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $applicant,
-                title: '代休申請の差戻し',
-                summary: "{$request->target_date->toDateString()} の代休申請が差し戻されました: {$command->comment}",
-                detailUrl: FrontendUrl::path('/compensatory-leave/history'),
-            );
-        }
-
-        return $request;
+        return null;
     }
 }

@@ -37,7 +37,7 @@ class RecalculateAttendanceDailyCalculationHandler implements CommandHandler
         $day->load('breaks', 'leaveSegments', 'calendarEntry.workStyle');
 
         AttendanceDayAggregate::retrieve($day->id)
-            ->calculate($this->calculator->calculate($day))
+            ->calculate($this->calculator->calculate($day), $day->user_id, $day->work_date->toDateString())
             ->persist();
 
         return null;

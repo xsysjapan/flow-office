@@ -96,8 +96,8 @@ class DesignateLegalHolidayHandler implements CommandHandler
             ),
         ];
 
-        foreach ($this->planWeekRecalculation($command->userId, $weekStart, $weekEnd) as ['dayId' => $dayId, 'calculation' => $calculation]) {
-            $aggregates[] = AttendanceDayAggregate::retrieve($dayId)->calculate($calculation);
+        foreach ($this->planWeekRecalculation($command->userId, $weekStart, $weekEnd) as ['dayId' => $dayId, 'calculation' => $calculation, 'userId' => $dayUserId, 'workDate' => $dayWorkDate]) {
+            $aggregates[] = AttendanceDayAggregate::retrieve($dayId)->calculate($calculation, $dayUserId, $dayWorkDate);
         }
 
         AggregateRoot::persistInTransaction(...$aggregates);
@@ -140,7 +140,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
 
             $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'calendarEntry.workStyle.calendar'));
 
-            $plan[] = ['dayId' => $day->id, 'calculation' => $calculation];
+            $plan[] = ['dayId' => $day->id, 'calculation' => $calculation, 'userId' => $day->user_id, 'workDate' => $day->work_date->toDateString()];
         }
 
         return $plan;

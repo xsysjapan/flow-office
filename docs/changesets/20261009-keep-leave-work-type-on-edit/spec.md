@@ -703,6 +703,11 @@
   `special-leave:migrate-to-account --apply`を実行する(未実行の間は旧付与の取消・旧申請の承認が口座に反映されない)。移行の冪等は口座の
   `migrated`の有無で判定し、移行前に新しい流れで登録された付与・申請は除外する。旧Projectorは口座の消化記録ID(`usage_id`)を持たない旧来の
   行だけを扱う。取消時の消化記録は現行どおり行を削除する。
+- 2026-10-10 実装中の決定(代休の配線替え): 付与の同期・手動付与・月次確定・付与取消(申請・承認)は代休の口座集約で記録する。付与の同期は
+  勤怠の計算イベント(`attendance_day.calculated`・`daily_calculation_adjusted`に利用者・勤務日・日区分・実労働分を末尾に追加)の内容で判定し、
+  手動付与は代休の口座側の休日出勤ビューで判定する。月次APIの代休表示は勤怠側の付与ビューを読む。旧付与集約とそのCommand/Handlerは削除する
+  (旧イベントとProjectorは移行前の再生用に残す)。リリース手順: 新設Projectorのテーブルを空にして`event-sourcing:replay`の後、
+  `compensatory-leave:migrate-to-account --apply`を実行する。
 
 ## 実装結果
 未着手

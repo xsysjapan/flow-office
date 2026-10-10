@@ -11,7 +11,10 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
  * が作った行に上書きで反映する(is_manually_adjusted=trueにする)。その後日次実績が再編集され
  * attendance_day.calculatedが再発生すると、この補正は解除される。
  *
- * $payrollWorkMinutes・$lateNightPrescribedHolidayWorkMinutesはnullable(かつデフォルトnull)に
+ * 末尾の利用者ID・勤務日・日区分・実労働分は、代休口座などの他の文脈が勤怠日テーブルを読まずに判定できるよう
+ * 記録する(既定値nullは本変更前の保存イベント用。仕様確定事項I)。
+ *
+ * * $payrollWorkMinutes・$lateNightPrescribedHolidayWorkMinutesはnullable(かつデフォルトnull)に
  * してある。このイベントのspatie上のデシリアライズは名前付きコンストラクタ引数への復元であり、
  * これらの項目が追加される前に記録された行をnullable型なしで再生するとMissingConstructorArgumentsException
  * になるため(`.claude/skills/attendance-calc-review`参照)。Projector側はnullの場合、直前の
@@ -33,5 +36,9 @@ class AttendanceDailyCalculationAdjusted extends ShouldBeStored
         public readonly ?int $lateNightPrescribedHolidayWorkMinutes,
         public readonly string $reason,
         public readonly string $adjustedByUserId,
+        public readonly ?string $userId = null,
+        public readonly ?string $workDate = null,
+        public readonly ?string $dayClassification = null,
+        public readonly ?int $workMinutes = null,
     ) {}
 }

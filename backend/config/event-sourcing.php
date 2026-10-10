@@ -114,6 +114,7 @@ use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestApproved;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequested;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestReturned;
+use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestResubmitted;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageDesignated;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveUsageReversed;
@@ -621,6 +622,7 @@ return [
         'compensatory_leave.request_approved' => CompensatoryLeaveRequestApproved::class,
         'compensatory_leave.request_returned' => CompensatoryLeaveRequestReturned::class,
         'compensatory_leave.request_cancelled' => CompensatoryLeaveRequestCancelled::class,
+        'compensatory_leave.request_resubmitted' => CompensatoryLeaveRequestResubmitted::class,
 
         'shift_swap.requested' => ShiftSwapRequested::class,
         'shift_swap.request_approved' => ShiftSwapRequestApproved::class,

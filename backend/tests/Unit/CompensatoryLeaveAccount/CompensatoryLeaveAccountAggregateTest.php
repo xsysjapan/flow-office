@@ -51,19 +51,19 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     /** 休日出勤日 2026-10-03 の日単位の手動付与(確定済み)。 */
     private function manualDailyGrant(string $grantId, float $days, ?string $expiresOn): CompensatoryLeaveAccountGrantManuallyGranted
     {
-        return new CompensatoryLeaveAccountGrantManuallyGranted($grantId, '2026-10-03', $days, null, $expiresOn, null);
+        return new CompensatoryLeaveAccountGrantManuallyGranted(self::USER, $grantId, '2026-10-03', $days, null, $expiresOn, null);
     }
 
     /** 休日出勤日 2026-10-03 の時間単位の手動付与(確定済み)。 */
     private function manualHourlyGrant(string $grantId, int $minutes, ?string $expiresOn): CompensatoryLeaveAccountGrantManuallyGranted
     {
-        return new CompensatoryLeaveAccountGrantManuallyGranted($grantId, '2026-10-03', 0.0, $minutes, $expiresOn, null);
+        return new CompensatoryLeaveAccountGrantManuallyGranted(self::USER, $grantId, '2026-10-03', 0.0, $minutes, $expiresOn, null);
     }
 
     /** 利用日 2026-10-10 の消化記録(申請中)。 */
     private function designated(string $usageId, string $requestId, string $usageType, float $days, ?int $minutes): CompensatoryLeaveAccountUsageDesignated
     {
-        return new CompensatoryLeaveAccountUsageDesignated($usageId, $requestId, '2026-10-10', $usageType, $days, $minutes);
+        return new CompensatoryLeaveAccountUsageDesignated(self::USER, $usageId, $requestId, '2026-10-10', $usageType, $days, $minutes);
     }
 
     private function allocDaily(string $grantId, float $days): array
@@ -100,60 +100,60 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_holiday_work_creates_draft_grant(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-new', '2026-10-04', true, true, 480, 'daily', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantSynced('g-new', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-new', '2026-10-04', 1.0, null),
             ]);
     }
 
     public function test_holiday_work_updates_existing_draft_keeping_its_id(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-unused', '2026-10-04', true, true, 240, 'hourly', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 0.0, 240),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 0.0, 240),
             ]);
     }
 
     public function test_non_holiday_removes_existing_draft(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', true, false, 480, 'daily', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantRemoved('g1', self::REMOVE_REASON),
+                new CompensatoryLeaveAccountGrantRemoved(self::USER, 'g1', self::REMOVE_REASON),
             ]);
     }
 
     public function test_zero_minutes_removes_existing_draft(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', true, true, 0, 'daily', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantRemoved('g1', self::REMOVE_REASON),
+                new CompensatoryLeaveAccountGrantRemoved(self::USER, 'g1', self::REMOVE_REASON),
             ]);
     }
 
     public function test_non_holiday_without_draft_records_nothing(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', true, false, 480, 'daily', null);
             })
@@ -162,9 +162,9 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_disabled_setting_records_nothing_even_with_existing_draft(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', false, false, 0, 'daily', null);
@@ -174,10 +174,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_confirmed_grant_is_not_touched_by_sync(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-10-31 18:00:00', null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-10-31 18:00:00', null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-new', '2026-10-04', true, true, 240, 'hourly', null);
@@ -187,10 +187,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_confirmed_grant_is_not_removed_when_holiday_work_is_gone(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-10-31 18:00:00', null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-10-31 18:00:00', null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', true, false, 0, 'daily', null);
@@ -200,11 +200,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_cancelled_grant_is_not_recreated_by_sync(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-10-31 18:00:00', null),
-                new CompensatoryLeaveAccountGrantCancelled('g1', 'admin-1', null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-10-31 18:00:00', null),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g1', 'admin-1', null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g-new', '2026-10-04', true, true, 480, 'daily', null);
@@ -214,41 +214,41 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_removed_draft_is_recreated_with_new_id_on_holiday_work(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
-                new CompensatoryLeaveAccountGrantRemoved('g1', self::REMOVE_REASON),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantRemoved(self::USER, 'g1', self::REMOVE_REASON),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g2', '2026-10-04', true, true, 480, 'daily', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantSynced('g2', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g2', '2026-10-04', 1.0, null),
             ]);
     }
 
     public function test_sync_for_another_work_date_creates_separate_grant(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g2', '2026-10-05', true, true, 480, 'daily', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantSynced('g2', '2026-10-05', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g2', '2026-10-05', 1.0, null),
             ]);
     }
 
     public function test_half_day_unit_sync_uses_threshold(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g1', '2026-10-04', true, true, 240, 'half_day', 240);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 0.5, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 0.5, null),
             ]);
     }
 
@@ -256,9 +256,9 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->syncGrantFromHolidayWork('g1', '2026-10-05', true, true, 480, 'daily', null);
@@ -269,100 +269,100 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_confirms_only_drafts_within_period_inclusive_of_both_ends(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g-before', '2026-09-30', 1.0, null),
-                new CompensatoryLeaveAccountGrantSynced('g-first', '2026-10-01', 1.0, null),
-                new CompensatoryLeaveAccountGrantSynced('g-last', '2026-10-31', 1.0, null),
-                new CompensatoryLeaveAccountGrantSynced('g-after', '2026-11-01', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-before', '2026-09-30', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-first', '2026-10-01', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-last', '2026-10-31', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-after', '2026-11-01', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-05 10:00:00', 30);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g-first', '2026-11-05 10:00:00', '2026-12-05'),
-                new CompensatoryLeaveAccountGrantConfirmed('g-last', '2026-11-05 10:00:00', '2026-12-05'),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g-first', '2026-11-05 10:00:00', '2026-12-05'),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g-last', '2026-11-05 10:00:00', '2026-12-05'),
             ]);
     }
 
     public function test_confirmation_without_valid_days_is_unlimited(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-03', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-05 10:00:00', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-11-05 10:00:00', null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-11-05 10:00:00', null),
             ]);
     }
 
     public function test_zero_valid_days_expires_on_confirmation_date(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-03', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-05 10:00:00', 0);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-11-05 10:00:00', '2026-11-05'),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-11-05 10:00:00', '2026-11-05'),
             ]);
     }
 
     public function test_expiry_crosses_month_end_in_non_leap_year(): void
     {
         // 2027-01-31 + 30日 = 2027-03-02(2027年2月は28日)。
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2027-01-20', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2027-01-20', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2027-01-01', '2027-01-31', '2027-01-31 09:00:00', 30);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2027-01-31 09:00:00', '2027-03-02'),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2027-01-31 09:00:00', '2027-03-02'),
             ]);
     }
 
     public function test_period_end_on_leap_day_includes_that_day(): void
     {
         // 2028年は閏年。末日(2028-02-29)の休日出勤は当月の提出で確定する。
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g-leap', '2028-02-29', 1.0, null),
-                new CompensatoryLeaveAccountGrantSynced('g-mar', '2028-03-01', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-leap', '2028-02-29', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-mar', '2028-03-01', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2028-02-01', '2028-02-29', '2028-03-01 09:00:00', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g-leap', '2028-03-01 09:00:00', null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g-leap', '2028-03-01 09:00:00', null),
             ]);
     }
 
     public function test_leap_day_expiry_is_computed_by_calendar(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2028-02-28', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2028-02-28', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2028-02-01', '2028-02-29', '2028-02-28 10:00:00', 1);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2028-02-28 10:00:00', '2028-02-29'),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2028-02-28 10:00:00', '2028-02-29'),
             ]);
     }
 
     public function test_no_draft_in_period_records_nothing(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g-sep', '2026-09-30', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-sep', '2026-09-30', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-05 10:00:00', 30);
@@ -372,10 +372,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_already_confirmed_grant_is_not_confirmed_again(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
-                new CompensatoryLeaveAccountGrantConfirmed('g1', '2026-11-05 10:00:00', '2026-12-05'),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g1', '2026-11-05 10:00:00', '2026-12-05'),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-30 10:00:00', 30);
@@ -387,34 +387,34 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_manual_grant_for_holiday_work_is_confirmed_at_once(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->grantManually('g-m', '2026-10-03', true, 480, 'daily', null, '2027-03-31', '休日出勤振替');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantManuallyGranted('g-m', '2026-10-03', 1.0, null, '2027-03-31', '休日出勤振替'),
+                new CompensatoryLeaveAccountGrantManuallyGranted(self::USER, 'g-m', '2026-10-03', 1.0, null, '2027-03-31', '休日出勤振替'),
             ]);
     }
 
     public function test_manual_grant_without_expiry_and_reason(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->grantManually('g-m', '2026-10-03', true, 480, 'daily', null, null, null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantManuallyGranted('g-m', '2026-10-03', 1.0, null, null, null),
+                new CompensatoryLeaveAccountGrantManuallyGranted(self::USER, 'g-m', '2026-10-03', 1.0, null, null, null),
             ]);
     }
 
     public function test_manual_hourly_grant_uses_minutes(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->grantManually('g-m', '2026-10-03', true, 150, 'hourly', null, null, null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantManuallyGranted('g-m', '2026-10-03', 0.0, 150, null, null),
+                new CompensatoryLeaveAccountGrantManuallyGranted(self::USER, 'g-m', '2026-10-03', 0.0, 150, null, null),
             ]);
     }
 
@@ -422,7 +422,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->grantManually('g-m', '2026-10-03', false, 480, 'daily', null, null, null);
             });
@@ -432,7 +432,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->grantManually('g-m', '2026-10-03', true, 0, 'daily', null, null, null);
             });
@@ -442,7 +442,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-m', 1.0, null),
             ])
@@ -455,7 +455,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_unused_confirmed_grant_can_be_cancelled(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
             ])
@@ -463,7 +463,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->cancelGrant('g1', 'admin-1', '誤付与');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountGrantCancelled('g1', 'admin-1', '誤付与'),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g1', 'admin-1', '誤付与'),
             ]);
     }
 
@@ -471,9 +471,9 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-03', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelGrant('g1', 'admin-1', null);
@@ -484,10 +484,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
-                new CompensatoryLeaveAccountGrantCancelled('g1', 'admin-1', null),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g1', 'admin-1', null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelGrant('g1', 'admin-1', null);
@@ -498,11 +498,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelGrant('g1', 'admin-1', null);
@@ -513,11 +513,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-h', 150, null),
                 $this->designated('u1', 'r1', 'hourly', 0.0, 60),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-h', 60)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocHourly('g-h', 60)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelGrant('g-h', 'admin-1', null);
@@ -526,19 +526,19 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_grant_is_cancellable_after_its_usage_is_cancelled(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelUsage('u1', null);
                 $aggregate->cancelGrant('g1', 'admin-1', '誤付与');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageCancelled('u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
-                new CompensatoryLeaveAccountGrantCancelled('g1', 'admin-1', '誤付与'),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g1', 'admin-1', '誤付与'),
             ]);
     }
 
@@ -546,7 +546,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelGrant('missing', 'admin-1', null);
             });
@@ -556,7 +556,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_usage_is_designated_without_allocation(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
             ])
@@ -572,7 +572,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->designated('u1', 'r1', 'full', 1.0, null),
             ])
@@ -585,7 +585,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->designated('u1', 'r1', 'full', 1.0, null),
             ])
@@ -596,10 +596,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_resubmitted_request_gets_a_new_usage_after_cancellation(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageCancelled('u1', [], '差戻し'),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [], '差戻し'),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u2', 'r1', '2026-10-10', 'full', 1.0, null);
@@ -613,7 +613,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u1', 'r1', '2026-10-10', 'hourly', 0.0, null);
             });
@@ -623,7 +623,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_confirm_allocates_from_nearest_expiry_first(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-late', 1.0, '2027-06-30'),
                 $this->manualDailyGrant('g-early', 1.0, '2026-12-31'),
@@ -633,13 +633,13 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g-early', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g-early', 1.0)]),
             ]);
     }
 
     public function test_grant_without_expiry_is_used_last(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-none', 5.0, null),
                 $this->manualDailyGrant('g-dated', 1.0, '2027-03-31'),
@@ -649,7 +649,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [
                     $this->allocDaily('g-dated', 1.0),
                     $this->allocDaily('g-none', 1.0),
                 ]),
@@ -658,7 +658,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_grants_with_same_expiry_are_used_in_registration_order(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-first', 1.0, '2026-12-31'),
                 $this->manualDailyGrant('g-second', 3.0, '2026-12-31'),
@@ -668,7 +668,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [
                     $this->allocDaily('g-first', 1.0),
                     $this->allocDaily('g-second', 1.0),
                 ]),
@@ -677,7 +677,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_expired_grant_is_not_used(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-old', 3.0, '2026-10-09'),
                 $this->manualDailyGrant('g-ok', 3.0, '2026-12-31'),
@@ -687,13 +687,13 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g-ok', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g-ok', 1.0)]),
             ]);
     }
 
     public function test_grant_expiring_on_usage_day_is_still_used(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-edge', 1.0, '2026-10-10'),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
@@ -702,13 +702,13 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g-edge', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g-edge', 1.0)]),
             ]);
     }
 
     public function test_usage_is_split_across_grants(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 0.5, '2026-12-31'),
                 $this->manualDailyGrant('g2', 1.0, '2027-03-31'),
@@ -718,7 +718,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [
                     $this->allocDaily('g1', 0.5),
                     $this->allocDaily('g2', 0.5),
                 ]),
@@ -727,7 +727,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_exactly_remaining_balance_confirms(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
@@ -736,7 +736,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
             ]);
     }
 
@@ -744,7 +744,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $unallocated = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.5, null),
@@ -755,7 +755,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $unallocated = $aggregate->unallocatedFor('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)], 0.5, 0),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)], 0.5, 0),
             ]);
 
         $this->assertSame(['unallocatedDays' => 0.5, 'unallocatedMinutes' => 0], $unallocated);
@@ -765,11 +765,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $unallocated = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u0', 'r0', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u0', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u0', [$this->allocDaily('g1', 1.0)]),
                 $this->designated('u1', 'r1', 'half_am', 0.5, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$unallocated) {
@@ -778,7 +778,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $unallocated = $aggregate->unallocatedFor('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 0.5, 0),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [], 0.5, 0),
             ]);
 
         $this->assertSame(['unallocatedDays' => 0.5, 'unallocatedMinutes' => 0], $unallocated);
@@ -786,38 +786,38 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_draft_grant_is_not_used_and_full_shortage_is_recorded(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-03', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [], 1.0, 0),
             ]);
     }
 
     public function test_cancelled_grant_is_not_used_and_full_shortage_is_recorded(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
-                new CompensatoryLeaveAccountGrantCancelled('g1', 'admin-1', null),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g1', 'admin-1', null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [], 1.0, 0),
             ]);
     }
 
     public function test_hourly_usage_uses_only_hourly_grants(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-daily', 1.0, null),
                 $this->manualHourlyGrant('g-hourly', 240, null),
@@ -827,7 +827,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-hourly', 60)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocHourly('g-hourly', 60)]),
             ]);
     }
 
@@ -835,7 +835,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $unallocated = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-hourly', 60, null),
                 $this->designated('u1', 'r1', 'hourly', 0.0, 90),
@@ -846,7 +846,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $unallocated = $aggregate->unallocatedFor('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-hourly', 60)], 0.0, 30),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocHourly('g-hourly', 60)], 0.0, 30),
             ]);
 
         $this->assertSame(['unallocatedDays' => 0.0, 'unallocatedMinutes' => 30], $unallocated);
@@ -854,7 +854,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_daily_usage_does_not_use_hourly_grant_and_records_full_shortage(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-hourly', 240, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
@@ -863,7 +863,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmUsage('u1');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [], 1.0, 0),
             ]);
     }
 
@@ -871,11 +871,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $results = [];
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 2.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
                 $this->designated('u2', 'r2', 'full', 1.5, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$results) {
@@ -903,11 +903,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
@@ -918,11 +918,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageCancelled('u1', [], null),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [], null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
@@ -933,7 +933,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('missing');
             });
@@ -943,7 +943,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_cancelling_designated_usage_releases_nothing(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
@@ -952,7 +952,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->cancelUsage('u1', '差戻し');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageCancelled('u1', [], '差戻し'),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [], '差戻し'),
             ]);
     }
 
@@ -960,18 +960,18 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $remaining = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g1', 1.0)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$remaining) {
                 $aggregate->cancelUsage('u1', null);
                 $remaining = $aggregate->remainingDays('2026-10-10');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageCancelled('u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
             ]);
 
         $this->assertSame(1.0, $remaining);
@@ -981,18 +981,18 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $remaining = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-h', 240, null),
                 $this->designated('u1', 'r1', 'hourly', 0.0, 90),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-h', 90)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocHourly('g-h', 90)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$remaining) {
                 $aggregate->cancelUsage('u1', null);
                 $remaining = $aggregate->remainingMinutes('2026-10-10');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountUsageCancelled('u1', [['grantId' => 'g-h', 'releasedDays' => 0.0, 'releasedMinutes' => 90]], null),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [['grantId' => 'g-h', 'releasedDays' => 0.0, 'releasedMinutes' => 90]], null),
             ]);
 
         $this->assertSame(240, $remaining);
@@ -1002,10 +1002,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->designated('u1', 'r1', 'full', 1.0, null),
-                new CompensatoryLeaveAccountUsageCancelled('u1', [], null),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [], null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelUsage('u1', null);
@@ -1016,7 +1016,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelUsage('missing', null);
             });
@@ -1028,17 +1028,17 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $remaining = [];
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g-expired', 4.0, '2026-10-09'),
                 $this->manualDailyGrant('g-edge', 1.0, '2026-10-10'),
                 $this->manualDailyGrant('g-none', 2.0, null),
-                new CompensatoryLeaveAccountGrantSynced('g-draft', '2026-10-03', 1.0, null),
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g-draft', '2026-10-03', 1.0, null),
                 $this->manualDailyGrant('g-cancelled', 3.0, null),
-                new CompensatoryLeaveAccountGrantCancelled('g-cancelled', 'admin-1', null),
+                new CompensatoryLeaveAccountGrantCancelled(self::USER, 'g-cancelled', 'admin-1', null),
                 $this->manualHourlyGrant('g-hourly', 240, null),
                 $this->designated('u1', 'r1', 'full', 0.5, null),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g-none', 0.5)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocDaily('g-none', 0.5)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$remaining) {
                 $remaining['on_expiry_day'] = $aggregate->remainingDays('2026-10-10');
@@ -1057,11 +1057,11 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $remaining = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-h', 150, null),
                 $this->designated('u1', 'r1', 'hourly', 0.0, 90),
-                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-h', 90)]),
+                new CompensatoryLeaveAccountUsageConfirmed(self::USER, 'u1', [$this->allocHourly('g-h', 90)]),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$remaining) {
                 $remaining = [
@@ -1078,7 +1078,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $results = [];
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.0, null),
@@ -1129,7 +1129,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ['usageId' => 'u2', 'requestId' => 'r2', 'usedOn' => '2026-10-11', 'usageType' => 'full', 'usedDays' => 0.5, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],
         ];
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use ($grants, $usages, &$results) {
                 $aggregate->migrate($grants, $usages);
 
@@ -1145,8 +1145,8 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $results['remaining_after_cancel'] = $aggregate->remainingDays('2026-10-10');
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountMigrated($grants, $usages),
-                new CompensatoryLeaveAccountUsageCancelled('u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
+                new CompensatoryLeaveAccountMigrated(self::USER, $grants, $usages),
+                new CompensatoryLeaveAccountUsageCancelled(self::USER, 'u1', [['grantId' => 'g1', 'releasedDays' => 1.0, 'releasedMinutes' => 0]], null),
             ]);
 
         // 有効な付与は g1(3.0 - 1.0 = 2.0)のみ。取消済み・下書きは含めない。
@@ -1160,7 +1160,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
 
     public function test_migrated_draft_grant_can_be_confirmed(): void
     {
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([
                     ['grantId' => 'g-d', 'source' => 'sync', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'draft', 'expiresOn' => null],
@@ -1168,10 +1168,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 $aggregate->confirmGrantsForPeriod('2026-10-01', '2026-10-31', '2026-11-05 10:00:00', null);
             })
             ->assertRecorded([
-                new CompensatoryLeaveAccountMigrated([
+                new CompensatoryLeaveAccountMigrated(self::USER, [
                     ['grantId' => 'g-d', 'source' => 'sync', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'draft', 'expiresOn' => null],
                 ], []),
-                new CompensatoryLeaveAccountGrantConfirmed('g-d', '2026-11-05 10:00:00', null),
+                new CompensatoryLeaveAccountGrantConfirmed(self::USER, 'g-d', '2026-11-05 10:00:00', null),
             ]);
     }
 
@@ -1179,7 +1179,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $remaining = null;
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$remaining) {
                 $aggregate->migrate(
                     [['grantId' => 'g1', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 2.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null]],
@@ -1191,26 +1191,46 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
         $this->assertSame(1.0, $remaining);
     }
 
-    public function test_migrate_is_rejected_when_account_is_not_empty(): void
+    /**
+     * 移行前に新しい流れで登録された付与(口座に既にある)は移行データに含めない(運用コマンドが除外する)。
+     * 口座が空でなくても移行は可能だが、既存の付与IDと重複する移行データは拒否する。
+     */
+    public function test_migrate_rejects_a_grant_id_that_already_exists_in_the_account(): void
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                $this->manualDailyGrant('g0', 1.0, null),
+            ])
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+                $aggregate->migrate([
+                    ['grantId' => 'g0', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null],
+                ], []);
+            });
+    }
+
+    public function test_migrate_is_allowed_when_the_account_already_has_new_flow_grants(): void
+    {
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
                 $this->manualDailyGrant('g0', 1.0, null),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], []);
-            });
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountMigrated(self::USER, [], []),
+            ]);
     }
 
     public function test_second_migrate_is_rejected(): void
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->given([
-                new CompensatoryLeaveAccountMigrated([], []),
+                new CompensatoryLeaveAccountMigrated(self::USER, [], []),
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], []);
@@ -1221,7 +1241,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([
                     ['grantId' => 'g1', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null],
@@ -1234,7 +1254,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], [
                     ['usageId' => 'u1', 'requestId' => 'r1', 'usedOn' => '2026-10-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => null, 'status' => 'confirmed', 'allocations' => [['grantId' => 'missing', 'allocatedDays' => 1.0, 'allocatedMinutes' => 0]]],
@@ -1246,7 +1266,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g-d', 'source' => 'sync', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'draft', 'expiresOn' => null]],
@@ -1259,7 +1279,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g-c', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'cancelled', 'expiresOn' => null]],
@@ -1272,7 +1292,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g1', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null]],
@@ -1288,7 +1308,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g-h', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 0.0, 'grantedMinutes' => 240, 'status' => 'confirmed', 'expiresOn' => null]],
@@ -1304,7 +1324,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g1', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null]],
@@ -1317,7 +1337,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], [
                     ['usageId' => 'u1', 'requestId' => 'r1', 'usedOn' => '2026-10-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],
@@ -1330,7 +1350,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], [
                     ['usageId' => 'u1', 'requestId' => 'r1', 'usedOn' => '2026-10-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],
@@ -1343,7 +1363,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate(
                     [['grantId' => 'g1', 'source' => 'manual', 'sourceWorkDate' => '2026-10-03', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'status' => 'confirmed', 'expiresOn' => null]],
@@ -1356,7 +1376,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], [
                     ['usageId' => 'u1', 'requestId' => 'r1', 'usedOn' => '2026-10-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => null, 'status' => 'cancelled', 'allocations' => []],
@@ -1368,7 +1388,7 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
     {
         $this->expectException(DomainRuleException::class);
 
-        CompensatoryLeaveAccountAggregate::fake(self::USER)
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->migrate([], [
                     ['usageId' => 'u1', 'requestId' => 'r1', 'usedOn' => '2026-10-10', 'usageType' => 'hourly', 'usedDays' => 0.0, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],

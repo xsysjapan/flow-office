@@ -62,7 +62,7 @@ class RecalculateAttendanceMonthSnapshotHandler implements CommandHandler
             $calculation = $this->attendanceCalculator->calculate($day);
 
             AttendanceDayAggregate::retrieve($day->id)
-                ->calculate($calculation)
+                ->calculate($calculation, $day->user_id, $day->work_date->toDateString())
                 ->persist();
         }
 

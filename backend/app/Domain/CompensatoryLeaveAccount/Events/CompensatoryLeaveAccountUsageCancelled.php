@@ -12,6 +12,7 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class CompensatoryLeaveAccountUsageCancelled extends ShouldBeStored
 {
     public function __construct(
+        public readonly string $userId,
         public readonly string $usageId,
         public readonly array $releasedAllocations,
         public readonly ?string $reason,
