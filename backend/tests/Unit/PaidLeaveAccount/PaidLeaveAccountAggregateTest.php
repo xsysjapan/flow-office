@@ -506,8 +506,12 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_remainder_left_unallocated_without_failing_confirm(): void
+    public function test_confirm_is_rejected_when_balance_is_insufficient_and_records_nothing(): void
     {
+        // 論点17: 残数不足の承認は一部充当で確定させず拒否する(イベントは1件も記録されない)。
+        $this->expectException(DomainRuleException::class);
+        $this->expectExceptionMessage('有給休暇の残数が不足しているため承認できません。');
+
         PaidLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new PaidLeaveGrantCreated('g1', '2024-04-01', '2025-01-01', 1.0, null, 'manual'),
@@ -515,10 +519,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', 'approver-1');
-            })
-            ->assertRecorded([
-                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
-            ]);
+            });
     }
 
     // ---- Allocation: 自動再Allocation ----
@@ -599,27 +600,32 @@ class PaidLeaveAccountAggregateTest extends TestCase
 
     public function test_auto_allocation_processes_by_usedon_ascending(): void
     {
-        // u2の方が後に確定されたが usedOn は u1 より早いため、u2 が先に充当される。
+        // 残数不足の承認は拒否されるため、確定済み・未充当の状態は既存イベント(移行前の記録に相当)として与える。
+        // 増額で空きが生じると、usedOnが早いu2が先に充当される(u1より後に確定されていても同様)。
         PaidLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new PaidLeaveGrantCreated('g1', '2024-04-01', '2027-04-01', 2.0, null, 'manual'),
+                new PaidLeaveGrantCreated('g1', '2024-04-01', '2027-04-01', 1.0, null, 'manual'),
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-06-01', 2.0),
+                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
                 new PaidLeaveUsageDesignated('u2', 'wf-2', 'day-2', '2025-05-01', 2.0),
+                new PaidLeaveUsageConfirmed('u2', 'approver-1'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
-                $aggregate->confirmUsage('u2', 'approver-1');
+                $aggregate->changeGrantAmount('g1', 2.0, '増額', 'admin-1');
             })
             ->assertRecorded([
-                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
-                new PaidLeaveUsageAllocated('u1', 'g1', 2.0),
-                new PaidLeaveUsageConfirmed('u2', 'approver-1'),
-                // g1は既にu1へ全量充当済みのため、u2は充当されないまま残る。
+                new PaidLeaveGrantAmountChanged('g1', 2.0, '増額', 'admin-1'),
+                new PaidLeaveUsageAllocated('u2', 'g1', 2.0),
+                // g1はu2へ全量充当されるため、u1は未充当のまま残る。
             ]);
     }
 
-    public function test_later_created_but_earlier_usedon_usage_does_not_reshuffle_allocated_later_usage(): void
+    public function test_confirm_is_rejected_when_existing_allocation_leaves_no_balance_for_earlier_usedon(): void
     {
+        // u2はu1よりusedOnが早いが、g1に空きがないため既存のu1へのAllocationは組み替えず、
+        // 残数不足としてu2の承認を拒否する(論点17)。
+        $this->expectException(DomainRuleException::class);
+
         PaidLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new PaidLeaveGrantCreated('g1', '2024-04-01', '2027-04-01', 2.0, null, 'manual'),
@@ -628,15 +634,9 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageAllocated('u1', 'g1', 2.0),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                // u2はu1よりusedOnが早いが、g1に空きがないため既存のu1へのAllocationは
-                // 組み替えられず、u2は未充当のまま残る。
                 $aggregate->designateUsage('u2', 'wf-2', 'day-2', '2025-05-01', 1.0, 'full');
                 $aggregate->confirmUsage('u2', 'approver-1');
-            })
-            ->assertRecorded([
-                new PaidLeaveUsageDesignated('u2', 'wf-2', 'day-2', '2025-05-01', 1.0),
-                new PaidLeaveUsageConfirmed('u2', 'approver-1'),
-            ]);
+            });
     }
 
     public function test_grant_revoke_releases_all_its_allocations_without_touching_usage_record(): void
@@ -676,6 +676,150 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ->assertRecorded([
                 new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 5.0, null, 'manual'),
                 new PaidLeaveUsageAllocated('u1', 'g2', 3.0),
+            ]);
+    }
+
+    // ---- Usage: 申請ID→usageId・状態の問い合わせ ----
+
+    /**
+     * 与えたイベントを適用した後にAggregateの問い合わせを行い、その結果を返す。
+     *
+     * @param  object[]  $events
+     */
+    private function queryAfter(array $events, callable $query): mixed
+    {
+        $result = null;
+
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given($events)
+            ->when(function (PaidLeaveAccountAggregate $aggregate) use ($query, &$result) {
+                $result = $query($aggregate);
+            });
+
+        return $result;
+    }
+
+    public function test_usage_id_for_request_returns_the_designated_usage(): void
+    {
+        $events = [
+            new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1'),
+        ];
+
+        $this->assertSame('u1', $this->queryAfter($events, fn (PaidLeaveAccountAggregate $a) => $a->usageIdForRequest('pr-1')));
+        $this->assertNull($this->queryAfter($events, fn (PaidLeaveAccountAggregate $a) => $a->usageIdForRequest('pr-unknown')));
+    }
+
+    public function test_usage_id_for_request_still_returns_cancelled_usage_and_latest_after_redesignation(): void
+    {
+        $cancelled = [
+            new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+            new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1'),
+            new PaidLeaveUsageCancelled('u1', 'user-1', '差戻し'),
+        ];
+
+        // 取消後も最後に指定されたusageIdを返す。
+        $this->assertSame('u1', $this->queryAfter($cancelled, fn (PaidLeaveAccountAggregate $a) => $a->usageIdForRequest('pr-1')));
+
+        // 再提出で新しいusageが指定されたら、そちらを返す。
+        $resubmitted = array_merge($cancelled, [
+            new PaidLeaveUsageDesignated('u2', 'wf-2', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1'),
+        ]);
+        $this->assertSame('u2', $this->queryAfter($resubmitted, fn (PaidLeaveAccountAggregate $a) => $a->usageIdForRequest('pr-1')));
+    }
+
+    public function test_usage_status_reports_designated_confirmed_cancelled_and_null(): void
+    {
+        $grant = new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual');
+        $designated = new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1');
+
+        $this->assertSame('designated', $this->queryAfter([$grant, $designated], fn (PaidLeaveAccountAggregate $a) => $a->usageStatus('u1')));
+        $this->assertSame('confirmed', $this->queryAfter([$grant, $designated, new PaidLeaveUsageConfirmed('u1', 'approver-1')], fn (PaidLeaveAccountAggregate $a) => $a->usageStatus('u1')));
+        $this->assertSame('cancelled', $this->queryAfter([$grant, $designated, new PaidLeaveUsageCancelled('u1', 'user-1', null)], fn (PaidLeaveAccountAggregate $a) => $a->usageStatus('u1')));
+        $this->assertNull($this->queryAfter([$grant], fn (PaidLeaveAccountAggregate $a) => $a->usageStatus('u-unknown')));
+    }
+
+    public function test_has_active_usage_for_request_is_false_after_cancel_and_true_after_redesignation(): void
+    {
+        $grant = new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual');
+        $designated = new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1');
+        $cancelled = new PaidLeaveUsageCancelled('u1', 'user-1', '差戻し');
+
+        $this->assertFalse($this->queryAfter([$grant], fn (PaidLeaveAccountAggregate $a) => $a->hasActiveUsageForRequest('pr-1')));
+        $this->assertTrue($this->queryAfter([$grant, $designated], fn (PaidLeaveAccountAggregate $a) => $a->hasActiveUsageForRequest('pr-1')));
+        $this->assertFalse($this->queryAfter([$grant, $designated, $cancelled], fn (PaidLeaveAccountAggregate $a) => $a->hasActiveUsageForRequest('pr-1')));
+        $this->assertTrue($this->queryAfter(
+            [$grant, $designated, $cancelled, new PaidLeaveUsageDesignated('u2', 'wf-2', 'day-1', '2025-05-01', 1.0, 'full', 'pr-1')],
+            fn (PaidLeaveAccountAggregate $a) => $a->hasActiveUsageForRequest('pr-1'),
+        ));
+    }
+
+    // ---- Usage: 残数不足の承認(論点17) ----
+
+    public function test_confirm_succeeds_when_balance_exactly_covers_usage(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 3.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
+                new PaidLeaveUsageAllocated('u1', 'g1', 3.0),
+            ]);
+    }
+
+    public function test_confirm_succeeds_when_nearest_future_grant_covers_the_shortfall(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 1.0, null, 'manual'),
+                new PaidLeaveGrantCreated('g2', '2025-07-01', '2027-07-01', 2.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
+                new PaidLeaveUsageAllocated('u1', 'g1', 1.0),
+                new PaidLeaveUsageAllocated('u1', 'g2', 2.0),
+            ]);
+    }
+
+    public function test_confirm_is_rejected_when_future_grant_does_not_cover_the_shortfall(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 1.0, null, 'manual'),
+                new PaidLeaveGrantCreated('g2', '2025-07-01', '2027-07-01', 1.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            });
+    }
+
+    public function test_confirm_accepts_float_rounding_difference_as_exact_balance(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2026-04-01', 0.1, null, 'manual'),
+                new PaidLeaveGrantCreated('g2', '2025-04-02', '2027-04-01', 0.2, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 0.3),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $aggregate) {
+                $aggregate->confirmUsage('u1', 'approver-1');
+            })
+            ->assertRecorded([
+                new PaidLeaveUsageConfirmed('u1', 'approver-1'),
+                new PaidLeaveUsageAllocated('u1', 'g1', 0.1),
+                new PaidLeaveUsageAllocated('u1', 'g2', 0.19999999999999998),
             ]);
     }
 }

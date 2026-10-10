@@ -2,13 +2,14 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendancePunch;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveGrant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkStyle;
@@ -223,10 +224,7 @@ class AttendanceDayDeletionTest extends TestCase
             'planned_start_at' => "{$targetDate} 09:00:00", 'planned_end_at' => "{$targetDate} 18:00:00",
             'planned_break_minutes' => 60,
         ]);
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => $targetDate,

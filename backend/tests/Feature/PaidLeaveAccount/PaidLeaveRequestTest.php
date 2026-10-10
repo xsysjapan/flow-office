@@ -564,11 +564,11 @@ class PaidLeaveRequestTest extends TestCase
     }
 
     /**
-     * 承認不要設定の場合、残数不足でも即時承認(消化計画で消化できる分だけ記録)まで成立する
-     * (残数不足で申請・承認自体をブロックしない方針。RequestPaidLeave→
-     * ApprovePaidLeaveRequestの2段発行はそのまま1トランザクションで包まれる)。
+     * 承認不要設定の場合でも、残数不足は承認(自動承認を含む)の業務ルール違反として拒否する(論点17)。
+     * 申請・自動承認は1トランザクションで包まれているため、422のエラーで全体が取り消され、
+     * どの文脈の状態も変わらない。
      */
-    public function test_when_approval_is_not_required_insufficient_balance_still_auto_approves_with_partial_consumption(): void
+    public function test_when_approval_is_not_required_insufficient_balance_rejects_the_request_and_changes_nothing(): void
     {
         SystemSetting::current()->update(['paid_leave_requires_approval' => false]);
 
@@ -583,10 +583,13 @@ class PaidLeaveRequestTest extends TestCase
             'leave_type' => 'full',
         ]);
 
-        $response->assertCreated();
-        $response->assertJsonPath('status', 'approved');
-        $this->assertSame(1, PaidLeaveRequest::query()->count());
-        $this->assertEquals(0.0, (float) $grant->refresh()->remaining_days);
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', '有給休暇の残数が不足しているため承認できません。');
+        $this->assertSame(0, PaidLeaveRequest::query()->count());
+        $this->assertSame(0, PaidLeaveUsage::query()->count());
+        $this->assertSame(0, WorkflowRequest::query()->count());
+        $this->assertSame(0, AttendanceDay::query()->where('user_id', $employee->id)->count());
+        $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
     }
 
     public function test_cancelling_a_request_also_cancels_the_workflow_request(): void
