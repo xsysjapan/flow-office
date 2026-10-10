@@ -6,6 +6,7 @@ use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Models\CompensatoryHolidayWorkDay;
+use Illuminate\Support\Carbon;
 use App\Models\DayClassification;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -27,7 +28,7 @@ class CompensatoryLeaveHolidayWorkProjector extends Projector
 
         $this->upsert(
             userId: $event->userId,
-            workDate: $event->workDate,
+            workDate: Carbon::parse($event->workDate)->toDateString(),
             isHolidayDay: $this->isHolidayClassification(is_string($dayClassification) ? $dayClassification : null),
             workMinutes: (int) ($event->calculation['work_minutes'] ?? 0),
         );
@@ -41,7 +42,7 @@ class CompensatoryLeaveHolidayWorkProjector extends Projector
 
         $this->upsert(
             userId: $event->userId,
-            workDate: $event->workDate,
+            workDate: Carbon::parse($event->workDate)->toDateString(),
             isHolidayDay: $this->isHolidayClassification($event->dayClassification),
             workMinutes: $event->workMinutes,
         );

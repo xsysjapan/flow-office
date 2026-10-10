@@ -15,6 +15,7 @@ use Tests\TestCase;
 /**
  * 代休申請の集約(申請状態だけを扱う)の状態遷移の単体テスト。Projection(Eloquent)は使わない。
  * 遷移: none → submitted → approved / returned / cancelled、returned → submitted(再提出) / cancelled、approved → cancelled。
+ * 書き方は特別休暇のSpecialLeaveRequestAggregateTestと同じ(fake()->when()->assertRecorded())。
  */
 class CompensatoryLeaveRequestAggregateTest extends TestCase
 {
@@ -38,11 +39,91 @@ class CompensatoryLeaveRequestAggregateTest extends TestCase
         );
     }
 
-    public function test_request_records_the_request_with_its_content(): void
+    private function requestedEvent(): CompensatoryLeaveRequested
     {
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
+        return new CompensatoryLeaveRequested(
+            userId: self::USER,
+            targetDate: '2026-10-10',
+            leaveType: 'full',
+            hours: null,
+            requestedDays: 1.0,
+            requestedMinutes: null,
+            approverUserId: self::APPROVER,
+            reason: '理由',
+        );
+    }
+
+    public function test_request_is_recorded_once(): void
+    {
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)
+            ->when(fn (CompensatoryLeaveRequestAggregate $aggregate) => $this->requested($aggregate))
+            ->assertRecorded([$this->requestedEvent()]);
+    }
+
+    public function test_second_request_with_the_same_id_is_rejected(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+            $this->requested($aggregate);
+            $this->requested($aggregate);
+        });
+    }
+
+    public function test_share_is_rejected_before_the_request(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)->when(
+            fn (CompensatoryLeaveRequestAggregate $aggregate) => $aggregate->share('wf-1'),
+        );
+    }
+
+    public function test_share_records_the_workflow_request(): void
+    {
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)
+            ->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+                $this->requested($aggregate)->share('wf-1');
+            })
             ->assertRecorded([
-                new CompensatoryLeaveRequested(
+                $this->requestedEvent(),
+                new CompensatoryLeaveRequestShared(workflowRequestId: 'wf-1'),
+            ]);
+    }
+
+    public function test_approve_is_rejected_when_not_submitted(): void
+    {
+        $this->expectException(DomainRuleException::class);
+
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+            $this->requested($aggregate)->returnRequest(self::APPROVER, '差戻し');
+            $aggregate->approve(self::APPROVER);
+        });
+    }
+
+    public function test_approve_records_the_approval_with_the_applicant(): void
+    {
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)
+            ->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+                $this->requested($aggregate)->approve(self::APPROVER);
+            })
+            ->assertRecorded([
+                $this->requestedEvent(),
+                new CompensatoryLeaveRequestApproved(approvedByUserId: self::APPROVER, userId: self::USER),
+            ]);
+    }
+
+    public function test_return_then_resubmit_records_the_same_content(): void
+    {
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)
+            ->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+                $this->requested($aggregate)->returnRequest(self::APPROVER, '差戻し')->resubmit(self::USER);
+            })
+            ->assertRecorded([
+                $this->requestedEvent(),
+                new CompensatoryLeaveRequestReturned(returnedByUserId: self::APPROVER, comment: '差戻し', userId: self::USER),
+                new CompensatoryLeaveRequestResubmitted(
+                    resubmittedByUserId: self::USER,
                     userId: self::USER,
                     targetDate: '2026-10-10',
                     leaveType: 'full',
@@ -55,80 +136,32 @@ class CompensatoryLeaveRequestAggregateTest extends TestCase
             ]);
     }
 
-    public function test_a_second_request_for_the_same_id_is_rejected(): void
+    public function test_resubmit_is_rejected_when_not_returned(): void
     {
         $this->expectException(DomainRuleException::class);
 
-        $aggregate = $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST));
-        $this->requested($aggregate);
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)->when(
+            fn (CompensatoryLeaveRequestAggregate $aggregate) => $this->requested($aggregate)->resubmit(self::USER),
+        );
     }
 
-    public function test_share_is_only_allowed_while_submitted(): void
+    public function test_cancel_is_recorded_once_and_cannot_be_repeated(): void
     {
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->share('workflow-1')
-            ->assertRecorded([new CompensatoryLeaveRequestShared(workflowRequestId: 'workflow-1')]);
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)
+            ->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+                $this->requested($aggregate)->approve(self::APPROVER)->cancel(self::USER);
+            })
+            ->assertRecorded([
+                $this->requestedEvent(),
+                new CompensatoryLeaveRequestApproved(approvedByUserId: self::APPROVER, userId: self::USER),
+                new CompensatoryLeaveRequestCancelled(cancelledByUserId: self::USER, userId: self::USER),
+            ]);
 
         $this->expectException(DomainRuleException::class);
 
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->approve(self::APPROVER)
-            ->share('workflow-1');
-    }
-
-    public function test_approve_is_only_allowed_while_submitted(): void
-    {
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->approve(self::APPROVER)
-            ->assertRecorded([new CompensatoryLeaveRequestApproved(approvedByUserId: self::APPROVER, userId: self::USER)]);
-
-        $this->expectException(DomainRuleException::class);
-
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->approve(self::APPROVER)
-            ->approve(self::APPROVER);
-    }
-
-    public function test_return_then_resubmit_returns_to_submitted_with_the_same_content(): void
-    {
-        $aggregate = $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->returnRequest(self::APPROVER, '差戻し')
-            ->resubmit(self::USER);
-
-        $aggregate->assertRecorded([
-            new CompensatoryLeaveRequestReturned(returnedByUserId: self::APPROVER, comment: '差戻し', userId: self::USER),
-            new CompensatoryLeaveRequestResubmitted(
-                resubmittedByUserId: self::USER,
-                userId: self::USER,
-                targetDate: '2026-10-10',
-                leaveType: 'full',
-                hours: null,
-                requestedDays: 1.0,
-                requestedMinutes: null,
-                approverUserId: self::APPROVER,
-                reason: '理由',
-            ),
-        ]);
-    }
-
-    public function test_resubmit_is_only_allowed_while_returned(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))->resubmit(self::USER);
-    }
-
-    public function test_cancel_is_allowed_from_submitted_returned_and_approved_but_not_twice(): void
-    {
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->approve(self::APPROVER)
-            ->cancel(self::USER)
-            ->assertRecorded([new CompensatoryLeaveRequestCancelled(cancelledByUserId: self::USER, userId: self::USER)]);
-
-        $this->expectException(DomainRuleException::class);
-
-        $this->requested(CompensatoryLeaveRequestAggregate::fake(self::REQUEST))
-            ->cancel(self::USER)
-            ->cancel(self::USER);
+        CompensatoryLeaveRequestAggregate::fake(self::REQUEST)->when(function (CompensatoryLeaveRequestAggregate $aggregate) {
+            $this->requested($aggregate)->cancel(self::USER);
+            $aggregate->cancel(self::USER);
+        });
     }
 }

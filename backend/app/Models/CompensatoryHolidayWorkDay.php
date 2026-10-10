@@ -16,7 +16,7 @@ class CompensatoryHolidayWorkDay extends Model
     protected function casts(): array
     {
         return [
-            'work_date' => 'date',
+            // work_dateはdateキャストにしない(キャストは保存時に "Y-m-d H:i:s" 形式にするため、Y-m-dで検索する upsert と一致しなくなる)。
             'is_holiday_day' => 'boolean',
             'work_minutes' => 'integer',
         ];

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -24,6 +25,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // MySQLでは2026_08_04の外部キー(attendance_day_id→attendance_days)が残っており、一意制約はその索引を使っている
+        // ため、先に外部キーを撤去する(SQLiteは2026_08_16で表を作り直し外部キーが無い)。
+        $this->dropAttendanceDayForeignKeyIfExists();
+
         Schema::table('compensatory_leave_grants', function (Blueprint $table) {
             $table->dropUnique('compensatory_leave_grants_attendance_day_id_unique');
         });
@@ -84,5 +89,23 @@ return new class extends Migration
         Schema::table('compensatory_leave_grants', function (Blueprint $table) {
             $table->unique('attendance_day_id', 'compensatory_leave_grants_attendance_day_id_unique');
         });
+
+        if (DB::getDriverName() !== 'sqlite') {
+            Schema::table('compensatory_leave_grants', function (Blueprint $table) {
+                $table->foreign('attendance_day_id')->references('id')->on('attendance_days');
+            });
+        }
+    }
+
+    /** 付与の勤怠日への外部キーがあれば撤去する(SQLiteは表の作り直しで外部キーが無い。MySQLは残っている)。 */
+    private function dropAttendanceDayForeignKeyIfExists(): void
+    {
+        foreach (Schema::getForeignKeys('compensatory_leave_grants') as $foreignKey) {
+            if ($foreignKey['columns'] === ['attendance_day_id']) {
+                Schema::table('compensatory_leave_grants', function (Blueprint $table) use ($foreignKey) {
+                    $table->dropForeign($foreignKey['name']);
+                });
+            }
+        }
     }
 };

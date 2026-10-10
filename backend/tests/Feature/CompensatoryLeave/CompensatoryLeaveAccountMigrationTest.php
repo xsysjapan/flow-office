@@ -14,6 +14,7 @@ use Tests\TestCase;
  */
 class CompensatoryLeaveAccountMigrationTest extends TestCase
 {
+    use CompensatoryLeaveTestHelpers;
     use RefreshDatabase;
 
     private function legacyGrant(User $user, string $workDate = '2026-08-08'): string
