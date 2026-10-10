@@ -155,6 +155,11 @@ Bearerトークン方式(Cookieベースではない)。
     Commandを発行する)またはProjector(自文脈の読み取りビューを作る)で反応する。1回の操作から
     始まる連鎖は同期Reactorで1トランザクションとし、Reactorから発行するCommandは冪等にする
     (docs/03-architecture.md)。
+16. **業務ルールは単体テストできる形で書き、実際に単体テストする**: 残数・日数・時間の計算、状態遷移の
+    可否、重複・衝突判定などの業務ルールは、DB・Eloquent・Laravelに依存しないAggregateまたは純粋な
+    クラスに置き、`tests/Unit`の単体テスト(`PHPUnit\Framework\TestCase`)で検証する。CommandHandler・
+    Projector・Controllerには業務ルールを書かず、入力の読み込みと組み立てだけを行う。Featureテストは
+    配線(HTTP・認可・イベント連鎖)の確認に使う。詳細は`.claude/skills/domain-unit-test`。
 
 これらはバックエンドAPIの設計原則。詳細は `docs/03-architecture.md` と
 `docs/20-implementation-notes.md` を参照。

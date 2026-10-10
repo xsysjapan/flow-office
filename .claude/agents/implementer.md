@@ -29,7 +29,11 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 - 指定されたスキルのパターン(ファイル構成・命名規則)に厳密に従う。
 - 既存の参照実装ファイルと一貫したスタイルで書く。独自の抽象化・リファクタリングを
   追加しない(依頼された範囲だけを実装する)。
-- 実装後、そのスキルが要求するテスト(Vitest/PHPUnit等)を実行し、結果を報告する。
+- backendで業務ルール(計算・状態遷移の可否・判定)を実装・変更する場合は、`.claude/skills/domain-unit-test`に
+  従い、業務ルールをDB・Eloquent非依存のAggregate/純粋なクラスに置き、`tests/Unit`に`PHPUnit\Framework\TestCase`
+  継承の単体テストを書く。Handler/Projector/Controllerに業務ルールを書かない。
+- 実装後、そのスキルが要求するテスト(Vitest/PHPUnit等)を実行し、結果を報告する。追加した単体テストのファイルと
+  ケースも報告に含める。
 - 仕様上の判断が必要な曖昧点に実装中に気づいた場合は、推測で仕様を作らず、
   その論点を明記して依頼元に差し戻す。
 
