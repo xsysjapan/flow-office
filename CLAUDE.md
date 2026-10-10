@@ -155,11 +155,12 @@ Bearerトークン方式(Cookieベースではない)。
     Commandを発行する)またはProjector(自文脈の読み取りビューを作る)で反応する。1回の操作から
     始まる連鎖は同期Reactorで1トランザクションとし、Reactorから発行するCommandは冪等にする
     (docs/03-architecture.md)。
-16. **業務ルールは単体テストできる形で書き、実際に単体テストする**: 残数・日数・時間の計算、状態遷移の
-    可否、重複・衝突判定などの業務ルールは、DB・Eloquent・Laravelに依存しないAggregateまたは純粋な
-    クラスに置き、`tests/Unit`の単体テスト(`PHPUnit\Framework\TestCase`)で検証する。CommandHandler・
-    Projector・Controllerには業務ルールを書かず、入力の読み込みと組み立てだけを行う。Featureテストは
-    配線(HTTP・認可・イベント連鎖)の確認に使う。詳細は`.claude/skills/domain-unit-test`。
+16. **業務ルールと文脈間の連携は、UIに依存しない軽量なテストで網羅する**: 業務ルール(計算・状態遷移の
+    可否・判定)と、Reactorによる文脈間のイベント連鎖(コレオグラフィー)は、PHPUnitのテスト(SQLite+
+    Eloquent可)で正常・境界・異常を網羅する。ユースケースの操作(APIまたはCommand)から関係する全文脈の
+    状態までを通して確かめるシナリオテストを書き、画面操作で初めて見つかる不具合をE2Eより安いテストで
+    捕まえる。E2Eは主要導線の確認に留める。業務ルールはHandler等に埋め込まず、テストで直接呼べる単位に
+    置く。詳細は`.claude/skills/domain-test`。
 
 これらはバックエンドAPIの設計原則。詳細は `docs/03-architecture.md` と
 `docs/20-implementation-notes.md` を参照。

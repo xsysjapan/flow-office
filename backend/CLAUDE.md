@@ -80,8 +80,9 @@ database/        migrations(タイムスタンプ順、素朴なLaravel構成) /
 - `tests/Feature/<DomainName>/`は`app/Domain/<DomainName>/`のグルーピングに合わせる。
   ドメイン横断のテスト(監査ログ・Swaggerドキュメント生成など)は`tests/Feature/`直下に置く。
 - `php artisan test` で Feature/Unit 両方を実行する。
-- 業務ルールは純粋なクラスに置き`tests/Unit/<DomainName>/`で単体テストする(ルート`CLAUDE.md`原則16、
-  `.claude/skills/domain-unit-test`)。
+- 業務ルールと文脈間のイベント連鎖は、UIに依存しないテスト(SQLite+Eloquent可)で網羅する。ルールのテストは
+  `tests/Unit/<DomainName>/`、ユースケースの連鎖全体のシナリオテストは`tests/Feature/<DomainName>/`(ルート
+  `CLAUDE.md`原則16、`.claude/skills/domain-test`)。
 
 ## 開発でよく使うパターン (スキル)
 
