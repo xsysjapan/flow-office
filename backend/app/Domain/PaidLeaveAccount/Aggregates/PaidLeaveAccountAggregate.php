@@ -33,8 +33,9 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 6. Allocationは`usedOn`基準で有効なGrantのみ対象(処理日・承認日は不使用)。
  * 7. 空き発生時は未充当Usageを`usedOn`昇順に自動Allocationする。既存Allocationは
  *    組み替えない(常に「残りの不足分」だけを追加充当する)。
- * 8. 消化記録の確定(`confirmUsage`)は、充当計画で必要量を満たせる場合のみ許可する
+ * 8. 利用者の承認による消化記録の確定(`approveUsage`)は、充当計画で必要量を満たせる場合のみ許可する
  *    (残数不足は一部充当で確定せず例外。docs/changesets/20261009-keep-leave-work-type-on-edit 論点17)。
+ *    過去の消化記録の再生(移行)を含む`confirmUsage`は残数不足でも部分充当を許す。
  *
  * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>, originalGrantedOn?: ?string, originalGrantedDays?: ?float, cutoverMetadata?: ?array}
  * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int}
@@ -237,7 +238,43 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         return $this;
     }
 
+    /**
+     * 利用者の承認による消化記録の確定(論点17)。残数不足は一部充当せず拒否する。
+     * 承認経路(ConfirmPaidLeaveUsageHandler)はこちらを使う。
+     */
+    public function approveUsage(string $usageId, ?string $confirmedByUserId): self
+    {
+        $this->assertUsageIsConfirmable($usageId);
+
+        // 充当計画で必要量を満たさない場合は、イベントを1件も記録せず例外にする。
+        $planner = new AllocationPlanner();
+        $usage = $this->usages[$usageId];
+        $requiredDays = $usage['usedDays'] - array_sum($usage['allocations']);
+        $plan = $planner->plan($usage['usedOn'], $requiredDays, $this->grantsSnapshot());
+
+        if ($planner->shortageOf($requiredDays, $plan) > 0) {
+            throw new DomainRuleException('有給休暇の残数が不足しているため承認できません。');
+        }
+
+        return $this->confirmUsage($usageId, $confirmedByUserId);
+    }
+
+    /**
+     * 過去の消化記録の再生・内部用の確定。残数で充当しきれない分は未充当のまま残す(部分充当を許す)。
+     * 利用者の承認は`approveUsage`を使う(残数不足を拒否する)。移行の再生(過去の事実の引き継ぎ)はこちらを通る。
+     */
     public function confirmUsage(string $usageId, ?string $confirmedByUserId): self
+    {
+        $this->assertUsageIsConfirmable($usageId);
+
+        $this->recordThat(new PaidLeaveUsageConfirmed(usageId: $usageId, confirmedByUserId: $confirmedByUserId));
+
+        $this->allocateUsage($usageId);
+
+        return $this;
+    }
+
+    private function assertUsageIsConfirmable(string $usageId): void
     {
         $usage = $this->usages[$usageId] ?? null;
 
@@ -252,22 +289,6 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         if ($usage['confirmed']) {
             throw new DomainRuleException('既に確定済みのUsageです。');
         }
-
-        // 論点17: 残数不足の承認は拒否する(一部充当での確定はしない)。
-        // 充当計画の合計が必要量を満たさない場合は、イベントを1件も記録せず例外にする。
-        $planner = new AllocationPlanner();
-        $requiredDays = $usage['usedDays'] - array_sum($usage['allocations']);
-        $plan = $planner->plan($usage['usedOn'], $requiredDays, $this->grantsSnapshot());
-
-        if ($planner->shortageOf($requiredDays, $plan) > 0) {
-            throw new DomainRuleException('有給休暇の残数が不足しているため承認できません。');
-        }
-
-        $this->recordThat(new PaidLeaveUsageConfirmed(usageId: $usageId, confirmedByUserId: $confirmedByUserId));
-
-        $this->allocateUsage($usageId);
-
-        return $this;
     }
 
     public function cancelUsage(string $usageId, ?string $cancelledByUserId, ?string $reason): self

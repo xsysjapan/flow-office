@@ -518,7 +518,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
+                $aggregate->approveUsage('u1', 'approver-1');
             });
     }
 
@@ -635,7 +635,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u2', 'wf-2', 'day-2', '2025-05-01', 1.0, 'full');
-                $aggregate->confirmUsage('u2', 'approver-1');
+                $aggregate->approveUsage('u2', 'approver-1');
             });
     }
 
@@ -764,7 +764,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
+                $aggregate->approveUsage('u1', 'approver-1');
             })
             ->assertRecorded([
                 new PaidLeaveUsageConfirmed('u1', 'approver-1'),
@@ -781,7 +781,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
+                $aggregate->approveUsage('u1', 'approver-1');
             })
             ->assertRecorded([
                 new PaidLeaveUsageConfirmed('u1', 'approver-1'),
@@ -801,7 +801,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 3.0),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
+                $aggregate->approveUsage('u1', 'approver-1');
             });
     }
 
@@ -814,7 +814,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageDesignated('u1', 'wf-1', 'day-1', '2025-05-01', 0.3),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                $aggregate->confirmUsage('u1', 'approver-1');
+                $aggregate->approveUsage('u1', 'approver-1');
             })
             ->assertRecorded([
                 new PaidLeaveUsageConfirmed('u1', 'approver-1'),

@@ -298,8 +298,9 @@ class WorkflowRequestSubjectTest extends TestCase
     private function submitPaidLeaveRequest(User $employee, User $approver, string $targetDate, ?string $requestGroupId = null): array
     {
         $this->createWorkingDayShift($employee, $targetDate);
-        // 承認時の残数チェックは付与を集約側で持つ必要があるため、コマンドで付与する(同じ付与日は1回だけ)。
-        if (! PaidLeaveGrant::query()->where('user_id', $employee->id)->where('granted_on', '2025-07-01')->exists()) {
+        // 承認時の残数チェックは付与を集約側で持つ必要があるため、コマンドで付与する。
+        // 付与は利用者ごとに1回だけ(同一利用者への2回目以降の付与は日付の順序制約に違反するため行わない)。
+        if (! PaidLeaveGrant::query()->where('user_id', $employee->id)->exists()) {
             app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
         }
 

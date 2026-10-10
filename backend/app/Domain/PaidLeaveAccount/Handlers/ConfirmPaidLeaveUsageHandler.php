@@ -32,7 +32,7 @@ class ConfirmPaidLeaveUsageHandler implements CommandHandler
         }
 
         $aggregate
-            ->confirmUsage(
+            ->approveUsage(
                 usageId: $usageId,
                 confirmedByUserId: $command->confirmedByUserId,
             )

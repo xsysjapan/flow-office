@@ -680,6 +680,9 @@
   指定可能。Reactor経由(`viaReactor`)の二重指定・二重確定・二重取消は何もしない。確定時の残数不足は例外(論点17。誤差1e-9は許容)。
   テストで付与をイベントなしで直接INSERTしていたものは、集約が付与を知らず承認できないため、付与コマンドによる作成に置き換えた
   (本番の付与はcutover時の`paid_leave_account.migrated`イベントで集約に登録済みのため影響なし)。
+- 2026-10-10 実装中の決定(P1のCI対応): 論点17の残数不足の拒否は承認経路(`PaidLeaveAccountAggregate::approveUsage`、
+  `ConfirmPaidLeaveUsageHandler`)にだけ適用し、過去の消化記録の再生・移行(`confirmUsage`)は従来どおり部分充当を許す
+  (過去の事実の引き継ぎであり新たな承認ではないため)。
 
 ## 実装結果
 未着手

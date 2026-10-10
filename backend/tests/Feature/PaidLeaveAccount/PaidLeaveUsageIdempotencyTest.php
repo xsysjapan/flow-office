@@ -37,6 +37,9 @@ class PaidLeaveUsageIdempotencyTest extends TestCase
 
     private function designate(User $user, string $paidLeaveRequestId, bool $viaReactor = false, float $usedDays = 1.0): string
     {
+        // 現行のProjectorは paid_leave_requests 行を作るため、承認者(NOT NULL・users外部キー)に実在する利用者を渡す。
+        $approver = User::factory()->create();
+
         return $this->bus()->dispatch(new DesignatePaidLeaveUsage(
             userId: $user->id,
             workflowRequestId: null,
@@ -45,6 +48,7 @@ class PaidLeaveUsageIdempotencyTest extends TestCase
             usedDays: $usedDays,
             usageType: 'full',
             paidLeaveRequestId: $paidLeaveRequestId,
+            approverUserId: $approver->id,
             viaReactor: $viaReactor,
             initiatedByUserId: $user->id,
         ));
