@@ -434,8 +434,18 @@ class SpecialLeaveRequestTest extends TestCase
         $response->assertJsonPath('status', 'returned');
 
         // 差戻し通知には、特別休暇申請の履歴画面へのリンクが付く。
+        // 差戻し時は申請者へ通知が複数(ワークフロー側・特別休暇側)同時に積まれ、並び順は
+        // 秒単位の queued_at に依存して不定のため、先頭要素ではなく「いずれかの detail_url が
+        // 履歴画面へのリンクである」ことを確かめる。
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
-        $this->assertStringEndsWith('/special-leave/history', $employeeNotifications[0]['detail_url']);
+        $detailUrls = collect($employeeNotifications)->pluck('detail_url')->all();
+        $this->assertTrue(
+            collect($detailUrls)->contains(
+                fn ($url) => is_string($url) && str_ends_with($url, '/special-leave/history')
+            ),
+            '申請者の通知に /special-leave/history へのリンクが無い。実際のdetail_url一覧: '
+                .json_encode($detailUrls, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
     }
 
     /**
