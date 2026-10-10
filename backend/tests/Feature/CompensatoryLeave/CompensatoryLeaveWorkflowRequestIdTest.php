@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CompensatoryLeave;
 
+use App\Models\CompensatoryLeaveRequest;
 use App\Models\LeaveRequestWorkflowLink;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -35,6 +36,26 @@ class CompensatoryLeaveWorkflowRequestIdTest extends TestCase
             ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
         $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")
             ->assertOk()->assertJsonPath('workflow_request_id', $workflowRequestId);
+    }
+
+    /**
+     * ワークフローとの対応(leave_request_workflow_links)が無い場合、承認・差戻しは黙って何もせず
+     * 200を返してはいけない(承認・差戻しはworkflow_requestsを読まず対応表だけで申請を特定する)。
+     */
+    public function test_approval_and_return_fail_when_there_is_no_corresponding_workflow_request(): void
+    {
+        $this->enableCompensatoryLeave();
+        $this->makeCompensatoryWorkStyle();
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $requestId = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
+        LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->delete();
+
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")->assertStatus(422);
+        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/return", ['comment' => '差戻し'])->assertStatus(422);
+
+        $this->assertSame('submitted', CompensatoryLeaveRequest::query()->findOrFail($requestId)->status);
     }
 
     public function test_workflow_request_id_is_null_when_the_request_has_no_approval_workflow(): void

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\EventSourcing\CommandBus;
 use App\Domain\Export\Services\AttendanceExcelBuilder;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
-use App\Models\PaidLeaveGrant;
-use App\Models\PaidLeaveRequest;
-use App\Models\PaidLeaveUsage;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -281,20 +281,6 @@ class AttendanceExportTest extends TestCase
         $this->assignRole($admin, Role::query()->create(['code' => Role::ADMIN, 'name' => '管理者']));
 
         $employee = User::factory()->create(['name' => '締め 済み　社員']);
-        AttendanceMonth::query()->create([
-            'user_id' => $employee->id,
-            'year_month' => '2026-06',
-            'status' => 'closed',
-            'snapshot_json' => [
-                'work_minutes' => 9600,
-                'prescribed_work_minutes' => 9600,
-                'statutory_within_overtime_minutes' => 0,
-                'statutory_excess_overtime_minutes' => 120,
-                'late_night_work_minutes' => 60,
-                'legal_holiday_work_minutes' => 0,
-                'prescribed_holiday_work_minutes' => 0,
-            ],
-        ]);
 
         $day = AttendanceDay::query()->create([
             'user_id' => $employee->id,
@@ -315,63 +301,31 @@ class AttendanceExportTest extends TestCase
             'prescribed_holiday_work_minutes' => 0,
         ]);
 
-        $grant = PaidLeaveGrant::query()->create([
+        // 有給は付与・申請・承認のイベント経由で作る(口座集約が付与と消化を知る状態。原則2)。
+        // 6/15は勤怠日の実績を持つ日のため、消化はそれ以外の日に申請する(6月の消化は計1.5日)。
+        // 7月の付与は7月の消化の後に作る(付与日の昇順。6月末時点の残数には影響しない)。
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        $this->approvePaidLeave($employee, $admin, '2026-06-22', 'full');
+        $this->approvePaidLeave($employee, $admin, '2026-06-23', 'am_half');
+        $this->approvePaidLeave($employee, $admin, '2026-07-15', 'full');
+        $this->approvePaidLeave($employee, $admin, '2026-07-16', 'full');
+        $this->approvePaidLeave($employee, $admin, '2026-07-17', 'am_half');
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2026-07-01', '2028-06-30', 10.0, null));
+
+        // 申請・承認の後に締める(締め済みの月の日には申請できないため)。
+        AttendanceMonth::query()->create([
             'user_id' => $employee->id,
-            'granted_on' => '2025-07-01',
-            'expires_on' => '2027-06-30',
-            'granted_days' => 10,
-            'used_days' => 4,
-            'remaining_days' => 6,
-        ]);
-        $juneRequest = PaidLeaveRequest::query()->create([
-            'user_id' => $employee->id,
-            'approver_user_id' => $admin->id,
-            'status' => 'approved',
-            'leave_type' => 'full',
-            'target_date' => '2026-06-15',
-            'requested_days' => 1.5,
-        ]);
-        PaidLeaveUsage::query()->create([
-            'user_id' => $employee->id,
-            'attendance_day_id' => $day->id,
-            'paid_leave_grant_id' => $grant->id,
-            'paid_leave_request_id' => $juneRequest->id,
-            'used_on' => '2026-06-15',
-            'used_days' => 1.5,
-            'usage_type' => 'full',
-            'is_confirmed' => true,
-        ]);
-        $julyDay = AttendanceDay::query()->create([
-            'user_id' => $employee->id,
-            'work_date' => '2026-07-15',
-            'status' => 'clocked_out',
-            'source' => 'manual',
-        ]);
-        $julyRequest = PaidLeaveRequest::query()->create([
-            'user_id' => $employee->id,
-            'approver_user_id' => $admin->id,
-            'status' => 'approved',
-            'leave_type' => 'full',
-            'target_date' => '2026-07-15',
-            'requested_days' => 2.5,
-        ]);
-        PaidLeaveUsage::query()->create([
-            'user_id' => $employee->id,
-            'attendance_day_id' => $julyDay->id,
-            'paid_leave_grant_id' => $grant->id,
-            'paid_leave_request_id' => $julyRequest->id,
-            'used_on' => '2026-07-15',
-            'used_days' => 2.5,
-            'usage_type' => 'full',
-            'is_confirmed' => true,
-        ]);
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id,
-            'granted_on' => '2026-07-01',
-            'expires_on' => '2028-06-30',
-            'granted_days' => 10,
-            'used_days' => 0,
-            'remaining_days' => 10,
+            'year_month' => '2026-06',
+            'status' => 'closed',
+            'snapshot_json' => [
+                'work_minutes' => 9600,
+                'prescribed_work_minutes' => 9600,
+                'statutory_within_overtime_minutes' => 0,
+                'statutory_excess_overtime_minutes' => 120,
+                'late_night_work_minutes' => 60,
+                'legal_holiday_work_minutes' => 0,
+                'prescribed_holiday_work_minutes' => 0,
+            ],
         ]);
 
         $response = $this->withHeader('Origin', 'http://localhost:5173')
@@ -663,5 +617,42 @@ class AttendanceExportTest extends TestCase
         $this->actingAs($admin)
             ->get('/api/exports/attendance?year_month=2026-06&format=yayoi')
             ->assertStatus(422);
+    }
+
+    /**
+     * 有給を申請し承認する(消化記録・残数は承認のイベントを受けて口座集約側が作る)。
+     */
+    private function approvePaidLeave(User $employee, User $approver, string $date, string $leaveType): void
+    {
+        $this->createWorkingDayShift($employee, $date);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => $date,
+            'leave_type' => $leaveType,
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
+    }
+
+    private function createWorkingDayShift(User $user, string $date): void
+    {
+        $calendar = CompanyCalendar::query()->firstOrCreate(['name' => '2026年度'], ['week_starts_on' => 1]);
+        if (! $calendar->years()->exists()) {
+            $calendar->years()->create(['fiscal_year' => 2026, 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'published']);
+        }
+        $workStyle = WorkStyle::query()->firstOrCreate(['code' => 'standard-'.$user->id], [
+            'name' => '通常勤務', 'work_time_system' => 'fixed',
+            'prescribed_daily_minutes' => 480, 'prescribed_weekly_minutes' => 2400,
+            'default_start_time' => '09:00', 'default_end_time' => '18:00',
+            'default_break_minutes' => 60, 'company_calendar_id' => $calendar->id, 'is_shift_based' => false,
+        ]);
+
+        EmployeeCalendarEntry::query()->create([
+            'user_id' => $user->id, 'work_date' => $date, 'work_style_id' => $workStyle->id,
+            'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
+            'planned_start_at' => "{$date} 09:00:00", 'planned_end_at' => "{$date} 18:00:00",
+            'planned_break_minutes' => 60,
+        ]);
     }
 }

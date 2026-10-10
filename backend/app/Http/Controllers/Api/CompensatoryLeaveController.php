@@ -31,8 +31,6 @@ use App\Models\CompensatoryLeaveUsage;
 use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
-use App\Models\WorkflowRequest;
-use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -286,10 +284,11 @@ class CompensatoryLeaveController extends Controller
     )]
     public function approveRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): CompensatoryLeaveRequestResource
     {
-        // UC-P004相当: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // UC-P004相当: 承認はworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
         // ApproveWorkflowRequestを発行する。
         $commandBus->dispatch(new ApproveWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $compensatoryLeaveRequest,
                 '対応する申請が見つからないため承認できません。',
             ),
@@ -315,10 +314,11 @@ class CompensatoryLeaveController extends Controller
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        // UC-P004相当 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // UC-P004相当 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
         // ReturnWorkflowRequestを発行する。
         $commandBus->dispatch(new ReturnWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $compensatoryLeaveRequest,
                 '対応する申請が見つからないため差し戻せません。',
             ),
@@ -500,24 +500,20 @@ class CompensatoryLeaveController extends Controller
     }
 
     /**
-     * 承認・差戻し対象のworkflow_request(subject_type=compensatory_leave_request)を特定する。
+     * 承認・差戻し対象のワークフローIDを対応表(leave_request_workflow_links)から特定する。
+     * workflow_requestsは読まない(原則15。休暇申請文脈の対応表だけで申請を特定する)。
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
      */
-    private function submittedWorkflowRequestId(CompensatoryLeaveRequest $compensatoryLeaveRequest, string $message): string
+    private function linkedWorkflowRequestId(LeaveRequestWorkflowLinks $links, CompensatoryLeaveRequest $compensatoryLeaveRequest, string $message): string
     {
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::COMPENSATORY_LEAVE_REQUEST)
-            ->where('subject_id', $compensatoryLeaveRequest->id)
-            ->where('status', WorkflowRequestStatus::SUBMITTED)
-            ->latest()
-            ->first();
+        $workflowRequestId = $links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_COMPENSATORY, $compensatoryLeaveRequest->id);
 
-        if ($workflowRequest === null) {
+        if ($workflowRequestId === null) {
             throw new DomainRuleException($message);
         }
 
-        return $workflowRequest->id;
+        return $workflowRequestId;
     }
 
     /**
