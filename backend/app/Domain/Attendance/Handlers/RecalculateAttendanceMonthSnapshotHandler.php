@@ -52,7 +52,7 @@ class RecalculateAttendanceMonthSnapshotHandler implements CommandHandler
             ->where('user_id', $month->user_id)
             ->where('work_date', 'like', "{$month->year_month}%")
             ->with([
-                'breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages',
+                'breaks', 'leaveSegments',
                 'calendarEntry.workStyle',
             ])
             ->orderBy('work_date')

@@ -29,7 +29,7 @@ class WebPunchDispatcher
      */
     public function dispatch(?AttendanceDay $day, string $userId, string $workDate, string $punchType, Carbon $punchedAt): AttendanceDay
     {
-        if ($day !== null && $day->source !== AttendanceDaySource::PUNCH) {
+        if ($day !== null && ! in_array($day->source, [AttendanceDaySource::PUNCH, AttendanceDaySource::LEAVE], true)) {
             // 日次編集(UC-A005)・出勤日新規作成(UC-A016)等で既に確定した日は、
             // 打刻ボタンでは変更しない(docs/03-architecture.md 3.6)。無言で何も
             // 反映されない事態を避けるため、ここで明示的にエラーにする。

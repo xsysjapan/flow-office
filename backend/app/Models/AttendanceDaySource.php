@@ -13,4 +13,7 @@ final class AttendanceDaySource
     public const MANUAL = 'manual';
 
     public const PUNCH = 'punch';
+
+    /** 休暇の申請・承認に伴い勤怠日が作られた日(休暇だけの日。論点3)。打刻では PUNCH と同じく上書きできる。 */
+    public const LEAVE = 'leave';
 }

@@ -2,12 +2,12 @@
 
 namespace App\Domain\Attendance\Services;
 
-use App\Domain\SpecialLeave\SpecialLeaveWorkType;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
+use App\Domain\Attendance\Support\LeaveCalculationInput;
 use App\Models\AttendanceBreak;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceLeaveSegment;
 use App\Models\DayClassification;
-use App\Models\PaidLeaveType;
 use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
@@ -66,20 +66,16 @@ use Illuminate\Support\Carbon;
  *   場合は実績の内側)。実績と重なる部分だけを休憩と同様に労働時間・深夜時間から控除し、
  *   区間そのものの合計時間(実績の有無・重なりにかかわらず)を`absence_minutes`として
  *   集計する。
- * - 半休(`work_type`が`_am_half`/`_pm_half`で終わる。`paid_leave_`/`special_leave_`
- *   どちらのプレフィックスでも同様)の日は、所定労働時間(`prescribed_work_minutes`)を
- *   `work_styles.prescribed_daily_minutes`の半分とする(半休で労働する残り半日分に対する
- *   残業・不足判定の基準値を正しくするための調整)。全休(`_full`)・時間単位休暇(`_hourly`)・
- *   通常勤務日(work_type=null等)は変更せず、常にフルの所定労働時間のままとする。この調整は
- *   `prescribed_work_minutes`という基準値のみに影響し、有給・特別休暇の消化日数
- *   (`PaidLeaveUsage`/`SpecialLeaveUsage`・`paid_leave_days`/`special_leave_days`)には
- *   一切影響しない(決定事項であり、スコープ拡大ではない)。
- * - 有給休暇・特別休暇(全休・半休・時間単位)は`attendance_leave_segments`の対象外で、
- *   既存の`paid_leave_requests`/`special_leave_requests`/`attendance_days.work_type`/
- *   `paid_leave_usages`/`special_leave_usages`から`paid_leave_days`/`special_leave_days`
- *   (全休=1.0・半休=0.5)・`paid_leave_minutes`/`special_leave_minutes`(時間単位消化分)を
- *   それぞれ算出する。日次集計を1テーブルで完結させるための非正規化であり、消化の正データは
- *   引き続き`paid_leave_usages`/`special_leave_usages`のまま変わらない。
+ * - 半休の日(休暇ビューの有効な休暇が半休1つ。種類は有給・特別・代休を問わない)は、所定労働時間
+ *   (`prescribed_work_minutes`)を`work_styles.prescribed_daily_minutes`の半分とする(半休で労働する
+ *   残り半日分に対する残業・不足判定の基準値を正しくするための調整)。午前半休と午後半休がそろう日・
+ *   全休・時間単位休暇・休暇なしの日は変更せず、フルの所定労働時間のままとする(LeaveCalculationInput)。
+ *   この調整は`prescribed_work_minutes`という基準値のみに影響する。
+ * - 休暇(有給・特別・代休)は`attendance_leave_segments`の対象外で、休暇ビュー
+ *   (`attendance_day_leaves`)の申請中・承認済みの行から`paid_leave_days`/`special_leave_days`
+ *   (全休=1.0・半休=0.5。代休は0)・`paid_leave_minutes`/`special_leave_minutes`(時間休の分数)を
+ *   算出する(LeaveCalculationInput)。消化記録(`paid_leave_usages`/`special_leave_usages`)・
+ *   `attendance_days.work_type`は読まない。
  */
 class AttendanceCalculator
 {
@@ -93,6 +89,7 @@ class AttendanceCalculator
         private readonly LegalHolidayResolver $legalHolidayResolver,
         private readonly WorkStyleFallbackResolver $workStyleFallbackResolver,
         private readonly EffectiveScheduleResolver $effectiveScheduleResolver,
+        private readonly AttendanceDayLeaves $attendanceDayLeaves,
     ) {}
 
     /**
@@ -122,43 +119,21 @@ class AttendanceCalculator
             $lateNightWorkMinutes = max(0, $lateNightWorkMinutes);
         }
 
-        $paidLeaveDays = match ($day->work_type) {
-            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::FULL) => 1.0,
-            PaidLeaveType::toAttendanceWorkType(PaidLeaveType::AM_HALF), PaidLeaveType::toAttendanceWorkType(PaidLeaveType::PM_HALF) => 0.5,
-            default => 0.0,
-        };
-        $paidLeaveMinutes = (int) $day->paidLeaveUsages
-            ->where('cancelled', false)
-            ->where('usage_type', PaidLeaveType::HOURLY)
-            ->sum('used_minutes');
-
-        $specialLeaveDays = match (true) {
-            $day->work_type === SpecialLeaveWorkType::toAttendanceWorkType(PaidLeaveType::FULL) => 1.0,
-            in_array($day->work_type, [
-                SpecialLeaveWorkType::toAttendanceWorkType(PaidLeaveType::AM_HALF),
-                SpecialLeaveWorkType::toAttendanceWorkType(PaidLeaveType::PM_HALF),
-            ], true) => 0.5,
-            default => 0.0,
-        };
-        $specialLeaveMinutes = (int) $day->specialLeaveUsages
-            ->where('usage_type', PaidLeaveType::HOURLY)
-            ->sum('used_minutes');
-
         $shift = $this->effectiveScheduleResolver->resolve(
             $day->user_id,
             $day->work_date->copy(),
             $day->calendarEntry,
         );
         $workStyle = $shift?->workStyle ?? $this->resolveFallbackWorkStyle($day);
-        $prescribedWorkMinutes = $workStyle?->prescribed_daily_minutes ?? 0;
 
-        // 半休(_am_half/_pm_half)の日は所定労働時間を半分とする。全休・通常勤務日・時間単位
-        // 休暇は変更しない。休暇消費日数(PaidLeaveUsage/SpecialLeaveUsage)には影響しない。
-        $isHalfDayLeave = str_ends_with($day->work_type ?? '', '_am_half')
-            || str_ends_with($day->work_type ?? '', '_pm_half');
-        if ($isHalfDayLeave) {
-            $prescribedWorkMinutes = intdiv($prescribedWorkMinutes, 2);
-        }
+        // 休暇(有給・特別・代休)は休暇ビュー(attendance_day_leaves)の有効な休暇から読む。
+        // 消化記録(paid_leave_usages・special_leave_usages)・work_typeは読まない。半休の日の
+        // 所定労働時間の調整(半休が1つだけならP/2、午前+午後の半休は全休と同じくP)もこの入力で決める。
+        $leave = LeaveCalculationInput::from(
+            $this->attendanceDayLeaves->activeFor($day->user_id, $day->work_date->toDateString()),
+            $workStyle?->prescribed_daily_minutes ?? 0,
+        );
+        $prescribedWorkMinutes = $leave->effectivePrescribedMinutes;
 
         $plannedWorkMinutes = $shift?->plannedWorkMinutes() ?? 0;
 
@@ -301,10 +276,10 @@ class AttendanceCalculator
             'late_night_prescribed_holiday_work_minutes' => $lateNightPrescribedHolidayWorkMinutes,
             'core_time_violation' => $coreTimeViolation,
             'absence_minutes' => $absenceMinutes,
-            'special_leave_minutes' => $specialLeaveMinutes,
-            'paid_leave_days' => $paidLeaveDays,
-            'paid_leave_minutes' => $paidLeaveMinutes,
-            'special_leave_days' => $specialLeaveDays,
+            'special_leave_minutes' => $leave->specialLeaveMinutes,
+            'paid_leave_days' => $leave->paidLeaveDays,
+            'paid_leave_minutes' => $leave->paidLeaveMinutes,
+            'special_leave_days' => $leave->specialLeaveDays,
         ];
     }
 

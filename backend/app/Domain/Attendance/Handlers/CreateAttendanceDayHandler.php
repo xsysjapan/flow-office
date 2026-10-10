@@ -108,7 +108,7 @@ class CreateAttendanceDayHandler implements CommandHandler
 
         // 計算(AttendanceCalculator)は永続化後の実データから読み直す(通常のDBに保存された
         // Projectionを使う。これはCreate/Edit時のみの割り切りで、パフォーマンス上問題ない範囲)。
-        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle'));
+        $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'calendarEntry.workStyle'));
 
         AttendanceDayAggregate::retrieve($dayId)->calculate($calculation)->persist();
 

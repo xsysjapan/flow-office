@@ -10,10 +10,8 @@ use App\Models\AttendanceDayStatus;
 use App\Models\AttendanceLeaveSegment;
 use App\Models\AttendancePunch;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveUsage;
 use App\Models\PunchStatus;
 use App\Models\PunchType;
-use App\Models\SpecialLeaveUsage;
 use App\Models\WorkStyle;
 use App\Support\LocalDateTime;
 use Illuminate\Support\Carbon;
@@ -84,8 +82,9 @@ class AttendanceDayPunchSyncer
             ->whereDate('work_date', $workDate)
             ->first();
 
-        if ($day !== null && $day->source !== AttendanceDaySource::PUNCH) {
+        if ($day !== null && ! in_array($day->source, [AttendanceDaySource::PUNCH, AttendanceDaySource::LEAVE], true)) {
             // 画面からの操作・日次編集で既に確定した日は、打刻ログで上書きしない。
+            // 休暇だけの日(source=leave)は打刻で上書きできる(source=punchと同じ扱い)。
             return null;
         }
 
@@ -298,19 +297,6 @@ class AttendanceDayPunchSyncer
                 ? AttendanceLeaveSegment::query()->where('attendance_day_id', $existingDay->id)->get()
                 : collect(),
         );
-        $day->setRelation(
-            'paidLeaveUsages',
-            $existingDay !== null
-                ? PaidLeaveUsage::query()->where('attendance_day_id', $existingDay->id)->get()
-                : collect(),
-        );
-        $day->setRelation(
-            'specialLeaveUsages',
-            $existingDay !== null
-                ? SpecialLeaveUsage::query()->where('attendance_day_id', $existingDay->id)->get()
-                : collect(),
-        );
-
         $calendarEntry = $calendarEntryId !== null
             ? EmployeeCalendarEntry::query()->with('workStyle.calendar')->find($calendarEntryId)
             : null;

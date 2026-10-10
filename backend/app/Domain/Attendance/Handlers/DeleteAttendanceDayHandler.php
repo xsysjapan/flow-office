@@ -7,6 +7,7 @@ use App\Domain\Attendance\Aggregates\AttendancePunchAggregate;
 use App\Domain\Attendance\Commands\DeleteAttendanceDay;
 use App\Domain\Attendance\Services\AttendanceDayPunchSyncer;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
@@ -16,9 +17,8 @@ use App\Models\PunchStatus;
 
 /**
  * UC-A015: 日次勤怠を削除する。承認前(未提出・提出済み・差戻し)のみ可能で、
- * 承認済み・締め済みの日次勤怠は削除できない(AttendanceEditGuard参照)。有給・特別休暇の
- * 消化済みの日は、残数の整合性が崩れるため削除できない(承認済みの申請を取り消す機能は
- * 現状無いため、この場合は削除不可が最終的な扱いになる)。
+ * 承認済み・締め済みの日次勤怠は削除できない(AttendanceEditGuard参照)。有効な休暇
+ * (申請中・承認済み)がある日は、休暇の整合性が崩れるため削除できない(休暇を取り消してから削除する)。
  *
  * @implements CommandHandler<DeleteAttendanceDay>
  */
@@ -27,6 +27,7 @@ class DeleteAttendanceDayHandler implements CommandHandler
     public function __construct(
         private readonly AttendanceEditGuard $guard,
         private readonly AttendanceDayPunchSyncer $punchSyncer,
+        private readonly AttendanceDayLeaves $leaves,
     ) {}
 
     public function handle(Command $command): mixed
@@ -38,12 +39,10 @@ class DeleteAttendanceDayHandler implements CommandHandler
 
         $this->guard->assertMutable($day, $day->user_id, $workDate);
 
-        if ($day->paidLeaveUsages()->exists()) {
-            throw new DomainRuleException('有給消化済みの日次勤怠は削除できません。');
-        }
-
-        if ($day->specialLeaveUsages()->exists()) {
-            throw new DomainRuleException('特別休暇消化済みの日次勤怠は削除できません。');
+        // 有効な休暇(申請中・承認済み)がある日は削除できない。判定は休暇ビュー(attendance_day_leaves)で行い、
+        // 消化記録(paid_leave_usages・special_leave_usages)は見ない。
+        if ($this->leaves->activeFor($day->user_id, $workDate) !== []) {
+            throw new DomainRuleException('休暇(有給・特別休暇・代休)が申請・承認されている日次勤怠は削除できません。休暇を取り消してから削除してください。');
         }
 
         AttendanceDayAggregate::retrieve($day->id)

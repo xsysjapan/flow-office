@@ -2,18 +2,24 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
+use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\SpecialLeaveType;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * 半休(work_typeが`_am_half`/`_pm_half`)の日は所定労働時間を所定労働時間の半分とする
- * (AttendanceCalculator参照)。全休・通常勤務日・時間単位休暇は変更しない。
- * .claude/skills/attendance-calc-review 参照。
+ * 半休の日は所定労働時間を所定労働時間の半分とする(AttendanceCalculator・LeaveCalculationInput参照)。
+ * 全休・午前+午後の半休・通常勤務日・時間単位休暇は変更しない。
+ * 休暇は休暇申請のイベント(有給は申請API、特別休暇は申請集約)で作り、休暇ビューから計算に読まれることを確認する
+ * (work_typeの休暇値は計算に使わない)。.claude/skills/attendance-calc-review 参照。
  */
 class HalfDayLeavePrescribedMinutesTest extends TestCase
 {
@@ -28,13 +34,49 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         ]);
     }
 
+    /**
+     * 休暇を休暇申請のイベントとして記録する。$kind は paid(有給)または special(特別休暇)、$unit は
+     * full / am_half / pm_half / hourly。
+     */
+    private function applyLeave(User $user, string $workDate, string $kind, string $unit, ?float $hours = null): void
+    {
+        $approver = User::factory()->create();
+
+        if ($kind === 'paid') {
+            app(CommandBus::class)->dispatch(new GrantPaidLeave($user->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+            $this->actingAs($user)->postJson('/api/paid-leave/requests', [
+                'target_date' => $workDate,
+                'leave_type' => $unit,
+                'hours' => $hours,
+                'approver_user_id' => $approver->id,
+            ])->assertCreated();
+
+            return;
+        }
+
+        $type = SpecialLeaveType::query()->create(['name' => 'テスト休暇'.uniqid(), 'is_active' => true]);
+        SpecialLeaveRequestAggregate::retrieve((string) Str::uuid())->request(
+            userId: $user->id,
+            specialLeaveTypeId: $type->id,
+            targetDate: $workDate,
+            leaveType: $unit,
+            hours: $hours,
+            requestedDays: $unit === 'full' ? 1.0 : 0.5,
+            approverUserId: $approver->id,
+            reason: null,
+        )->persist();
+    }
+
     private function recordDay(
         User $user,
         WorkStyle $workStyle,
         string $workDate,
         ?string $actualStart,
         ?string $actualEnd,
-        ?string $workType,
+        ?string $leaveKind,
+        ?string $leaveUnit = null,
+        ?float $leaveHours = null,
     ): AttendanceDay {
         $shift = EmployeeCalendarEntry::query()->create([
             'user_id' => $user->id, 'work_date' => $workDate, 'work_style_id' => $workStyle->id,
@@ -47,8 +89,12 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
             'status' => AttendanceDayStatus::NOT_STARTED, 'source' => 'manual', 'utc_offset_minutes' => 540,
         ]);
 
+        if ($leaveKind !== null && $leaveUnit !== null) {
+            $this->applyLeave($user, $workDate, $leaveKind, $leaveUnit, $leaveHours);
+        }
+
         $payload = [
-            'work_type' => $workType,
+            'work_type' => null,
             'reason' => 'テストデータ投入',
         ];
         if ($actualStart !== null && $actualEnd !== null) {
@@ -66,7 +112,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
 
-        $day = $this->recordDay($user, $workStyle, '2026-08-03', '09:00', '12:00', 'special_leave_pm_half');
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', '09:00', '12:00', 'special', 'pm_half');
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
@@ -82,7 +128,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
 
-        $day = $this->recordDay($user, $workStyle, '2026-08-03', '13:00', '17:00', 'paid_leave_am_half');
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', '13:00', '17:00', 'paid', 'am_half');
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
@@ -97,7 +143,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
 
-        $day = $this->recordDay($user, $workStyle, '2026-08-03', null, null, 'special_leave_full');
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', null, null, 'special', 'full');
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
@@ -121,7 +167,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $workStyle = $this->makeWorkStyle(480);
         $user = User::factory()->create();
 
-        $day = $this->recordDay($user, $workStyle, '2026-08-03', '09:00', '18:00', 'paid_leave_hourly');
+        $day = $this->recordDay($user, $workStyle, '2026-08-03', '09:00', '18:00', 'paid', 'hourly', 2.0);
 
         $response = $this->actingAs($user)->getJson("/api/attendance/days/{$day->id}")->assertOk();
 
@@ -138,7 +184,7 @@ class HalfDayLeavePrescribedMinutesTest extends TestCase
         $user = User::factory()->create();
 
         $this->recordDay($user, $workStyle, '2026-08-03', '09:00', '18:00', null);
-        $this->recordDay($user, $workStyle, '2026-08-04', '09:00', '12:00', 'special_leave_pm_half');
+        $this->recordDay($user, $workStyle, '2026-08-04', '09:00', '12:00', 'special', 'pm_half');
 
         $response = $this->actingAs($user)->getJson('/api/attendance/months/2026-08')->assertOk();
         $totals = $response->json('monthly_calculation_totals');

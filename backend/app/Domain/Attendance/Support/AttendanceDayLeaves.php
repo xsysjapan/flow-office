@@ -41,6 +41,22 @@ final class AttendanceDayLeaves
             ->all();
     }
 
+    /**
+     * 休暇1件(申請ID)の行を状態によらず返す。差戻し・取消の行も返す(対象日・利用者を引くため)。
+     * 行が無ければ null。
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findByRequest(string $leaveKind, string $leaveRequestId): ?array
+    {
+        $leave = AttendanceDayLeave::query()
+            ->where('leave_kind', $leaveKind)
+            ->where('leave_request_id', $leaveRequestId)
+            ->first();
+
+        return $leave === null ? null : $this->toArray($leave);
+    }
+
     private function activeQuery(string $userId): Builder
     {
         return AttendanceDayLeave::query()

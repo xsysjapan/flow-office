@@ -138,7 +138,7 @@ class DesignateLegalHolidayHandler implements CommandHandler
                 continue;
             }
 
-            $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'paidLeaveUsages', 'specialLeaveUsages', 'calendarEntry.workStyle.calendar'));
+            $calculation = $this->calculator->calculate($day->load('breaks', 'leaveSegments', 'calendarEntry.workStyle.calendar'));
 
             $plan[] = ['dayId' => $day->id, 'calculation' => $calculation];
         }

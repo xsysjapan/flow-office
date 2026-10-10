@@ -67,6 +67,7 @@ use App\Domain\Attachment\Handlers\UploadAttachmentHandler;
 use App\Domain\Attendance\Commands\AdjustAttendanceDailyCalculation;
 use App\Domain\Attendance\Commands\AllocateAttendanceWeeklyOvertime;
 use App\Domain\Attendance\Commands\ApplyCalendarBulkOperation;
+use App\Domain\Attendance\Commands\ApplyLeaveToAttendanceDay;
 use App\Domain\Attendance\Commands\ApproveAttendanceMonth;
 use App\Domain\Attendance\Commands\ArchiveCompanyCalendarYear;
 use App\Domain\Attendance\Commands\AssignEmployeeRotation;
@@ -104,9 +105,11 @@ use App\Domain\Attendance\Commands\GeneratePatternCalendarEntries;
 use App\Domain\Attendance\Commands\GenerateRotationCalendarEntries;
 use App\Domain\Attendance\Commands\PublishCompanyCalendarYear;
 use App\Domain\Attendance\Commands\PublishEmployeeCalendarEntries;
+use App\Domain\Attendance\Commands\RecalculateAttendanceDayForLeave;
 use App\Domain\Attendance\Commands\RecalculateAttendanceMonthSnapshot;
 use App\Domain\Attendance\Commands\RecordAttendancePunch;
 use App\Domain\Attendance\Commands\RegisterHolidayCalendarSource;
+use App\Domain\Attendance\Commands\ReleaseLeaveFromAttendanceDay;
 use App\Domain\Attendance\Commands\RemoveUserWorkStyleMonthlyAssignment;
 use App\Domain\Attendance\Commands\ReopenClosedAttendanceMonth;
 use App\Domain\Attendance\Commands\ReturnAttendanceMonth;
@@ -129,6 +132,7 @@ use App\Domain\Attendance\Commands\WarnUnsubmittedAttendance;
 use App\Domain\Attendance\Handlers\AdjustAttendanceDailyCalculationHandler;
 use App\Domain\Attendance\Handlers\AllocateAttendanceWeeklyOvertimeHandler;
 use App\Domain\Attendance\Handlers\ApplyCalendarBulkOperationHandler;
+use App\Domain\Attendance\Handlers\ApplyLeaveToAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\ApproveAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ArchiveCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\AssignEmployeeRotationHandler;
@@ -166,9 +170,11 @@ use App\Domain\Attendance\Handlers\GeneratePatternCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\GenerateRotationCalendarEntriesHandler;
 use App\Domain\Attendance\Handlers\PublishCompanyCalendarYearHandler;
 use App\Domain\Attendance\Handlers\PublishEmployeeCalendarEntriesHandler;
+use App\Domain\Attendance\Handlers\RecalculateAttendanceDayForLeaveHandler;
 use App\Domain\Attendance\Handlers\RecalculateAttendanceMonthSnapshotHandler;
 use App\Domain\Attendance\Handlers\RecordAttendancePunchHandler;
 use App\Domain\Attendance\Handlers\RegisterHolidayCalendarSourceHandler;
+use App\Domain\Attendance\Handlers\ReleaseLeaveFromAttendanceDayHandler;
 use App\Domain\Attendance\Handlers\RemoveUserWorkStyleMonthlyAssignmentHandler;
 use App\Domain\Attendance\Handlers\ReopenClosedAttendanceMonthHandler;
 use App\Domain\Attendance\Handlers\ReturnAttendanceMonthHandler;
@@ -555,6 +561,9 @@ return [
         AllocateAttendanceWeeklyOvertime::class => AllocateAttendanceWeeklyOvertimeHandler::class,
         EditEmployeeCalendarEntry::class => EditEmployeeCalendarEntryHandler::class,
         DeleteAttendanceDay::class => DeleteAttendanceDayHandler::class,
+        ApplyLeaveToAttendanceDay::class => ApplyLeaveToAttendanceDayHandler::class,
+        RecalculateAttendanceDayForLeave::class => RecalculateAttendanceDayForLeaveHandler::class,
+        ReleaseLeaveFromAttendanceDay::class => ReleaseLeaveFromAttendanceDayHandler::class,
 
         CreateCompanyCalendar::class => CreateCompanyCalendarHandler::class,
         UpdateCompanyCalendar::class => UpdateCompanyCalendarHandler::class,
