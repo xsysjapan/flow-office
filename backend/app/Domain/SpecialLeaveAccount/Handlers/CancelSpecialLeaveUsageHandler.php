@@ -17,7 +17,7 @@ use App\Domain\SpecialLeaveAccount\Commands\CancelSpecialLeaveUsage;
  */
 class CancelSpecialLeaveUsageHandler implements CommandHandler
 {
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof CancelSpecialLeaveUsage);
 
@@ -27,16 +27,18 @@ class CancelSpecialLeaveUsageHandler implements CommandHandler
 
         if ($usageId === null) {
             if ($command->viaReactor) {
-                return;
+                return null;
             }
 
             throw new DomainRuleException("特別休暇申請 [{$command->requestId}] に対応する消化記録が存在しません。");
         }
 
         if ($command->viaReactor && $aggregate->usageStatus($usageId) === 'cancelled') {
-            return;
+            return null;
         }
 
         $aggregate->cancelUsage($usageId, $command->reason)->persist();
+
+        return null;
     }
 }

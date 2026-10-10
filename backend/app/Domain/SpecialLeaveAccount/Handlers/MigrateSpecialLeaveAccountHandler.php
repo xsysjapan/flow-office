@@ -14,12 +14,14 @@ use App\Domain\SpecialLeaveAccount\Commands\MigrateSpecialLeaveAccount;
  */
 class MigrateSpecialLeaveAccountHandler implements CommandHandler
 {
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof MigrateSpecialLeaveAccount);
 
         SpecialLeaveAccountAggregate::retrieve(SpecialLeaveAccountAggregate::streamIdFor($command->userId))
             ->migrate($command->grants, $command->usages, $command->userId)
             ->persist();
+
+        return null;
     }
 }

@@ -15,7 +15,7 @@ use App\Domain\SpecialLeaveAccount\Commands\ConfirmSpecialLeaveUsage;
  */
 class ConfirmSpecialLeaveUsageHandler implements CommandHandler
 {
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof ConfirmSpecialLeaveUsage);
 
@@ -29,9 +29,11 @@ class ConfirmSpecialLeaveUsageHandler implements CommandHandler
 
         // viaReactor=true: 既に確定済みなら何もしない。
         if ($command->viaReactor && $aggregate->usageStatus($usageId) === 'confirmed') {
-            return;
+            return null;
         }
 
         $aggregate->confirmUsage($usageId, $command->requiresGrant)->persist();
+
+        return null;
     }
 }

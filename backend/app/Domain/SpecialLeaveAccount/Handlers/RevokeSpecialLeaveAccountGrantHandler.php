@@ -12,12 +12,14 @@ use App\Domain\SpecialLeaveAccount\Commands\RevokeSpecialLeaveAccountGrant;
  */
 class RevokeSpecialLeaveAccountGrantHandler implements CommandHandler
 {
-    public function handle(Command $command): void
+    public function handle(Command $command): mixed
     {
         assert($command instanceof RevokeSpecialLeaveAccountGrant);
 
         SpecialLeaveAccountAggregate::retrieve(SpecialLeaveAccountAggregate::streamIdFor($command->userId))
             ->revokeGrant($command->grantId, $command->revokedByUserId, $command->reason)
             ->persist();
+
+        return null;
     }
 }
