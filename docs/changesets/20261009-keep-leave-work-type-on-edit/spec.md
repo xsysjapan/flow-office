@@ -88,10 +88,12 @@
 - **Reactorの独立性**: 同じイベントを購読するReactorが複数あっても、互いの結果に依存しない(実行順に依存
   しない)。連鎖は「申請・承認→休暇申請→残数・使用→勤怠」の一方向を基本とし、逆方向は次の3つのみ:
   休暇申請の申請(`*.shared`)→ワークフローの提出、休暇申請の承認(まとめ申請の兄弟)→兄弟ワークフローの承認、
-  休暇申請の取消→ワークフローの取消。
+  休暇申請の取消→ワークフローの取消。このほか勤怠→代休の口座の連携(日次計算からの代休付与の同期、月次提出での
+  付与確定)は、休暇の連鎖とは別の向きの連携として維持する。
 - **テスト(原則16、`domain-test`スキル)**: 本変更で新設・変更する業務ルール(口座集約の残数・充当・取消、休暇申請の
   状態遷移、付与日数換算・有効期限、同じ日の衝突判定、締め判定、論点15の削除条件、出勤率の判定、休暇ビューから勤怠
-  計算への入力変換)は、テストで直接呼べる単位(Aggregate/判定・計算クラス)に置き、ルールのテストで正常・境界・異常を
+  計算への入力変換、まとめ申請の兄弟承認の対象判定、再提出の可否、`migrated`による引き継ぎ、午前・午後の休暇の組合せ)は、
+  テストで直接呼べる単位(Aggregate/判定・計算クラス)に置き、ルールのテストで正常・境界・異常を
   確かめる。文脈間の連鎖は、受け入れ条件の各シナリオをUI非依存のシナリオテスト(API/Command起点、SQLite)で通し、
   各ステップ後にワークフロー・休暇申請・消化記録/残高・勤怠(休暇ビュー・日次計算)の状態を確認する。失敗系は全文脈の
   状態が変わらないこと、冪等性・リビルドの再現性も確認する。代休の現状(`assets/domain-unit-test-coverage.md`)で
@@ -146,10 +148,12 @@
 - 決定: 有給申請の集約`PaidLeaveRequestAggregate`を新設し、`paid_leave_request.requested/approved/
   returned/cancelled`を記録する。`paid_leave_requests`は休暇申請側の新Projectorが作り、残数側
   (`PaidLeaveUsageAllocationProjector`)からは申請テーブルの更新を削除する。
-- 境界条件: 新Projectorは、`paid_leave_request.requested`が存在する申請IDについては新イベントのみで状態を作り、
-  存在しない申請ID(本変更以前の申請)については従来どおり`paid_leave_account.*`と`workflow_request.returned`
-  から状態を作る。勤怠の休暇ビュー(論点2)も同じ規則を使う。旧イベント名`paid_leave.*`(廃止済み・記録元なし)
-  とは別のイベント名にする。
+- 境界条件: 本変更前の申請は、仕様確定事項Iの`paid_leave_request.migrated`で新しい集約へ引き継ぐ。各Projector
+  (申請テーブル・勤怠の休暇ビュー・出勤率ビュー)は申請IDごとに、`migrated`(または`requested`)より前は旧系統
+  (旧`paid_leave.*`、cutover後の`paid_leave_account.*`+`workflow_request.returned`)で、それ以後は
+  `paid_leave_request.*`(`migrated`を含む)だけで状態を作る。`migrated`以後に記録された旧系統のイベント
+  (`paid_leave_account.usage_confirmed`等)は申請状態の入力にしない。新イベント名は旧`paid_leave.*`
+  (廃止済み・記録元なし)と別にする。
 - 未確定・要確認事項: なし
 
 ### 論点5: 差戻し・再申請・取消(設計書`docs/09:315-316`への準拠)
@@ -157,7 +161,7 @@
   - 差戻し: `workflow_request.returned`→休暇申請文脈がRETURNEDを記録→残数文脈が未確定の消化記録を取り消す
     (有給`usage_cancelled`、特別・代休は残数集約の取消イベント。論点6)→勤怠の休暇ビューから外れ、勤怠が
     該当日を再計算する。
-  - 再申請: 休暇の画面から新規に申請する(論点8)。
+  - 再申請: 申請詳細の「提出する」で同じ内容のまま再提出する(論点8)。内容を変える場合は取消→新規申請。
   - 申請者・管理者による取消(申請中・承認済み): 休暇申請文脈がCANCELLEDを記録→残数文脈が消化記録を取り消す
     (承認済みは充当を解除し残高を戻す)→勤怠が再計算。ワークフローは、申請中なら申請・承認文脈のReactorが
     取消す(`viaReactor`のため申請者本人チェックなし)。**承認済みのワークフローは状態を変えない**
@@ -255,7 +259,7 @@
   - C. 補正イベントを追記する
 - 決定: A。旧`paid_leave.requested`(申請中)・`paid_leave.request_approved`(承認済み)から休暇ビューの行と
   `paid_leave_requests`の状態を作る(旧イベントの集約ID=申請ID)。論点4の境界条件に「旧`paid_leave.*`を持つ申請ID
-  は旧イベントで作る」を加える(3系統: 旧`paid_leave.*`/cutover後〜本変更前の`paid_leave_account.*`/本変更後の
+  は旧イベントで作る」を加える(切り替えは論点4の境界条件に従う。3系統: 旧`paid_leave.*`/cutover後〜本変更前の`paid_leave_account.*`/本変更後の
   `paid_leave_request.*`。申請IDごとに排他)。
 - 理由: 旧イベントが唯一の記録で二重にならず、履歴を変えずにリビルドで再現できる。
 - 未確定・要確認事項: なし
@@ -309,7 +313,11 @@
   承認済みなら何もしない(承認済みは状態を変えない。論点5)。
 - 休暇申請の取消→ワークフローの取消Reactor(`CancelWorkflowRequestOn{PaidLeave,SpecialLeave,CompensatoryLeave}RequestCancelledReactor`)
   を3種にそろえる(有給は新設、インライン呼び出しを削除)。
-- 申請・承認文脈から休暇のテーブルを読む処理(`PaidLeaveApprovalOnWorkflowRequestApprovedReactor`の兄弟申請承認)を削除する。
+- 申請・承認文脈から休暇のテーブルを読む処理を削除する(`{PaidLeave,SpecialLeave,CompensatoryLeave}ApprovalOnWorkflowRequestApprovedReactor`の
+  兄弟申請・兄弟ワークフローの承認、`{PaidLeave,SpecialLeave,CompensatoryLeave}RequestOnWorkflowRequestDraftedReactor`の
+  `workflow_requests`読み取り)。drafted→申請・approved/returned/submitted/cancelled→申請の各Reactorは休暇申請文脈へ移す。
+- `ApproveWorkflowRequest`に`viaReactor`を追加。`viaReactor=true`は承認者チェックを行わず、既に承認済みなら何もしない
+  (兄弟ワークフローの承認用)。
 
 ### C. 休暇申請文脈(`App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`の申請部分)
 - 有給申請集約`PaidLeaveRequestAggregate`(集約ID=申請ID)を新設。イベント: `paid_leave_request.requested`
@@ -319,11 +327,13 @@
 - 遷移: requested(申請中) → approved / returned / cancelled、returned → resubmitted(申請中) / cancelled。
   approved → cancelled。
 - Reactor(申請・承認文脈のイベント→自文脈のCommand):
-  - `workflow_request.drafted` → 申請(現行どおり)
+  - `workflow_request.drafted` → 申請(イベントの`formData`・`approverUserId`・`applicantUserId`・`subjectId`だけで処理し、
+    `workflow_requests`を読まない)
   - ワークフローID→休暇申請の対応: ワークフローのイベントは業務側(subject)を持たないため、休暇申請文脈が
     `workflow_request.drafted`(subjectType・subjectId)と自文脈の`*.shared`(workflowRequestId)から自分の対応表
     (`leave_request_workflow_links`)を作り、以下のReactorはこれで申請を特定する(`workflow_requests`を読まない)。
-  - `workflow_request.approved` → 対応する申請を承認し、まとめ申請の兄弟を承認する(論点5)
+  - `workflow_request.approved` → 対応する申請を承認し、まとめ申請の兄弟のうち**申請中のものだけ**を承認する
+    (差戻し中・取消済み・承認済みの兄弟は対象外。現行どおり。論点5)
   - `workflow_request.returned` → 対応する申請を差戻し
   - `workflow_request.submitted`(差戻しからの再提出) → 対応する差し戻された申請を再申請(論点8)
   - `workflow_request.cancelled` → 対応する申請を取消
@@ -332,7 +342,8 @@
 - 申請Handlerは他文脈の集約・テーブルを読み書きしない(勤怠日・勤怠計算・締め判定・他の休暇申請の重複チェック・
   残数Projectionの読み取りを全て削除)。
 - 申請テーブル(`paid_leave_requests`・`special_leave_requests`・`compensatory_leave_requests`)は休暇申請文脈の
-  Projectorだけが更新する。`paid_leave_requests`のProjectorの入力は申請IDごとに排他の3系統(論点4・13):
+  Projectorだけが更新する。`paid_leave_requests`のProjectorの入力は申請IDごとに排他の3系統(論点4の境界条件・論点13。
+  `migrated`より前は旧系統、以後は新イベント):
   旧`paid_leave.requested/request_approved`、cutover後〜本変更前の`paid_leave_account.usage_designated/usage_confirmed/
   usage_cancelled`+`workflow_request.returned`、本変更後の`paid_leave_request.*`。
 
@@ -359,7 +370,7 @@
 - 休暇ビュー`attendance_day_leaves`(新設Projection): 列=id、user_id、work_date、leave_kind(paid/special/
   compensatory)、unit(full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、request_id、
   workflow_request_id、request_status(submitted/approved)、source_event_id。入力=休暇申請文脈のイベント
-  (論点2、有給は3系統)。差戻し・取消で行を削除する。
+  (論点2、有給は論点4の境界条件の3系統と`paid_leave_request.migrated`)。差戻し・取消で行を削除する。
 - Reactor(休暇申請のイベント→勤怠のCommand):
   - 申請・再申請 → `ApplyLeaveToAttendanceDay`: 締め判定(論点14、全遷移)と同じ日の衝突チェック(論点7、判定対象から
     今回の休暇自身を除く)を行い、違反なら例外。勤怠日が無ければ`attendance_day.created`(`source=leave`、
@@ -376,8 +387,9 @@
   論点3で存在するため)。`special_leave_breakdown`(月次API)と残数不足警告は`attendance_day_leaves`(特別休暇の種別ID)
   から作る。
 - 全休日の出勤可否・打刻取り込み・打刻漏れ警告・未出勤件数・今日の表示は`attendance_day_leaves`の全休で判定(論点9)。
+  「全休」には、午前半休と午後半休が(種類を問わず)そろう日を含む(仕様確定事項I)。
 - 月次提出ガードは`attendance_day_leaves`の`leave_kind=paid`かつ申請中で判定(現行どおり有給のみ。論点14)。
-- 勤怠APIの日次・週次・月次・今日の応答に`leaves`(休暇ビューの行)を含める。勤怠日が無い休暇日も返す。
+- 勤怠APIの日次・週次・月次・今日の応答に`leaves`(休暇ビューの行)を含める。
   既存の`special_leave_usages`項目は`leaves`に置き換える。(休暇だけの日も論点3で勤怠日があるため、勤怠日の無い
   休暇日を別途返す必要はない)
 - `work_type`: 休暇値の書き込み・解釈を全て削除(論点10)。
@@ -390,7 +402,9 @@
   求めた「退勤済み」(`attendance_day.created`/`edited`/`synced_from_punches`/`live_status_synced`/`deleted`のstatus。
   勤怠日IDから利用者・日付への対応は同じイベントから保持)。休暇=休暇申請3種のイベント(申請中・承認済み)。
 - 判定は現行の結果と同じにする: Assessorの分子=退勤済み ∪ 全休の休暇(3種) ∪ 有給の半休・時間休。Grantの分子=
-  退勤済み ∪ 全休の休暇(3種) ∪ 有給・特別の半休・時間休。分母日と重なる日だけを数える。
+  退勤済み ∪ 全休の休暇(3種) ∪ 有給・特別の半休・時間休。分母日と重なる日だけを数える。午前半休と午後半休が
+  (種類を問わず)そろう日は全休の休暇として扱う(仕様確定事項I。現行は後から書いた片方だけが効いていたための差で、
+  意図的な変更)。入力に`paid_leave_request.migrated`等の引き継ぎイベントを含める。
 - 勤怠のイベントに不足する情報があれば勤怠のイベントに追加する(利用者・日付は`attendance_day.created`等が持つ)。
 
 ### G. フロントエンド
@@ -406,7 +420,14 @@
   ついて現在の状態(申請中/差戻し/承認済み/取消、対象日・取得単位・時間数・ワークフローID・まとめ申請ID・対応する消化記録ID)を
   `paid_leave_request.migrated`として今の時点に追記する。以後の承認・差戻し・取消・再提出は全て`PaidLeaveRequestAggregate`で
   処理する。特別・代休の口座の`*_account.migrated`には申請ID→消化記録IDの対応を含める。これにより論点4・13の3系統の
-  入力は「`migrated`以前の再生」にだけ使われる。
+  入力は「`migrated`以前の再生」にだけ使われる(論点4の境界条件)。
+- **消化記録の無い引き継ぎ済み有給の取消**: cutover前の8件(承認済み・消化記録なし。cutover時に残数へ反映済み)は、
+  システム上の取消を拒否する(「移行前の申請のため取消できません。付与日数の調整で対応してください」)。対象日は
+  2026年8月〜9月4日で、締め済みであれば論点14により元々取消できない。
+- **差し戻された申請の消化記録(特別・代休の移行時)**: `*_account.migrated`から除外した差戻し分の消化記録は、補正(H)で
+  取消イベントを追記して行を残さない。
+- **月次APIの代休付与表示のビュー**: 勤怠側が代休の口座のイベントから作り、利用者×日付で付与(日数・時間・確定状況・
+  充当量)を持つ。
 - **代休付与の連携(原則15)**: 付与の同期Reactorは`attendance_day.calculated`・`daily_calculation_adjusted`・`deleted`を
   購読する(現行と同じ)。計算イベントの内容(利用者・日付・日区分・休日労働時間)で判定し、不足する項目は計算イベントに
   追加する。手動付与(`GrantCompensatoryLeaveHandler`)は勤怠日を読まず、代休の口座側が計算イベントから作る休日出勤の
@@ -446,7 +467,9 @@
 - 締め済みの日への休暇の申請・取消はエラーになり、どの文脈の状態も変わらない。
 - 休暇日の勤怠を編集しても休暇の表示・集計・残高は変わらない。`work_type`は休暇に影響しない。
 - 全休の日は出勤不可・打刻を取り込まない・打刻漏れ警告が出ない。半休の日は打刻できる。
-- 休暇だけの日(勤怠日なし)も月次の休暇日数・給与連携に含まれ、同じ休暇データに対して改修前と同じ値になる。
+- 休暇だけの日(勤怠が`source=leave`で記録)も月次の休暇日数・給与連携に含まれ、同じ休暇データに対して改修前と同じ値になる。
+- 同じイベントを2回処理しても各文脈の状態が変わらない。却下済みのワークフローに紐づく申請中の休暇が取消として引き継がれる。
+  まとめ申請で兄弟の一部が差戻し中でも承認が通る。cutover前の有給の取消は拒否される。
 - 休暇の各Handlerが他文脈の集約・テーブルを直接読み書きしていない(コードレビュー)。
 - 同じイベントを購読する複数のReactorの実行順を入れ替えても結果が同じ。通知が重複しない。
 - 勤怠・休暇申請・残数の各Projectorを空から全件リビルドしても、リビルド前と同じ状態になる(補正後の本番相当
@@ -484,12 +507,12 @@
 ## 実装対象
 文脈単位の作業パッケージ(WP)に分け、implementerへ順に委譲する(依存のないものは並列)。各WPでテストを追加し、
 完了ごとに委譲元がレビューする。全WPは同じブランチで開発し一緒にリリースする。WP3〜WP5は互いに依存し単独では既存テストが
-通らないため、CIの全件PASSはWP3〜WP5をそろえた時点と全WP完了時点で確認する(それ以前は各WPのテストを確認)。
+通らないため、CIの全件PASSはWP2〜WP5をそろえた時点と全WP完了時点で確認する(それ以前は各WPのテストを確認)。
 申請・承認文脈の休暇テーブル読み取り(兄弟承認)の削除はWP3で、休暇申請側の兄弟承認と同時に行う。
 | WP | 内容 | 主な対象 | 依存 |
 |---|---|---|---|
 | WP1 共通基盤 | `viaReactor`・`initiatedByUserId`の規約、冪等ガードの共通化、Projectorの行なし許容 | `App\Domain\EventSourcing`、各Projector | - |
-| WP2 申請・承認 | 却下の制限、`CancelWorkflowRequest`の`viaReactor`、取消Reactorの3種統一、有給の提出Reactor・兄弟ワークフロー承認Reactorの新設 | `App\Domain\Workflow` | WP1 |
+| WP2 申請・承認 | 却下の制限、`CancelWorkflowRequest`・`ApproveWorkflowRequest`の`viaReactor`、取消Reactorの3種統一、有給の提出Reactor・兄弟ワークフロー承認Reactorの新設 | `App\Domain\Workflow` | WP1・WP3のイベント定義 |
 | WP3 休暇申請 | `PaidLeaveRequestAggregate`・`paid_leave_request.*`(`migrated`含む)、ワークフロー対応表、兄弟承認の移設(申請・承認側の休暇テーブル読み取りの削除を含む)、通知の一覧化と移設、申請Projector(有給は3系統)、特別・代休の申請集約から使用操作を削除・`request_resubmitted`、ワークフローイベントのReactor、申請Handlerから他文脈操作を削除 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`、`Workflow/Reactors`の休暇系 | WP1・WP2 |
 | WP4 残数・使用 | 有給口座のReactor化・申請テーブル更新の削除・残数不足の拒否、特別・代休の口座集約・イベント・Projector・移行コマンド、代休付与同期の付け替え、消化記録の外部キー撤去・`attendance_day_id`任意化 | `App\Domain\PaidLeaveAccount`、新設の口座、マイグレーション | WP3 |
 | WP5 勤怠 | `attendance_day_leaves`、`ApplyLeaveToAttendanceDay`/`ReleaseLeaveFromAttendanceDay`とReactor、`source=leave`、衝突チェック・締め判定、勤怠計算の休暇入力、出勤可否・打刻取り込み・警告・未出勤件数・月次提出ガード、API`leaves`、勤怠日Projectorのリセット、`attendance:recalculate-days`、`work_type`の休暇解釈の削除 | `App\Domain\Attendance`、`AttendanceController`、`AttendanceDayResource` | WP3 |
@@ -629,6 +652,10 @@
   `migrated`で引き継ぎ、有給の提出Reactor、出勤率の入力の穴、代休付与連携の原則15違反と外部キー、午前・午後の別休暇の計算、
   時間休分の算出、月次提出ガードを有給に限定、WPの束ね方、勤怠イベントの必須項目、削除条件、通知、受け入れ条件・docsの漏れ。
   午前・午後で別の休暇がそろう日は全休と同じ扱い(所定を半分にしない)と委譲元で決定(ユーザーに報告)。
+- 2026-10-10 最終設計レビュー後の再確認の指摘を反映: 3系統の切り替えを`migrated`基準に統一(論点4・13・C・E・F)、逆方向連携に
+  勤怠→代休の口座を追加、午前・午後の別休暇がそろう日を出勤可否・警告・出勤率でも全休扱い、兄弟承認は申請中のみ・
+  `ApproveWorkflowRequest`の`viaReactor`、drafted Reactorの`workflow_requests`読み取り削除、cutover前8件の取消は拒否
+  (委譲元で決定、ユーザーに報告)、論点5の再申請の記述を論点8に合わせて修正、テスト一覧・受け入れ条件の追加、WP2の依存。
 
 ## 実装結果
 未着手
