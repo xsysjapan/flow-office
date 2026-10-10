@@ -740,23 +740,30 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_confirm_is_rejected_when_balance_is_short(): void
+    public function test_confirm_partially_allocates_and_records_shortage_when_balance_is_short(): void
     {
-        $this->expectException(DomainRuleException::class);
+        $unallocated = null;
 
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
                 $this->designated('u1', 'r1', 'full', 1.5, null),
             ])
-            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1');
-            });
+
+                $unallocated = $aggregate->unallocatedFor('u1');
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)], 0.5, 0),
+            ]);
+
+        $this->assertSame(['unallocatedDays' => 0.5, 'unallocatedMinutes' => 0], $unallocated);
     }
 
-    public function test_confirm_is_rejected_when_balance_is_already_allocated(): void
+    public function test_confirm_records_shortage_when_balance_is_already_allocated(): void
     {
-        $this->expectException(DomainRuleException::class);
+        $unallocated = null;
 
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
@@ -765,15 +772,20 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
                 new CompensatoryLeaveAccountUsageConfirmed('u0', [$this->allocDaily('g1', 1.0)]),
                 $this->designated('u1', 'r1', 'half_am', 0.5, null),
             ])
-            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1');
-            });
+
+                $unallocated = $aggregate->unallocatedFor('u1');
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 0.5, 0),
+            ]);
+
+        $this->assertSame(['unallocatedDays' => 0.5, 'unallocatedMinutes' => 0], $unallocated);
     }
 
-    public function test_draft_grant_is_not_used(): void
+    public function test_draft_grant_is_not_used_and_full_shortage_is_recorded(): void
     {
-        $this->expectException(DomainRuleException::class);
-
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new CompensatoryLeaveAccountGrantSynced('g1', '2026-10-03', 1.0, null),
@@ -781,13 +793,14 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
-            });
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+            ]);
     }
 
-    public function test_cancelled_grant_is_not_used(): void
+    public function test_cancelled_grant_is_not_used_and_full_shortage_is_recorded(): void
     {
-        $this->expectException(DomainRuleException::class);
-
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
                 $this->manualDailyGrant('g1', 1.0, null),
@@ -796,7 +809,10 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
-            });
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+            ]);
     }
 
     public function test_hourly_usage_uses_only_hourly_grants(): void
@@ -815,24 +831,29 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_hourly_shortage_is_rejected(): void
+    public function test_hourly_shortage_is_partially_allocated_and_recorded_in_minutes(): void
     {
-        $this->expectException(DomainRuleException::class);
+        $unallocated = null;
 
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-hourly', 60, null),
                 $this->designated('u1', 'r1', 'hourly', 0.0, 90),
             ])
-            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1');
-            });
+
+                $unallocated = $aggregate->unallocatedFor('u1');
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocHourly('g-hourly', 60)], 0.0, 30),
+            ]);
+
+        $this->assertSame(['unallocatedDays' => 0.0, 'unallocatedMinutes' => 30], $unallocated);
     }
 
-    public function test_daily_usage_does_not_use_hourly_grant(): void
+    public function test_daily_usage_does_not_use_hourly_grant_and_records_full_shortage(): void
     {
-        $this->expectException(DomainRuleException::class);
-
         CompensatoryLeaveAccountAggregate::fake(self::USER)
             ->given([
                 $this->manualHourlyGrant('g-hourly', 240, null),
@@ -840,7 +861,42 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1');
+            })
+            ->assertRecorded([
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [], 1.0, 0),
+            ]);
+    }
+
+    public function test_unallocated_is_zero_when_fully_allocated_and_after_cancellation(): void
+    {
+        $results = [];
+
+        CompensatoryLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                $this->manualDailyGrant('g1', 2.0, null),
+                $this->designated('u1', 'r1', 'full', 1.0, null),
+                new CompensatoryLeaveAccountUsageConfirmed('u1', [$this->allocDaily('g1', 1.0)]),
+                $this->designated('u2', 'r2', 'full', 1.5, null),
+            ])
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) use (&$results) {
+                $results['fully_allocated'] = $aggregate->unallocatedFor('u1');
+                $results['designated'] = $aggregate->unallocatedFor('u2');
+
+                $aggregate->confirmUsage('u2');
+                $results['short_confirmed'] = $aggregate->unallocatedFor('u2');
+
+                $aggregate->cancelUsage('u2', null);
+                $results['cancelled'] = $aggregate->unallocatedFor('u2');
             });
+
+        $zero = ['unallocatedDays' => 0.0, 'unallocatedMinutes' => 0];
+
+        $this->assertSame([
+            'fully_allocated' => $zero,
+            'designated' => $zero,
+            'short_confirmed' => ['unallocatedDays' => 0.5, 'unallocatedMinutes' => 0],
+            'cancelled' => $zero,
+        ], $results);
     }
 
     public function test_confirming_twice_is_rejected(): void

@@ -23,7 +23,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 状態(replay):
  * - grants: grantId => [specialLeaveTypeId, grantedOn, expiresOn, grantedDays, revoked, allocations(usageId => days)]
  * - usages: usageId => [requestId, specialLeaveTypeId, usedOn, usageType, usedDays, usedMinutes,
- *           status(designated|confirmed|cancelled), allocations(grantId => days)]
+ *           status(designated|confirmed|cancelled), allocations(grantId => days), unallocatedDays(float)]
  * - requestIndex: requestId => 最後に作成されたusageId(再申請で新しい消化記録に差し替わる)
  *
  * 不変条件:
@@ -31,6 +31,8 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 2. 同じ申請の有効な消化記録は1件だけ(取消後の再申請は新しいusageIdで作成可能)。
  * 3. 確定は1回だけ・取消済みは確定不可、取消は1回だけ。取消で充当を全て解除する。
  * 4. 消化済み(充当合計>0)の付与は取り消せない。
+ * 5. 残数が不足しても承認はブロックしない(ユーザー決定)。充当できた分だけ充当し、残りは
+ *    未充当日数(unallocatedDays)として確定時に記録する。
  */
 class SpecialLeaveAccountAggregate extends AggregateRoot
 {
@@ -43,7 +45,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     /** @var array<string, array{specialLeaveTypeId: int, grantedOn: string, expiresOn: ?string, grantedDays: float, revoked: bool, allocations: array<string, float>}> */
     private array $grants = [];
 
-    /** @var array<string, array{requestId: string, specialLeaveTypeId: int, usedOn: string, usageType: string, usedDays: float, usedMinutes: ?int, status: string, allocations: array<string, float>}> */
+    /** @var array<string, array{requestId: string, specialLeaveTypeId: int, usedOn: string, usageType: string, usedDays: float, usedMinutes: ?int, status: string, allocations: array<string, float>, unallocatedDays: float}> */
     private array $usages = [];
 
     /** @var array<string, string> */
@@ -156,11 +158,12 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     /**
      * 消化記録を確定する(承認時)。移植元: `ApproveSpecialLeaveRequestHandler::planConsumption`。
      *
-     * - `requiresGrant=false`(残数を要しない種別): 充当なしで確定する。
+     * - `requiresGrant=false`(残数を要しない種別): 充当なしで確定する(未充当日数は0)。
      * - `requiresGrant=true`: 利用日時点で有効な同じ種類の付与へ現行の順序で充当する。
-     *   残数が不足する場合は例外にし、確定しない(論点17。現行は不足でも承認していた)。
+     *   残数が不足しても例外にせず、充当できた分だけを充当して確定する(ユーザー決定)。
+     *   残りは未充当日数(`unallocatedFor`で参照)として記録する。付与が無い場合は充当0・未充当=全量。
      *
-     * @throws DomainRuleException 存在しない・取消済み・確定済み・残数不足
+     * @throws DomainRuleException 存在しない・取消済み・確定済み
      */
     public function confirmUsage(string $usageId, bool $requiresGrant): self
     {
@@ -175,6 +178,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         }
 
         $allocations = [];
+        $unallocatedDays = 0.0;
 
         if ($requiresGrant) {
             $allocations = (new SpecialLeaveAllocationPlanner)->plan(
@@ -183,16 +187,15 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
                 grants: $this->grantsSnapshot($usage['specialLeaveTypeId']),
             );
 
-            $allocatedDays = array_sum(array_column($allocations, 'allocatedDays'));
+            $allocatedDays = (float) array_sum(array_column($allocations, 'allocatedDays'));
 
-            if ($usage['usedDays'] - $allocatedDays > 0) {
-                throw new DomainRuleException('特別休暇の残数が不足しているため承認できません。');
-            }
+            $unallocatedDays = max(0.0, $usage['usedDays'] - $allocatedDays);
         }
 
         $this->recordThat(new SpecialLeaveAccountUsageConfirmed(
             usageId: $usageId,
             allocations: $allocations,
+            unallocatedDays: $unallocatedDays,
         ));
 
         return $this;
@@ -326,6 +329,14 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
+     * 確定時に充当できなかった未充当日数。確定していない・取消済み・存在しない消化記録は0.0。
+     */
+    public function unallocatedFor(string $usageId): float
+    {
+        return $this->usages[$usageId]['unallocatedDays'] ?? 0.0;
+    }
+
+    /**
      * 指定日時点で利用可能な付与(取消済みを除き、失効していない)の残数の合計。
      * 失効日当日は利用可能。充当計画と同じ判定を使う。
      */
@@ -376,6 +387,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
             'usedMinutes' => $event->usedMinutes,
             'status' => self::STATUS_DESIGNATED,
             'allocations' => [],
+            'unallocatedDays' => 0.0,
         ];
 
         $this->requestIndex[$event->requestId] = $event->usageId;
@@ -384,6 +396,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     protected function applySpecialLeaveAccountUsageConfirmed(SpecialLeaveAccountUsageConfirmed $event): void
     {
         $this->usages[$event->usageId]['status'] = self::STATUS_CONFIRMED;
+        $this->usages[$event->usageId]['unallocatedDays'] = $event->unallocatedDays;
 
         foreach ($event->allocations as $allocation) {
             $this->addAllocation($event->usageId, $allocation['grantId'], $allocation['allocatedDays']);
@@ -393,6 +406,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     protected function applySpecialLeaveAccountUsageCancelled(SpecialLeaveAccountUsageCancelled $event): void
     {
         $this->usages[$event->usageId]['status'] = self::STATUS_CANCELLED;
+        $this->usages[$event->usageId]['unallocatedDays'] = 0.0;
 
         foreach ($event->releasedAllocations as $released) {
             unset($this->usages[$event->usageId]['allocations'][$released['grantId']]);
@@ -425,6 +439,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
                 'usedMinutes' => $usage['usedMinutes'],
                 'status' => $usage['status'],
                 'allocations' => [],
+                'unallocatedDays' => 0.0,
             ];
 
             $this->requestIndex[$usage['requestId']] = $usage['usageId'];

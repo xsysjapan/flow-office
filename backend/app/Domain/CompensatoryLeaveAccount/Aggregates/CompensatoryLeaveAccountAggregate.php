@@ -34,7 +34,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  *           status(draft|confirmed|cancelled), expiresOn, allocations(usageId => [allocatedDays, allocatedMinutes])]
  *   ※ 下書きの削除(GrantRemoved)は連想配列から取り除く。
  * - usages: usageId => [requestId, usedOn, usageType, usedDays, usedMinutes, status(designated|confirmed|cancelled),
- *           allocations(grantId => [allocatedDays, allocatedMinutes])]
+ *           allocations(grantId => [allocatedDays, allocatedMinutes]), unallocatedDays(float), unallocatedMinutes(int)]
  * - requestIndex: requestId => 最後に作成されたusageId(再申請で新しい消化記録に差し替わる)
  *
  * 不変条件:
@@ -43,6 +43,8 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 3. 確定は1回だけ・取消済みは確定不可、取消は1回だけ。取消で充当を全て解除する。
  * 4. 消化済み(充当合計>0)の付与は取り消せない。
  * 5. 確定済みの付与・取消済みの付与は充当に使わない(利用日時点で失効していない確定済みの付与だけを使う)。
+ * 6. 残数が不足しても承認はブロックしない(ユーザー決定)。充当できた分だけ充当し、残りは
+ *    未充当量(日数・分)として確定時に記録する。
  */
 class CompensatoryLeaveAccountAggregate extends AggregateRoot
 {
@@ -71,7 +73,7 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     /** @var array<string, array{source: string, sourceWorkDate: string, grantedDays: float, grantedMinutes: ?int, status: string, expiresOn: ?string, allocations: array<string, array{allocatedDays: float, allocatedMinutes: int}>}> */
     private array $grants = [];
 
-    /** @var array<string, array{requestId: string, usedOn: string, usageType: string, usedDays: float, usedMinutes: ?int, status: string, allocations: array<string, array{allocatedDays: float, allocatedMinutes: int}>}> */
+    /** @var array<string, array{requestId: string, usedOn: string, usageType: string, usedDays: float, usedMinutes: ?int, status: string, allocations: array<string, array{allocatedDays: float, allocatedMinutes: int}>, unallocatedDays: float, unallocatedMinutes: int}> */
     private array $usages = [];
 
     /** @var array<string, string> */
@@ -301,9 +303,11 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
      *
      * 利用日時点で失効していない確定済みの付与のうち、同じ単位(時間単位の消化は分単位の付与、
      * それ以外は日単位の付与)のものへ、失効日の近い順(無期限は最後)に充当する。
-     * 残数が不足する場合は例外にし、確定しない(論点17。現行は不足でも承認していた)。
+     * 残数が不足しても例外にせず、充当できた分だけを充当して確定する(ユーザー決定)。
+     * 残りは未充当量として記録する(時間単位の消化は分、それ以外は日。`unallocatedFor`で参照)。
+     * 付与が無い場合は充当0・未充当=全量。
      *
-     * @throws DomainRuleException 存在しない・取消済み・確定済み・残数不足
+     * @throws DomainRuleException 存在しない・取消済み・確定済み
      */
     public function confirmUsage(string $usageId): self
     {
@@ -326,11 +330,9 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
             grants: $this->grantsSnapshot($hourly),
         );
 
-        $allocatedAmount = array_sum(array_column($plan, 'allocatedAmount'));
+        $allocatedAmount = (float) array_sum(array_column($plan, 'allocatedAmount'));
 
-        if ($requiredAmount - $allocatedAmount > 0) {
-            throw new DomainRuleException('代休の残数が不足しているため承認できません。');
-        }
+        $unallocatedAmount = max(0.0, $requiredAmount - $allocatedAmount);
 
         $allocations = array_map(
             fn (array $item) => $hourly
@@ -342,6 +344,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
         $this->recordThat(new CompensatoryLeaveAccountUsageConfirmed(
             usageId: $usageId,
             allocations: $allocations,
+            unallocatedDays: $hourly ? 0.0 : $unallocatedAmount,
+            unallocatedMinutes: $hourly ? (int) round($unallocatedAmount) : 0,
         ));
 
         return $this;
@@ -509,6 +513,20 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
+     * 確定時に充当できなかった未充当量。日単位の消化は`unallocatedDays`、時間単位の消化は
+     * `unallocatedMinutes`に値を持つ(もう一方は0)。確定していない・取消済み・存在しない消化記録は両方0。
+     *
+     * @return array{unallocatedDays: float, unallocatedMinutes: int}
+     */
+    public function unallocatedFor(string $usageId): array
+    {
+        return [
+            'unallocatedDays' => $this->usages[$usageId]['unallocatedDays'] ?? 0.0,
+            'unallocatedMinutes' => $this->usages[$usageId]['unallocatedMinutes'] ?? 0,
+        ];
+    }
+
+    /**
      * 付与の状態(draft|confirmed|cancelled)。存在しなければnull(下書きの削除後も存在しない扱い)。
      */
     public function grantStatus(string $grantId): ?string
@@ -607,6 +625,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
             'usedMinutes' => $event->usedMinutes,
             'status' => self::USAGE_DESIGNATED,
             'allocations' => [],
+            'unallocatedDays' => 0.0,
+            'unallocatedMinutes' => 0,
         ];
 
         $this->requestIndex[$event->requestId] = $event->usageId;
@@ -615,6 +635,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     protected function applyCompensatoryLeaveAccountUsageConfirmed(CompensatoryLeaveAccountUsageConfirmed $event): void
     {
         $this->usages[$event->usageId]['status'] = self::USAGE_CONFIRMED;
+        $this->usages[$event->usageId]['unallocatedDays'] = $event->unallocatedDays;
+        $this->usages[$event->usageId]['unallocatedMinutes'] = $event->unallocatedMinutes;
 
         foreach ($event->allocations as $allocation) {
             $this->addAllocation($event->usageId, $allocation['grantId'], $allocation['allocatedDays'], $allocation['allocatedMinutes']);
@@ -624,6 +646,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
     protected function applyCompensatoryLeaveAccountUsageCancelled(CompensatoryLeaveAccountUsageCancelled $event): void
     {
         $this->usages[$event->usageId]['status'] = self::USAGE_CANCELLED;
+        $this->usages[$event->usageId]['unallocatedDays'] = 0.0;
+        $this->usages[$event->usageId]['unallocatedMinutes'] = 0;
 
         foreach ($event->releasedAllocations as $released) {
             unset($this->usages[$event->usageId]['allocations'][$released['grantId']]);
@@ -656,6 +680,8 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
                 'usedMinutes' => $usage['usedMinutes'],
                 'status' => $usage['status'],
                 'allocations' => [],
+                'unallocatedDays' => 0.0,
+                'unallocatedMinutes' => 0,
             ];
 
             $this->requestIndex[$usage['requestId']] = $usage['usageId'];

@@ -313,37 +313,51 @@ class SpecialLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_confirm_is_rejected_when_balance_is_short(): void
+    public function test_confirm_partially_allocates_and_records_shortage_when_balance_is_short(): void
     {
-        $this->expectException(DomainRuleException::class);
+        $unallocated = null;
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null),
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
             ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', true);
-            });
+
+                $unallocated = $aggregate->unallocatedFor('u1');
+            })
+            ->assertRecorded([
+                new SpecialLeaveAccountUsageConfirmed('u1', [
+                    ['grantId' => 'g1', 'allocatedDays' => 1.0],
+                ], 0.5),
+            ]);
+
+        $this->assertSame(0.5, $unallocated);
     }
 
-    public function test_confirm_is_rejected_when_no_grant_exists(): void
+    public function test_confirm_without_grant_allocates_nothing_and_records_full_shortage(): void
     {
-        $this->expectException(DomainRuleException::class);
+        $unallocated = null;
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
             ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', true);
-            });
+
+                $unallocated = $aggregate->unallocatedFor('u1');
+            })
+            ->assertRecorded([
+                new SpecialLeaveAccountUsageConfirmed('u1', [], 1.0),
+            ]);
+
+        $this->assertSame(1.0, $unallocated);
     }
 
-    public function test_confirm_rejects_shortage_when_only_other_type_has_balance(): void
+    public function test_confirm_records_full_shortage_when_only_other_type_has_balance(): void
     {
-        $this->expectException(DomainRuleException::class);
-
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new SpecialLeaveAccountGrantRegistered('g-other', self::OTHER_TYPE, '2026-04-01', null, 3.0, null),
@@ -351,13 +365,14 @@ class SpecialLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
-            });
+            })
+            ->assertRecorded([
+                new SpecialLeaveAccountUsageConfirmed('u1', [], 1.0),
+            ]);
     }
 
-    public function test_confirm_does_not_use_revoked_grant(): void
+    public function test_confirm_does_not_use_revoked_grant_and_records_full_shortage(): void
     {
-        $this->expectException(DomainRuleException::class);
-
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null),
@@ -366,21 +381,76 @@ class SpecialLeaveAccountAggregateTest extends TestCase
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
+            })
+            ->assertRecorded([
+                new SpecialLeaveAccountUsageConfirmed('u1', [], 1.0),
+            ]);
+    }
+
+    public function test_confirm_with_no_shortage_records_zero_unallocated(): void
+    {
+        $unallocated = null;
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.5, null),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
+            ])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
+                $aggregate->confirmUsage('u1', true);
+
+                $unallocated = $aggregate->unallocatedFor('u1');
             });
+
+        $this->assertSame(0.0, $unallocated);
     }
 
     public function test_usage_without_grant_requirement_is_confirmed_without_allocation(): void
     {
+        $unallocated = null;
+
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
             ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', false);
+
+                $unallocated = $aggregate->unallocatedFor('u1');
             })
             ->assertRecorded([
                 new SpecialLeaveAccountUsageConfirmed('u1', []),
             ]);
+
+        $this->assertSame(0.0, $unallocated);
+    }
+
+    public function test_unallocated_is_zero_before_confirmation_and_after_cancellation(): void
+    {
+        $results = [];
+
+        SpecialLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageConfirmed('u1', [], 1.0),
+                new SpecialLeaveAccountUsageDesignated('u2', 'r2', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+            ])
+            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$results) {
+                $results['confirmed_short'] = $aggregate->unallocatedFor('u1');
+                $results['designated'] = $aggregate->unallocatedFor('u2');
+
+                $aggregate->cancelUsage('u1', '取消');
+
+                $results['cancelled'] = $aggregate->unallocatedFor('u1');
+                $results['missing'] = $aggregate->unallocatedFor('missing');
+            });
+
+        $this->assertSame([
+            'confirmed_short' => 1.0,
+            'designated' => 0.0,
+            'cancelled' => 0.0,
+            'missing' => 0.0,
+        ], $results);
     }
 
     public function test_confirming_twice_is_rejected(): void
