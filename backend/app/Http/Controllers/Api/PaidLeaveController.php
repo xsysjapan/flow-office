@@ -6,6 +6,7 @@ use App\Console\Commands\MigratePaidLeaveAccountsCommand;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
+use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest as ApprovePaidLeaveRequestCommand;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
@@ -26,6 +27,7 @@ use App\Http\Resources\PaidLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Jobs\ReapplyPaidLeaveSchedulePolicyJob;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveGrantPolicy;
 use App\Models\PaidLeaveGrantRule;
@@ -36,8 +38,6 @@ use App\Models\PaidLeaveType;
 use App\Models\PaidLeaveUsage;
 use App\Models\SystemSetting;
 use App\Models\User;
-use App\Models\WorkflowRequest;
-use App\Models\WorkflowRequestStatus;
 use App\Models\WorkStyle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -598,7 +598,7 @@ class PaidLeaveController extends Controller
 
         if ($requiresApproval) {
             // UC-P003: 有給申請はworkflow_requestの下書き作成を起点にする。PaidLeaveRequest集約への
-            // RequestPaidLeaveはPaidLeaveRequestOnWorkflowRequestDraftedReactorが発行する
+            // RequestPaidLeaveはPaidLeaveRequestOnWorkflowRequestReactorが発行する
             // (ルートCLAUDE.md「操作経路と業務ロジックを分離する」)。
             // PaidLeaveRequestのIDはここで採番してsubjectIdとして渡す。Handler側から
             // workflow_requests.subject_idを直接書き換えるとProjectionの再生成で失われるため
@@ -708,12 +708,13 @@ class PaidLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function approveRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    public function approveRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): PaidLeaveRequestResource
     {
-        // UC-P004: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
-        // ApproveWorkflowRequestを発行する。
+        // UC-P004: 承認はworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
+        // ApproveWorkflowRequestを発行する(承認後の有給申請の承認はReactorが行う)。
         $commandBus->dispatch(new ApproveWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $paidLeaveRequest,
                 '対応する申請が見つからないため承認できません。',
             ),
@@ -732,14 +733,15 @@ class PaidLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function returnRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    public function returnRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): PaidLeaveRequestResource
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        // UC-P004 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
-        // ReturnWorkflowRequestを発行する。
+        // UC-P004 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
+        // ReturnWorkflowRequestを発行する(有給申請の差戻しはReactorが行う)。
         $commandBus->dispatch(new ReturnWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $paidLeaveRequest,
                 '対応する申請が見つからないため差し戻せません。',
             ),
@@ -851,20 +853,15 @@ class PaidLeaveController extends Controller
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
      */
-    private function submittedWorkflowRequestId(PaidLeaveRequest $paidLeaveRequest, string $message): string
+    private function linkedWorkflowRequestId(LeaveRequestWorkflowLinks $links, PaidLeaveRequest $paidLeaveRequest, string $message): string
     {
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::PAID_LEAVE_REQUEST)
-            ->where('subject_id', $paidLeaveRequest->id)
-            ->where('status', WorkflowRequestStatus::SUBMITTED)
-            ->latest()
-            ->first();
+        $workflowRequestId = $links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_PAID, $paidLeaveRequest->id);
 
-        if ($workflowRequest === null) {
+        if ($workflowRequestId === null) {
             throw new DomainRuleException($message);
         }
 
-        return $workflowRequest->id;
+        return $workflowRequestId;
     }
 
     /**

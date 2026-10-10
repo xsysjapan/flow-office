@@ -281,12 +281,14 @@ use App\Domain\Notification\Handlers\ConfirmNotificationHandler;
 use App\Domain\PaidLeave\Commands\ApprovePaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\CancelPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\RequestPaidLeave;
+use App\Domain\PaidLeave\Commands\ResubmitPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\ReturnPaidLeaveRequest;
 use App\Domain\PaidLeave\Commands\WarnExpiringPaidLeave;
 use App\Domain\PaidLeave\Commands\WarnFiveDayObligation;
 use App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\CancelPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\RequestPaidLeaveHandler;
+use App\Domain\PaidLeave\Handlers\ResubmitPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
@@ -618,6 +620,7 @@ return [
         ApprovePaidLeaveRequest::class => ApprovePaidLeaveRequestHandler::class,
         ReturnPaidLeaveRequest::class => ReturnPaidLeaveRequestHandler::class,
         CancelPaidLeaveRequest::class => CancelPaidLeaveRequestHandler::class,
+        ResubmitPaidLeaveRequest::class => ResubmitPaidLeaveRequestHandler::class,
 
         GrantPaidLeave::class => PaidLeaveAccountGrantPaidLeaveHandler::class,
         ChangePaidLeaveGrantAmount::class => ChangePaidLeaveGrantAmountHandler::class,

@@ -13,7 +13,8 @@ use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
- * 有給申請の集約(集約ID=申請ID)。申請の状態(申請中・差戻し・承認済み・取消)だけを持つ。
+ * 有給申請の集約(集約ID=申請ID)。申請の状態(申請中・差戻し・承認済み・取消)と、申請の内容
+ * (申請者・対象日・取得単位・承認者など。遷移イベントに載せて残数・勤怠の連鎖へ渡す)を持つ。
  * 残数・消化記録(usage)は有給口座(PaidLeaveAccount)の集約が持ち、本集約は関与しない。
  *
  * 状態遷移: none → submitted(申請中) → approved / returned / cancelled、
@@ -40,6 +41,26 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     ];
 
     private string $status = self::STATUS_NONE;
+
+    /** 申請者。 */
+    private ?string $userId = null;
+
+    /** 承認者(承認不要時の申請は申請者自身)。 */
+    private ?string $approverUserId = null;
+
+    private ?string $targetDate = null;
+
+    private ?string $leaveType = null;
+
+    private ?float $hours = null;
+
+    private ?float $requestedDays = null;
+
+    private ?string $reason = null;
+
+    private ?string $requestGroupId = null;
+
+    private ?string $workflowRequestId = null;
 
     /** cutover前の承認済み申請(消化記録なしで引き継がれた申請)。取消できない。 */
     private bool $cutoverWithoutUsage = false;
@@ -87,7 +108,10 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     {
         $this->assertStatus([self::STATUS_SUBMITTED], '申請中でない有給申請は承認できません。');
 
-        $this->recordThat(new PaidLeaveRequestLifecycleApproved(approvedByUserId: $approvedByUserId));
+        $this->recordThat(new PaidLeaveRequestLifecycleApproved(
+            approvedByUserId: $approvedByUserId,
+            userId: $this->userId,
+        ));
 
         return $this;
     }
@@ -99,16 +123,31 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         $this->recordThat(new PaidLeaveRequestLifecycleReturned(
             returnedByUserId: $returnedByUserId,
             comment: $comment,
+            userId: $this->userId,
         ));
 
         return $this;
     }
 
+    /**
+     * 差戻し後の再提出。申請の内容は変えず、申請中に戻す(新しい消化記録は残数側がこのイベントから作る)。
+     */
     public function resubmit(?string $resubmittedByUserId): self
     {
         $this->assertStatus([self::STATUS_RETURNED], '差戻し中でない有給申請は再提出できません。');
 
-        $this->recordThat(new PaidLeaveRequestLifecycleResubmitted(resubmittedByUserId: $resubmittedByUserId));
+        $this->recordThat(new PaidLeaveRequestLifecycleResubmitted(
+            resubmittedByUserId: $resubmittedByUserId,
+            userId: $this->userId,
+            targetDate: $this->targetDate,
+            leaveType: $this->leaveType,
+            hours: $this->hours,
+            requestedDays: $this->requestedDays,
+            approverUserId: $this->approverUserId,
+            reason: $this->reason,
+            requestGroupId: $this->requestGroupId,
+            workflowRequestId: $this->workflowRequestId,
+        ));
 
         return $this;
     }
@@ -129,6 +168,7 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         $this->recordThat(new PaidLeaveRequestLifecycleCancelled(
             cancelledByUserId: $cancelledByUserId,
             reason: $reason,
+            userId: $this->userId,
         ));
 
         return $this;
@@ -191,6 +231,18 @@ class PaidLeaveRequestAggregate extends AggregateRoot
         return $this->status;
     }
 
+    /** 申請者(申請前はnull)。 */
+    public function userId(): ?string
+    {
+        return $this->userId;
+    }
+
+    /** 承認者(申請前・承認不要時の申請者プレースホルダを含む。申請前はnull)。 */
+    public function approverUserId(): ?string
+    {
+        return $this->approverUserId;
+    }
+
     public function isSubmitted(): bool
     {
         return $this->status === self::STATUS_SUBMITTED;
@@ -222,11 +274,22 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     protected function applyPaidLeaveRequestLifecycleRequested(PaidLeaveRequestLifecycleRequested $event): void
     {
         $this->status = self::STATUS_SUBMITTED;
+        $this->applyDetails(
+            $event->userId,
+            $event->approverUserId,
+            $event->targetDate,
+            $event->leaveType,
+            $event->hours,
+            $event->requestedDays,
+            $event->reason,
+            $event->requestGroupId,
+            $event->workflowRequestId,
+        );
     }
 
     protected function applyPaidLeaveRequestLifecycleShared(PaidLeaveRequestLifecycleShared $event): void
     {
-        // 状態は変えない(申請中のまま)。
+        $this->workflowRequestId = $event->workflowRequestId;
     }
 
     protected function applyPaidLeaveRequestLifecycleApproved(PaidLeaveRequestLifecycleApproved $event): void
@@ -253,5 +316,38 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     {
         $this->status = $event->status;
         $this->cutoverWithoutUsage = $event->status === self::STATUS_APPROVED && ! $event->hasUsage;
+        $this->applyDetails(
+            $event->userId,
+            $event->approverUserId,
+            $event->targetDate,
+            $event->leaveType,
+            $event->hours,
+            $event->requestedDays,
+            $event->reason,
+            $event->requestGroupId,
+            $event->workflowRequestId,
+        );
+    }
+
+    private function applyDetails(
+        string $userId,
+        ?string $approverUserId,
+        string $targetDate,
+        string $leaveType,
+        ?float $hours,
+        float $requestedDays,
+        ?string $reason,
+        ?string $requestGroupId,
+        ?string $workflowRequestId,
+    ): void {
+        $this->userId = $userId;
+        $this->approverUserId = $approverUserId;
+        $this->targetDate = $targetDate;
+        $this->leaveType = $leaveType;
+        $this->hours = $hours;
+        $this->requestedDays = $requestedDays;
+        $this->reason = $reason;
+        $this->requestGroupId = $requestGroupId;
+        $this->workflowRequestId = $workflowRequestId;
     }
 }

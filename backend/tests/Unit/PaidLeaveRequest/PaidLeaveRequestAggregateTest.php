@@ -128,7 +128,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->approve('approver-1');
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleApproved(approvedByUserId: 'approver-1')]);
+            ->assertRecorded([new PaidLeaveRequestLifecycleApproved(approvedByUserId: 'approver-1', userId: 'user-1')]);
     }
 
     public function test_approve_sets_status_to_approved(): void
@@ -182,6 +182,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
                 new PaidLeaveRequestLifecycleReturned(
                     returnedByUserId: 'approver-1',
                     comment: '日程を確認してください',
+                    userId: 'user-1',
                 ),
             ]);
     }
@@ -217,12 +218,26 @@ class PaidLeaveRequestAggregateTest extends TestCase
 
     public function test_resubmit_records_resubmitted_event_while_returned(): void
     {
+        // 再提出は申請の内容(対象日・取得単位など)をそのまま持つ(残数側が新しい消化記録を作るため)。
         PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
             ->given([$this->requested(), $this->returned()])
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->resubmit('user-1');
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleResubmitted(resubmittedByUserId: 'user-1')]);
+            ->assertRecorded([
+                new PaidLeaveRequestLifecycleResubmitted(
+                    resubmittedByUserId: 'user-1',
+                    userId: 'user-1',
+                    targetDate: '2026-10-12',
+                    leaveType: 'full',
+                    hours: null,
+                    requestedDays: 1.0,
+                    approverUserId: 'approver-1',
+                    reason: '私用',
+                    requestGroupId: null,
+                    workflowRequestId: null,
+                ),
+            ]);
     }
 
     public function test_resubmit_sets_status_to_submitted(): void
@@ -287,7 +302,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->cancel('user-1', null);
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null)]);
+            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1')]);
     }
 
     public function test_cancel_records_cancelled_event_while_approved(): void
@@ -440,7 +455,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->approve('approver-1');
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleApproved(approvedByUserId: 'approver-1')]);
+            ->assertRecorded([new PaidLeaveRequestLifecycleApproved(approvedByUserId: 'approver-1', userId: 'user-1')]);
     }
 
     public function test_migrated_returned_can_be_resubmitted_but_not_approved(): void
@@ -450,7 +465,20 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->resubmit('user-1');
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleResubmitted(resubmittedByUserId: 'user-1')]);
+            ->assertRecorded([
+                new PaidLeaveRequestLifecycleResubmitted(
+                    resubmittedByUserId: 'user-1',
+                    userId: 'user-1',
+                    targetDate: '2026-08-10',
+                    leaveType: 'full',
+                    hours: null,
+                    requestedDays: 1.0,
+                    approverUserId: 'approver-1',
+                    reason: null,
+                    requestGroupId: null,
+                    workflowRequestId: 'wf-1',
+                ),
+            ]);
 
         $this->expectException(DomainRuleException::class);
 
@@ -479,7 +507,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->cancel('user-1', null);
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null)]);
+            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1')]);
     }
 
     public function test_migrated_approved_without_usage_cannot_be_cancelled(): void
@@ -501,7 +529,7 @@ class PaidLeaveRequestAggregateTest extends TestCase
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->cancel('user-1', null);
             })
-            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null)]);
+            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1')]);
     }
 
     public function test_migrated_approved_without_usage_is_approved(): void

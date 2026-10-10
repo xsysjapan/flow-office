@@ -4,9 +4,9 @@ namespace Tests\Feature\PaidLeaveAccount;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
-use App\Models\AttendanceDay;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveGrant;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
@@ -81,11 +81,8 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertEquals(1.0, (float) $grant->used_days);
         $this->assertEquals(9.0, (float) $grant->remaining_days);
 
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertNotNull($day);
-        $this->assertSame('paid_leave_full', $day->work_type);
-        $this->assertSame('clocked_out', $day->status);
-
+        // 休暇は勤怠日の作業内容・状態へ書き込まない(勤怠の休暇ビューは別作業)。有給申請の状態と消化記録を確認する。
+        $this->assertSame('approved', PaidLeaveRequest::query()->findOrFail($requestId)->status);
         $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
     }
 
@@ -108,8 +105,7 @@ class PaidLeaveRequestTest extends TestCase
         $grant = PaidLeaveGrant::query()->where('user_id', $employee->id)->first();
         $this->assertEquals(0.5, (float) $grant->used_days);
 
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('paid_leave_am_half', $day->work_type);
+        $this->assertSame('approved', PaidLeaveRequest::query()->findOrFail($requestId)->status);
     }
 
     public function test_hourly_leave_requested_days_is_computed_from_prescribed_daily_minutes(): void
@@ -214,10 +210,7 @@ class PaidLeaveRequestTest extends TestCase
         $response->assertJsonPath('status', 'submitted');
 
         $this->assertEquals(0.5, (float) $grant->refresh()->remaining_days);
-
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertNotNull($day);
-        $this->assertSame('paid_leave_full', $day->work_type);
+        $this->assertSame('submitted', PaidLeaveRequest::query()->findOrFail($response->json('id'))->status);
     }
 
     public function test_approval_consumes_across_multiple_grants_when_the_nearest_expiring_one_is_insufficient(): void
@@ -303,18 +296,16 @@ class PaidLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
-        // 未承認の取消でも、申請時点で反映済みの勤怠(attendance_days.work_type)と
-        // 未確定のpaid_leave_usages行は巻き戻される(承認済みの取消と同じ巻き戻しが必要)。
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('paid_leave_full', $day->work_type);
+        // 未承認の取消でも、申請時点で作られた未確定の消化記録(paid_leave_usages)は取り消される。
+        // 申請と連動したワークフローも取り消される(申請中のため)。
+        $workflowRequestId = WorkflowRequest::query()->where('subject_id', $requestId)->value('id');
         $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
 
         $response = $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel");
         $response->assertOk();
         $response->assertJsonPath('status', 'cancelled');
 
-        $day->refresh();
-        $this->assertNull($day->work_type);
+        $this->assertSame('cancelled', WorkflowRequest::query()->findOrFail($workflowRequestId)->status);
         // 新ドメインでは取消済みUsageの行自体は削除せず、cancelled=trueとして残す
         // (docs/changesets/20260906-paid-leave-domain-redesign/spec.md 不変条件5)。
         $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('cancelled', false)->count());
@@ -355,7 +346,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->count());
     }
 
-    public function test_cancelling_an_approved_full_day_request_restores_the_grant_and_clears_the_attendance_day(): void
+    public function test_cancelling_an_approved_full_day_request_restores_the_grant_and_cancels_the_request(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
@@ -371,8 +362,6 @@ class PaidLeaveRequestTest extends TestCase
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
 
         $this->assertEquals(9.0, (float) $grant->refresh()->remaining_days);
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertSame('paid_leave_full', $day->work_type);
 
         $response = $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel");
         $response->assertOk();
@@ -380,17 +369,10 @@ class PaidLeaveRequestTest extends TestCase
 
         $this->assertEquals(10.0, (float) $grant->refresh()->remaining_days);
         $this->assertSame(0, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('cancelled', false)->count());
-
-        $day->refresh();
-        $this->assertNull($day->work_type);
-        $this->assertSame('not_started', $day->status);
+        $this->assertSame('cancelled', PaidLeaveRequest::query()->findOrFail($requestId)->status);
     }
 
-    /**
-     * 半休は実際の出退勤(打刻)が既にあるため、取消時にステータスは打刻由来のまま維持する
-     * (全休のようにclocked_out扱いへ強制していないため巻き戻し不要)。
-     */
-    public function test_cancelling_an_approved_half_day_request_keeps_the_actual_punch_derived_status(): void
+    public function test_cancelling_an_approved_half_day_request_restores_the_grant(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
@@ -405,15 +387,10 @@ class PaidLeaveRequestTest extends TestCase
         ])->assertCreated()->json('id');
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertOk();
 
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $day->update(['actual_start_at' => '2026-08-10 13:00:00', 'actual_end_at' => '2026-08-10 18:00:00', 'status' => 'clocked_out']);
-
         $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$requestId}/cancel")->assertOk();
 
         $this->assertEquals(10.0, (float) $grant->refresh()->remaining_days);
-        $day->refresh();
-        $this->assertNull($day->work_type);
-        $this->assertSame('clocked_out', $day->status);
+        $this->assertSame('cancelled', PaidLeaveRequest::query()->findOrFail($requestId)->status);
     }
 
     public function test_cannot_cancel_an_approved_request_once_the_month_is_submitted(): void
@@ -508,7 +485,7 @@ class PaidLeaveRequestTest extends TestCase
     }
 
     /**
-     * 対応するworkflow_requestが無い場合、承認は黙って何もせず200を返してはいけない。
+     * ワークフローとの対応(leave_request_workflow_links)が無い場合、承認は黙って何もせず200を返してはいけない。
      */
     public function test_approval_fails_when_there_is_no_corresponding_workflow_request(): void
     {
@@ -523,7 +500,7 @@ class PaidLeaveRequestTest extends TestCase
             'approver_user_id' => $approver->id,
         ])->assertCreated()->json('id');
 
-        WorkflowRequest::query()->where('subject_id', $requestId)->delete();
+        LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->delete();
 
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")->assertStatus(422);
 
@@ -557,10 +534,7 @@ class PaidLeaveRequestTest extends TestCase
         $this->assertSame(0, WorkflowRequest::query()->where('subject_id', $requestId)->count());
 
         $this->assertEquals(9.0, (float) $grant->refresh()->remaining_days);
-
-        $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', '2026-08-10')->first();
-        $this->assertNotNull($day);
-        $this->assertSame('paid_leave_full', $day->work_type);
+        $this->assertSame(1, PaidLeaveUsage::query()->where('paid_leave_request_id', $requestId)->where('is_confirmed', true)->count());
     }
 
     /**
