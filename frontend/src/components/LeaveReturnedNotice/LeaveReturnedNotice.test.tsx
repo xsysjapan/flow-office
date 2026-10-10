@@ -3,36 +3,31 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { LeaveReturnedNotice } from './LeaveReturnedNotice'
 
-function renderNotice(subjectType: Parameters<typeof LeaveReturnedNotice>[0]['subjectType']) {
+function renderNotice(workflowRequestId: string | null) {
   return render(
     <MemoryRouter>
-      <LeaveReturnedNotice subjectType={subjectType} />
+      <LeaveReturnedNotice workflowRequestId={workflowRequestId} />
     </MemoryRouter>,
   )
 }
 
 describe('LeaveReturnedNotice', () => {
   it('explains that the request was returned and can be resubmitted from the request detail', () => {
-    renderNotice('paid_leave_request')
+    renderNotice('workflow-request-1')
 
     expect(screen.getByText('差し戻されています。申請詳細の「提出する」で再提出できます。')).toBeInTheDocument()
   })
 
-  it('links to the returned requests of the given leave type', () => {
-    renderNotice('special_leave_request')
+  it('links directly to the request detail of the workflow request', () => {
+    renderNotice('workflow-request-1')
 
-    expect(screen.getByRole('link', { name: '差戻し中の申請を開く' })).toHaveAttribute(
-      'href',
-      '/requests?status=returned&subjectType=special_leave_request',
-    )
+    expect(screen.getByRole('link', { name: '申請詳細を開く' })).toHaveAttribute('href', '/requests/workflow-request-1')
   })
 
-  it('links the compensatory leave type to its own subject type', () => {
-    renderNotice('compensatory_leave_request')
+  it('does not show the link when there is no workflow request', () => {
+    renderNotice(null)
 
-    expect(screen.getByRole('link', { name: '差戻し中の申請を開く' })).toHaveAttribute(
-      'href',
-      '/requests?status=returned&subjectType=compensatory_leave_request',
-    )
+    expect(screen.getByText('差し戻されています。申請詳細の「提出する」で再提出できます。')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '申請詳細を開く' })).not.toBeInTheDocument()
   })
 })

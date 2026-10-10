@@ -282,7 +282,7 @@ function MyPaidLeaveRequestList() {
               <Badge tone={tone}>{label}</Badge>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {req.status === 'returned' && <LeaveReturnedNotice subjectType="paid_leave_request" />}
+              {req.status === 'returned' && <LeaveReturnedNotice workflowRequestId={req.workflow_request_id} />}
               {/* 取消は元に戻せない操作(SKILL.md §2.12)のため、ConfirmActionDialogで結果を確認させる
                   (WorkflowRequestDetailPageの取消確認と同じ扱い)。差し戻された申請も取消できる。 */}
               {(req.status === 'submitted' || req.status === 'returned') && (

@@ -92,7 +92,8 @@ function elapsedWorkedMinutes(day: AttendanceDay, now: Date): number | null {
 function statusDescription(day: AttendanceDay, now: Date): ReactNode {
   switch (day.status) {
     case 'not_started':
-      return 'まだ出勤していません'
+      // 全休の日は出勤しない休暇日のため、未出勤ではなく休暇である旨を表示する。
+      return isFullDayLeave(day.leaves) ? '本日は休暇(全休)です' : 'まだ出勤していません'
     case 'working': {
       const minutes = elapsedWorkedMinutes(day, now)
       return (

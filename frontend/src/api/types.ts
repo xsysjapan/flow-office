@@ -904,6 +904,8 @@ export interface CompensatoryLeaveRequest {
   requested_days: number;
   requested_minutes: number | null;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;
@@ -926,6 +928,8 @@ export interface PaidLeaveRequest {
   hours: number | null;
   requested_days: number;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;
@@ -1056,6 +1060,8 @@ export interface SpecialLeaveRequest {
   hours: number | null;
   requested_days: number;
   reason: string | null;
+  /** 対応するワークフローのID(申請詳細 `/requests/:id` へのリンクに使う)。対応が無ければnull。 */
+  workflow_request_id: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   returned_at: string | null;

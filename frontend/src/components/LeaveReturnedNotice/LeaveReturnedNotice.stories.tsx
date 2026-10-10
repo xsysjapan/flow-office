@@ -14,9 +14,8 @@ const meta = {
     ),
   ],
   argTypes: {
-    subjectType: {
-      control: 'select',
-      options: ['paid_leave_request', 'special_leave_request', 'compensatory_leave_request'],
+    workflowRequestId: {
+      control: 'text',
     },
   },
 } satisfies Meta<typeof LeaveReturnedNotice>
@@ -24,14 +23,10 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const PaidLeave: Story = {
-  args: { subjectType: 'paid_leave_request' },
+export const WithRequestDetailLink: Story = {
+  args: { workflowRequestId: 'workflow-request-1' },
 }
 
-export const SpecialLeave: Story = {
-  args: { subjectType: 'special_leave_request' },
-}
-
-export const CompensatoryLeave: Story = {
-  args: { subjectType: 'compensatory_leave_request' },
+export const WithoutWorkflowRequest: Story = {
+  args: { workflowRequestId: null },
 }

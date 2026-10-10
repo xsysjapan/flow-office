@@ -705,6 +705,35 @@ class SpecialLeaveRequestTest extends TestCase
         $this->actingAs($approver)->getJson('/api/special-leave/requests/to-approve')->assertOk()->assertJsonCount(1);
     }
 
+    public function test_responses_include_the_workflow_request_id_of_the_request(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $type = $this->createType();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        $this->grantSpecialLeave([
+            'user_id' => $employee->id, 'special_leave_type_id' => $type->id,
+            'granted_on' => '2026-07-01', 'expires_on' => null,
+            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+        ]);
+
+        $requestId = $this->actingAs($employee)->postJson('/api/special-leave/requests', [
+            'special_leave_type_id' => $type->id,
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $workflowRequestId = LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->value('workflow_request_id');
+        $this->assertNotNull($workflowRequestId);
+
+        $this->actingAs($employee)->getJson('/api/special-leave/requests/mine')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->getJson('/api/special-leave/requests/to-approve')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->postJson("/api/special-leave/requests/{$requestId}/approve")
+            ->assertOk()->assertJsonPath('workflow_request_id', $workflowRequestId);
+    }
+
     /**
      * workflow_requests.subject_id はイベント(WorkflowRequestDrafted)から投影されるため、
      * Projectionを再生成しても失われない(ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。

@@ -578,7 +578,7 @@ class PaidLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
+    public function storeRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
     {
         // system_settings.paid_leave_requires_approval=falseの場合、承認ワークフローを
         // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(ルートCLAUDE.md
@@ -622,6 +622,7 @@ class PaidLeaveController extends Controller
             ));
 
             $paidLeaveRequest = PaidLeaveRequest::query()->findOrFail($requestId);
+            $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
 
             return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
         }
@@ -657,6 +658,8 @@ class PaidLeaveController extends Controller
             ));
         });
 
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
         return (new PaidLeaveRequestResource($paidLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
     }
 
@@ -667,13 +670,14 @@ class PaidLeaveController extends Controller
         tags: ['有給休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function myRequests(Request $request): AnonymousResourceCollection
+    public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = PaidLeaveRequest::query()
             ->with('user', 'approver')
             ->where('user_id', $request->user()->id)
             ->orderByDesc('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, $requests);
 
         return PaidLeaveRequestResource::collection($requests);
     }
@@ -685,7 +689,7 @@ class PaidLeaveController extends Controller
         tags: ['有給休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function requestsToApprove(Request $request): AnonymousResourceCollection
+    public function requestsToApprove(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = PaidLeaveRequest::query()
             ->with('user', 'approver')
@@ -693,6 +697,7 @@ class PaidLeaveController extends Controller
             ->where('status', PaidLeaveRequestStatus::SUBMITTED)
             ->orderBy('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, $requests);
 
         return PaidLeaveRequestResource::collection($requests);
     }
@@ -721,7 +726,10 @@ class PaidLeaveController extends Controller
             approvedByUserId: $request->user()->id,
         ));
 
-        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+        $paidLeaveRequest = $paidLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return new PaidLeaveRequestResource($paidLeaveRequest);
     }
 
     #[OA\Post(
@@ -749,7 +757,10 @@ class PaidLeaveController extends Controller
             comment: $data['comment'],
         ));
 
-        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+        $paidLeaveRequest = $paidLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return new PaidLeaveRequestResource($paidLeaveRequest);
     }
 
     #[OA\Post(
@@ -760,11 +771,14 @@ class PaidLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function cancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    public function cancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): PaidLeaveRequestResource
     {
         $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id));
 
-        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+        $paidLeaveRequest = $paidLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return new PaidLeaveRequestResource($paidLeaveRequest);
     }
 
     /**
@@ -780,11 +794,14 @@ class PaidLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'paidLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function adminCancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus): PaidLeaveRequestResource
+    public function adminCancelRequest(Request $request, PaidLeaveRequest $paidLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): PaidLeaveRequestResource
     {
         $commandBus->dispatch(new CancelPaidLeaveRequest($paidLeaveRequest->id, $request->user()->id, isAdminAction: true));
 
-        return new PaidLeaveRequestResource($paidLeaveRequest->refresh()->load('user', 'approver'));
+        $paidLeaveRequest = $paidLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_PAID, [$paidLeaveRequest]);
+
+        return new PaidLeaveRequestResource($paidLeaveRequest);
     }
 
     /**

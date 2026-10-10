@@ -294,7 +294,7 @@ class SpecialLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['special_leave_type_id', 'target_date', 'leave_type', 'approver_user_id'], properties: [new OA\Property(property: 'special_leave_type_id', type: 'integer'), new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid'), new OA\Property(property: 'reason', type: 'string', nullable: true), new OA\Property(property: 'request_group_id', type: 'string', format: 'uuid', nullable: true, description: '期間指定でまとめて申請した複数日分を束ねるID(単日申請では省略)')])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
+    public function storeRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
     {
         // system_settings.special_leave_requires_approval=falseの場合、承認ワークフローを
         // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(PaidLeaveController::storeRequest
@@ -340,6 +340,7 @@ class SpecialLeaveController extends Controller
             ));
 
             $specialLeaveRequest = SpecialLeaveRequest::query()->findOrFail($requestId);
+            $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
 
             return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
         }
@@ -375,6 +376,8 @@ class SpecialLeaveController extends Controller
             ));
         });
 
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
         return (new SpecialLeaveRequestResource($specialLeaveRequest->load('user', 'approver', 'specialLeaveType')))->response()->setStatusCode(201);
     }
 
@@ -385,13 +388,14 @@ class SpecialLeaveController extends Controller
         tags: ['特別休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function myRequests(Request $request): AnonymousResourceCollection
+    public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = SpecialLeaveRequest::query()
             ->with('user', 'approver', 'specialLeaveType')
             ->where('user_id', $request->user()->id)
             ->orderByDesc('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, $requests);
 
         return SpecialLeaveRequestResource::collection($requests);
     }
@@ -403,7 +407,7 @@ class SpecialLeaveController extends Controller
         tags: ['特別休暇'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function requestsToApprove(Request $request): AnonymousResourceCollection
+    public function requestsToApprove(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = SpecialLeaveRequest::query()
             ->with('user', 'approver', 'specialLeaveType')
@@ -411,6 +415,7 @@ class SpecialLeaveController extends Controller
             ->where('status', SpecialLeaveRequestStatus::SUBMITTED)
             ->orderBy('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, $requests);
 
         return SpecialLeaveRequestResource::collection($requests);
     }
@@ -436,7 +441,10 @@ class SpecialLeaveController extends Controller
             approvedByUserId: $request->user()->id,
         ));
 
-        return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+        $specialLeaveRequest = $specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return new SpecialLeaveRequestResource($specialLeaveRequest);
     }
 
     #[OA\Post(
@@ -464,7 +472,10 @@ class SpecialLeaveController extends Controller
             comment: $data['comment'],
         ));
 
-        return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+        $specialLeaveRequest = $specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return new SpecialLeaveRequestResource($specialLeaveRequest);
     }
 
     #[OA\Post(
@@ -475,11 +486,14 @@ class SpecialLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function cancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
+    public function cancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): SpecialLeaveRequestResource
     {
         $commandBus->dispatch(new CancelSpecialLeaveRequest($specialLeaveRequest->id, $request->user()->id));
 
-        return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+        $specialLeaveRequest = $specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return new SpecialLeaveRequestResource($specialLeaveRequest);
     }
 
     /**
@@ -495,11 +509,14 @@ class SpecialLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'specialLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function adminCancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus): SpecialLeaveRequestResource
+    public function adminCancelRequest(Request $request, SpecialLeaveRequest $specialLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): SpecialLeaveRequestResource
     {
         $commandBus->dispatch(new CancelSpecialLeaveRequest($specialLeaveRequest->id, $request->user()->id, isAdminAction: true));
 
-        return new SpecialLeaveRequestResource($specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType'));
+        $specialLeaveRequest = $specialLeaveRequest->refresh()->load('user', 'approver', 'specialLeaveType');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_SPECIAL, [$specialLeaveRequest]);
+
+        return new SpecialLeaveRequestResource($specialLeaveRequest);
     }
 
     /**

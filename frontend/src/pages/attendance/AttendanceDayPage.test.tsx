@@ -751,6 +751,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     const approvedSpecialLeaveRequest: SpecialLeaveRequest = {
@@ -768,6 +769,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     const approvedCompensatoryLeaveRequest: CompensatoryLeaveRequest = {
@@ -784,6 +786,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     it('does not show a cancel item when there is no approved leave on this day', async () => {
@@ -887,6 +890,7 @@ describe('AttendanceDayPage', () => {
         approved_at: null,
         returned_at: null,
         cancelled_at: null,
+        workflow_request_id: null,
       }
       vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(createdPaidLeaveRequest)
       vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
@@ -929,6 +933,7 @@ describe('AttendanceDayPage', () => {
         approved_at: '2026-07-02T00:00:00+09:00',
         returned_at: null,
         cancelled_at: null,
+        workflow_request_id: null,
       }
       const paidLeaveDay: AttendanceDay = {
         ...recordedDay,

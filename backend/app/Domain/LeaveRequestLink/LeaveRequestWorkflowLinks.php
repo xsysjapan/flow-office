@@ -37,4 +37,30 @@ final class LeaveRequestWorkflowLinks
 
         return $workflowRequestId === null ? null : (string) $workflowRequestId;
     }
+
+    /**
+     * 休暇申請(モデルの配列・コレクション)に対応するワークフローIDを、非永続の属性
+     * `workflow_request_id`として付ける(対応が無ければnull)。一覧はまとめて1回の問い合わせで
+     * 引く(N+1を避ける)。ワークフローのテーブルは読まない。
+     *
+     * @param  iterable<int, \Illuminate\Database\Eloquent\Model>  $leaveRequests
+     */
+    public function attachWorkflowRequestIds(string $leaveKind, iterable $leaveRequests): void
+    {
+        $requests = is_array($leaveRequests) ? $leaveRequests : iterator_to_array($leaveRequests, false);
+
+        if ($requests === []) {
+            return;
+        }
+
+        $workflowRequestIdByLeaveRequestId = LeaveRequestWorkflowLink::query()
+            ->where('leave_kind', $leaveKind)
+            ->whereIn('leave_request_id', array_map(fn ($request) => $request->getKey(), $requests))
+            ->pluck('workflow_request_id', 'leave_request_id');
+
+        foreach ($requests as $request) {
+            $workflowRequestId = $workflowRequestIdByLeaveRequestId[$request->getKey()] ?? null;
+            $request->setAttribute('workflow_request_id', $workflowRequestId === null ? null : (string) $workflowRequestId);
+        }
+    }
 }

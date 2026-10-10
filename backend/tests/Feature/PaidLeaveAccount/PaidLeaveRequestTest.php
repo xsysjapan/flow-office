@@ -434,6 +434,45 @@ class PaidLeaveRequestTest extends TestCase
         $this->actingAs($approver)->getJson('/api/paid-leave/requests/to-approve')->assertOk()->assertJsonCount(1);
     }
 
+    public function test_responses_include_the_workflow_request_id_of_the_request(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+
+        $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+            'approver_user_id' => $approver->id,
+        ])->assertCreated()->json('id');
+        $workflowRequestId = LeaveRequestWorkflowLink::query()->where('leave_request_id', $requestId)->value('workflow_request_id');
+        $this->assertNotNull($workflowRequestId);
+
+        $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->getJson('/api/paid-leave/requests/to-approve')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', $workflowRequestId);
+        $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$requestId}/approve")
+            ->assertOk()->assertJsonPath('workflow_request_id', $workflowRequestId);
+    }
+
+    public function test_workflow_request_id_is_null_when_the_request_has_no_approval_workflow(): void
+    {
+        $employee = User::factory()->create();
+        $this->createWorkingDayShift($employee, '2026-08-10');
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
+        SystemSetting::current()->update(['paid_leave_requires_approval' => false]);
+
+        $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
+            'target_date' => '2026-08-10',
+            'leave_type' => 'full',
+        ])->assertCreated()->assertJsonPath('workflow_request_id', null);
+
+        $this->actingAs($employee)->getJson('/api/paid-leave/requests/mine')
+            ->assertOk()->assertJsonPath('0.workflow_request_id', null);
+    }
+
     /**
      * workflow_requests.subject_id はイベント(WorkflowRequestDrafted)から投影されるため、
      * Projectionを再生成しても失われない(ルートCLAUDE.md「Projectionは再生成可能な派生データ」)。

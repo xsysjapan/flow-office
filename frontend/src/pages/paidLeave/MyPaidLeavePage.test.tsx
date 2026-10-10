@@ -39,6 +39,7 @@ const submittedRequest: PaidLeaveRequest = {
   approved_at: null,
   returned_at: null,
   cancelled_at: null,
+  workflow_request_id: null,
 }
 
 function renderPage(requests: PaidLeaveRequest[] = [], paidLeaveRequiresApproval = true, initialPath = '/paid-leave') {
