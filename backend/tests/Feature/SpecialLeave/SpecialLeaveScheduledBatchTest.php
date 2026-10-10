@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\SpecialLeave;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
-use App\Models\AttendanceDay;
 use App\Models\CompanyCalendar;
-use App\Models\EmployeeCalendarEntry;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
 use App\Models\SpecialLeaveType;
@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -54,19 +55,47 @@ class SpecialLeaveScheduledBatchTest extends TestCase
     {
         $workStyle = $this->createWorkStyle();
 
+        // カレンダーの割当・退勤済みの勤怠は、それぞれのイベント(employee_calendar_entry.assigned・attendance_day.created)で作る。
+        // 出勤率はこれらのイベントから作られる出勤率ビュー(special_leave_attendance_rate_days)で判定する。
         for ($i = 0; $i < $scheduledDays; $i++) {
-            $date = $today->copy()->subDays($i * 7);
-            EmployeeCalendarEntry::query()->create([
-                'user_id' => $user->id, 'work_date' => $date->toDateString(), 'work_style_id' => $workStyle->id,
-                'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false,
-                'planned_break_minutes' => 60,
-            ]);
+            $date = $today->copy()->subDays($i * 7)->toDateString();
+            EmployeeCalendarEntryAggregate::retrieve((string) Str::uuid())->assign(
+                userId: $user->id,
+                workDate: $date,
+                workStyleId: $workStyle->id,
+                shiftPatternId: null,
+                dayType: 'weekday',
+                isWorkingDay: true,
+                isLegalHoliday: false,
+                isCompanyHoliday: false,
+                plannedStartAt: null,
+                plannedEndAt: null,
+                plannedBreakMinutes: 60,
+                plannedBreakStartAt: null,
+                plannedBreakEndAt: null,
+                isPublished: true,
+                isManuallyOverridden: false,
+                assignedByUserId: $user->id,
+            )->persist();
 
             if ($i < $attendedDays) {
-                AttendanceDay::query()->create([
-                    'user_id' => $user->id, 'work_date' => $date->toDateString(),
-                    'status' => 'clocked_out', 'source' => 'live',
-                ]);
+                AttendanceDayAggregate::retrieve((string) Str::uuid())->create(
+                    userId: $user->id,
+                    workDate: $date,
+                    calendarEntryId: null,
+                    status: 'clocked_out',
+                    source: 'live',
+                    utcOffsetMinutes: 540,
+                    actualStartAt: null,
+                    actualEndAt: null,
+                    workType: null,
+                    workLocationType: null,
+                    note: null,
+                    breaks: [],
+                    leaveSegments: [],
+                    reason: 'test',
+                    createdByUserId: $user->id,
+                )->persist();
             }
         }
     }

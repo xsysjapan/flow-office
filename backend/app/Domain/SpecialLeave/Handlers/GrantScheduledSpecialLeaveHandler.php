@@ -7,9 +7,8 @@ use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\SpecialLeave\Commands\GrantScheduledSpecialLeave;
 use App\Domain\SpecialLeave\Commands\GrantSpecialLeave;
-use App\Models\AttendanceDay;
-use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeCalendarEntry;
+use App\Domain\Leave\Support\LeaveAttendanceRateJudgement;
+use App\Models\SpecialLeaveAttendanceRateDay;
 use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveGrantRule;
 use App\Models\SystemSetting;
@@ -123,7 +122,8 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
             ->where(fn ($q) => $q->whereNull('usage_start_date')->orWhereDate('usage_start_date', '<=', $today->toDateString()));
 
         if ($rule->work_style_id !== null) {
-            $userIds = EmployeeCalendarEntry::query()
+            // 対象の勤務形態は特別休暇の出勤率ビュー(カレンダーの割当イベント由来)から求める。
+            $userIds = SpecialLeaveAttendanceRateDay::query()
                 ->where('work_style_id', $rule->work_style_id)
                 ->whereDate('work_date', $today->toDateString())
                 ->pluck('user_id');
@@ -158,32 +158,26 @@ class GrantScheduledSpecialLeaveHandler implements CommandHandler
     {
         $periodStart = $today->copy()->subMonths($rule->grant_cycle_months);
 
-        $scheduledDates = EmployeeCalendarEntry::query()
+        // 入力は特別休暇の出勤率ビューだけ(勤怠日・カレンダーのテーブルは読まない。仕様確定事項F)。
+        // 分子: 退勤済み ∪ 全休の休暇(3種) ∪ 有給・特別休暇の半休・時間休。
+        $scheduledDays = SpecialLeaveAttendanceRateDay::query()
             ->where('user_id', $user->id)
             ->where('is_working_day', true)
             ->whereDate('work_date', '>=', $periodStart->toDateString())
             ->whereDate('work_date', '<=', $today->toDateString())
-            ->pluck('work_date')
-            ->map(fn ($date) => $date->toDateString());
+            ->get();
 
-        if ($scheduledDates->isEmpty()) {
+        if ($scheduledDays->isEmpty()) {
             return false;
         }
 
-        $attendedDates = AttendanceDay::query()
-            ->where('user_id', $user->id)
-            ->whereDate('work_date', '>=', $periodStart->toDateString())
-            ->whereDate('work_date', '<=', $today->toDateString())
-            ->where(function ($query) {
-                $query->where('status', AttendanceDayStatus::CLOCKED_OUT)
-                    ->orWhere('work_type', 'like', 'paid_leave_%')
-                    ->orWhere('work_type', 'like', 'special_leave_%');
-            })
-            ->pluck('work_date')
-            ->map(fn ($date) => $date->toDateString());
-
-        $attendedCount = $scheduledDates->intersect($attendedDates)->count();
-        $rate = ($attendedCount / $scheduledDates->count()) * 100;
+        $attendedCount = $scheduledDays->filter(fn (SpecialLeaveAttendanceRateDay $day) => LeaveAttendanceRateJudgement::countsAsAttended(
+            $day->attended,
+            $day->full_leave_kinds ?? [],
+            $day->partial_leave_kinds ?? [],
+            [LeaveAttendanceRateJudgement::KIND_PAID, LeaveAttendanceRateJudgement::KIND_SPECIAL],
+        ))->count();
+        $rate = ($attendedCount / $scheduledDays->count()) * 100;
 
         return $rate >= $rule->min_attendance_rate;
     }

@@ -708,6 +708,12 @@
   手動付与は代休の口座側の休日出勤ビューで判定する。月次APIの代休表示は勤怠側の付与ビューを読む。旧付与集約とそのCommand/Handlerは削除する
   (旧イベントとProjectorは移行前の再生用に残す)。リリース手順: 新設Projectorのテーブルを空にして`event-sourcing:replay`の後、
   `compensatory-leave:migrate-to-account --apply`を実行する。
+- 2026-10-10 実装中の決定(WP6・WP7・有給の引き継ぎ): 出勤率ビューは有給(`leave_attendance_rate_*`)と特別休暇
+  (`special_leave_attendance_rate_*`。自動付与の勤務形態の絞り込みのため`work_style_id`を持つ)の各文脈に置き、判定は共有の
+  `App\Domain\Leave\Support\LeaveAttendanceRateJudgement`、Projectorは共通の抽象基底を継承する。フロントの差し戻された休暇の再提出は、
+  休暇申請APIに`workflow_request_id`を追加して申請詳細へ直接リンクする(後続で対応)。休暇の履歴画面(イベント一覧)には差戻しの導線を
+  付けない。有給の引き継ぎ(`paid-leave:migrate-requests`)で、却下済みワークフローの申請中は取消として引き継ぎ口座の未確定消化記録も
+  取り消す。**リハーサル確認事項**: (g)引き継ぎコマンドの警告(対応ワークフローが無い申請等)の件数、(h)旧システムが直接作った勤怠日の扱い(WP8)。
 
 ## 実装結果
 未着手
