@@ -96,6 +96,15 @@ use App\Domain\BackOffice\Events\BackOfficeTaskAssigned;
 use App\Domain\BackOffice\Events\BackOfficeTaskCompleted;
 use App\Domain\BackOffice\Events\BackOfficeTaskCreated;
 use App\Domain\BackOffice\Events\BackOfficeTaskStatusChanged;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantCancelled;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantConfirmed;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantManuallyGranted;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantRemoved;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantSynced;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountMigrated;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageCancelled;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageConfirmed;
+use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageDesignated;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantCancelled;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantConfirmed;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveGrantRemoved;
@@ -584,6 +593,18 @@ return [
         'special_leave_account.usage_confirmed' => SpecialLeaveAccountUsageConfirmed::class,
         'special_leave_account.usage_cancelled' => SpecialLeaveAccountUsageCancelled::class,
         'special_leave_account.migrated' => SpecialLeaveAccountMigrated::class,
+
+        // CompensatoryLeaveAccountAggregate(利用者単位の代休口座集約。付与・消化記録・充当の残数を一括で持つ。
+        // 集約IDは利用者IDからの派生UUID)。docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 仕様確定事項D参照。
+        'compensatory_leave_account.grant_synced' => CompensatoryLeaveAccountGrantSynced::class,
+        'compensatory_leave_account.grant_removed' => CompensatoryLeaveAccountGrantRemoved::class,
+        'compensatory_leave_account.grant_confirmed' => CompensatoryLeaveAccountGrantConfirmed::class,
+        'compensatory_leave_account.grant_manually_granted' => CompensatoryLeaveAccountGrantManuallyGranted::class,
+        'compensatory_leave_account.grant_cancelled' => CompensatoryLeaveAccountGrantCancelled::class,
+        'compensatory_leave_account.usage_designated' => CompensatoryLeaveAccountUsageDesignated::class,
+        'compensatory_leave_account.usage_confirmed' => CompensatoryLeaveAccountUsageConfirmed::class,
+        'compensatory_leave_account.usage_cancelled' => CompensatoryLeaveAccountUsageCancelled::class,
+        'compensatory_leave_account.migrated' => CompensatoryLeaveAccountMigrated::class,
 
         'compensatory_leave.grant_synced' => CompensatoryLeaveGrantSynced::class,
         'compensatory_leave.manually_granted' => CompensatoryLeaveManuallyGranted::class,
