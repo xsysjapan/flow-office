@@ -158,6 +158,13 @@ use App\Domain\PaidLeave\Events\PaidLeaveUsageReversed;
 use App\Domain\PaidLeave\Events\PaidLeaveUsed;
 use App\Domain\PaidLeave\Events\PaidLeaveWarningRaised;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleMigrated;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged as PaidLeaveAccountGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated as PaidLeaveAccountGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged as PaidLeaveAccountGrantDateChanged;
@@ -531,6 +538,16 @@ return [
         'paid_leave_account.usage_allocation_released' => PaidLeaveAccountUsageAllocationReleased::class,
         // Migration専用(Phase 9)。Command/Handlerは未実装だがイベント名を予約しておく。
         'paid_leave_account.migrated' => PaidLeaveAccountMigrated::class,
+
+        // PaidLeaveRequestAggregate(有給申請の申請状態の集約。旧paid_leave.*(廃止済み)とは別名)。
+        // docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 論点4・仕様確定事項C・I参照。
+        'paid_leave_request.requested' => PaidLeaveRequestLifecycleRequested::class,
+        'paid_leave_request.shared' => PaidLeaveRequestLifecycleShared::class,
+        'paid_leave_request.approved' => PaidLeaveRequestLifecycleApproved::class,
+        'paid_leave_request.returned' => PaidLeaveRequestLifecycleReturned::class,
+        'paid_leave_request.resubmitted' => PaidLeaveRequestLifecycleResubmitted::class,
+        'paid_leave_request.cancelled' => PaidLeaveRequestLifecycleCancelled::class,
+        'paid_leave_request.migrated' => PaidLeaveRequestLifecycleMigrated::class,
 
         // PaidLeaveScheduleAggregate(社員単位の付与予定Schedule/Assessment集約。
         // docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
