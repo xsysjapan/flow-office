@@ -40,6 +40,9 @@ class SpecialLeaveAccountProjector extends Projector
                 'granted_on' => $event->grantedOn,
                 'expires_on' => $event->expiresOn,
                 'granted_days' => $event->grantedDays,
+                // 残数の列(NOT NULL)は付与時点の値で埋め、直後の再計算で充当の合計に合わせる(旧Projectorと同じ初期値)。
+                'used_days' => 0,
+                'remaining_days' => $event->grantedDays,
                 'grant_reason' => $event->grantReason,
                 'status' => SpecialLeaveGrantStatus::ACTIVE,
             ],
@@ -132,6 +135,8 @@ class SpecialLeaveAccountProjector extends Projector
                     'granted_on' => $grant['grantedOn'],
                     'expires_on' => $grant['expiresOn'],
                     'granted_days' => $grant['grantedDays'],
+                    'used_days' => 0,
+                    'remaining_days' => $grant['grantedDays'],
                     'status' => $grant['revoked'] ? SpecialLeaveGrantStatus::REVOKED : SpecialLeaveGrantStatus::ACTIVE,
                     'revoked_at' => $grant['revoked'] ? $event->createdAt() : null,
                 ],

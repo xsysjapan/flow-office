@@ -16,6 +16,7 @@ use App\Models\DeviceOwnerType;
 use App\Models\PunchType;
 use App\Support\LocalDateTime;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -97,7 +98,8 @@ class DevicePunchController extends Controller
             ->whereDate('work_date', '>=', $punch->work_date->copy()->subDays(31))
             ->whereDate('work_date', '<', $punch->work_date)
             ->where('status', '!=', AttendanceDayStatus::CLOCKED_OUT)
-            ->whereNotIn('work_date', $fullDayLeaveDates)
+            // 勤怠日のwork_dateは日付だけでなく時刻付きで保存されることがあるため、日付部分で比較する。
+            ->whereNotIn(DB::raw('DATE(work_date)'), $fullDayLeaveDates)
             ->whereDoesntHave('calculation', fn ($query) => $query->where('absence_minutes', '>', 0))
             ->count();
         $workMinutes = null;

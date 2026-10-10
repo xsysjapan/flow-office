@@ -740,7 +740,11 @@ class AttendanceController extends Controller
         return SpecialLeaveUsage::query()
             ->where('user_id', $userId)
             ->where('used_on', 'like', "{$yearMonth}%")
-            ->where('is_confirmed', false)
+            // 残数不足の判定: 新しい流れ(特別休暇口座)では承認で確定し、充当できなかった日数をunallocated_daysに記録する。
+            // 旧来の行は確定できていない(is_confirmed=false)ことで表す。どちらも承認済み・残数を要する種別のものだけ対象。
+            ->where(fn ($query) => $query
+                ->where('unallocated_days', '>', 0)
+                ->orWhere('is_confirmed', false))
             ->whereHas('request', fn ($query) => $query
                 ->where('status', SpecialLeaveRequestStatus::APPROVED)
                 ->whereHas('specialLeaveType', fn ($query) => $query->where('requires_grant', true)))
