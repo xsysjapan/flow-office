@@ -261,8 +261,13 @@ class PaidLeaveRequestProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function create(string $requestId, string $source, array $attributes, bool $takeover = false): bool
+    private function create(?string $requestId, string $source, array $attributes, bool $takeover = false): bool
     {
+        // 申請IDが無いイベントは行を作れないため無視する(例外にしない)。
+        if ($requestId === null) {
+            return false;
+        }
+
         $existing = PaidLeaveRequest::query()->find($requestId);
         if (! $takeover && $existing !== null && ! $this->canWrite($existing, $source)) {
             return false;
@@ -281,8 +286,12 @@ class PaidLeaveRequestProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function transition(string $requestId, string $source, array $attributes): void
+    private function transition(?string $requestId, string $source, array $attributes): void
     {
+        if ($requestId === null) {
+            return;
+        }
+
         $request = PaidLeaveRequest::query()->find($requestId);
         if ($request === null || ! $this->canWrite($request, $source)) {
             return;

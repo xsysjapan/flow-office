@@ -369,8 +369,13 @@ class AttendanceDayLeaveProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function create(string $leaveKind, string $leaveRequestId, string $source, array $attributes, bool $takeover = false): bool
+    private function create(string $leaveKind, ?string $leaveRequestId, string $source, array $attributes, bool $takeover = false): bool
     {
+        // 申請IDが無いイベント(休暇の行を作れない旧イベント)は無視する(例外にしない。変更セットのリハーサル事項(e))。
+        if ($leaveRequestId === null) {
+            return false;
+        }
+
         $existing = $this->find($leaveKind, $leaveRequestId);
         if (! $takeover && $existing !== null && $existing->source !== $source) {
             return false;
@@ -389,8 +394,12 @@ class AttendanceDayLeaveProjector extends Projector
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function transition(string $leaveKind, string $leaveRequestId, string $source, array $attributes): void
+    private function transition(string $leaveKind, ?string $leaveRequestId, string $source, array $attributes): void
     {
+        if ($leaveRequestId === null) {
+            return;
+        }
+
         $leave = $this->find($leaveKind, $leaveRequestId);
         if ($leave === null || $leave->source !== $source) {
             return;
@@ -412,8 +421,12 @@ class AttendanceDayLeaveProjector extends Projector
         ]);
     }
 
-    private function find(string $leaveKind, string $leaveRequestId): ?AttendanceDayLeave
+    private function find(string $leaveKind, ?string $leaveRequestId): ?AttendanceDayLeave
     {
+        if ($leaveRequestId === null) {
+            return null;
+        }
+
         return AttendanceDayLeave::query()
             ->where('leave_kind', $leaveKind)
             ->where('leave_request_id', $leaveRequestId)

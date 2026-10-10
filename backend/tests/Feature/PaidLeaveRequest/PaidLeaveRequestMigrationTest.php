@@ -172,9 +172,10 @@ class PaidLeaveRequestMigrationTest extends TestCase
 
     public function test_migrated_submitted_request_can_be_approved_and_consumes_the_grant(): void
     {
+        // fixtures() で確定済みの1日(承認済みのcutover後の申請)を差し引いた残数が基準。
         [, , $submittedAccount] = $this->fixtures();
         Artisan::call('paid-leave:migrate-requests', ['--apply' => true]);
-        $this->assertRemainingDays(10.0);
+        $this->assertRemainingDays(9.0);
 
         app(CommandBus::class)->dispatch(new ApprovePaidLeaveRequest(
             paidLeaveRequestId: $submittedAccount,
@@ -183,14 +184,15 @@ class PaidLeaveRequestMigrationTest extends TestCase
 
         $this->assertSame('approved', PaidLeaveRequestAggregate::retrieve($submittedAccount)->status());
         $this->assertSame(['approved', PaidLeaveRequest::SOURCE_PAID_REQUEST], $this->rowState($submittedAccount));
-        $this->assertRemainingDays(9.0);
+        $this->assertRemainingDays(8.0);
     }
 
     public function test_migrated_returned_request_can_be_resubmitted_and_approved_with_one_usage(): void
     {
+        // fixtures() で確定済みの1日を差し引いた残数が基準。差戻し中は消化記録が取り消されているため残数は変わらない。
         [, $returnedLegacy] = $this->fixtures();
         Artisan::call('paid-leave:migrate-requests', ['--apply' => true]);
-        $this->assertRemainingDays(10.0);
+        $this->assertRemainingDays(9.0);
 
         app(CommandBus::class)->dispatch(new ResubmitPaidLeaveRequest(
             paidLeaveRequestId: $returnedLegacy,
@@ -200,7 +202,7 @@ class PaidLeaveRequestMigrationTest extends TestCase
         // 再提出で申請中に戻り、新しい消化記録は1件(差戻しで取り消されている旧い分と二重に計上しない)。
         $this->assertSame('submitted', PaidLeaveRequestAggregate::retrieve($returnedLegacy)->status());
         $this->assertTrue(PaidLeaveAccountAggregate::retrieve($this->employee->id)->hasActiveUsageForRequest($returnedLegacy));
-        $this->assertRemainingDays(10.0);
+        $this->assertRemainingDays(9.0);
 
         app(CommandBus::class)->dispatch(new ApprovePaidLeaveRequest(
             paidLeaveRequestId: $returnedLegacy,
@@ -208,7 +210,7 @@ class PaidLeaveRequestMigrationTest extends TestCase
         ));
 
         $this->assertSame('approved', PaidLeaveRequestAggregate::retrieve($returnedLegacy)->status());
-        $this->assertRemainingDays(9.0);
+        $this->assertRemainingDays(8.0);
     }
 
     public function test_rebuilding_the_projections_after_migration_reproduces_the_same_state(): void
