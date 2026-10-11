@@ -132,43 +132,40 @@ php artisan events:normalize-history \
 全792件をデシリアライズできること、
 全集約のバージョン欠番が0件であることを確認済み。
 
-## 休暇まわりの補正(変更セット 20261009-keep-leave-work-type-on-edit)
+## 休暇まわりの作り直し(変更セット 20261009-keep-leave-work-type-on-edit、論点18)
 
-休暇の申請・残数・勤怠を文脈ごとに分けた変更(変更セット論点12・仕様確定事項H)で、本番の休暇データを補正する
-ための枠組みを追加した。枠組みは次の部品からなる。具体的な補正の計画(どのイベントを何に変えるか)は、本番相当データの
-リハーサルで件数を確認して決め、その後にユーザーの許可を得てから作る。
+休暇の旧イベント(有給・特別休暇・代休の旧系統)と、移行イベント(`*.migrated`)・補正イベント(`attendance_day.corrected`)は、
+`stored_events`の作り直しで新しいイベント構成へ変換する。移行イベント・補正イベントは作らない(`data-correction`スキル)。
+変換規則と実行手順は`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md`(2章・7章)、
+本番の手順は`docs/27-release-runbook.md` 3.1による。
+
+### 作り直しの実行
+
+```bash
+php artisan leave:rebuild-event-store                    # 試し実行(既定。書き込みなし。扱えない並びがあれば失敗)
+php artisan leave:rebuild-event-store --apply            # stored_events_rebuilt に作り直し後の行を書き、自己整合性を検査する
+php artisan leave:rebuild-event-store --verify           # stored_events_rebuilt の自己整合性(id・版の連番、旧イベントの残存)を検査する
+php artisan leave:rebuild-event-store --swap             # 検査が通っている場合に stored_events と入れ替える
+php artisan leave:rebuild-event-store --list-readmodels  # 全Projectorの書き込み先テーブル(リビルド前に空にする対象)を出す
+```
+
+- 旧イベントクラスに依存せず`stored_events`の生のJSONを読み、元の発生順にid・版を振り直す。`created_at`は元の値を引き継ぐ。
+- 扱えない並びは未対応として一覧に出し、失敗させる(推測で埋めない)。例: ReadModelに行が無く`attendance_day.created`も無い勤怠日、
+  cutover後の指定・取消の重複、`daily_calculation_adjusted`の直前に`attendance_day.calculated`が無い日、旧と口座イベントの混在、
+  申請に結び付かない消化。
+- `--swap`は`stored_events`を`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残す(表名を記録する)。
+- 検証は複製DBで行う。複製に作り直し後の表を入れ、全ReadModelを空にして全Projectorをリビルドした結果を本番のReadModelと比較し、
+  差分が意図した差(差し戻された休暇の消化記録の取消、休暇値の削除等)だけであることを確認する。
+
+### 部分的な書き換え(`StoredEventCorrector`・補正コマンドの基底)
+
+少数のイベントのpayloadを直す・誤って記録されたイベントを消す補正は、次の部品で行う。作り直しで置き換えられない個別の補正に使う。
+各補正は、対象のイベント・修正前後の値を示したうえで、ユーザーの明示的な許可を得てから本実行する(`data-correction`ステップ2。一般的な「直してほしい」は許可とみなさない)。
 
 - `App\Domain\EventSourcing\Correction\StoredEventCorrector`: `stored_events`の直接修正(書き換え・削除)の共通処理
 - `App\Console\Commands\Concerns\StoredEventCorrectionCommand`: 補正コマンドの基底クラス。子クラスは`plan()`で補正計画
   (`StoredEventCorrectionPlan`。補正キーと`StoredEventRewrite`の一覧)を返す。子クラスのsignatureには`{--apply} {--backup-table=}`を含める
 - 補正ログ `stored_event_corrections`: 修正したイベントの修正前後のpayload・バックアップテーブル名を残す。Projectionではない
-- 補正専用イベント `attendance_day.corrected`(`CorrectAttendanceDay`で記録)
-- 候補の検出 `php artisan leave:correction-report`(試し実行専用。何も変更しない)
-
-### 候補の検出とリハーサル
-
-本番相当DBの複製で次を実行し、候補の件数と採りうる方法を確認する。
-
-```bash
-php artisan leave:correction-report
-php artisan leave:correction-report --limit=50
-```
-
-| 候補 | 内容 | 推奨する方法 | 採らない方法 |
-|---|---|---|---|
-| (1) | 差し戻された休暇の未取消の消化記録 | 補正イベント(今の時点の取消を追記する。口座集約の取消で行う) | 直接修正(利用者の操作の記録であり誤記録ではないため) |
-| (2) | 休暇の処理が直接作った勤怠日(`attendance_day.created`が無い) | 補正イベント(`attendance_day.corrected`を今の時点に追記) | 欠けた`created`の過去の版への挿入(挿入は行わない) |
-| (3) | 編集イベント(created・edited)に入った休暇値(`workType`の`paid_leave_*`等) | 直接修正(`workType`を`null`へ書き換え。版は変えない) | 補正イベントによる上書き(過去の誤った値は履歴に残る) |
-| (4) | 勤怠日に残る休暇値・全休の`status`(実績・打刻の無い`clocked_out`) | (3)の直接修正の後に`event-sourcing:replay`で再生成し、残った行だけ補正イベントを追記 | 勤怠日テーブルの直接UPDATE(ReadModleだけの書き換えは行わない) |
-
-リハーサルでは次も確認する。
-
-- 旧系統の引き継ぎコマンドの警告件数: `paid-leave:migrate-requests`・`special-leave:migrate-to-account`・
-  `compensatory-leave:migrate-to-account`(いずれも既定は試し実行)
-- (1)の対象のうち、旧系統の消化記録は口座への移行(`migrated`)の後に取消として扱うため、移行の件数と合わせて方法を決める
-
-決めた方法と件数は変更セットに記録し、直接修正の対象イベントの種類・範囲・書き換え後の値を示したうえで、
-ユーザーの明示的な許可を得る(`.claude/skills/data-correction` ステップ2。一般的な「直してほしい」は許可とみなさない)。
 
 ### 直接修正の実行(試し実行 → 許可 → `--apply`)
 
@@ -192,23 +189,13 @@ php artisan <補正コマンド> --apply --backup-table=stored_events_backup_202
 - 本実行の後、影響するReadModelを`event-sourcing:replay`で再生成し(対象テーブルを空にしてから実行する。手順は`docs/29`参照)、
   検証SQLで結果を確認する。
 
-### 補正イベント(`attendance_day.corrected`)を使う場合
+### 作り直しの後(休暇まわりの確認)
 
-補正イベントは、今の時点に勤怠日の「現在の正しい状態一式」を追記する。過去のイベントは書き換えない。
-
-- 運用コマンドは`CorrectAttendanceDay`(`App\Domain\Attendance\Commands\CorrectAttendanceDay`)をCommandBusで発行する。
-  `correctionId`が同じ補正は記録しない(再実行で二重に記録しない)。`reason`・`correctedByUserId`は必須。
-- 行が無ければ作る(欠けた`attendance_day.created`の補完)。`dailyCalculation`が`null`なら日次計算の行を消す。
-  手動調整・週40時間の配賦は渡した値をそのまま置き、差分の再適用はしない。月次ロック(`locked_at`)は含めない。
-- 補正イベントの追記後に、勤怠日の日次計算を現在のロジックで確認する場合は`attendance:recalculate-days`
-  (`--from`・`--to`必須。既定は試し実行、`--apply`で記録。締め・提出済みの日は一覧に印を付ける)を使う。
-
-### 検証(休暇まわりの補正後)
-
-- `php artisan leave:correction-report`の候補(1)〜(4)の件数が、リハーサルで決めた方法の後に想定どおり0件になること
-- `stored_event_corrections`に補正キーごとの件数とバックアップテーブル名が残っていること
-- 補正の対象の集約について、版が欠番なく続いていること
-- 有給・特別休暇・代休の口座と勤怠の休暇ビューを空から再生成しても、補正前の再生成と同じ状態になること
+- 全ReadModelのテーブル(`leave:rebuild-event-store --list-readmodels`で出す一覧)を空にしてから、全Projectorを`event-sourcing:replay`する
+  (Projectorは既存の状態を消さない前提のため空にする。手順は`docs/29`参照)。
+- 日次計算を`attendance:recalculate-days`(`--from`・`--to`必須。既定は試し実行、`--apply`で記録。締め・提出済みの日は一覧に印を付ける)で
+  再計算する。締め・提出済みの月のスナップショットとの差は、リハーサルで確認する。
+- 有給・特別休暇・代休の口座と勤怠の休暇ビューを空から再生成しても、作り直し前の再生成と同じ状態になること。
 
 ## ロールバック
 

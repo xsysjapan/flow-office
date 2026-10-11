@@ -114,17 +114,17 @@
 
 ## Attendance
 
-- `attendance.break_auto_inserted` (1日分の勤務が矛盾なく組み立てられた際、働き方の
+- `attendance_day.break_auto_inserted` (1日分の勤務が矛盾なく組み立てられた際、働き方の
   auto_break_enabledが有効かつその日に休憩が1件も記録されていない場合に、標準休憩
   (default_break_start_time〜default_break_end_time)を自動でattendance_breaksへ
   補完する。実際に打刻・編集された休憩を上書きすることはない。WEB・端末のどちらの
   経路でも`AttendanceDayPunchSyncer`が同じ規則で発生させる)
-- `attendance.day_created` (UC-A016 出勤日を新規作成する)
-- `attendance.day_edited`
-- `attendance.day_deleted` (UC-A015 日次勤怠を削除する)
-- `attendance.day_calculated`
-- `attendance.daily_calculation_adjusted` (日次登録後、区分ごとの時間を手動で補正する。
-  実績が再編集され`attendance.day_calculated`が再発生すると解除される)
+- `attendance_day.created` (UC-A016 出勤日を新規作成する)
+- `attendance_day.edited`
+- `attendance_day.deleted` (UC-A015 日次勤怠を削除する)
+- `attendance_day.calculated`
+- `attendance_day.daily_calculation_adjusted` (日次登録後、区分ごとの時間を手動で補正する。
+  実績が再編集され`attendance_day.calculated`が再発生すると解除される)
 - `attendance.legal_holiday_designated` (UC-C007 法定休日「決めない方式」の週の法定休日を指定する)
 - `attendance.submission_reminder_excluded` (管理者が特定の社員×年月を勤怠未提出督促
   (WarnUnsubmittedAttendanceHandler)の対象から個別に除外する。誤ってその月を提出対象に
@@ -140,7 +140,6 @@
 - `attendance_day.live_status_synced` (打刻ログがまだ矛盾なく1日分の勤務として組み立て
   られない間(出勤のみ・休憩開始のみ等)に、最新の打刻から`attendance_days.status`のみを
   反映する。WEB画面・端末のどちらの打刻でも発生しうる。既に退勤済みの日には発生しない)
-- `attendance_day.corrected` (補正専用。運用の補正コマンド(data-correction)が発行する`CorrectAttendanceDay`で記録する。勤怠日の現在の正しい状態一式(勤怠日の列・休憩・不就労区間・日次計算・週40時間の配賦)と補正ID・理由・操作者を持つ。行が無ければ作り、あれば全項目を置き換える。過去のイベントは書き換えない。同じ補正IDは1度だけ記録する。出勤率ビュー・代休の休日出勤ビューも同じイベントから更新する。代休付与の同期Reactor(SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor)も購読し、記録された日次計算で下書き付与を同期する(日次計算が無ければ外す))
 - `attendance.month_submitted`
 - `attendance.month_approved`
 - `attendance.month_returned`
@@ -215,31 +214,14 @@
 - `field_provenance.recorded` (AI推定値・ユーザー確認等、項目ごとの出所の記録)
 - `field_provenance.confirmed` (ユーザーがAI推定値を確認したことの記録)
 
-## PaidLeave(廃止・監査目的でstored_eventsに残存)
+## PaidLeave(旧。作り直しで削除)
 
 年次有給休暇は2026年9月の`PaidLeaveAccountAggregate`への再設計(cutover、
-docs/changesets/20260906-paid-leave-domain-redesign/spec.md)により、以下の
-`paid_leave.*`イベント群は**廃止**された。旧`App\Domain\PaidLeave\Aggregates\
-{PaidLeaveGrantAggregate,PaidLeaveRequestAggregate}`および対応するCommand/Handler/
-Projectorはコードから削除済みで、以後この名前空間から新規に発行されることはない。
-イベントクラス自体は`stored_events`に残る過去データのreplay・履歴参照のためだけに
-物理的に残置している(`enforce_event_class_map`解決のため)。新規実装・新規参照では
-下記「PaidLeaveAccount」節のイベントを使うこと。
-
-- `paid_leave.rule_created`
-- `paid_leave.granted`
-- `paid_leave.requested`
-- `paid_leave.usage_designated` (旧paid_leave_request集約が記録。申請時点(承認前)で
-  `paid_leave_usages`に確定前(grant_id未設定・is_confirmed=false)の行を作る)
-- `paid_leave.request_approved`
-- `paid_leave.request_returned`
-- `paid_leave.request_cancelled`
-- `paid_leave.used`
-- `paid_leave.usage_reversed`
-- `paid_leave.expired`
-- `paid_leave.warning_raised`
-- `paid_leave.grant_revoked` (管理者による付与取消。消化済み日数がある付与は取消不可
-  ―この制約自体も新ドメインでは変更されている。docs/09-usecases-paid-leave.md UC-P008参照)
+docs/changesets/20260906-paid-leave-domain-redesign/spec.md)で、旧`paid_leave.*`イベント群は廃止された。
+2026-10-11の`stored_events`の作り直し(変更セット論点18。`leave:rebuild-event-store`)で、旧イベント列は
+新しいイベント構成(`paid_leave_request.*`・`paid_leave_account.*`)へ変換済みであり、`paid_leave.*`は現在の
+`stored_events`に記録されない。旧イベント(`paid_leave.rule_created`・`granted`・`requested`・`usage_designated`・
+`request_approved`・`used`・`grant_revoked`等)は削除した。
 
 ## PaidLeaveAccount(現行、`App\Domain\PaidLeaveAccount\Events\`)
 
@@ -251,8 +233,8 @@ Projectorはコードから削除済みで、以後この名前空間から新�
 内部モデル」を参照。
 
 - `paid_leave_account.grant_created` → `PaidLeaveGrantCreated`
-  (grantId, grantedOn, expiresOn, grantedDays, grantReason, source)。新規Grant発行
-  (手動・自動付与とも共通)。
+  (grantId, grantedOn, expiresOn, grantedDays, grantReason, source)。`source`は`manual`・`scheduled_batch`・
+  `carried_over`(作り直しで作るcutoverの持ち込み残高)。新規Grant発行(手動・自動付与とも共通)。
 - `paid_leave_account.grant_amount_changed` → `PaidLeaveGrantAmountChanged`
   (grantId, newGrantedDays, reason, changedByUserId)。最新Grantの日数変更
   (Allocation合計を下回る減額は不可)。
@@ -285,12 +267,8 @@ Projectorはコードから削除済みで、以後この名前空間から新�
   UsageとGrantを充当する(1件のUsage確定で複数件発行されうる)。
 - `paid_leave_account.usage_allocation_released` → `PaidLeaveUsageAllocationReleased`
   (usageId, grantId, releasedDays)。Grant取消・Usage取消時にAllocationを解除する。
-- `paid_leave_account.migrated` → `PaidLeaveAccountMigrated`
-  (cutoverDate, grants[])。既存システム/旧ドメインからのcutover移行専用。口座ごとに
-  1回だけ発行され、通常の`grant()`が課す不変条件(直前Grantより後の日付であること等)を
-  経由しない`migrateGrants()`から発行される。`grants[]`の各要素は
-  `{grantId, originalGrantedOn?, originalGrantedDays?, remainingDaysAtCutover, expiresOn,
-  source, cutoverMetadata?}`(docs/09-usecases-paid-leave.md UC-P010参照)。
+- (`paid_leave_account.migrated`は削除。cutover時点の残高は作り直しで`grant_created`(`source=carried_over`)に変換済み。
+  docs/09-usecases-paid-leave.md UC-P010参照)
 
 ## PaidLeaveRequest(有給申請の申請状態、`App\Domain\PaidLeaveRequest\Events\`)
 
@@ -298,8 +276,10 @@ Projectorはコードから削除済みで、以後この名前空間から新�
 (申請中・差戻し・承認済み・取消)だけを持ち、残数・消化記録は`PaidLeaveAccount`が持つ
 (docs/09-usecases-paid-leave.md、変更セット`20261009-keep-leave-work-type-on-edit`の論点4)。
 イベントクラス名は旧`PaidLeave\Events\PaidLeaveRequestApproved`等との衝突を避けて
-`PaidLeaveRequestLifecycle{Requested,Shared,Approved,Returned,Resubmitted,Cancelled,Migrated}`
+`PaidLeaveRequestLifecycle{Requested,Shared,Approved,Returned,Resubmitted,Cancelled}`
 とし、`config/event-sourcing.php`で`paid_leave_request.*`に対応づける。
+作り直し後は、申請の`requested`・`resubmitted`が`userId`・`hours`・`approverUserId`・`reason`・`requestGroupId`・`workflowRequestId`を持ち、
+承認・差戻し・取消は`userId`を持つ(旧イベントに無い項目は作り直しで補完する)。
 
 - `paid_leave_request.requested` → `PaidLeaveRequestLifecycleRequested`
   (userId, targetDate, leaveType, hours, requestedDays, approverUserId, reason, requestGroupId,
@@ -314,11 +294,7 @@ Projectorはコードから削除済みで、以後この名前空間から新�
   workflowRequestId)。差戻しからの再提出(内容は変えない。残数側は新しい消化記録を作る)。
 - `paid_leave_request.cancelled` → `PaidLeaveRequestLifecycleCancelled`(cancelledByUserId, reason, userId)。
   申請中・差戻し・承認済みからの取消。承認済みの取消でも承認(ワークフロー)は取り消さない(設計原則13)。
-- `paid_leave_request.migrated` → `PaidLeaveRequestLifecycleMigrated`(本変更前の申請の引き継ぎ)。
-  現在の状態・対象日・取得単位・時間数・ワークフローID・まとめ申請ID・対応する消化記録ID(`usageId`)を
-  含む。運用コマンド`paid-leave:migrate-requests`が今の時点に追記する。
-  申請IDごとに、`migrated`より前は旧系統(旧`paid_leave.*`/cutover後の`paid_leave_account.*`+
-  `workflow_request.returned`)、以後は`paid_leave_request.*`だけで状態を作る(3系統の切り替え)。
+- (`paid_leave_request.migrated`は削除。本変更前の申請は作り直しで`paid_leave_request.*`の状態機械のイベントに変換済み)
 
 ## SpecialLeaveAccount(特別休暇の利用者単位の口座集約、`App\Domain\SpecialLeaveAccount\Events\`)
 
@@ -338,9 +314,7 @@ Projectorはコードから削除済みで、以後この名前空間から新�
   充当できなかった分を`unallocatedDays`に記録する(論点17)。
 - `special_leave_account.usage_cancelled` → `SpecialLeaveAccountUsageCancelled`
   (usageId, releasedAllocations, reason)。差戻し・取消で消化記録を取り消し、充当を解除する。
-- `special_leave_account.migrated` → `SpecialLeaveAccountMigrated`(grants, usages, userId)。
-  運用コマンド`special-leave:migrate-to-account`が、既存の付与・未取消の消化記録の現在の状態を
-  今の時点に追記する(差し戻された申請の消化記録は含めない。申請IDと消化記録IDの対応を含む)。
+- (`special_leave_account.migrated`は削除。既存の付与・消化は作り直しで`special_leave_account.*`に変換済み)
 
 ## CompensatoryLeaveAccount(代休の利用者単位の口座集約、`App\Domain\CompensatoryLeaveAccount\Events\`)
 
@@ -366,8 +340,7 @@ AggregateIdは特別休暇の口座と同じく種類ごとの派生IDを使う�
   (userId, usageId, allocations, unallocatedDays, unallocatedMinutes)。承認時の充当。不足分は記録する(論点17)。
 - `compensatory_leave_account.usage_cancelled` → `CompensatoryLeaveAccountUsageCancelled`
   (userId, usageId, releasedAllocations, reason)。差戻し・取消で消化記録を取り消す。
-- `compensatory_leave_account.migrated` → `CompensatoryLeaveAccountMigrated`(userId, grants, usages)。
-  運用コマンド`compensatory-leave:migrate-to-account`が追記する(特別休暇と同じ規則)。
+- (`compensatory_leave_account.migrated`は削除。既存の付与・消化は作り直しで`compensatory_leave_account.*`に変換済み)
 
 ## 休暇まわりの連携(購読関係、原則15)
 
@@ -430,55 +403,44 @@ docs/changesets/20260906-paid-leave-schedule-assessment/spec.md参照)。
 
 ## SpecialLeave
 
-`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
-paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。
+申請の状態(申請・差戻し・再申請・承認・取消・提出)は`special_leave.*`が持つ。付与・消化(残数)は
+`SpecialLeaveAccount`の`special_leave_account.*`が持つ(上記「SpecialLeaveAccount」節)。
 
-2026-10-10の変更で、申請状態(申請・差戻し・再申請・承認・取消・提出)は`special_leave.*`が持ち、
-付与・消化(残数)は`SpecialLeaveAccount`の`special_leave_account.*`が持つ。`special_leave.granted`・
-`special_leave.usage_designated`・`special_leave.used`・`special_leave.usage_reversed`・`special_leave.grant_revoked`は
-旧集約の過去データの再生用に残置する(新規には発行されない)。
-
-- `special_leave.granted` (旧。新規付与は`special_leave_account.grant_registered`)
 - `special_leave.requested`
 - `special_leave.request_shared` (申請の提出。申請・承認文脈のReactorがワークフローを提出する)
 - `special_leave.request_resubmitted` (`SpecialLeaveRequestResubmitted`。差戻しされた申請の再申請。
   同じ内容で申請中に戻し、残数側は新しい消化記録を作る。論点8)
-- `special_leave.usage_designated` (旧。新規は`special_leave_account.usage_designated`)
 - `special_leave.request_approved`
 - `special_leave.request_returned`
 - `special_leave.request_cancelled`
-- `special_leave.used` (旧)
-- `special_leave.usage_reversed` (旧)
-- `special_leave.grant_revoked` (旧。管理者による付与取消。新規は`special_leave_account.grant_revoked`)
+
+旧イベント(`special_leave.granted`・`usage_designated`・`used`・`usage_reversed`・`grant_revoked`)は削除した。
+作り直しで`special_leave_account.*`へ変換済みであり、現在の`stored_events`には記録されない。
+
+作り直し後の`requested`・`resubmitted`は`userId`・`targetDate`・`specialLeaveTypeId`・`leaveType`・`hours`・`requestedDays`・
+`approverUserId`・`reason`・`requestGroupId`を持ち、承認・差戻し・取消は`userId`・`targetDate`・`specialLeaveTypeId`・`leaveType`・
+`hours`・`requestedDays`を持つ(旧イベントに無い項目は作り直しで補完する)。
 
 ## CompensatoryLeave
 
-`paid_leave.*`と同じ構造(`usage_designated`/`used`/`usage_reversed`のライフサイクルは
-paid_leave_usagesと同じ。docs/16-database-schema.md paid_leave_usages参照)。休日出勤の
-勤怠実績から自動導出される付与(grant)に関するイベントが別途ある。
+申請の状態(申請・差戻し・再申請・承認・取消・提出)は`compensatory_leave.*`が持つ。付与・消化(残数)は
+`CompensatoryLeaveAccount`の`compensatory_leave_account.*`が持つ(上記「CompensatoryLeaveAccount」節)。
+休日出勤の勤怠実績からの付与は、勤怠の日次計算に同期される。
 
-2026-10-10の変更で、申請状態は`compensatory_leave.*`(申請)、付与・消化(残数)は
-`CompensatoryLeaveAccount`の`compensatory_leave_account.*`が持つ。付与と消化の以下のイベントは
-旧集約の過去データの再生用に残置する(新規には発行されない)。
-
-- `compensatory_leave.grant_synced` (旧。新規は`compensatory_leave_account.grant_synced`)
-- `compensatory_leave.grant_removed` (旧)
-- `compensatory_leave.grant_confirmed` (旧)
-- `compensatory_leave.grant_cancelled` (旧)
 - `compensatory_leave.requested`
 - `compensatory_leave.request_shared`
-- `compensatory_leave.usage_designated` (旧。新規は`compensatory_leave_account.usage_designated`)
+- `compensatory_leave.request_resubmitted` (`CompensatoryLeaveRequestResubmitted`。差戻しされた申請の
+  再申請。論点8)
 - `compensatory_leave.request_approved`
 - `compensatory_leave.request_returned`
 - `compensatory_leave.request_cancelled`
-- `compensatory_leave.request_resubmitted` (`CompensatoryLeaveRequestResubmitted`。差戻しされた申請の
-  再申請。論点8)
-- `compensatory_leave.used` (旧)
-- `compensatory_leave.usage_reversed` (旧)
-- `compensatory_leave.manually_granted` (旧。管理者による手動付与。新規は
-  `compensatory_leave_account.grant_manually_granted`。休日出勤の対象日を指定し、
-  勤怠実績からの自動導出と同じ換算ルールで日数を算出、承認不要でstatus=confirmedの行を
-  1イベントで作成する。docs/09-usecases-paid-leave.md「代休の手動付与・管理者直接取消」参照)
+
+旧イベント(`compensatory_leave.grant_synced`・`grant_removed`・`grant_confirmed`・`grant_cancelled`・
+`usage_designated`・`used`・`usage_reversed`・`manually_granted`)は削除した。作り直しで`compensatory_leave_account.*`へ
+変換済みであり、現在の`stored_events`には記録されない。
+
+作り直し後の`requested`・`resubmitted`は`userId`・`targetDate`・`leaveType`・`hours`・`requestedDays`・`requestedMinutes`・
+`approverUserId`・`reason`・`requestGroupId`を持ち、承認・差戻し・取消は`userId`を持つ(旧イベントに無い項目は作り直しで補完する)。
 
 ## Attachment / Notification / Export (横断)
 
@@ -558,6 +520,8 @@ StoredEventを復元するための履歴互換イベントである。旧機構
   (例: `attendance_day` + `attendance_days.id`)。
 - イベントは追記のみ。既存イベントの意味を変える場合は新しいイベント種別を追加し、
   旧イベントは残す(イミュータブル)。
+  ただし休暇の旧イベントは例外で、作り直し(`docs/32`「休暇まわりの補正」。`stored_events`の作り直し)で
+  新しいイベント構成に変換して置き換えた。
 
 ただし、本番カットオーバー処理が業務事実と異なる合成イベントや逆転した日時を作った場合に限り、
 承認済みの一回限りのデータ補正として、原本DBバックアップと専用バックアップテーブルを作成した上で

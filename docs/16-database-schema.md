@@ -1112,10 +1112,8 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - used_days (旧ドメイン互換のため存続。`allocated_days`と同じ意味の値を保持)
 - remaining_days (`granted_days - allocated_days`の非正規化キャッシュ)
 - grant_reason
-- source (`manual` / `migration`。通常のGrantとcutover移行由来のGrantを監査上区別する)
-- original_granted_days (nullable。移行(モードA)由来のGrantのみ設定される、切替前の
-  元の付与日数。監査・表示専用で、不変条件には使わない)
-- cutover_metadata (nullable, json。移行由来のGrantの付随情報(モード種別・備考等))
+- source (`manual`(手動付与) / `scheduled_batch`(定期の自動付与) / `carried_over`(cutoverでシステム外から持ち込んだ残高。
+  `stored_events`の作り直しで作る)。付与の区別に使う。`original_granted_days`・`cutover_metadata`は撤去した(移行の情報はイベントの`meta`に残る))
 - expiry_warned_at (UC-P005: 消滅警告を通知済みの日時。重複通知防止用)
 - five_day_obligation_warned_at (UC-P006: 年5日取得義務警告を通知済みの日時。重複通知防止用)
 - status (`active` / `revoked`。UC-P008: 管理者による付与取消。デフォルト`active`)
@@ -1131,9 +1129,6 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 ## paid_leave_requests (有給申請の申請テーブル。Projection)
 
 - id
-- input_source (nullable。申請の入力系統。変更セット論点4・13の3系統: `legacy_paid`(旧`paid_leave.*`)/
-  `paid_account`(cutover後〜本変更前の`paid_leave_account.*`+`workflow_request.returned`)/
-  `paid_request`(本変更後の`paid_leave_request.*`)。`paid_leave_request.migrated`以前は旧系統で作る)
 - request_group_id (nullable。期間指定でまとめて申請した複数日分(1日1行)を束ねるID。
   単日申請ではnull。承認者がこのうち1件を承認すると、同じIDを持つ他の提出中の行も
   まとめて承認される)
@@ -1164,8 +1159,6 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 
 - id (内部連番。既存互換のため残置)
 - usage_id (uuid、unique。新ドメインのUsage識別子。`PaidLeaveUsageDesignated.usageId`)
-- stored_event_id (nullable, unique。旧ドメイン時代の冪等性列。新ドメインの行は
-  `usage_id`で冪等Upsertする)
 - user_id
 - attendance_day_id (nullable。勤怠日への外部キーは撤去した(変更セット論点6・12)。新規の消化記録には設定しない)
 - paid_leave_grant_id (nullable。旧ドメインが単一Grant参照に使っていた列。新ドメインの
@@ -1306,7 +1299,7 @@ Aggregateをreplayして行う)。
 ## 休暇まわりの新設テーブル(変更セット `20261009-keep-leave-work-type-on-edit`)
 
 休暇の申請・残数・勤怠の連携のために新設・変更したテーブル(マイグレーション
-`2026_10_10_000001`〜`000008`)。Projectionは`stored_events`から再生成できる。口座集約の
+`2026_10_10_000001`〜`000009`)。Projectionは`stored_events`から再生成できる。口座集約の
 テーブル(`*_usages`・`*_usage_allocations`)の行は口座集約のイベント(`*_account.*`)から作る。
 
 - `leave_request_workflow_links` (Projection。休暇申請文脈): workflow_request_id (PK)、leave_kind
@@ -1314,23 +1307,21 @@ Aggregateをreplayして行う)。
   `workflow_request.drafted`と各休暇の`*.shared`から作り、`workflow_requests`を読まない。
 - `attendance_day_leaves` (Projection。勤怠の休暇ビュー): id、leave_kind、leave_request_id、user_id、
   work_date、unit (full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、workflow_request_id、
-  request_status (submitted/approved/returned/cancelled)、source (legacy_paid/paid_account/paid_request/
-  special/compensatory)、timestamps。unique(leave_kind, leave_request_id)、index(user_id, work_date)。
-  差戻し・取消では行を削除せずrequest_statusを更新する(系統の切り替え判定に行を使うため)。
+  request_status (submitted/approved/returned/cancelled)、timestamps。unique(leave_kind, leave_request_id)、index(user_id, work_date)。
+  差戻し・取消では行を削除せずrequest_statusを更新する(画面で履歴を追えるようにするため)。
   読み手は申請中・承認済みの行だけを扱う。`work_type`・勤怠日の休暇値の代わりに休暇の有無・種類・取得単位を持つ。
 - `attendance_day_leave_paid_usages` (Projection): usage_id (PK)、leave_request_id。有給の消化記録ID→
-  有給申請ID(系統の判定に使う)。
+  有給申請ID。
 - `paid_leave_request_usage_links` (Projection): usage_id (PK)、paid_leave_request_id (index)。
   有給の消化記録→申請の対応。消化記録テーブルの申請への外部キーの代わりに持つ。
-- `paid_leave_requests`: 列`input_source`を追加(上記「paid_leave_requests」節)。
-- `paid_leave_usages`: `attendance_day_id`・`paid_leave_request_id`の外部キーを撤去(リリース時の
+- `paid_leave_usages`: `attendance_day_id`・`paid_leave_request_id`の外部キーと`stored_event_id`列を撤去(リリース時の
   撤去順は外部キー→索引。docs/32参照)。
 - `special_leave_usages`: `usage_id` (nullable、unique)、`unallocated_days` (default 0) を追加。
-  `attendance_day_id`をnullableにし、`attendance_day_id`・`special_leave_request_id`の外部キーを撤去。
+  `attendance_day_id`をnullableにし、`attendance_day_id`・`special_leave_request_id`の外部キーと`stored_event_id`列を撤去。
 - `special_leave_usage_allocations` (新設。口座の充当): id、usage_id (index)、grant_id (special_leave_grantsへの外部キー)、
   allocated_days、timestamps。unique(usage_id, grant_id)。
 - `compensatory_leave_usages`: `usage_id` (nullable、unique)、`unallocated_days`・`unallocated_minutes` (default 0) を追加。
-  `attendance_day_id`をnullableにし、`attendance_day_id`・`compensatory_leave_request_id`の外部キーを撤去。
+  `attendance_day_id`をnullableにし、`attendance_day_id`・`compensatory_leave_request_id`の外部キーと`stored_event_id`列を撤去。
 - `compensatory_leave_usage_allocations` (新設。口座の充当): id、usage_id (index)、grant_id (index。外部キーなし)、
   allocated_days、allocated_minutes、timestamps。unique(usage_id, grant_id)。
 - `compensatory_holiday_work_days` (新設。代休の口座側の休日出勤ビュー。計算イベントから作る。手動付与の
@@ -1345,13 +1336,24 @@ Aggregateをreplayして行う)。
 - `leave_attendance_rate_days` (Projection。有給の出勤率ビュー、利用者×日付): id、user_id、work_date、
   is_working_day (分母)、attended (分子の出勤)、full_leave_kinds・partial_leave_kinds (json)。unique(user_id, work_date)。
 - `leave_attendance_rate_leaves` (Projection): id、leave_kind、leave_request_id、user_id、work_date、unit、
-  usage_id (nullable、index)、workflow_request_id (nullable)、request_status、source。
+  workflow_request_id (nullable)、request_status。
   unique(leave_kind, leave_request_id)、index(user_id, work_date)。
 - `leave_attendance_rate_attendance_days` (Projection): id (勤怠日ID、PK)、user_id、work_date、clocked_out。
   index(user_id, work_date)。
 - `special_leave_attendance_rate_days`・`special_leave_attendance_rate_leaves`・`special_leave_attendance_rate_attendance_days`
   (特別休暇の出勤率ビュー、有給と同じ列。`special_leave_attendance_rate_days`は`work_style_id` (nullable。自動付与の
   勤務形態の絞り込み用)を持つ)。索引名は64文字制限内に明示名を付けている。
+
+### 作り直しで撤去した列(マイグレーション `2026_10_11_000001`)
+
+`stored_events`の作り直し(変更セット論点18。`docs/27-release-runbook.md` 3.1)で旧系統が不要になったため、次の列を撤去した。
+撤去の際は索引を先に外す(これらの列に外部キーは付いていない)。
+
+- `paid_leave_grants`: `original_granted_days`・`cutover_metadata`(移行の監査列。cutoverの情報はイベントの`meta`に残る)。`source`は残す。
+- `paid_leave_requests`: `input_source`(申請の入力系統)。
+- `paid_leave_usages`・`special_leave_usages`・`compensatory_leave_usages`: `stored_event_id`(旧系統の冪等性列。口座集約の消化記録は`usage_id`で冪等にする)。
+- `attendance_day_leaves`: `source`(休暇ビューの系統)。
+- `leave_attendance_rate_leaves`・`special_leave_attendance_rate_leaves`: `source`(出勤率ビューの系統)・`usage_id`(cutover後の有給の消化記録→行の対応)。
 
 ## expense_categories (経費区分マスタ。イベントソーシング対象外の通常のEloquent CRUD)
 

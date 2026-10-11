@@ -10,8 +10,8 @@
   `.claude/skills/data-correction/SKILL.md`(「`stored_events`の作り直しの進め方」)、`docs/27-release-runbook.md` 3.1。
 - 方針: 移行イベント・補正イベントは作らない。旧イベント列から新しいイベント構成の列を決定的に生成し、元の発生順にid・版を振り直した
   表を作り、複製DBで検証してから入れ替える。移行コマンド・補正候補の検出コマンドは使わない(WP10で削除)。
-- 変換コマンドの名前 `leave:rebuild-event-store` とオプション(`--apply`・`--swap`)は仮称(`event-rebuild-mapping.md` 7章)。
-  WP10の実装に合わせて読み替える。
+- 変換コマンドは `leave:rebuild-event-store`(WP10で実装済み)。オプションは `--apply`・`--verify`・`--swap`・`--list-readmodels`
+  (実装どおり。手順は `event-rebuild-mapping.md` 7章)。
 - 表記: **要確認** は、コードや既存資料から確定できず、実施前にユーザーまたは委譲元が決める箇所。
 - 本番DBへの書き込みは、この手順書の対象外。本番での作り直しは、変換規則と試し実行の結果を示してユーザーの明示的な許可を得てから行う
   (data-correction「本番での実行にはユーザーの明示的な許可を得る」)。
@@ -387,18 +387,20 @@ ORDER BY prefix;
 
 ## 3. 作り直しの試し実行・本実行・複製DBでの検証(`event-rebuild-mapping.md` 7章の1〜5)
 
-変換コマンド `leave:rebuild-event-store`(仮称)は、旧イベントクラスに依存せず `stored_events` の生のJSONを読む。
+変換コマンド `leave:rebuild-event-store` は、旧イベントクラスに依存せず `stored_events` の生のJSONを読む。
 3-1〜3-4 は `flow_office_rehearsal`(本番役・旧スキーマのまま)で、3-5 は `flow_office_verify` で行う。
 
-- **要確認 R1**: 変換コマンドは新しいコードに含まれる。旧スキーマのDB(migrate前)に対して実行できること(読むのは
-  `stored_events` だけで、新しいテーブルを前提にしないこと)をWP10の実装で確認する。
+- **R1(確定: コードで確認)**: 変換コマンドは旧スキーマのDB(migrate前)で動く。読むのは `stored_events`・`attendance_days`・
+  `attendance_breaks`・`attendance_leave_segments`・`attendance_punches`(いずれも旧スキーマの表)と、補正ログ
+  `stored_event_corrections` が有ればその件数のみ(`EventStoreRebuildWriter`)。新しいテーブルは前提にしない。
 
 ### 3-1. 事前条件の確認
 
 試し実行が自動で確認するが、同じ内容をSQLでも確認して記録する。
 
 ```sql
--- (1) 新しい種類のイベントが0件(期待: 0行)。paid_leave_account.* のうち新しい種類はWP10の一覧で確認する(要確認)
+-- (1) 新しい種類のイベントが0件(期待: 0行)。変換器が未対応とする接頭辞(`EventStoreRebuilder::UNSUPPORTED_PREFIXES`)と一致させた。
+--     試し実行の事前条件の検査は paid_leave_request.* だけを見る(R3)
 SELECT event_class, COUNT(*) AS events
 FROM stored_events
 WHERE event_class LIKE 'paid_leave_request.%'
@@ -409,7 +411,7 @@ GROUP BY event_class;
 -- (2) 補正ログが0件(テーブルが無ければ0件として扱う。本番の旧スキーマには無い想定)
 SELECT COUNT(*) AS corrections FROM stored_event_corrections;
 
--- (3) スナップショットが0件(要確認: spatie のスナップショットのテーブル名)
+-- (3) スナップショットが0件(テーブル名 `snapshots` は migration 2026_07_23_044707 で確定。試し実行の検査には含まれないため、ここで確認する)
 SELECT COUNT(*) AS snapshots FROM snapshots;
 
 -- (4) cutover のイベントの件数(2.3の突き合わせの対象)
@@ -418,8 +420,9 @@ FROM stored_events
 WHERE event_class = 'paid_leave_account.migrated';
 ```
 
-- (1)(2)(3) のいずれかが0件でなければ、作り直しは行わない(試し実行も失敗する)。補正ログがある場合は旧id→新idの対応表を
-  残す必要がある(`event-rebuild-mapping.md` 6章)ため、委譲元に報告する。
+- (1)(2)(3) のいずれかが0件でない(期待は0)場合は、作り直しは行わない。試し実行が検査するのは(2)、既存の`stored_events_rebuilt`の有無、
+  (1)のうち `paid_leave_request.*` だけで、(1)のほかの接頭辞は変換器が未対応として失敗させる。(3)は試し実行では検査しないため、ここで確認する。
+  補正ログがある場合は試し実行の事前条件で止まる(`--apply`は拒否される)。旧id→新idの対応表を残す必要がある(`event-rebuild-mapping.md` 6章)ため、委譲元に報告する。
 
 ### 3-2. 試し実行(既定)
 
@@ -459,6 +462,21 @@ ORDER BY w.subject_type, w.status;
 - `workflow_status = returned` の件数 = 差戻しの状態で終わる申請の件数(cutover後の有給の差戻しはワークフローのイベントから組み立てる)。
 - `request_status` が NULL の行(業務側の申請が見つからないワークフロー)は件数を記録し、試し実行の扱えない並びと照合する。
 
+### 3-2a. 扱えない並び(作り直しが失敗させる並び)の確認
+
+試し実行は、次の並びを見つけると未対応として一覧に出し、失敗する(`UnsupportedEventSequence`)。本番相当データで、次がすべて0件であることを確認する。
+1件でもあれば推測で埋めず、変換規則を決めて変更セットを更新してから再実行する。
+
+| 並び | 試し実行の出力の理由(実装の文言) | 期待 |
+|---|---|---|
+| ReadModel(`attendance_days`)に行が無く、`attendance_day.created`も無い勤怠日 | `ReadModel(attendance_days)に現在値が無く、attendance_day.created を補えない` | 0件 |
+| cutover後の指定・取消の重複(同じ申請に消化の指定が2回) | `消化の指定が2回ある(cutover後は再提出でも指定しない前提)` | 0件 |
+| `daily_calculation_adjusted`の直前に`attendance_day.calculated`が無い日 | `日次計算の手動調整(id=…)の実労働分を補う元(直前の attendance_day.calculated)が無い` | 0件 |
+| 旧(`paid_leave.*`)と口座イベント(`paid_leave_account.usage_*`)の混在 | `旧の申請(paid_leave.*)とcutover後の口座の消化(paid_leave_account.usage_*)が混在している` | 0件 |
+| 申請に結び付かない消化 | `変換されなかった消化の行` / `充当されなかった消化の行` / `申請の作成が無い` | 0件 |
+
+- (b)(e)の分数が求められない・申請IDの無い消化も、同じく未対応として失敗する(R8。実装での扱いは試し実行の出力で確認する)。
+
 ### 3-3. 書き込みを止める(本番の手順の模擬)とバックアップ
 
 本番では次を止める。リハーサルでは各操作の時刻を記録し、5-6 の再開までの時間(メンテナンス窓)を測る。
@@ -482,6 +500,7 @@ php artisan leave:rebuild-event-store --apply | tee ~/rehearsal-20261009/dryrun/
 
 - 休暇以外のイベントも同じ順で写し、id・版を振り直す。`stored_events` は変わらない。
 - 出力の件数が 3-2 の試し実行と一致することを確認する。
+- `--apply` は続けて自己整合性を検査する(id・版の連番、旧イベントの残存)。検査が失敗した場合は、5-2の入れ替えに進まない。
 
 確認のSQL:
 
@@ -742,7 +761,8 @@ SELECT AUTO_INCREMENT FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stored_events';
 ```
 
-- 元の表の名前(`stored_events_before_rebuild_*`)を記録する。 ____________________
+- コマンドは入れ替えの前に `--verify` と同じ検査を行い、通らなければ入れ替えない。
+- 元の表の名前(`stored_events_before_rebuild_*`)を記録する(出力に表示される)。 ____________________
 
 ### 5-3. 旧系統を削除した新しいコードの配備とマイグレーション
 
@@ -753,7 +773,8 @@ php artisan migrate:status | tail -n 20
 php artisan access-control:sync-catalog
 ```
 
-- 対象は本変更のマイグレーション(`2026_10_10_*`。WP10の列削除を含む)。**要確認 R10**: docs/27 3.1 の migrate の範囲の記述。
+- 対象は `2026_10_10_000001`〜`000009`(000009 は補正ログ `stored_event_corrections`)と、`2026_10_11_000001`(作り直し後の列の撤去)。
+  範囲は docs/27 3.1 と一致させた(R10)。
 
 外部キーの撤去と列を確認する(MySQL)。
 
@@ -783,12 +804,15 @@ WHERE TABLE_SCHEMA = DATABASE()
   AND COLUMN_NAME = 'attendance_day_id'
   AND NON_UNIQUE = 0;
 
--- 期待: 0行(WP10で削除する列が残っていないこと。列名はWP10の実装に合わせて読み替える)
+-- 期待: 0行(撤去した列が残っていないこと。`2026_10_11_000001`)
 SELECT TABLE_NAME, COLUMN_NAME
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE()
-  AND ((COLUMN_NAME = 'input_source')
-    OR (COLUMN_NAME = 'stored_event_id' AND TABLE_NAME IN ('paid_leave_usages', 'special_leave_usages', 'compensatory_leave_usages')));
+  AND ((TABLE_NAME = 'paid_leave_requests' AND COLUMN_NAME = 'input_source')
+    OR (TABLE_NAME = 'paid_leave_grants' AND COLUMN_NAME IN ('original_granted_days', 'cutover_metadata'))
+    OR (TABLE_NAME IN ('paid_leave_usages', 'special_leave_usages', 'compensatory_leave_usages') AND COLUMN_NAME = 'stored_event_id')
+    OR (TABLE_NAME = 'attendance_day_leaves' AND COLUMN_NAME = 'source')
+    OR (TABLE_NAME IN ('leave_attendance_rate_leaves', 'special_leave_attendance_rate_leaves') AND COLUMN_NAME IN ('source', 'usage_id')));
 ```
 
 ### 5-4. 全ReadModelを空にして全Projectorをリビルド
@@ -796,9 +820,9 @@ WHERE TABLE_SCHEMA = DATABASE()
 作り直しでは、休暇の処理が直接作った勤怠日にも `created` が置かれるため、勤怠日・日次計算・月次を含む**全ReadModel**を空にしてよい
 (旧手順の「勤怠日を空にしない」は不要になった)。Projectorは `replay` の前に状態を消さないため、必ず空にしてから再生する。
 
-- 空にするテーブルの一覧は、Projectorの書き込み先から機械的に作ったもの(WP10の成果物)を使う。
-  **要確認 R2**: 一覧の作り方と、一覧に `stored_events.id` を参照する列を持つ表(`workflow_request_history_entries`・
-  `expense_claim_history_entries` の `stored_event_id`)が含まれること。
+- 空にするテーブルの一覧は `php artisan leave:rebuild-event-store --list-readmodels` の出力を使う(Projectorの書き込み先から機械的に作る。実装済み)。
+  **要確認 R2**: 出力に、`stored_events.id` を参照する列を持つ表(`workflow_request_history_entries`・`expense_claim_history_entries`)が
+  含まれるかを実行して確認する。含まれなければ、その表の `stored_event_id` の扱いを決めてから進む。
 
 ```sql
 -- 空にする(一覧のテーブルをすべて。外部キーが残るテーブルがあるため、一時的に検査を止める)
@@ -809,10 +833,11 @@ SET FOREIGN_KEY_CHECKS = 1;
 ```
 
 ```bash
-time php artisan event-sourcing:replay --force | tee ~/rehearsal-20261009/after/replay-all.txt
+time php artisan event-sourcing:replay | tee ~/rehearsal-20261009/after/replay-all.txt
 ```
 
-- **要確認 R11**: spatie の replay コマンドの引数と挙動(引数なしで全Projector、`--force`)。最初の実行の出力で確認する。
+- **要確認 R11**: `event-sourcing:replay` は docs/29 の使い方(`event-sourcing:replay [Projector名]`、引数なしで全Projector)に従う。
+  `--force` の要否は vendor 未インストールのため未確認。確認プロンプトで止まる場合は、その時点で止めて確認する。
 - 記録: 所要時間、主なテーブルの行数。
 
 ### 5-5. 日次計算の再計算(締め・提出済みの月も含む)
@@ -1013,7 +1038,7 @@ SELECT attendance_day_id, prescribed_work_minutes, work_minutes, payroll_work_mi
 FROM attendance_daily_calculations ORDER BY attendance_day_id;
 ```
 
-- 列名はWP10の実装(削除した列)に合わせて読み替える。
+- 列名は撤去後の列(`2026_10_11_000001`で撤去した列を含まない)に合わせた。
 
 **手順(b) 空にして再生**: 5-4 と同じ方法で、全ReadModelを空にして全Projectorを再生する。
 
@@ -1023,7 +1048,7 @@ FROM attendance_daily_calculations ORDER BY attendance_day_id;
 diff ~/rehearsal-20261009/rebuild/state-before.tsv ~/rehearsal-20261009/rebuild/state-after.tsv && echo SAME
 ```
 
-- 期待: 差分なし(旧Projectorと口座のProjectorが同じテーブルに書く問題は、旧Projectorの旧イベント処理の削除(WP10)で無くなる)。
+- 期待: 差分なし(旧Projectorと口座のProjectorが同じテーブルに書く問題は、旧Projectorの旧イベント処理を削除したことで無くなっている)。
 - 日次計算は 5-5 の再計算のイベントから再生されるため、(a) と同じになる。
 - **順序の確認(任意だが推奨)**: Projectorを逆順で1つずつ再生し、(a) と同じになるか確認する(順序非依存)。
 
@@ -1127,18 +1152,18 @@ php artisan attendance:recalculate-days --from=<from_date> --to=<to_date> | tee 
 
 ## 9. 要確認の一覧(実施前に決める・確認する)
 
-- **R1**: 変換コマンドを旧スキーマ(migrate前)のDBに対して実行できるか(読むのは `stored_events` だけであること)。
-- **R2(重要)**: 空にする全ReadModelのテーブルの一覧(Projectorの書き込み先から機械的に作る。WP10の成果物)。`stored_events.id` を参照する
-  `workflow_request_history_entries`・`expense_claim_history_entries` を含むこと。
-- **R3**: 3-1 の「新しい種類のイベント」の一覧(`paid_leave_account.*` のうち本変更で増えた種類)と、スナップショットのテーブル名。
-- **R4**: 変換コマンド(`leave:rebuild-event-store`、仮称)とオプション名はWP10の実装に合わせて読み替える(WP10は未着手)。
+- **R1(確定)**: 変換コマンドは旧スキーマ(migrate前)のDBで動く。読むのは `stored_events`・`attendance_days`・`attendance_breaks`・`attendance_leave_segments`・`attendance_punches`(いずれも旧スキーマの表)と、補正ログ `stored_event_corrections` が有ればその件数のみ。
+- **R2(重要)**: 空にする全ReadModelのテーブルの一覧(Projectorの書き込み先から機械的に作る。`--list-readmodels` で出す)。`stored_events.id` を参照する
+  `workflow_request_history_entries`・`expense_claim_history_entries` を含むこと(`--list-readmodels` の出力で確認する)。
+- **R3(一部確定)**: 試し実行の事前条件の検査は `paid_leave_request.*` だけを見る(`EventStoreRebuildWriter::preconditionViolations`)。`special_leave_account.*`・`compensatory_leave_account.*` は変換器が未対応として失敗させる。スナップショットのテーブル名は `snapshots`(確定)。スナップショット0件は試し実行の検査に含まれないため、3-1 (3) のSQLで確認する。
+- **R4(確定)**: 変換コマンドは `leave:rebuild-event-store`。オプションは `--apply`(書き込み・検査)・`--verify`(検査のみ)・`--swap`(検査が通れば入れ替え)・`--list-readmodels`(空にする一覧)。手順書の表記はこれに合わせた。
 - **R5**: 本番DBの複製の手順(mysqldump のオプション・権限・MySQLのバージョン)は既存の資料に無い。
 - **R6**: 暗号化された値の復号のため、リハーサルの `APP_KEY` は本番の値を使う。暗号化カラムの一覧は未確認。
 - **R7**: 特別休暇の「残数を要する/要しない」は `*.used` の有無で判定する(承認時点の種別の設定の履歴が無いため)。残数を要する種別で
   `*.used` が無い申請があれば、判定が実態と違う。
 - **R8**: (b) 分数が求められない時間休、(e) 申請IDの無い有給の消化記録を、変換コマンドが扱えない並びとして失敗させるか(WP10の実装で確認)。
 - **R9**: 旧系統の有給の消化記録の取消の表し方(`paid_leave_usages.cancelled` が旧系統の行で使われていたか)。B07 の比較の読み方に影響する。
-- **R10**: docs/27 3.1 の migrate の範囲の記述と、リポジトリのマイグレーション(`2026_10_10_*`。補正ログ `stored_event_corrections` を含む)の対応。
-- **R11**: spatie の replay コマンドの引数と挙動(引数なしで全Projector、`--force`)は、既存コードの使い方から推定した。
+- **R10(確定)**: 本変更のマイグレーションは `2026_10_10_000001`〜`000009`(000009 が補正ログ `stored_event_corrections`)と、作り直し後の列の撤去 `2026_10_11_000001`。docs/27 3.1 の記述をこの範囲に合わせた。
+- **R11(一部確定)**: `event-sourcing:replay` は docs/29 の使い方に従う(引数なしで全Projector)。`--force` の要否は未確認。
 - **R12**: `attendance_daily_calculations.attendance_day_id` が 1 日 1 行か(B02 の合計の前提)。
 - **R13**: 3-4 (5) の作り直し前の逆転数のSQLは件数が多いと遅い。所要時間を見て、必要なら抽出範囲を絞る。

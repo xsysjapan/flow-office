@@ -257,11 +257,11 @@ cancelled)は独立ステータス系列として引き続き管理するが、�
 
 ### 有給申請の引き継ぎ(本変更前の申請)
 
-本変更前に申請された有給は、運用コマンド`paid-leave:migrate-requests`が現在の状態を
-`paid_leave_request.migrated`として今の時点に追記して、新しい申請の集約に引き継ぐ(変更セット
-仕様確定事項I)。引き継ぎ後の承認・差戻し・取消・再提出は全て新しい集約で処理する。cutover前(旧`paid_leave.*`)の
-8件のうち消化記録の無い承認済みの申請は、システム上の取消を拒否する(「移行前の申請のため取消できません。
-付与日数の調整で対応してください」)。
+本変更前に申請された有給は、`stored_events`の作り直し(論点18。`leave:rebuild-event-store`、
+`docs/27-release-runbook.md` 3.1)で、旧イベント列から新しい申請の状態機械のイベント(`paid_leave_request.*`と
+口座の消化記録)へ変換する。移行イベント(`paid_leave_request.migrated`)は作らない。作り直し後は全ての申請が
+通常の申請と同じ経路で処理され、承認・差戻し・取消・再提出は新しい集約で行う。cutover前(旧`paid_leave.*`)の
+8件も、作り直しで消化記録が再現されるため、承認済みのものは通常どおり取り消せる(取消で残数を戻す)。
 
 期間指定でまとめて申請した複数日分(同じ`request_group_id`を持つ行)は、承認者がそのうち
 1件を承認する操作だけで、まだ提出中の残りの日もまとめて承認する(1日ごとに個別承認する
@@ -409,15 +409,14 @@ Allocationベースへ完全移行する等)は今回の再設計のスコープ
 
 1. 社員本人が自分の有給履歴を確認する、または管理者・人事担当者が対象社員を選んで
    有給履歴を確認する
-2. 付与・申請・承認・差戻し・取消・消化・移行のイベントを日時の新しい順に一覧表示する
+2. 付与・申請・承認・差戻し・取消・消化のイベントを日時の新しい順に一覧表示する
 
 `paid_leave_grants`/`paid_leave_requests`/`paid_leave_usage_allocations`/
 `paid_leave_balances` の現在の残高・ステータス一覧(UC-P001〜UC-P004の画面)とは別に、
 `stored_events`(EventStore)を正の記録として直接検索し、対象社員に関する一連のイベントを
 時系列で表示する。`stored_events`の`aggregate_uuid`は`PaidLeaveAccountAggregate`の
 AggregateId(=対象社員の`user_id`)そのものであるため、旧ドメインのように個々のGrant/
-Request idで絞り込む必要はなく、社員の`user_id`1つで一連のイベント(Grant系・Usage系・
-移行イベントを含む)を横断的に取得できる(旧ドメインからの構造上の簡素化)。
+Request idで絞り込む必要はなく、社員の`user_id`1つで一連のイベント(Grant系・Usage系を含む)を横断的に取得できる(旧ドメインからの構造上の簡素化)。
 
 自分の履歴は誰でも閲覧できる。他の社員の履歴は`paid_leave.read` Permissionを持ち、対象Userを
 含むScopeが有効な場合だけ閲覧できる(`GET /paid-leave/grants/user/{userId}`等)。
@@ -470,45 +469,23 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 `GET /special-leave/usages/user/{userId}`)・代休(`POST /compensatory-leave/requests/{id}/admin-cancel`、
 `GET /compensatory-leave/usages/user/{userId}`)にも実装する。
 
-## UC-P010: 既存システムからの有給データを移行する(cutover専用)
+## UC-P010: 既存システムからの有給データを移行する(cutover。作り直しに置き換え済み)
 
-1. 人事担当者・管理者(`leave.manage` Permission)が、旧システム(または旧Projection)から
-   読み取った社員ごとの移行データを用意する
-2. 社員ごとに`usage_start_date`時点(cutover日)で有効なGrant状態を、以下3モードの
-   いずれかの形式で用意する
-   - モードA: Grant単位で完全に分かる(`original_granted_on`/`original_granted_days`とも
-     判明)
-   - モードB: 前年度繰越+当年度残高(`original_granted_days`は不明、`original_granted_on`は
-     判明)
-   - モードC: 残高と有効期限のみ判明(`original_granted_on`/`original_granted_days`とも不明)
-3. `MigratePaidLeaveAccount` Commandを発行し、`PaidLeaveAccountAggregate::migrateGrants()`
-   経由で`PaidLeaveAccountMigrated`イベントを1回だけ記録する
-4. 移行後は通常のGrant操作(`GrantPaidLeave`等)・Usage操作がそのまま利用できる
+2026年9月のcutover時点の有給の残高は、当時の移行イベント(`paid_leave_account.migrated`)で口座に取り込んだ。
+この移行は、変更セット論点18で`stored_events`の作り直し(`leave:rebuild-event-store`。`docs/27-release-runbook.md` 3.1)に
+置き換えた。
 
-移行は口座ごとに一度きりの操作であり、既にGrantが1件でも存在する口座への再実行は拒否する
-(`DomainRuleException`)。移行前の個別Usage履歴の完全再現は行わない
-(依頼書「過去の全Usage履歴再現は必須としない」の方針)。
+- 移行イベント・移行コマンド(`MigratePaidLeaveAccount`・`paid-leave:migrate-accounts`)・`POST /paid-leave/migrate`・
+  `PaidLeaveAccountAggregate::migrateGrants()`は削除した。新しい移行は行わない。
+- 作り直しでは、cutover時点の残数を旧付与と突き合わせる。旧で再現できる付与(残数が一致する)は、旧付与の
+  `grant_created`をそのまま使う。再現できない残高(システム外から持ち込んだ残高)は、cutoverの付与ID・残数・有効期限で
+  `paid_leave_account.grant_created`を作り、`source`を`carried_over`とする。cutoverの情報(モード・備考)は付与イベントの
+  `meta`に残る。付与の移行監査列(`original_granted_days`・`cutover_metadata`)は持たない。
+- 付与の残数の上限は、切替時点の実際の残日数(`remainingDaysAtCutover`)とする。元の付与日数が不明でも架空の上限は作らない。
+- 移行前の個別の消化履歴は、旧イベントの消化記録から作り直しで再現する。再現できない並びは作り直しが失敗するため、
+  試し実行で確認する(`docs/27-release-runbook.md` 3.1)。
 
-**不変条件上の上限の扱い**: 全モード共通で、Aggregate内部の不変条件(減額・Allocation
-超過判定等)が参照する「利用可能な上限」は常に`remainingDaysAtCutover`(切替時点の実際の
-残日数)であり、`originalGrantedOn`/`originalGrantedDays`はnullable可能な監査・表示専用の
-付随メタデータ(`paid_leave_grants.original_granted_days`/`cutover_metadata`列)として
-保持するに留める。モードC(元付与日数不明)でも架空の上限は作らない。「最新Grant」判定の
-起算日(`grantedOn`相当)は、モードA/Bでは`originalGrantedOn`をそのまま使い、モードCで
-`originalGrantedOn`が不明な場合のみ`cutoverDate`を代替の順序キーとして用いる。
-
-移行で作成されたGrantは`paid_leave_grants.source`が`migration`(通常のGrantは`manual`)と
-なり、監査上区別できる。
-
-**入力経路は2つ**:
-
-- 管理者専用`POST /paid-leave/migrate`(1社員分。単発の疎通確認・修正用)
-- 一括投入用artisanコマンド`php artisan paid-leave:migrate-accounts <file.json> [--dry-run]`
-  (社員ごとにGrantが入れ子になるためCSVではなくJSON形式を採用。1件の入力データが不正でも
-  バッチ全体を中断せず、行ごとの成否を最後にまとめて報告する部分失敗許容)
-
-いずれも`leave.manage`相当の管理者権限に限定する。UI(移行専用の管理画面)は当変更セットの
-スコープ外(spec.md「対象外」)で、artisanコマンド・単発APIのみで完結する。
+移行後は通常のGrant操作(`GrantPaidLeave`等)・Usage操作がそのまま利用できる。
 
 ## UC-P011: 付与予定(Schedule)をローリング生成する
 
@@ -608,7 +585,7 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
 
 `Eligible`以外のエントリが選択に混入していた場合や、1件のAggregate例外が他のエントリの
 処理を止めないよう、エントリ単位で成功/失敗を収集し、レスポンスに部分失敗を含めて返す
-(黙って握りつぶさない。`paid-leave:migrate-accounts`と同じ「行単位継続」方針)。
+(黙って握りつぶさない。行単位で成否を集計して返す「行単位継続」方針)。
 
 ## 実装上のポイント
 
@@ -675,7 +652,7 @@ UC-P003で説明した申請者本人による取消(`POST /paid-leave/requests/
   (`special_leave_account.*`)が持つ。申請時に消化記録を作り、承認時に付与へ充当し、差戻し・取消で消化記録を
   取り消す(Reactor: `SpecialLeaveUsageOnSpecialLeaveRequestReactor`)。
 - 付与は`special_leave_account.grant_registered`で登録し、取消は`special_leave_account.grant_revoked`で記録する。
-  既存の付与・消化は`special-leave:migrate-to-account --apply`(運用コマンド)で口座へ移す(docs/32)。
+  既存の付与・消化は、`stored_events`の作り直し(`leave:rebuild-event-store`)で口座のイベントに変換する(`docs/27-release-runbook.md` 3.1)。
 - 承認時に残数が不足していても承認は拒否せず、充当できた分だけ充当し、充当できなかった分は
   `unallocatedDays`として確定イベントに記録する(論点17)。
 - 差戻し・再申請・取消・締め・同じ日の衝突の扱いは「差戻し・再申請・取消(休暇の共通ルール)」のとおり。
@@ -734,7 +711,7 @@ Command/`GrantCompensatoryLeaveHandler`)。対象日に休日出勤の実績が�
 取消申請→承認フロー(上記、`request-cancellation`/`grant-cancellations/{id}/approve`)とは
 別の、承認を経ない管理者専用の即時取消経路であり、代休の口座集約の付与取消
 (`compensatory_leave_account.grant_cancelled`)で行う(`used_days`が0より大きい場合は同様に取消不可)。
-旧付与集約とそのCommand/Handlerは口座集約へ置き換えて削除した(旧イベントは移行前の再生用に残す)。
+旧付与集約とそのCommand/Handlerは口座集約へ置き換えて削除した。旧イベントは作り直しで新しいイベントに変換し、削除した。
 
 有給・特別休暇のUC-P007と同様、`GET /compensatory-leave/history/mine`(本人)・
 `GET /compensatory-leave/history/user/{userId}`(`leave.manage` Permission)で
