@@ -12,6 +12,7 @@ use App\Models\AttendanceDayLeave;
 use App\Models\AttendanceSpecialLeaveShortage;
 use App\Models\CompensatoryLeaveGrant;
 use App\Models\CompensatoryLeaveUsage;
+use App\Models\EmployeeCalendarEntry;
 use App\Models\Notification;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveUsage;
@@ -85,7 +86,11 @@ class LeaveCrossContextScenarioTest extends TestCase
 
     private function workDay(User $employee, string $date): void
     {
-        $this->makeCompensatoryWorkingDayShift($employee, WorkStyle::query()->firstOrFail(), $date);
+        // 同じ日に複数の休暇を申請するため、勤務予定は無ければ作る(日付列はdate型キャストで日時文字列になるのでwhereDateで探す)。
+        $exists = EmployeeCalendarEntry::query()->where('user_id', $employee->id)->whereDate('work_date', $date)->exists();
+        if (! $exists) {
+            $this->makeCompensatoryWorkingDayShift($employee, WorkStyle::query()->firstOrFail(), $date);
+        }
     }
 
     /** 休暇を申請して申請IDを返す(勤務予定は日ごとに作る)。承認者がnullなら承認不要設定の申請。 */
@@ -168,10 +173,9 @@ class LeaveCrossContextScenarioTest extends TestCase
     private function reprocessReactors(string $eventAlias, bool $reverse, ?array $only = null): void
     {
         $stored = EloquentStoredEvent::query()->where('event_class', $eventAlias)->orderByDesc('id')->firstOrFail()->toStoredEvent();
-        $eventClass = $stored->event::class;
 
         $reactors = app(Projectionist::class)->getReactors()
-            ->filter(fn ($reactor): bool => in_array($eventClass, $reactor->handles(), true)
+            ->filter(fn ($reactor): bool => $reactor->handles($stored)
                 && ($only === null || in_array($reactor::class, $only, true)))
             ->values();
         $this->assertNotEmpty($reactors->all(), "{$eventAlias} を購読するReactorがありません");
