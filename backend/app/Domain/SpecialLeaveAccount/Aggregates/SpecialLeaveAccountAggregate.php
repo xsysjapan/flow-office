@@ -86,7 +86,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         ?string $expiresOn,
         float $grantedDays,
         ?string $grantReason,
-        ?string $userId = null,
+        string $userId,
     ): self {
         if (isset($this->grants[$grantId])) {
             throw new DomainRuleException("Grant [{$grantId}] は既に存在します。");
@@ -146,7 +146,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         string $usageType,
         float $usedDays,
         ?int $usedMinutes,
-        ?string $userId = null,
+        string $userId,
     ): self {
         if (isset($this->usages[$usageId])) {
             throw new DomainRuleException("Usage [{$usageId}] は既に存在します。");

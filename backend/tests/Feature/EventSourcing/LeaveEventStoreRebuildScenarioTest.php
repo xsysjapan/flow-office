@@ -199,7 +199,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
             'event_version' => 1,
             'event_class' => $class,
             'event_properties' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            'meta_data' => json_encode(['aggregate-root-version' => $this->versions[$aggregate]]),
+            'meta_data' => json_encode(['aggregate-root-uuid' => $aggregate, 'aggregate-root-version' => $this->versions[$aggregate]]),
             'created_at' => self::AT,
         ]);
     }

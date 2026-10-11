@@ -129,7 +129,8 @@
   対応表を残す)、監査ログAPIの`event_id`(外部に返すidが変わることをリリースノートに記載)、`LeaveHistoryQuery`。
 - Projectorは`replay`の前に状態を消さない(`resetState`を持つものが0件)。入れ替えの後、全ReadModelのテーブルを空にしてから全
   Projectorを`replay`する(空にするテーブルの一覧はProjectorの書き込み先から機械的に作り、手順書に載せる)。
-- `meta_data`: 元のイベントの独自キーを引き継ぎ、`aggregate-root-version`を新しい版に更新する。分割で作るイベントは元のイベントの
+- `meta_data`: 元のイベントの独自キーを引き継ぎ、`aggregate-root-version`を新しい版に、`aggregate-root-uuid`を行の集約IDに更新する
+  (Spatieはイベントの集約IDを`meta_data`から読むため、別の集約へ移したイベントも合わせる)。分割で作るイベントは元のイベントの
   `meta_data`を写し、補った事実であることを示すキー(`rebuilt_from`=元のイベントのid)を付ける。
 
 ## 7. 実行手順

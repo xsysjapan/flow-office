@@ -45,6 +45,7 @@ tools: Read, Edit, Write, Grep, Glob, Bash
   長いテーブル名では明示名を付ける。
 - モデルを新設したら、対応するテーブルの列とモデルの`$timestamps`・`$fillable`・キャストを突き合わせる(ビュー用の
   テーブルに`created_at`/`updated_at`が無いなら`public $timestamps = false;`)。
+- 不要になった`use`文を消すときは、そのクラス名がファイル内で他に使われていないかGrepしてから消す(`php -l`は未importのクラス参照を検出しない)。
 - 仕様上の判断が必要な曖昧点に実装中に気づいた場合は、推測で仕様を作らず、
   その論点を明記して依頼元に差し戻す。
 

@@ -13,6 +13,7 @@ use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
+use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestApproved;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestCancelled;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestResubmitted;

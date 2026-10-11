@@ -527,6 +527,9 @@ final class EventStoreRebuilder
 
             $meta = $event->meta;
             if ($version !== null) {
+                // Spatieはイベントの集約IDを meta_data の aggregate-root-uuid から読む。分割・補完で作った行は
+                // 元の行(別の集約)の meta を写しているため、行の集約IDに合わせて更新する。
+                $meta['aggregate-root-uuid'] = $event->aggregateUuid;
                 $meta['aggregate-root-version'] = $version;
             }
             if ($event->rebuiltFrom !== null) {

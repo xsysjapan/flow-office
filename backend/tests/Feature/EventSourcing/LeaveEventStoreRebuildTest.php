@@ -55,7 +55,7 @@ class LeaveEventStoreRebuildTest extends TestCase
 
         $this->assertSame(0, DB::table('stored_events')->where('event_class', 'paid_leave.requested')->count());
         $this->assertSame(1, DB::table('stored_events')->where('event_class', 'paid_leave_request.requested')->count());
-        $backups = collect(Schema::getTableListing())->filter(fn (string $t) => str_starts_with($t, 'stored_events_before_rebuild_'));
+        $backups = collect(Schema::getTableListing(schemaQualified: false))->filter(fn (string $t) => str_starts_with($t, 'stored_events_before_rebuild_'));
         $this->assertCount(1, $backups);
         $this->assertSame($originalCount, DB::table($backups->first())->count());
     }

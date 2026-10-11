@@ -43,7 +43,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与');
+                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与', self::USER);
             })
             ->assertRecorded([
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与', self::USER),
@@ -54,7 +54,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 3.0, null);
+                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER);
             })
             ->assertRecorded([
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
@@ -70,7 +70,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 2.0, null);
+                $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 2.0, null, self::USER);
             });
     }
 
@@ -153,7 +153,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
+                $aggregate->designateUsage('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER);
             })
             ->assertRecorded([
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
@@ -169,7 +169,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u1', 'r2', self::TYPE, '2026-10-11', 'full', 1.0, 480);
+                $aggregate->designateUsage('u1', 'r2', self::TYPE, '2026-10-11', 'full', 1.0, 480, self::USER);
             });
     }
 
@@ -182,7 +182,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
+                $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER);
             });
     }
 
@@ -195,7 +195,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 new SpecialLeaveAccountUsageCancelled('u1', [], null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
+                $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER);
             })
             ->assertRecorded([
                 new SpecialLeaveAccountUsageDesignated('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
