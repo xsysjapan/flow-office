@@ -116,11 +116,11 @@
 
 ### 論点2: 休暇ビューの入力イベントと、休暇として扱う範囲
 - 決定:
-  - 入力: 休暇申請文脈のイベント(有給`paid_leave_request.*`(新設、論点4)、特別`special_leave_request.*`、
-    代休`compensatory_leave_request.*`の申請・承認・差戻し・取消)。各行は休暇の種類・取得単位・時間数・
+  - 入力: 休暇申請文脈のイベント(有給`paid_leave_request.*`(新設、論点4)、特別`special_leave.request_*`、
+    代休`compensatory_leave.request_*`の申請・承認・差戻し・取消)。各行は休暇の種類・取得単位・時間数・
     申請ID・申請状態(申請中/承認済み)を持つ。
   - 過去分: 本変更前の休暇(cutover前の有給を含む)は、論点18の`stored_events`の作り直しで最初から
-    `paid_leave_request.*`・`special_leave_request.*`・`compensatory_leave_request.*`として記録し直すため、入力は
+    `paid_leave_request.*`・`special_leave.request_*`・`compensatory_leave.request_*`として記録し直すため、入力は
     上記の休暇申請文脈のイベントだけで足りる(旧`paid_leave.*`・`paid_leave_account.*`を入力にしない)。
   - 休暇として扱う範囲: 申請中・承認済み(差戻し・取消で外れる)。現行の`work_type`(申請時に設定・取消で解除)と
     同じく、計算は申請中から休暇として扱う。差戻しは本変更で休暇から外れる(論点5)。
@@ -407,8 +407,8 @@
 
 ### E. 勤怠文脈(`App\Domain\Attendance`)
 - 休暇ビュー`attendance_day_leaves`(新設Projection): 列=id、user_id、work_date、leave_kind(paid/special/
-  compensatory)、unit(full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、request_id、
-  workflow_request_id、request_status(submitted/approved)、source_event_id。入力=休暇申請文脈のイベント
+  compensatory)、unit(full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、leave_request_id、
+  workflow_request_id、usage_id、request_status(submitted/approved/returned/cancelled)、source(休暇の種類)。入力=休暇申請文脈のイベント
   (論点2。本変更前の休暇も論点18の作り直しで同じイベントになるため、旧系統は読まない)。差戻し・取消では行を残し`request_status`をreturned/cancelledにする(読み手は申請中・承認済みだけを扱う。実装中の決定(WP5a))。
 - Reactor(休暇申請のイベント→勤怠のCommand):
   - 申請・再申請 → `ApplyLeaveToAttendanceDay`: 締め判定(論点14、全遷移)と同じ日の衝突チェック(論点7、判定対象から
@@ -583,6 +583,7 @@
 | WP8 補正の枠組み | (論点18で置き換え)実装済みの補正専用イベント`attendance_day.corrected`・`CorrectAttendanceDay`・`leave:correction-report`はWP10で削除する。補正コマンドの基底・`StoredEventCorrector`は少数のイベントを直す補正用に残す | `App\Console\Commands`、`App\Domain\Attendance` | WP4・WP5 |
 | WP9 docs | 「ドキュメントへの影響」の全件 | `docs/`、`.claude/skills/add-domain-event` | 全WP |
 | WP10 イベント構成の作り直し | (1)変換コマンド`leave:rebuild-event-store`(仮称。生JSONを読む、申請・付与・勤怠日ごとの状態機械、cutoverの付与の突き合わせと`carried_over`、勤怠日の`created`の補完・休暇値の書き換え、既定値nullの項目の補完、事前条件の確認、試し実行既定・`--apply`で`stored_events_rebuilt`・`--swap`、変換規則のテスト。仕様確定事項H、`assets/event-rebuild-mapping.md` 2・5・6・7章)。(2)旧系統の削除: 旧イベントクラスと別名(`config/event-sourcing.php`)、旧集約、旧Projectorの旧イベント処理と`stored_events`の直接読み取り、`PaidLeaveRequestProjector`・`AttendanceDayLeaveProjector`・出勤率ビューの系統の切り替え(`input_source`列)、既定値nullのガード、消化記録の`stored_event_id`列・付与の移行監査列とその表示、フロントの旧`event_type`名(同4章)。(3)移行コマンドと補正イベントの削除: 移行コマンド4つ(`special-leave:migrate-to-account`・`compensatory-leave:migrate-to-account`・`paid-leave:migrate-requests`・`paid-leave:migrate-accounts`)、`/paid-leave/migrate` APIと`MigratePaidLeaveAccount`、`*_account.migrated`・`paid_leave_request.migrated`、各口座集約の`migrate()`・`migrateGrants()`、`PaidLeaveRequestAggregate`の移行前申請の取消拒否、`attendance_day.corrected`・`CorrectAttendanceDay`・`onAttendanceDayCorrected`・`LeaveCorrectionCandidateDetector`・`LeaveCorrectionReportCommand`。(4)手順書: `assets/rehearsal-checklist.md`、`docs/27`・`docs/32`の作り直しの手順(空にするReadModelのテーブル一覧をProjectorの書き込み先から機械的に作って載せる) | `App\Console\Commands`、`App\Domain\PaidLeave`・`PaidLeaveRequest`・`PaidLeaveAccount`・`SpecialLeave`・`CompensatoryLeave`・`Attendance`・`PaidLeaveSchedule`、マイグレーション、`frontend/src`、`docs/` | WP1〜WP9 |
+| WP11 実装漏れの補完 | 2026-10-11の監査に基づく決定(1)〜(7)(実装中の決定の記録): 差戻し通知のリンク(特別休暇・代休)、勤務予定日・時間休の判定を勤怠の`ApplyLeaveToAttendanceDay`へ移す、Reactor発行Commandのviaにそろえる(提出3種・代休の同期・月次確定)、特別休暇の残数不足警告を勤怠側のビューに、テストの補完、docs/13・17の修正 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`・`Attendance`・`Workflow`・`CompensatoryLeaveAccount`、`AttendanceController`、`docs/` | WP10 |
 
 ## 検証方法
 - backend: CI(PHP 8.4)。この作業環境はPHP 8.3のためローカルでは実行できない。
@@ -778,7 +779,21 @@
   取り消す。**リハーサル確認事項**: (g)引き継ぎコマンドの警告(対応ワークフローが無い申請等)の件数、(h)旧システムが直接作った勤怠日の扱い(WP8)。(有給の引き継ぎコマンドと(g)(h)は論点18で置き換え)
 - 2026-10-10 論点18を独立設計レビュー(blocker8・major9)に基づき改訂、spec全体と手順書を方式Bに合わせた
 - 2026-10-11 ユーザーが論点18(stored_eventsの作り直し、`assets/event-rebuild-mapping.md`)を承認し、WP10の実装と実装漏れの確認・完了を指示。本番での作り直しの実行は、試し実行の結果を示してから別途許可を得る(`data-correction`スキル)。
-
+- 2026-10-11 実装漏れの監査(investigator)に基づく決定(WP11として実装):
+  (1)通知: 休暇の差戻し通知はワークフロー側の差戻し通知だけを送り(二重送信の解消)、その通知のリンクを休暇の種類ごとの履歴画面にする
+  (有給は実装済み、特別休暇・代休もそろえる)。仕様確定事項Iの「休暇固有の通知」とdocs/13をこの形に改める。
+  (2)勤務予定日の判定: 休暇申請のHandlerが勤怠の勤務予定・勤務形態を読む処理(原則15違反)をやめ、「勤務予定日でない日の休暇」と
+  「時間休の時間数と所定労働時間の整合」は勤怠文脈の`ApplyLeaveToAttendanceDay`の判定(判定クラス)で拒否する。`system_settings`は
+  全文脈共通の設定として読んでよい。
+  (3)HTTPのAPI(読み取り)は、画面の表示のために他文脈の読み取り用クエリクラス(`LeaveUsageQuery`等)を組み合わせてよい。ドメインの
+  Handler・Reactor・Projectorは他文脈のテーブルを読まない。
+  (4)Reactorが発行するCommandは全てviaReactor/initiatedByUserIdを持つ(ワークフローの提出3種、代休付与の同期・月次確定もそろえる)。
+  勤怠の休暇反映(Apply/Recalculate)は再実行で状態が変わらないため現状のまま(日次計算を再記録するだけ)とする。
+  (5)特別休暇の残数不足警告: 勤怠側が特別休暇口座のイベント(`special_leave_account.usage_confirmed`の未充当量・`usage_cancelled`)から
+  自分のビューを作って表示し、`special_leave_usages`を直接読まない。
+  (6)テストの補完: 午前有給+午後代休、有給の締め済みの全遷移、特別休暇・代休の承認不要の申請、同じイベントを購読するReactorの実行順を
+  入れ替えても結果が同じこと、通知が重複しないこと。
+  (7)docs/17の勤怠のイベント名を`config/event-sourcing.php`の別名(`attendance_day.*`)にそろえる。
 ## 実装結果
 2026-10-10 実装完了(PR #115、ドラフト)。全WPを同じブランチで実装し、CI(PHP 8.4のPHPUnit全件・MySQLでのマイグレーション・
 フロントのビルド)で確認した。コーディングは全てimplementerに委譲し、委譲ごとのレビュー・CIでの失敗と是正は
