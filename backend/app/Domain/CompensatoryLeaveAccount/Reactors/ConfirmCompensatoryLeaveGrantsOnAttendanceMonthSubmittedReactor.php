@@ -25,6 +25,8 @@ class ConfirmCompensatoryLeaveGrantsOnAttendanceMonthSubmittedReactor extends Re
             periodStart: $month->copy()->startOfMonth()->toDateString(),
             periodEnd: $month->copy()->endOfMonth()->toDateString(),
             submittedAt: $event->createdAt()->toDateTimeString(),
+            viaReactor: true,
+            initiatedByUserId: $event->userId,
         ));
     }
 }

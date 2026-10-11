@@ -39,6 +39,18 @@ class LeaveAttendanceDayRecorder
     }
 
     /**
+     * 対象日が勤務予定日か。勤務予定→その月の働き方→システムのデフォルト働き方の順で解決する
+     * (勤務予定が未展開の通常勤務でも判定できる)。解決できなければfalse。
+     */
+    public function isScheduledWorkingDay(string $userId, string $workDate): bool
+    {
+        $date = Carbon::parse($workDate);
+
+        return (bool) $this->effectiveScheduleResolver
+            ->resolve($userId, $date, $this->calendarEntry($userId, $workDate))?->is_working_day;
+    }
+
+    /**
      * 勤怠日が無ければ source=leave(status=not_started、実績なし)で作成し、あればそれを返す。
      */
     public function ensureDay(string $userId, string $workDate, string $createdByUserId): AttendanceDay

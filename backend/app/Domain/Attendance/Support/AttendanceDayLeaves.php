@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * 戻り値は値の配列(LeaveDayConflictPolicy・LeaveCalculationInput へそのまま渡せる形):
  * leave_kind, leave_request_id, user_id, work_date(Y-m-d), unit, hours, minutes,
- * special_leave_type_id, workflow_request_id, request_status, source
+ * special_leave_type_id, workflow_request_id, request_status
  */
 final class AttendanceDayLeaves
 {

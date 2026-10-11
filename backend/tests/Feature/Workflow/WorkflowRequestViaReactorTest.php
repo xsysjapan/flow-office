@@ -229,4 +229,110 @@ class WorkflowRequestViaReactorTest extends TestCase
             approvedByUserId: $stranger->id,
         ));
     }
+
+    /**
+     * @return array{applicant: User, approver: User, workflowRequestId: string}
+     */
+    private function makeDraftRequest(): array
+    {
+        $applicant = User::factory()->create();
+        $approver = User::factory()->create();
+
+        $requestType = RequestType::query()->create([
+            'code' => 'general_request',
+            'name' => '一般申請',
+            'form_schema' => [],
+            'requires_backoffice_task' => false,
+            'is_active' => true,
+        ]);
+
+        $draft = $this->bus()->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: $requestType->code,
+            applicantUserId: $applicant->id,
+            title: 'テスト申請',
+            formData: [],
+            approverUserId: $approver->id,
+        ));
+
+        return ['applicant' => $applicant, 'approver' => $approver, 'workflowRequestId' => $draft->id];
+    }
+
+    public function test_reactor_submit_succeeds_even_when_the_submitter_is_someone_else_and_records_the_initiator(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'workflowRequestId' => $id] = $this->makeDraftRequest();
+        $initiator = User::factory()->create();
+
+        $result = $this->bus()->dispatch(new SubmitWorkflowRequest(
+            workflowRequestId: $id,
+            submittedByUserId: $applicant->id,
+            approverUserId: $approver->id,
+            viaReactor: true,
+            initiatedByUserId: $initiator->id,
+        ));
+
+        $this->assertSame(WorkflowRequestStatus::SUBMITTED, $result->status);
+        $this->assertSame(WorkflowRequestStatus::SUBMITTED, $this->statusOf($id));
+
+        // 記録する提出者は連鎖の起点の操作者(initiatedByUserId)。
+        $entry = \App\Models\WorkflowRequestHistoryEntry::query()
+            ->where('workflow_request_id', $id)
+            ->where('action', 'submitted')
+            ->first();
+        $this->assertNotNull($entry);
+        $this->assertSame($initiator->id, $entry->actor_user_id);
+    }
+
+    public function test_reactor_submit_does_nothing_when_already_submitted(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'workflowRequestId' => $id] = $this->makeDraftRequest();
+
+        $submit = fn () => $this->bus()->dispatch(new SubmitWorkflowRequest(
+            workflowRequestId: $id,
+            submittedByUserId: $applicant->id,
+            approverUserId: $approver->id,
+            viaReactor: true,
+            initiatedByUserId: $applicant->id,
+        ));
+
+        $submit();
+        $eventCount = \DB::table('stored_events')->count();
+
+        // 2回目は例外にならず、状態もイベントも変わらない(冪等)。
+        $result = $submit();
+
+        $this->assertSame(WorkflowRequestStatus::SUBMITTED, $result->status);
+        $this->assertSame($eventCount, \DB::table('stored_events')->count());
+        $count = \App\Models\WorkflowRequestHistoryEntry::query()
+            ->where('workflow_request_id', $id)
+            ->where('action', 'submitted')
+            ->count();
+        $this->assertSame(1, $count);
+    }
+
+    public function test_user_submit_by_a_stranger_is_still_rejected(): void
+    {
+        ['approver' => $approver, 'workflowRequestId' => $id] = $this->makeDraftRequest();
+        $stranger = User::factory()->create();
+
+        $this->expectException(DomainRuleException::class);
+        $this->bus()->dispatch(new SubmitWorkflowRequest(
+            workflowRequestId: $id,
+            submittedByUserId: $stranger->id,
+            approverUserId: $approver->id,
+        ));
+    }
+
+    public function test_user_submit_of_an_already_submitted_request_is_still_rejected(): void
+    {
+        ['applicant' => $applicant, 'approver' => $approver, 'workflowRequestId' => $id] = $this->makeDraftRequest();
+        $command = new SubmitWorkflowRequest(
+            workflowRequestId: $id,
+            submittedByUserId: $applicant->id,
+            approverUserId: $approver->id,
+        );
+        $this->bus()->dispatch($command);
+
+        $this->expectException(DomainRuleException::class);
+        $this->bus()->dispatch($command);
+    }
 }

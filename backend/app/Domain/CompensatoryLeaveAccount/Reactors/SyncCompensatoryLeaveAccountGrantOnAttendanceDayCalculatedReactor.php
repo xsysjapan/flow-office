@@ -30,6 +30,7 @@ class SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor extends 
             workDate: $event->workDate,
             dayClassification: is_string($dayClassification) ? $dayClassification : null,
             workMinutes: (int) ($event->calculation['work_minutes'] ?? 0),
+            initiatedByUserId: $event->userId,
         );
     }
 
@@ -40,6 +41,7 @@ class SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor extends 
             workDate: $event->workDate,
             dayClassification: $event->dayClassification,
             workMinutes: $event->workMinutes,
+            initiatedByUserId: $event->adjustedByUserId,
         );
     }
 
@@ -51,16 +53,19 @@ class SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor extends 
             workDate: $event->workDate,
             dayClassification: null,
             workMinutes: 0,
+            initiatedByUserId: $event->deletedByUserId,
         );
     }
 
-    private function sync(string $userId, string $workDate, ?string $dayClassification, int $workMinutes): void
+    private function sync(string $userId, string $workDate, ?string $dayClassification, int $workMinutes, string $initiatedByUserId): void
     {
         $this->commandBus->dispatch(new SyncCompensatoryLeaveAccountGrant(
             userId: $userId,
             workDate: $workDate,
             isHolidayDay: in_array($dayClassification, [DayClassification::PRESCRIBED_HOLIDAY, DayClassification::LEGAL_HOLIDAY], true),
             workMinutes: $workMinutes,
+            viaReactor: true,
+            initiatedByUserId: $initiatedByUserId,
         ));
     }
 }

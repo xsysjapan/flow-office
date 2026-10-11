@@ -99,6 +99,11 @@ class CompensatoryLeaveScenarioTest extends TestCase
         $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
         $this->assertLeaveRow($employee, '2026-09-10', 'returned');
 
+        // 差戻し通知は1件だけで、リンクは代休の画面(代休には履歴画面が無い)。
+        $notifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
+        $this->assertCount(1, $notifications);
+        $this->assertStringEndsWith('/compensatory-leave', $notifications[0]['detail_url']);
+
         // 再提出(申請詳細の「提出する」): 同じ内容で申請中に戻り、新しい消化記録が作られる(論点8)。
         $this->actingAs($employee)->postJson('/api/workflow-requests/'.$this->workflowIdOf($requestId).'/submit')
             ->assertSuccessful();

@@ -33,6 +33,8 @@ class SubmitWorkflowRequestOnPaidLeaveRequestSharedReactor extends Reactor
             workflowRequestId: $workflowRequest->id,
             submittedByUserId: $workflowRequest->applicant_user_id,
             approverUserId: $workflowRequest->approver_user_id,
+            viaReactor: true,
+            initiatedByUserId: $workflowRequest->applicant_user_id,
         ));
     }
 }

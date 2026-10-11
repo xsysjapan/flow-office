@@ -6,13 +6,14 @@ use App\Domain\Attendance\Commands\ApplyLeaveToAttendanceDay;
 use App\Domain\Attendance\Services\AttendanceEditGuard;
 use App\Domain\Attendance\Services\LeaveAttendanceDayRecorder;
 use App\Domain\Attendance\Support\AttendanceDayLeaves;
+use App\Domain\Attendance\Support\LeaveApplicabilityPolicy;
 use App\Domain\Attendance\Support\LeaveDayConflictPolicy;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 
 /**
- * 休暇の申請・再提出を勤怠へ反映する。手順: (a) 締め判定(管理者の例外なし)、(b) 同じ日の有効な休暇との
+ * 休暇の申請・再提出を勤怠へ反映する。手順: (0) 勤務予定日・時間休の時間数の判定(LeaveApplicabilityPolicy)、(a) 締め判定(管理者の例外なし)、(b) 同じ日の有効な休暇との
  * 衝突判定(今回の休暇自身は除く)、(c) 勤怠日が無ければ作成、(d) 日次計算の記録。
  * 違反は DomainRuleException で、連鎖全体(申請の作成を含む)が取り消される。
  *
@@ -24,6 +25,7 @@ class ApplyLeaveToAttendanceDayHandler implements CommandHandler
         private readonly AttendanceEditGuard $guard,
         private readonly AttendanceDayLeaves $leaves,
         private readonly LeaveDayConflictPolicy $conflictPolicy,
+        private readonly LeaveApplicabilityPolicy $applicabilityPolicy,
         private readonly LeaveAttendanceDayRecorder $recorder,
     ) {}
 
@@ -39,6 +41,17 @@ class ApplyLeaveToAttendanceDayHandler implements CommandHandler
 
         $userId = (string) $leave['user_id'];
         $workDate = (string) $leave['work_date'];
+
+        $notApplicable = $this->applicabilityPolicy->check(
+            (string) $leave['leave_kind'],
+            (string) $leave['unit'],
+            $leave['minutes'] === null ? null : (int) $leave['minutes'],
+            $this->recorder->isScheduledWorkingDay($userId, $workDate),
+            $this->recorder->prescribedMinutes($userId, $workDate),
+        );
+        if ($notApplicable !== null) {
+            throw new DomainRuleException($notApplicable);
+        }
 
         $this->guard->assertMutable($this->recorder->dayOf($userId, $workDate), $userId, $workDate);
 

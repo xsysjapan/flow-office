@@ -10,14 +10,13 @@ use App\Domain\PaidLeave\Commands\RequestPaidLeave;
 use App\Domain\PaidLeaveRequest\Aggregates\PaidLeaveRequestAggregate;
 use App\Models\PaidLeaveRequest;
 use App\Models\PaidLeaveType;
-use App\Models\WorkStyle;
 use Illuminate\Support\Carbon;
 
 /**
  * UC-P003: 有給を申請する。有給申請の集約(PaidLeaveRequestAggregate)へ申請を記録するだけで、
  * 他の文脈の集約・テーブルは読み書きしない。
  *
- * - 勤務予定日でない日の申請拒否・時間休の入力検証は、この文脈のルールとして残す。
+ * - 勤務予定日でない日・時間休の時間数と所定労働時間の整合の判定は、勤怠文脈の休暇の反映(ApplyLeaveToAttendanceDay)が行う。
  * - 残数の消化記録(有給口座)・勤怠の休暇・ワークフローの提出は、記録された
  *   `paid_leave_request.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う(原則15)。
  * - viaReactor=true(workflow_request.drafted からのReactor発行)で、同じ申請IDが既に申請済みなら何もしない(冪等)。
@@ -40,27 +39,7 @@ class RequestPaidLeaveHandler implements CommandHandler
             return PaidLeaveRequest::query()->findOrFail($command->requestId);
         }
 
-        $targetDate = Carbon::parse($command->targetDate);
-        $calendarEntry = $this->scheduledWorkingDayResolver->resolveSchedule($command->userId, $targetDate);
-        $workStyle = $calendarEntry?->workStyle;
-
-        if ($calendarEntry !== null) {
-            if (! $calendarEntry->is_working_day) {
-                throw new DomainRuleException('勤務予定日ではないため有給を申請できません。');
-            }
-        } else {
-            // 通常勤務(シフト非対象)は運用上employee_calendar_entriesが事前展開されないことが
-            // 多いため、勤務予定が無い日は「未展開」として扱い、その月に割り当てられた働き方
-            // (無ければシステムのデフォルト働き方)から所定労働日かどうかを判定する
-            // (ScheduledWorkingDayResolver参照)。
-            $workStyle = $this->scheduledWorkingDayResolver->resolveWorkStyle($command->userId, $targetDate);
-
-            if (! $this->scheduledWorkingDayResolver->isWorkingDay($command->userId, $targetDate)) {
-                throw new DomainRuleException('勤務予定日ではないため有給を申請できません。');
-            }
-        }
-
-        $requestedDays = $this->resolveRequestedDays($command, $workStyle);
+        $requestedDays = $this->resolveRequestedDays($command);
 
         $aggregate->request(
             userId: $command->userId,
@@ -84,7 +63,7 @@ class RequestPaidLeaveHandler implements CommandHandler
         return PaidLeaveRequest::query()->findOrFail($command->requestId);
     }
 
-    private function resolveRequestedDays(RequestPaidLeave $command, ?WorkStyle $workStyle): float
+    private function resolveRequestedDays(RequestPaidLeave $command): float
     {
         if ($command->leaveType === PaidLeaveType::FULL) {
             return 1.0;
@@ -99,6 +78,10 @@ class RequestPaidLeaveHandler implements CommandHandler
                 throw new DomainRuleException('時間休の場合は取得時間を指定してください。');
             }
 
+            // 日数への換算に所定労働時間が要る(換算だけをここで行う)。勤務予定日・時間数の妥当性の判定は
+            // 勤怠文脈の休暇の反映(ApplyLeaveToAttendanceDay)が行う。
+            $workStyle = $this->scheduledWorkingDayResolver->resolveWorkStyle($command->userId, Carbon::parse($command->targetDate));
+
             if ($workStyle === null) {
                 throw new DomainRuleException('働き方が特定できないため時間休を申請できません。');
             }
@@ -106,10 +89,6 @@ class RequestPaidLeaveHandler implements CommandHandler
             // マスタ値をそのまま使い、ハードコードしたフォールバックは持たない。
             $prescribedDailyMinutes = $workStyle->prescribed_daily_minutes;
             $requestedDays = round(($command->hours * 60) / $prescribedDailyMinutes, 1);
-
-            if ($requestedDays <= 0 || $requestedDays >= 1) {
-                throw new DomainRuleException('時間休として妥当な取得時間を指定してください。');
-            }
 
             return $requestedDays;
         }

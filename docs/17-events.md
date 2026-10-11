@@ -140,10 +140,10 @@
 - `attendance_day.live_status_synced` (打刻ログがまだ矛盾なく1日分の勤務として組み立て
   られない間(出勤のみ・休憩開始のみ等)に、最新の打刻から`attendance_days.status`のみを
   反映する。WEB画面・端末のどちらの打刻でも発生しうる。既に退勤済みの日には発生しない)
-- `attendance.month_submitted`
-- `attendance.month_approved`
-- `attendance.month_returned`
-- `attendance.month_closed`
+- `attendance_month.submitted`
+- `attendance_month.approved`
+- `attendance_month.returned`
+- `attendance_month.closed`
 - `attendance.month_reopened` (救済コマンド: 管理者専用。締め済みの月次勤怠の締めを取り消し、
   承認済み状態に戻す。docs/07-usecases-attendance.md UC-A017)
 - `attendance.month_confirmation_reverted` (救済コマンド: バックオフィス担当者専用。汎用申請
@@ -366,7 +366,7 @@ AggregateIdは特別休暇の口座と同じく種類ごとの派生IDを使う�
   勤怠側で行い、違反は連鎖全体を取り消す(論点7・14)。
 - 勤怠 → 代休口座: `attendance_day.calculated`・`attendance_day.daily_calculation_adjusted`・
   `attendance_day.deleted`を代休口座の同期Reactorが受ける(計算イベントの利用者・勤務日・日区分・実労働分で判定)。
-  `attendance.month_submitted`で代休付与の確定を行う。
+  `attendance_month.submitted`で代休付与の確定を行う。
 
 ## PaidLeaveSchedule(`App\Domain\PaidLeaveSchedule\Events\`)
 

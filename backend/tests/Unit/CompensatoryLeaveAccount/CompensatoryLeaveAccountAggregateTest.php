@@ -121,6 +121,31 @@ class CompensatoryLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
+    public function test_syncing_the_same_holiday_work_again_records_nothing(): void
+    {
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+            ])
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+                $aggregate->syncGrantFromHolidayWork('g-unused', '2026-10-04', true, true, 480, 'daily', null);
+            })
+            ->assertNotRecorded(self::ALL_EVENTS);
+    }
+
+    public function test_removing_an_already_removed_draft_records_nothing(): void
+    {
+        CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)
+            ->given([
+                new CompensatoryLeaveAccountGrantSynced(self::USER, 'g1', '2026-10-04', 1.0, null),
+                new CompensatoryLeaveAccountGrantRemoved(self::USER, 'g1', self::REMOVE_REASON),
+            ])
+            ->when(function (CompensatoryLeaveAccountAggregate $aggregate) {
+                $aggregate->syncGrantFromHolidayWork('g-x', '2026-10-04', true, false, 480, 'daily', null);
+            })
+            ->assertNotRecorded(self::ALL_EVENTS);
+    }
+
     public function test_non_holiday_removes_existing_draft(): void
     {
         CompensatoryLeaveAccountAggregate::fake(self::USER)->forUser(self::USER)

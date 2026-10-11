@@ -12,7 +12,7 @@ use RuntimeException;
  *
  * - readRows(): stored_events の生の行を id順に読む。
  * - readAttendanceDays(): ReadModel(attendance_days)の現在値を読む(勤怠の変換 2.4 の入力)。
- * - assertPreconditions(): 事前条件(論点18 7章1)。新しい種類の休暇イベント・補正ログ・既存の作り直し表が無いこと。
+ * - assertPreconditions(): 事前条件(論点18 7章1)。新しい種類の休暇・口座イベント・補正ログ・既存の作り直し表・スナップショットが無いこと。
  * - write(): 新しい表(既定 stored_events_rebuilt)に書く。既にあれば失敗する。
  * - verify(): 作り直し後の表の自己整合性(id・版の連番、新しい種類が残っていないこと)を確かめる。
  * - swap(): stored_events と入れ替える。元の表は stored_events_before_rebuild_YYYYMMDDHHMMSS として残す。
@@ -116,6 +116,19 @@ final class EventStoreRebuildWriter
         $newKinds = DB::table('stored_events')->where('event_class', 'like', 'paid_leave_request.%')->count();
         if ($newKinds > 0) {
             $violations[] = "新しい種類の休暇申請イベント(paid_leave_request.*)が {$newKinds} 件ある(本番には無い前提)";
+        }
+
+        // cutover後の paid_leave_account.* は変換の対象(新しい種類へ変換する)なので数えない。
+        $newAccountKinds = DB::table('stored_events')
+            ->where(fn ($query) => $query
+                ->where('event_class', 'like', 'special_leave_account.%')
+                ->orWhere('event_class', 'like', 'compensatory_leave_account.%'))
+            ->count();
+        if ($newAccountKinds > 0) {
+            $violations[] = "新しい種類の口座イベント(special_leave_account.*・compensatory_leave_account.*)が {$newAccountKinds} 件ある(本番には無い前提)";
+        }
+        if (Schema::hasTable('snapshots') && DB::table('snapshots')->exists()) {
+            $violations[] = 'snapshots テーブルに行がある(集約のスナップショットは作り直し後の履歴と一致しないため、削除してから実行する)';
         }
 
         return $violations;

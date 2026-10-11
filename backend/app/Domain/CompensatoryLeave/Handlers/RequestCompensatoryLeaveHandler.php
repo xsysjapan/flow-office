@@ -2,7 +2,6 @@
 
 namespace App\Domain\CompensatoryLeave\Handlers;
 
-use App\Domain\Attendance\Services\ScheduledWorkingDayResolver;
 use App\Domain\CompensatoryLeave\Aggregates\CompensatoryLeaveRequestAggregate;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
 use App\Domain\EventSourcing\Contracts\Command;
@@ -10,14 +9,13 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
  * 代休を申請する。代休申請の集約(CompensatoryLeaveRequestAggregate)へ申請を記録するだけで、
  * 他の文脈の集約・テーブルは読み書きしない(原則15)。
  *
- * - 取得単位の設定・勤務予定日でない日の申請拒否・時間休の入力検証は、この文脈のルールとして残す。
+ * - 取得単位の設定・時間休の時間数の入力検証は、この文脈のルールとして残す。勤務予定日でない日の判定は勤怠文脈の休暇の反映(ApplyLeaveToAttendanceDay)が行う。
  * - 残数の消化記録(代休口座)・勤怠の休暇(勤怠のReactor)・ワークフローの提出は、記録された
  *   `compensatory_leave.requested`/`.shared`をそれぞれの文脈のReactorが受けて行う。
  * - 同日の休暇の衝突・締め判定は勤怠文脈が休暇の反映時に行う(違反なら連鎖全体が取り消される)。
@@ -27,10 +25,6 @@ use Illuminate\Support\Str;
  */
 class RequestCompensatoryLeaveHandler implements CommandHandler
 {
-    public function __construct(
-        private readonly ScheduledWorkingDayResolver $scheduledWorkingDayResolver,
-    ) {}
-
     public function handle(Command $command): mixed
     {
         assert($command instanceof RequestCompensatoryLeave);
@@ -44,18 +38,6 @@ class RequestCompensatoryLeaveHandler implements CommandHandler
 
         $unit = SystemSetting::current()->compensatory_leave_unit;
         $this->assertLeaveTypeAllowed($unit, $command->leaveType);
-
-        $targetDate = Carbon::parse($command->targetDate);
-
-        $calendarEntry = $this->scheduledWorkingDayResolver->resolveSchedule($command->userId, $targetDate);
-
-        if ($calendarEntry !== null) {
-            if (! $calendarEntry->is_working_day) {
-                throw new DomainRuleException('勤務予定日ではないため代休を申請できません。');
-            }
-        } elseif (! $this->scheduledWorkingDayResolver->isWorkingDay($command->userId, $targetDate)) {
-            throw new DomainRuleException('勤務予定日ではないため代休を申請できません。');
-        }
 
         [$requestedDays, $requestedMinutes] = $this->resolveRequestedAmount($command);
 

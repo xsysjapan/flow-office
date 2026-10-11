@@ -906,7 +906,7 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
 - late_night_prescribed_holiday_work_minutes (所定休日労働のうち深夜時間帯にかかった分。
   late_night_legal_holiday_work_minutesの所定休日版で、late_night_work_minutesには含まない)
 - is_manually_adjusted (日次登録後、区分ごとの時間を手動で補正したかどうか。実績
-  (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance.day_calculated`)
+  (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance_day.calculated`)
   されると、falseに戻る)
 - adjusted_by_user_id / adjusted_at (手動補正した社員・日時。`is_manually_adjusted=false`
   の場合はnull)
@@ -923,11 +923,11 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
   口座の消化記録(`paid_leave_usages`)のままで、ここは日次集計を1テーブルで完結させるための非正規化)
 - created_at / updated_at
 
-`attendance.daily_calculation_adjusted`イベント(手動補正)で更新される列
+`attendance_day.daily_calculation_adjusted`イベント(手動補正)で更新される列
 (`prescribed_work_minutes`/`statutory_within_overtime_minutes`/`statutory_excess_overtime_minutes`/
 `legal_holiday_work_minutes`/深夜内訳)も、
 イベントの再生成で同じ値を再構築できる(=Projectionの原則を破らない)。実績が再編集され
-`attendance.day_calculated`が再発生すると、以降のイベント再生ではその再計算結果で上書き
+`attendance_day.calculated`が再発生すると、以降のイベント再生ではその再計算結果で上書き
 されるため、手動補正はあくまで「直近の実績編集以降に加えられた最新の上書き」として扱われる。
 
 週40時間(労基法32条)の超過量自体は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
@@ -1148,7 +1148,7 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 `paid_leave_request.*`イベント(休暇申請文脈の`PaidLeaveRequestAggregate`)で、この表は
 休暇申請文脈の`PaidLeaveRequestProjector`だけが更新する(残数側の`PaidLeaveUsageAllocationProjector`は
 この表を更新しない。変更セット論点4・仕様確定事項C)。リリース時は`paid_leave_requests`・
-`paid_leave_request_usage_links`・`leave_request_workflow_links`を空にして一緒にリビルドする。
+`leave_request_workflow_links`を空にして一緒にリビルドする。
 
 
 ## paid_leave_usages
@@ -1164,7 +1164,7 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - paid_leave_grant_id (nullable。旧ドメインが単一Grant参照に使っていた列。新ドメインの
   Allocationは`paid_leave_usage_allocations`側で複数Grantにまたがって持つため、この列は
   cutover後は使われないが、既存Projection互換のため列自体は削除せず残置している)
-- paid_leave_request_id (nullable。申請テーブルへの外部キーは撤去した。対応は`paid_leave_request_usage_links`で持つ)
+- paid_leave_request_id (nullable。申請テーブルへの外部キーは撤去した)
 - used_on
 - used_days
 - used_minutes (nullable)
@@ -1310,10 +1310,13 @@ Aggregateをreplayして行う)。
   request_status (submitted/approved/returned/cancelled)、timestamps。unique(leave_kind, leave_request_id)、index(user_id, work_date)。
   差戻し・取消では行を削除せずrequest_statusを更新する(画面で履歴を追えるようにするため)。
   読み手は申請中・承認済みの行だけを扱う。`work_type`・勤怠日の休暇値の代わりに休暇の有無・種類・取得単位を持つ。
-- `attendance_day_leave_paid_usages` (Projection): usage_id (PK)、leave_request_id。有給の消化記録ID→
-  有給申請ID。
-- `paid_leave_request_usage_links` (Projection): usage_id (PK)、paid_leave_request_id (index)。
-  有給の消化記録→申請の対応。消化記録テーブルの申請への外部キーの代わりに持つ。
+- `attendance_special_leave_shortages` (Projection。勤怠側の特別休暇の残数不足ビュー。マイグレーション`2026_10_11_000003`): usage_id (PK)、
+  user_id、work_date、special_leave_request_id、special_leave_type_id、used_days、used_minutes (nullable)、
+  unallocated_days (承認で確定したときの未充当日数。0より大きい行が残数不足)。index(user_id, work_date)(明示名`att_sl_shortages_user_date_index`)。
+  特別休暇口座のイベント(`special_leave_account.usage_designated`で行を作り、`usage_confirmed`で未充当日数を記録し、`usage_cancelled`で行を削除する)
+  から勤怠のProjectorが作る。月次APIの`special_leave_balance_warnings`はこのビューを読み、`special_leave_usages`は読まない。
+- (撤去) `attendance_day_leave_paid_usages`・`paid_leave_request_usage_links`: 書き込み・読み取りが無くなったため
+  マイグレーション`2026_10_11_000002`で撤去した(downで空のテーブルを復元する)。
 - `paid_leave_usages`: `attendance_day_id`・`paid_leave_request_id`の外部キーと`stored_event_id`列を撤去(リリース時の
   撤去順は外部キー→索引。docs/32参照)。
 - `special_leave_usages`: `usage_id` (nullable、unique)、`unallocated_days` (default 0) を追加。

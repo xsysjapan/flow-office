@@ -161,6 +161,13 @@ class CompensatoryLeaveAccountAggregate extends AggregateRoot
 
         [$grantedDays, $grantedMinutes] = (new CompensatoryLeaveGrantConversion)->resolve($unit, $halfDayThresholdMinutes, $workMinutes);
 
+        // 同じ内容の下書き付与が既にあれば何も記録しない(同じ計算イベントの再処理で結果が変わらない・冪等)。
+        if ($existingGrantId !== null
+            && $this->grants[$existingGrantId]['grantedDays'] === $grantedDays
+            && $this->grants[$existingGrantId]['grantedMinutes'] === $grantedMinutes) {
+            return $this;
+        }
+
         $this->recordThat(new CompensatoryLeaveAccountGrantSynced(
             userId: $this->requireUserId(),
             grantId: $existingGrantId ?? $newGrantId,

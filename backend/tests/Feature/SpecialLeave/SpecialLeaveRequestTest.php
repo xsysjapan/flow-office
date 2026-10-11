@@ -440,6 +440,8 @@ class SpecialLeaveRequestTest extends TestCase
         // 申請者への通知は差戻しの1件だけ(承認依頼の通知は承認者へ届く)。
         $employeeNotifications = $this->actingAs($employee)->getJson('/api/notifications/mine')->json('data');
         $this->assertCount(1, $employeeNotifications);
+        // 差戻し通知のリンクは特別休暇の履歴画面。
+        $this->assertStringEndsWith('/special-leave/history', $employeeNotifications[0]['detail_url']);
     }
 
     /**

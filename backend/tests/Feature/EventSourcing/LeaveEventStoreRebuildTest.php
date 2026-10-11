@@ -84,6 +84,55 @@ class LeaveEventStoreRebuildTest extends TestCase
         $this->assertFalse(Schema::hasTable(EventStoreRebuildWriter::TABLE));
     }
 
+    public function test_apply_fails_when_new_kind_account_events_already_exist(): void
+    {
+        foreach (['special_leave_account.grant_registered' => 901, 'compensatory_leave_account.grant_synced' => 902] as $class => $id) {
+            DB::table('stored_events')->insert([
+                'id' => $id,
+                'aggregate_uuid' => 'account-'.$id,
+                'aggregate_version' => 1,
+                'event_version' => 1,
+                'event_class' => $class,
+                'event_properties' => json_encode(['userId' => 'u1']),
+                'meta_data' => json_encode([]),
+                'created_at' => '2026-08-01 10:00:00',
+            ]);
+
+            $this->assertContains(
+                true,
+                array_map(fn (string $v) => str_contains($v, '口座イベント'), (new EventStoreRebuildWriter)->preconditionViolations()),
+            );
+            $this->artisan('leave:rebuild-event-store', ['--apply' => true])->assertExitCode(1);
+            $this->assertFalse(Schema::hasTable(EventStoreRebuildWriter::TABLE));
+
+            DB::table('stored_events')->where('id', $id)->delete();
+        }
+    }
+
+    public function test_cutover_paid_leave_account_events_are_not_a_precondition_violation(): void
+    {
+        // 履歴には cutover後の paid_leave_account.migrated がある(変換の対象)。事前条件の違反にならない。
+        $this->assertSame([], (new EventStoreRebuildWriter)->preconditionViolations());
+    }
+
+    public function test_apply_fails_when_snapshots_exist(): void
+    {
+        DB::table('snapshots')->insert([
+            'aggregate_uuid' => 'R1',
+            'aggregate_version' => 3,
+            'state' => json_encode([]),
+            'created_at' => '2026-08-01 10:00:00',
+            'updated_at' => '2026-08-01 10:00:00',
+        ]);
+
+        $violations = (new EventStoreRebuildWriter)->preconditionViolations();
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('snapshots', $violations[0]);
+
+        $this->artisan('leave:rebuild-event-store', ['--apply' => true])->assertExitCode(1);
+        $this->assertFalse(Schema::hasTable(EventStoreRebuildWriter::TABLE));
+    }
+
     private function insertOldPaidLeaveHistory(): void
     {
         $at = '2026-08-01 10:00:00';
