@@ -48,6 +48,20 @@ class EventStoreRebuilderTest extends TestCase
         $this->assertSame(range(1, count($result->rows)), $ids);
     }
 
+    public function test_meta_keys_read_by_spatie_match_the_renumbered_row(): void
+    {
+        $result = $this->rebuilder->rebuild($this->baseRows());
+
+        $this->assertTrue($result->ok, json_encode($result->unsupported));
+        foreach ($result->rows as $row) {
+            $meta = $row['meta_data'];
+            $this->assertSame($row['id'], $meta['stored-event-id']);
+            $this->assertSame($row['created_at'], $meta['created-at']);
+            $this->assertSame($row['aggregate_uuid'], $meta['aggregate-root-uuid']);
+            $this->assertSame($row['aggregate_version'], $meta['aggregate-root-version']);
+        }
+    }
+
     public function test_versions_are_contiguous_per_aggregate_and_unrelated_aggregates_keep_their_versions(): void
     {
         $result = $this->rebuilder->rebuild($this->baseRows());

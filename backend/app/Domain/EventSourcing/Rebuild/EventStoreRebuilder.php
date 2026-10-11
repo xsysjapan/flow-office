@@ -532,6 +532,10 @@ final class EventStoreRebuilder
                 $meta['aggregate-root-uuid'] = $event->aggregateUuid;
                 $meta['aggregate-root-version'] = $version;
             }
+            // Spatieはイベントの stored event id・作成日時も meta_data(stored-event-id・created-at)から読む
+            // (WorkflowRequestHistoryProjector等が使う)。振り直した id と行の created_at に合わせる。
+            $meta['stored-event-id'] = $id;
+            $meta['created-at'] = $event->createdAt;
             if ($event->rebuiltFrom !== null) {
                 $meta['rebuilt_from'] = $event->rebuiltFrom;
             }
