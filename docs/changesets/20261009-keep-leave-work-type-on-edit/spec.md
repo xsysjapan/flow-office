@@ -788,7 +788,7 @@
   (3)HTTPのAPI(読み取り)は、画面の表示のために他文脈の読み取り用クエリクラス(`LeaveUsageQuery`等)を組み合わせてよい。ドメインの
   Handler・Reactor・Projectorは他文脈のテーブルを読まない。
   (4)Reactorが発行するCommandは全てviaReactor/initiatedByUserIdを持つ(ワークフローの提出3種、代休付与の同期・月次確定もそろえる)。
-  勤怠の休暇反映(Apply/Recalculate)は再実行で状態が変わらないため現状のまま(日次計算を再記録するだけ)とする。
+  勤怠の休暇反映(Apply/Recalculate/Release)も冪等にし、日次計算の結果が直近の計算と同じなら記録しない(2026-10-11 CIの指摘で改訂)。
   (5)特別休暇の残数不足警告: 勤怠側が特別休暇口座のイベント(`special_leave_account.usage_confirmed`の未充当量・`usage_cancelled`)から
   自分のビューを作って表示し、`special_leave_usages`を直接読まない。
   (6)テストの補完: 午前有給+午後代休、有給の締め済みの全遷移、特別休暇・代休の承認不要の申請、同じイベントを購読するReactorの実行順を

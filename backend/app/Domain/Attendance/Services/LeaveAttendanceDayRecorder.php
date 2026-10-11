@@ -9,6 +9,7 @@ use App\Models\AttendanceDaySource;
 use App\Models\EmployeeCalendarEntry;
 use App\Models\SystemSetting;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -93,7 +94,37 @@ class LeaveAttendanceDayRecorder
 
         $calculation = $this->calculator->calculate($fresh);
 
+        // 勤怠日の現在の日次計算(直近の計算・補正のイベント)と同じ結果なら記録しない(同じ休暇の反映を再処理しても
+        // イベントが増えない・冪等)。比較は日次計算の全項目。
+        if ($this->isSameAsCurrentCalculation($fresh->id, $calculation)) {
+            return;
+        }
+
         AttendanceDayAggregate::retrieve($fresh->id)->calculate($calculation, $fresh->user_id, $fresh->work_date->toDateString())->persist();
+    }
+
+    /**
+     * 直近の計算系イベント(attendance_day.calculated・daily_calculation_adjusted)が計算イベントで、その計算結果が
+     * 与えられた結果と全項目で同じか。補正イベントが直近なら(補正後の値は別物のため)falseを返す。
+     *
+     * @param  array<string, mixed>  $calculation
+     */
+    private function isSameAsCurrentCalculation(string $dayId, array $calculation): bool
+    {
+        $latest = DB::table('stored_events')
+            ->where('aggregate_uuid', $dayId)
+            ->whereIn('event_class', ['attendance_day.calculated', 'attendance_day.daily_calculation_adjusted'])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($latest === null || $latest->event_class !== 'attendance_day.calculated') {
+            return false;
+        }
+
+        $recorded = json_decode((string) $latest->event_properties, true)['calculation'] ?? null;
+        $new = json_decode(json_encode($calculation, JSON_THROW_ON_ERROR), true);
+
+        return is_array($recorded) && $recorded == $new;
     }
 
     public function dayOf(string $userId, string $workDate): ?AttendanceDay
