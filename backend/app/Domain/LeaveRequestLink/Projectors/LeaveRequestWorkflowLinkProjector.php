@@ -3,7 +3,6 @@
 namespace App\Domain\LeaveRequestLink\Projectors;
 
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
-use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -38,12 +37,6 @@ class LeaveRequestWorkflowLinkProjector extends Projector
         }
 
         $this->link($event->aggregateRootUuid(), $leaveKind, $event->subjectId);
-    }
-
-    /** 旧`paid_leave.request_shared`(本変更前のイベント。発行元は現行コードに無く、履歴の再生で使う)。 */
-    public function onPaidLeaveRequestShared(PaidLeaveRequestShared $event): void
-    {
-        $this->link($event->workflowRequestId, LeaveRequestWorkflowLink::KIND_PAID, $event->aggregateRootUuid());
     }
 
     public function onPaidLeaveRequestLifecycleShared(PaidLeaveRequestLifecycleShared $event): void

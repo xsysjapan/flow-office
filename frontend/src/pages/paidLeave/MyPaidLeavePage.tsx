@@ -354,7 +354,9 @@ export function MyPaidLeavePage() {
                   <TableCell>{grant.granted_days}</TableCell>
                   <TableCell>{grant.used_days}</TableCell>
                   <TableCell>{grant.remaining_days}</TableCell>
-                  <TableCell className="text-muted-foreground">{grant.grant_reason ?? '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {grant.source === 'carried_over' ? '繰越(システム外からの持ち込み)' : (grant.grant_reason ?? '-')}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

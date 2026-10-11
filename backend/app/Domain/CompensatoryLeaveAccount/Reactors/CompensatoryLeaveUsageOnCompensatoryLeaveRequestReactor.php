@@ -42,9 +42,7 @@ class CompensatoryLeaveUsageOnCompensatoryLeaveRequestReactor extends Reactor
 
     public function onCompensatoryLeaveRequestResubmitted(CompensatoryLeaveRequestResubmitted $event): void
     {
-        if ($event->userId === null
-            || $event->targetDate === null
-            || $event->leaveType === null
+        if ($event->leaveType === null
             || $event->requestedDays === null
         ) {
             // 集約は申請済みの内容を必ず記録するため、ここに来るのは不整合のみ。
@@ -64,10 +62,6 @@ class CompensatoryLeaveUsageOnCompensatoryLeaveRequestReactor extends Reactor
 
     public function onCompensatoryLeaveRequestApproved(CompensatoryLeaveRequestApproved $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('承認のイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ConfirmCompensatoryLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),
@@ -78,10 +72,6 @@ class CompensatoryLeaveUsageOnCompensatoryLeaveRequestReactor extends Reactor
 
     public function onCompensatoryLeaveRequestReturned(CompensatoryLeaveRequestReturned $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('差戻しのイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelCompensatoryLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),
@@ -93,10 +83,6 @@ class CompensatoryLeaveUsageOnCompensatoryLeaveRequestReactor extends Reactor
 
     public function onCompensatoryLeaveRequestCancelled(CompensatoryLeaveRequestCancelled $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('取消のイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelCompensatoryLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),

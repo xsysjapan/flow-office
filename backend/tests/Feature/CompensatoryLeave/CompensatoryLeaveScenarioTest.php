@@ -363,44 +363,6 @@ class CompensatoryLeaveScenarioTest extends TestCase
         $this->assertSame($before, $this->compensatoryStateOf($employee, $grant->id), '締め済みの日の差戻し中の取消');
     }
 
-    /**
-     * 移行後の申請: 移行コマンドで口座へ引き継いだ付与(本変更前の付与)を、新しい申請の承認・取消が使う。
-     */
-    public function test_requests_after_the_migration_use_the_migrated_grant(): void
-    {
-        $employee = User::factory()->create();
-        $approver = User::factory()->create();
-        $this->makeCompensatoryWorkStyle();
-        $grantId = $this->legacyCompensatoryGrant($employee);
-
-        $this->artisan('compensatory-leave:migrate-to-account', ['--apply' => true])->assertSuccessful();
-        $this->assertTrue($this->compensatoryAccountOf($employee)->isMigrated());
-
-        $requestId = $this->requestCompensatoryLeave($employee, $approver, '2026-09-10');
-        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
-
-        $this->actingAs($approver)->postJson("/api/compensatory-leave/requests/{$requestId}/approve")
-            ->assertOk()
-            ->assertJsonPath('status', 'approved');
-
-        $this->assertEquals(0.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
-        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('used_days'));
-        $this->assertDatabaseHas('compensatory_leave_usages', [
-            'compensatory_leave_request_id' => $requestId,
-            'is_confirmed' => true,
-            'unallocated_days' => 0.0,
-        ]);
-        $this->assertLeaveRow($employee, '2026-09-10', 'approved');
-
-        $this->actingAs($employee)->postJson("/api/compensatory-leave/requests/{$requestId}/cancel")
-            ->assertOk()
-            ->assertJsonPath('status', 'cancelled');
-
-        $this->assertEquals(1.0, (float) CompensatoryLeaveGrant::query()->whereKey($grantId)->value('remaining_days'));
-        $this->assertSame(0, CompensatoryLeaveUsage::query()->where('compensatory_leave_request_id', $requestId)->count());
-        $this->assertLeaveRow($employee, '2026-09-10', 'cancelled');
-    }
-
     /** 本変更前の代休付与(旧テーブル)。移行テストと同じ作り方で、移行コマンドの入力を再現する。 */
     private function legacyCompensatoryGrant(User $user, string $workDate = '2026-08-08'): string
     {

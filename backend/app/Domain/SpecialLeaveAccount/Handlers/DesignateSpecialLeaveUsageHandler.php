@@ -4,9 +4,9 @@ namespace App\Domain\SpecialLeaveAccount\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
+use App\Domain\EventSourcing\Rebuild\LeaveUsageId;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
 use App\Domain\SpecialLeaveAccount\Commands\DesignateSpecialLeaveUsage;
-use Illuminate\Support\Str;
 
 /**
  * 申請に対応する消化記録を作成する(充当は行わない)。消化記録IDは発行して返す。
@@ -26,7 +26,8 @@ class DesignateSpecialLeaveUsageHandler implements CommandHandler
             return (string) $aggregate->usageIdForRequest($command->requestId);
         }
 
-        $usageId = (string) Str::uuid();
+        // 消化記録は申請IDと再提出の回数で決まるID(論点18。作り直しの変換と同じ採番)。
+        $usageId = LeaveUsageId::for('special_leave', $command->requestId, $aggregate->designationCountForRequest($command->requestId));
 
         $aggregate
             ->designateUsage(

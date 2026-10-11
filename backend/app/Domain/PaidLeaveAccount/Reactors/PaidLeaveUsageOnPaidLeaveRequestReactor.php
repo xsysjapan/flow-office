@@ -21,7 +21,7 @@ use Spatie\EventSourcing\EventHandlers\Reactors\Reactor;
  * - approved → 消化記録の確定(残数不足でも確定し、充当できた分だけ充当。論点17)
  * - returned / cancelled → 消化記録の取消(承認済みは充当を解除し残高を戻す)
  *
- * 対象の消化記録は申請IDで特定する。migrated には反応しない(引き継ぎ時点の消化記録は運用コマンドが扱う)。
+ * 対象の消化記録は申請IDで特定する。
  * 全て viaReactor=true で発行し、既に目的の状態なら何もしない(冪等)。
  */
 class PaidLeaveUsageOnPaidLeaveRequestReactor extends Reactor
@@ -47,7 +47,7 @@ class PaidLeaveUsageOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleResubmitted(PaidLeaveRequestLifecycleResubmitted $event): void
     {
-        if ($event->userId === null || $event->targetDate === null || $event->leaveType === null || $event->requestedDays === null) {
+        if ($event->leaveType === null || $event->requestedDays === null) {
             // 集約は申請済みの内容を必ず記録するため、ここに来るのは不整合のみ。
             throw new \LogicException('再提出のイベントに申請内容がありません: '.$event->aggregateRootUuid());
         }
@@ -69,10 +69,6 @@ class PaidLeaveUsageOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleApproved(PaidLeaveRequestLifecycleApproved $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('承認のイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ConfirmPaidLeaveUsage(
             userId: $event->userId,
             usageId: null,
@@ -85,10 +81,6 @@ class PaidLeaveUsageOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleReturned(PaidLeaveRequestLifecycleReturned $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('差戻しのイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelPaidLeaveUsage(
             userId: $event->userId,
             usageId: null,
@@ -102,10 +94,6 @@ class PaidLeaveUsageOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleCancelled(PaidLeaveRequestLifecycleCancelled $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('取消のイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelPaidLeaveUsage(
             userId: $event->userId,
             usageId: null,

@@ -185,29 +185,29 @@ describe('statusLabels', () => {
   })
 
   it('maps paid leave history event types to a Japanese label and tone, falling back to the raw type', () => {
-    expect(paidLeaveEventTypeLabel('paid_leave.granted')).toEqual({ label: '付与', tone: 'success' })
-    expect(paidLeaveEventTypeLabel('paid_leave.request_returned')).toEqual({ label: '差戻し', tone: 'warning' })
+    expect(paidLeaveEventTypeLabel('paid_leave_account.grant_created')).toEqual({ label: '付与', tone: 'success' })
+    expect(paidLeaveEventTypeLabel('paid_leave_request.returned')).toEqual({ label: '差戻し', tone: 'warning' })
+    expect(paidLeaveEventTypeLabel('paid_leave_account.usage_confirmed')).toEqual({ label: '消化', tone: 'info' })
+    expect(paidLeaveEventTypeLabel('paid_leave.granted')).toEqual({ label: 'paid_leave.granted', tone: 'neutral' })
     expect(paidLeaveEventTypeLabel('paid_leave.unknown_event')).toEqual({ label: 'paid_leave.unknown_event', tone: 'neutral' })
   })
 
   it('formats each paid leave history event type using its own payload shape', () => {
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.granted', { granted_days: 10, expires_on: '2027-06-30' }))).toBe(
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_created', { granted_days: 10, expires_on: '2027-06-30' }))).toBe(
       '10日を付与(有効期限 2027-06-30)',
     )
     expect(
       paidLeaveEventDetail(
-        buildEvent('paid_leave.requested', { target_date: '2026-08-10', leave_type: 'full', requested_days: 1 }),
+        buildEvent('paid_leave_request.requested', { target_date: '2026-08-10', leave_type: 'full', requested_days: 1 }),
       ),
     ).toBe('対象日 2026-08-10 の全休を申請(1日)')
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.request_approved', {}))).toBe('有給申請が承認されました')
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.request_returned', { comment: '確認してください' }))).toBe(
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_request.approved', {}))).toBe('有給申請が承認されました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_request.returned', { comment: '確認してください' }))).toBe(
       '有給申請が差し戻されました: 確認してください',
     )
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.request_cancelled', {}))).toBe('有給申請を取り消しました')
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.used', { used_on: '2026-08-10', used_days: 0.5 }))).toBe(
-      '対象日 2026-08-10 に0.5日を消化',
-    )
-    expect(paidLeaveEventDetail(buildEvent('paid_leave.warning_raised', { message: '有給が失効間近です' }))).toBe(
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_request.cancelled', {}))).toBe('有給申請を取り消しました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.usage_confirmed', {}))).toBe('有給の消化が確定しました')
+    expect(paidLeaveEventDetail(buildEvent('paid_leave_account.grant_warning_raised', { message: '有給が失効間近です' }))).toBe(
       '有給が失効間近です',
     )
   })

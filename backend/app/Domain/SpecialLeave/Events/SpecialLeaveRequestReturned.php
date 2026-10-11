@@ -13,9 +13,9 @@ class SpecialLeaveRequestReturned extends ShouldBeStored
     public function __construct(
         public readonly string $returnedByUserId,
         public readonly string $comment,
-        public readonly ?string $userId = null,
+        public readonly string $userId,
+        public readonly string $targetDate,
         public readonly ?int $specialLeaveTypeId = null,
-        public readonly ?string $targetDate = null,
         public readonly ?string $leaveType = null,
         public readonly ?float $hours = null,
         public readonly ?float $requestedDays = null,

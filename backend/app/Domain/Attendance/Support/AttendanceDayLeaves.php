@@ -117,7 +117,6 @@ final class AttendanceDayLeaves
             'special_leave_type_id' => $leave->special_leave_type_id,
             'workflow_request_id' => $leave->workflow_request_id,
             'request_status' => $leave->request_status,
-            'source' => $leave->source,
         ];
     }
 }

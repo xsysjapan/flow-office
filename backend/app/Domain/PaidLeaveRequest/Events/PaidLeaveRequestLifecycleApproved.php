@@ -12,6 +12,6 @@ class PaidLeaveRequestLifecycleApproved extends ShouldBeStored
 {
     public function __construct(
         public readonly ?string $approvedByUserId,
-        public readonly ?string $userId = null,
+        public readonly string $userId,
     ) {}
 }

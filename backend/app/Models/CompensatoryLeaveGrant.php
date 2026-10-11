@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * (attendance_days)から自動導出される派生データであり、attendance_day_idをユニークキーに
  * upsertされる。status='draft'の間は月次未提出であることを表し、月次提出時に'confirmed'へ
  * 確定して初めて消化申請の対象になる。主キーはUUID(HasUuids)。この行自体は
- * CompensatoryLeaveGrantProjectorがstored_eventsから作成・更新する。
+ * CompensatoryLeaveAccountProjectorがstored_eventsから作成・更新する。
  */
 #[Fillable([
     'id', 'user_id', 'source', 'attendance_day_id', 'work_date', 'granted_days', 'granted_minutes',

@@ -74,7 +74,7 @@ class RecalculateAttendanceDaysCommandTest extends TestCase
         $calculation = app(AttendanceCalculator::class)->calculate($day);
         $calculation['paid_leave_days'] = 0.0;
 
-        AttendanceDayAggregate::retrieve($attendanceDayId)->calculate($calculation)->persist();
+        AttendanceDayAggregate::retrieve($attendanceDayId)->calculate($calculation, $day->user_id, $day->work_date->toDateString())->persist();
     }
 
     private function calculatedEventCount(): int
@@ -157,6 +157,9 @@ class RecalculateAttendanceDaysCommandTest extends TestCase
             lateNightPrescribedHolidayWorkMinutes: 0,
             reason: '社労士確認後の手動調整',
             adjustedByUserId: $approver->id,
+            userId: AttendanceDay::query()->findOrFail($dayId)->user_id,
+            workDate: AttendanceDay::query()->findOrFail($dayId)->work_date->toDateString(),
+            workMinutes: 0,
         )->persist();
 
         $this->artisan('attendance:recalculate-days', ['--from' => '2026-08-01', '--to' => '2026-08-31', '--apply' => true])
@@ -202,6 +205,9 @@ class RecalculateAttendanceDaysCommandTest extends TestCase
             lateNightPrescribedHolidayWorkMinutes: 0,
             reason: '手動調整',
             adjustedByUserId: $approver->id,
+            userId: AttendanceDay::query()->findOrFail($dayId)->user_id,
+            workDate: AttendanceDay::query()->findOrFail($dayId)->work_date->toDateString(),
+            workMinutes: 0,
         )->persist();
         $events = $this->calculatedEventCount();
 

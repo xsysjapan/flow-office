@@ -15,10 +15,8 @@ use Illuminate\Database\Eloquent\Model;
     'user_id',
     'work_date',
     'unit',
-    'usage_id',
     'workflow_request_id',
     'request_status',
-    'source',
 ])]
 class LeaveAttendanceRateLeave extends Model
 {

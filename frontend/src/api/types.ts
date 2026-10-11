@@ -801,6 +801,8 @@ export interface PaidLeaveGrant {
   used_days: number;
   remaining_days: number;
   grant_reason: string | null;
+  /** 付与の出所。carried_over はシステム外から持ち込んだ残高(繰越)。 */
+  source?: "manual" | "scheduled_batch" | "carried_over";
   status: LeaveGrantStatus;
   revoked_at: string | null;
   revoked_by_user_id: string | null;

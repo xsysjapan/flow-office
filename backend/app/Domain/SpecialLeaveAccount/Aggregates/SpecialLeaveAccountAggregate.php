@@ -5,7 +5,6 @@ namespace App\Domain\SpecialLeaveAccount\Aggregates;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountMigrated;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
@@ -51,7 +50,21 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     /** @var array<string, string> */
     private array $requestIndex = [];
 
-    private bool $migrated = false;
+    /**
+     * 同じ申請IDに対して、これまでに消化記録を指定した回数(取消済みを含む)を返す。
+     * 再提出の回数に当たり、消化記録のusageIdの採番(LeaveUsageId)に使う(論点18 2.1)。
+     */
+    public function designationCountForRequest(string $requestId): int
+    {
+        $count = 0;
+        foreach ($this->usages as $usage) {
+            if ($usage['requestId'] === $requestId) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
 
     /**
      * 利用者IDから特別休暇口座の集約IDを決定的に派生させる。
@@ -63,7 +76,7 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * 付与を登録する。現行の`SpecialLeaveGrantAggregate::grant`と同じく、日数・日付の妥当性は
+     * 付与を登録する。旧来の特別休暇付与と同じく、日数・日付の妥当性は
      * 検証しない(現行にもルールが無いため。報告の確認事項を参照)。
      */
     public function registerGrant(
@@ -233,97 +246,6 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * 既存データの引き継ぎ。口座が空のときだけ1回実行できる。
-     *
-     * @param  array<int, array{grantId: string, specialLeaveTypeId: int, grantedOn: string, expiresOn: ?string, grantedDays: float, revoked: bool}>  $grants
-     * @param  array<int, array{usageId: string, requestId: string, specialLeaveTypeId: int, usedOn: string, usageType: string, usedDays: float, usedMinutes: ?int, status: string, allocations: array<int, array{grantId: string, allocatedDays: float}>}>  $usages
-     *
-     * @throws DomainRuleException 口座が空でない・ID重複・存在しない付与への充当・付与超過・種類の不一致
-     */
-    public function migrate(array $grants, array $usages, ?string $userId = null): self
-    {
-        if ($this->migrated) {
-            throw new DomainRuleException('この特別休暇口座は既に引き継ぎ済みです。');
-        }
-
-        $grantIds = [];
-        $grantsById = [];
-
-        foreach ($grants as $grant) {
-            if (isset($grantsById[$grant['grantId']])) {
-                throw new DomainRuleException("移行データ内でGrant ID [{$grant['grantId']}] が重複しています。");
-            }
-
-            if (isset($this->grants[$grant['grantId']])) {
-                throw new DomainRuleException("Grant [{$grant['grantId']}] は既に口座に存在します。");
-            }
-
-            $grantsById[$grant['grantId']] = $grant;
-            $grantIds[] = $grant['grantId'];
-        }
-
-        $usageIds = [];
-        $requestIds = [];
-        $allocatedByGrant = [];
-
-        foreach ($usages as $usage) {
-            if (in_array($usage['usageId'], $usageIds, true)) {
-                throw new DomainRuleException("移行データ内でUsage ID [{$usage['usageId']}] が重複しています。");
-            }
-
-            if (in_array($usage['requestId'], $requestIds, true)) {
-                throw new DomainRuleException("移行データ内で申請 [{$usage['requestId']}] の消化記録が重複しています。");
-            }
-
-            if (isset($this->requestIndex[$usage['requestId']])) {
-                throw new DomainRuleException("申請 [{$usage['requestId']}] の消化記録は既に口座にあります。");
-            }
-
-            if (! in_array($usage['status'], [self::STATUS_DESIGNATED, self::STATUS_CONFIRMED], true)) {
-                throw new DomainRuleException('移行できる消化記録の状態は申請中(designated)・確定(confirmed)のみです。');
-            }
-
-            if ($usage['status'] === self::STATUS_DESIGNATED && $usage['allocations'] !== []) {
-                throw new DomainRuleException('申請中の消化記録には充当を含められません。');
-            }
-
-            foreach ($usage['allocations'] as $allocation) {
-                $grant = $grantsById[$allocation['grantId']] ?? $this->knownGrant((string) $allocation['grantId']);
-
-                if ($grant === null || $grant['revoked']) {
-                    throw new DomainRuleException("移行データの充当先 Grant [{$allocation['grantId']}] が存在しないか取消済みです。");
-                }
-
-                if ($grant['specialLeaveTypeId'] !== $usage['specialLeaveTypeId']) {
-                    throw new DomainRuleException("Grant [{$allocation['grantId']}] と消化記録の特別休暇の種類が一致しません。");
-                }
-
-                $allocatedByGrant[$allocation['grantId']] = ($allocatedByGrant[$allocation['grantId']] ?? 0.0) + $allocation['allocatedDays'];
-            }
-
-            $usageIds[] = $usage['usageId'];
-            $requestIds[] = $usage['requestId'];
-        }
-
-        foreach ($allocatedByGrant as $grantId => $days) {
-            $known = $grantsById[$grantId] ?? $this->knownGrant((string) $grantId);
-            // 口座に既にある付与は、移行前に登録された新しい付与の充当分を差し引いた残りを超えられない。
-            $alreadyUsed = isset($this->grants[$grantId]) ? $this->usedDaysOf((string) $grantId) : 0.0;
-            if ($days + $alreadyUsed > $known['grantedDays']) {
-                throw new DomainRuleException("Grant [{$grantId}] の充当合計が付与日数を超えています。");
-            }
-        }
-
-        $this->recordThat(new SpecialLeaveAccountMigrated(
-            grants: $grants,
-            usages: $usages,
-            userId: $userId,
-        ));
-
-        return $this;
-    }
-
-    /**
      * 申請に対応する最後の消化記録のusageIdを返す(取消済みも含む)。無ければnull。
      */
     public function usageIdForRequest(string $requestId): ?string
@@ -339,38 +261,6 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         $usageId = $this->requestIndex[$requestId] ?? null;
 
         return $usageId !== null && $this->activeUsage($usageId);
-    }
-
-    /** 既存データの引き継ぎ(special_leave_account.migrated)が済んでいるか。移行は利用者ごとに一度だけ行う。 */
-    public function isMigrated(): bool
-    {
-        return $this->migrated;
-    }
-
-    /** 付与が口座に登録済みか(移行対象から、新しい流れで登録済みの付与を除くために使う)。 */
-    public function hasGrant(string $grantId): bool
-    {
-        return isset($this->grants[$grantId]);
-    }
-
-    /**
-     * 口座に既にある付与の移行時の情報(移行データの付与と同じ形)。無ければnull。
-     *
-     * @return array{specialLeaveTypeId: int, grantedDays: float, revoked: bool}|null
-     */
-    private function knownGrant(string $grantId): ?array
-    {
-        $grant = $this->grants[$grantId] ?? null;
-
-        if ($grant === null) {
-            return null;
-        }
-
-        return [
-            'specialLeaveTypeId' => $grant['specialLeaveTypeId'],
-            'grantedDays' => $grant['grantedDays'],
-            'revoked' => $grant['revoked'],
-        ];
     }
 
     public function hasUsage(string $usageId): bool
@@ -469,42 +359,6 @@ class SpecialLeaveAccountAggregate extends AggregateRoot
         foreach ($event->releasedAllocations as $released) {
             unset($this->usages[$event->usageId]['allocations'][$released['grantId']]);
             unset($this->grants[$released['grantId']]['allocations'][$event->usageId]);
-        }
-    }
-
-    protected function applySpecialLeaveAccountMigrated(SpecialLeaveAccountMigrated $event): void
-    {
-        $this->migrated = true;
-
-        foreach ($event->grants as $grant) {
-            $this->grants[$grant['grantId']] = [
-                'specialLeaveTypeId' => $grant['specialLeaveTypeId'],
-                'grantedOn' => $grant['grantedOn'],
-                'expiresOn' => $grant['expiresOn'],
-                'grantedDays' => $grant['grantedDays'],
-                'revoked' => $grant['revoked'],
-                'allocations' => [],
-            ];
-        }
-
-        foreach ($event->usages as $usage) {
-            $this->usages[$usage['usageId']] = [
-                'requestId' => $usage['requestId'],
-                'specialLeaveTypeId' => $usage['specialLeaveTypeId'],
-                'usedOn' => $usage['usedOn'],
-                'usageType' => $usage['usageType'],
-                'usedDays' => $usage['usedDays'],
-                'usedMinutes' => $usage['usedMinutes'],
-                'status' => $usage['status'],
-                'allocations' => [],
-                'unallocatedDays' => 0.0,
-            ];
-
-            $this->requestIndex[$usage['requestId']] = $usage['usageId'];
-
-            foreach ($usage['allocations'] as $allocation) {
-                $this->addAllocation($usage['usageId'], $allocation['grantId'], $allocation['allocatedDays']);
-            }
         }
     }
 

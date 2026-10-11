@@ -17,6 +17,6 @@ class SpecialLeaveAccountGrantRegistered extends ShouldBeStored
         public readonly ?string $expiresOn,
         public readonly float $grantedDays,
         public readonly ?string $grantReason,
-        public readonly ?string $userId = null,
+        public readonly string $userId,
     ) {}
 }

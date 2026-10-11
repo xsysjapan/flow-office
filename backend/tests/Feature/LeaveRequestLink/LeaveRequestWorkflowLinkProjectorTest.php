@@ -5,7 +5,6 @@ namespace Tests\Feature\LeaveRequestLink;
 use App\Domain\CompensatoryLeave\Events\CompensatoryLeaveRequestShared;
 use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\LeaveRequestLink\Projectors\LeaveRequestWorkflowLinkProjector;
-use App\Domain\PaidLeave\Events\PaidLeaveRequestShared;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleShared;
 use App\Domain\SpecialLeave\Events\SpecialLeaveRequestShared;
 use App\Domain\Workflow\Events\WorkflowRequestDrafted;
@@ -75,55 +74,6 @@ class LeaveRequestWorkflowLinkProjectorTest extends TestCase
         $this->assertSame(0, LeaveRequestWorkflowLink::query()->count());
     }
 
-    public function test_leave_request_shared_events_create_link_rows(): void
-    {
-        $paidWorkflowId = (string) Str::uuid();
-        $paidLeaveRequestId = (string) Str::uuid();
-        $this->projector()->onPaidLeaveRequestLifecycleShared(
-            (new PaidLeaveRequestLifecycleShared(workflowRequestId: $paidWorkflowId))->setAggregateRootUuid($paidLeaveRequestId),
-        );
-
-        $legacyPaidWorkflowId = (string) Str::uuid();
-        $legacyPaidLeaveRequestId = (string) Str::uuid();
-        $this->projector()->onPaidLeaveRequestShared(
-            (new PaidLeaveRequestShared(workflowRequestId: $legacyPaidWorkflowId))->setAggregateRootUuid($legacyPaidLeaveRequestId),
-        );
-
-        $specialWorkflowId = (string) Str::uuid();
-        $specialLeaveRequestId = (string) Str::uuid();
-        $this->projector()->onSpecialLeaveRequestShared(
-            (new SpecialLeaveRequestShared(workflowRequestId: $specialWorkflowId))->setAggregateRootUuid($specialLeaveRequestId),
-        );
-
-        $compensatoryWorkflowId = (string) Str::uuid();
-        $compensatoryLeaveRequestId = (string) Str::uuid();
-        $this->projector()->onCompensatoryLeaveRequestShared(
-            (new CompensatoryLeaveRequestShared(workflowRequestId: $compensatoryWorkflowId))->setAggregateRootUuid($compensatoryLeaveRequestId),
-        );
-
-        $this->assertDatabaseHas('leave_request_workflow_links', [
-            'workflow_request_id' => $paidWorkflowId,
-            'leave_kind' => LeaveRequestWorkflowLink::KIND_PAID,
-            'leave_request_id' => $paidLeaveRequestId,
-        ]);
-        $this->assertDatabaseHas('leave_request_workflow_links', [
-            'workflow_request_id' => $legacyPaidWorkflowId,
-            'leave_kind' => LeaveRequestWorkflowLink::KIND_PAID,
-            'leave_request_id' => $legacyPaidLeaveRequestId,
-        ]);
-        $this->assertDatabaseHas('leave_request_workflow_links', [
-            'workflow_request_id' => $specialWorkflowId,
-            'leave_kind' => LeaveRequestWorkflowLink::KIND_SPECIAL,
-            'leave_request_id' => $specialLeaveRequestId,
-        ]);
-        $this->assertDatabaseHas('leave_request_workflow_links', [
-            'workflow_request_id' => $compensatoryWorkflowId,
-            'leave_kind' => LeaveRequestWorkflowLink::KIND_COMPENSATORY,
-            'leave_request_id' => $compensatoryLeaveRequestId,
-        ]);
-        $this->assertSame(4, LeaveRequestWorkflowLink::query()->count());
-    }
-
     public function test_reprocessing_same_workflow_does_not_duplicate_rows(): void
     {
         $workflowRequestId = (string) Str::uuid();
@@ -171,5 +121,43 @@ class LeaveRequestWorkflowLinkProjectorTest extends TestCase
         $this->assertSame($workflowRequestId, $links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_PAID, $leaveRequestId));
         $this->assertNull($links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_SPECIAL, $leaveRequestId));
         $this->assertNull($links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_PAID, (string) Str::uuid()));
+    }
+
+    public function test_leave_request_shared_events_create_link_rows(): void
+    {
+        $paidWorkflowId = (string) Str::uuid();
+        $paidLeaveRequestId = (string) Str::uuid();
+        $this->projector()->onPaidLeaveRequestLifecycleShared(
+            (new PaidLeaveRequestLifecycleShared(workflowRequestId: $paidWorkflowId))->setAggregateRootUuid($paidLeaveRequestId),
+        );
+
+        $specialWorkflowId = (string) Str::uuid();
+        $specialLeaveRequestId = (string) Str::uuid();
+        $this->projector()->onSpecialLeaveRequestShared(
+            (new SpecialLeaveRequestShared(workflowRequestId: $specialWorkflowId))->setAggregateRootUuid($specialLeaveRequestId),
+        );
+
+        $compensatoryWorkflowId = (string) Str::uuid();
+        $compensatoryLeaveRequestId = (string) Str::uuid();
+        $this->projector()->onCompensatoryLeaveRequestShared(
+            (new CompensatoryLeaveRequestShared(workflowRequestId: $compensatoryWorkflowId))->setAggregateRootUuid($compensatoryLeaveRequestId),
+        );
+
+        $this->assertDatabaseHas('leave_request_workflow_links', [
+            'workflow_request_id' => $paidWorkflowId,
+            'leave_kind' => LeaveRequestWorkflowLink::KIND_PAID,
+            'leave_request_id' => $paidLeaveRequestId,
+        ]);
+        $this->assertDatabaseHas('leave_request_workflow_links', [
+            'workflow_request_id' => $specialWorkflowId,
+            'leave_kind' => LeaveRequestWorkflowLink::KIND_SPECIAL,
+            'leave_request_id' => $specialLeaveRequestId,
+        ]);
+        $this->assertDatabaseHas('leave_request_workflow_links', [
+            'workflow_request_id' => $compensatoryWorkflowId,
+            'leave_kind' => LeaveRequestWorkflowLink::KIND_COMPENSATORY,
+            'leave_request_id' => $compensatoryLeaveRequestId,
+        ]);
+        $this->assertSame(3, LeaveRequestWorkflowLink::query()->count());
     }
 }

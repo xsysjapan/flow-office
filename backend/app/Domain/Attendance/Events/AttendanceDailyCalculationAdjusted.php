@@ -36,9 +36,9 @@ class AttendanceDailyCalculationAdjusted extends ShouldBeStored
         public readonly ?int $lateNightPrescribedHolidayWorkMinutes,
         public readonly string $reason,
         public readonly string $adjustedByUserId,
-        public readonly ?string $userId = null,
-        public readonly ?string $workDate = null,
+        public readonly string $userId,
+        public readonly string $workDate,
+        public readonly int $workMinutes,
         public readonly ?string $dayClassification = null,
-        public readonly ?int $workMinutes = null,
     ) {}
 }

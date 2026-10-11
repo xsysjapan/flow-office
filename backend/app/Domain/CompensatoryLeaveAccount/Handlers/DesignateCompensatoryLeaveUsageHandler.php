@@ -6,7 +6,7 @@ use App\Domain\CompensatoryLeaveAccount\Aggregates\CompensatoryLeaveAccountAggre
 use App\Domain\CompensatoryLeaveAccount\Commands\DesignateCompensatoryLeaveUsage;
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
-use Illuminate\Support\Str;
+use App\Domain\EventSourcing\Rebuild\LeaveUsageId;
 
 /**
  * 申請に対応する消化記録を作成する(充当は行わない)。消化記録IDは発行する。
@@ -30,7 +30,7 @@ class DesignateCompensatoryLeaveUsageHandler implements CommandHandler
 
         $aggregate
             ->designateUsage(
-                usageId: (string) Str::uuid(),
+                usageId: LeaveUsageId::for('compensatory_leave', $command->requestId, $aggregate->designationCountForRequest($command->requestId)),
                 requestId: $command->requestId,
                 usedOn: $command->usedOn,
                 usageType: $command->usageType,

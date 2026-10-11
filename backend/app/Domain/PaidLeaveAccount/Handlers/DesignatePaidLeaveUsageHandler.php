@@ -4,6 +4,7 @@ namespace App\Domain\PaidLeaveAccount\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
+use App\Domain\EventSourcing\Rebuild\LeaveUsageId;
 use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use Illuminate\Support\Str;
@@ -27,7 +28,10 @@ class DesignatePaidLeaveUsageHandler implements CommandHandler
             return (string) $aggregate->usageIdForRequest($command->paidLeaveRequestId);
         }
 
-        $usageId = (string) Str::uuid();
+        // 有給申請の消化記録は申請IDと再提出の回数で決まるID(論点18。作り直しの変換と同じ採番)。
+        $usageId = $command->paidLeaveRequestId !== null
+            ? LeaveUsageId::for('paid_leave', $command->paidLeaveRequestId, $aggregate->designationCountForRequest($command->paidLeaveRequestId))
+            : (string) Str::uuid();
 
         $aggregate
             ->designateUsage(

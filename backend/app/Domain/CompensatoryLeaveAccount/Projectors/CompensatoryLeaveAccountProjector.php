@@ -7,7 +7,6 @@ use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantConf
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantManuallyGranted;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantRemoved;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantSynced;
-use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountMigrated;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageCancelled;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageConfirmed;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageDesignated;
@@ -22,8 +21,7 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  * 消化記録テーブル(compensatory_leave_usages)と、充当の表(compensatory_leave_usage_allocations)を元のIDで作成・更新する。
  * SpecialLeaveAccountProjectorと同じ形。
  *
- * - 付与・消化記録の行は口座のイベントの内容だけで作る(旧系統のイベントに依存しない)。旧系統の既存Projector
- *   (CompensatoryLeaveGrantProjector)は移行前の再生用に残す。
+ * - 付与・消化記録の行は口座のイベントの内容だけで作る(旧系統のイベントに依存しない)。
  * - 残数(付与のused_days・remaining_days)は充当の表の合計から毎回計算し直す(加減算しない)。同じイベントを
  *   再適用しても、リビルドしても同じ結果になる(冪等)。
  * - 行の存在を前提とする更新は、行が無ければ何もしない(findOrFailを使わない。順序非依存)。
@@ -33,8 +31,6 @@ class CompensatoryLeaveAccountProjector extends Projector
 {
     public function onCompensatoryLeaveAccountGrantSynced(CompensatoryLeaveAccountGrantSynced $event): void
     {
-        $this->assertUserId($event->userId, $event->grantId);
-
         CompensatoryLeaveGrant::query()->updateOrCreate(
             ['id' => $event->grantId],
             $this->grantAttributes(
@@ -55,8 +51,6 @@ class CompensatoryLeaveAccountProjector extends Projector
 
     public function onCompensatoryLeaveAccountGrantManuallyGranted(CompensatoryLeaveAccountGrantManuallyGranted $event): void
     {
-        $this->assertUserId($event->userId, $event->grantId);
-
         CompensatoryLeaveGrant::query()->updateOrCreate(
             ['id' => $event->grantId],
             $this->grantAttributes(
@@ -101,11 +95,6 @@ class CompensatoryLeaveAccountProjector extends Projector
 
     public function onCompensatoryLeaveAccountUsageDesignated(CompensatoryLeaveAccountUsageDesignated $event): void
     {
-        $this->assertUserId($event->userId, $event->usageId);
-
-        // 同じ申請に旧系統(usage_idを持たない)の消化記録が残っていれば置き換える。
-        $this->deleteLegacyUsages($event->requestId);
-
         CompensatoryLeaveUsage::query()->updateOrCreate(
             ['usage_id' => $event->usageId],
             $this->usageAttributes(
@@ -154,64 +143,6 @@ class CompensatoryLeaveAccountProjector extends Projector
         CompensatoryLeaveUsage::query()->where('usage_id', $event->usageId)->delete();
 
         $this->recalculateGrants($grantIds);
-    }
-
-    /**
-     * 移行(compensatory_leave_account.migrated)。本変更前の付与・消化記録の現在の状態を元のIDで書き込む。
-     * 移行より前の旧系統のイベントで作った行は、同じ付与IDなら上書き、同じ申請の旧系統の消化記録は置き換える。
-     */
-    public function onCompensatoryLeaveAccountMigrated(CompensatoryLeaveAccountMigrated $event): void
-    {
-        $this->assertUserId($event->userId, 'migrated');
-
-        $grantIds = [];
-
-        foreach ($event->grants as $grant) {
-            CompensatoryLeaveGrant::query()->updateOrCreate(
-                ['id' => $grant['grantId']],
-                $this->grantAttributes(
-                    userId: $event->userId,
-                    source: $grant['source'] === 'manual' ? 'manual' : 'attendance',
-                    workDate: $grant['sourceWorkDate'],
-                    grantedDays: $grant['grantedDays'],
-                    grantedMinutes: $grant['grantedMinutes'],
-                    status: $grant['status'],
-                    confirmedAt: $grant['status'] === CompensatoryLeaveGrantStatus::CONFIRMED ? $event->createdAt() : null,
-                    expiresOn: $grant['expiresOn'],
-                    grantReason: null,
-                ),
-            );
-
-            $grantIds[] = (string) $grant['grantId'];
-        }
-
-        foreach ($event->usages as $usage) {
-            $this->deleteLegacyUsages($usage['requestId']);
-
-            CompensatoryLeaveUsage::query()->updateOrCreate(
-                ['usage_id' => $usage['usageId']],
-                $this->usageAttributes(
-                    userId: $event->userId,
-                    requestId: $usage['requestId'],
-                    usedOn: $usage['usedOn'],
-                    usageType: $usage['usageType'],
-                    usedDays: $usage['usedDays'],
-                    usedMinutes: $usage['usedMinutes'],
-                    isConfirmed: $usage['status'] === 'confirmed',
-                    unallocatedDays: 0.0,
-                    unallocatedMinutes: 0,
-                ),
-            );
-
-            $usageGrantIds = $this->replaceAllocations($usage['usageId'], $usage['allocations']);
-            CompensatoryLeaveUsage::query()->where('usage_id', $usage['usageId'])->update([
-                'compensatory_leave_grant_id' => count($usageGrantIds) === 1 ? $usageGrantIds[0] : null,
-            ]);
-
-            $grantIds = array_merge($grantIds, $usageGrantIds);
-        }
-
-        $this->recalculateGrants(array_values(array_unique($grantIds)));
     }
 
     /**
@@ -309,15 +240,6 @@ class CompensatoryLeaveAccountProjector extends Projector
         return array_values(array_unique($grantIds));
     }
 
-    /** 同じ申請の、充当の表に紐づかない(旧系統の)消化記録の行を削除する。 */
-    private function deleteLegacyUsages(string $requestId): void
-    {
-        CompensatoryLeaveUsage::query()
-            ->where('compensatory_leave_request_id', $requestId)
-            ->whereNull('usage_id')
-            ->delete();
-    }
-
     /**
      * @param  string[]  $grantIds
      */
@@ -351,10 +273,4 @@ class CompensatoryLeaveAccountProjector extends Projector
         ]);
     }
 
-    private function assertUserId(?string $userId, string $label): void
-    {
-        if ($userId === null) {
-            throw new \LogicException("代休口座のイベントに利用者IDがありません: {$label}");
-        }
-    }
 }

@@ -20,7 +20,7 @@ class AttendanceDayCalculated extends ShouldBeStored
      */
     public function __construct(
         public readonly array $calculation,
-        public readonly ?string $userId = null,
-        public readonly ?string $workDate = null,
+        public readonly string $userId,
+        public readonly string $workDate,
     ) {}
 }

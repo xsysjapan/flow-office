@@ -6,7 +6,6 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeaveAccount\Aggregates\SpecialLeaveAccountAggregate;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountMigrated;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
@@ -47,7 +46,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与');
             })
             ->assertRecorded([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与'),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', '2027-03-31', 3.0, '付与', self::USER),
             ]);
     }
 
@@ -58,7 +57,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
                 $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 3.0, null);
             })
             ->assertRecorded([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ]);
     }
 
@@ -68,7 +67,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->registerGrant('g1', self::TYPE, '2026-04-01', null, 2.0, null);
@@ -79,7 +78,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->revokeGrant('g1', 'admin-1', '誤付与');
@@ -105,7 +104,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
                 new SpecialLeaveAccountGrantRevoked('g1', 'admin-1', null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
@@ -119,8 +118,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g1', 'allocatedDays' => 1.0]]),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
@@ -132,8 +131,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g1', 'allocatedDays' => 1.0]]),
                 new SpecialLeaveAccountUsageCancelled('u1', [['grantId' => 'g1', 'releasedDays' => 1.0]], null),
             ])
@@ -151,13 +150,13 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
             })
             ->assertRecorded([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ]);
     }
 
@@ -167,7 +166,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u1', 'r2', self::TYPE, '2026-10-11', 'full', 1.0, 480);
@@ -180,7 +179,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
@@ -191,15 +190,15 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageCancelled('u1', [], null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->designateUsage('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480);
             })
             ->assertRecorded([
-                new SpecialLeaveAccountUsageDesignated('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ]);
     }
 
@@ -209,9 +208,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-late', self::TYPE, '2026-04-01', '2027-06-30', 2.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-early', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 2.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g-late', self::TYPE, '2026-04-01', '2027-06-30', 2.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-early', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 2.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -228,9 +227,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-none', self::TYPE, '2026-04-01', null, 5.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-2027', self::TYPE, '2026-04-01', '2027-06-30', 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g-none', self::TYPE, '2026-04-01', null, 5.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-2027', self::TYPE, '2026-04-01', '2027-06-30', 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -246,9 +245,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-a', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-b', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
+                new SpecialLeaveAccountGrantRegistered('g-a', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-b', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -265,9 +264,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-expired', self::TYPE, '2025-04-01', '2026-10-09', 1.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-valid', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g-expired', self::TYPE, '2025-04-01', '2026-10-09', 1.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-valid', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -283,8 +282,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', '2026-10-10', 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', '2026-10-10', 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -300,8 +299,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.5, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.5, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -319,8 +318,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', true);
@@ -342,7 +341,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', true);
@@ -360,8 +359,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-other', self::OTHER_TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g-other', self::OTHER_TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -375,9 +374,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null, self::USER),
                 new SpecialLeaveAccountGrantRevoked('g1', 'admin-1', null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->confirmUsage('u1', true);
@@ -393,8 +392,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.5, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.5, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.5, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', true);
@@ -411,7 +410,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$unallocated) {
                 $aggregate->confirmUsage('u1', false);
@@ -431,9 +430,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [], 1.0),
-                new SpecialLeaveAccountUsageDesignated('u2', 'r2', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u2', 'r2', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$results) {
                 $results['confirmed_short'] = $aggregate->unallocatedFor('u1');
@@ -459,8 +458,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g1', 'allocatedDays' => 1.0]]),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
@@ -474,8 +473,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageCancelled('u1', [], null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
@@ -499,8 +498,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
     {
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 3.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
                 $aggregate->cancelUsage('u1', '差戻し');
@@ -516,9 +515,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-early', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-late', self::TYPE, '2026-04-01', '2027-06-30', 2.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 2.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g-early', self::TYPE, '2026-04-01', '2026-12-31', 1.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-late', self::TYPE, '2026-04-01', '2027-06-30', 2.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 2.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [
                     ['grantId' => 'g-early', 'allocatedDays' => 1.0],
                     ['grantId' => 'g-late', 'allocatedDays' => 1.0],
@@ -547,7 +546,7 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageCancelled('u1', [], null),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) {
@@ -573,13 +572,13 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g-expired', self::TYPE, '2025-04-01', '2026-10-09', 4.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-edge', self::TYPE, '2025-04-01', '2026-10-10', 1.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-none', self::TYPE, '2025-04-01', null, 2.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-revoked', self::TYPE, '2026-04-01', null, 5.0, null),
-                new SpecialLeaveAccountGrantRegistered('g-other', self::OTHER_TYPE, '2026-04-01', null, 7.0, null),
+                new SpecialLeaveAccountGrantRegistered('g-expired', self::TYPE, '2025-04-01', '2026-10-09', 4.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-edge', self::TYPE, '2025-04-01', '2026-10-10', 1.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-none', self::TYPE, '2025-04-01', null, 2.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-revoked', self::TYPE, '2026-04-01', null, 5.0, null, self::USER),
+                new SpecialLeaveAccountGrantRegistered('g-other', self::OTHER_TYPE, '2026-04-01', null, 7.0, null, self::USER),
                 new SpecialLeaveAccountGrantRevoked('g-revoked', 'admin-1', null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 0.5, 240),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 0.5, 240, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g-none', 'allocatedDays' => 0.5]]),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$remaining) {
@@ -601,8 +600,8 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null),
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountGrantRegistered('g1', self::TYPE, '2026-04-01', null, 1.0, null, self::USER),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageConfirmed('u1', [['grantId' => 'g1', 'allocatedDays' => 1.0]]),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$remaining) {
@@ -618,9 +617,9 @@ class SpecialLeaveAccountAggregateTest extends TestCase
 
         SpecialLeaveAccountAggregate::fake(self::USER)
             ->given([
-                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u1', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
                 new SpecialLeaveAccountUsageCancelled('u1', [], null),
-                new SpecialLeaveAccountUsageDesignated('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480),
+                new SpecialLeaveAccountUsageDesignated('u2', 'r1', self::TYPE, '2026-10-10', 'full', 1.0, 480, self::USER),
             ])
             ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$results) {
                 $results = [
@@ -645,182 +644,4 @@ class SpecialLeaveAccountAggregateTest extends TestCase
         ], $results);
     }
 
-    // ---- 引き継ぎ(migrate) ----
-
-    public function test_migrate_restores_grants_usages_and_allocations(): void
-    {
-        $results = [];
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) use (&$results) {
-                $aggregate->migrate(
-                    grants: [
-                        ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => '2026-12-31', 'grantedDays' => 3.0, 'revoked' => false],
-                        ['grantId' => 'g-rev', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => true],
-                    ],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                        ['usageId' => 'u2', 'requestId' => 'r2', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-11', 'usageType' => 'full', 'usedDays' => 0.5, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],
-                    ],
-                );
-
-                $results = [
-                    'remaining' => $aggregate->remaining(self::TYPE, '2026-10-10'),
-                    'status_u1' => $aggregate->usageStatus('u1'),
-                    'status_u2' => $aggregate->usageStatus('u2'),
-                    'request_r2' => $aggregate->usageIdForRequest('r2'),
-                ];
-
-                $aggregate->cancelUsage('u1', null);
-                $results['remaining_after_cancel'] = $aggregate->remaining(self::TYPE, '2026-10-10');
-            })
-            ->assertRecorded([
-                new SpecialLeaveAccountMigrated(
-                    [
-                        ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => '2026-12-31', 'grantedDays' => 3.0, 'revoked' => false],
-                        ['grantId' => 'g-rev', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => true],
-                    ],
-                    [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                        ['usageId' => 'u2', 'requestId' => 'r2', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-11', 'usageType' => 'full', 'usedDays' => 0.5, 'usedMinutes' => null, 'status' => 'designated', 'allocations' => []],
-                    ],
-                ),
-                new SpecialLeaveAccountUsageCancelled('u1', [['grantId' => 'g1', 'releasedDays' => 1.0]], null),
-            ]);
-
-        $this->assertSame([
-            'remaining' => 2.0,
-            'status_u1' => 'confirmed',
-            'status_u2' => 'designated',
-            'request_r2' => 'u2',
-            'remaining_after_cancel' => 3.0,
-        ], $results);
-    }
-
-    public function test_migrate_is_allowed_when_a_new_grant_was_registered_before_migration(): void
-    {
-        $migratedGrant = ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 3.0, 'revoked' => false];
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->given([
-                new SpecialLeaveAccountGrantRegistered('g0', self::TYPE, '2026-04-01', null, 1.0, null),
-            ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) use ($migratedGrant) {
-                $aggregate->migrate([$migratedGrant], []);
-            })
-            ->assertRecorded([
-                new SpecialLeaveAccountMigrated([$migratedGrant], []),
-            ]);
-    }
-
-    public function test_migrate_rejects_a_grant_id_that_already_exists_in_the_account(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->given([
-                new SpecialLeaveAccountGrantRegistered('g0', self::TYPE, '2026-04-01', null, 1.0, null),
-            ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate([
-                    ['grantId' => 'g0', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => false],
-                ], []);
-            });
-    }
-
-    public function test_second_migrate_is_rejected(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->given([
-                new SpecialLeaveAccountMigrated([], []),
-            ])
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate([], []);
-            });
-    }
-
-    public function test_migrate_rejects_allocation_to_unknown_grant(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate(
-                    grants: [],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'missing', 'allocatedDays' => 1.0]]],
-                    ],
-                );
-            });
-    }
-
-    public function test_migrate_rejects_allocation_exceeding_grant(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate(
-                    grants: [
-                        ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => false],
-                    ],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                        ['usageId' => 'u2', 'requestId' => 'r2', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-11', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                    ],
-                );
-            });
-    }
-
-    public function test_migrate_rejects_duplicate_request_id(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate(
-                    grants: [],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'designated', 'allocations' => []],
-                        ['usageId' => 'u2', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-11', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'designated', 'allocations' => []],
-                    ],
-                );
-            });
-    }
-
-    public function test_migrate_rejects_designated_usage_with_allocation(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate(
-                    grants: [
-                        ['grantId' => 'g1', 'specialLeaveTypeId' => self::TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => false],
-                    ],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'designated', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                    ],
-                );
-            });
-    }
-
-    public function test_migrate_rejects_allocation_to_grant_of_other_type(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        SpecialLeaveAccountAggregate::fake(self::USER)
-            ->when(function (SpecialLeaveAccountAggregate $aggregate) {
-                $aggregate->migrate(
-                    grants: [
-                        ['grantId' => 'g1', 'specialLeaveTypeId' => self::OTHER_TYPE, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 1.0, 'revoked' => false],
-                    ],
-                    usages: [
-                        ['usageId' => 'u1', 'requestId' => 'r1', 'specialLeaveTypeId' => self::TYPE, 'usedOn' => '2026-08-10', 'usageType' => 'full', 'usedDays' => 1.0, 'usedMinutes' => 480, 'status' => 'confirmed', 'allocations' => [['grantId' => 'g1', 'allocatedDays' => 1.0]]],
-                    ],
-                );
-            });
-    }
 }

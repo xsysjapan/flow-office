@@ -12,8 +12,8 @@ class PaidLeaveRequestLifecycleResubmitted extends ShouldBeStored
 {
     public function __construct(
         public readonly ?string $resubmittedByUserId,
-        public readonly ?string $userId = null,
-        public readonly ?string $targetDate = null,
+        public readonly string $userId,
+        public readonly string $targetDate,
         public readonly ?string $leaveType = null,
         public readonly ?float $hours = null,
         public readonly ?float $requestedDays = null,

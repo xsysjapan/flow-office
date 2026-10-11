@@ -4,7 +4,6 @@ namespace App\Domain\SpecialLeaveAccount\Projectors;
 
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRegistered;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountGrantRevoked;
-use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountMigrated;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageCancelled;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageConfirmed;
 use App\Domain\SpecialLeaveAccount\Events\SpecialLeaveAccountUsageDesignated;
@@ -18,8 +17,7 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  * 特別休暇口座の集約(special_leave_account.*)のイベントから、既存の付与テーブル(special_leave_grants)・
  * 消化記録テーブル(special_leave_usages)と、充当の表(special_leave_usage_allocations)を元のIDで作成・更新する。
  *
- * - 付与・消化記録の行は口座のイベントの内容だけで作る(旧系統のイベントに依存しない)。旧系統の既存Projector
- *   (SpecialLeaveGrantProjector・SpecialLeaveUsageProjector)は移行前の再生用に残す。
+ * - 付与・消化記録の行は口座のイベントの内容だけで作る(旧系統のイベントに依存しない)。
  * - 残数(付与のused_days・remaining_days)は充当の表の合計から毎回計算し直す(加減算しない)。同じイベントを
  *   再適用しても、リビルドしても同じ結果になる(冪等)。
  * - 行の存在を前提とする更新は、行が無ければ何もしない(findOrFailを使わない。順序非依存)。
@@ -30,8 +28,6 @@ class SpecialLeaveAccountProjector extends Projector
 {
     public function onSpecialLeaveAccountGrantRegistered(SpecialLeaveAccountGrantRegistered $event): void
     {
-        $this->assertUserId($event->userId, $event->grantId);
-
         SpecialLeaveGrant::query()->updateOrCreate(
             ['id' => $event->grantId],
             [
@@ -63,11 +59,6 @@ class SpecialLeaveAccountProjector extends Projector
 
     public function onSpecialLeaveAccountUsageDesignated(SpecialLeaveAccountUsageDesignated $event): void
     {
-        $this->assertUserId($event->userId, $event->usageId);
-
-        // 同じ申請に旧系統(usage_idを持たない)の消化記録が残っていれば置き換える。
-        $this->deleteLegacyUsages($event->requestId);
-
         SpecialLeaveUsage::query()->updateOrCreate(
             ['usage_id' => $event->usageId],
             $this->usageAttributes(
@@ -114,58 +105,6 @@ class SpecialLeaveAccountProjector extends Projector
         SpecialLeaveUsage::query()->where('usage_id', $event->usageId)->delete();
 
         $this->recalculateGrants($grantIds);
-    }
-
-    /**
-     * 移行(special_leave_account.migrated)。本変更前の付与・消化記録の現在の状態を元のIDで書き込む。
-     * 移行より前の旧系統のイベントで作った行は、同じ付与IDなら上書き、同じ申請の旧系統の消化記録は置き換える。
-     */
-    public function onSpecialLeaveAccountMigrated(SpecialLeaveAccountMigrated $event): void
-    {
-        $this->assertUserId($event->userId, 'migrated');
-
-        $grantIds = [];
-
-        foreach ($event->grants as $grant) {
-            SpecialLeaveGrant::query()->updateOrCreate(
-                ['id' => $grant['grantId']],
-                [
-                    'user_id' => $event->userId,
-                    'special_leave_type_id' => $grant['specialLeaveTypeId'],
-                    'granted_on' => $grant['grantedOn'],
-                    'expires_on' => $grant['expiresOn'],
-                    'granted_days' => $grant['grantedDays'],
-                    'used_days' => 0,
-                    'remaining_days' => $grant['grantedDays'],
-                    'status' => $grant['revoked'] ? SpecialLeaveGrantStatus::REVOKED : SpecialLeaveGrantStatus::ACTIVE,
-                    'revoked_at' => $grant['revoked'] ? $event->createdAt() : null,
-                ],
-            );
-
-            $grantIds[] = $grant['grantId'];
-        }
-
-        foreach ($event->usages as $usage) {
-            $this->deleteLegacyUsages($usage['requestId']);
-
-            SpecialLeaveUsage::query()->updateOrCreate(
-                ['usage_id' => $usage['usageId']],
-                $this->usageAttributes(
-                    userId: $event->userId,
-                    requestId: $usage['requestId'],
-                    usedOn: $usage['usedOn'],
-                    usedDays: $usage['usedDays'],
-                    usedMinutes: $usage['usedMinutes'],
-                    usageType: $usage['usageType'],
-                    isConfirmed: $usage['status'] === 'confirmed',
-                    unallocatedDays: 0.0,
-                ),
-            );
-
-            $grantIds = array_merge($grantIds, $this->replaceAllocations($usage['usageId'], $usage['allocations']));
-        }
-
-        $this->recalculateGrants(array_values(array_unique($grantIds)));
     }
 
     /**
@@ -228,15 +167,6 @@ class SpecialLeaveAccountProjector extends Projector
         return array_values(array_unique($grantIds));
     }
 
-    /** 同じ申請の、充当の表に紐づかない(旧系統の)消化記録の行を削除する。 */
-    private function deleteLegacyUsages(string $requestId): void
-    {
-        SpecialLeaveUsage::query()
-            ->where('special_leave_request_id', $requestId)
-            ->whereNull('usage_id')
-            ->delete();
-    }
-
     /**
      * @param  string[]  $grantIds
      */
@@ -269,10 +199,4 @@ class SpecialLeaveAccountProjector extends Projector
         ]);
     }
 
-    private function assertUserId(?string $userId, string $label): void
-    {
-        if ($userId === null) {
-            throw new \LogicException("特別休暇口座のイベントに利用者IDがありません: {$label}");
-        }
-    }
 }

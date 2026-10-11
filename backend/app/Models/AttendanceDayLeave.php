@@ -21,7 +21,6 @@ use Illuminate\Database\Eloquent\Model;
     'special_leave_type_id',
     'workflow_request_id',
     'request_status',
-    'source',
 ])]
 class AttendanceDayLeave extends Model
 {
@@ -30,19 +29,6 @@ class AttendanceDayLeave extends Model
     public const KIND_SPECIAL = 'special';
 
     public const KIND_COMPENSATORY = 'compensatory';
-
-    /** 有給・旧系統(旧 paid_leave.* イベント)。 */
-    public const SOURCE_LEGACY_PAID = 'legacy_paid';
-
-    /** 有給・cutover後の系統(paid_leave_account.usage_*)。 */
-    public const SOURCE_PAID_ACCOUNT = 'paid_account';
-
-    /** 有給・新系統(paid_leave_request.*)。 */
-    public const SOURCE_PAID_REQUEST = 'paid_request';
-
-    public const SOURCE_SPECIAL = 'special';
-
-    public const SOURCE_COMPENSATORY = 'compensatory';
 
     public const STATUS_SUBMITTED = 'submitted';
 

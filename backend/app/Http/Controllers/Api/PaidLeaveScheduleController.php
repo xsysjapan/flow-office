@@ -149,7 +149,7 @@ class PaidLeaveScheduleController extends Controller
 
         $hasMigratedLegacyData = PaidLeaveGrant::query()
             ->where('user_id', $user->id)
-            ->whereNotNull('cutover_metadata')
+            ->where('source', 'carried_over')
             ->exists();
 
         $result = $assessor->assess(

@@ -43,9 +43,7 @@ class SpecialLeaveUsageOnSpecialLeaveRequestReactor extends Reactor
 
     public function onSpecialLeaveRequestResubmitted(SpecialLeaveRequestResubmitted $event): void
     {
-        if ($event->userId === null
-            || $event->specialLeaveTypeId === null
-            || $event->targetDate === null
+        if ($event->specialLeaveTypeId === null
             || $event->leaveType === null
             || $event->requestedDays === null
         ) {
@@ -67,10 +65,6 @@ class SpecialLeaveUsageOnSpecialLeaveRequestReactor extends Reactor
 
     public function onSpecialLeaveRequestApproved(SpecialLeaveRequestApproved $event): void
     {
-        if ($event->userId === null || $event->requiresGrant === null) {
-            throw new \LogicException('承認のイベントに申請者・残数の要否がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ConfirmSpecialLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),
@@ -82,10 +76,6 @@ class SpecialLeaveUsageOnSpecialLeaveRequestReactor extends Reactor
 
     public function onSpecialLeaveRequestReturned(SpecialLeaveRequestReturned $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('差戻しのイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelSpecialLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),
@@ -97,10 +87,6 @@ class SpecialLeaveUsageOnSpecialLeaveRequestReactor extends Reactor
 
     public function onSpecialLeaveRequestCancelled(SpecialLeaveRequestCancelled $event): void
     {
-        if ($event->userId === null) {
-            throw new \LogicException('取消のイベントに申請者がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new CancelSpecialLeaveUsage(
             userId: $event->userId,
             requestId: $event->aggregateRootUuid(),

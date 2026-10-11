@@ -3,7 +3,6 @@
 namespace App\Domain\CompensatoryLeaveAccount\Projectors;
 
 use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
-use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Models\CompensatoryHolidayWorkDay;
@@ -15,16 +14,12 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  * 勤怠日の計算イベントから、代休口座が見る休日出勤のビュー(compensatory_holiday_work_days)を作る。
  * 利用者×勤務日の日区分と実労働分だけを持つ(手動付与の休日出勤の判定に使う。勤怠日テーブルは読まない)。
  *
- * 行は計算イベントごとに上書きし、勤怠日の削除で外す。利用者・勤務日が無いイベント(本変更前の保存イベント)は無視する。
+ * 行は計算イベントごとに上書きし、勤怠日の削除で外す。
  */
 class CompensatoryLeaveHolidayWorkProjector extends Projector
 {
     public function onAttendanceDayCalculated(AttendanceDayCalculated $event): void
     {
-        if ($event->userId === null || $event->workDate === null) {
-            return;
-        }
-
         $dayClassification = $event->calculation['day_classification'] ?? null;
 
         $this->upsert(
@@ -35,34 +30,8 @@ class CompensatoryLeaveHolidayWorkProjector extends Projector
         );
     }
 
-    /**
-     * 補正イベント: 日次計算があれば記録した日区分・実労働分で置き換え、日次計算が無ければ休日出勤の行を外す。
-     */
-    public function onAttendanceDayCorrected(AttendanceDayCorrected $event): void
-    {
-        if ($event->dailyCalculation === null) {
-            CompensatoryHolidayWorkDay::query()
-                ->where('user_id', $event->userId)
-                ->whereDate('work_date', $event->workDate)
-                ->delete();
-
-            return;
-        }
-
-        $this->upsert(
-            userId: $event->userId,
-            workDate: Carbon::parse($event->workDate)->toDateString(),
-            isHolidayDay: $this->isHolidayClassification($event->dayClassification),
-            workMinutes: (int) ($event->dailyCalculation['work_minutes'] ?? 0),
-        );
-    }
-
     public function onAttendanceDailyCalculationAdjusted(AttendanceDailyCalculationAdjusted $event): void
     {
-        if ($event->userId === null || $event->workDate === null || $event->workMinutes === null) {
-            return;
-        }
-
         $this->upsert(
             userId: $event->userId,
             workDate: Carbon::parse($event->workDate)->toDateString(),

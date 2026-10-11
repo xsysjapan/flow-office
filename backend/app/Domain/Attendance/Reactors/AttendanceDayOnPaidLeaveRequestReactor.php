@@ -32,10 +32,6 @@ class AttendanceDayOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleRequested(PaidLeaveRequestLifecycleRequested $event): void
     {
-        if ($event->userId === null || $event->targetDate === null) {
-            throw new \LogicException('申請のイベントに申請者・対象日がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ApplyLeaveToAttendanceDay(
             userId: $event->userId,
             workDate: $event->targetDate,
@@ -48,10 +44,6 @@ class AttendanceDayOnPaidLeaveRequestReactor extends Reactor
 
     public function onPaidLeaveRequestLifecycleResubmitted(PaidLeaveRequestLifecycleResubmitted $event): void
     {
-        if ($event->userId === null || $event->targetDate === null) {
-            throw new \LogicException('再提出のイベントに申請者・対象日がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ApplyLeaveToAttendanceDay(
             userId: $event->userId,
             workDate: $event->targetDate,

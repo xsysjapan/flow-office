@@ -13,6 +13,6 @@ class PaidLeaveRequestLifecycleCancelled extends ShouldBeStored
     public function __construct(
         public readonly ?string $cancelledByUserId,
         public readonly ?string $reason,
-        public readonly ?string $userId = null,
+        public readonly string $userId,
     ) {}
 }

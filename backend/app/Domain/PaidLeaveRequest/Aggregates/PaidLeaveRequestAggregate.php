@@ -5,7 +5,6 @@ namespace App\Domain\PaidLeaveRequest\Aggregates;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleMigrated;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
@@ -19,7 +18,6 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  *
  * 状態遷移: none → submitted(申請中) → approved / returned / cancelled、
  * returned → submitted(再提出) / cancelled、approved → cancelled。
- * migrated は本変更前の申請の現在状態を none から引き継ぐ(none のときのみ)。
  *
  * 冪等性(viaReactorの既に目的の状態なら何もしない)は呼び出し側(Handler)が
  * isXxx()で判断する。本集約は不正な遷移を DomainRuleException で拒否する。
@@ -32,13 +30,6 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     private const STATUS_RETURNED = 'returned';
     private const STATUS_APPROVED = 'approved';
     private const STATUS_CANCELLED = 'cancelled';
-
-    private const MIGRATABLE_STATUSES = [
-        self::STATUS_SUBMITTED,
-        self::STATUS_RETURNED,
-        self::STATUS_APPROVED,
-        self::STATUS_CANCELLED,
-    ];
 
     private string $status = self::STATUS_NONE;
 
@@ -61,9 +52,6 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     private ?string $requestGroupId = null;
 
     private ?string $workflowRequestId = null;
-
-    /** cutover前の承認済み申請(消化記録なしで引き継がれた申請)。取消できない。 */
-    private bool $cutoverWithoutUsage = false;
 
     public function request(
         string $userId,
@@ -159,67 +147,10 @@ class PaidLeaveRequestAggregate extends AggregateRoot
             '取消できない状態の有給申請です。',
         );
 
-        if ($this->status === self::STATUS_APPROVED && $this->cutoverWithoutUsage) {
-            throw new DomainRuleException(
-                '移行前の申請のため取消できません。付与日数の調整で対応してください。',
-            );
-        }
-
         $this->recordThat(new PaidLeaveRequestLifecycleCancelled(
             cancelledByUserId: $cancelledByUserId,
             reason: $reason,
             userId: $this->userId,
-        ));
-
-        return $this;
-    }
-
-    /**
-     * 本変更前に申請された有給申請の現在状態を引き継ぐ(paid_leave_request.migrated)。
-     * none のときのみ実行できる(二重引き継ぎ禁止)。
-     */
-    public function migrate(
-        string $userId,
-        string $targetDate,
-        string $leaveType,
-        ?float $hours,
-        float $requestedDays,
-        ?string $approverUserId,
-        ?string $reason,
-        ?string $requestGroupId,
-        ?string $workflowRequestId,
-        string $status,
-        ?string $usageId,
-        bool $hasUsage,
-        ?string $submittedAt = null,
-        ?string $approvedAt = null,
-        ?string $returnedAt = null,
-        ?string $cancelledAt = null,
-    ): self {
-        if ($this->status !== self::STATUS_NONE) {
-            throw new DomainRuleException('既に引き継ぎ済み、または申請済みの有給申請です。');
-        }
-        if (! in_array($status, self::MIGRATABLE_STATUSES, true)) {
-            throw new DomainRuleException('引き継ぎ不可の状態です: '.$status);
-        }
-
-        $this->recordThat(new PaidLeaveRequestLifecycleMigrated(
-            userId: $userId,
-            targetDate: $targetDate,
-            leaveType: $leaveType,
-            hours: $hours,
-            requestedDays: $requestedDays,
-            approverUserId: $approverUserId,
-            reason: $reason,
-            requestGroupId: $requestGroupId,
-            workflowRequestId: $workflowRequestId,
-            status: $status,
-            usageId: $usageId,
-            hasUsage: $hasUsage,
-            submittedAt: $submittedAt,
-            approvedAt: $approvedAt,
-            returnedAt: $returnedAt,
-            cancelledAt: $cancelledAt,
         ));
 
         return $this;
@@ -310,23 +241,6 @@ class PaidLeaveRequestAggregate extends AggregateRoot
     protected function applyPaidLeaveRequestLifecycleCancelled(PaidLeaveRequestLifecycleCancelled $event): void
     {
         $this->status = self::STATUS_CANCELLED;
-    }
-
-    protected function applyPaidLeaveRequestLifecycleMigrated(PaidLeaveRequestLifecycleMigrated $event): void
-    {
-        $this->status = $event->status;
-        $this->cutoverWithoutUsage = $event->status === self::STATUS_APPROVED && ! $event->hasUsage;
-        $this->applyDetails(
-            $event->userId,
-            $event->approverUserId,
-            $event->targetDate,
-            $event->leaveType,
-            $event->hours,
-            $event->requestedDays,
-            $event->reason,
-            $event->requestGroupId,
-            $event->workflowRequestId,
-        );
     }
 
     private function applyDetails(

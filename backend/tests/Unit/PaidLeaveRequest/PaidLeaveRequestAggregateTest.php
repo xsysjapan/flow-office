@@ -6,7 +6,6 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeaveRequest\Aggregates\PaidLeaveRequestAggregate;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleApproved;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleCancelled;
-use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleMigrated;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleRequested;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleResubmitted;
 use App\Domain\PaidLeaveRequest\Events\PaidLeaveRequestLifecycleReturned;
@@ -70,17 +69,6 @@ class PaidLeaveRequestAggregateTest extends TestCase
 
         PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
             ->given([$this->requested()])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->request('user-1', '2026-10-13', 'full', null, 1.0, 'approver-1', null);
-            });
-    }
-
-    public function test_request_after_migrated_is_rejected(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('submitted')])
             ->when(function (PaidLeaveRequestAggregate $aggregate) {
                 $aggregate->request('user-1', '2026-10-13', 'full', null, 1.0, 'approver-1', null);
             });
@@ -343,200 +331,6 @@ class PaidLeaveRequestAggregateTest extends TestCase
             });
     }
 
-    // ---- 引き継ぎ(migrate) ----
-
-    public function test_migrate_records_migrated_event_from_none(): void
-    {
-        $event = $this->migrated('approved', hasUsage: true);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->migrate(
-                    userId: 'user-1',
-                    targetDate: '2026-08-10',
-                    leaveType: 'full',
-                    hours: null,
-                    requestedDays: 1.0,
-                    approverUserId: 'approver-1',
-                    reason: null,
-                    requestGroupId: null,
-                    workflowRequestId: 'wf-1',
-                    status: 'approved',
-                    usageId: 'usage-1',
-                    hasUsage: true,
-                );
-            })
-            ->assertRecorded([$event]);
-    }
-
-    public function test_migrate_sets_status_to_each_migrated_status(): void
-    {
-        $this->assertSame('submitted', $this->statusAfter([$this->migrated('submitted')]));
-        $this->assertSame('returned', $this->statusAfter([$this->migrated('returned')]));
-        $this->assertSame('approved', $this->statusAfter([$this->migrated('approved')]));
-        $this->assertSame('cancelled', $this->statusAfter([$this->migrated('cancelled')]));
-    }
-
-    public function test_second_migrate_is_rejected(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('submitted')])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->migrate(
-                    userId: 'user-1',
-                    targetDate: '2026-08-10',
-                    leaveType: 'full',
-                    hours: null,
-                    requestedDays: 1.0,
-                    approverUserId: 'approver-1',
-                    reason: null,
-                    requestGroupId: null,
-                    workflowRequestId: 'wf-1',
-                    status: 'submitted',
-                    usageId: null,
-                    hasUsage: false,
-                );
-            });
-    }
-
-    public function test_migrate_is_rejected_after_request(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->requested()])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->migrate(
-                    userId: 'user-1',
-                    targetDate: '2026-08-10',
-                    leaveType: 'full',
-                    hours: null,
-                    requestedDays: 1.0,
-                    approverUserId: 'approver-1',
-                    reason: null,
-                    requestGroupId: null,
-                    workflowRequestId: 'wf-1',
-                    status: 'submitted',
-                    usageId: null,
-                    hasUsage: false,
-                );
-            });
-    }
-
-    public function test_migrate_rejects_status_that_cannot_be_migrated(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->migrate(
-                    userId: 'user-1',
-                    targetDate: '2026-08-10',
-                    leaveType: 'full',
-                    hours: null,
-                    requestedDays: 1.0,
-                    approverUserId: 'approver-1',
-                    reason: null,
-                    requestGroupId: null,
-                    workflowRequestId: 'wf-1',
-                    status: 'none',
-                    usageId: null,
-                    hasUsage: false,
-                );
-            });
-    }
-
-    public function test_migrated_submitted_can_be_approved(): void
-    {
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('submitted')])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->approve('approver-1');
-            })
-            ->assertRecorded([new PaidLeaveRequestLifecycleApproved(approvedByUserId: 'approver-1', userId: 'user-1')]);
-    }
-
-    public function test_migrated_returned_can_be_resubmitted_but_not_approved(): void
-    {
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('returned')])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->resubmit('user-1');
-            })
-            ->assertRecorded([
-                new PaidLeaveRequestLifecycleResubmitted(
-                    resubmittedByUserId: 'user-1',
-                    userId: 'user-1',
-                    targetDate: '2026-08-10',
-                    leaveType: 'full',
-                    hours: null,
-                    requestedDays: 1.0,
-                    approverUserId: 'approver-1',
-                    reason: null,
-                    requestGroupId: null,
-                    workflowRequestId: 'wf-1',
-                ),
-            ]);
-
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('returned')])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->approve('approver-1');
-            });
-    }
-
-    public function test_migrated_cancelled_cannot_be_cancelled_again(): void
-    {
-        $this->expectException(DomainRuleException::class);
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('cancelled')])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->cancel('user-1', null);
-            });
-    }
-
-    public function test_migrated_approved_with_usage_can_be_cancelled(): void
-    {
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('approved', hasUsage: true)])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->cancel('user-1', null);
-            })
-            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1')]);
-    }
-
-    public function test_migrated_approved_without_usage_cannot_be_cancelled(): void
-    {
-        $this->expectException(DomainRuleException::class);
-        $this->expectExceptionMessage('移行前の申請のため取消できません。付与日数の調整で対応してください。');
-
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('approved', hasUsage: false)])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->cancel('user-1', null);
-            });
-    }
-
-    public function test_migrated_submitted_without_usage_can_still_be_cancelled(): void
-    {
-        PaidLeaveRequestAggregate::fake(self::REQUEST_ID)
-            ->given([$this->migrated('submitted', hasUsage: false)])
-            ->when(function (PaidLeaveRequestAggregate $aggregate) {
-                $aggregate->cancel('user-1', null);
-            })
-            ->assertRecorded([new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1')]);
-    }
-
-    public function test_migrated_approved_without_usage_is_approved(): void
-    {
-        $this->assertTrue($this->stateAfter([$this->migrated('approved', hasUsage: false)])['approved']);
-    }
-
     // ---- 問い合わせメソッド ----
 
     public function test_query_methods_reflect_each_status(): void
@@ -628,39 +422,21 @@ class PaidLeaveRequestAggregateTest extends TestCase
 
     private function approved(string $approverUserId): PaidLeaveRequestLifecycleApproved
     {
-        return new PaidLeaveRequestLifecycleApproved(approvedByUserId: $approverUserId);
+        return new PaidLeaveRequestLifecycleApproved(approvedByUserId: $approverUserId, userId: 'user-1');
     }
 
     private function returned(): PaidLeaveRequestLifecycleReturned
     {
-        return new PaidLeaveRequestLifecycleReturned(returnedByUserId: 'approver-1', comment: '差戻し');
+        return new PaidLeaveRequestLifecycleReturned(returnedByUserId: 'approver-1', comment: '差戻し', userId: 'user-1');
     }
 
     private function resubmitted(): PaidLeaveRequestLifecycleResubmitted
     {
-        return new PaidLeaveRequestLifecycleResubmitted(resubmittedByUserId: 'user-1');
+        return new PaidLeaveRequestLifecycleResubmitted(resubmittedByUserId: 'user-1', userId: 'user-1', targetDate: '2026-10-12');
     }
 
     private function cancelled(): PaidLeaveRequestLifecycleCancelled
     {
-        return new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null);
-    }
-
-    private function migrated(string $status, bool $hasUsage = true): PaidLeaveRequestLifecycleMigrated
-    {
-        return new PaidLeaveRequestLifecycleMigrated(
-            userId: 'user-1',
-            targetDate: '2026-08-10',
-            leaveType: 'full',
-            hours: null,
-            requestedDays: 1.0,
-            approverUserId: 'approver-1',
-            reason: null,
-            requestGroupId: null,
-            workflowRequestId: 'wf-1',
-            status: $status,
-            usageId: $hasUsage ? 'usage-1' : null,
-            hasUsage: $hasUsage,
-        );
+        return new PaidLeaveRequestLifecycleCancelled(cancelledByUserId: 'user-1', reason: null, userId: 'user-1');
     }
 }

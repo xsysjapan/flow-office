@@ -7,7 +7,6 @@ use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantConf
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantManuallyGranted;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantRemoved;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountGrantSynced;
-use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountMigrated;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageCancelled;
 use App\Domain\CompensatoryLeaveAccount\Events\CompensatoryLeaveAccountUsageConfirmed;
 use App\Models\CompensatoryGrantDayView;
@@ -67,27 +66,6 @@ class CompensatoryGrantDayViewProjector extends Projector
         CompensatoryGrantDayViewAllocation::query()->where('usage_id', $event->usageId)->delete();
 
         $this->recalculateGrants($grantIds);
-    }
-
-    /**
-     * 移行(本変更前の付与・消化記録の状態)。付与の行と充当の表を、口座の移行イベントの内容で作る。
-     */
-    public function onCompensatoryLeaveAccountMigrated(CompensatoryLeaveAccountMigrated $event): void
-    {
-        foreach ($event->grants as $grant) {
-            $this->upsert(
-                (string) $grant['grantId'],
-                $event->userId,
-                $grant['sourceWorkDate'],
-                (float) $grant['grantedDays'],
-                $grant['grantedMinutes'],
-                $grant['status'],
-            );
-        }
-
-        foreach ($event->usages as $usage) {
-            $this->replaceAllocations($usage['usageId'], $usage['allocations']);
-        }
     }
 
     private function upsert(string $grantId, string $userId, string $workDate, float $grantedDays, ?int $grantedMinutes, string $status): void

@@ -43,10 +43,6 @@ class AttendanceDayOnCompensatoryLeaveRequestReactor extends Reactor
 
     public function onCompensatoryLeaveRequestResubmitted(CompensatoryLeaveRequestResubmitted $event): void
     {
-        if ($event->userId === null || $event->targetDate === null) {
-            throw new \LogicException('再提出のイベントに申請者・対象日がありません: '.$event->aggregateRootUuid());
-        }
-
         $this->commandBus->dispatch(new ApplyLeaveToAttendanceDay(
             userId: $event->userId,
             workDate: $event->targetDate,

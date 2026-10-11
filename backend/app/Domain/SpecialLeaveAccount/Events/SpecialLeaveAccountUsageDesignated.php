@@ -18,6 +18,6 @@ class SpecialLeaveAccountUsageDesignated extends ShouldBeStored
         public readonly string $usageType,
         public readonly float $usedDays,
         public readonly ?int $usedMinutes,
-        public readonly ?string $userId = null,
+        public readonly string $userId,
     ) {}
 }

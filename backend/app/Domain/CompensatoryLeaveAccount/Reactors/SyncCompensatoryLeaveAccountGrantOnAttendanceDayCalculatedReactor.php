@@ -4,7 +4,6 @@ namespace App\Domain\CompensatoryLeaveAccount\Reactors;
 
 use App\Domain\Attendance\Events\AttendanceDailyCalculationAdjusted;
 use App\Domain\Attendance\Events\AttendanceDayCalculated;
-use App\Domain\Attendance\Events\AttendanceDayCorrected;
 use App\Domain\Attendance\Events\AttendanceDayDeleted;
 use App\Domain\CompensatoryLeaveAccount\Commands\SyncCompensatoryLeaveAccountGrant;
 use App\Domain\EventSourcing\CommandBus;
@@ -24,10 +23,6 @@ class SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor extends 
 
     public function onAttendanceDayCalculated(AttendanceDayCalculated $event): void
     {
-        if ($event->userId === null || $event->workDate === null) {
-            return;
-        }
-
         $dayClassification = $event->calculation['day_classification'] ?? null;
 
         $this->sync(
@@ -40,40 +35,11 @@ class SyncCompensatoryLeaveAccountGrantOnAttendanceDayCalculatedReactor extends 
 
     public function onAttendanceDailyCalculationAdjusted(AttendanceDailyCalculationAdjusted $event): void
     {
-        if ($event->userId === null || $event->workDate === null) {
-            return;
-        }
-
         $this->sync(
             userId: $event->userId,
             workDate: $event->workDate,
             dayClassification: $event->dayClassification,
-            workMinutes: (int) ($event->workMinutes ?? 0),
-        );
-    }
-
-    /**
-     * 補正イベント: 記録された日次計算で同期する(計算と同じ判定)。日次計算が無い補正は休日出勤でない扱いで付与を外す。
-     * 週40時間の配賦は補正イベントが値を持つため、ここでは反応しない。
-     */
-    public function onAttendanceDayCorrected(AttendanceDayCorrected $event): void
-    {
-        if ($event->dailyCalculation === null) {
-            $this->sync(
-                userId: $event->userId,
-                workDate: $event->workDate,
-                dayClassification: null,
-                workMinutes: 0,
-            );
-
-            return;
-        }
-
-        $this->sync(
-            userId: $event->userId,
-            workDate: $event->workDate,
-            dayClassification: $event->dayClassification,
-            workMinutes: (int) ($event->dailyCalculation['work_minutes'] ?? 0),
+            workMinutes: $event->workMinutes,
         );
     }
 

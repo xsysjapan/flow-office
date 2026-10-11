@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * 有給の消化記録ID→有給申請ID(paid_leave_request_usage_links)。
- * PaidLeaveRequestProjectorだけが書き込む派生データ。cutover後の確定・取消イベント
+ * 【確認事項】作り直し後は書き込みが無い(旧系統の対応表。削除の要否は未決定)。PaidLeaveRequestProjectorだけが書き込む派生データ。cutover後の確定・取消イベント
  * (usageIdしか持たない)を申請IDへ対応付けるために使う。
  */
 #[Fillable(['usage_id', 'paid_leave_request_id'])]
