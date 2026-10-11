@@ -36,19 +36,19 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         [$r1, $w1, $u1] = [(string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid()];
         [$r2, $w2, $u2] = [(string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid()];
 
-        $this->put($user->id, 'paid_leave_account.grant_created', ['grantId' => $grantId, 'grantedOn' => '2026-04-01', 'expiresOn' => '2027-03-31', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'manual']);
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.grant_created', ['grantId' => $grantId, 'grantedOn' => '2026-04-01', 'expiresOn' => '2027-03-31', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'manual']);
         // 承認済み
-        $this->put($w1, 'workflow_request.drafted', $this->drafted($user->id, $approver->id, $r1));
-        $this->put($user->id, 'paid_leave_account.usage_designated', $this->designated($u1, $w1, $r1, '2026-09-10', $approver->id));
-        $this->put($w1, 'workflow_request.submitted', ['approverUserId' => $approver->id, 'submittedByUserId' => $user->id]);
-        $this->put($user->id, 'paid_leave_account.usage_confirmed', ['usageId' => $u1, 'confirmedByUserId' => $approver->id]);
-        $this->put($user->id, 'paid_leave_account.usage_allocated', ['usageId' => $u1, 'grantId' => $grantId, 'allocatedDays' => 1.0]);
-        $this->put($w1, 'workflow_request.approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($w1, 'workflow_request.drafted', $this->drafted($user->id, $approver->id, $r1));
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.usage_designated', $this->designated($u1, $w1, $r1, '2026-09-10', $approver->id));
+        $this->insertLegacyEvent($w1, 'workflow_request.submitted', ['approverUserId' => $approver->id, 'submittedByUserId' => $user->id]);
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.usage_confirmed', ['usageId' => $u1, 'confirmedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.usage_allocated', ['usageId' => $u1, 'grantId' => $grantId, 'allocatedDays' => 1.0]);
+        $this->insertLegacyEvent($w1, 'workflow_request.approved', ['approvedByUserId' => $approver->id]);
         // 差戻し(口座イベントは無く、workflow_request.returned だけ)
-        $this->put($w2, 'workflow_request.drafted', $this->drafted($user->id, $approver->id, $r2));
-        $this->put($user->id, 'paid_leave_account.usage_designated', $this->designated($u2, $w2, $r2, '2026-09-11', $approver->id));
-        $this->put($w2, 'workflow_request.submitted', ['approverUserId' => $approver->id, 'submittedByUserId' => $user->id]);
-        $this->put($w2, 'workflow_request.returned', ['returnedByUserId' => $approver->id, 'comment' => '日付を直して']);
+        $this->insertLegacyEvent($w2, 'workflow_request.drafted', $this->drafted($user->id, $approver->id, $r2));
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.usage_designated', $this->designated($u2, $w2, $r2, '2026-09-11', $approver->id));
+        $this->insertLegacyEvent($w2, 'workflow_request.submitted', ['approverUserId' => $approver->id, 'submittedByUserId' => $user->id]);
+        $this->insertLegacyEvent($w2, 'workflow_request.returned', ['returnedByUserId' => $approver->id, 'comment' => '日付を直して']);
 
         $this->rebuildAndSwap();
 
@@ -71,12 +71,12 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
         [$grantId, $sr1, $sr2] = [(string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid()];
 
-        $this->put($grantId, 'special_leave.granted', ['userId' => $user->id, 'specialLeaveTypeId' => $type->id, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 5.0, 'grantReason' => null]);
-        $this->put($sr1, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-10'));
-        $this->put($sr1, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
-        $this->put($grantId, 'special_leave.used', $this->usedPayload($user->id, 'specialLeaveRequestId', $sr1, '2026-09-10', 1.0));
-        $this->put($sr2, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-11'));
-        $this->put($sr2, 'special_leave.request_cancelled', ['cancelledByUserId' => $user->id]);
+        $this->insertLegacyEvent($grantId, 'special_leave.granted', ['userId' => $user->id, 'specialLeaveTypeId' => $type->id, 'grantedOn' => '2026-04-01', 'expiresOn' => null, 'grantedDays' => 5.0, 'grantReason' => null]);
+        $this->insertLegacyEvent($sr1, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-10'));
+        $this->insertLegacyEvent($sr1, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($grantId, 'special_leave.used', $this->usedPayload($user->id, 'specialLeaveRequestId', $sr1, '2026-09-10', 1.0));
+        $this->insertLegacyEvent($sr2, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-11'));
+        $this->insertLegacyEvent($sr2, 'special_leave.request_cancelled', ['cancelledByUserId' => $user->id]);
 
         $this->rebuildAndSwap();
 
@@ -97,13 +97,13 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $approver = User::factory()->create();
         [$grantId, $cr] = [(string) Str::uuid(), (string) Str::uuid()];
 
-        $this->put($grantId, 'compensatory_leave.manually_granted', ['userId' => $user->id, 'workDate' => '2026-08-01', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'expiresOn' => null, 'grantReason' => '手動']);
-        $this->put($cr, 'compensatory_leave.requested', [
+        $this->insertLegacyEvent($grantId, 'compensatory_leave.manually_granted', ['userId' => $user->id, 'workDate' => '2026-08-01', 'grantedDays' => 1.0, 'grantedMinutes' => null, 'expiresOn' => null, 'grantReason' => '手動']);
+        $this->insertLegacyEvent($cr, 'compensatory_leave.requested', [
             'userId' => $user->id, 'targetDate' => '2026-09-10', 'leaveType' => 'full', 'hours' => null, 'requestedDays' => 1.0, 'requestedMinutes' => null,
             'approverUserId' => $approver->id, 'reason' => null, 'requestGroupId' => null,
         ]);
-        $this->put($cr, 'compensatory_leave.request_approved', ['approvedByUserId' => $approver->id, 'userId' => null]);
-        $this->put($grantId, 'compensatory_leave.used', $this->usedPayload($user->id, 'compensatoryLeaveRequestId', $cr, '2026-09-10', 1.0));
+        $this->insertLegacyEvent($cr, 'compensatory_leave.request_approved', ['approvedByUserId' => $approver->id, 'userId' => null]);
+        $this->insertLegacyEvent($grantId, 'compensatory_leave.used', $this->usedPayload($user->id, 'compensatoryLeaveRequestId', $cr, '2026-09-10', 1.0));
 
         $this->rebuildAndSwap();
 
@@ -130,13 +130,13 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
                 'id' => $dayId, 'user_id' => $user->id, 'work_date' => $date, 'status' => 'clocked_out', 'source' => 'manual',
                 'utc_offset_minutes' => 540, 'work_type' => 'special_leave_full', 'created_at' => self::AT, 'updated_at' => self::AT,
             ]);
-            $this->put($dayId, 'attendance_day.calculated', ['calculation' => $this->calculation(), 'userId' => null, 'workDate' => null]);
+            $this->insertLegacyEvent($dayId, 'attendance_day.calculated', ['calculation' => $this->calculation(), 'userId' => null, 'workDate' => null]);
         }
-        $this->put($skeptKept, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-10'));
-        $this->put($skeptKept, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
-        $this->put($skeptReleased, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-11'));
-        $this->put($skeptReleased, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
-        $this->put($skeptReleased, 'special_leave.request_cancelled', ['cancelledByUserId' => $user->id]);
+        $this->insertLegacyEvent($skeptKept, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-10'));
+        $this->insertLegacyEvent($skeptKept, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($skeptReleased, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-11'));
+        $this->insertLegacyEvent($skeptReleased, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($skeptReleased, 'special_leave.request_cancelled', ['cancelledByUserId' => $user->id]);
 
         $this->artisan('leave:rebuild-event-store', ['--apply' => true])->assertExitCode(0);
         $this->artisan('leave:rebuild-event-store', ['--swap' => true])->assertExitCode(0);
@@ -189,7 +189,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $payload */
-    private function put(string $aggregate, string $class, array $payload): void
+    private function insertLegacyEvent(string $aggregate, string $class, array $payload): void
     {
         $this->versions[$aggregate] = ($this->versions[$aggregate] ?? 0) + 1;
         DB::table('stored_events')->insert([
