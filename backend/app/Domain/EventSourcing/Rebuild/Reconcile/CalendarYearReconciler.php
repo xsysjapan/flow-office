@@ -96,7 +96,7 @@ final class CalendarYearReconciler
                 'endsOn' => $endsOn,
                 'generatedFrom' => (string) $row['generated_from'],
                 'createdByUserId' => null,
-            ]);
+            ], $createdAt);
             $ctx->registerRef('calendar_year:'.$id, $cursor);
         } else {
             $want = ['calendar' => $calendarId, 'fiscal_year' => $fiscalYear, 'starts_on' => $startsOn, 'ends_on' => $endsOn];

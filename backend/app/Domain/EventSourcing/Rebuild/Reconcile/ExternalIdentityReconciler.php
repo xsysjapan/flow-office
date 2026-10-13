@@ -96,7 +96,7 @@ final class ExternalIdentityReconciler
                 'externalCode' => Norm::str($row['external_code'] ?? null),
                 'email' => Norm::str($row['email'] ?? null),
                 'actorUserId' => null,
-            ]);
+            ], $final === null ? $createdAt : null);
         }
         if ($status !== 'active') {
             $ctx->emit(self::TABLE, $slot, 'external_identity.unlinked', $aggregate, [

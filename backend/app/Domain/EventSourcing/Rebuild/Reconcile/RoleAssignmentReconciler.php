@@ -103,7 +103,7 @@ final class RoleAssignmentReconciler
                 'startsAt' => Norm::payloadDateTime($row['starts_at'] ?? null),
                 'endsAt' => Norm::payloadDateTime($row['ends_at'] ?? null),
                 'actorUserId' => $want['assigned_by'],
-            ]);
+            ], $createdAt);
             $state = ['status' => 'active'] + $want;
         }
 

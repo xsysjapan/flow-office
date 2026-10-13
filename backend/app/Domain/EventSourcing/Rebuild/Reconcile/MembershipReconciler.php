@@ -97,10 +97,12 @@ final class MembershipReconciler
         }
 
         $createdAt = Norm::str($row['created_at'] ?? null);
+        $eventAt = null;
         if ($final !== null) {
             $ctx->mismatch(self::TABLE, $key, $final['present'] ? 'kind・isPrimary・操作者がイベントと違う' : 'イベントでは除去済みだが行がある');
             $slot = $ctx->afterLast($aggregate);
         } else {
+            $eventAt = $createdAt;
             $dep = $ctx->latest($ctx->ref('user:'.$userId), $ctx->ref('group:'.$groupId), $createdBy !== null ? $ctx->ref('user:'.$createdBy) : null);
             $slot = $ctx->beforeFirst($aggregate, $createdAt);
             $slot = $slot !== null
@@ -114,6 +116,6 @@ final class MembershipReconciler
             'membershipKind' => $kind,
             'isPrimary' => $primary,
             'actorUserId' => $createdBy,
-        ]);
+        ], $eventAt);
     }
 }

@@ -66,7 +66,7 @@ final class RoleReconciler
                 'description' => $want['description'],
                 'actorUserId' => null,
                 'isSystem' => (bool) $row['is_system'],
-            ]);
+            ], $createdAt);
             $ctx->registerRef('role:'.$id, $createdSlot);
             $state = ['status' => 'active'] + $want;
             $last ??= $createdSlot;

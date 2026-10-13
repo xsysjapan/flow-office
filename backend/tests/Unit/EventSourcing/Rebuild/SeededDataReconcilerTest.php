@@ -100,7 +100,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertStringContainsString('isSystem', $result->issues[0]['reason']);
     }
 
-    public function test_group_type_with_only_updated_events_gets_created_just_before_the_first_event_with_the_previous_events_time(): void
+    public function test_group_type_with_only_updated_events_gets_created_just_before_the_first_event_with_the_row_created_at(): void
     {
         $aggregate = Uuid::uuid5(Uuid::NAMESPACE_URL, 'group-type:department')->toString();
         $result = $this->reconcile(
@@ -116,7 +116,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('group_type.created', $created->eventClass);
         $this->assertSame(5, $created->anchorId);
         $this->assertLessThan(0, $created->subOrder);
-        $this->assertSame('2026-08-01 09:00:00', $created->createdAt);
+        $this->assertSame(self::ROW_AT, $created->createdAt);
         $this->assertCount(1, $result->mismatches['group_types']);
     }
 
@@ -187,7 +187,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('role.created', $result->events[0]->eventClass);
         $this->assertSame(4, $result->events[0]->anchorId);
         $this->assertLessThan(0, $result->events[0]->subOrder);
-        $this->assertSame('2026-08-01 09:00:00', $result->events[0]->createdAt);
+        $this->assertSame(self::ROW_AT, $result->events[0]->createdAt);
     }
 
     // ---- permission_role・role_features ----
@@ -407,7 +407,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertCount(1, $result->events);
         $this->assertSame(2, $result->events[0]->anchorId);
         $this->assertLessThan(0, $result->events[0]->subOrder);
-        $this->assertSame('2026-08-01 09:00:00', $result->events[0]->createdAt);
+        $this->assertSame(self::ROW_AT, $result->events[0]->createdAt);
     }
 
     // ---- memberships ----
@@ -519,7 +519,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(['name', 'phone'], array_keys($byKey));
         $this->assertSame(6, $byKey['name']->anchorId);
         $this->assertLessThan(0, $byKey['name']->subOrder);
-        $this->assertSame('2026-08-01 09:00:00', $byKey['name']->createdAt);
+        $this->assertSame('2026-01-13 00:00:00', $byKey['name']->createdAt);
 
         $mismatch = $this->reconcile($events, new SeededDataCurrent(fieldAuthorities: [$row('email', 'LOCAL')]));
         $this->assertCount(1, $mismatch->events);

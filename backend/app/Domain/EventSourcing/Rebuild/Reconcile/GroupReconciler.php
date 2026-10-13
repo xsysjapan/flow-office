@@ -95,7 +95,7 @@ final class GroupReconciler
                 'description' => $want['description'],
                 'parentGroupId' => $want['parent_group_id'],
                 'actorUserId' => null,
-            ]);
+            ], $createdAt);
             $ctx->registerRef('group:'.$id, $createdSlot);
             $state = ['status' => 'active'] + $want;
             $last ??= $createdSlot;

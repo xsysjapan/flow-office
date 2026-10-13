@@ -36,6 +36,7 @@ final class FieldAuthorityReconciler
             }
 
             $ctx->guard("field_authority {$fieldKey}", function () use ($ctx, $row, $fieldKey, $want, $aggregate, $final): void {
+                $createdAt = null;
                 if (isset($final[$fieldKey])) {
                     $ctx->mismatch(self::TABLE, $fieldKey, '最終状態(authorityType・provider)が行と違う');
                     $slot = $ctx->afterLast($aggregate);
@@ -48,7 +49,7 @@ final class FieldAuthorityReconciler
                     'authorityType' => $want[0],
                     'provider' => $want[1],
                     'actorUserId' => null,
-                ]);
+                ], $createdAt);
             });
         }
     }

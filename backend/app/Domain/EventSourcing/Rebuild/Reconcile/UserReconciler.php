@@ -35,7 +35,7 @@ final class UserReconciler
             $ctx->guard('user '.$id, function () use ($ctx, $row, $id): void {
                 $createdAt = Norm::str($row['created_at'] ?? null);
                 $slot = $ctx->beforeFirst($id, $createdAt) ?? $ctx->head($createdAt);
-                $created = $ctx->emit(self::TABLE, $slot, 'user.migrated_from_legacy', $id, ['attributes' => $this->attributes($row)]);
+                $created = $ctx->emit(self::TABLE, $slot, 'user.migrated_from_legacy', $id, ['attributes' => $this->attributes($row)], $createdAt);
                 $ctx->registerRef('user:'.$id, $created);
             });
         }

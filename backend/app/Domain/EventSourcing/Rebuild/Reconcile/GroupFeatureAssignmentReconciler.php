@@ -90,10 +90,12 @@ final class GroupFeatureAssignmentReconciler
             }
 
             $createdAt = Norm::str($row['created_at'] ?? null);
+            $eventAt = null;
             if (isset($hasEvents[$featureId])) {
                 $ctx->mismatch(self::TABLE, $key, $final['assigned'] ? 'assigned_by がイベントと違う' : 'イベントでは割り当て解除済みだが行がある');
                 $slot = $ctx->afterLast($aggregate);
             } else {
+                $eventAt = $createdAt;
                 $dep = $ctx->latest($ctx->ref('group:'.$groupId), $assignedBy !== null ? $ctx->ref('user:'.$assignedBy) : null);
                 $slot = $ctx->beforeFirst($aggregate, $createdAt);
                 $slot = $slot !== null
@@ -102,7 +104,7 @@ final class GroupFeatureAssignmentReconciler
             }
             $ctx->emit(self::TABLE, $slot, 'feature.assigned_to_group', $aggregate, [
                 'groupId' => $groupId, 'featureId' => $featureId, 'actorUserId' => $assignedBy,
-            ]);
+            ], $eventAt);
         }
     }
 }

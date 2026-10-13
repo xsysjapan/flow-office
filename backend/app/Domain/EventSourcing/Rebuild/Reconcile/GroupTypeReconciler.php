@@ -62,7 +62,7 @@ final class GroupTypeReconciler
                 'maxPrimaryMemberships' => $want['max_primary_memberships'],
                 'actorUserId' => null,
                 'isSystem' => (bool) $row['is_system'],
-            ]);
+            ], Norm::str($row['created_at'] ?? null));
             $ctx->registerRef('group_type:'.$id, $createdSlot);
             $state = ['status' => 'active'] + $want;
             $last ??= $createdSlot;

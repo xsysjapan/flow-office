@@ -392,7 +392,7 @@ class SeededDataRebuildScenarioTest extends TestCase
 
     /**
      * created_at を元の値と比べられる行(導出イベントが行の created_at で置かれるもの)。
-     * 作成イベントが無く「最初のイベントの直前」に置いた group G2・role 2は、置き場所の前のイベントの値になるため除く。
+     * 作成を補うイベントは、置く位置に関わらず行の created_at で置かれる(論点19 決定1)ため、全行を比べる。
      *
      * @return array<string, array<string, string>>
      */
@@ -412,7 +412,7 @@ class SeededDataRebuildScenarioTest extends TestCase
             'company_calendar_years' => fn ($r) => (string) $r->id,
             'company_calendar_days' => fn ($r) => substr((string) $r->date, 0, 10),
         ];
-        $except = ['groups' => ['g2'], 'roles' => ['2']];
+        $except = [];
 
         $result = [];
         foreach ($key as $table => $keyOf) {
