@@ -68,10 +68,22 @@ class SeededDataRebuildScenarioTest extends TestCase
         $this->artisan('leave:rebuild-event-store', ['--swap' => true])->assertExitCode(0);
 
         $this->assertDerivedEvents();
+        $afterSwap = $this->eventSummary();
 
         $this->emptyReadModels();
         $this->assertSame(0, DB::table('users')->count());
-        Artisan::call('event-sourcing:replay', ['--force' => true]);
+        $beforeReplay = $this->eventSummary();
+        $this->assertSame($afterSwap, $beforeReplay, 'ReadModelを空にしたことで stored_events が変わった(空にする一覧に stored_events が入っている疑い)。swap後: '.$afterSwap.' / replay前: '.$beforeReplay);
+        $exitCode = Artisan::call('event-sourcing:replay', ['--force' => true]);
+        $this->assertSame(0, $exitCode, Artisan::output());
+
+        $empty = array_keys(array_filter($this->snapshot(), fn (array $rows) => $rows === []));
+        if ($empty !== []) {
+            $this->fail('replay後に空のままの表: '.implode(', ', $empty)
+                ."\nswap後: ".$afterSwap."\nreplay前: ".$beforeReplay."\nreplay後: ".$this->eventSummary()
+                ."\nreplay出力: ".Artisan::output()
+                ."\nevent_class一覧: ".implode(', ', DB::table('stored_events')->orderBy('id')->pluck('event_class')->all()));
+        }
 
         $this->assertEquals($before, $this->snapshot());
         $this->assertEquals($createdAtBefore, $this->createdAtSnapshot());
@@ -101,6 +113,14 @@ class SeededDataRebuildScenarioTest extends TestCase
         $this->assertTrue($result->ok, json_encode($result->unsupported, JSON_UNESCAPED_UNICODE));
         $this->assertSame([], $result->report['reconcile']['derived']);
         $this->assertSame($eventsBefore, count($result->rows));
+    }
+
+    /** 診断用: stored_events の件数とイベント種別ごとの件数。 */
+    private function eventSummary(): string
+    {
+        $counts = DB::table('stored_events')->selectRaw('event_class, count(*) as n')->groupBy('event_class')->orderBy('event_class')->pluck('n', 'event_class')->all();
+
+        return 'total='.array_sum($counts).' '.json_encode($counts, JSON_UNESCAPED_UNICODE);
     }
 
     /** 導出イベントの位置・内容(作り直し後の stored_events)。 */

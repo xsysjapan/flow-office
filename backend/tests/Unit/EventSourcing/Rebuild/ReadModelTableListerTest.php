@@ -29,7 +29,7 @@ class ReadModelTableListerTest extends TestCase
     {
         $tables = (new ReadModelTableLister)->tables(app_path('Domain'));
 
-        foreach (['features', 'permissions', 'permission_scope_types', 'system_settings', 'user_credentials'] as $master) {
+        foreach (['features', 'permissions', 'permission_scope_types', 'system_settings', 'user_credentials', 'stored_events', 'snapshots'] as $master) {
             $this->assertArrayNotHasKey($master, $tables);
         }
         foreach (['device_roles', 'users', 'roles', 'permission_role'] as $written) {
