@@ -11,6 +11,8 @@ namespace App\Domain\EventSourcing\Rebuild;
  *    扱えない種類は未対応として記録する。
  * 2. 申請ごと・付与ごと・cutover(利用者ごと)・勤怠日ごとに変換する。扱えない並びは未対応として記録し、続ける。
  *    勤怠日の変換は、休暇の変換結果(利用者・対象日・解除の操作)と、ReadModel(attendance_days)の現在値を入力にする。
+ *    旧版の付与予定イベント(paid_leave_schedule.* で entryId があり scheduleEntryId が無いもの)は、ReadModel
+ *    (paid_leave_schedule_entries・assessments)の現在値から現行の形のイベント列に置き換える(論点19 決定3)。
  * 3. 変換で置き換えた行を除き、残りの行(休暇以外・ワークフロー等)は元の行をそのまま写す。
  * 4. 元の発生順(anchorId・subOrder)に並べ、id を1から振り直し、集約ごとに版を1から連番にする。
  *    休暇・勤怠以外の集約は版が変わらないことを確認し、変わったものは件数を報告する。
@@ -80,13 +82,15 @@ final class EventStoreRebuilder
         private readonly LeaveRequestRebuilder $leaveRequests = new LeaveRequestRebuilder,
         private readonly LeaveAccountGrantRebuilder $leaveGrants = new LeaveAccountGrantRebuilder,
         private readonly AttendanceRebuilder $attendance = new AttendanceRebuilder,
+        private readonly PaidLeaveScheduleRebuilder $schedule = new PaidLeaveScheduleRebuilder,
     ) {}
 
     /**
      * @param  list<StoredEventRow>  $rows  stored_events の全行(id順でなくてもよい)
      * @param  array<string, AttendanceDayCurrent>  $attendanceDays  ReadModel(attendance_days)の現在値(勤怠日ID => 現在値)。勤怠の変換(2.4)の入力
+     * @param  array<string, PaidLeaveScheduleCurrent>  $paidLeaveSchedule  ReadModel(paid_leave_schedule_entries・assessments)の現在値(行id => 現在値)。旧版の付与予定イベントの置き換えの入力
      */
-    public function rebuild(array $rows, array $attendanceDays = []): RebuildResult
+    public function rebuild(array $rows, array $attendanceDays = [], array $paidLeaveSchedule = []): RebuildResult
     {
         usort($rows, fn (StoredEventRow $a, StoredEventRow $b) => $a->id <=> $b->id);
 
@@ -101,6 +105,7 @@ final class EventStoreRebuilder
         $accountUsageRows = [];
         $cutoverRows = [];
         $attendanceRows = [];
+        $scheduleRows = [];
         /** @var array<string, array<string, list<StoredEventRow>>> $leaveRequestRows kind => 申請ID => 申請集約の行 */
         $leaveRequestRows = [];
         /** @var array<string, array<string, list<StoredEventRow>>> $leaveUsageRows kind => 申請ID => 付与集約の *.used・*.usage_reversed */
@@ -123,6 +128,8 @@ final class EventStoreRebuilder
                 if ($class === 'workflow_request.drafted' && $row->get('subjectType') === 'paid_leave_request' && $row->get('subjectId') !== null) {
                     $workflowByPaidRequest[(string) $row->get('subjectId')] = (string) $row->aggregateUuid;
                 }
+            } elseif (PaidLeaveScheduleRebuilder::isLegacyRow($row)) {
+                $scheduleRows[] = $row;
             } elseif (in_array($class, PaidLeaveRequestRebuilder::REQUEST_CLASSES, true)) {
                 $paidRequestRows[(string) $row->aggregateUuid][] = $row;
             } elseif (in_array($class, PaidLeaveRequestRebuilder::USAGE_CLASSES, true)) {
@@ -370,7 +377,26 @@ final class EventStoreRebuilder
             }
         }
 
+        // 旧版の付与予定イベント(論点19 決定3)。
+        $scheduleSummary = ['entries' => 0, 'replaced' => [], 'derived' => []];
+        if ($scheduleRows !== []) {
+            $scheduleResult = $this->schedule->rebuild($scheduleRows, $paidLeaveSchedule);
+            foreach ($scheduleResult->issues as $issue) {
+                $unsupported[] = $this->issue($issue['key'], $issue['reason']);
+            }
+            array_push($converted, ...$scheduleResult->events);
+            foreach ($scheduleResult->consumedIds as $id) {
+                $consumed[$id] = true;
+            }
+            $scheduleSummary = [
+                'entries' => count(array_unique(array_map(fn (StoredEventRow $r) => (string) $r->get('entryId'), $scheduleRows))),
+                'replaced' => $scheduleResult->replacedByClass,
+                'derived' => $scheduleResult->derivedByClass,
+            ];
+        }
+
         $report = [
+            'paid_leave_schedule' => $scheduleSummary,
             'by_class_before' => $byClassBefore,
             'paid_requests' => $paidRequestSummary,
             'special_requests' => $leaveRequestSummary[LeaveRequestRebuilder::SPECIAL],

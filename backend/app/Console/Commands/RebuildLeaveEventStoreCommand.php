@@ -50,7 +50,7 @@ final class RebuildLeaveEventStoreCommand extends Command
             return $this->verifyOnly($writer);
         }
 
-        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays());
+        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays(), $writer->readPaidLeaveSchedule());
         $this->printReport($result->report);
 
         if (! $result->ok) {
@@ -180,6 +180,16 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->info('勤怠日の変換');
             $this->line("対象の勤怠日: {$attendance['days']} 件 / created を補った日: {$attendance['created_added']} 件 / deleted を補った日: {$attendance['deleted_added']} 件");
             $this->line("休暇値の workType を書き換えた件数: {$attendance['work_type_rewritten']} / 既定値nullの項目を補完した件数: {$attendance['null_items_filled']}");
+        }
+
+        if (isset($report['paid_leave_schedule'])) {
+            $schedule = $report['paid_leave_schedule'];
+            $this->info('旧版の付与予定イベントの置き換え');
+            $this->line("対象の付与予定(entryId): {$schedule['entries']} 件");
+            $this->info('置き換えた旧版のイベント');
+            $this->table(['event_class', '件数'], $this->countRows($schedule['replaced']));
+            $this->info('導出した現行のイベント');
+            $this->table(['event_class', '件数'], $this->countRows($schedule['derived']));
         }
 
         $this->info('cutoverの付与の突き合わせ結果');

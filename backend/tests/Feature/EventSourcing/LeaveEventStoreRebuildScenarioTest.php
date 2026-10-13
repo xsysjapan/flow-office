@@ -163,6 +163,80 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertNull(DB::table('attendance_days')->where('id', $released)->first());
     }
 
+    public function test_legacy_paid_leave_schedule_events_are_replaced_from_the_read_model_and_replay_to_the_same_rows(): void
+    {
+        $user = User::factory()->create();
+        $admin = User::factory()->create();
+        [$granted, $cancelled, $review, $plain, $assessmentId] = [(string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid(), (string) Str::uuid()];
+        $grantId = (string) Str::uuid();
+
+        $entry = fn (string $id, array $values) => DB::table('paid_leave_schedule_entries')->insert($values + [
+            'id' => $id, 'user_id' => $user->id, 'scheduled_on' => '2026-10-01', 'category' => 'standard', 'candidate_grant_days' => 10.0,
+            'status' => 'Scheduled', 'is_manually_overridden' => false, 'created_at' => self::AT, 'updated_at' => self::AT,
+        ]);
+        $entry($granted, [
+            'status' => 'Granted', 'latest_assessment_id' => $assessmentId, 'grant_id' => $grantId, 'category' => 'adjusted', 'candidate_grant_days' => 11.0,
+            'is_manually_overridden' => true, 'manual_override_reason' => '調整', 'manual_override_by_user_id' => $admin->id, 'manual_override_at' => '2026-09-03 08:00:00',
+        ]);
+        $entry($cancelled, ['status' => 'Cancelled', 'cancelled_reason' => '再計算のため']);
+        $entry($review, ['status' => 'NeedsReview']);
+        $entry($plain, []);
+        DB::table('paid_leave_schedule_assessments')->insert([
+            'id' => $assessmentId, 'schedule_entry_id' => $granted, 'period_start' => '2025-04-01', 'period_end' => '2026-03-31', 'denominator_days' => 240,
+            'attendance_days' => 190, 'excluded_days' => 2, 'attendance_rate' => 79.17, 'policy_version' => 'v1', 'automatic_result' => 'NotEligible',
+            'final_result' => 'Eligible', 'override_reason' => '例外承認', 'overridden_by_user_id' => $admin->id, 'created_at' => self::AT, 'updated_at' => self::AT,
+        ]);
+        $before = $this->scheduleSnapshot();
+
+        // 旧版のイベント(entryId。集約は行id)。plain は旧版のイベントを持つ(entry_createdのみ)。
+        foreach ([$granted, $cancelled, $review, $plain] as $id) {
+            $this->insertLegacyEvent($id, 'paid_leave_schedule.entry_created', ['entryId' => $id, 'userId' => $user->id, 'scheduledOn' => '2026-10-01']);
+        }
+        $this->insertLegacyEvent($granted, 'paid_leave_schedule.entry_granted', ['entryId' => $granted, 'grantId' => $grantId, 'operatorUserId' => $admin->id]);
+        $this->insertLegacyEvent($cancelled, 'paid_leave_schedule.entry_superseded', ['entryId' => $cancelled, 'reason' => '再計算のため']);
+
+        $this->rebuildAndSwap();
+
+        $this->assertSame(0, DB::table('stored_events')->whereIn('aggregate_uuid', [$granted, $cancelled, $review, $plain])->count());
+        $rows = DB::table('stored_events')->where('aggregate_uuid', $user->id)->orderBy('id')->get();
+        $this->assertSame(range(1, $rows->count()), $rows->pluck('aggregate_version')->map(fn ($v) => (int) $v)->all());
+        $this->assertSame(4, $rows->where('event_class', 'paid_leave_schedule.entry_created')->count());
+        $this->assertSame(1, $rows->where('event_class', 'paid_leave_schedule.assessment_overridden')->count());
+        $this->assertSame(1, $rows->where('event_class', 'paid_leave_schedule.entry_cancelled')->count());
+        foreach ($rows as $row) {
+            $meta = json_decode($row->meta_data, true);
+            $this->assertSame($user->id, $meta['aggregate-root-uuid']);
+            $this->assertSame((int) $row->aggregate_version, $meta['aggregate-root-version']);
+            $this->assertSame((int) $row->id, $meta['stored-event-id']);
+        }
+
+        DB::table('paid_leave_schedule_assessments')->delete();
+        DB::table('paid_leave_schedule_entries')->delete();
+        $this->replayReadModels();
+
+        $this->assertEquals($before, $this->scheduleSnapshot());
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> 比較用の付与予定ReadModel(日時列を除く) */
+    private function scheduleSnapshot(): array
+    {
+        $entries = DB::table('paid_leave_schedule_entries')->orderBy('id')->get()->map(fn ($r) => [
+            'id' => $r->id, 'user_id' => $r->user_id, 'scheduled_on' => substr((string) $r->scheduled_on, 0, 10), 'category' => $r->category,
+            'candidate_grant_days' => (float) $r->candidate_grant_days, 'status' => $r->status, 'latest_assessment_id' => $r->latest_assessment_id,
+            'is_manually_overridden' => (bool) $r->is_manually_overridden, 'manual_override_reason' => $r->manual_override_reason,
+            'manual_override_by_user_id' => $r->manual_override_by_user_id, 'manual_override_at' => $r->manual_override_at !== null ? substr((string) $r->manual_override_at, 0, 19) : null, 'grant_id' => $r->grant_id, 'cancelled_reason' => $r->cancelled_reason,
+        ])->all();
+        $assessments = DB::table('paid_leave_schedule_assessments')->orderBy('id')->get()->map(fn ($r) => [
+            'id' => $r->id, 'schedule_entry_id' => $r->schedule_entry_id, 'period_start' => substr((string) $r->period_start, 0, 10),
+            'period_end' => substr((string) $r->period_end, 0, 10), 'denominator_days' => (int) $r->denominator_days, 'attendance_days' => (int) $r->attendance_days,
+            'excluded_days' => (int) $r->excluded_days, 'attendance_rate' => (float) $r->attendance_rate, 'policy_version' => $r->policy_version,
+            'automatic_result' => $r->automatic_result, 'final_result' => $r->final_result, 'override_reason' => $r->override_reason,
+            'overridden_by_user_id' => $r->overridden_by_user_id,
+        ])->all();
+
+        return ['entries' => $entries, 'assessments' => $assessments];
+    }
+
     private function rebuildAndSwap(): void
     {
         $this->artisan('leave:rebuild-event-store')->assertExitCode(0);
@@ -179,6 +253,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
             'special_leave_usages', 'special_leave_requests', 'special_leave_grants',
             'compensatory_leave_usages', 'compensatory_leave_requests', 'compensatory_leave_grants',
             'leave_request_workflow_links', 'workflow_request_history_entries', 'workflow_requests',
+            'paid_leave_schedule_assessments', 'paid_leave_schedule_entries',
         ] as $table) {
             if (Schema::hasTable($table)) {
                 DB::table($table)->delete();

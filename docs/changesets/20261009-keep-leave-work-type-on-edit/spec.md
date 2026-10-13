@@ -381,7 +381,7 @@
    `paid_leave_schedule.*`を旧版のイベントとする。旧版のイベントは削除し、旧版のイベントに現れた`entryId`ごとに、現在の
    `paid_leave_schedule_entries`・`paid_leave_schedule_assessments`の行から現行の形のイベント列を導出する。集約UUIDは利用者の`userId`
    (現行の規則)。置く位置は、その利用者の旧版のイベントの最初の位置。発生日時は、作成はその行の`created_at`、それ以外は対応する旧版の
-   イベントの発生日時(無ければ作成と同じ)。
+   イベントの発生日時(無ければ手動修正は行の`manual_override_at`、取消は行の`updated_at`、それも無ければ作成と同じ)。
    - `entry_created`(scheduleEntryId=行の`id`、scheduledOn・category・candidateGrantDaysは行の値、`isDeterminate`は行の状態が
      判定保留でなければtrue)。
    - 判定の行ごとに`assessment_recorded`(assessmentId=判定の行の`id`)。最終判定が自動判定と違えば`assessment_overridden`。

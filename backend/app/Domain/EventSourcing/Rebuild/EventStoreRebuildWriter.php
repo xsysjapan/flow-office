@@ -12,6 +12,7 @@ use RuntimeException;
  *
  * - readRows(): stored_events の生の行を id順に読む。
  * - readAttendanceDays(): ReadModel(attendance_days)の現在値を読む(勤怠の変換 2.4 の入力)。
+ * - readPaidLeaveSchedule(): ReadModel(paid_leave_schedule_entries・paid_leave_schedule_assessments)の現在値を読む(旧版の付与予定イベントの置き換えの入力)。
  * - assertPreconditions(): 事前条件(論点18 7章1)。新しい種類の休暇・口座イベント・補正ログ・既存の作り直し表・スナップショットが無いこと。
  * - write(): 新しい表(既定 stored_events_rebuilt)に書く。既にあれば失敗する。
  * - verify(): 作り直し後の表の自己整合性(id・版の連番、新しい種類が残っていないこと)を確かめる。
@@ -101,6 +102,64 @@ final class EventStoreRebuildWriter
         }
 
         return $days;
+    }
+
+    /**
+     * ReadModel(paid_leave_schedule_entries・paid_leave_schedule_assessments)の現在値(行id => 現在値)。
+     * 旧版の付与予定イベントを現行の形のイベントに置き換える(論点19 決定3)入力に使う。
+     *
+     * @return array<string, PaidLeaveScheduleCurrent>
+     */
+    public function readPaidLeaveSchedule(): array
+    {
+        if (! Schema::hasTable('paid_leave_schedule_entries')) {
+            return [];
+        }
+
+        $assessments = [];
+        if (Schema::hasTable('paid_leave_schedule_assessments')) {
+            foreach (DB::table('paid_leave_schedule_assessments')->orderBy('created_at')->orderBy('id')->get() as $row) {
+                $assessments[(string) $row->schedule_entry_id][] = [
+                    'id' => (string) $row->id,
+                    'periodStart' => $row->period_start !== null ? (string) $row->period_start : null,
+                    'periodEnd' => $row->period_end !== null ? (string) $row->period_end : null,
+                    'denominatorDays' => $row->denominator_days !== null ? (int) $row->denominator_days : null,
+                    'attendanceDays' => $row->attendance_days !== null ? (int) $row->attendance_days : null,
+                    'excludedDays' => $row->excluded_days !== null ? (int) $row->excluded_days : null,
+                    'attendanceRate' => $row->attendance_rate !== null ? (float) $row->attendance_rate : null,
+                    'policyVersion' => $row->policy_version !== null ? (string) $row->policy_version : null,
+                    'automaticResult' => $row->automatic_result !== null ? (string) $row->automatic_result : null,
+                    'finalResult' => $row->final_result !== null ? (string) $row->final_result : null,
+                    'overrideReason' => $row->override_reason !== null ? (string) $row->override_reason : null,
+                    'overriddenByUserId' => $row->overridden_by_user_id !== null ? (string) $row->overridden_by_user_id : null,
+                    'createdAt' => $row->created_at !== null ? (string) $row->created_at : null,
+                ];
+            }
+        }
+
+        $entries = [];
+        foreach (DB::table('paid_leave_schedule_entries')->orderBy('id')->get() as $row) {
+            $id = (string) $row->id;
+            $entries[$id] = new PaidLeaveScheduleCurrent(
+                id: $id,
+                userId: $row->user_id !== null ? (string) $row->user_id : null,
+                scheduledOn: $row->scheduled_on !== null ? (string) $row->scheduled_on : null,
+                category: $row->category !== null ? (string) $row->category : null,
+                candidateGrantDays: $row->candidate_grant_days !== null ? (float) $row->candidate_grant_days : null,
+                status: $row->status !== null ? (string) $row->status : null,
+                isManuallyOverridden: (bool) $row->is_manually_overridden,
+                manualOverrideReason: $row->manual_override_reason !== null ? (string) $row->manual_override_reason : null,
+                manualOverrideByUserId: $row->manual_override_by_user_id !== null ? (string) $row->manual_override_by_user_id : null,
+                grantId: $row->grant_id !== null ? (string) $row->grant_id : null,
+                cancelledReason: $row->cancelled_reason !== null ? (string) $row->cancelled_reason : null,
+                createdAt: $row->created_at !== null ? (string) $row->created_at : null,
+                manualOverrideAt: $row->manual_override_at !== null ? (string) $row->manual_override_at : null,
+                updatedAt: $row->updated_at !== null ? (string) $row->updated_at : null,
+                assessments: $assessments[$id] ?? [],
+            );
+        }
+
+        return $entries;
     }
 
     /** @return list<string> 満たしていない事前条件の説明(空なら満たしている) */
