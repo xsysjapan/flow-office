@@ -822,3 +822,22 @@
 - 既知の例外: 有給・特別休暇の時間休の申請日数の換算のための勤務形態の読み取りが申請Handlerに残る(原則15。実装中の決定(WP11))。
 - 残課題(対象外): `ShiftSwapRequestController`・`ExpenseClaimController`の`workflow_requests`直読み(休暇以外)、フロントのe2eの実行、
   本変更前からの失敗(`useAuth`による単体テスト6件、Storybookのdecorator不足による13件)。
+
+## リハーサル結果
+
+### 1回目(2026-10-13、ローカルのDocker MySQL、`xsys_flowoffice.sql`から複製)
+
+- 試し実行: 扱えない並び0件、cutoverの突き合わせの不一致0件。`--apply`で`stored_events_rebuilt`へ2830件、自己整合性の検査は問題なし。
+  `--swap`も成功(元の表は`stored_events_before_rebuild_20261013035804`)。
+- 3-5(`flow_office_verify`での全Projectorのリビルド)が完走しなかった。
+  1. `device_roles`の一意制約違反: `--list-readmodels`の一覧に、Projectorがリレーション経由(`$device->roles()->create`等)で
+     書くテーブルが含まれず、空にされなかった。**是正(実装中の決定)**: 一覧の作成で、Projectorのソースで呼んでいるリレーション
+     メソッド(`->名前()->`)を、参照しているモデルのリレーションとして解決し、その関連先(BelongsToManyなら中間テーブルも)の
+     テーブルを加える。対象は`device_roles`・`device_scopes`・`attendance_breaks`・`attendance_leave_segments`等。
+     ユニットテストで、リレーション経由のテーブルが一覧に含まれることを固定する。
+  2. `attendance_days`の`[user_id, work_date]`の一意制約違反: 同じ利用者・日に、削除されていない勤怠日の集約が2つ再生されている。
+     原因は未特定。仮説は、旧コードがイベントを書かずに勤怠日の行を削除したため、同じ日に別の集約が作られて2つ並んだというもの。
+     その場合、ReadModelに行が無い集約には`deleted`が置かれない(2.4の解除の規則はReadModelの現在値がある日だけ)。
+     リハーサルのDBで対象の集約を特定してから、変換規則(2.4)の追加を決める(手順書3-5の診断SQL)。
+- 試し実行・`--apply`の自己整合性の検査が、この重複を検出しなかった。変換規則を決めた後、勤怠日の`[利用者, 勤務日]`の生存期間が
+  重ならないことを試し実行の検査に加える。
