@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "--yes",
-        "codegraph",
+        "@colbymchenry/codegraph",
         "serve",
         "--mcp"
       ]
