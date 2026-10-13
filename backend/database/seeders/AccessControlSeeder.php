@@ -43,7 +43,8 @@ class AccessControlSeeder extends Seeder
             }
         }
 
-        // 既存の行を上書きしない。ロールの権限は、まだ一度も設定されていない(イベントも行も無い)ものだけ設定する。
+        // 既存の行を上書きしない。ロールの権限は、行がまだ無い(設定されていない)ものだけ設定する。
+        // 判定はReadModelの行で行う(イベントの有無では、行だけ消えた環境で権限が空のままになり、ロール割当が拒否される)。
         $rolePermissions = [
             Role::EMPLOYEE => ['attendance.read', 'attendance.update'],
             Role::BACKOFFICE_STAFF => ['approval.execute', 'backoffice_task.execute', 'attendance.confirmation_revert'],
@@ -55,11 +56,7 @@ class AccessControlSeeder extends Seeder
         foreach ($rolePermissions as $roleCode => $codes) {
             $role = Role::query()->where('code', $roleCode)->firstOrFail();
             $hasRows = DB::table('permission_role')->where('role_id', $role->id)->exists();
-            $hasEvents = DB::table('stored_events')
-                ->where('aggregate_uuid', Uuid::uuid5(Uuid::NAMESPACE_URL, 'role:'.$role->code)->toString())
-                ->where('event_class', 'role.permissions_changed')
-                ->exists();
-            if ($hasRows || $hasEvents) {
+            if ($hasRows) {
                 continue;
             }
             $bus->dispatch(new ChangeRolePermissions(
@@ -90,7 +87,7 @@ class AccessControlSeeder extends Seeder
 
         // 移行済み環境の現行設定を初期値とする。子Featureだけを選択している場合も、
         // 現行DBの割当をそのまま再現し、親Featureを暗黙に追加しない。
-        // 既存の行を上書きしない: まだ一度も設定されていない(イベントも行も無い)グループだけ設定する。
+        // 既存の行を上書きしない: 行がまだ無いグループだけ設定する。
         $initialFeatures = [
             $allUsersGroupId => [
                 'attendance', 'attendance.clock', 'attendance.entry', 'attendance.timesheet',
@@ -103,10 +100,7 @@ class AccessControlSeeder extends Seeder
         ];
         foreach ($initialFeatures as $groupId => $featureCodes) {
             $hasRows = DB::table('group_feature_assignments')->where('group_id', $groupId)->exists();
-            $hasEvents = DB::table('stored_events')
-                ->where('aggregate_uuid', Uuid::uuid5(Uuid::NAMESPACE_URL, 'group-access:'.$groupId)->toString())
-                ->exists();
-            if ($hasRows || $hasEvents) {
+            if ($hasRows) {
                 continue;
             }
             foreach ($featureCodes as $code) {
