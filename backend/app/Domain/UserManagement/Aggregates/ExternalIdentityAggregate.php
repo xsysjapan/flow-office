@@ -8,7 +8,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class ExternalIdentityAggregate extends AggregateRoot
 {
-    public function link(string $userId, string $provider, ?string $tenant, string $subject, ?string $code, ?string $email, string $actor): self
+    public function link(string $userId, string $provider, ?string $tenant, string $subject, ?string $code, ?string $email, ?string $actor): self
     {
         $this->recordThat(new ExternalIdentityLinked($userId, $provider, $tenant, $subject, $code, $email, $actor));
 

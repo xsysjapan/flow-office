@@ -26,6 +26,7 @@
 - `user.field_authority_changed`
 - `group.created` / `group.updated` / `group.inactivated`
 - `group_type.created` / `group_type.updated` / `group_type.inactivated`
+  (`group_type.created`のpayloadに`isSystem`(bool、既定false。旧形式は欠落時false)を持ち、`group_types.is_system`へ反映する)
 - `membership.added` / `membership.removed` / `membership.primary_changed`
 - `membership_change_set.created` / `membership_change_set.scheduled` /
   `membership_change_set.applied` / `membership_change_set.failed` /
@@ -33,12 +34,18 @@
 - `feature.assigned_to_group` / `feature.removed_from_group`
 - `user.feature_suspended` / `user.feature_suspension_removed`
 - `role.created` / `role.updated` / `role.inactivated`
+  (`role.created`のpayloadに`isSystem`(bool、既定false。旧形式は欠落時false)を持ち、`roles.is_system`へ反映する)
 - `role.permissions_changed`
 - `role.features_changed`(Role→Feature自動適用のFeatureマスタ変更。保存後にそのRoleを保持する
   全グループへ`GroupFeatureSyncService`が`group_feature_assignments`を差分同期する)
 - `role_assignment.created` / `role_assignment.updated` / `role_assignment.removed`
   (`subject_type='group'`の場合、保存後に`GroupFeatureSyncService`が対象グループの
   `group_feature_assignments`を差分同期する)
+- 注記: 上記のうち`group.created`・`group.updated`・`group_type.created`・`group_type.updated`・`role.created`・
+  `role.updated`・`role.permissions_changed`・`role.features_changed`・`role_assignment.created`・
+  `feature.assigned_to_group`・`feature.removed_from_group`・`membership.added`・`external_identity.linked`・
+  `user.field_authority_changed`の`actorUserId`はnull可。シーダー・イベントを経ずに作られたデータの補完(作り直し)が
+  操作者nullで記録する(docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 論点19)。HTTP経由の操作は従来どおり認証ユーザー。
 - `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
 
 ## Workflow (汎用申請)

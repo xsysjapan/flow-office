@@ -19,7 +19,7 @@ use Ramsey\Uuid\Uuid;
             throw new DomainRuleException('Roleコードは既に使用されています。');
         } $businessId = (int) (DB::table('roles')->lockForUpdate()->max('id') ?? 0) + 1;
         $id = Uuid::uuid5(Uuid::NAMESPACE_URL, 'role:'.$c->code)->toString();
-        RoleAggregate::retrieve($id)->create($businessId, $c->code, $c->name, $c->description, $c->actorUserId)->persist();
+        RoleAggregate::retrieve($id)->create($businessId, $c->code, $c->name, $c->description, $c->actorUserId, $c->isSystem)->persist();
 
         return $c->code;
     }

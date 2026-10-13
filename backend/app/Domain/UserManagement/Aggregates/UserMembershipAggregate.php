@@ -9,7 +9,7 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class UserMembershipAggregate extends AggregateRoot
 {
-    public function add(string $userId, string $groupId, string $kind, bool $primary, string $actor): self
+    public function add(string $userId, string $groupId, string $kind, bool $primary, ?string $actor): self
     {
         $this->recordThat(new MembershipAdded($userId, $groupId, $kind, $primary, $actor));
 

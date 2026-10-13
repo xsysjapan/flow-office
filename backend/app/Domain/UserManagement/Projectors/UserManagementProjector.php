@@ -74,7 +74,7 @@ class UserManagementProjector extends Projector
     {
         DB::table('group_types')->updateOrInsert(
             ['id' => $event->groupTypeId],
-            ['code' => $event->code, 'name' => $event->name, 'display_order' => $event->displayOrder, 'is_system' => false, 'status' => 'active', 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'primary_membership_required' => $event->primaryMembershipRequired, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['code' => $event->code, 'name' => $event->name, 'display_order' => $event->displayOrder, 'is_system' => $event->isSystem, 'status' => 'active', 'membership_limit_type' => $event->membershipLimitType, 'max_memberships_per_user' => $event->maxMembershipsPerUser, 'primary_membership_required' => $event->primaryMembershipRequired, 'max_primary_memberships' => $event->maxPrimaryMemberships, 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 
