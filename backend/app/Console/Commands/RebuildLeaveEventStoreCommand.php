@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\Rebuild\EventRestorabilityChecker;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
+use App\Domain\EventSourcing\Rebuild\ReadModelFingerprinter;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
 use Illuminate\Console\Command;
@@ -21,7 +22,9 @@ final class RebuildLeaveEventStoreCommand extends Command
         {--apply : stored_events_rebuilt に作り直し後の行を書く(既定は試し実行)}
         {--verify : stored_events_rebuilt の自己整合性(id・版の連番)と、現行のイベントクラスへの復元可否を検査する}
         {--swap : stored_events_rebuilt と stored_events を入れ替える(検査が通っている場合のみ)}
-        {--list-readmodels : 全Projectorの書き込み先テーブルの一覧を出す(手順書の「空にするテーブル」)}';
+        {--list-readmodels : 全Projectorの書き込み先テーブルの一覧を出す(手順書の「空にするテーブル」)}
+        {--readmodel-fingerprint : 全ReadModelのテーブルごとに「件数」と「行の内容のハッシュ」を出す(作り直し前後のDBをdiffで比べる。読み取りのみ)}
+        {--readmodel-fingerprint-rows= : 指定したテーブルの正規化した行(ソート済み)を出す(--readmodel-fingerprint の差分の行を特定する)}';
 
     protected $description = '休暇の旧イベント列を新しいイベント構成へ作り直す(試し実行が既定。--apply・--verify・--swap で段階的に実行)';
 
@@ -36,6 +39,13 @@ final class RebuildLeaveEventStoreCommand extends Command
             ));
 
             return self::SUCCESS;
+        }
+
+        if ($this->option('readmodel-fingerprint-rows')) {
+            return $this->fingerprintRows((string) $this->option('readmodel-fingerprint-rows'));
+        }
+        if ($this->option('readmodel-fingerprint')) {
+            return $this->fingerprint();
         }
 
         $violations = $writer->preconditionViolations();
@@ -80,6 +90,38 @@ final class RebuildLeaveEventStoreCommand extends Command
         $this->info(EventStoreRebuildWriter::TABLE.' に '.count($result->rows).' 件を書いた。');
 
         return $this->verifyOnly($writer);
+    }
+
+    /** 1行1テーブル: テーブル名<TAB>件数<TAB>ハッシュ(テーブル名順。diffで比べる用なので表整形はしない)。 */
+    private function fingerprint(): int
+    {
+        $fingerprinter = new ReadModelFingerprinter;
+        foreach (array_keys((new ReadModelTableLister)->tables(app_path('Domain'))) as $table) {
+            $result = $fingerprinter->fingerprint($table);
+            $this->line($result === null ? "{$table}\t-\t(テーブルなし)" : "{$table}\t{$result['count']}\t{$result['hash']}");
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function fingerprintRows(string $table): int
+    {
+        if (! array_key_exists($table, (new ReadModelTableLister)->tables(app_path('Domain')))) {
+            $this->error("{$table} は --list-readmodels の一覧にない。");
+
+            return self::FAILURE;
+        }
+        $rows = (new ReadModelFingerprinter)->rows($table);
+        if ($rows === null) {
+            $this->error("{$table} のテーブルが無い。");
+
+            return self::FAILURE;
+        }
+        foreach ($rows as $row) {
+            $this->line($row);
+        }
+
+        return self::SUCCESS;
     }
 
     private function verifyOnly(EventStoreRebuildWriter $writer): int

@@ -578,6 +578,34 @@ RENAME TABLE stored_events TO stored_events_original, stored_events_rebuilt TO s
 3. 差分を6-2の「期待する差分」と照合する。6-3 の照合も `flow_office_verify` で行う。
 4. 説明できない差分が1件でもあれば、5章(入れ替え)に進まない。
 
+#### 3-5-fp. 全ReadModelの指紋の比較(`--readmodel-fingerprint`)
+
+B01〜B15 は代表的な集計だけなので、全ReadModelの全行を、作り直し前の `flow_office_rehearsal` と、作り直し後に全ReadModelを空にして
+全Projectorを replay した `flow_office_verify` で比べる。読み取りのみで、DBに書かない。比較から除く列は `created_at`・`updated_at`、
+`stored_events.id` を指す列(`stored_event_id`)、自動採番の整数主キー `id`(UUID等の主キーは比較に含める)。
+
+```bash
+# 作り直し前: DB_DATABASE=flow_office_rehearsal の .env で(リビルド前、または元のダンプを入れた別DBで)
+php artisan leave:rebuild-event-store --readmodel-fingerprint > ~/rehearsal-20261009/before/fingerprint.tsv
+
+# 作り直し後: DB_DATABASE=flow_office_verify の .env で(全ReadModelを空にして全Projectorをリビルドした後)
+php artisan leave:rebuild-event-store --readmodel-fingerprint > ~/rehearsal-20261009/verify/fingerprint.tsv
+
+diff ~/rehearsal-20261009/before/fingerprint.tsv ~/rehearsal-20261009/verify/fingerprint.tsv
+```
+
+- 出力は1行1テーブルで `テーブル名<TAB>件数<TAB>ハッシュ`(テーブル名順)。diff に出たテーブルが差のあるテーブル。
+- 差のあるテーブルは、両DBで `--readmodel-fingerprint-rows=テーブル名` を実行して行(正規化・ソート済み)を保存し、diff で差の行を特定する。
+
+```bash
+php artisan leave:rebuild-event-store --readmodel-fingerprint-rows=<テーブル名> > ~/rehearsal-20261009/before/rows-<テーブル名>.txt   # flow_office_rehearsal
+php artisan leave:rebuild-event-store --readmodel-fingerprint-rows=<テーブル名> > ~/rehearsal-20261009/verify/rows-<テーブル名>.txt   # flow_office_verify
+diff ~/rehearsal-20261009/before/rows-<テーブル名>.txt ~/rehearsal-20261009/verify/rows-<テーブル名>.txt
+```
+
+- 期待する差は、休暇の変更(論点18・6-2 の「期待する差分」)によるものだけ。それ以外のテーブル・行に差があれば説明できない差分として扱い、
+  5章(入れ替え)に進まない。
+
 #### 3-5a. リビルドが一意制約違反で止まったとき(2026-10-13 リハーサル1回目)
 
 - 一意制約違反で止まったテーブルが `--list-readmodels` の一覧に無いときは、一覧の漏れである。一覧の作成を直してからやり直す
