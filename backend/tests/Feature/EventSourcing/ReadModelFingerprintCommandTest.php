@@ -6,7 +6,6 @@ use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -18,7 +17,7 @@ class ReadModelFingerprintCommandTest extends TestCase
 
     public function test_fingerprintは1行1テーブルでタブ区切りの件数とハッシュを出す(): void
     {
-        $this->artisan('leave:rebuild-event-store', ['--readmodel-fingerprint' => true])->assertExitCode(0);
+        $this->assertSame(0, Artisan::call('leave:rebuild-event-store', ['--readmodel-fingerprint' => true]));
         $lines = array_values(array_filter(explode("\n", Artisan::output())));
 
         $tables = array_keys((new ReadModelTableLister)->tables(app_path('Domain')));
@@ -34,13 +33,22 @@ class ReadModelFingerprintCommandTest extends TestCase
 
     public function test_rowsは指定テーブルの正規化した行を出す(): void
     {
-        Schema::disableForeignKeyConstraints();
+        foreach (['aaaaaaaa', 'bbbbbbbb'] as $prefix) {
+            DB::table('devices')->insert([
+                'id' => $prefix.'-0000-0000-0000-000000000000',
+                'owner_type' => 'shared',
+                'name' => $prefix,
+                'device_type' => 'android',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         DB::table('device_roles')->insert([
             ['device_id' => 'bbbbbbbb-0000-0000-0000-000000000000', 'role_type' => 'punch', 'settings_json' => '{"y":1,"x":2}', 'created_at' => now(), 'updated_at' => now()],
             ['device_id' => 'aaaaaaaa-0000-0000-0000-000000000000', 'role_type' => 'punch', 'settings_json' => null, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        $this->artisan('leave:rebuild-event-store', ['--readmodel-fingerprint-rows' => 'device_roles'])->assertExitCode(0);
+        $this->assertSame(0, Artisan::call('leave:rebuild-event-store', ['--readmodel-fingerprint-rows' => 'device_roles']));
         $lines = array_values(array_filter(explode("\n", Artisan::output())));
 
         $this->assertSame([
@@ -51,6 +59,6 @@ class ReadModelFingerprintCommandTest extends TestCase
 
     public function test_rowsは一覧に無いテーブルを拒否する(): void
     {
-        $this->artisan('leave:rebuild-event-store', ['--readmodel-fingerprint-rows' => 'users'])->assertExitCode(1);
+        $this->artisan('leave:rebuild-event-store', ['--readmodel-fingerprint-rows' => 'permissions'])->assertExitCode(1);
     }
 }
