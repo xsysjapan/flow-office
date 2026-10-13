@@ -16,7 +16,7 @@ class UserMembershipAggregate extends AggregateRoot
         return $this;
     }
 
-    public function remove(string $userId, string $groupId, string $actor): self
+    public function remove(string $userId, string $groupId, ?string $actor): self
     {
         $this->recordThat(new MembershipRemoved($userId, $groupId, $actor));
 

@@ -15,7 +15,7 @@ class ExternalIdentityAggregate extends AggregateRoot
         return $this;
     }
 
-    public function unlink(string $userId, int $identityId, string $provider, string $externalSubjectId, string $actor): self
+    public function unlink(string $userId, int $identityId, string $provider, string $externalSubjectId, ?string $actor): self
     {
         $this->recordThat(new ExternalIdentityUnlinked($userId, $identityId, $provider, $externalSubjectId, $actor));
 

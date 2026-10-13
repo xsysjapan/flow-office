@@ -2,7 +2,6 @@
 
 namespace App\Domain\EventSourcing\Rebuild\Reconcile;
 
-use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
 use App\Domain\UserManagement\Support\UserManagementStreamId;
 
 /**
@@ -15,7 +14,7 @@ use App\Domain\UserManagement\Support\UserManagementStreamId;
  * - 行があり、そのキーのイベントが1件も無い: external_identity.linked を導出する。集約にイベントが無ければ、利用者の作成イベント
  *   (既存または導出)の直後(無ければ列の先頭)。イベントがあれば最初のイベントの直前(ただし利用者の作成より前には置かない)。
  * - 行があり、最終状態が違う(利用者・status): 最後のイベントの直後(集約にイベントが無ければ利用者の作成イベントの直後)に導出する。
- * - 行の status が active でない場合は、unlinked の操作者(必須)を決められないため、扱えない並びとして止める。
+ * - 行の status が active でない場合は、linked(必要なら)に続けて external_identity.unlinked(identityId は行の id)を導出する。
  * 操作者は null(行に作成者の列が無い)。
  */
 final class ExternalIdentityReconciler
@@ -74,10 +73,6 @@ final class ExternalIdentityReconciler
         if ($final !== null && $final['user_id'] === $userId && $final['status'] === $status) {
             return;
         }
-        if ($status !== 'active') {
-            throw new UnsupportedEventSequence("external_identity {$key}", "status={$status} の行は、external_identity.unlinked の操作者を決められない");
-        }
-
         $aggregate = UserManagementStreamId::for('user-identity', $userId);
         $createdAt = Norm::str($row['created_at'] ?? null);
         $dep = $ctx->ref('user:'.$userId);
@@ -91,14 +86,26 @@ final class ExternalIdentityReconciler
                 : ($dep !== null ? $ctx->afterRef($dep, $createdAt) : $ctx->head($createdAt));
         }
 
-        $ctx->emit(self::TABLE, $slot, 'external_identity.linked', $aggregate, [
-            'userId' => $userId,
-            'provider' => (string) $row['provider'],
-            'externalTenantId' => Norm::str($row['external_tenant_id'] ?? null),
-            'externalSubjectId' => (string) $row['external_subject_id'],
-            'externalCode' => Norm::str($row['external_code'] ?? null),
-            'email' => Norm::str($row['email'] ?? null),
-            'actorUserId' => null,
-        ]);
+        $needsLink = $final === null || $final['user_id'] !== $userId || $final['status'] !== 'active';
+        if ($needsLink) {
+            $slot = $ctx->emit(self::TABLE, $slot, 'external_identity.linked', $aggregate, [
+                'userId' => $userId,
+                'provider' => (string) $row['provider'],
+                'externalTenantId' => Norm::str($row['external_tenant_id'] ?? null),
+                'externalSubjectId' => (string) $row['external_subject_id'],
+                'externalCode' => Norm::str($row['external_code'] ?? null),
+                'email' => Norm::str($row['email'] ?? null),
+                'actorUserId' => null,
+            ]);
+        }
+        if ($status !== 'active') {
+            $ctx->emit(self::TABLE, $slot, 'external_identity.unlinked', $aggregate, [
+                'userId' => $userId,
+                'identityId' => (int) ($row['id'] ?? 0),
+                'provider' => (string) $row['provider'],
+                'externalSubjectId' => (string) $row['external_subject_id'],
+                'actorUserId' => null,
+            ]);
+        }
     }
 }

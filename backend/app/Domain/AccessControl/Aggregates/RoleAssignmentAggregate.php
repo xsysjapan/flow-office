@@ -16,14 +16,14 @@ class RoleAssignmentAggregate extends AggregateRoot
         return $this;
     }
 
-    public function remove(string $actor): self
+    public function remove(?string $actor): self
     {
         $this->recordThat(new RoleAssignmentRemoved($actor));
 
         return $this;
     }
 
-    public function update(string $scopeType, ?string $scopeGroupId, bool $includeDescendants, ?string $startsAt, ?string $endsAt, string $actor): self
+    public function update(string $scopeType, ?string $scopeGroupId, bool $includeDescendants, ?string $startsAt, ?string $endsAt, ?string $actor): self
     {
         $this->recordThat(new RoleAssignmentUpdated($scopeType, $scopeGroupId, $includeDescendants, $startsAt, $endsAt, $actor));
 

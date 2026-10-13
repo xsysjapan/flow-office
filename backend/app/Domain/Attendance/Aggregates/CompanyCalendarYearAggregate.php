@@ -92,7 +92,7 @@ class CompanyCalendarYearAggregate extends AggregateRoot
         return $this;
     }
 
-    public function publish(string $publishedByUserId): self
+    public function publish(?string $publishedByUserId): self
     {
         $this->recordThat(new CompanyCalendarYearPublished(
             publishedByUserId: $publishedByUserId,
@@ -101,7 +101,7 @@ class CompanyCalendarYearAggregate extends AggregateRoot
         return $this;
     }
 
-    public function unpublish(string $unpublishedByUserId): self
+    public function unpublish(?string $unpublishedByUserId): self
     {
         $this->recordThat(new CompanyCalendarYearUnpublished(
             unpublishedByUserId: $unpublishedByUserId,
@@ -110,7 +110,7 @@ class CompanyCalendarYearAggregate extends AggregateRoot
         return $this;
     }
 
-    public function archive(string $archivedByUserId): self
+    public function archive(?string $archivedByUserId): self
     {
         $this->recordThat(new CompanyCalendarYearArchived(
             archivedByUserId: $archivedByUserId,

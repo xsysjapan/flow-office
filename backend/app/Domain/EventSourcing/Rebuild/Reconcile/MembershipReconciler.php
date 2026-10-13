@@ -3,7 +3,6 @@
 namespace App\Domain\EventSourcing\Rebuild\Reconcile;
 
 use App\Domain\UserManagement\Support\UserManagementStreamId;
-use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
 
 /**
  * memberships の照合(論点19 決定1)。集約UUIDは UserManagementStreamId::for('user-membership', userId)。
@@ -13,8 +12,8 @@ use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
  * - 行があり、(利用者, グループ)のイベントが1件も無い: membership.added を導出する。集約にイベントが無ければ、利用者・グループ・
  *   作成者の作成イベントのうち最も後ろの直後(無ければ列の先頭)。イベントがあれば最初のイベントの直前(ただし依存先の作成より前には置かない)。
  * - 行があり、最終状態が違う(除去済み・kind/isPrimary/操作者が違う): 最後のイベントの直後に membership.added(行の値)を導出する。
- * - 行が無いのに最終状態では所属している: 差を埋める除去イベント(操作者が必須)を決められないため、扱えない並びとして止める。
- * 操作者は行の created_by。
+ * - 行が無いのに最終状態では所属している: 最後の直後に membership.removed(操作者 null)を導出する。
+ * added の操作者は行の created_by。
  */
 final class MembershipReconciler
 {
@@ -82,7 +81,9 @@ final class MembershipReconciler
         if ($row === null) {
             if ($final !== null && $final['present']) {
                 $ctx->mismatch(self::TABLE, $key, 'イベントでは所属しているが行が無い');
-                throw new UnsupportedEventSequence($key, 'イベントでは所属しているが行が無く、除去イベント(操作者が必須)を決められない');
+                $ctx->emit(self::TABLE, $ctx->afterLast($aggregate), 'membership.removed', $aggregate, [
+                    'userId' => $userId, 'groupId' => $groupId, 'actorUserId' => null,
+                ]);
             }
 
             return;

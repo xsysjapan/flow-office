@@ -14,8 +14,8 @@ use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
  * - 行の status が published/archived で最終状態が違う: 最後のイベントの直後(イベントが無ければ作成の直後)に
  *   company_calendar_year.published(発生日時は行の published_at、操作者は published_by_user_id)・.archived を導出する。
  *   archived で行に published_at があるのに公開のイベントが無ければ、先に published を導出する。
- * - 扱えない並び: 行の status が draft で最終状態が違う、操作者(published_by_user_id)が無い、イベントでは削除済み、
- *   created があるのに年度・期間・暦が行と違う。
+ * - 行の status が draft で最終状態が違う: unpublished を導出する。操作者は published_by_user_id(published・archived)、無ければ null。
+ * - 扱えない並び: イベントでは削除済み、created があるのに年度・期間・暦が行と違う。
  */
 final class CalendarYearReconciler
 {
@@ -117,17 +117,15 @@ final class CalendarYearReconciler
         if ($events !== []) {
             $ctx->mismatch(self::TABLE, $key, "status がイベントの最終状態({$state['status']})と違い、行は {$status}");
         }
-        if ($status === 'draft') {
-            throw new UnsupportedEventSequence($key, "status=draft の行がイベントの最終状態({$state['status']})と違い、unpublished の操作者を決められない");
-        }
-        if ($publishedBy === null) {
-            throw new UnsupportedEventSequence($key, "status={$status} の行に published_by_user_id が無く、操作者を決められない");
-        }
-
         // 最後のイベントの直後(イベントが無ければ作成の直後)に続けて置く。
         $cursor = $ctx->afterLast($id) ?? $cursor;
         if ($cursor === null) {
             throw new UnsupportedEventSequence($key, 'イベントの置き場所を決められない');
+        }
+        if ($status === 'draft') {
+            $ctx->emit(self::TABLE, $cursor, 'company_calendar_year.unpublished', $id, ['unpublishedByUserId' => null]);
+
+            return;
         }
         if ($status === 'published' || ($status === 'archived' && $publishedAt !== null && ! $published)) {
             $cursor = $ctx->emit(self::TABLE, $cursor, 'company_calendar_year.published', $id, ['publishedByUserId' => $publishedBy], $publishedAt);

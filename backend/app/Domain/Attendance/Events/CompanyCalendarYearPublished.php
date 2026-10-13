@@ -10,6 +10,6 @@ use Spatie\EventSourcing\StoredEvents\ShouldBeStored;
 class CompanyCalendarYearPublished extends ShouldBeStored
 {
     public function __construct(
-        public readonly string $publishedByUserId,
+        public readonly ?string $publishedByUserId,
     ) {}
 }

@@ -137,10 +137,15 @@ class UserProjector extends Projector
     /** 本番カットオーバー移行時にusers行を初期状態として記録した合成イベントの再生用。 */
     public function onUserMigratedFromLegacy(UserMigratedFromLegacy $event): void
     {
-        User::query()->updateOrCreate(
-            ['id' => $event->aggregateRootUuid()],
-            $event->attributes,
-        );
+        // fillableに無い列(自動付与フラグ等)も attributes にあれば反映する。created_at は新規作成時のみ、
+        // attributes の値(無ければイベントの発生日時)で書く(再生で同じ結果にする)。
+        $attributes = $event->attributes;
+        $createdAt = $attributes['created_at'] ?? null;
+        unset($attributes['created_at']);
+
+        $user = User::query()->find($event->aggregateRootUuid())
+            ?? (new User)->forceFill(['id' => $event->aggregateRootUuid(), 'created_at' => $createdAt ?? $event->createdAt()]);
+        $user->forceFill($attributes)->save();
     }
 
     public function onUserHireDateSet(UserHireDateSet $event): void

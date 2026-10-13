@@ -11,8 +11,8 @@ use App\Domain\EventSourcing\Rebuild\UnsupportedEventSequence;
  * 順に上書きしたもの。
  * - created が無い: 行の値から role_assignment.created を導出する。集約にイベントが無ければ、ロール・スコープのグループ・
  *   割当者の作成イベントのうち最も後ろの直後(無ければ列の先頭)。イベントがあれば最初のイベントの直前。操作者は行の assigned_by。
- * - 導出できない違い(created があるのに最終状態が違う・status が active でない行)は、差を埋めるイベントを決められないため
- *   扱えない並びとして止める(updated・removed は操作者を必須とする)。
+ * - 最終状態が違う: 最後の直後(created を導出したならその直後)に、範囲・期間の違いは role_assignment.updated、status=removed の行は
+ *   role_assignment.removed を操作者 null で導出する。付与先・ロール・割当者の違い、removed から active に戻す違いは扱えない並びとして止める。
  */
 final class RoleAssignmentReconciler
 {
@@ -74,6 +74,7 @@ final class RoleAssignmentReconciler
         $events = $ctx->rowsOf($id);
 
         $state = null;
+        $createdSlot = null;
         $hasCreated = false;
         foreach ($events as $event) {
             if ($event->eventClass === 'role_assignment.created') {
@@ -82,9 +83,6 @@ final class RoleAssignmentReconciler
         }
 
         if (! $hasCreated) {
-            if ($want['status'] !== 'active') {
-                throw new UnsupportedEventSequence($key, "イベントが無く status={$want['status']} の行は、role_assignment.removed の操作者を決められない");
-            }
             $createdAt = Norm::str($row['created_at'] ?? null);
             $dep = $ctx->latest(
                 $ctx->ref('role:'.$want['role_id']),
@@ -95,7 +93,7 @@ final class RoleAssignmentReconciler
             $slot = $slot !== null
                 ? $ctx->notBefore($slot, $dep)
                 : ($dep !== null ? $ctx->afterRef($dep, $createdAt) : $ctx->head($createdAt));
-            $ctx->emit(self::TABLE, $slot, 'role_assignment.created', $id, [
+            $createdSlot = $ctx->emit(self::TABLE, $slot, 'role_assignment.created', $id, [
                 'subjectType' => $want['subject_type'],
                 'subjectId' => $want['subject_id'],
                 'roleId' => $want['role_id'],
@@ -135,8 +133,29 @@ final class RoleAssignmentReconciler
         if ($differences === []) {
             return;
         }
+        if ($events !== []) {
+            $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.implode(', ', $differences));
+        }
 
-        $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.implode(', ', $differences));
-        throw new UnsupportedEventSequence($key, 'イベントの最終状態が行と違い('.implode(', ', $differences).')、差を埋めるイベントを決められない');
+        // created で決まる列(付与先・ロール・割当者)と、removed を取り消す変更は、イベントで直せない。
+        $fixable = ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at', 'status'];
+        if (array_diff($differences, $fixable) !== [] || (in_array('status', $differences, true) && $want['status'] === 'active')) {
+            throw new UnsupportedEventSequence($key, 'イベントの最終状態が行と違い('.implode(', ', $differences).')、updated・removed では差を埋められない');
+        }
+
+        $slot = $ctx->afterLast($id) ?? $createdSlot;
+        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at']) !== []) {
+            $slot = $ctx->emit(self::TABLE, $slot, 'role_assignment.updated', $id, [
+                'scopeType' => $want['scope_type'],
+                'scopeGroupId' => $want['scope_group_id'],
+                'includeDescendants' => $want['include_descendants'],
+                'startsAt' => Norm::payloadDateTime($row['starts_at'] ?? null),
+                'endsAt' => Norm::payloadDateTime($row['ends_at'] ?? null),
+                'actorUserId' => null,
+            ]);
+        }
+        if (in_array('status', $differences, true)) {
+            $ctx->emit(self::TABLE, $slot, 'role_assignment.removed', $id, ['actorUserId' => null]);
+        }
     }
 }

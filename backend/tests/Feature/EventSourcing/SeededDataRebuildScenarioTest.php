@@ -42,6 +42,15 @@ class SeededDataRebuildScenarioTest extends TestCase
     /** Projectorの書き込み先ではない参照マスタ・設定(空にしない)。 */
     private const NOT_READ_MODELS = ['features', 'permissions', 'permission_scope_types', 'system_settings'];
 
+    /** @var list<int> */
+    private array $permissionIds = [];
+
+    /** @var list<int> */
+    private array $featureIds = [];
+
+    /** @var array<string, int> */
+    private array $masterCounts = [];
+
     /** @var array<string, int> */
     private array $versions = [];
 
@@ -70,8 +79,8 @@ class SeededDataRebuildScenarioTest extends TestCase
         $this->assertEquals($before, $this->snapshot());
         $this->assertEquals($createdAtBefore, $this->createdAtSnapshot());
         // 参照マスタは空にしておらず、そのまま残っている。
-        $this->assertSame(2, DB::table('permissions')->count());
-        $this->assertSame(2, DB::table('features')->count());
+        $this->assertSame($this->masterCounts['permissions'], DB::table('permissions')->count());
+        $this->assertSame($this->masterCounts['features'], DB::table('features')->count());
     }
 
     public function test_a_second_rebuild_after_replay_derives_nothing_more(): void
@@ -140,24 +149,38 @@ class SeededDataRebuildScenarioTest extends TestCase
         $role2 = Uuid::uuid5(Uuid::NAMESPACE_URL, 'role:employee')->toString();
         $role2Events = array_values(array_filter($events, fn (array $e) => $e['aggregate'] === $role2));
         $this->assertSame(['role.created', 'role.updated', 'role.permissions_changed', 'role.permissions_changed'], array_column($role2Events, 'class'));
-        $this->assertSame([1], $role2Events[3]['payload']['permissionIds']);
+        $this->assertSame([$this->permissionIds[0]], $role2Events[3]['payload']['permissionIds']);
 
         // days_updated の旧集約UUID(company_calendars.id)は年の id へ付け替わっている。
         $this->assertSame(0, DB::table('stored_events')->where('aggregate_uuid', self::CALENDAR)->where('event_class', 'company_calendar_year.days_updated')->count());
         $this->assertGreaterThanOrEqual(2, DB::table('stored_events')->where('aggregate_uuid', self::YEAR)->where('event_class', 'company_calendar_year.days_updated')->count());
     }
 
+    /**
+     * 参照マスタの行のid(codeで既存の行を探し、無ければ作る)。ReadModelではないため空にも補完にもしない。
+     *
+     * @param  list<string>  $codes
+     * @param  callable(string): array<string, mixed>  $make
+     * @return list<int>
+     */
+    private function masterIds(string $table, array $codes, callable $make): array
+    {
+        $ids = [];
+        foreach ($codes as $code) {
+            $id = DB::table($table)->where('code', $code)->value('id');
+            $ids[] = (int) ($id ?? DB::table($table)->insertGetId($make($code)));
+        }
+
+        return $ids;
+    }
+
     private function insertSeededRows(): void
     {
         $now = '2026-01-01 00:00:00';
-        DB::table('permissions')->insert([
-            ['id' => 1, 'code' => 'p.view', 'resource' => 'p', 'action' => 'view', 'created_at' => $now, 'updated_at' => $now],
-            ['id' => 2, 'code' => 'p.edit', 'resource' => 'p', 'action' => 'edit', 'created_at' => $now, 'updated_at' => $now],
-        ]);
-        DB::table('features')->insert([
-            ['id' => 1, 'code' => 'f1', 'name' => 'F1', 'status' => 'active', 'created_at' => $now, 'updated_at' => $now],
-            ['id' => 2, 'code' => 'f2', 'name' => 'F2', 'status' => 'active', 'created_at' => $now, 'updated_at' => $now],
-        ]);
+        // 参照マスタ(カタログ)は既に行があるため、固定のidで insert せず、既存の行を使う(無ければ作る)。
+        $this->permissionIds = $this->masterIds('permissions', ['p.view', 'p.edit'], fn (string $code) => ['code' => $code, 'resource' => 'p', 'action' => substr($code, 2), 'created_at' => $now, 'updated_at' => $now]);
+        $this->featureIds = $this->masterIds('features', ['f.one', 'f.two'], fn (string $code) => ['code' => $code, 'name' => $code, 'status' => 'active', 'created_at' => $now, 'updated_at' => $now]);
+        $this->masterCounts = ['permissions' => DB::table('permissions')->count(), 'features' => DB::table('features')->count()];
 
         $type = fn (int $id, string $code, bool $system, string $status, string $at) => [
             'id' => $id, 'code' => $code, 'name' => $code, 'display_order' => $id * 10, 'is_system' => $system, 'status' => $status,
@@ -170,7 +193,7 @@ class SeededDataRebuildScenarioTest extends TestCase
             ['id' => self::U1, 'entra_user_id' => 's1', 'name' => '管理者', 'email' => 'u1@example.test', 'account_status' => 'active', 'source_type' => 'microsoft_entra',
                 'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'hire_date' => '2020-04-01', 'created_at' => '2026-01-04 00:00:00', 'updated_at' => '2026-01-04 00:00:00'],
             ['id' => self::U2, 'entra_user_id' => null, 'name' => '社員', 'email' => 'u2@example.test', 'account_status' => 'active', 'source_type' => 'local',
-                'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'last_login_at' => '2026-08-02 09:00:00', 'created_at' => '2026-01-05 00:00:00', 'updated_at' => '2026-01-05 00:00:00'],
+                'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'last_login_at' => '2026-08-02 09:00:00', 'paid_leave_auto_grant_enabled' => false, 'created_at' => '2026-01-05 00:00:00', 'updated_at' => '2026-01-05 00:00:00'],
         ]);
 
         // G1 は種別 1 の親、G2 はその子(G2 にはこの後 group.updated のイベントだけがある)。
@@ -185,9 +208,9 @@ class SeededDataRebuildScenarioTest extends TestCase
             ['id' => 2, 'code' => 'employee', 'name' => '社員(改)', 'description' => 'd', 'is_system' => true, 'status' => 'active', 'created_at' => '2026-01-09 00:00:00', 'updated_at' => '2026-01-09 00:00:00'],
         ]);
         DB::table('permission_role')->insert([
-            ['role_id' => 1, 'permission_id' => 1], ['role_id' => 1, 'permission_id' => 2], ['role_id' => 2, 'permission_id' => 1],
+            ['role_id' => 1, 'permission_id' => $this->permissionIds[0]], ['role_id' => 1, 'permission_id' => $this->permissionIds[1]], ['role_id' => 2, 'permission_id' => $this->permissionIds[0]],
         ]);
-        DB::table('role_features')->insert([['role_id' => 1, 'feature_id' => 1, 'created_at' => '2026-01-10 00:00:00', 'updated_at' => '2026-01-10 00:00:00']]);
+        DB::table('role_features')->insert([['role_id' => 1, 'feature_id' => $this->featureIds[0], 'created_at' => '2026-01-10 00:00:00', 'updated_at' => '2026-01-10 00:00:00']]);
         DB::table('role_assignments')->insert([
             ['id' => self::A1, 'subject_type' => 'user', 'subject_id' => self::U1, 'role_id' => 1, 'scope_type' => 'company', 'scope_group_id' => null, 'include_descendants' => false,
                 'starts_at' => null, 'ends_at' => null, 'status' => 'active', 'assigned_by' => null, 'created_at' => '2026-01-11 00:00:00', 'updated_at' => '2026-01-11 00:00:00'],
@@ -195,8 +218,8 @@ class SeededDataRebuildScenarioTest extends TestCase
                 'starts_at' => '2026-04-01 00:00:00', 'ends_at' => '2027-03-31 00:00:00', 'status' => 'active', 'assigned_by' => self::U1, 'created_at' => '2026-01-12 00:00:00', 'updated_at' => '2026-01-12 00:00:00'],
         ]);
         DB::table('group_feature_assignments')->insert([
-            ['group_id' => self::G1, 'feature_id' => 1, 'assigned_by' => self::U1, 'created_at' => '2026-01-13 00:00:00', 'updated_at' => '2026-01-13 00:00:00'],
-            ['group_id' => self::G2, 'feature_id' => 2, 'assigned_by' => null, 'created_at' => '2026-01-14 00:00:00', 'updated_at' => '2026-01-14 00:00:00'],
+            ['group_id' => self::G1, 'feature_id' => $this->featureIds[0], 'assigned_by' => self::U1, 'created_at' => '2026-01-13 00:00:00', 'updated_at' => '2026-01-13 00:00:00'],
+            ['group_id' => self::G2, 'feature_id' => $this->featureIds[1], 'assigned_by' => null, 'created_at' => '2026-01-14 00:00:00', 'updated_at' => '2026-01-14 00:00:00'],
         ]);
         DB::table('memberships')->insert([
             ['user_id' => self::U1, 'group_id' => self::G1, 'membership_kind' => 'primary', 'is_primary' => true, 'created_by' => self::U1, 'created_at' => '2026-01-15 00:00:00', 'updated_at' => '2026-01-15 00:00:00'],
@@ -246,7 +269,7 @@ class SeededDataRebuildScenarioTest extends TestCase
         $this->insertEvent(self::G2, 'group.updated', ['name' => 'チームB', 'code' => 'g2', 'description' => null, 'parentGroupId' => self::G1, 'status' => 'active', 'actorUserId' => null]);
         $role2 = Uuid::uuid5(Uuid::NAMESPACE_URL, 'role:employee')->toString();
         $this->insertEvent($role2, 'role.updated', ['roleId' => 2, 'name' => '社員(改)', 'description' => 'd', 'status' => 'active', 'actorUserId' => null]);
-        $this->insertEvent($role2, 'role.permissions_changed', ['roleId' => 2, 'permissionIds' => [1, 2], 'actorUserId' => null]);
+        $this->insertEvent($role2, 'role.permissions_changed', ['roleId' => 2, 'permissionIds' => [$this->permissionIds[0], $this->permissionIds[1]], 'actorUserId' => null]);
         $this->insertEvent(self::U2, 'user.logged_in', ['wasFirstLogin' => true, 'loggedInAt' => '2026-08-02 09:00:00']);
     }
 
@@ -354,7 +377,7 @@ class SeededDataRebuildScenarioTest extends TestCase
 
     /**
      * created_at を元の値と比べられる行(導出イベントが行の created_at で置かれるもの)。
-     * 作成イベントが無く「最初のイベントの直前」に置いた group G2・role 2・利用者は、置き場所の前のイベントの値になるため除く。
+     * 作成イベントが無く「最初のイベントの直前」に置いた group G2・role 2は、置き場所の前のイベントの値になるため除く。
      *
      * @return array<string, array<string, string>>
      */
@@ -362,6 +385,7 @@ class SeededDataRebuildScenarioTest extends TestCase
     {
         $key = [
             'group_types' => fn ($r) => (string) $r->id,
+            'users' => fn ($r) => (string) $r->id,
             'groups' => fn ($r) => (string) $r->code,
             'roles' => fn ($r) => (string) $r->id,
             'role_features' => fn ($r) => $r->role_id.'/'.$r->feature_id,

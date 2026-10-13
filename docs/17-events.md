@@ -46,6 +46,11 @@
   `feature.assigned_to_group`・`feature.removed_from_group`・`membership.added`・`external_identity.linked`・
   `user.field_authority_changed`の`actorUserId`はnull可。シーダー・イベントを経ずに作られたデータの補完(作り直し)が
   操作者nullで記録する(docs/changesets/20261009-keep-leave-work-type-on-edit/spec.md 論点19)。HTTP経由の操作は従来どおり認証ユーザー。
+- 注記: 照合による補完(作り直し。論点19 決定1)が差を埋めるために操作者nullで記録するため、`external_identity.unlinked`・
+  `membership.removed`・`role_assignment.updated`・`role_assignment.removed`の`actorUserId`、`company_calendar_year.published`の
+  `publishedByUserId`、`.unpublished`の`unpublishedByUserId`、`.archived`の`archivedByUserId`もnull可。
+  `user.migrated_from_legacy`のattributesは、fillableに無い`paid_leave_auto_grant_enabled`・`special_leave_auto_grant_enabled`と
+  `created_at`(新規作成時のみ。無ければイベントの発生日時)も反映する。
 - `system_settings.updated` (システム設定の直接更新と同一トランザクションで記録する監査イベント)
 
 ## Workflow (汎用申請)

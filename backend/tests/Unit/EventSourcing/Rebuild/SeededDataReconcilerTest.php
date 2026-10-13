@@ -266,29 +266,42 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('2026-01-09 00:00:00', $created->createdAt);
     }
 
-    public function test_role_assignment_with_a_different_final_state_or_removed_status_cannot_be_derived_and_stops(): void
+    public function test_role_assignment_differences_are_filled_by_updated_and_removed_with_a_null_actor_and_unfixable_ones_stop(): void
     {
         $assignment = '77777777-7777-4777-8777-777777777777';
         $row = [
             'id' => $assignment, 'subject_type' => 'user', 'subject_id' => self::USER, 'role_id' => 7, 'scope_type' => 'company', 'scope_group_id' => null,
             'include_descendants' => 0, 'starts_at' => null, 'ends_at' => null, 'status' => 'active', 'assigned_by' => null, 'created_at' => self::ROW_AT,
         ];
-        $withEvent = $this->reconcile(
-            [$this->event(1, $assignment, 'role_assignment.created', ['subjectType' => 'user', 'subjectId' => self::USER, 'roleId' => 7, 'scopeType' => 'company', 'scopeGroupId' => null, 'includeDescendants' => false, 'startsAt' => null, 'endsAt' => null, 'actorUserId' => null])],
-            new SeededDataCurrent(users: [$this->user()], roles: [$this->role()], roleAssignments: [['scope_type' => 'self'] + $row]),
-        );
-        $this->assertCount(1, $withEvent->issues);
-        $this->assertCount(1, $withEvent->mismatches['role_assignments']);
+        $created = $this->event(1, $assignment, 'role_assignment.created', ['subjectType' => 'user', 'subjectId' => self::USER, 'roleId' => 7, 'scopeType' => 'company', 'scopeGroupId' => null, 'includeDescendants' => false, 'startsAt' => null, 'endsAt' => null, 'actorUserId' => null]);
+        $base = ['users' => [$this->user()], 'roles' => [$this->role()]];
+        $only = fn (ReconcileResult $r, string $prefix) => array_values(array_filter($r->events, fn (RebuiltEvent $e) => str_starts_with($e->eventClass, $prefix)));
 
-        $removed = $this->reconcile([], new SeededDataCurrent(users: [$this->user()], roles: [$this->role()], roleAssignments: [['status' => 'removed'] + $row]));
-        $this->assertCount(1, $removed->issues);
+        $scope = $this->reconcile([$created], new SeededDataCurrent(...$base, roleAssignments: [['scope_type' => 'self', 'ends_at' => '2027-03-31 00:00:00'] + $row]));
+        $updated = $only($scope, 'role_assignment.');
+        $this->assertSame([], $scope->issues);
+        $this->assertCount(1, $updated);
+        $this->assertSame('role_assignment.updated', $updated[0]->eventClass);
+        $this->assertSame(1, $updated[0]->anchorId);
+        $this->assertSame('self', $updated[0]->payload['scopeType']);
+        $this->assertSame('2027-03-31T00:00:00Z', $updated[0]->payload['endsAt']);
+        $this->assertNull($updated[0]->payload['actorUserId']);
+        $this->assertCount(1, $scope->mismatches['role_assignments']);
 
-        $same = $this->reconcile(
-            [$this->event(1, $assignment, 'role_assignment.created', ['subjectType' => 'user', 'subjectId' => self::USER, 'roleId' => 7, 'scopeType' => 'company', 'scopeGroupId' => null, 'includeDescendants' => false, 'startsAt' => null, 'endsAt' => null, 'actorUserId' => null])],
-            new SeededDataCurrent(users: [$this->user()], roles: [$this->role()], roleAssignments: [$row]),
-        );
+        $removed = $this->reconcile([], new SeededDataCurrent(...$base, roleAssignments: [['status' => 'removed'] + $row]));
+        $this->assertSame([], $removed->issues);
+        $this->assertSame(['role_assignment.created', 'role_assignment.removed'], array_column($only($removed, 'role_assignment.'), 'eventClass'));
+        $this->assertNull($only($removed, 'role_assignment.')[1]->payload['actorUserId']);
+
+        $removedByEvent = $this->reconcile([$created, $this->event(2, $assignment, 'role_assignment.removed', ['actorUserId' => 'x'])], new SeededDataCurrent(...$base, roleAssignments: [$row]));
+        $this->assertCount(1, $removedByEvent->issues);
+
+        $differentRole = $this->reconcile([$created], new SeededDataCurrent(...$base, roleAssignments: [['role_id' => 8] + $row]));
+        $this->assertCount(1, $differentRole->issues);
+
+        $same = $this->reconcile([$created], new SeededDataCurrent(...$base, roleAssignments: [$row]));
         $this->assertSame([], $same->issues);
-        $this->assertCount(2, $same->events);
+        $this->assertSame([], $only($same, 'role_assignment.'));
     }
 
     // ---- group_feature_assignments ----
@@ -362,7 +375,7 @@ class SeededDataReconcilerTest extends TestCase
             new SeededDataCurrent(users: [
                 $this->user(),
                 $this->user(['id' => self::USER2]),
-                $this->user(['id' => '88888888-8888-4888-8888-888888888888', 'email' => 'c@example.test', 'employee_number' => 'E3', 'hire_date' => '2020-04-01 00:00:00', 'password' => 'secret', 'created_at' => '2026-01-04 00:00:00']),
+                $this->user(['id' => '88888888-8888-4888-8888-888888888888', 'email' => 'c@example.test', 'employee_number' => 'E3', 'hire_date' => '2020-04-01 00:00:00', 'password' => 'secret', 'paid_leave_auto_grant_enabled' => 0, 'created_at' => '2026-01-04 00:00:00']),
             ]),
         );
 
@@ -374,6 +387,9 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('2026-01-04 00:00:00', $event->createdAt);
         $this->assertSame('E3', $event->payload['attributes']['employee_number']);
         $this->assertSame('2020-04-01', $event->payload['attributes']['hire_date']);
+        $this->assertFalse($event->payload['attributes']['paid_leave_auto_grant_enabled']);
+        $this->assertArrayNotHasKey('special_leave_auto_grant_enabled', $event->payload['attributes']);
+        $this->assertSame('2026-01-04 00:00:00', $event->payload['attributes']['created_at']);
         $this->assertArrayNotHasKey('password', $event->payload['attributes']);
         $this->assertArrayNotHasKey('termination_date', $event->payload['attributes']);
     }
@@ -435,8 +451,11 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertCount(1, $different->mismatches['memberships']);
 
         $missingRow = $this->reconcile($rows, new SeededDataCurrent(...$base));
-        $this->assertCount(1, $missingRow->issues);
-        $this->assertStringContainsString('所属している', $missingRow->issues[0]['reason']);
+        $this->assertSame([], $missingRow->issues);
+        $removed = array_values(array_filter($missingRow->events, fn (RebuiltEvent $e) => $e->eventClass === 'membership.removed'));
+        $this->assertCount(1, $removed);
+        $this->assertSame(3, $removed[0]->anchorId);
+        $this->assertSame(['userId' => self::USER, 'groupId' => self::GROUP, 'actorUserId' => null], $removed[0]->payload);
     }
 
     // ---- external_identities ----
@@ -460,7 +479,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('2026-01-12 00:00:00', $events[1]->createdAt);
     }
 
-    public function test_external_identity_created_by_a_user_event_matches_and_an_unlinked_row_without_events_stops(): void
+    public function test_external_identity_created_by_a_user_event_matches_and_an_unlinked_row_without_events_gets_linked_then_unlinked(): void
     {
         $matched = $this->reconcile(
             [$this->event(1, self::USER, 'user.onboarded_as_admin', ['entraUserId' => 'entra-1', 'name' => 'A', 'email' => null, 'authMethod' => 'sso'])],
@@ -468,9 +487,12 @@ class SeededDataReconcilerTest extends TestCase
         );
         $this->assertSame([], $matched->events);
 
-        $unlinked = $this->reconcile([], new SeededDataCurrent(users: [$this->user()], externalIdentities: [['user_id' => self::USER, 'provider' => 'EXTERNAL_HR', 'external_tenant_id' => null, 'external_subject_id' => 'E1', 'external_code' => null, 'email' => null, 'status' => 'unlinked', 'created_at' => self::ROW_AT]]));
-        $this->assertCount(1, $unlinked->issues);
-        $this->assertStringContainsString('unlinked', $unlinked->issues[0]['reason']);
+        $unlinked = $this->reconcile([], new SeededDataCurrent(users: [$this->user()], externalIdentities: [['user_id' => self::USER, 'provider' => 'EXTERNAL_HR', 'external_tenant_id' => null, 'external_subject_id' => 'E1', 'external_code' => null, 'email' => null, 'status' => 'unlinked', 'created_at' => self::ROW_AT, 'id' => 5]]));
+        $this->assertSame([], $unlinked->issues);
+        $events = $this->ordered($unlinked);
+        $this->assertSame(['user.migrated_from_legacy', 'external_identity.linked', 'external_identity.unlinked'], array_map(fn (RebuiltEvent $e) => $e->eventClass, $events));
+        $this->assertSame('E1', $events[2]->payload['externalSubjectId']);
+        $this->assertNull($events[2]->payload['actorUserId']);
     }
 
     // ---- field_authorities ----
@@ -525,7 +547,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('2026-03-31 09:00:00', $events[2]->createdAt);
     }
 
-    public function test_archived_calendar_year_with_published_at_gets_published_then_archived_and_unfixable_rows_stop(): void
+    public function test_archived_calendar_year_with_published_at_gets_published_then_archived_and_a_null_actor_is_allowed(): void
     {
         $archived = $this->reconcile([], new SeededDataCurrent(
             users: [$this->user()],
@@ -537,8 +559,8 @@ class SeededDataReconcilerTest extends TestCase
         );
 
         $noActor = $this->reconcile([], new SeededDataCurrent(calendarYears: [$this->year(['status' => 'published', 'published_at' => '2026-03-31 09:00:00', 'published_by_user_id' => null])]));
-        $this->assertCount(1, $noActor->issues);
-        $this->assertStringContainsString('published_by_user_id', $noActor->issues[0]['reason']);
+        $this->assertSame([], $noActor->issues);
+        $this->assertNull($this->ordered($noActor)[1]->payload['publishedByUserId']);
 
         $draftWhilePublished = $this->reconcile(
             [
@@ -547,7 +569,11 @@ class SeededDataReconcilerTest extends TestCase
             ],
             new SeededDataCurrent(users: [$this->user()], calendarYears: [$this->year(['status' => 'draft'])]),
         );
-        $this->assertCount(1, $draftWhilePublished->issues);
+        $this->assertSame([], $draftWhilePublished->issues);
+        $unpublished = array_values(array_filter($draftWhilePublished->events, fn (RebuiltEvent $e) => $e->eventClass === 'company_calendar_year.unpublished'));
+        $this->assertCount(1, $unpublished);
+        $this->assertSame(2, $unpublished[0]->anchorId);
+        $this->assertNull($unpublished[0]->payload['unpublishedByUserId']);
     }
 
     public function test_calendar_year_with_a_published_event_and_matching_status_derives_nothing(): void
@@ -678,10 +704,14 @@ class SeededDataReconcilerTest extends TestCase
 
     public function test_rebuilder_fails_when_the_reconcile_cannot_decide(): void
     {
-        $result = (new EventStoreRebuilder)->rebuild([], [], [], new SeededDataCurrent(calendarYears: [$this->year(['status' => 'published', 'published_by_user_id' => null])]));
+        $deleted = [
+            $this->event(1, self::YEAR, 'company_calendar_year.created', ['companyCalendarId' => self::CALENDAR, 'fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'generatedFrom' => 'manual', 'createdByUserId' => null]),
+            $this->event(2, self::YEAR, 'company_calendar_year.deleted', ['deletedByUserId' => self::USER]),
+        ];
+        $result = (new EventStoreRebuilder)->rebuild($deleted, [], [], new SeededDataCurrent(calendarYears: [$this->year()]));
 
         $this->assertFalse($result->ok);
-        $this->assertSame(self::YEAR, str_replace('company_calendar_year ', '', $result->unsupported[0]['key']));
+        $this->assertSame('company_calendar_year '.self::YEAR, $result->unsupported[0]['key']);
     }
 
     // ---- 部品 ----
