@@ -50,7 +50,7 @@ final class RebuildLeaveEventStoreCommand extends Command
             return $this->verifyOnly($writer);
         }
 
-        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays(), $writer->readPaidLeaveSchedule());
+        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays(), $writer->readPaidLeaveSchedule(), $writer->readSeededData());
         $this->printReport($result->report);
 
         if (! $result->ok) {
@@ -180,6 +180,40 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->info('勤怠日の変換');
             $this->line("対象の勤怠日: {$attendance['days']} 件 / created を補った日: {$attendance['created_added']} 件 / deleted を補った日: {$attendance['deleted_added']} 件");
             $this->line("休暇値の workType を書き換えた件数: {$attendance['work_type_rewritten']} / 既定値nullの項目を補完した件数: {$attendance['null_items_filled']}");
+        }
+
+        if (isset($report['reconcile'])) {
+            $reconcile = $report['reconcile'];
+            $this->info('照合による補完(イベントを経ずに作られた行・最終状態がずれた行の差を埋める導出イベント)');
+            $derivedRows = [];
+            foreach ($reconcile['derived'] as $table => $classes) {
+                foreach ($classes as $class => $count) {
+                    $derivedRows[] = [$table, $class, $count];
+                }
+            }
+            $this->table(['テーブル', '導出したevent_class', '件数'], $derivedRows);
+            $this->line('テーブルごとの導出イベント件数: '.($reconcile['derived'] === [] ? 'なし' : implode(' / ', array_map(
+                fn (string $table, array $classes) => $table.' '.array_sum($classes),
+                array_keys($reconcile['derived']),
+                array_values($reconcile['derived']),
+            ))));
+            $mismatchRows = [];
+            foreach ($reconcile['mismatches'] as $table => $keys) {
+                foreach ($keys as $key) {
+                    $mismatchRows[] = [$table, $key];
+                }
+            }
+            $this->line('イベントがあるのに最終状態が違ったキー: '.count($mismatchRows).' 件');
+            if ($mismatchRows !== []) {
+                $this->table(['テーブル', 'キー: 違い'], $mismatchRows);
+            }
+            if ($reconcile['remapped'] !== []) {
+                $this->line('集約UUIDを付け替えた company_calendar_year.days_updated: '.count($reconcile['remapped']).' 件');
+                $this->table(['stored_events.id', '旧集約UUID(company_calendars.id)', '新集約UUID(年のid)'], array_map(
+                    fn (array $r) => [$r['id'], $r['from'], $r['to']],
+                    $reconcile['remapped'],
+                ));
+            }
         }
 
         if (isset($report['paid_leave_schedule'])) {

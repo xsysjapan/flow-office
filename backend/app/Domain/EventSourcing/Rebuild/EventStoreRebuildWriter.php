@@ -2,6 +2,7 @@
 
 namespace App\Domain\EventSourcing\Rebuild;
 
+use App\Domain\EventSourcing\Rebuild\Reconcile\SeededDataCurrent;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,6 +14,7 @@ use RuntimeException;
  * - readRows(): stored_events の生の行を id順に読む。
  * - readAttendanceDays(): ReadModel(attendance_days)の現在値を読む(勤怠の変換 2.4 の入力)。
  * - readPaidLeaveSchedule(): ReadModel(paid_leave_schedule_entries・paid_leave_schedule_assessments)の現在値を読む(旧版の付与予定イベントの置き換えの入力)。
+ * - readSeededData(): ReadModel(group_types・groups・roles・permission_role・role_features・role_assignments・group_feature_assignments・users・memberships・external_identities・field_authorities・company_calendar_years・days)の現在の行を読む(照合による補完の入力。論点19 決定1)。
  * - assertPreconditions(): 事前条件(論点18 7章1)。新しい種類の休暇・口座イベント・補正ログ・既存の作り直し表・スナップショットが無いこと。
  * - write(): 新しい表(既定 stored_events_rebuilt)に書く。既にあれば失敗する。
  * - verify(): 作り直し後の表の自己整合性(id・版の連番、新しい種類が残っていないこと)を確かめる。
@@ -160,6 +162,48 @@ final class EventStoreRebuildWriter
         }
 
         return $entries;
+    }
+
+    /**
+     * 照合による補完(論点19 決定1)の入力として、ReadModelの現在の行を読む(読み取りのみ。テーブルが無ければ空)。
+     * users のパスワード・remember_token は読み込まない。
+     */
+    public function readSeededData(): SeededDataCurrent
+    {
+        $rows = function (string $table, ?string $orderBy = 'id'): array {
+            if (! Schema::hasTable($table)) {
+                return [];
+            }
+            $query = DB::table($table);
+            if ($orderBy !== null && Schema::hasColumn($table, $orderBy)) {
+                $query->orderBy($orderBy);
+            }
+
+            return array_map(fn ($row) => (array) $row, $query->get()->all());
+        };
+
+        $users = array_map(function (array $row): array {
+            unset($row['password'], $row['remember_token']);
+
+            return $row;
+        }, $rows('users'));
+
+        return new SeededDataCurrent(
+            groupTypes: $rows('group_types'),
+            groups: $rows('groups'),
+            roles: $rows('roles'),
+            permissionRole: $rows('permission_role', null),
+            roleFeatures: $rows('role_features'),
+            roleAssignments: $rows('role_assignments'),
+            groupFeatureAssignments: $rows('group_feature_assignments'),
+            users: $users,
+            memberships: $rows('memberships'),
+            externalIdentities: $rows('external_identities'),
+            fieldAuthorities: $rows('field_authorities'),
+            companyCalendarIds: Schema::hasTable('company_calendars') ? array_map('strval', DB::table('company_calendars')->pluck('id')->all()) : [],
+            calendarYears: $rows('company_calendar_years'),
+            calendarDays: $rows('company_calendar_days'),
+        );
     }
 
     /** @return list<string> 満たしていない事前条件の説明(空なら満たしている) */
