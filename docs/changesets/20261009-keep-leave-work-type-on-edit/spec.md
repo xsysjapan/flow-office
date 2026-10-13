@@ -330,6 +330,77 @@
 - 未確定・要確認事項(リハーサルで確認してから進む): 試し実行で扱えない並びの有無、cutoverの付与の不一致の有無と`carried_over`の
   内容、差戻し/取消/却下の判定結果、複製DBでの比較の差分、再計算で値が変わる日。
 
+### 論点19: イベントを経ずに作られたデータと、現行のクラスで復元できない旧イベント(リハーサル2回目で判明)
+
+**背景**: 全ReadModelを空にして全Projectorを再生すると、(1)シーダー・マイグレーションがイベントを経ずに作った行が再現されない、
+(2)PR #109の版の`paid_leave_schedule.*`(payloadに`userId`・`entryId`、集約UUIDは`uuid5(NS, userId)`)が現行のクラスへ復元できない。
+いずれも休暇の変更より前からの欠落だが、作り直し後に全ReadModelを再生成できることを今回のリリースの条件とする(2026-10-14 ユーザー決定)。
+
+**決定**:
+
+1. **照合による補完(共通規則)**: 下表のテーブルについて、`stored_events`を再生した結果と現在の行を、行のキーごとに突き合わせる。
+   再生結果が現在の行と一致しない部分だけ、差を埋めるイベント(導出イベント)を作り直しの中で置く。
+   - 置く位置: そのキーのイベントが1件も無い(行がイベントを経ずに作られた)ときは、その集約の最初のイベントの直前。集約にイベントが
+     無ければ、外部キーの依存順(下表の「順」)に並べて、依存先の作成イベントの直後(依存先も無ければ列の先頭)。
+     そのキーにイベントがあるのに最終状態が違う(シーダーの再実行で上書きされた等)ときは、その集約の最後のイベントの直後。
+   - 発生日時(`created_at`): 列の先頭・依存先の直後に置くものは、行の`created_at`(無ければ置き場所の前のイベントの値)。それ以外は
+     置き場所の前のイベントの値。
+   - 操作者: 行に作成者・割当者の値があればそれ、無ければ`null`(2026-10-14 ユーザー決定。下記2で`actorUserId`をnull可にする)。
+   - 試し実行で、テーブルごとに導出イベントの件数と「イベントがあるのに最終状態が違った」キーの一覧を出す。
+
+| 順 | テーブル | 導出するイベント | 集約UUID |
+|---|---|---|---|
+| 1 | `group_types` | `group_type.created`(差は`group_type.updated`) | `uuid5(URL, 'group-type:'.code)` |
+| 2 | `groups` | `group.created`(差は`group.updated`) | 行の`id` |
+| 3 | `roles` | `role.created`(差は`role.updated`) | `uuid5(URL, 'role:'.code)` |
+| 4 | `permission_role` | `role.permissions_changed`(ロールごとの全置換) | 同上 |
+| 4 | `role_features` | `role.features_changed`(全置換) | 同上 |
+| 4 | `role_assignments` | `role_assignment.created` | 行の`id` |
+| 5 | `group_feature_assignments` | `feature.assigned_to_group`(余分は`feature.removed_from_group`) | `uuid5(URL, 'group-access:'.groupId)` |
+| 6 | `users` | `user.migrated_from_legacy`(既存の合成イベント。作成イベントが無い利用者のみ) | 行の`id` |
+| 7 | `memberships` | `membership.added` | `UserManagementStreamId::for('user-membership', userId)` |
+| 7 | `external_identities` | `external_identity.linked` | `UserManagementStreamId::for('user-identity', userId)` |
+| 1 | `field_authorities` | `user.field_authority_changed` | `uuid5(URL, 'field-authority-catalog')` |
+| 2 | `company_calendar_years` | `company_calendar_year.created`、状態に応じて`.published`・`.archived` | 行の`id` |
+| 3 | `company_calendar_days` | `company_calendar_year.days_updated`(差のある日だけ) | 親の年の`id` |
+
+   - `company_calendar_days`: `days_updated`の集約UUIDが現在の年の`id`と一致しないもの(マイグレーション`2026_08_10_020000`で年を
+     新設したときの付け替え漏れ)は、試し実行で一覧にする。旧集約UUIDが`company_calendars.id`で、日付がその暦の年の範囲に入るときは、
+     その年の`id`へ付け替える(集約UUID・`meta_data`の両方。版は振り直す)。それ以外は扱えない並びとして止める。
+   - `features`・`permissions`・`permission_scope_types`はProjectorの書き込み先ではない参照マスタ(`SyncAccessControlCatalog`が直接
+     書く。`system_settings`と同じ扱い)。空にせず、補完もしない。
+2. **イベントの変更**(項目の追加・null可にする変更のみ。既存の記録はそのまま復元できる):
+   - `RoleCreated`・`GroupTypeCreated`に`isSystem`(bool、既定false)を足し、Projectorは固定値ではなくその値を書く。
+   - 次のイベントの`actorUserId`(`company_calendar_year.created`は`createdByUserId`で既にnull可)をnull可にし、Projectorはnullをそのまま
+     書く: `group.created`・`group.updated`・`group_type.created`・`group_type.updated`・`role.created`・`role.updated`・
+     `role.permissions_changed`・`role.features_changed`・`role_assignment.created`・`feature.assigned_to_group`・
+     `feature.removed_from_group`・`membership.added`・`external_identity.linked`・`user.field_authority_changed`。
+   - `CompanyCalendarYearProjector`: `published_at`と`created_at`・`updated_at`を`now()`ではなくイベントの発生日時にする(再生で
+     同じ結果にする。設計原則2)。`company_calendar_days`の`created_at`・`updated_at`も同様。
+3. **旧付与予定イベントの置き換え**(2026-10-14 ユーザー決定): payloadに`entryId`を持ち`scheduleEntryId`を持たない
+   `paid_leave_schedule.*`を旧版のイベントとする。旧版のイベントは削除し、旧版のイベントに現れた`entryId`ごとに、現在の
+   `paid_leave_schedule_entries`・`paid_leave_schedule_assessments`の行から現行の形のイベント列を導出する。集約UUIDは利用者の`userId`
+   (現行の規則)。置く位置は、その利用者の旧版のイベントの最初の位置。発生日時は、作成はその行の`created_at`、それ以外は対応する旧版の
+   イベントの発生日時(無ければ作成と同じ)。
+   - `entry_created`(scheduleEntryId=行の`id`、scheduledOn・category・candidateGrantDaysは行の値、`isDeterminate`は行の状態が
+     判定保留でなければtrue)。
+   - 判定の行ごとに`assessment_recorded`(assessmentId=判定の行の`id`)。最終判定が自動判定と違えば`assessment_overridden`。
+   - 手動修正済み(`is_manually_overridden`)なら`entry_manually_edited`(changesは現在のcategory・candidateGrantDays、reason・
+     operatorUserIdは`manual_override_*`の値)。
+   - `grant_id`があれば`entry_granted`。取消済みなら`entry_cancelled`(reasonは`cancelled_reason`、無ければ「既存データの引き継ぎ」)。
+   - 再生後の行が現在の行と一致しないものは、試し実行で一覧にして止める。
+4. **シーダー**(2026-10-14 ユーザー決定): `UserManagementSeeder`・`AccessControlSeeder`・`RoleSeeder`はCommandを発行して
+   イベントを記録する形に書き換え、既にある行は飛ばす(冪等)。足りないCommandの引数(`CreateRole`の`roleId`・`isSystem`、
+   `CreateGroupType`の`groupTypeId`・`isSystem`等)を足し、シーダーからの発行は操作者null。`docs/32`の「作り直しの前にシーダーを
+   実行する」手順を見直す(作り直しの後に実行し、イベントを記録させる)。
+5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
+6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
+   件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
+   (`leave:rebuild-event-store --readmodel-fingerprint`)。差は、休暇の変更で意図した差(論点18・6-2)だけであること。
+
+**対象外**: `PaidLeaveSchedule`と`PaidLeaveAccount`が同じ集約UUID(`userId`)を共有している現行の問題(PR #112で`uuid5`の
+分離が戻った)。作り直しは現行の規則のまま版を振り直す。別の変更セットで扱う。
+
 ## 仕様確定事項(まとめ)
 
 ### A. 共通基盤(横断ルールの実装)
@@ -584,6 +655,7 @@
 | WP9 docs | 「ドキュメントへの影響」の全件 | `docs/`、`.claude/skills/add-domain-event` | 全WP |
 | WP10 イベント構成の作り直し | (1)変換コマンド`leave:rebuild-event-store`(仮称。生JSONを読む、申請・付与・勤怠日ごとの状態機械、cutoverの付与の突き合わせと`carried_over`、勤怠日の`created`の補完・休暇値の書き換え、既定値nullの項目の補完、事前条件の確認、試し実行既定・`--apply`で`stored_events_rebuilt`・`--swap`、変換規則のテスト。仕様確定事項H、`assets/event-rebuild-mapping.md` 2・5・6・7章)。(2)旧系統の削除: 旧イベントクラスと別名(`config/event-sourcing.php`)、旧集約、旧Projectorの旧イベント処理と`stored_events`の直接読み取り、`PaidLeaveRequestProjector`・`AttendanceDayLeaveProjector`・出勤率ビューの系統の切り替え(`input_source`列)、既定値nullのガード、消化記録の`stored_event_id`列・付与の移行監査列とその表示、フロントの旧`event_type`名(同4章)。(3)移行コマンドと補正イベントの削除: 移行コマンド4つ(`special-leave:migrate-to-account`・`compensatory-leave:migrate-to-account`・`paid-leave:migrate-requests`・`paid-leave:migrate-accounts`)、`/paid-leave/migrate` APIと`MigratePaidLeaveAccount`、`*_account.migrated`・`paid_leave_request.migrated`、各口座集約の`migrate()`・`migrateGrants()`、`PaidLeaveRequestAggregate`の移行前申請の取消拒否、`attendance_day.corrected`・`CorrectAttendanceDay`・`onAttendanceDayCorrected`・`LeaveCorrectionCandidateDetector`・`LeaveCorrectionReportCommand`。(4)手順書: `assets/rehearsal-checklist.md`、`docs/27`・`docs/32`の作り直しの手順(空にするReadModelのテーブル一覧をProjectorの書き込み先から機械的に作って載せる) | `App\Console\Commands`、`App\Domain\PaidLeave`・`PaidLeaveRequest`・`PaidLeaveAccount`・`SpecialLeave`・`CompensatoryLeave`・`Attendance`・`PaidLeaveSchedule`、マイグレーション、`frontend/src`、`docs/` | WP1〜WP9 |
 | WP11 実装漏れの補完 | 2026-10-11の監査に基づく決定(1)〜(7)(実装中の決定の記録): 差戻し通知のリンク(特別休暇・代休)、勤務予定日・時間休の判定を勤怠の`ApplyLeaveToAttendanceDay`へ移す、Reactor発行Commandのviaにそろえる(提出3種・代休の同期・月次確定)、特別休暇の残数不足警告を勤怠側のビューに、テストの補完、docs/13・17の修正 | `App\Domain\PaidLeave`・`SpecialLeave`・`CompensatoryLeave`・`Attendance`・`Workflow`・`CompensatoryLeaveAccount`、`AttendanceController`、`docs/` | WP10 |
+| WP12 イベントを経ずに作られたデータの補完・旧付与予定 | 論点19の1〜6: (A)イベント・Projectorの変更(`isSystem`、`actorUserId`のnull可、暦の年・日の発生日時)、(B)照合による補完(作り直しに組み込む)、(C)旧付与予定イベントの置き換え、(D)ReadModelの照合の出力、(E)シーダーのCommand化と`docs/32`、(F)手順書・`docs/17`・`assets/event-rebuild-mapping.md` | `App\Domain\EventSourcing\Rebuild`、`UserManagement`・`AccessControl`・`Attendance`(暦)・`PaidLeaveSchedule`、`database/seeders`、`docs/` | WP10 |
 
 ## 検証方法
 - backend: CI(PHP 8.4)。この作業環境はPHP 8.3のためローカルでは実行できない。
