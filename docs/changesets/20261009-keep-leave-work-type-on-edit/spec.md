@@ -859,3 +859,11 @@
 - 2026-10-14 ユーザー決定(項目1): 作成イベントが無いマスタは、`stored_events`の作り直しの中で、ReadModelの現在の行から作成イベント
   (`group.created`・`group_type.created`・`role.created`・`company_calendar_year.created`)を導出して、その集約の最初のイベントの
   直前に挿入する(欠落した事実の補完。`data-correction`スキル)。除外リストで残す方式は採らない(設計原則2)。導出規則は論点19で決める。
+- 2026-10-14 ユーザー決定(続き):
+  - **範囲**: 作成イベントの補完は4表に限らず、シーダー・マイグレーションがイベントを経ずに作ったProjectorの書き込み先すべて
+    (`permission_role`・`role_assignments`・`group_feature_assignments`・`memberships`・`external_identities`・`field_authorities`等)を
+    今回のリリースで扱う。`roles`・`group_types`の`is_system`を表せるよう作成イベントを変更する。全ReadModelを空にして全Projectorを
+    再生できる状態をリリースの条件とする(論点19)。
+  - **付与予定(PR #109の版のイベント)**: 旧イベントを1件ずつ変換せず、現在のReadModel(マイグレーションで移した
+    `paid_leave_schedule_entries`・`paid_leave_schedule_assessments`)から現行の形のイベント列(作成→判定の記録/上書き→付与/取消)を
+    導出して置き換える。途中の履歴(その場での再計算・手動修正の日時・NeedsReviewへの移行)は失われ、最終状態は現在の値と一致する。
