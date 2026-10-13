@@ -137,14 +137,20 @@ class LeaveEventStoreRebuildTest extends TestCase
     {
         $at = '2026-08-01 10:00:00';
         $rows = [
-            [1, 'D1', 1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'workType' => null], []],
+            [1, 'D1', 1, 'attendance_day.created', [
+                'userId' => 'u1', 'workDate' => '2026-08-10', 'calendarEntryId' => null, 'status' => 'not_started', 'source' => 'manual', 'utcOffsetMinutes' => 540,
+                'actualStartAt' => null, 'actualEndAt' => null, 'workType' => null, 'workLocationType' => null, 'note' => null,
+                'breaks' => [], 'leaveSegments' => [], 'reason' => 'テスト', 'createdByUserId' => 'u1',
+            ], []],
             [2, 'G1', 1, 'paid_leave.granted', ['userId' => 'u1', 'grantedOn' => '2026-04-01', 'expiresOn' => '2027-03-31', 'grantedDays' => 10.0, 'grantReason' => null], []],
             [3, 'R1', 1, 'paid_leave.requested', ['userId' => 'u1', 'targetDate' => '2026-08-10', 'leaveType' => 'full', 'hours' => null, 'requestedDays' => 1.0, 'approverUserId' => 'a1', 'reason' => null, 'requestGroupId' => null], []],
             [4, 'R1', 2, 'paid_leave.request_shared', ['workflowRequestId' => 'W1'], []],
-            [5, 'W1', 1, 'workflow_request.drafted', ['applicantUserId' => 'u1'], []],
+            [5, 'W1', 1, 'workflow_request.drafted', [
+                'requestTypeId' => null, 'requestTypeCode' => null, 'applicantUserId' => 'u1', 'title' => '有給申請', 'formData' => [], 'approverUserId' => 'a1',
+            ], []],
             [6, 'R1', 3, 'paid_leave.request_approved', ['approvedByUserId' => 'a1'], []],
             [7, 'G1', 2, 'paid_leave.used', ['userId' => 'u1', 'paidLeaveRequestId' => 'R1', 'attendanceDayId' => 'day-1', 'usedOn' => '2026-08-10', 'usedDays' => 1.0, 'usedMinutes' => null, 'usageType' => 'full'], []],
-            [8, 'D1', 2, 'attendance_day.calculated', ['calculation' => ['work_minutes' => 480], 'userId' => 'u1'], []],
+            [8, 'D1', 2, 'attendance_day.calculated', ['calculation' => ['work_minutes' => 480], 'userId' => 'u1', 'workDate' => null], []],
             [9, 'u1', 1, 'paid_leave_account.migrated', [
                 'cutoverDate' => '2026-08-01',
                 'grants' => [
