@@ -578,6 +578,43 @@ RENAME TABLE stored_events TO stored_events_original, stored_events_rebuilt TO s
 3. 差分を6-2の「期待する差分」と照合する。6-3 の照合も `flow_office_verify` で行う。
 4. 説明できない差分が1件でもあれば、5章(入れ替え)に進まない。
 
+#### 3-5a. リビルドが一意制約違反で止まったとき(2026-10-13 リハーサル1回目)
+
+- 一意制約違反で止まったテーブルが `--list-readmodels` の一覧に無いときは、一覧の漏れである。一覧の作成を直してからやり直す
+  (手で表を足して続けない)。
+- `attendance_days` の `[user_id, work_date]` で止まったときは、同じ利用者・日に、削除されていない勤怠日の集約が2つ再生されている。
+  次のSQLで対象を特定し、出力を `~/rehearsal-20261009/verify/attendance-day-overlap.tsv` に保存して報告する。
+
+```sql
+-- flow_office_verify で実行する(stored_events は作り直し後、stored_events_original は作り直し前)。
+-- 同じ利用者・勤務日に複数ある勤怠日の集約と、各集約のイベント列・元の行の有無。
+WITH days AS (
+  SELECT aggregate_uuid,
+         MAX(JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.userId'))) AS user_id,
+         MAX(LEFT(JSON_UNQUOTE(JSON_EXTRACT(event_properties, '$.workDate')), 10)) AS work_date,
+         MIN(id) AS first_id, MAX(id) AS last_id,
+         SUM(event_class = 'attendance_day.deleted') AS deleted_count,
+         GROUP_CONCAT(CONCAT(id, ':', event_class) ORDER BY id SEPARATOR ' > ') AS events
+  FROM stored_events
+  WHERE event_class LIKE 'attendance\_day.%'
+  GROUP BY aggregate_uuid
+)
+SELECT d.user_id, d.work_date, d.aggregate_uuid, d.first_id, d.last_id, d.deleted_count,
+       (SELECT COUNT(*) FROM flow_office_rehearsal.attendance_days a WHERE a.id = d.aggregate_uuid) AS readmodel_row_exists,
+       (SELECT COUNT(*) FROM stored_events_original o WHERE o.aggregate_uuid = d.aggregate_uuid) AS original_events,
+       d.events
+FROM days d
+JOIN (SELECT user_id, work_date FROM days GROUP BY user_id, work_date HAVING COUNT(*) > 1) dup
+  ON dup.user_id = d.user_id AND dup.work_date = d.work_date
+ORDER BY d.user_id, d.work_date, d.first_id;
+```
+
+- `readmodel_row_exists` は、5-4 のリビルド前の `flow_office_rehearsal.attendance_days`(作り直し前の現在値)を見る。
+  `flow_office_rehearsal` を既にリビルドしていれば、元の `xsys_flowoffice.sql` を別DBに入れて参照先を差し替える。
+- 見るところ: `deleted_count=0` かつ `readmodel_row_exists=0` の集約があれば、旧コードがイベントを書かずに行を削除したもの(変更セット
+  「リハーサル結果」1回目の仮説)。同じSQLの `stored_events` を `stored_events_original` に替えても重複が出るなら、作り直し前から
+  の重複である。
+
 ---
 
 ## 4. 確認事項(a)〜(h)(spec「実装中の決定」のリハーサル確認事項を作り直しに合わせて改めたもの)
