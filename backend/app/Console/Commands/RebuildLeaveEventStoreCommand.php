@@ -2,10 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\EventSourcing\Rebuild\EventRestorabilityChecker;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 休暇まわりの stored_events の作り直し(論点18、assets/event-rebuild-mapping.md 7章)。
@@ -17,7 +19,7 @@ final class RebuildLeaveEventStoreCommand extends Command
 {
     protected $signature = 'leave:rebuild-event-store
         {--apply : stored_events_rebuilt に作り直し後の行を書く(既定は試し実行)}
-        {--verify : stored_events_rebuilt の自己整合性(id・版の連番)を検査する}
+        {--verify : stored_events_rebuilt の自己整合性(id・版の連番)と、現行のイベントクラスへの復元可否を検査する}
         {--swap : stored_events_rebuilt と stored_events を入れ替える(検査が通っている場合のみ)}
         {--list-readmodels : 全Projectorの書き込み先テーブルの一覧を出す(手順書の「空にするテーブル」)}';
 
@@ -58,6 +60,10 @@ final class RebuildLeaveEventStoreCommand extends Command
             return self::FAILURE;
         }
 
+        // 作り直し後に出力されるイベント列(メモリ上の結果)を現行のイベントクラスへ復元できるか検査する。
+        $restoreFailures = (new EventRestorabilityChecker)->checkRows($result->rows);
+        $this->printRestorability('作り直し後のイベント列(メモリ上)', $restoreFailures);
+
         if (! $this->option('apply')) {
             $this->info('試し実行のみ(書き込みなし)。--apply で '.EventStoreRebuildWriter::TABLE.' に書く。');
 
@@ -79,17 +85,46 @@ final class RebuildLeaveEventStoreCommand extends Command
     private function verifyOnly(EventStoreRebuildWriter $writer): int
     {
         $problems = $writer->verify();
+        $ok = true;
         if ($problems === []) {
             $this->info(EventStoreRebuildWriter::TABLE.' の自己整合性: 問題なし。');
-
-            return self::SUCCESS;
+        } else {
+            $ok = false;
+            $this->error('自己整合性の違反:');
+            foreach ($problems as $problem) {
+                $this->line('- '.$problem);
+            }
         }
-        $this->error('自己整合性の違反:');
-        foreach ($problems as $problem) {
-            $this->line('- '.$problem);
+
+        if (Schema::hasTable(EventStoreRebuildWriter::TABLE)) {
+            $failures = (new EventRestorabilityChecker)->checkTable(EventStoreRebuildWriter::TABLE);
+            $ok = $this->printRestorability(EventStoreRebuildWriter::TABLE, $failures) && $ok;
         }
 
-        return self::FAILURE;
+        return $ok ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * 復元できない行の一覧を出す。1件も無ければ true。
+     *
+     * @param  array<string, array{count: int, first_id: int, message: string}>  $failures
+     */
+    private function printRestorability(string $target, array $failures): bool
+    {
+        if ($failures === []) {
+            $this->info("{$target} の復元可否: 全行を現行のイベントクラスへ復元できる。");
+
+            return true;
+        }
+
+        $this->error("{$target} の復元可否: 現行のイベントクラスへ復元できない行がある。");
+        $this->table(['event_class', '件数', '先頭のid', '最初の例外メッセージ'], array_map(
+            fn (string $class, array $f) => [$class, $f['count'], $f['first_id'], $f['message']],
+            array_keys($failures),
+            array_values($failures),
+        ));
+
+        return false;
     }
 
     private function swap(EventStoreRebuildWriter $writer): int
