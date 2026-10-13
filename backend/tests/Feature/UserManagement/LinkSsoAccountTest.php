@@ -6,6 +6,7 @@ use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Commands\LinkSsoAccount;
 use App\Models\User;
+use App\Models\UserCredential;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,7 +19,8 @@ class LinkSsoAccountTest extends TestCase
 
     public function test_local_user_can_link_an_sso_account(): void
     {
-        $user = User::factory()->create(['password' => 'secret1234', 'entra_user_id' => null]);
+        $user = User::factory()->create(['entra_user_id' => null]);
+        UserCredential::query()->create(['user_id' => $user->id, 'password' => 'secret1234']);
 
         $linked = app(CommandBus::class)->dispatch(new LinkSsoAccount(
             userId: $user->id,
@@ -27,7 +29,7 @@ class LinkSsoAccountTest extends TestCase
 
         $this->assertSame('entra-link-1', $linked->entra_user_id);
         // ローカルパスワードは維持される(連携後も両方でログインできる)。
-        $this->assertNotNull($linked->refresh()->password);
+        $this->assertNotNull(UserCredential::query()->find($user->id)?->password);
     }
 
     public function test_relinking_the_same_account_is_idempotent(): void

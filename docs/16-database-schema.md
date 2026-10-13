@@ -42,9 +42,6 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - id
 - name
 - email
-- password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
-  パスワードログイン用。`hashed`キャストで自動ハッシュ化して保存する。SSOでログインする
-  ユーザーはnullのまま)
 - job_title (所属とは独立した表示用プロフィール項目。管理元は`field_authorities`で決定する)
 - account_status (`PENDING` / `ACTIVE` / `SUSPENDED` / `LEAVE` / `RETIRED` / `DISABLED`)
 - source_type (`LOCAL` / `MICROSOFT_ENTRA` / `EXTERNAL_HR` / `IMPORT`)
@@ -64,6 +61,20 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
 - last_login_at
 - created_at / updated_at
+
+## user_credentials (ローカルログインの資格情報)
+
+- user_id (主キー。`users.id`。外部キーは張らない。usersをイベントから再生成しても残すため)
+- password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
+  パスワードログイン用のハッシュ。`hashed`キャストで自動ハッシュ化して保存する。SSOで
+  ログインするユーザーは行が無いかnull)
+- remember_token (nullable)
+- created_at / updated_at
+
+`system_settings`と同じく、イベントではなく直接更新する正データ(Projectorの書き込み先では
+ない)。パスワードの平文・ハッシュは`stored_events`に記録しない。旧`users.password`・
+`users.remember_token`から移行済み(論点19 決定7)。`leave:rebuild-event-store --list-readmodels`の
+対象外。
 
 ## system_settings (システム全体設定。単一行)
 
