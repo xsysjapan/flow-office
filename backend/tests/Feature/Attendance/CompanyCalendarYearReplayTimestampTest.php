@@ -28,8 +28,16 @@ class CompanyCalendarYearReplayTimestampTest extends TestCase
         $year = CompanyCalendarYear::query()->where('company_calendar_id', $calendarId)->firstOrFail();
         $this->actingAs($admin)->postJson("/api/company-calendar-years/{$year->id}/publish")->assertOk();
 
-        DB::table('stored_events')->where('event_class', 'company_calendar_year.published')
-            ->update(['created_at' => '2026-03-01 09:00:00']);
+        // Spatieの createdAt() は meta_data の 'created-at' から読むため、created_at 列と合わせて両方を書き換える。
+        $publishedEvents = DB::table('stored_events')->where('event_class', 'company_calendar_year.published')->get();
+        foreach ($publishedEvents as $publishedEvent) {
+            $meta = json_decode($publishedEvent->meta_data, true);
+            $meta['created-at'] = '2026-03-01 09:00:00';
+            DB::table('stored_events')->where('id', $publishedEvent->id)->update([
+                'created_at' => '2026-03-01 09:00:00',
+                'meta_data' => json_encode($meta),
+            ]);
+        }
         DB::table('company_calendar_years')->delete();
 
         Artisan::call('event-sourcing:replay', ['--force' => true]);

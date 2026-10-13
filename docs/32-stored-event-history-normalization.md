@@ -101,8 +101,6 @@ php artisan events:backfill-attendance-backoffice-tasks --apply
 
 ```bash
 php artisan migrate --force
-php artisan db:seed --class=UserManagementSeeder --force
-php artisan db:seed --class=AccessControlSeeder --force
 
 # 読み取り専用の事前確認
 php artisan events:normalize-history
@@ -111,6 +109,15 @@ php artisan events:normalize-history
 php artisan events:normalize-history \
   --apply \
   --backup-table=stored_events_backup_20260810
+```
+
+シーダー(`UserManagementSeeder`・`AccessControlSeeder`)は、作り直し(と旧系統を削除したコードの配備)の後に実行する。
+シーダーはCommandを発行してイベントを`stored_events`へ記録し、既にある行は飛ばす(上書きしない)ため、作り直しの前に
+実行すると、作り直しの対象に新規のイベントが混ざる。
+
+```bash
+php artisan db:seed --class=UserManagementSeeder --force
+php artisan db:seed --class=AccessControlSeeder --force
 ```
 
 バックアップテーブルが既に存在する場合は上書きせず停止する。MySQLのDDLは暗黙コミットされるため、

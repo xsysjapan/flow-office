@@ -2,11 +2,15 @@
 
 namespace Database\Seeders;
 
+use App\Domain\AccessControl\Commands\CreateRole;
+use App\Domain\EventSourcing\CommandBus;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
- * docs/05-user-roles.md のユーザー種別に対応する既定ロールを作成する。
+ * docs/05-user-roles.md のユーザー種別に対応する既定ロールをCommand(操作者null)で作成する。
+ * 既にあるロールは飛ばす。
  */
 class RoleSeeder extends Seeder
 {
@@ -22,7 +26,9 @@ class RoleSeeder extends Seeder
         ];
 
         foreach ($names as $code => $name) {
-            Role::query()->firstOrCreate(['code' => $code], ['name' => $name]);
+            if (! DB::table('roles')->where('code', $code)->exists()) {
+                app(CommandBus::class)->dispatch(new CreateRole($code, $name, null, null));
+            }
         }
     }
 }
