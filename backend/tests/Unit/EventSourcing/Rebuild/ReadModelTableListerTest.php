@@ -24,4 +24,16 @@ class ReadModelTableListerTest extends TestCase
         $this->assertContains('Attendance/Projectors/AttendanceDayProjector.php', $tables['attendance_breaks']);
         $this->assertContains('Attendance/Projectors/AttendanceDayProjector.php', $tables['attendance_leave_segments']);
     }
+
+    public function test_参照マスタ・認証情報は一覧に含まれず書き込み先は含まれる(): void
+    {
+        $tables = (new ReadModelTableLister)->tables(app_path('Domain'));
+
+        foreach (['features', 'permissions', 'permission_scope_types', 'system_settings', 'user_credentials'] as $master) {
+            $this->assertArrayNotHasKey($master, $tables);
+        }
+        foreach (['device_roles', 'users', 'roles', 'permission_role'] as $written) {
+            $this->assertArrayHasKey($written, $tables);
+        }
+    }
 }

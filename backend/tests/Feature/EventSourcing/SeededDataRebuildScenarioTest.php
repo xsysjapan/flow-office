@@ -39,9 +39,6 @@ class SeededDataRebuildScenarioTest extends TestCase
 
     private const YEAR = '77777777-7777-4777-8777-777777777777';
 
-    /** Projectorの書き込み先ではない参照マスタ・設定(空にしない)。 */
-    private const NOT_READ_MODELS = ['features', 'permissions', 'permission_scope_types', 'system_settings'];
-
     /** @var list<int> */
     private array $permissionIds = [];
 
@@ -189,12 +186,10 @@ class SeededDataRebuildScenarioTest extends TestCase
         ];
         DB::table('group_types')->insert([$type(1, 'department', true, 'active', '2026-01-01 00:00:00'), $type(2, 'team', false, 'inactive', '2026-01-02 00:00:00')]);
 
-        DB::table('users')->insert([
-            ['id' => self::U1, 'entra_user_id' => 's1', 'name' => '管理者', 'email' => 'u1@example.test', 'account_status' => 'active', 'source_type' => 'microsoft_entra',
-                'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'hire_date' => '2020-04-01', 'created_at' => '2026-01-04 00:00:00', 'updated_at' => '2026-01-04 00:00:00'],
-            ['id' => self::U2, 'entra_user_id' => null, 'name' => '社員', 'email' => 'u2@example.test', 'account_status' => 'active', 'source_type' => 'local',
-                'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'last_login_at' => '2026-08-02 09:00:00', 'paid_leave_auto_grant_enabled' => false, 'created_at' => '2026-01-05 00:00:00', 'updated_at' => '2026-01-05 00:00:00'],
-        ]);
+        DB::table('users')->insert(['id' => self::U1, 'entra_user_id' => 's1', 'name' => '管理者', 'email' => 'u1@example.test', 'account_status' => 'active', 'source_type' => 'microsoft_entra',
+            'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'hire_date' => '2020-04-01', 'created_at' => '2026-01-04 00:00:00', 'updated_at' => '2026-01-04 00:00:00']);
+        DB::table('users')->insert(['id' => self::U2, 'entra_user_id' => null, 'name' => '社員', 'email' => 'u2@example.test', 'account_status' => 'active', 'source_type' => 'local',
+            'employment_status' => 'active', 'timezone' => 'Asia/Tokyo', 'last_login_at' => '2026-08-02 09:00:00', 'paid_leave_auto_grant_enabled' => false, 'created_at' => '2026-01-05 00:00:00', 'updated_at' => '2026-01-05 00:00:00']);
 
         // G1 は種別 1 の親、G2 はその子(G2 にはこの後 group.updated のイベントだけがある)。
         DB::table('groups')->insert([
@@ -294,10 +289,10 @@ class SeededDataRebuildScenarioTest extends TestCase
         ]);
     }
 
-    /** 参照マスタ以外の全ReadModel(leave:rebuild-event-store --list-readmodels の一覧)を空にする。 */
+    /** 全ReadModel(leave:rebuild-event-store --list-readmodels の一覧。参照マスタ・認証情報は除いてある)を空にする。 */
     private function emptyReadModels(): void
     {
-        $tables = array_diff(array_keys((new ReadModelTableLister)->tables(app_path('Domain'))), self::NOT_READ_MODELS);
+        $tables = array_keys((new ReadModelTableLister)->tables(app_path('Domain')));
         $this->assertContains('users', $tables);
         $this->assertContains('company_calendar_days', $tables);
 
@@ -333,7 +328,7 @@ class SeededDataRebuildScenarioTest extends TestCase
             'role_features' => [['role_id', 'feature_id'], ['id']],
             'role_assignments' => [['id'], []],
             'group_feature_assignments' => [['group_id', 'feature_id'], ['id']],
-            'users' => [['id'], ['password', 'remember_token']],
+            'users' => [['id'], []],
             'memberships' => [['user_id', 'group_id'], ['id']],
             'external_identities' => [['provider', 'external_subject_id'], ['id']],
             'field_authorities' => [['field_key'], ['id']],

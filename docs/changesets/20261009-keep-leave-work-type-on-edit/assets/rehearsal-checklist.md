@@ -569,7 +569,7 @@ RENAME TABLE stored_events TO stored_events_original, stored_events_rebuilt TO s
 ```
 
 以降は `DB_DATABASE=flow_office_verify` の `.env` の新しいコードで、5-3〜5-4 と同じ手順を行う(migrate・外部キーの確認・権限カタログ・
-全ReadModelを空にして全Projectorをリビルド)。続けて、5-5 の日次計算の再計算を試し実行で行い、変わる日の一覧を保存する。
+全ReadModelを空にして全Projectorをリビルド。空にする一覧は参照マスタ・認証情報を除いたもの)。続けて、5-5 の日次計算の再計算を試し実行で行い、変わる日の一覧を保存する。
 
 比較:
 
@@ -888,6 +888,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 (旧手順の「勤怠日を空にしない」は不要になった)。Projectorは `replay` の前に状態を消さないため、必ず空にしてから再生する。
 
 - 空にするテーブルの一覧は `php artisan leave:rebuild-event-store --list-readmodels` の出力を使う(Projectorの書き込み先から機械的に作る。実装済み)。
+  一覧は、Projectorが読むだけの参照マスタ・認証情報(`features`・`permissions`・`permission_scope_types`・`system_settings`・`user_credentials`)を除いてある(空にしない)。
   **要確認 R2**: 出力に、`stored_events.id` を参照する列を持つ表(`workflow_request_history_entries`・`expense_claim_history_entries`)が
   含まれるかを実行して確認する。含まれなければ、その表の `stored_event_id` の扱いを決めてから進む。
 
