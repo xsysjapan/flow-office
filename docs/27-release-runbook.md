@@ -116,7 +116,7 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 休暇の申請・残数・勤怠を文脈間のイベント連携に切り替えたリリース。既存データは移行コマンドではなく、
 `stored_events`の作り直しで新しいイベント構成に変換して引き継ぐ(変更セット論点18。変換規則と実行手順は
 `docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md` 7章)。移行イベント・移行コマンド・
-補正イベントは作らない。作り直しは本番での実行の前に、`assets/rehearsal-checklist.md`の手順で複製DBに対して行い、
+補正イベントは作らない。作り直しは本番での実行の前に、変更セットのリハーサル手順書(`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/rehearsal-checklist.md`)の手順で複製DBに対して行い、
 試し実行の結果を確認する。以下の順序で行う。
 
 1. 事前条件の確認(試し実行で自動確認): 作り直しの表`stored_events_rebuilt`が存在しないこと、補正ログ`stored_event_corrections`が空であること、
