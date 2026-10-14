@@ -8,6 +8,6 @@ class SetDefaultCompanyCalendar implements Command
 {
     public function __construct(
         public readonly string $companyCalendarId,
-        public readonly string $changedByUserId,
+        public readonly ?string $changedByUserId,
     ) {}
 }

@@ -60,7 +60,7 @@ final class RebuildLeaveEventStoreCommand extends Command
             return $this->verifyOnly($writer);
         }
 
-        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays(), $writer->readPaidLeaveSchedule(), $writer->readSeededData());
+        $result = $rebuilder->rebuild($writer->readRows(), $writer->readAttendanceDays(), $writer->readPaidLeaveSchedule(), $writer->readSeededData(), $writer->readCalendarDayIndex());
         $this->printReport($result->report);
 
         if (! $result->ok) {
@@ -222,6 +222,12 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->info('勤怠日の変換');
             $this->line("対象の勤怠日: {$attendance['days']} 件 / created を補った日: {$attendance['created_added']} 件 / deleted を補った日: {$attendance['deleted_added']} 件");
             $this->line("休暇値の workType を書き換えた件数: {$attendance['work_type_rewritten']} / 既定値nullの項目を補完した件数: {$attendance['null_items_filled']}");
+        }
+
+        if (isset($report['holiday_calendar_day_refs'])) {
+            $refs = $report['holiday_calendar_day_refs'];
+            $this->info('祝日の同期イベントへの companyCalendarYearId・date の補完');
+            $this->line("補った要素: {$refs['filled']} 件 / 補えなかった要素(対応する日の行が無い): {$refs['unresolved']} 件 / 既に揃っていた要素: {$refs['already_complete']} 件 / 置き換えたイベント: {$refs['events']} 件");
         }
 
         if (isset($report['reconcile'])) {

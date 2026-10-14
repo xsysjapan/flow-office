@@ -15,6 +15,7 @@ use RuntimeException;
  * - readAttendanceDays(): ReadModel(attendance_days)の現在値を読む(勤怠の変換 2.4 の入力)。
  * - readPaidLeaveSchedule(): ReadModel(paid_leave_schedule_entries・paid_leave_schedule_assessments)の現在値を読む(旧版の付与予定イベントの置き換えの入力)。
  * - readSeededData(): ReadModel(group_types・groups・roles・permission_role・role_features・role_assignments・group_feature_assignments・users・memberships・external_identities・field_authorities・company_calendar_years・days)の現在の行を読む(照合による補完の入力。論点19 決定1)。
+ * - readCalendarDayIndex(): ReadModel(company_calendar_days)の id => (年の id・日付)の対応を読む(祝日の同期イベントの dayChanges に補う入力。論点19 決定8-2)。
  * - assertPreconditions(): 事前条件(論点18 7章1)。新しい種類の休暇・口座イベント・補正ログ・既存の作り直し表・スナップショットが無いこと。
  * - write(): 新しい表(既定 stored_events_rebuilt)に書く。既にあれば失敗する。
  * - verify(): 作り直し後の表の自己整合性(id・版の連番、新しい種類が残っていないこと)を確かめる。
@@ -203,7 +204,32 @@ final class EventStoreRebuildWriter
             companyCalendarIds: Schema::hasTable('company_calendars') ? array_map('strval', DB::table('company_calendars')->pluck('id')->all()) : [],
             calendarYears: $rows('company_calendar_years'),
             calendarDays: $rows('company_calendar_days'),
+            companyCalendars: array_map(
+                fn (array $row) => array_intersect_key($row, array_flip(['id', 'is_default', 'created_at'])),
+                $rows('company_calendars'),
+            ),
         );
+    }
+
+    /**
+     * ReadModel(company_calendar_days)の現在の行から、日の id => 年の id・日付(Y-m-d)の対応を読む(読み取りのみ。テーブルが無ければ空)。
+     * 祝日の同期イベント(holiday_calendar_source.synced・sync_reverted)の dayChanges・dayReverts に companyCalendarYearId・date を補う入力
+     * (論点19 決定8-2)。
+     *
+     * @return array<int, array{yearId: string, date: string}>
+     */
+    public function readCalendarDayIndex(): array
+    {
+        if (! Schema::hasTable('company_calendar_days')) {
+            return [];
+        }
+
+        $index = [];
+        foreach (DB::table('company_calendar_days')->select('id', 'calendar_id', 'date')->orderBy('id')->get() as $row) {
+            $index[(int) $row->id] = ['yearId' => (string) $row->calendar_id, 'date' => substr((string) $row->date, 0, 10)];
+        }
+
+        return $index;
     }
 
     /** @return list<string> 満たしていない事前条件の説明(空なら満たしている) */

@@ -421,7 +421,8 @@
       イベント(`sync_reverted`)も同様。
    3. `company_calendars.is_default`: マイグレーション`2026_08_10_020900`がイベントを経ずに設定していた。照合による補完の対象に
       `company_calendars`の`is_default`を加え、差があれば`company_calendar.default_changed`を導出する(操作者`changedByUserId`は
-      null可にしnull。決定2と同じ方針)。
+      null可にしnull。決定2と同じ方針)。置く位置は、既定の暦の集約の最後のイベントの直後と、他の暦の最後の
+      `default_changed`の直後のうち後ろ(後続の他の暦の切り替えに上書きされないため。実装中の決定)。
    4. 現在時刻で書くProjector: `HolidayCalendarSourceProjector`(`synced_at`・`applied_at`・`last_synced_at`・`disabled_at`)と
       `CalendarBulkOperationProjector`(`applied_at`・`reverted_at`)を、イベントの発生日時で書く。
    5. イベントの発生日時: 作り直しは`meta_data`の`created-at`を`stored_events.created_at`列の値にそろえていたが、Projectorが

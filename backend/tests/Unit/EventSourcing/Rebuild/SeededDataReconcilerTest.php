@@ -675,6 +675,106 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame([], $kept->remapped);
     }
 
+    // ---- company_calendars.is_default(論点19 決定8-3) ----
+
+    private const CALENDAR2 = '66666666-6666-4666-8666-666666666666';
+
+    public function test_default_calendar_without_default_changed_event_gets_one_after_its_last_event_with_a_null_actor(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::CALENDAR, 'company_calendar.created', ['name' => 'A']),
+                $this->event(2, self::CALENDAR2, 'company_calendar.created', ['name' => 'B']),
+                $this->event(3, self::CALENDAR, 'company_calendar.updated', ['name' => 'A2']),
+            ],
+            new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, true), $this->calendar(self::CALENDAR2, false)]),
+        );
+
+        $events = array_values(array_filter($this->ordered($result), fn (RebuiltEvent $e) => $e->eventClass === 'company_calendar.default_changed'));
+        $this->assertCount(1, $events);
+        $this->assertSame(self::CALENDAR, $events[0]->aggregateUuid);
+        $this->assertSame(3, $events[0]->anchorId);
+        $this->assertGreaterThan(0, $events[0]->subOrder);
+        $this->assertSame(['previousDefaultCompanyCalendarId' => null, 'changedByUserId' => null], $events[0]->payload);
+        $this->assertSame(['company_calendars' => ['company_calendar.default_changed' => 1]], $result->derivedByTable);
+        $this->assertSame([], $result->issues);
+        $this->assertArrayHasKey('company_calendars', $result->mismatches);
+    }
+
+    public function test_default_changed_moves_the_default_from_the_calendar_the_events_say_is_default(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::CALENDAR, 'company_calendar.created', ['name' => 'A']),
+                $this->event(2, self::CALENDAR2, 'company_calendar.created', ['name' => 'B']),
+                $this->event(3, self::CALENDAR, 'company_calendar.default_changed', ['previousDefaultCompanyCalendarId' => null, 'changedByUserId' => self::USER]),
+                $this->event(4, self::CALENDAR2, 'company_calendar.updated', ['name' => 'B2']),
+            ],
+            new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, false), $this->calendar(self::CALENDAR2, true)]),
+        );
+
+        $events = array_values(array_filter($this->ordered($result), fn (RebuiltEvent $e) => $e->eventClass === 'company_calendar.default_changed'));
+        $this->assertCount(1, $events);
+        $this->assertSame(self::CALENDAR2, $events[0]->aggregateUuid);
+        $this->assertSame(self::CALENDAR, $events[0]->payload['previousDefaultCompanyCalendarId']);
+        $this->assertNull($events[0]->payload['changedByUserId']);
+    }
+
+    public function test_default_changed_is_placed_after_a_later_default_changed_of_another_calendar(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::CALENDAR, 'company_calendar.created', ['name' => 'A']),
+                $this->event(2, self::CALENDAR2, 'company_calendar.created', ['name' => 'B']),
+                $this->event(3, self::CALENDAR2, 'company_calendar.default_changed', ['previousDefaultCompanyCalendarId' => null, 'changedByUserId' => self::USER]),
+            ],
+            new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, true), $this->calendar(self::CALENDAR2, false)]),
+        );
+
+        $events = array_values(array_filter($this->ordered($result), fn (RebuiltEvent $e) => $e->eventClass === 'company_calendar.default_changed'));
+        $this->assertSame(3, $events[0]->anchorId);
+        $this->assertSame(self::CALENDAR2, $events[0]->payload['previousDefaultCompanyCalendarId']);
+    }
+
+    public function test_matching_default_derives_nothing(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::CALENDAR, 'company_calendar.created', ['name' => 'A']),
+                $this->event(2, self::CALENDAR, 'company_calendar.default_changed', ['previousDefaultCompanyCalendarId' => null, 'changedByUserId' => self::USER]),
+            ],
+            new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, true), $this->calendar(self::CALENDAR2, false)]),
+        );
+
+        $this->assertSame([], $result->events);
+        $this->assertSame([], $result->issues);
+        $this->assertSame([], $result->mismatches);
+    }
+
+    public function test_default_calendar_without_any_events_is_placed_at_the_head_with_the_row_created_at(): void
+    {
+        $result = $this->reconcile([], new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, true)]));
+
+        $this->assertCount(1, $result->events);
+        $this->assertSame(0, $result->events[0]->anchorId);
+        $this->assertSame(self::ROW_AT, $result->events[0]->createdAt);
+        $this->assertSame([], $result->mismatches);
+    }
+
+    public function test_zero_or_multiple_default_calendars_stop_and_no_calendars_is_fine(): void
+    {
+        $none = $this->reconcile([], new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, false)]));
+        $this->assertSame('company_calendars is_default', $none->issues[0]['key']);
+        $this->assertSame([], $none->events);
+
+        $many = $this->reconcile([], new SeededDataCurrent(companyCalendars: [$this->calendar(self::CALENDAR, true), $this->calendar(self::CALENDAR2, true)]));
+        $this->assertSame('company_calendars is_default', $many->issues[0]['key']);
+
+        $empty = $this->reconcile([], new SeededDataCurrent(companyCalendars: []));
+        $this->assertSame([], $empty->issues);
+        $this->assertSame([], $empty->events);
+    }
+
     // ---- EventStoreRebuilder への組み込み ----
 
     public function test_rebuilder_orders_derived_events_renumbers_ids_and_versions_and_reports_the_reconcile_summary(): void
@@ -715,6 +815,12 @@ class SeededDataReconcilerTest extends TestCase
     }
 
     // ---- 部品 ----
+
+    /** @return array<string, mixed> */
+    private function calendar(string $id, bool $isDefault): array
+    {
+        return ['id' => $id, 'is_default' => $isDefault ? 1 : 0, 'created_at' => self::ROW_AT];
+    }
 
     /** @return array<string, mixed> */
     private function groupType(array $over = []): array

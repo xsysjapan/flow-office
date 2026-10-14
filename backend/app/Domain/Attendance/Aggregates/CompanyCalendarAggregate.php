@@ -64,7 +64,7 @@ class CompanyCalendarAggregate extends AggregateRoot
         return $this;
     }
 
-    public function changeDefault(?string $previousDefaultCompanyCalendarId, string $changedByUserId): self
+    public function changeDefault(?string $previousDefaultCompanyCalendarId, ?string $changedByUserId): self
     {
         $this->recordThat(new CompanyCalendarDefaultChanged(
             previousDefaultCompanyCalendarId: $previousDefaultCompanyCalendarId,

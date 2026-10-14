@@ -21,6 +21,7 @@ final readonly class SeededDataCurrent
      * @param  list<array<string, mixed>>  $externalIdentities
      * @param  list<array<string, mixed>>  $fieldAuthorities
      * @param  list<string>  $companyCalendarIds  company_calendars.id(旧集約UUIDの付け替え判定に使う)
+     * @param  list<array<string, mixed>>  $companyCalendars  company_calendars の行(id・is_default・created_at。is_default の照合に使う)
      * @param  list<array<string, mixed>>  $calendarYears
      * @param  list<array<string, mixed>>  $calendarDays
      */
@@ -39,5 +40,6 @@ final readonly class SeededDataCurrent
         public array $companyCalendarIds = [],
         public array $calendarYears = [],
         public array $calendarDays = [],
+        public array $companyCalendars = [],
     ) {}
 }

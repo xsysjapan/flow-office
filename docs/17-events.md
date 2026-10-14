@@ -76,7 +76,7 @@
 
 - `company_calendar.created` (会社カレンダー本体の作成)
 - `company_calendar.default_changed` (デフォルトカレンダーの切り替え。既存デフォルトの自動解除を
-  含む)
+  含む。`changedByUserId`はnull可: イベントの作り直しでマイグレーション由来の既定を補ったもの)
 - `company_calendar.fiscal_year_settings_changed` (本体の`fiscal_year_start_month`/
   `fiscal_year_start_day`の変更。既に生成済みの`company_calendar_years`の`starts_on`/
   `ends_on`には影響せず、以後生成される年度にのみ反映される)
@@ -92,8 +92,11 @@
 - `company_calendar_day.updated` (会社カレンダー日の`schedule_state`個別編集)
 - `company_calendar_day.reverted` (会社カレンダー日の個別編集の取消)
 - `holiday_calendar_source.registered` (祝日iCalendarソースの登録)
-- `holiday_calendar_source.synced` (祝日iCalendar同期の実行。追加/更新/削除件数を含む)
-- `holiday_calendar_source.sync_reverted` (同期実行1回分の取消)
+- `holiday_calendar_source.synced` (祝日iCalendar同期の実行。追加/更新/削除件数を含む。`dayChanges`の各要素は
+  `company_calendar_day_id`(日の自動採番id。再生で変わり得る)に加え、日を再生でも特定できるよう
+  `companyCalendarYearId`(日の年のid)と`date`(`Y-m-d`)を持つ。Projectorは両方があれば「年のid+日付」で日を引き、
+  無い旧形式の要素は`company_calendar_day_id`で引く。`synced_at`・`last_synced_at`・出典の`applied_at`はイベントの発生日時)
+- `holiday_calendar_source.sync_reverted` (同期実行1回分の取消。`dayReverts`の各要素も`companyCalendarYearId`・`date`を持ち、同じ規則で日を引く)
 - `holiday_calendar_source.disabled` (祝日iCalendarソースの無効化)
 - `calendar_bulk_operation.applied` (複数従業員予定の一括操作の確定適用。
   `operation_type`〔`calendar_apply`/`rotation_generate`/`bulk_edit`〕を含む)

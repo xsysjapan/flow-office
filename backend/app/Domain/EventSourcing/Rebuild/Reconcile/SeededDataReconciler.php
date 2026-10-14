@@ -13,7 +13,8 @@ use App\Domain\EventSourcing\Rebuild\StoredEventRow;
  * 処理順は外部キーの依存順(依存先の導出イベントが依存元より前になる)。論点19の表の「順」から、users を
  * 外部キー(created_by・assigned_by・published_by_user_id)で参照されるテーブルより前にしている。
  *   group_types → field_authorities → users → groups → roles → company_calendar_years → permission_role・role_features →
- *   role_assignments → group_feature_assignments → memberships・external_identities → company_calendar_days
+ *   role_assignments → group_feature_assignments → memberships・external_identities → company_calendar_days →
+ *   company_calendars.is_default(論点19 決定8-3。暦の既定。CompanyCalendarDefaultReconciler)
  * features・permissions・permission_scope_types は参照マスタ(Projectorの書き込み先ではない)のため読まない。
  */
 final class SeededDataReconciler
@@ -43,6 +44,7 @@ final class SeededDataReconciler
         (new MembershipReconciler)->reconcile($ctx);
         (new ExternalIdentityReconciler)->reconcile($ctx);
         (new CalendarDayReconciler)->reconcile($ctx);
+        (new CompanyCalendarDefaultReconciler)->reconcile($ctx);
 
         $events = array_map(fn (StoredEventRow $row) => RebuiltEvent::passThrough($row), $remapped['replaced']);
         array_push($events, ...$ctx->events);

@@ -39,6 +39,8 @@ class SeededDataRebuildScenarioTest extends TestCase
 
     private const YEAR = '77777777-7777-4777-8777-777777777777';
 
+    private const SOURCE = '88888888-8888-4888-8888-888888888888';
+
     /** @var list<int> */
     private array $permissionIds = [];
 
@@ -52,6 +54,9 @@ class SeededDataRebuildScenarioTest extends TestCase
     private array $versions = [];
 
     private int $nextId = 1;
+
+    /** 祝日の同期イベントが(旧形式の)自動採番idで指す日(2026-04-02)の、作り直し前のid。 */
+    private int $holidayDayId = 0;
 
     public function test_seeded_rows_are_reconciled_into_the_rebuilt_events_and_replay_to_the_same_rows(): void
     {
@@ -87,6 +92,16 @@ class SeededDataRebuildScenarioTest extends TestCase
 
         $this->assertEquals($before, $this->snapshot());
         $this->assertEquals($createdAtBefore, $this->createdAtSnapshot());
+        // 暦の既定は再生後も同じ(導出した default_changed で true になる)。
+        $this->assertTrue((bool) DB::table('company_calendars')->where('id', self::CALENDAR)->value('is_default'));
+        // 日の行の id は再生で変わるが、祝日の同期は年の id と日付で正しい日(2026-04-02)に付く(日の出典が記録される)。
+        $this->assertNotSame($this->holidayDayId, (int) DB::table('company_calendar_days')->whereDate('date', '2026-04-02')->value('id'));
+        $sources = DB::table('company_calendar_day_sources')
+            ->join('company_calendar_days', 'company_calendar_days.id', '=', 'company_calendar_day_sources.company_calendar_day_id')
+            ->where('company_calendar_day_sources.source_type', 'holiday_sync')
+            ->where('company_calendar_day_sources.source_ref', self::SOURCE)
+            ->pluck('company_calendar_days.date')->map(fn ($d) => substr((string) $d, 0, 10))->all();
+        $this->assertSame(['2026-04-02'], $sources);
         // 参照マスタは空にしておらず、そのまま残っている。
         $this->assertSame($this->masterCounts['permissions'], DB::table('permissions')->count());
         $this->assertSame($this->masterCounts['features'], DB::table('features')->count());
@@ -167,6 +182,22 @@ class SeededDataRebuildScenarioTest extends TestCase
         $role2Events = array_values(array_filter($events, fn (array $e) => $e['aggregate'] === $role2));
         $this->assertSame(['role.created', 'role.updated', 'role.permissions_changed', 'role.permissions_changed'], array_column($role2Events, 'class'));
         $this->assertSame([$this->permissionIds[0]], $role2Events[3]['payload']['permissionIds']);
+
+        // 暦の既定(イベントを経ずに設定された is_default)は company_calendar.default_changed(操作者null)として暦の集約に導出される。
+        $defaults = array_values(array_filter($events, fn (array $e) => $e['class'] === 'company_calendar.default_changed'));
+        $this->assertCount(1, $defaults);
+        $this->assertSame(self::CALENDAR, $defaults[0]['aggregate']);
+        $this->assertNull($defaults[0]['payload']['previousDefaultCompanyCalendarId']);
+        $this->assertNull($defaults[0]['payload']['changedByUserId']);
+
+        // 祝日の同期イベントの dayChanges には、作り直し前の日の行から companyCalendarYearId・date が補われる(消えた日はそのまま)。
+        $synced = array_values(array_filter($events, fn (array $e) => $e['class'] === 'holiday_calendar_source.synced'));
+        $this->assertCount(1, $synced);
+        $changes = $synced[0]['payload']['dayChanges'];
+        $this->assertSame(self::YEAR, $changes[0]['companyCalendarYearId']);
+        $this->assertSame('2026-04-02', $changes[0]['date']);
+        $this->assertArrayNotHasKey('companyCalendarYearId', $changes[1]);
+        $this->assertSame('2026-04-29', $changes[1]['date']);
 
         // days_updated の旧集約UUID(company_calendars.id)は年の id へ付け替わっている。
         $this->assertSame(0, DB::table('stored_events')->where('aggregate_uuid', self::CALENDAR)->where('event_class', 'company_calendar_year.days_updated')->count());
@@ -253,6 +284,8 @@ class SeededDataRebuildScenarioTest extends TestCase
 
         DB::table('company_calendars')->insert([
             'id' => self::CALENDAR, 'name' => '本社カレンダー', 'week_starts_on' => 1, 'fiscal_year_start_month' => 4, 'fiscal_year_start_day' => 1,
+            // マイグレーション(2026_08_10_020900)がイベントを経ずに設定した既定の暦。イベントには company_calendar.default_changed が無い。
+            'is_default' => true,
             'created_at' => '2026-01-21 00:00:00', 'updated_at' => '2026-01-21 00:00:00',
         ]);
         DB::table('company_calendar_years')->insert([
@@ -268,6 +301,9 @@ class SeededDataRebuildScenarioTest extends TestCase
             $day('2026-04-02', 'company_holiday', false, false, 'OFF', '2026-02-01 00:00:00'),
             $day('2026-04-03', 'legal_holiday', false, true, 'OFF', '2026-02-02 00:00:00'),
         ]);
+        // 2026-04-02 は祝日の同期(holiday_calendar_source.synced)で祝日になった日。
+        DB::table('company_calendar_days')->whereDate('date', '2026-04-02')->update(['is_public_holiday' => true, 'public_holiday_name' => '春の日']);
+        $this->holidayDayId = (int) DB::table('company_calendar_days')->whereDate('date', '2026-04-02')->value('id');
     }
 
     /** いくつかの更新イベントだけ(作成イベントが無い集約・旧集約UUIDの days_updated・最終状態が違う権限)。 */
@@ -286,6 +322,18 @@ class SeededDataRebuildScenarioTest extends TestCase
         $this->insertEvent($role2, 'role.updated', ['roleId' => 2, 'name' => '社員(改)', 'description' => 'd', 'status' => 'active', 'actorUserId' => null]);
         $this->insertEvent($role2, 'role.permissions_changed', ['roleId' => 2, 'permissionIds' => [$this->permissionIds[0], $this->permissionIds[1]], 'actorUserId' => null]);
         $this->insertEvent(self::U2, 'user.logged_in', ['wasFirstLogin' => true, 'loggedInAt' => '2026-08-02 09:00:00']);
+
+        // 祝日の同期: 日を自動採番の company_calendar_day_id(と date)で指す旧形式。年の id は無い。2件目は既に無い日(補えない)。
+        $this->insertEvent(self::SOURCE, 'holiday_calendar_source.registered', ['name' => '祝日', 'icsUrl' => 'https://example.test/holidays.ics', 'registeredByUserId' => self::U1, 'sourceKind' => 'url', 'uploadedIcsPath' => null, 'uploadedIcsFilename' => null]);
+        $this->insertEvent(self::SOURCE, 'holiday_calendar_source.synced', [
+            'eventChanges' => [],
+            'dayChanges' => [
+                ['company_calendar_day_id' => $this->holidayDayId, 'date' => '2026-04-02', 'is_public_holiday' => true, 'public_holiday_name' => '春の日', 'previous_is_public_holiday' => false, 'previous_public_holiday_name' => null],
+                ['company_calendar_day_id' => 987654, 'date' => '2026-04-29', 'is_public_holiday' => true, 'public_holiday_name' => '消えた日', 'previous_is_public_holiday' => false, 'previous_public_holiday_name' => null],
+            ],
+            'protectedConflicts' => [],
+            'syncedByUserId' => null,
+        ]);
     }
 
     /** @param  array<string, mixed>  $payload */

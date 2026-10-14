@@ -16,6 +16,8 @@ use App\Domain\EventSourcing\Rebuild\Reconcile\SeededDataReconciler;
  *    勤怠日の変換は、休暇の変換結果(利用者・対象日・解除の操作)と、ReadModel(attendance_days)の現在値を入力にする。
  *    旧版の付与予定イベント(paid_leave_schedule.* で entryId があり scheduleEntryId が無いもの)は、ReadModel
  *    (paid_leave_schedule_entries・assessments)の現在値から現行の形のイベント列に置き換える(論点19 決定3)。
+ *    祝日の同期イベント(holiday_calendar_source.synced・sync_reverted)の dayChanges・dayReverts へは、ReadModel(company_calendar_days)の
+ *    現在の行から companyCalendarYearId・date を補う(論点19 決定8-2。HolidayCalendarDayRefRebuilder)。
  *    ReadModel(group_types・roles・users 等)の現在の行を渡されたときは、イベントを経ずに作られた行・イベントの最終状態と
  *    ずれた行の差を埋める導出イベントを置く(照合による補完。論点19 決定1。SeededDataReconciler)。
  * 3. 変換で置き換えた行を除き、残りの行(休暇以外・ワークフロー等)は元の行をそのまま写す。
@@ -89,6 +91,7 @@ final class EventStoreRebuilder
         private readonly AttendanceRebuilder $attendance = new AttendanceRebuilder,
         private readonly PaidLeaveScheduleRebuilder $schedule = new PaidLeaveScheduleRebuilder,
         private readonly SeededDataReconciler $seededReconciler = new SeededDataReconciler,
+        private readonly HolidayCalendarDayRefRebuilder $holidayDayRefs = new HolidayCalendarDayRefRebuilder,
     ) {}
 
     /**
@@ -96,8 +99,9 @@ final class EventStoreRebuilder
      * @param  array<string, AttendanceDayCurrent>  $attendanceDays  ReadModel(attendance_days)の現在値(勤怠日ID => 現在値)。勤怠の変換(2.4)の入力
      * @param  array<string, PaidLeaveScheduleCurrent>  $paidLeaveSchedule  ReadModel(paid_leave_schedule_entries・assessments)の現在値(行id => 現在値)。旧版の付与予定イベントの置き換えの入力
      * @param  SeededDataCurrent|null  $seeded  ReadModel(group_types・roles・users 等)の現在の行。照合による補完(論点19 決定1)の入力。null なら照合しない
+     * @param  array<int, array{yearId: string, date: string}>  $calendarDayIndex  ReadModel(company_calendar_days)の 日の id => 年の id・日付。祝日の同期イベントの dayChanges・dayReverts に companyCalendarYearId・date を補う入力(論点19 決定8-2)
      */
-    public function rebuild(array $rows, array $attendanceDays = [], array $paidLeaveSchedule = [], ?SeededDataCurrent $seeded = null): RebuildResult
+    public function rebuild(array $rows, array $attendanceDays = [], array $paidLeaveSchedule = [], ?SeededDataCurrent $seeded = null, array $calendarDayIndex = []): RebuildResult
     {
         usort($rows, fn (StoredEventRow $a, StoredEventRow $b) => $a->id <=> $b->id);
 
@@ -420,7 +424,15 @@ final class EventStoreRebuilder
             ];
         }
 
+        // 祝日の同期イベントの dayChanges・dayReverts へ companyCalendarYearId・date を補う(論点19 決定8-2)。
+        $holidayRefs = $this->holidayDayRefs->rebuild($rows, $calendarDayIndex);
+        array_push($converted, ...$holidayRefs->events);
+        foreach ($holidayRefs->consumedIds as $id) {
+            $consumed[$id] = true;
+        }
+
         $report = [
+            'holiday_calendar_day_refs' => $holidayRefs->report(),
             'reconcile' => $reconcileSummary,
             'paid_leave_schedule' => $scheduleSummary,
             'by_class_before' => $byClassBefore,
