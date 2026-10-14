@@ -14,7 +14,7 @@ use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
 use App\Models\HolidayCalendarEvent;
 use App\Models\HolidayCalendarSource;
-use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -23,6 +23,9 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  */
 class HolidayCalendarSourceProjector extends Projector
 {
+    /** 再生で毎回同じidになるよう、行のidをuuid5で決める名前空間(変更しない)。 */
+    private const ID_NAMESPACE = 'a3c1f1de-5b0e-5c43-9d2a-6e1b7f0c4d82';
+
     public function __construct(
         private readonly CalendarWeekdayPatternDayGenerator $weekdayPatternDayGenerator,
     ) {}
@@ -77,7 +80,7 @@ class HolidayCalendarSourceProjector extends Projector
                 ->where('ics_uid', $change['ics_uid'])
                 ->first()
                 ?? new HolidayCalendarEvent([
-                    'id' => (string) Str::uuid(),
+                    'id' => Uuid::uuid5(self::ID_NAMESPACE, $sourceId.'|'.$change['ics_uid'])->toString(),
                     'holiday_calendar_source_id' => $sourceId,
                     'ics_uid' => $change['ics_uid'],
                 ]);
@@ -85,6 +88,8 @@ class HolidayCalendarSourceProjector extends Projector
             $holidayEvent->fill(['date' => $change['date'], 'name' => $change['name'], 'synced_at' => $syncedAt])->save();
         }
 
+        $eventKey = $event->storedEventId() ?? ($sourceId.'#'.$event->aggregateRootVersion());
+        $occurrences = [];
         foreach ($event->dayChanges as $dayChange) {
             $day = $this->findDay($dayChange);
             if ($day === null) {
@@ -112,8 +117,12 @@ class HolidayCalendarSourceProjector extends Projector
                 ...$holidaySchedule,
             ]);
 
+            // 同じイベントで同じ年・日付・出典が複数回出ても別のidになるよう、出現順(0始まり)を含める。
+            $dayKey = $day->calendar_id.'|'.$day->date->toDateString().'|holiday_sync|'.$sourceId.'|'.$eventKey;
+            $occurrence = $occurrences[$dayKey] = ($occurrences[$dayKey] ?? -1) + 1;
+
             CompanyCalendarDaySource::query()->create([
-                'id' => (string) Str::uuid(),
+                'id' => Uuid::uuid5(self::ID_NAMESPACE, $dayKey.'|'.$occurrence)->toString(),
                 'company_calendar_day_id' => $day->id,
                 'source_type' => 'holiday_sync',
                 'source_ref' => (string) $sourceId,

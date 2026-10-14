@@ -208,6 +208,8 @@ final class EventStoreRebuildWriter
                 fn (array $row) => array_intersect_key($row, array_flip(['id', 'is_default', 'created_at'])),
                 $rows('company_calendars'),
             ),
+            defaultTimezone: Schema::hasTable('system_settings') && Schema::hasColumn('system_settings', 'default_timezone')
+                ? (($tz = DB::table('system_settings')->value('default_timezone')) !== null ? (string) $tz : null) : null,
         );
     }
 

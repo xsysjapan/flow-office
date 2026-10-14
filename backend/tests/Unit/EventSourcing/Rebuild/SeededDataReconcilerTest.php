@@ -410,6 +410,58 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(self::ROW_AT, $result->events[0]->createdAt);
     }
 
+    public function test_user_attributes_dropped_by_normalization_are_derived_after_the_last_event(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::USER, 'user.created_from_sso_login', ['entraUserId' => 'e1', 'name' => 'A', 'email' => null], '2026-03-01 09:00:00'),
+                $this->event(2, self::USER, 'user.logged_in', ['wasFirstLogin' => true, 'loggedInAt' => '2026-03-02 09:00:00'], '2026-03-02 09:00:00'),
+            ],
+            new SeededDataCurrent(users: [$this->user([
+                'usage_start_date' => '2020-04-01 00:00:00', 'hire_date' => '2020-04-01', 'termination_date' => '2026-09-30',
+                'timezone' => 'America/New_York', 'paid_leave_auto_grant_enabled' => 0, 'special_leave_auto_grant_enabled' => 1,
+            ])], defaultTimezone: 'Asia/Tokyo'),
+        );
+
+        $events = $this->ordered($result);
+        $this->assertSame([
+            'user.usage_start_date_set', 'user.hire_date_set', 'user.termination_date_set', 'user.profile_updated', 'user.paid_leave_auto_grant_enabled_set',
+        ], array_map(fn (RebuiltEvent $e) => $e->eventClass, $events));
+        $this->assertSame(['usageStartDate' => '2020-04-01', 'changedByUserId' => null], $events[0]->payload);
+        $this->assertSame(['before' => ['timezone' => 'Asia/Tokyo'], 'after' => ['timezone' => 'America/New_York'], 'changedByUserId' => null], $events[3]->payload);
+        $this->assertSame(['enabled' => false, 'changedByUserId' => null], $events[4]->payload);
+        $this->assertSame(2, $events[0]->anchorId);
+        $this->assertSame(5, $result->derivedByTable['users'] ? array_sum($result->derivedByTable['users']) : 0);
+        $this->assertArrayHasKey('users', $result->mismatches);
+    }
+
+    public function test_user_attributes_equal_to_the_event_state_derive_nothing(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::USER, 'user.created_from_sso_login', ['entraUserId' => 'e1', 'name' => 'A', 'email' => null], '2026-03-01 09:00:00'),
+                $this->event(2, self::USER, 'user.hire_date_set', ['hireDate' => '2020-04-01', 'changedByUserId' => self::USER], '2026-03-02 09:00:00'),
+            ],
+            new SeededDataCurrent(users: [$this->user(['usage_start_date' => '2026-03-01', 'hire_date' => '2020-04-01 00:00:00'])], defaultTimezone: 'Asia/Tokyo'),
+        );
+
+        $this->assertSame([], $result->events);
+        $this->assertSame([], $result->mismatches);
+    }
+
+    public function test_user_attribute_null_in_the_row_but_set_by_events_is_an_unsupported_sequence(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::USER, 'user.created_from_sso_login', ['entraUserId' => 'e1', 'name' => 'A', 'email' => null]),
+                $this->event(2, self::USER, 'user.hire_date_set', ['hireDate' => '2020-04-01', 'changedByUserId' => self::USER]),
+            ],
+            new SeededDataCurrent(users: [$this->user(['hire_date' => null, 'usage_start_date' => substr(self::AT, 0, 10)])]),
+        );
+
+        $this->assertCount(1, $result->issues);
+    }
+
     // ---- memberships ----
 
     public function test_membership_without_events_is_placed_after_the_user_and_group_creation(): void

@@ -24,6 +24,7 @@ final readonly class SeededDataCurrent
      * @param  list<array<string, mixed>>  $companyCalendars  company_calendars の行(id・is_default・created_at。is_default の照合に使う)
      * @param  list<array<string, mixed>>  $calendarYears
      * @param  list<array<string, mixed>>  $calendarDays
+     * @param  ?string  $defaultTimezone  system_settings.default_timezone(作成系イベントが users.timezone に書く既定値。論点19 決定10-3)
      */
     public function __construct(
         public array $groupTypes = [],
@@ -41,5 +42,6 @@ final readonly class SeededDataCurrent
         public array $calendarYears = [],
         public array $calendarDays = [],
         public array $companyCalendars = [],
+        public ?string $defaultTimezone = null,
     ) {}
 }

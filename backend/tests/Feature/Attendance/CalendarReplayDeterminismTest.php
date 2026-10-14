@@ -160,6 +160,30 @@ class CalendarReplayDeterminismTest extends TestCase
             ->where('company_calendar_day_id', $replayedDay->id)->where('source_type', 'holiday_sync')->count());
     }
 
+    /** 論点19 決定10-2: 再生で行のidが変わらない(Str::uuid()による採番をやめた)。 */
+    public function test_holiday_events_and_day_sources_get_the_same_ids_after_replay(): void
+    {
+        $admin = $this->makeAdmin();
+        [$sourceId, $year] = $this->setUpSyncedYear($admin);
+        $this->actingAs($admin)->postJson("/api/holiday-calendar-sources/{$sourceId}/sync")->assertOk();
+
+        $ids = fn () => [
+            'events' => DB::table('holiday_calendar_events')->orderBy('ics_uid')->pluck('id')->all(),
+            'sources' => DB::table('company_calendar_day_sources')->orderBy('id')->pluck('id')->all(),
+        ];
+        $first = $ids();
+        $this->assertNotEmpty($first['events']);
+        $this->assertNotEmpty($first['sources']);
+
+        $this->emptyCalendarReadModels();
+        Artisan::call('event-sourcing:replay', ['--force' => true]);
+        $this->assertSame($first, $ids());
+
+        $this->emptyCalendarReadModels();
+        Artisan::call('event-sourcing:replay', ['--force' => true]);
+        $this->assertSame($first, $ids());
+    }
+
     public function test_legacy_day_change_without_date_is_looked_up_by_day_id(): void
     {
         $admin = $this->makeAdmin();

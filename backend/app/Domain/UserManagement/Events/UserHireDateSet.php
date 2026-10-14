@@ -11,6 +11,6 @@ class UserHireDateSet extends ShouldBeStored
 {
     public function __construct(
         public readonly string $hireDate,
-        public readonly string $changedByUserId,
+        public readonly ?string $changedByUserId,
     ) {}
 }
