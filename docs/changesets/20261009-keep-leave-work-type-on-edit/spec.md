@@ -433,6 +433,23 @@
    6. `paid_leave_balances`の行の増加(1→3行)と`unallocated_days`の差は、意図した差として扱う見込み(旧系統のイベントでは行が
       作られず、作り直しで全付与保有者の口座イベントが揃うため。未充当は論点17の部分充当)。次のリハーサルで、増えた行が付与の
       ある利用者であること、`unallocated_days`の差が確認事項(a)の不足量と一致することを確かめる。
+9. **リハーサル4回目の差への対処**(2026-10-14):
+   1. `attendance_days.locked_at`(ユーザー決定): 列を廃止する。月次の締め(`CloseAttendanceMonthHandler`)がイベントを書かずに
+      直接UPDATEしており(設計原則2違反)、編集可否は月次の状態と`attendance_locks`で判定済み。書き込み・`AttendanceDay::isLocked`・
+      `AttendanceEditGuard`の判定(1)を削除し、マイグレーションで列を削除する。確定取消(`confirmation_reverted`)の後は日次の
+      編集→再提出ができるようになる(Projectorの説明どおり)。締め日時は`attendance_months.closed_at`。
+   2. 実績の無い`clocked_out`の日(実装中の決定): 旧コードが全休の申請時に勤怠日の状態を直接`clocked_out`にし、その後の日次編集が
+      ReadModelの状態を`attendance_day.edited`のpayloadへ写していた。2.4に規則を足す: その日に全休の申請があり、`edited`の
+      `status`が`clocked_out`で`actualStartAt`・`actualEndAt`がともにnullなら、`status`を直前の状態(同じ日の直前のイベントから
+      求めた値。無ければ`not_started`)に書き換える。試し実行で対象の一覧を出す。全休の申請が無い日は書き換えない。
+   3. cutover前の有給8件の充当: 旧システムの承認は、対象日に有効で残数のある付与が無いと充当(`paid_leave.used`)を書かなかった。
+      8件には`paid_leave.used`が無く、作り直しは2.1どおり未充当として再現している(論点17の部分充当と同じ扱い)。8件の承認時に
+      有効で残数のある付与が無かったことをリハーサルのデータで確かめ、無ければこのまま(手順書4(f)・6-3(6)・B09の期待を
+      「消化記録のみ・充当0・未充当」に改める)。あれば旧システムの不具合としてユーザーに判断を仰ぐ。
+   4. 日時の9時間の差: `stored_events.created_at`とReadModelの日時列はMySQLの`TIMESTAMP`で、セッションのタイムゾーンで変換される。
+      本番とリハーサルのセッションのタイムゾーンが違うと読み書きで9時間ずれる(`meta_data`の文字列はずれない)。決定8-5の規則を
+      改め、列と`meta_data`の差が1時間の整数倍(±2秒)ならタイムゾーンのずれとして`meta_data`を使う。リハーサルのMySQLは本番と
+      同じタイムゾーンで動かす(手順書1章)。本番とリハーサルの`@@time_zone`をリハーサルで確かめる。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
