@@ -997,11 +997,14 @@ SET FOREIGN_KEY_CHECKS = 1;
 ```
 
 ```bash
-time php artisan event-sourcing:replay | tee ~/rehearsal-20261009/after/replay-all.txt
+time DB_DATABASE=<対象DB> php artisan event-sourcing:replay --force | tee ~/rehearsal-20261009/after/replay-all.txt
 ```
 
 - **要確認 R11**: `event-sourcing:replay` は docs/29 の使い方(`event-sourcing:replay [Projector名]`、引数なしで全Projector)に従う。
-  `--force` の要否は vendor 未インストールのため未確認。確認プロンプトで止まる場合は、その時点で止めて確認する。
+  (リハーサル10回目で確認)引数なしでは確認プロンプトで入力待ちになるため `--force` を付ける。また接続先を明示しないと `.env` の
+  既定(空の `flow_office` など)を向き、「再生するイベントなし」で正常終了してしまう。実行の直前に 0-1 で接続先を確かめ、
+  `DB_DATABASE=<対象DB> php artisan event-sourcing:replay --force` のように対象DBを明示する。終了後、再生したイベント件数が
+  `stored_events` の件数(Projectorの無い `export.created` を除く)と合うことを確かめる。0件なら接続先の誤りとして止める。
 - 記録: 所要時間、主なテーブルの行数。
 
 ### 5-5. 日次計算の再計算(締め・提出済みの月も含む)
