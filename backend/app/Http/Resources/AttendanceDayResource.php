@@ -36,11 +36,10 @@ class AttendanceDayResource extends JsonResource
             'work_location_type' => $this->work_location_type,
             'day_classification' => $this->day_classification,
             'note' => $this->note,
-            // 締め(locked_at)だけでなく、月次が提出済み以降のロックも合わせて反映する
+            // 月次の状態(提出済み以降・締め)とロック表を反映する
             // (AttendanceEditGuard参照。previewAttendancePatternと同じ判定)。
-            'is_locked' => $workDate === null
-                ? $this->isLocked()
-                : ! app(AttendanceEditGuard::class)->isMutable($this->resource, $this->user_id, $workDate),
+            'is_locked' => $workDate !== null
+                && ! app(AttendanceEditGuard::class)->isMutable($this->resource, $this->user_id, $workDate),
             // today()でその日の勤務予定を一時的に載せている場合のみ含める(UC-A001 手順2)。
             'planned_start_at' => $this->planned_start_at,
             'planned_end_at' => $this->planned_end_at,

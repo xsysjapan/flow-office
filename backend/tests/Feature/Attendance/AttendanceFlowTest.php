@@ -287,9 +287,9 @@ class AttendanceFlowTest extends TestCase
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")
             ->assertOk()->assertJsonPath('status', 'closed');
 
-        $this->assertNotNull(AttendanceDay::query()->findOrFail($dayId)->locked_at);
-        $this->assertNull($previousMonthDay->refresh()->locked_at);
-        $this->assertNull($nextMonthDay->refresh()->locked_at);
+        // 締め後の編集可否は月次の状態で判定する(attendance_days.locked_atは廃止)。対象月外の日は編集可能のまま。
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$previousMonthDay->id}")->assertJsonPath('is_locked', false);
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$nextMonthDay->id}")->assertJsonPath('is_locked', false);
 
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
         $dayResponse->assertJsonPath('is_locked', true);

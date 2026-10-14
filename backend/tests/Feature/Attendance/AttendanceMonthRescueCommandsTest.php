@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\Role;
 use App\Models\User;
@@ -121,6 +122,45 @@ class AttendanceMonthRescueCommandsTest extends TestCase
         $this->assertSame('not_submitted', $month->status);
         $this->assertNull($month->approved_at);
         $this->assertNull($month->submitted_at);
+    }
+
+    /**
+     * 確定取消(approved → not_submitted)の後は、月次のロックが解除され、日次勤怠を通常の編集で直せる
+     * (attendance_days.locked_atは廃止し、編集可否は月次の状態とロック表で判定する)。
+     */
+    public function test_a_day_can_be_edited_again_after_the_month_confirmation_is_reverted(): void
+    {
+        $employee = User::factory()->create();
+        $approver = User::factory()->create();
+        $backofficeStaff = User::factory()->create();
+        $this->assignRole($backofficeStaff, Role::query()->create(['code' => Role::BACKOFFICE_STAFF, 'name' => 'バックオフィス担当']));
+
+        $month = $this->submitAndApprove($employee, $approver);
+        $dayId = AttendanceDay::query()->where('user_id', $employee->id)->firstOrFail()->id;
+
+        // 確定済みの間は編集できない。
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', true);
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", ['reason' => '確定中の編集(拒否されるべき)'])
+            ->assertStatus(422);
+
+        $workflowRequest = WorkflowRequest::query()->create([
+            'id' => (string) Str::uuid(),
+            'title' => '勤怠確定取消依頼',
+            'applicant_user_id' => $employee->id,
+            'approver_user_id' => $approver->id,
+            'status' => WorkflowRequestStatus::APPROVED,
+            'form_data' => ['target_year_month' => $month->year_month, 'reason' => '打刻修正のため'],
+            'submitted_at' => now(),
+            'approved_at' => now(),
+        ]);
+        $this->actingAs($backofficeStaff)->postJson("/api/attendance-months/{$month->id}/revert-confirmation", [
+            'reason' => '打刻修正のため確定を取り消す',
+            'workflow_request_id' => $workflowRequest->id,
+        ])->assertOk();
+
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}")->assertJsonPath('is_locked', false);
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", ['reason' => '確定取消後の編集'])
+            ->assertSuccessful();
     }
 
     public function test_revert_confirmation_is_forbidden_for_non_backoffice_staff(): void

@@ -401,7 +401,7 @@ UC-A013と同様、対象日が属する月次が提出済み以降の場合は�
    UC-A012の規則で日次勤怠を再作成する。
 
 日次勤怠は、対象月が未提出・差戻しのいずれかの間のみ削除できる。
-月次が提出済み以降(提出済み・承認済み・締め済み)は、締め(`locked_at`)の有無によらず変更・削除でき
+月次が提出済み以降(提出済み・承認済み・締め済み)は、変更・削除でき
 ない(UC-A005参照。日次単位の`AttendanceDay`が存在しない休日等も含め、月次のProjection
 (`attendance_months.status`)を見て一律にロックする。修正が必要な場合は修正申請ワークフロー
 ([10章](./10-usecases-workflow.md))を使う)。また、対象日に有給消化(`paid_leave_usages`)が既に反映されている場合は、有給残数の
@@ -588,8 +588,8 @@ docs/07-usecases-attendance.md「裁量労働制・管理監督者」参照)に�
 - 集計結果: `attendance_daily_calculations` (日次) / `attendance_months` (月次スナップショット)
 - 打刻ログ (参考情報、正ではない): `attendance_punches`
 
-月次勤怠 (`attendance_months`) は直接編集不可。締め後の `attendance_days` は
-`locked_at` を設定してロックし、以降の修正は修正申請ワークフロー
+月次勤怠 (`attendance_months`) は直接編集不可。締め後の `attendance_days` の編集可否は
+月次の状態(`attendance_months.status`)とロック表(`attendance_locks`)で判定し(`attendance_days.locked_at`列は廃止)、以降の修正は修正申請ワークフロー
 ([10章 汎用申請](./10-usecases-workflow.md)) を経由する。
 
 `attendance_days.source` は `actual_start_at` / `actual_end_at` / 休憩がどの経路で最後に

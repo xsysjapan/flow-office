@@ -51,7 +51,7 @@ class AttendanceDifferenceDetector
                     'start_time' => $break->break_start_at?->format('H:i'),
                     'end_time' => $break->break_end_at?->format('H:i'),
                 ])->all(),
-                'locked' => $day->isLocked(),
+                'locked' => ! $this->guard->isMutable($day, $userId, $workDate),
             ];
 
             if (! $this->guard->isMutable($day, $userId, $workDate)) {

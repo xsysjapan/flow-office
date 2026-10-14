@@ -589,7 +589,8 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
   保存し直す派生値で、`employee_calendar_entries.schedule_state`+`is_legal_holiday`の3値
   簡略版。時間計算自体には影響しない。docs/07-usecases-attendance.md「日次勤怠の区分」参照)
 - note
-- locked_at
+- (`locked_at`列は廃止した。日次の編集可否は月次の状態`attendance_months.status`とロック表`attendance_locks`で
+  `AttendanceEditGuard`が判定する。変更セット`20261009-keep-leave-work-type-on-edit`論点19)
 - created_at / updated_at
 
 ## attendance_breaks

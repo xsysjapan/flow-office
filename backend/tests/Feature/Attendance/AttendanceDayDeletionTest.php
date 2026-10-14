@@ -148,7 +148,7 @@ class AttendanceDayDeletionTest extends TestCase
     }
 
     /**
-     * 既存実装の抜け穴の修正確認: 締め(locked_at)前でも、月次が承認済みになった時点で
+     * 既存実装の抜け穴の修正確認: 締め前でも、月次が承認済みになった時点で
      * 日次勤怠の削除・編集はできなくなる。
      */
     public function test_a_day_cannot_be_deleted_or_edited_once_the_month_is_approved_even_before_close(): void
@@ -167,7 +167,7 @@ class AttendanceDayDeletionTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
 
-        // is_locked は締め(locked_at)だけでなく、月次が提出済み以降であることも反映する
+        // is_locked は月次が提出済み以降であることを反映する
         // (AttendanceEditGuardと同じ判定。AttendanceDayResource参照)。
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
         $dayResponse->assertJsonPath('is_locked', true);
