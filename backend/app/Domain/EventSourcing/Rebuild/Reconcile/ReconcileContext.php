@@ -117,7 +117,7 @@ final class ReconcileContext
      */
     public function head(?string $rowCreatedAt): Slot
     {
-        $createdAt = $rowCreatedAt ?? ($this->rows[0] ?? null)?->createdAt;
+        $createdAt = $rowCreatedAt ?? ($this->rows[0] ?? null)?->occurredAt();
         if ($createdAt === null) {
             throw new UnsupportedEventSequence('(列の先頭)', '行の created_at もイベントも無く、導出イベントの発生日時を決められない');
         }
@@ -137,7 +137,7 @@ final class ReconcileContext
         }
         $previous = $this->previousRow($first->id);
 
-        return new Slot($first->id, true, self::BEFORE_BASE - 1, $previous?->createdAt ?? $rowCreatedAt ?? $first->createdAt, $first->meta);
+        return new Slot($first->id, true, self::BEFORE_BASE - 1, $previous?->occurredAt() ?? $rowCreatedAt ?? $first->occurredAt(), $first->meta);
     }
 
     /** 集約の最後のイベントの直後。集約にイベントが無ければ null。発生日時はそのイベントの値。 */

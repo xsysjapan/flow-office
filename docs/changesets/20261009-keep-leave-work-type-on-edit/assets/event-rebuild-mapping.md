@@ -131,9 +131,15 @@
   Projectorを`replay`する(空にするテーブルの一覧はProjectorの書き込み先から機械的に作り、手順書に載せる)。
 - `meta_data`: 元のイベントの独自キーを引き継ぎ、`aggregate-root-version`を新しい版に、`aggregate-root-uuid`を行の集約IDに更新する
   (Spatieはイベントの集約IDを`meta_data`から読むため、別の集約へ移したイベントも合わせる)。
-  `stored-event-id`を振り直した新しいidに、`created-at`を行の`created_at`に更新する(Spatieはイベントのstored event idと作成日時も
+  `stored-event-id`を振り直した新しいidに、`created-at`を発生日時(下記。列`created_at`と同じ値)に更新する(Spatieはイベントのstored event idと作成日時も
   `meta_data`から読み、履歴の投影(`workflow_request_history_entries`の`stored_event_id`・`occurred_at`)が使うため。分割・補完で作った行も同じ)。分割で作るイベントは元のイベントの
   `meta_data`を写し、補った事実であることを示すキー(`rebuilt_from`=元のイベントのid)を付ける。
+- 発生日時(`meta_data`の`created-at`と列`created_at`の両方に同じ値を入れる。論点19 決定8-5。`StoredEventRow::occurredAt()`):
+  - 元の行をそのまま写すイベント・payloadだけを書き換えたイベント: 元の行の`meta_data`の`created-at`(Projectorがliveで読んでいた
+    Spatieの`recordThat`時刻)。ただし元の行の列`created_at`と`created-at`が2秒以上ずれていれば列の値(正規化で意図して直したもの)。
+    `created-at`が無ければ列の値。比較は秒単位、書式は元の`created-at`の文字列を写す。
+  - 導出イベント(置き場所のanchorの行から作るもの): anchorの行について上と同じ規則で決めた値。導出側で明示的に指定したもの
+    (照合による補完で行の`created_at`を使う作成イベント、付与予定の置き換えで行の時刻を使うもの等)は指定値を優先する。
 
 ## 7. 実行手順
 

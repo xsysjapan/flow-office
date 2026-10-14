@@ -36,7 +36,7 @@ final readonly class RebuiltEvent
             aggregateUuid: $row->aggregateUuid,
             payload: $row->payload,
             meta: $row->meta,
-            createdAt: $row->createdAt,
+            createdAt: $row->occurredAt(),
             anchorId: $row->id,
             subOrder: 0,
             rebuiltFrom: null,
@@ -45,7 +45,7 @@ final readonly class RebuiltEvent
     }
 
     /**
-     * 元の行(anchor)の位置に、変換で作った行を置く。created_at と meta は anchor から引き継ぐ。
+     * 元の行(anchor)の位置に、変換で作った行を置く。発生日時(StoredEventRow::occurredAt)と meta は anchor から引き継ぐ。
      *
      * @param  array<string, mixed>  $payload
      */
@@ -62,7 +62,7 @@ final readonly class RebuiltEvent
             aggregateUuid: $aggregateUuid,
             payload: $payload,
             meta: $anchor->meta,
-            createdAt: $anchor->createdAt,
+            createdAt: $anchor->occurredAt(),
             anchorId: $anchor->id,
             subOrder: $subOrder,
             rebuiltFrom: $rebuiltFrom,

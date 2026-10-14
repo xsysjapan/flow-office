@@ -36,6 +36,34 @@ final readonly class StoredEventRow
         );
     }
 
+    /** meta_data の created-at(Spatieの recordThat 時刻)。無い・文字列でないときは null。 */
+    public function metaCreatedAt(): ?string
+    {
+        $value = $this->meta['created-at'] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * 作り直し後のイベントの発生日時(論点19 決定8-5)。meta の created-at(Projector が live で読んでいた値)を優先し、
+     * 列 created_at と2秒以上ずれていれば列の値(正規化で意図して直したもの)、meta に無ければ列の値。
+     * 書式は meta の値をそのまま写す。比較は秒単位。
+     */
+    public function occurredAt(): string
+    {
+        $meta = $this->metaCreatedAt();
+        if ($meta === null) {
+            return $this->createdAt;
+        }
+        $metaTime = strtotime($meta);
+        $columnTime = strtotime($this->createdAt);
+        if ($metaTime === false || $columnTime === false || abs($metaTime - $columnTime) >= 2) {
+            return $this->createdAt;
+        }
+
+        return $meta;
+    }
+
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->payload[$key] ?? $default;

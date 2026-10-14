@@ -28,7 +28,7 @@ final readonly class Slot
 
     public static function ofRow(StoredEventRow $row): self
     {
-        return new self($row->id, false, 0, $row->createdAt, $row->meta);
+        return new self($row->id, false, 0, $row->occurredAt(), $row->meta);
     }
 
     /** 並び順の比較(anchorId、subOrder の順)。 */

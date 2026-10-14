@@ -76,7 +76,7 @@ final class PaidLeaveScheduleRebuilder
                     aggregateUuid: $userId,
                     payload: $payload,
                     meta: $anchor->meta,
-                    createdAt: $createdAt ?? $anchor->createdAt,
+                    createdAt: $createdAt ?? $anchor->occurredAt(),
                     anchorId: $anchor->id,
                     subOrder: $users[$userId]['subOrder']++,
                     rebuiltFrom: null,
@@ -117,7 +117,7 @@ final class PaidLeaveScheduleRebuilder
         $oldCreatedAt = function (string $suffix, int $index = 0, ?string $fallback = null) use ($rowsOfEntry, $createdAt): ?string {
             $matching = array_values(array_filter($rowsOfEntry, fn (StoredEventRow $r) => $r->eventClass === self::CLASS_PREFIX.$suffix));
 
-            return ($matching[$index] ?? null)?->createdAt ?? $fallback ?? $createdAt;
+            return ($matching[$index] ?? null)?->occurredAt() ?? $fallback ?? $createdAt;
         };
 
         $out = [];

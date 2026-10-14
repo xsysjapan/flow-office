@@ -109,7 +109,7 @@ final class PaidLeaveGrantRebuilder
                     'originalGrantedOn' => $grantedOn,
                     'originalGrantedDays' => $grant['originalGrantedDays'] ?? null,
                 ]],
-                createdAt: $migrated->createdAt,
+                createdAt: $migrated->occurredAt(),
                 anchorId: $migrated->id,
                 subOrder: $i,
                 rebuiltFrom: $migrated->id,
