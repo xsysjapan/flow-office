@@ -998,3 +998,19 @@
   5. 勤怠の月次・有給申請・通知等で日時の列に差(状態・スナップショットの値は一致)。
   6. 勤怠日の`work_type`の休暇値16件がnull、14日の状態が`clocked_out`→`not_started`: 論点12・2.4で意図した差。
 - 1〜5の原因を調査中。日次の再計算・ロールバックの試験・後続の比較は未実施。
+
+### 4回目(2026-10-14、391f2abの上の作業コミット e1484805)
+
+- 試し実行・`--apply`・`--swap`成功(作り直し後2,883件)。新しい検証DB(`flow_office_verify_rerun4`)で replay 2,867件が完走。
+- 解消: `company_calendar_days`(365件・内容一致)、`company_calendars.is_default`。休暇ビュー21件・申請との不一致0・孤立0・勤怠日の欠落0。
+- 残った差(全体は未合格):
+  1. cutover前の有給8件(承認済み・消化記録計7.5日)に充当(`usage_allocated`)が0件で付与に紐づかず、`paid_leave_balances`の未充当が
+     計7.5日。旧イベントには`usage_designated`8件はあるが`paid_leave.used`が無い。手順書4(f)・6-3(6)の期待(充当の再現)を満たさない。
+  2. `attendance_days.locked_at`: 作り直し前67件に値、再生後はすべてNULL。打刻・実績の無い`clocked_out`が1日残る(B12の期待0)。
+  3. 日時の差(月次・申請・通知・ワークフロー等)の多くがちょうど9時間。`notifications.queued_at`はより大きな差もある。
+     仮説: これらの列と`stored_events.created_at`はMySQLの`TIMESTAMP`(セッションのタイムゾーンで変換される)で、本番(XSERVER)と
+     リハーサル(Docker)のセッションのタイムゾーンが違うと読み書きで9時間ずれる。`meta_data`の`created-at`(文字列)はずれない。
+     決定8-5の「2秒以上ずれたら列」の規則が、このずれを正規化と誤認している可能性がある。確認中。
+  4. `company_calendar_day_sources.applied_at`57行の差: 決定8-4(発生日時で書く)によるもの。3と同じずれかを確認する。
+  5. B12の`no_created`130件は、`live_status_synced`(123件)・`synced_from_punches`(7件)で行が作られる日で、手順書の判定条件の誤り。
+     判定条件を行を作る3種のイベントに直した。

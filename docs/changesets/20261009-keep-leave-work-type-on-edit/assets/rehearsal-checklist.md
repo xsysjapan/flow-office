@@ -332,13 +332,16 @@ WHERE d.status = 'clocked_out' AND d.actual_start_at IS NULL AND d.actual_end_at
 GROUP BY d.work_type
 ORDER BY days DESC;
 
--- (2)の基準: 勤怠日の最初のイベントに attendance_day.created が無い日(prerequisites の (a1)(a2))。作り直しで created を補う日
+-- (2)の基準: 行を作るイベント(created・live_status_synced・synced_from_punches。AttendanceDayProjector が行を作る3種)が
+--   1件も無い勤怠日(prerequisites の (a1)(a2))。作り直しで created を補う日
 SELECT COUNT(*) AS no_created,
        SUM(EXISTS(SELECT 1 FROM stored_events e
                   WHERE e.aggregate_uuid = d.id AND e.event_class LIKE 'attendance_day.%')) AS with_other_events
 FROM attendance_days d
 WHERE NOT EXISTS (SELECT 1 FROM stored_events c
-                  WHERE c.aggregate_uuid = d.id AND c.event_class = 'attendance_day.created');
+                  WHERE c.aggregate_uuid = d.id
+                    AND c.event_class IN ('attendance_day.created', 'attendance_day.live_status_synced',
+                                          'attendance_day.synced_from_punches'));
 
 -- (3)の基準: 編集イベントに入った休暇値
 SELECT event_class, COUNT(*) AS events
