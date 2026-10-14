@@ -100,6 +100,31 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertEqualsWithDelta(0.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
     }
 
+    public function test_usage_recorded_after_the_cutover_event_with_a_target_date_before_cutover_is_allocated(): void
+    {
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        $grantId = (string) Str::uuid();
+        $r1 = (string) Str::uuid();
+
+        // cutoverの経路: migrated が先で、承認は後(確定がcutover以降に記録される)。対象日は cutoverDate より前。
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.migrated', [
+            'cutoverDate' => '2026-09-15',
+            'grants' => [
+                ['grantId' => $grantId, 'originalGrantedOn' => null, 'originalGrantedDays' => 10.0, 'remainingDaysAtCutover' => 10.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+            ],
+        ]);
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 2.0), '2026-09-20 10:00:00');
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id], '2026-09-20 10:00:00');
+
+        $this->rebuildAndSwap();
+        $this->replayReadModels();
+
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertNotNull($balance);
+        $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
+    }
+
     public function test_cutover_grant_balance_is_cutover_remaining_minus_the_allocation(): void
     {
         $user = User::factory()->create();
@@ -358,7 +383,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $payload */
-    private function insertLegacyEvent(string $aggregate, string $class, array $payload): void
+    private function insertLegacyEvent(string $aggregate, string $class, array $payload, string $at = self::AT): void
     {
         $this->versions[$aggregate] = ($this->versions[$aggregate] ?? 0) + 1;
         DB::table('stored_events')->insert([
@@ -372,9 +397,9 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
                 'aggregate-root-uuid' => $aggregate,
                 'aggregate-root-version' => $this->versions[$aggregate],
                 'stored-event-id' => $this->nextId - 1,
-                'created-at' => self::AT,
+                'created-at' => $at,
             ]),
-            'created_at' => self::AT,
+            'created_at' => $at,
         ]);
     }
 

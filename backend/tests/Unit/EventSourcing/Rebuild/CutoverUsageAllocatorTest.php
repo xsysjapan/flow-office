@@ -106,7 +106,7 @@ class CutoverUsageAllocatorTest extends TestCase
         $this->assertSame(0, $result['report']['unallocated_usages']);
     }
 
-    public function test_usage_confirmed_after_cutover_or_already_allocated_is_out_of_scope(): void
+    public function test_usage_dated_on_or_after_cutover_or_already_allocated_is_out_of_scope(): void
     {
         $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
         $after = $this->usage('U1', '2026-08-10', 1.0, 11, '2026-08-05 10:00:00');
@@ -117,6 +117,49 @@ class CutoverUsageAllocatorTest extends TestCase
         $this->assertSame([], $result['events']);
         $this->assertSame(0, $result['report']['eligible_usages']);
         $this->assertSame(0, $result['report']['unallocated_usages']);
+    }
+
+    public function test_usage_dated_before_cutover_is_allocated_even_when_confirmed_after_cutover(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        // 確定は cutover(2026-08-01)以降に記録されているが、対象日は前。
+        $usage = $this->usage('U1', '2026-07-10', 1.0, 12, '2026-08-05 10:00:00');
+        $result = $this->allocator->allocate([...$usage, $grant], $this->cutovers([$grant]));
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame(['usageId' => 'U1', 'grantId' => 'G', 'allocatedDays' => 1.0], $result['events'][0]->payload);
+        $this->assertSame(12, $result['events'][0]->anchorId);
+        $this->assertSame(1, $result['report']['eligible_usages']);
+        $this->assertSame(1, $result['report']['allocated_usages']);
+    }
+
+    public function test_usage_dated_on_cutover_date_is_out_of_scope_even_when_confirmed_before(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        $usage = $this->usage('U1', '2026-08-01', 1.0, 3, '2026-07-12 10:00:00');
+        $result = $this->allocator->allocate([...$usage, $grant], $this->cutovers([$grant]));
+
+        $this->assertSame([], $result['events']);
+        $this->assertSame(0, $result['report']['eligible_usages']);
+    }
+
+    public function test_rebuilder_allocates_usage_requested_and_confirmed_after_cutover_with_target_date_before(): void
+    {
+        // cutoverの経路(rebuildFromAccount)の形: 申請・承認が cutover 以降に記録され、対象日は cutover より前。
+        $result = (new EventStoreRebuilder)->rebuild([
+            new StoredEventRow(1, self::USER, 1, 'paid_leave_account.migrated', [
+                'cutoverDate' => '2026-08-01',
+                'grants' => [
+                    ['grantId' => 'G2', 'originalGrantedOn' => null, 'originalGrantedDays' => 5.0, 'remainingDaysAtCutover' => 5.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+                ],
+            ], [], '2026-08-01 09:00:00'),
+            new StoredEventRow(2, 'R1', 1, 'paid_leave.requested', ['userId' => self::USER, 'targetDate' => '2026-07-21', 'leaveType' => 'full', 'hours' => null, 'requestedDays' => 1.0, 'approverUserId' => 'a1', 'reason' => null, 'requestGroupId' => null], [], '2026-08-03 10:00:00'),
+            new StoredEventRow(3, 'R1', 2, 'paid_leave.request_approved', ['approvedByUserId' => 'a1'], [], '2026-08-03 10:00:00'),
+        ]);
+
+        $this->assertTrue($result->ok, json_encode($result->unsupported));
+        $this->assertSame(1, $result->report['cutover_allocation']['allocated_usages']);
+        $this->assertContains('paid_leave_account.usage_allocated', array_column($result->rows, 'event_class'));
     }
 
     public function test_rebuilder_places_the_allocation_after_the_carried_over_grant_and_reports_it(): void

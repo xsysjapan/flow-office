@@ -5,12 +5,12 @@ namespace App\Domain\EventSourcing\Rebuild;
 use App\Domain\PaidLeaveAccount\Support\AllocationPlanner;
 
 /**
- * cutover前に承認され、充当(旧 paid_leave.used)が無いまま確定した有給の消化記録を、cutover の付与
- * (carried_over の grant_created)に充当する usage_allocated を導出する(論点19 決定9-3a、
+ * 対象日がcutover前で、充当(旧 paid_leave.used)が無いまま確定した有給の消化記録を、cutover の付与
+ * (carried_over の grant_created)に充当する usage_allocated を導出する(論点19 決定9-3a の改訂、
  * assets/event-rebuild-mapping.md 2.3)。
  *
- * - 対象: 口座集約(userId)の usage_confirmed のうち、確定の発生日が cutoverDate より前、usage_allocated・usage_cancelled が
- *   無いもの。cutover後の通常の承認(既に usage_allocated があるもの・cutover後に確定したもの)は対象外。
+ * - 対象: 口座集約(userId)の usage_confirmed のうち、消化記録の対象日(usage_designated の usedOn)が cutoverDate より前、usage_allocated・usage_cancelled が
+ *   無いもの。cutover後の通常の承認(既に usage_allocated があるもの・対象日がcutover以降のもの)は対象外。
  * - 充当の順序・単位: 現行の口座集約の承認時の充当と同じ(確定の順に、AllocationPlanner で対象日に有効な付与の
  *   expiresOn 昇順。付与の残りを超えない。足りない分は未充当のまま。論点17)。充当の候補は cutover の付与だけ。
  * - 置く位置: その付与の grant_created と、その消化の usage_confirmed のうち後ろの直後(subOrder で順序)。
@@ -70,7 +70,8 @@ final class CutoverUsageAllocator
             if ($usage['designated'] === null || $confirmed === null || $usage['allocated'] || $usage['cancelled']) {
                 continue;
             }
-            if (substr($confirmed->createdAt, 0, 10) >= $cutovers[$usage['userId']]['cutoverDate']) {
+            // 対象は消化記録の対象日(usage_designated の usedOn)で選ぶ。確定の日付では選ばない(cutoverの経路は確定がcutover以降に記録されるため)。
+            if (substr((string) $usage['designated']->payload['usedOn'], 0, 10) >= $cutovers[$usage['userId']]['cutoverDate']) {
                 continue;
             }
             $eligible[] = ['usageId' => (string) $usageId] + $usage;

@@ -8,7 +8,7 @@ namespace App\Domain\EventSourcing\Rebuild;
  * - attendance_day.created が無い勤怠日(行を作るイベントが最初に無い日)に、最初のイベントの直前に created を補う。
  *   項目は ReadModel(attendance_days)の現在値から作る(source・status・createdByUserId・reason の規則は補う箇所のコメント参照)。
  * - created / edited の workType が休暇値(paid_leave_ 等で始まる値)なら、同じ勤怠日の休暇値でない直前の値(無ければnull)に書き換える。
- * - 全休の休暇申請がある日の edited で、status=clocked_out なのに実績(actualStartAt・actualEndAt)がともにnullなら、status を直前の状態に書き換える(決定9-2)。
+ * - 全休の休暇申請がある日の edited で、status=clocked_out なのに実績(actualStartAt・actualEndAt)がともにnullなら、status をnot_started に書き換える(決定9-2a)。
  * - 休暇の解除で空になった勤怠日の deleted は、後続のイベントが無いときだけ、解除の直後に置く。
  * - calculated・daily_calculation_adjusted の既定値null項目(userId・workDate・dayClassification・workMinutes)を補完する。
  *
@@ -100,8 +100,6 @@ final class AttendanceRebuilder
         $rewritten = 0;
         $filled = 0;
         $statusRewritten = [];
-        // 直前の状態(status)。無ければ not_started。
-        $previousStatus = 'not_started';
         $hasFullLeave = false;
         foreach ($leaves as $leave) {
             if (($leave['leaveType'] ?? null) === self::FULL_LEAVE_TYPE) {
@@ -119,7 +117,6 @@ final class AttendanceRebuilder
             $workType = self::isLeaveWorkType($current->workType) ? null : $current->workType;
             $createdSource = $hasLeave && $untouched ? 'leave' : $current->source;
             $lastNonLeaveWorkType = $workType;
-            $previousStatus = $untouched ? 'not_started' : (string) $current->status;
 
             $events[] = RebuiltEvent::derived($first, -1, 'attendance_day.created', $dayId, [
                 'userId' => $current->userId,
@@ -166,22 +163,16 @@ final class AttendanceRebuilder
                 if ($row->eventClass === 'attendance_day.created') {
                     $createdSource = (string) $row->get('source');
                 }
-                // 全休の日の edited が、実績が無いのに status=clocked_out を持つとき、直前の状態に戻す(論点19 決定9-2)。
+                // 全休の日の edited が、実績が無いのに status=clocked_out を持つとき、not_started にする(論点19 決定9-2a。実績が両方無い状態は not_started)。
                 if ($row->eventClass === 'attendance_day.edited' && $hasFullLeave
                     && $row->get('status') === 'clocked_out'
                     && $row->get('actualStartAt') === null && $row->get('actualEndAt') === null) {
-                    $payload['status'] = $previousStatus;
+                    $payload['status'] = 'not_started';
                     $statusRewritten[] = [
                         'dayId' => $dayId,
                         'workDate' => $row->get('workDate') !== null ? self::date((string) $row->get('workDate')) : $identity['workDate'],
                         'eventId' => $row->id,
                     ];
-                } elseif ($row->get('status') !== null) {
-                    $previousStatus = (string) $row->get('status');
-                }
-            } elseif ($row->eventClass === 'attendance_day.live_status_synced') {
-                if ($row->get('status') !== null) {
-                    $previousStatus = (string) $row->get('status');
                 }
             } elseif ($row->eventClass === 'attendance_day.calculated') {
                 $payload = $this->fillIdentity($payload, $identity, $key, $row, $filled);

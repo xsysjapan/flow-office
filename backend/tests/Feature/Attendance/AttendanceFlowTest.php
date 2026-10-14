@@ -157,6 +157,31 @@ class AttendanceFlowTest extends TestCase
         $this->assertSame(0, $calculation['late_night_statutory_excess_overtime_minutes']);
     }
 
+    public function test_editing_a_clocked_out_day_to_clear_both_actuals_makes_it_not_started(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $dateString = Carbon::today($employee->timezone)->toDateString();
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [],
+            'reason' => '実績を入力',
+        ])->assertOk();
+        $this->assertSame('clocked_out', AttendanceDay::query()->findOrFail($dayId)->status);
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => null,
+            'actual_end_at' => null,
+            'breaks' => [],
+            'reason' => '実績を消す',
+        ])->assertOk();
+        $this->assertSame('not_started', AttendanceDay::query()->findOrFail($dayId)->status);
+    }
+
     public function test_editing_a_day_with_mismatched_offsets_across_fields_is_rejected(): void
     {
         $employee = User::factory()->create();

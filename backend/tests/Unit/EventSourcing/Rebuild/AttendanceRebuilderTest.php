@@ -146,7 +146,7 @@ class AttendanceRebuilderTest extends TestCase
         $this->assertEqualsCanonicalizing([1, 3, 4, 6], $result->consumedIds);
     }
 
-    public function test_status_of_edited_is_rolled_back_when_full_leave_day_has_clocked_out_without_actuals(): void
+    public function test_status_of_edited_is_rewritten_to_not_started_when_full_leave_day_has_clocked_out_without_actuals(): void
     {
         $result = $this->rebuilder->rebuild(self::DAY, [
             $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'leave', 'status' => 'not_started', 'workType' => null]),
@@ -176,7 +176,7 @@ class AttendanceRebuilderTest extends TestCase
         $this->assertSame([], $notClockedOut->statusRewrittenTargets);
     }
 
-    public function test_status_rolls_back_to_the_created_status_added_from_the_read_model(): void
+    public function test_status_is_not_started_when_created_is_added_from_the_read_model(): void
     {
         $result = $this->rebuilder->rebuild(self::DAY, [$this->editedWithStatus(5, 'clocked_out')], $this->current(['source' => 'leave', 'status' => 'clocked_out']), [$this->leave('full')]);
 
@@ -185,7 +185,7 @@ class AttendanceRebuilderTest extends TestCase
         $this->assertCount(1, $result->statusRewrittenTargets);
     }
 
-    public function test_status_rolls_back_to_the_status_after_a_previous_edited_or_live_status_sync(): void
+    public function test_status_becomes_not_started_regardless_of_previous_live_status_sync(): void
     {
         $result = $this->rebuilder->rebuild(self::DAY, [
             $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'status' => 'not_started', 'workType' => null]),
@@ -198,21 +198,23 @@ class AttendanceRebuilderTest extends TestCase
         foreach ($result->events as $event) {
             $byId[$event->anchorId] = $event->payload['status'];
         }
-        // 3は直前(live_status_synced)の working、4は書き換え後の3の status(working)。
-        $this->assertSame([3 => 'working', 4 => 'working'], $byId);
+        $this->assertSame([3 => 'not_started', 4 => 'not_started'], $byId);
         $this->assertCount(2, $result->statusRewrittenTargets);
     }
 
-    public function test_status_rolls_back_to_the_previous_edited_status_not_rewritten(): void
+    public function test_edit_clearing_actuals_after_an_edit_with_actuals_becomes_not_started(): void
     {
         $result = $this->rebuilder->rebuild(self::DAY, [
             $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'status' => 'not_started', 'workType' => null]),
-            $this->editedWithStatus(2, 'working'),
+            $this->editedWithStatus(2, 'clocked_out', '2026-08-10T09:00:00+09:00', '2026-08-10T18:00:00+09:00'),
             $this->editedWithStatus(3, 'clocked_out'),
         ], null, [$this->leave('full')]);
 
-        $this->assertSame('working', $result->events[0]->payload['status']);
+        // 実績ありの2は変えず(イベントに現れない)、実績を消した3だけ not_started にする。
+        $this->assertCount(1, $result->events);
         $this->assertSame(3, $result->events[0]->anchorId);
+        $this->assertSame('not_started', $result->events[0]->payload['status']);
+        $this->assertSame([['dayId' => self::DAY, 'workDate' => '2026-08-10', 'eventId' => 3]], $result->statusRewrittenTargets);
     }
 
     public function test_calculated_null_items_are_filled_from_the_created_event(): void

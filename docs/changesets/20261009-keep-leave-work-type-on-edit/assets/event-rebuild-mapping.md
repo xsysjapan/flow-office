@@ -61,13 +61,13 @@
 - 付与IDが一致しない付与(システム外から持ち込んだ残高)は`grant_created`(source=`carried_over`、grantId=cutoverの付与ID、
   grantedDays=`remainingDaysAtCutover`、grantedOn=`originalGrantedOn`(nullならcutover日)、cutoverの`mode`・`notes`は`meta_data`)にする。
 - 付与IDは一致するが残数が合わない付与は、試し実行で一覧にして失敗させる(リハーサルで原因を確認し、変換規則を決めてから進む)。
-- **cutover前に承認された消化記録の充当(論点19 決定9-3a)**: cutover前(確定の発生日が`cutoverDate`より前)に承認され、充当
-  (旧`paid_leave.used`)が無いまま確定(`usage_confirmed`)した有給の消化記録は、cutoverの付与(`carried_over`の`grant_created`)に
+- **cutover前の対象日の消化記録の充当(論点19 決定9-3a)**: 消化記録の対象日(`usage_designated`の日付)が`cutoverDate`より前で、充当
+  (旧`paid_leave.used`)が無いまま確定(`usage_confirmed`)した有給(確定の日付では選ばない: cutoverの経路は確定がcutover以降に記録されるため)の消化記録は、cutoverの付与(`carried_over`の`grant_created`)に
   充当する`paid_leave_account.usage_allocated`を導出する(`CutoverUsageAllocator`)。順序・単位は現行の口座集約の承認時の充当と同じ
   (確定の順に`AllocationPlanner`で、対象日に有効な付与を`expiresOn`昇順、付与の残りを超えない。有効な付与が無ければ集約の規則の
   とおり)。付与の`originalGrantedOn`がnullなら付与日はcutover日として扱う。足りない分は未充当のまま(論点17)。置く位置は、その付与の
   `grant_created`と消化の`usage_confirmed`のうち後ろの直後(subOrderで順序)、発生日時は置き場所の行。集約UUIDは口座(userId)、usageIdは
-  2.1の規則の消化記録のid。取消済みの消化記録・cutover後の通常の承認(既に`usage_allocated`があるもの)は対象外。`reconcileCutover`の
+  2.1の規則の消化記録のid。取消済みの消化記録・対象日がcutover以降のもの・既に`usage_allocated`があるものは対象外。`reconcileCutover`の
   突き合わせはcutover時点の残数の照合(旧付与の再現)で、この充当は突き合わせの後・cutover後の位置に置くため影響しない。試し実行のレポート
   (`cutover_allocation`)に、充当した件数・日数と、充当できなかった(付与の残り不足・有効な付与なし)件数・日数・一覧を出す。
 - 結果として論点13の8件は通常の承認済み申請と同じく取消できる(2026-10-10 ユーザー決定)。`PaidLeaveRequestAggregate`の
@@ -83,7 +83,7 @@
 | `attendance_day.created`が無い勤怠日 | その勤怠日の最初のイベント(多くは`calculated`)の直前に`attendance_day.created`を置く。source=休暇の処理が作った日なら`leave`、それ以外は現在値。calendarEntryId・utcOffsetMinutesは現在値、createdByUserIdは休暇の申請者(無ければ利用者)、reasonは固定文言「既存データの引き継ぎ」 |
 | `created`/`edited`のpayloadの`workType`が休暇値 | その日の作業内容の値に書き換える(休暇値の前の値。無ければnull) |
 | ReadModelの`status=clocked_out`が全休のために書かれたもの(実績・打刻なし) | 置く`created`のstatusを実績から決まる値(`not_started`)にする |
-| 全休(`leaveType=full`)の休暇申請がある日の`edited`で、payloadの`status=clocked_out`かつ`actualStartAt`・`actualEndAt`がともにnull(論点19 決定9-2) | `status`を直前の状態に書き換える。直前の状態は同じ日のイベントをid順に積み上げた値(`created`のstatus、補った`created`のstatus、前の`edited`の書き換え後のstatus、`live_status_synced`のstatus。無ければ`not_started`)。全休の申請が無い日・実績がある`edited`は変えない。書き換えた件数と対象(勤怠日id・勤務日・イベントid)を試し実行のレポートに出す |
+| 全休(`leaveType=full`)の休暇申請がある日の`edited`で、payloadの`status=clocked_out`かつ`actualStartAt`・`actualEndAt`がともにnull(論点19 決定9-2) | `status`を`not_started`に書き換える(決定9-2a。実績が両方無い状態は`not_started`。直前の状態は使わない。先に実績ありの`edited`があった後に実績を消した`edited`も`not_started`)。全休の申請が無い日・実績がある`edited`は変えない。実際に値が変わったものだけ、書き換えた件数と対象(勤怠日id・勤務日・イベントid)を試し実行のレポートに出す |
 | 休暇の解除で空になった勤怠日 | **後続のイベントが無い場合だけ**、解除の直後に`attendance_day.deleted`を置く(punchLogActionは打刻ログを変えない値、deletedByUserIdは解除の操作者)。後続のイベントがあれば置かない |
 
 日次計算は作り直しの中では変換しない(計算に当時のReadModelが要るため)。作り直しの後に、候補(3)で休暇値を直した日と休暇の

@@ -57,7 +57,10 @@ class EditAttendanceDayHandler implements CommandHandler
         $workStyle = $day->calendarEntry?->workStyle
             ?? $this->workStyleFallbackResolver->resolveForUser($day->user_id, $day->work_date);
         $this->workdayBoundaryValidator->assertWithinBoundary($workStyle, $day->work_date->toDateString(), $actualStartAt, $actualEndAt);
-        $status = $command->actualEndAt !== null ? AttendanceDayStatus::CLOCKED_OUT : $day->status;
+        // 実績(開始・終了)が両方無い編集は、日の現在の状態を写さず not_started にする。
+        $status = $command->actualEndAt !== null
+            ? AttendanceDayStatus::CLOCKED_OUT
+            : ($command->actualStartAt === null ? AttendanceDayStatus::NOT_STARTED : $day->status);
 
         $breaksPayload = [];
         $parsedBreaks = [];
