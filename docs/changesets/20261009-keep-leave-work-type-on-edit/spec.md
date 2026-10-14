@@ -484,6 +484,17 @@
       `attendance_locks`・`entity_shares`・`workflow_request_history_entries`。再生はイベントの日時に戻す)、リハーサルで空にした認証系の
       表(`authentication_keys`・`device_admin_sessions`と、その外部キーで`attendance_punches.authentication_key_id`がNULLになった行)、
       端末のハートビートの値(`devices.app_version`・`last_seen_at`。イベントを経ない運用の値で、次のハートビートで戻る)。
+   1a. (2026-10-14 実装中の決定、10-1を補う) 旧ストアには確定時の充当も記録されていない。作り直しは現行の充当の規則をすべて過去に
+      当てはめる: (i) 確定時: 入力に既存の`usage_allocated`が無い消化記録は、`usage_confirmed`の時点の付与の状態で`AllocationPlanner`を
+      当てはめ、確定の直後に導出する。(ii) 付与時: 10-1のとおり。(iii) 取消時: 現行の`cancelUsage`と同じく、残っている充当の解除を
+      導出し、空いた付与へ他の未充当を再充当する(既存の解除がある分は導出しない)。付与の状態には日付・期限・日数の変更・取消を
+      その時点まで反映する。試し実行のレポートは充当ごとに規則(confirm/grant/cancel)を出す。
+   5. `membership_change_sets.effective_at`・`notifications.queued_at`が再生時刻になる(リハーサル7回目): どちらも表で最初の
+      `TIMESTAMP`列でNOT NULL・既定値なし。MySQLの`explicit_defaults_for_timestamp=OFF`では`DEFAULT CURRENT_TIMESTAMP ON UPDATE
+      CURRENT_TIMESTAMP`が自動で付き、その列を含まないUPDATE(適用・取消・失敗、送信・確認の投影)で更新時刻に上書きされる。payloadの
+      値(`effectiveAt`・`queuedAt`)が正しい。ReadModelの同じ形の列(表で最初の`TIMESTAMP`でNOT NULL・既定値の指定が無いもの)を
+      `DATETIME`に変えるマイグレーションを足す(ReadModelなので再生で正しい値に戻る)。本番の元の値が上書きされていた分は、意図した差
+      (不具合の修正)とする。本番とリハーサルの`@@explicit_defaults_for_timestamp`と該当表の`SHOW CREATE TABLE`を確かめる。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
