@@ -456,7 +456,10 @@
       差し引いていない。作り直しで、この8件の消化記録を cutover の付与(`carried_over`の`grant_created`)に充当する
       (`paid_leave_account.usage_allocated`を導出)。充当の順序は現行の口座集約の充当の規則(承認時の充当と同じ順序)に従い、対象日に
       有効な付与から充当する。対象は、消化記録の対象日(`usage_designated`の日付)がcutoverの日付より前で、充当が無く確定済み・
-      未取消のもの(確定の日付では選ばない: cutoverの経路の8件は確定がcutover以降に記録されているため。リハーサル5回目)。置く位置は、その付与の`grant_created`と消化の`usage_confirmed`のうち後ろの直後。足りない分は未充当
+      未取消のもの(確定の日付では選ばない: cutoverの経路の8件は確定がcutover以降に記録されているため。リハーサル5回目)。充当先は、その利用者の全ての付与
+      (cutoverの`carried_over`に限らない。リハーサル6回目: 8件の利用者の付与は承認時点より後に付与されたもので、cutoverの付与だけを
+      候補にしていたため充当されなかった)。現行の充当規則(`AllocationPlanner`。対象日に有効な付与が無ければ直近の将来の付与)に従う。
+      cutoverの日付は、その利用者に`paid_leave_account.migrated`があればその日付、無ければ全利用者のcutoverの日付の最小値。置く位置は、その付与の`grant_created`と消化の`usage_confirmed`のうち後ろの直後。足りない分は未充当
       (論点17)。残数は38日から30.5日になる。手順書4(f)・6-3(6)・B09の期待(充当の再現)はこの規則で満たす。
    4. 日時の9時間の差: `stored_events.created_at`とReadModelの日時列はMySQLの`TIMESTAMP`で、セッションのタイムゾーンで変換される。
       本番とリハーサルのセッションのタイムゾーンが違うと読み書きで9時間ずれる(`meta_data`の文字列はずれない)。決定8-5の規則を
