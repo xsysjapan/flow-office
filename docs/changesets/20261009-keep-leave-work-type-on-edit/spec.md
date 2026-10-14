@@ -520,6 +520,18 @@
         同じ型)。**イベントを正とし、導出しない**。照合は、イベントのある所属では`created_by`の違いだけでは差にしない(在籍・kind・
         isPrimaryが違うときだけ導出する)。`created_by`は作成イベントが無い所属を導出するときにだけ行から使う。再生後の`created_by`・
         `created_at`がイベントの値になる差は意図した差とする。
+   8. (2026-10-14 リハーサル9回目、決定8-5・9-4を置き換える) イベントの発生日時は常に`meta_data`の`created-at`とする。Spatieでは
+      イベントの時刻は`ShouldBeStored::createdAt()`(=`meta_data`の`created-at`。記録時に付く)で、Projectorもこれを読む。
+      `stored_events.created_at`列は保存時刻(WHO列に近い)で、旧版の正規化・保守のコマンドが後から書き換えた行がある(13クラス計308件。
+      列が後の時刻)。作り直しは`meta_data`の`created-at`を発生日時とし、列も同じ値にそろえる。`meta_data`に無い・解釈できない行だけ
+      列の値を使う。導出イベントは置き場所の値、明示指定は従来どおり。ユーザー了承(ライブラリの標準どおり)。
+   9. (2026-10-14 リハーサル9回目) `external_identities.external_tenant_id`: Projector(`UserProjector::linkEntraIdentity`)が再生時の
+      `system_settings.m365_tenant_id`を読むため、イベントだけで再現できない。Entraの外部IDを作るイベント(SSOログインでの作成・
+      SSOアカウントの連携等)に`externalTenantId`(null可)を持たせ、ハンドラは記録時の設定値を入れる。Projectorはイベントの値を使い、
+      値が無い旧イベントだけ従来どおり設定値を読む。作り直しは、旧イベントに現在の`external_identities`の行(provider+subject)の
+      tenant IDを補う。補う前提として、sourceのtenant IDが1種類で設定値と同じであることを試し実行で検査し、違えば止めて報告する。
+      ユーザー同意。
+   10. 勤怠日の2日(打刻のある全休の日)の日次計算は`work_minutes`=0・`payroll_work_minutes`=0で、全休の日の勤務時間0を満たす。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
