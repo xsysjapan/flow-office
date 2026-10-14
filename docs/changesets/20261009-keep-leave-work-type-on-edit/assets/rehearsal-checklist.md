@@ -606,6 +606,22 @@ diff ~/rehearsal-20261009/before/rows-<テーブル名>.txt ~/rehearsal-20261009
 - 期待する差は、休暇の変更(論点18・6-2 の「期待する差分」)によるものだけ。それ以外のテーブル・行に差があれば説明できない差分として扱い、
   5章(入れ替え)に進まない。
 
+#### 3-5b. 有給の残高(`paid_leave_balances`)の差の確認(論点19 決定8-6)
+
+作り直し後は、付与のある全利用者に残高の行ができる(旧系統のイベントでは行が作られなかった)。差が意図したものかを次で確かめる。
+
+```sql
+-- flow_office_verify: 増えた行の利用者が、付与(作り直し後の grant_created)を持つこと
+SELECT b.user_id, b.available_days, b.pending_days, b.unallocated_days,
+       (SELECT COUNT(*) FROM stored_events e WHERE e.aggregate_uuid = b.user_id
+          AND e.event_class = 'paid_leave_account.grant_created') AS grants
+FROM paid_leave_balances b
+WHERE b.user_id NOT IN (SELECT user_id FROM flow_office_rehearsal.paid_leave_balances);  -- 作り直し前に行が無かった利用者
+```
+
+- `grants` が0の行があれば説明できない差として報告する。
+- `unallocated_days` の差(作り直し前に行があった利用者)は、4章の確認事項(a)(残数不足のまま承認された消化記録)の不足量の合計と一致すること。
+
 #### 3-5a. リビルドが一意制約違反で止まったとき(2026-10-13 リハーサル1回目)
 
 - 一意制約違反で止まったテーブルが `--list-readmodels` の一覧に無いときは、一覧の漏れである。一覧の作成を直してからやり直す
