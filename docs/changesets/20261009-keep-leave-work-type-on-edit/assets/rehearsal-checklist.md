@@ -92,6 +92,19 @@ gunzip -c ~/rehearsal-20261009/prod-copy.sql.gz | mysql -h <リハーサルホ�
 - 投入後、0-1 で接続先を確認する。
 - `stored_events` の件数を本番側で控えておく(2-B15 の値と照合する)。
 
+### 1-1a. タイムゾーン(2026-10-14 リハーサル4回目で判明)
+
+`stored_events.created_at` と ReadModel の日時列は MySQL の `TIMESTAMP` で、接続のセッションのタイムゾーンで変換される。
+リハーサルのMySQLを本番と同じタイムゾーンで動かさないと、比較で日時がちょうど9時間などずれる。
+
+```sql
+-- 本番(読み取りのみ)とリハーサルの両方で実行し、@@global.time_zone・@@session.time_zone をそろえる
+SELECT @@global.time_zone, @@session.time_zone, @@system_time_zone, NOW(), UTC_TIMESTAMP();
+```
+
+- 本番が `SYSTEM`(JST)や `+09:00` なら、リハーサルのMySQLを `--default-time-zone=+09:00` で起動する(Docker なら command に指定)。
+- 投入(`mysql < dump`)・各コマンドの実行は、そろえた後に行う。
+
 ### 1-2. 配備するブランチ
 
 - ブランチ: `claude/claude-md-delegation-rules`(PR #115 の head。WP10を含むこと)。
@@ -771,6 +784,35 @@ ORDER BY id;
 
 - **要確認**: `usedOn`・`usedDays` のキー名は `PaidLeaveAccountUsageDesignated` のプロパティ名で推定した。結果が空なら、キー名を確認する。
 - 違った時に決めること: 件数が 1 以上なら、対応する申請を特定する方法(対象日・利用者での突き合わせ等)をユーザーと決め、変換規則に加える。
+
+### (f0) cutover前の有給8件の承認時に、充当できる付与があったか(論点19 決定9-3)
+
+```sql
+-- flow_office_rehearsal(作り直し前の旧イベント)。8件それぞれの承認時点で、対象日に有効な付与の一覧
+SELECT r.aggregate_uuid AS request_id,
+       JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.userId')) AS user_id,
+       JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.targetDate')) AS target_date,
+       a.created_at AS approved_at,
+       g.aggregate_uuid AS grant_id,
+       JSON_UNQUOTE(JSON_EXTRACT(g.event_properties,'$.grantedOn')) AS granted_on,
+       JSON_UNQUOTE(JSON_EXTRACT(g.event_properties,'$.expiresOn')) AS expires_on,
+       g.created_at AS grant_recorded_at
+FROM stored_events r
+JOIN stored_events a ON a.aggregate_uuid = r.aggregate_uuid AND a.event_class = 'paid_leave.request_approved'
+LEFT JOIN stored_events g ON g.event_class = 'paid_leave.granted'
+  AND JSON_UNQUOTE(JSON_EXTRACT(g.event_properties,'$.userId')) = JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.userId'))
+  AND g.id < a.id
+  AND JSON_UNQUOTE(JSON_EXTRACT(g.event_properties,'$.grantedOn')) <= JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.targetDate'))
+  AND JSON_UNQUOTE(JSON_EXTRACT(g.event_properties,'$.expiresOn')) >= JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.targetDate'))
+WHERE r.event_class = 'paid_leave.requested'
+  AND JSON_UNQUOTE(JSON_EXTRACT(r.event_properties,'$.targetDate')) BETWEEN '2026-08-10' AND '2026-09-04'
+ORDER BY r.id;
+```
+
+- `grant_id` が全行 NULL(承認時に有効な付与が無い)なら、8件が充当されないのは旧システムどおりで、作り直しの「消化記録のみ・充当0・
+  未充当」は意図した結果。(f)・6-3(6)・B09 の充当の期待はこの8件には当てはまらない。
+- `grant_id` がある行は、その付与の承認時点の残数(付与日数 − それまでの `paid_leave.used`)を確かめて報告する(残数があれば旧システムの
+  不具合として判断を仰ぐ)。
 
 ### (f) 承認済み・未充当の消化記録の未充当量
 
