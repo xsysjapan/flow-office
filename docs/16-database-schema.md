@@ -4,6 +4,9 @@
 実装時のマイグレーションで確定させる。`created_at` / `updated_at` は全テーブル共通。
 
 **日時カラムの扱い**: `_at` で終わるカラムはタイムゾーン情報を持たない壁時計表記で保存する。
+ReadModel(Projection)の`_at`列は`DATETIME`で持ち、表で最初のTIMESTAMP列をNOT NULL・既定値なしにしない。
+MySQL(`explicit_defaults_for_timestamp=OFF`)では、そうした最初のTIMESTAMP列に`ON UPDATE CURRENT_TIMESTAMP`が
+自動で付き、投影のUPDATE(その列を含まない)で更新時刻に上書きされるため(2026_10_14_000002で該当列をDATETIMEに変更)。
 API境界(リクエスト・レスポンスの両方)では常にオフセット付きISO8601形式で日時をやり取りし、
 変換は `App\Support\LocalDateTime` に集約する(詳細は docs/03-architecture.md 3.4)。
 どのオフセットで解釈するかは2系統ある。
@@ -240,7 +243,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - source_ref(生成元の参照情報。例: `holiday_calendar_events.id`)
 - applied_at
 - applied_by_user_id(nullable。自動処理の場合はnull)
-- created_at
+- created_at(DATETIME・NOT NULL・既定値なし。投影が必ず値を入れる)
 
 1つの会社カレンダー日に複数の生成元履歴が残りうる(標準生成→祝日同期→手動変更、等)。
 最新の1件がその日の生成元として画面に表示される。
@@ -302,7 +305,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   表示する)
 - error_code(nullable。`result=failed`の場合の理由コード)
 - previous_snapshot(上書き前の従業員予定の内容。JSON。取消時にこの内容へ戻す)
-- created_at
+- created_at(DATETIME・NOT NULL・既定値なし。投影が必ず値を入れる)
 
 ## employment_categories
 
@@ -1490,7 +1493,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - asset_id (→ assets)
 - location_text (text)
 - changed_by_user_id (→ users)
-- changed_at
+- changed_at(DATETIME・NOT NULL・既定値なし)
 
 ## asset_placements (設置品の設置/保管場所の履歴。現在有効な1件+履歴)
 
@@ -1500,7 +1503,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - id
 - asset_id (→ assets)
 - location_text (text)
-- started_at
+- started_at(DATETIME・NOT NULL・既定値なし)
 - ended_at (nullable。nullなら現在有効な設置)
 - started_by_user_id (→ users)
 - ended_by_user_id (nullable, → users)
@@ -1515,7 +1518,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - user_id (→ users。借用者)
 - loan_request_id (nullable, UUID。`approval`方式で承認済み申請に基づいて貸与した場合のみ
   `asset_loan_requests.id`を指す。外部キー制約なし)
-- loaned_at
+- loaned_at(DATETIME・NOT NULL・既定値なし)
 - expected_return_at (nullable)
 - loaned_by_user_id (→ users)
 - returned_at (nullable)
@@ -1586,7 +1589,7 @@ docs/20-implementation-notes.md と同様の注記)。
 - title
 - summary
 - detail_url
-- queued_at
+- queued_at(DATETIME・NOT NULL・既定値なし。`notification.queued`の`queuedAt`をそのまま入れる)
 - sent_at (nullable)
 - confirmed_at (nullable。本人が通知一覧またはメールのリンクから確認した日時)
 - resolved_at (nullable。対象の不備・申請そのものが解消された日時。confirmed_atとは独立に更新される)
