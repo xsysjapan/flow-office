@@ -59,6 +59,9 @@ UPDATE system_settings SET notification_mail_enabled = 0;
 mkdir -p ~/rehearsal-20261009/{before,dryrun,verify,after,rebuild,backup}
 ```
 
+- 認証系の行(認証キー・端末管理セッション・外部ID等)をReadModelでscrubしても、`stored_events`には残るため再生で戻る
+  (リハーサル8回目)。検証DB・作り直し後のDB・保存した出力は本番と同じ機密として扱い、比較結果を保存してから破棄する。
+
 ### 0-4. SQLの互換性
 
 SQLは MySQL 5.7 で動く形に書いた(CTE・ウィンドウ関数は使わない)。本番のMySQLバージョンは要確認。
