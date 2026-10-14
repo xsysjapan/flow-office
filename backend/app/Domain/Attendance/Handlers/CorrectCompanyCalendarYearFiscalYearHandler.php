@@ -67,8 +67,8 @@ class CorrectCompanyCalendarYearFiscalYearHandler implements CommandHandler
         $companyCalendarYear->refresh();
         $companyCalendar = $companyCalendarYear->companyCalendar;
 
-        // 訂正前の期間分の日別データは新しい期間とはもはや対応しないため、作り直す前に破棄する。
-        $companyCalendarYear->days()->delete();
+        // 訂正前の期間分の日別データは、訂正イベントのProjectorが削除する(イベントを書かない直接削除はしない)。
+        // 訂正後の日は、この後のcompany_calendar_year.days_updatedで作られる。
 
         $days = $this->dayGenerator->generate(
             Carbon::parse($command->startsOn),

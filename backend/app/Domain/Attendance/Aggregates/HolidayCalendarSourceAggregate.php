@@ -102,7 +102,7 @@ class HolidayCalendarSourceAggregate extends AggregateRoot
     }
 
     /**
-     * @param  list<array{company_calendar_day_id: int, is_public_holiday: bool, public_holiday_name: ?string}>  $dayReverts
+     * @param  list<array{company_calendar_day_id: int, companyCalendarYearId?: ?string, date?: ?string, is_public_holiday: bool, public_holiday_name: ?string}>  $dayReverts
      */
     public function revertLastSync(array $dayReverts, int $revertedStoredEventId, string $revertedByUserId): self
     {

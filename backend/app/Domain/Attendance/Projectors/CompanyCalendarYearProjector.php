@@ -10,6 +10,7 @@ use App\Domain\Attendance\Events\CompanyCalendarYearFiscalYearCorrected;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Models\CompanyCalendarDay;
+use App\Models\CompanyCalendarDaySource;
 use App\Models\CompanyCalendarYear;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -118,6 +119,17 @@ class CompanyCalendarYearProjector extends Projector
 
     public function onCompanyCalendarYearFiscalYearCorrected(CompanyCalendarYearFiscalYearCorrected $event): void
     {
+        // 訂正前の期間分の日別データと出典は新しい期間と対応しないため削除する。
+        // 訂正後の日は後続のcompany_calendar_year.days_updatedで作られる。
+        // 外部キーのcascadeに頼らず、出典(子)→日(親)の順に明示的に削除する。
+        $dayIds = CompanyCalendarDay::query()
+            ->where('calendar_id', $event->aggregateRootUuid())
+            ->pluck('id');
+        foreach ($dayIds->chunk(500) as $chunk) {
+            CompanyCalendarDaySource::query()->whereIn('company_calendar_day_id', $chunk->all())->delete();
+        }
+        CompanyCalendarDay::query()->where('calendar_id', $event->aggregateRootUuid())->delete();
+
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'fiscal_year' => $event->fiscalYear,
             'starts_on' => $event->startsOn,
