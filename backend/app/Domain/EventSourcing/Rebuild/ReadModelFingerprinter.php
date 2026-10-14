@@ -25,6 +25,9 @@ final class ReadModelFingerprinter
 
     private const CHUNK = 1000;
 
+    /** @param  string|null  $connection 読む接続名(null は既定の接続) */
+    public function __construct(private readonly ?string $connection = null) {}
+
     /** @return array{count: int, hash: string}|null テーブルが無ければ null */
     public function fingerprint(string $table): ?array
     {
@@ -43,11 +46,35 @@ final class ReadModelFingerprinter
      */
     public function rows(string $table): ?array
     {
-        if (! Schema::hasTable($table)) {
+        $data = $this->normalizedRows($table);
+        if ($data === null) {
             return null;
         }
 
-        $columns = Schema::getColumns($table);
+        $lines = array_map(
+            fn (array $normalized) => json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            $data['rows'],
+        );
+        sort($lines, SORT_STRING);
+
+        return $lines;
+    }
+
+    /**
+     * 比較対象の列だけを正規化した行(列名 => 文字列)。ReadModelDiffer が使う。テーブルが無ければ null。
+     * key は、行の同一性に使える主キー列(自動採番の整数主キー・複合主キー・主キー無しは null)。
+     * kinds は比較対象の列名 => 型の種別(integer/decimal/date/datetime/json_or_text/string)。
+     *
+     * @return array{key: string|null, kinds: array<string, string>, rows: list<array<string, string>>}|null
+     */
+    public function normalizedRows(string $table): ?array
+    {
+        $schema = Schema::connection($this->connection);
+        if (! $schema->hasTable($table)) {
+            return null;
+        }
+
+        $columns = $schema->getColumns($table);
         $primary = $this->primaryKeyColumn($table);
         $autoIncrementPrimary = null;
         foreach ($columns as $column) {
@@ -67,37 +94,38 @@ final class ReadModelFingerprinter
         }
         ksort($types);
 
-        $lines = [];
-        $handle = function ($rows) use ($types, &$lines): void {
+        $result = [];
+        $handle = function ($rows) use ($types, &$result): void {
             foreach ($rows as $row) {
                 $row = (array) $row;
                 $normalized = [];
                 foreach ($types as $name => $kind) {
                     $normalized[$name] = $this->normalize($row[$name] ?? null, $kind);
                 }
-                $lines[] = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                $result[] = $normalized;
             }
         };
 
+        $db = DB::connection($this->connection);
         if ($primary !== null) {
-            DB::table($table)->chunkById(self::CHUNK, $handle, $primary);
+            $db->table($table)->chunkById(self::CHUNK, $handle, $primary);
         } else {
-            $query = DB::table($table);
+            $query = $db->table($table);
             foreach (array_column($columns, 'name') as $name) {
                 $query->orderBy($name);
             }
             $query->chunk(self::CHUNK, $handle);
         }
 
-        sort($lines, SORT_STRING);
+        $key = ($primary !== null && $primary !== $autoIncrementPrimary && isset($types[$primary])) ? $primary : null;
 
-        return $lines;
+        return ['key' => $key, 'kinds' => $types, 'rows' => $result];
     }
 
     /** 主キーが1列ならその列名(複合主キー・主キー無しは null)。 */
     private function primaryKeyColumn(string $table): ?string
     {
-        foreach (Schema::getIndexes($table) as $index) {
+        foreach (Schema::connection($this->connection)->getIndexes($table) as $index) {
             if (($index['primary'] ?? false) && count($index['columns']) === 1) {
                 return $index['columns'][0];
             }

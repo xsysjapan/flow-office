@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\EventSourcing\Rebuild\EventRestorabilityChecker;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuilder;
+use App\Domain\EventSourcing\Rebuild\ReadModelDiffer;
 use App\Domain\EventSourcing\Rebuild\ReadModelFingerprinter;
 use App\Domain\EventSourcing\Rebuild\ReadModelTableLister;
 use App\Domain\EventSourcing\Rebuild\EventStoreRebuildWriter;
@@ -24,7 +25,9 @@ final class RebuildLeaveEventStoreCommand extends Command
         {--swap : stored_events_rebuilt と stored_events を入れ替える(検査が通っている場合のみ)}
         {--list-readmodels : 全Projectorの書き込み先テーブルの一覧を出す(手順書の「空にするテーブル」)}
         {--readmodel-fingerprint : 全ReadModelのテーブルごとに「件数」と「行の内容のハッシュ」を出す(作り直し前後のDBをdiffで比べる。読み取りのみ)}
-        {--readmodel-fingerprint-rows= : 指定したテーブルの正規化した行(ソート済み)を出す(--readmodel-fingerprint の差分の行を特定する)}';
+        {--readmodel-fingerprint-rows= : 指定したテーブルの正規化した行(ソート済み)を出す(--readmodel-fingerprint の差分の行を特定する)}
+        {--readmodel-diff= : 全ReadModelのテーブルごとに、現在のDBと、同じサーバー上の指定したデータベース(作り直し前)の行単位の差を出す。読み取りのみ}
+        {--readmodel-diff-json= : --readmodel-diff の全テーブル・全件の差の要約と例をJSONで保存するファイル}';
 
     protected $description = '休暇の旧イベント列を新しいイベント構成へ作り直す(試し実行が既定。--apply・--verify・--swap で段階的に実行)';
 
@@ -41,6 +44,9 @@ final class RebuildLeaveEventStoreCommand extends Command
             return self::SUCCESS;
         }
 
+        if ($this->option('readmodel-diff')) {
+            return $this->readModelDiff((string) $this->option('readmodel-diff'), $this->option('readmodel-diff-json'));
+        }
         if ($this->option('readmodel-fingerprint-rows')) {
             return $this->fingerprintRows((string) $this->option('readmodel-fingerprint-rows'));
         }
@@ -99,6 +105,60 @@ final class RebuildLeaveEventStoreCommand extends Command
         foreach (array_keys((new ReadModelTableLister)->tables(app_path('Domain'))) as $table) {
             $result = $fingerprinter->fingerprint($table);
             $this->line($result === null ? "{$table}\t-\t(テーブルなし)" : "{$table}\t{$result['count']}\t{$result['hash']}");
+        }
+
+        return self::SUCCESS;
+    }
+
+    /** 現在の接続の設定を複製して database だけ差し替えた接続を実行時に作り、2つのDBの差を出す(どちらにも書かない)。 */
+    private function readModelDiff(string $database, mixed $jsonPath): int
+    {
+        $default = (string) config('database.default');
+        $settings = config("database.connections.{$default}");
+        $settings['database'] = $database;
+        $otherConnection = 'readmodel_diff_other';
+        config(["database.connections.{$otherConnection}" => $settings]);
+
+        $tables = array_keys((new ReadModelTableLister)->tables(app_path('Domain')));
+        $diff = (new ReadModelDiffer($default, $otherConnection))->diff($tables);
+
+        $this->table(['テーブル', '件数(比較先)', '件数(現在)', '比較先のみ', '現在のみ', '内容が違う', '備考'], ReadModelDiffer::summaryRows($diff));
+
+        foreach ($diff as $table => $d) {
+            if ($d['status'] !== 'compared') {
+                continue;
+            }
+            $hasDiff = $d['only_other'] > 0 || $d['only_current'] > 0 || $d['changed'] > 0;
+            if (! $hasDiff && $d['columns_only_current'] === [] && $d['columns_only_other'] === []) {
+                continue;
+            }
+            $this->info("[{$table}]");
+            if ($d['columns_only_current'] !== [] || $d['columns_only_other'] !== []) {
+                $this->line('片側にしかない列(比較から除く) 現在のみ: '.implode(', ', $d['columns_only_current']).' / 比較先のみ: '.implode(', ', $d['columns_only_other']));
+            }
+            if ($d['changed_columns'] !== []) {
+                $this->table(['違う列', '件数'], array_map(fn ($c, $n) => [$c, $n], array_keys($d['changed_columns']), array_values($d['changed_columns'])));
+                $this->table(['キー', '列', '比較先の値', '現在の値', '差(秒)'], array_map(
+                    fn (array $e) => [$e['key'], $e['column'], $e['other'], $e['current'], isset($e['diff_seconds']) ? sprintf('%+d', $e['diff_seconds']) : '-'],
+                    $d['changed_examples'],
+                ));
+            }
+            foreach ($d['datetime_diff_seconds'] as $column => $counts) {
+                $this->line("日時の差(秒) {$column}: ".implode(' / ', array_map(fn ($sec, $n) => "{$sec}: {$n}件", array_keys($counts), array_values($counts))));
+            }
+            foreach (['only_other_examples' => '比較先にだけある行', 'only_current_examples' => '現在にだけある行'] as $field => $label) {
+                foreach ($d[$field] as $example) {
+                    $this->line("{$label}: ".json_encode($example, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                }
+            }
+        }
+
+        if (is_string($jsonPath) && $jsonPath !== '') {
+            file_put_contents($jsonPath, json_encode(
+                ['current_database' => config("database.connections.{$default}.database"), 'other_database' => $database, 'tables' => $diff],
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            ));
+            $this->info("JSON を {$jsonPath} に保存した。");
         }
 
         return self::SUCCESS;
