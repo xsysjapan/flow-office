@@ -558,7 +558,7 @@ class PaidLeaveAccountAggregateTest extends TestCase
             ]);
     }
 
-    public function test_new_grant_triggers_auto_allocation(): void
+    public function test_new_grant_itself_does_not_allocate(): void
     {
         PaidLeaveAccountAggregate::fake(self::USER)
             ->given([
@@ -570,8 +570,8 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 $aggregate->grant('g2', '2025-06-01', '2027-06-01', 10.0, null, 'manual');
             })
             ->assertRecorded([
+                // 付与時の未充当の充当は Reactor が allocateUnallocatedOnGrant() で行う(論点19 決定10-1)。
                 new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 10.0, null, 'manual'),
-                new PaidLeaveUsageAllocated('u1', 'g2', 3.0),
             ]);
     }
 
@@ -706,15 +706,98 @@ class PaidLeaveAccountAggregateTest extends TestCase
                 new PaidLeaveUsageAllocated('u1', 'g1', 3.0),
                 new PaidLeaveUsageAllocationReleased('u1', 'g1', 3.0),
                 new PaidLeaveGrantRevoked('g1', 'admin-1', '誤付与取消'),
+                new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 5.0, null, 'manual'),
             ])
             ->when(function (PaidLeaveAccountAggregate $aggregate) {
-                // 新たにg2を付与しても、取消済みg1は候補に入らずg2へ充当される。
-                $aggregate->grant('g2', '2025-06-01', '2027-06-01', 5.0, null, 'manual');
+                // 新たにg2が付与されたとき、取消済みg1は対象に入らずg2へ充当される。
+                $aggregate->allocateUnallocatedOnGrant('g2');
             })
             ->assertRecorded([
-                new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 5.0, null, 'manual'),
                 new PaidLeaveUsageAllocated('u1', 'g2', 3.0),
             ]);
+    }
+
+    // ---- 付与時の未充当の充当(論点19 決定10-1) ----
+
+    public function test_allocate_on_grant_allocates_oldest_confirmed_first_within_the_grant_remaining(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveUsageDesignated('u1', null, null, '2025-05-02', 2.0),
+                new PaidLeaveUsageDesignated('u2', null, null, '2025-05-01', 2.0),
+                // 確定は u2 が先(対象日はu1の方が後だが、確定の古い順)
+                new PaidLeaveUsageConfirmed('u2', 'a1'),
+                new PaidLeaveUsageConfirmed('u1', 'a1'),
+                new PaidLeaveGrantCreated('g1', '2026-01-01', '2026-01-31', 3.0, null, 'manual'),
+            ])
+            ->when(fn (PaidLeaveAccountAggregate $a) => $a->allocateUnallocatedOnGrant('g1'))
+            ->assertRecorded([
+                // 有効期間(2026-01)と対象日(2025-05)の関係は問わない。残り3日: u2に2日、u1に1日。
+                new PaidLeaveUsageAllocated('u2', 'g1', 2.0),
+                new PaidLeaveUsageAllocated('u1', 'g1', 1.0),
+            ]);
+    }
+
+    public function test_allocate_on_grant_only_allocates_the_shortfall_of_partly_allocated_usage(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 1.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', null, null, '2025-05-01', 3.0),
+                new PaidLeaveUsageConfirmed('u1', 'a1'),
+                new PaidLeaveUsageAllocated('u1', 'g1', 1.0),
+                new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 10.0, null, 'manual'),
+            ])
+            ->when(fn (PaidLeaveAccountAggregate $a) => $a->allocateUnallocatedOnGrant('g2'))
+            ->assertRecorded([new PaidLeaveUsageAllocated('u1', 'g2', 2.0)]);
+    }
+
+    public function test_allocate_on_grant_skips_fully_allocated_cancelled_and_unconfirmed_usages(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('full', null, null, '2025-05-01', 1.0),
+                new PaidLeaveUsageConfirmed('full', 'a1'),
+                new PaidLeaveUsageAllocated('full', 'g1', 1.0),
+                new PaidLeaveUsageDesignated('cancelled', null, null, '2025-05-02', 1.0),
+                new PaidLeaveUsageConfirmed('cancelled', 'a1'),
+                new PaidLeaveUsageCancelled('cancelled', 'a1', null),
+                new PaidLeaveUsageDesignated('unconfirmed', null, null, '2025-05-03', 1.0),
+            ])
+            ->when(fn (PaidLeaveAccountAggregate $a) => $a->allocateUnallocatedOnGrant('g1'))
+            ->assertNothingRecorded();
+    }
+
+    public function test_allocate_on_grant_is_idempotent_and_ignores_unknown_or_revoked_grants(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveGrantCreated('g1', '2025-04-01', '2027-04-01', 10.0, null, 'manual'),
+                new PaidLeaveUsageDesignated('u1', null, null, '2025-05-01', 2.0),
+                new PaidLeaveUsageConfirmed('u1', 'a1'),
+                new PaidLeaveUsageAllocated('u1', 'g1', 2.0),
+                new PaidLeaveGrantCreated('g2', '2025-06-01', '2027-06-01', 10.0, null, 'manual'),
+                new PaidLeaveGrantRevoked('g2', 'admin-1', null),
+            ])
+            ->when(function (PaidLeaveAccountAggregate $a) {
+                $a->allocateUnallocatedOnGrant('g1');
+                $a->allocateUnallocatedOnGrant('g2');
+                $a->allocateUnallocatedOnGrant('missing');
+            })
+            ->assertNothingRecorded();
+    }
+
+    public function test_allocate_on_grant_leaves_the_rest_unallocated_when_the_grant_runs_out(): void
+    {
+        PaidLeaveAccountAggregate::fake(self::USER)
+            ->given([
+                new PaidLeaveUsageDesignated('u1', null, null, '2025-05-01', 3.0),
+                new PaidLeaveUsageConfirmed('u1', 'a1'),
+                new PaidLeaveGrantCreated('g1', '2026-01-01', '2027-01-01', 1.5, null, 'manual'),
+            ])
+            ->when(fn (PaidLeaveAccountAggregate $a) => $a->allocateUnallocatedOnGrant('g1'))
+            ->assertRecorded([new PaidLeaveUsageAllocated('u1', 'g1', 1.5)]);
     }
 
     // ---- Usage: 申請ID→usageId・状態の問い合わせ ----

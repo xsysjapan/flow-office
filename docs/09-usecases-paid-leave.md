@@ -317,12 +317,22 @@ Usage確定(`confirmUsage`)時、副作用のないDomain Service`AllocationPlan
 
 ### 未充当Usageの自動再Allocation
 
-Grant追加・増額・有効期限延長・Usage取消によるAllocation解除など、「空きが発生した契機」
+Grant増額・有効期限延長・Usage取消によるAllocation解除など(Grant追加は下記「付与時の未充当の充当」)、「空きが発生した契機」
 の都度、Aggregateは未充当のUsage(確定済み・未取消・充当不足があるもの)を`usedOn`昇順
 (同日は登録順)に再評価し、空きが生まれたGrantへ自動的に充当する
 (`allocateUnallocatedUsages`)。既存のAllocationは組み替えない(常に「残りの不足分」だけを
 追加充当する、安定ソートの再Allocation)。同一Command実行内・同一Aggregateバージョン内で
 完結させることで、楽観的排他との整合を保つ。
+
+### 付与時の未充当の充当(Reactor)
+
+先に使用(承認・確定)してから後で付与された場合は、付与されたときに充当する(変更セット`20261009-keep-leave-work-type-on-edit`
+論点19 決定10-1)。`paid_leave_account.grant_created`を購読するReactor(`UnallocatedUsageOnPaidLeaveGrantReactor`)が
+`AllocateUnallocatedPaidLeaveUsages`(`viaReactor=true`)を発行し、集約の`allocateUnallocatedOnGrant`が、その利用者の確定済み・
+未取消で充当が使用日数に足りない消化記録へ、**確定の古い順**に、**その付与の残りの範囲**で`usage_allocated`を記録する
+(業務ルールは`GrantTimeAllocationPlanner`)。付与の有効期間と対象日の関係は問わない。既に充当済み・取消済みの消化記録は対象外で、
+充当できるものが無ければ何も記録しない(冪等)。承認時の充当(`AllocationPlanner`)は変えない。付与の作成自体(`grant`)は
+充当せず、充当はこのReactorが同じトランザクションで行う。
 
 ## Usageのライフサイクル
 

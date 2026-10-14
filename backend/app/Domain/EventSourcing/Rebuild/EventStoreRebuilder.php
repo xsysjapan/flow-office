@@ -92,7 +92,7 @@ final class EventStoreRebuilder
         private readonly PaidLeaveScheduleRebuilder $schedule = new PaidLeaveScheduleRebuilder,
         private readonly SeededDataReconciler $seededReconciler = new SeededDataReconciler,
         private readonly HolidayCalendarDayRefRebuilder $holidayDayRefs = new HolidayCalendarDayRefRebuilder,
-        private readonly CutoverUsageAllocator $cutoverAllocator = new CutoverUsageAllocator,
+        private readonly UnallocatedUsageAllocator $usageAllocator = new UnallocatedUsageAllocator,
     ) {}
 
     /**
@@ -174,8 +174,6 @@ final class EventStoreRebuilder
         $requestResults = [];
         $grantStates = [];
         $cutoverSummary = [];
-        /** @var array<string, string> $cutoverAllocation 利用者ID => cutoverの日付(migrated のある利用者。最小値) */
-        $cutoverAllocation = [];
         $handledRequests = [];
 
         $absorb = function (PaidLeaveRequestRebuild $result) use (&$converted, &$consumed, &$requestResults): void {
@@ -349,9 +347,6 @@ final class EventStoreRebuilder
             try {
                 $outcome = $this->grants->reconcileCutover($cutover, $grantStates);
                 array_push($converted, ...$outcome['events']);
-                $userId = (string) $cutover->aggregateUuid;
-                $cutoverDate = (string) $cutover->get('cutoverDate');
-                $cutoverAllocation[$userId] = isset($cutoverAllocation[$userId]) ? min($cutoverAllocation[$userId], $cutoverDate) : $cutoverDate;
                 $cutoverSummary = array_merge($cutoverSummary, $outcome['outcomes']);
                 $consumed[$cutover->id] = true;
             } catch (UnsupportedEventSequence $e) {
@@ -359,15 +354,15 @@ final class EventStoreRebuilder
             }
         }
 
-        // cutoverの日付より前の対象日で承認され充当の無い有給の消化記録を、その利用者の付与に充当する(論点19 決定9-3a)。
-        // 充当先の付与・既存の充当は、変換後のイベントと、変換されずにそのまま写る口座の行(cutover以降に新形式で記録されたもの)の両方から集める。
+        // 付与時の未充当の充当(論点19 決定10-1)。作り直し後の全イベントを発生順に見て、各付与の時点で未充当の消化記録へ充当する。
+        // 変換後のイベントと、変換されずにそのまま写る口座の行(cutover以降に新形式で記録されたもの)の両方を対象にする。
         $passedThrough = [];
         foreach ($rows as $row) {
             if (! isset($consumed[$row->id]) && str_starts_with($row->eventClass, 'paid_leave_account.')) {
                 $passedThrough[] = RebuiltEvent::passThrough($row);
             }
         }
-        $allocation = $this->cutoverAllocator->allocate([...$converted, ...$passedThrough], $cutoverAllocation);
+        $allocation = $this->usageAllocator->allocate([...$converted, ...$passedThrough]);
         array_push($converted, ...$allocation['events']);
 
         // 勤怠日(論点18 2.4・2.5)。休暇の変換結果から、利用者・対象日ごとの休暇を引けるようにする。
@@ -462,7 +457,7 @@ final class EventStoreRebuilder
             'leave_grants' => $leaveGrantCount,
             'attendance' => $attendanceSummary,
             'cutover' => $cutoverSummary,
-            'cutover_allocation' => $allocation['report'],
+            'usage_allocation' => $allocation['report'],
         ];
 
         if ($unsupported !== []) {

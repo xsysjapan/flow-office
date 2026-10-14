@@ -61,21 +61,40 @@
 - 付与IDが一致しない付与(システム外から持ち込んだ残高)は`grant_created`(source=`carried_over`、grantId=cutoverの付与ID、
   grantedDays=`remainingDaysAtCutover`、grantedOn=`originalGrantedOn`(nullならcutover日)、cutoverの`mode`・`notes`は`meta_data`)にする。
 - 付与IDは一致するが残数が合わない付与は、試し実行で一覧にして失敗させる(リハーサルで原因を確認し、変換規則を決めてから進む)。
-- **cutoverの日付より前の対象日の消化記録の充当(論点19 決定9-3a)**: 消化記録の対象日(`usage_designated`の日付)が「cutoverの日付」より前で、
-  充当(旧`paid_leave.used`)が無いまま確定(`usage_confirmed`)・未取消の有給(確定の日付では選ばない: cutoverの経路は確定がcutover以降に
-  記録されるため)の消化記録は、その利用者の付与に充当する`paid_leave_account.usage_allocated`を導出する(`CutoverUsageAllocator`)。
-  - **cutoverの日付**: その利用者に`migrated`があればその`cutoverDate`、無ければ全利用者の`cutoverDate`の最小値(利用者に`migrated`が
-    無くても対象になる)。`migrated`が全く無ければ何もしない。
-  - **充当先**: その利用者の**全ての付与**(作り直し後の`grant_created`。`carried_over`に限らず、変換されずにそのまま写る行(cutover以降に新形式で記録されたもの)も含む)。取消(`grant_revoked`)済みは除く。
-    `grant_amount_changed`があれば最終の日数。既存の有効な充当(`usage_allocated`の合計 − `usage_allocation_released`の合計。`PaidLeaveBalanceProjector`と同じ。変換されずに写る行も含む)を付与ごとに差し引いてから
-    `AllocationPlanner`に渡す(付与の残りを超えない)。承認時点より後に付与された付与にも、`AllocationPlanner`の規則(直近の将来の付与1件)で充当される。
-  - 順序・単位は現行の口座集約の承認時の充当と同じ(確定の順に、対象日に有効な付与を`expiresOn`昇順)。足りない分は未充当のまま(論点17)。
-  - 置く位置は、充当先の付与の`grant_created`と消化の`usage_confirmed`のうち後ろの直後(subOrderで順序)、発生日時は置き場所の行。集約UUIDは
-    口座(userId)、usageIdは2.1の規則の消化記録のid。取消済み・対象日がcutoverの日付以降・既に`usage_allocated`があるものは対象外。
-    `reconcileCutover`の突き合わせはcutover時点の残数の照合で、この充当は突き合わせの後に置くため影響しない。
-  - 試し実行のレポート(`cutover_allocation`)に、cutoverの日付の最小値、対象の消化記録ごとの一覧(usageId・利用者・対象日・日数・充当した
-    付与と日数・未充当の日数と理由・cutoverの日付とその決め方(利用者のmigrated/全体の最小値))、充当した件数・日数、未充当の件数・日数を出す
-    (コマンドの表示も同じ)。
+- **未充当の充当(論点19 決定10-1。決定9-3aを置き換える)**: 作り直し後の**全イベント**(変換分+変換されずにそのまま写る口座の行)を
+  発生順(anchorId・subOrder)に見て、現行の2つの規則を過去に当てはめる(`UnallocatedUsageAllocator`)。cutoverの日付による対象の絞り込みはしない。
+  - **確定時の充当**(規則 confirm。現行の`PaidLeaveAccountAggregate::confirmUsage`→`allocateUsage`): 各`usage_confirmed`の時点で、その消化記録に
+    入力全体を通じて`usage_allocated`が1件も無いなら、その時点の利用者の付与(付与日・期限・付与日数・取消・充当済み合計)に
+    `AllocationPlanner`を当てはめ、使用日数 − 充当済みの範囲で`usage_allocated`を導出する(対象日に有効な付与の残り → 対象日より後に
+    付与日がある付与のうち付与日が最も近い1件の残り)。既存の`usage_allocated`を持つ消化記録は確定時の導出をしない(二重充当防止。
+    不足分は付与時の規則で扱う)。
+  - **付与時の充当**(規則 grant。現行の`PaidLeaveAccountAggregate::allocateUnallocatedOnGrant`。`grant_created`を購読するReactorが発行):
+    各`grant_created`の時点で、それより前に確定した(`usage_confirmed`)未取消の消化記録のうち、充当(`usage_allocated`の合計 −
+    `usage_allocation_released`の合計)が使用日数(`usage_designated`の`usedDays`)に足りないものへ、確定の古い順に、**その付与の残り**
+    (付与の時点の日数 − 有効な充当の合計)の範囲で充当する`usage_allocated`を導出する。付与の有効期間と消化記録の対象日の関係は問わない
+    (`GrantTimeAllocationPlanner`)。
+  - **取消**(規則 cancel。現行の`PaidLeaveAccountAggregate::cancelUsage`→`allocateUnallocatedUsages`): 各`usage_cancelled`の時点で、その消化記録に
+    残っている充当を付与ごとに`usage_allocation_released`で解除する(残り = 充当の合計 − 解除の合計。付与の取消(revoked)済みの分は除く)。
+    入力中でその取消より後に既存の`usage_allocation_released`がある付与の分は、二重に解除しないため導出しない。続けて、確定済み・未取消で
+    充当が足りない他の消化記録へ、`usedOn`の昇順(同日は消化の指定の順)に`AllocationPlanner`で充当する(規則 cancel)。既存の`usage_allocated`を
+    持つ消化記録は再充当の対象外(確定時と同じ)。
+    置く位置: 解除は取消の行より前(同じanchorの中で元の行より前、subOrderは負の値)。ただし取消のanchorに充当の行・確定/付与の行があるとき、
+    または取消が同じanchorに複数あるときは取消の直後。再充当は取消の直後(subOrderは`SUB_ORDER_BASE`から)。
+  - **付与の取消**(規則 grant_revoked。現行の`PaidLeaveAccountAggregate::revokeGrant`): 各`grant_revoked`の時点で、その付与に残っている充当を
+    消化記録ごとに`usage_allocation_released`で解除してから取消を記録する(取消済みの消化記録・既に解除されている分・入力中で取消より後に既存の
+    解除がある分は導出しない)。続けて、他の未充当の消化記録へ上の再充当と同じ規則で充当する(規則 grant_revoked。取消済みの付与へは充当しない)。
+    解除は取消の行より前、再充当は取消の直後(置き場所は取消と同じ判定)。
+  - **付与の変更**(規則 grant_changed。現行の`changeGrantAmount`・`changeGrantDate`・`changeGrantExpiry`): 増額・付与日の変更・期限延長の各イベントの
+    時点で、上の再充当と同じ規則で未充当の消化記録へ充当する(解除は導出しない。現行も減額で充当を解除しない)。再充当は契機の直後に置く。
+  - 付与日・期限は`grant_created`の後の`grant_date_changed`・`grant_expiry_changed`で更新する(現行の集約と同じ)。付与日数は
+    `grant_amount_changed`の時点までの値。取消(`grant_revoked`)済みの付与には充当しない。
+  - 既存の充当・解除・取消、導出した充当は発生順に状態へ反映する。取消済みの消化記録は対象外。付与の無い利用者の未充当はそのまま
+    (付与されたときに付与時の規則で充当される)。`carried_over`の付与も通常の付与と同じに扱う。
+  - 置く位置は導出の契機(`usage_confirmed`または`grant_created`)の直後(同じanchorの中でsubOrderを`SUB_ORDER_BASE`から)。発生日時は
+    契機のイベントから引き継ぎ、metaも引き継ぐ(metaの`cutover`は除く)。
+    集約UUIDは口座(userId)、usageIdは2.1の規則の消化記録のid。`reconcileCutover`の突き合わせはcutover時点の残数の照合で、影響しない。
+  - 試し実行のレポート(`usage_allocation`)に、消化記録ごとの一覧(usageId・利用者・対象日・日数・充当した付与と日数・未充当の日数と理由
+    (付与なし/付与の残り不足))、充当した件数・日数、未充当の件数・日数を出す。各充当に規則(`confirm`/`grant`/`cancel`/`grant_changed`/`grant_revoked`)を付す(コマンドの表示も同じ)。
 - 結果として論点13の8件は通常の承認済み申請と同じく取消できる(2026-10-10 ユーザー決定)。`PaidLeaveRequestAggregate`の
   「移行前の申請の取消を拒否」は削除する。
 

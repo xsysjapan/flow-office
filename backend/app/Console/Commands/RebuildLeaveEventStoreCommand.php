@@ -346,20 +346,17 @@ final class RebuildLeaveEventStoreCommand extends Command
         }
         $this->table(['結果', '件数'], $this->countRows($outcomes));
 
-        if (isset($report['cutover_allocation'])) {
-            $allocation = $report['cutover_allocation'];
-            $this->info('付与への充当(cutoverの日付より前の対象日で承認され充当の無い消化記録。決定9-3a)');
-            $this->line('cutoverの日付の最小値(migrated の無い利用者に使う): '.($allocation['min_cutover_date'] ?? 'なし(migrated が無いので充当しない)'));
-            $this->line("対象の消化記録: {$allocation['eligible_usages']} 件");
+        if (isset($report['usage_allocation'])) {
+            $allocation = $report['usage_allocation'];
+            $this->info('未充当の充当(決定10-1。確定時: 確定の時点の付与へ充当 / 付与時: 付与の時点で不足している消化記録へ確定の古い順に充当)');
             $this->line("充当した消化記録: {$allocation['allocated_usages']} 件 / {$allocation['allocated_days']} 日");
-            $this->line("充当できなかった(付与の残り不足・有効な付与なし): {$allocation['unallocated_usages']} 件 / {$allocation['unallocated_days']} 日");
+            $this->line("未充当のまま(付与なし・付与の残り不足): {$allocation['unallocated_usages']} 件 / {$allocation['unallocated_days']} 日");
             if (($allocation['usages'] ?? []) !== []) {
-                $this->table(['消化記録', '利用者', '対象日', '日数', '充当した付与と日数', '未充当の日数', '理由', 'cutoverの日付(決め方)'], array_map(
+                $this->table(['消化記録', '利用者', '対象日', '日数', '充当した付与と日数', '未充当の日数', '理由'], array_map(
                     fn (array $r) => [
                         $r['usage_id'], $r['user_id'], $r['used_on'], $r['days'],
-                        implode(', ', array_map(fn (array $a) => "{$a['grant_id']}: {$a['days']}", $r['allocations'])) ?: '-',
+                        implode(', ', array_map(fn (array $a) => "{$a['grant_id']}: {$a['days']} ({$a['rule']})", $r['allocations'])) ?: '-',
                         $r['unallocated_days'], $r['reason'] ?? '-',
-                        $r['cutover_date'].' ('.($r['cutover_basis'] === 'migrated' ? '利用者のmigrated' : '全体の最小値').')',
                     ],
                     $allocation['usages'],
                 ));

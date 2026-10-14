@@ -15,6 +15,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
 use App\Domain\PaidLeaveAccount\Support\AllocationPlanner;
+use App\Domain\PaidLeaveAccount\Support\GrantTimeAllocationPlanner;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -30,13 +31,14 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 4. Grant有効期限短縮はAllocation件数0のGrantのみ許可。
  * 5. Grant取消時は当該Grantの全Allocationを解除する(Usage自体は取消しない)。
  * 6. Allocationは`usedOn`基準で有効なGrantのみ対象(処理日・承認日は不使用)。
+ * 7'. 付与時の未充当の充当は`allocateUnallocatedOnGrant`(Reactorから呼ぶ。論点19 決定10-1)。
  * 7. 空き発生時は未充当Usageを`usedOn`昇順に自動Allocationする。既存Allocationは
  *    組み替えない(常に「残りの不足分」だけを追加充当する)。
  *    残数が不足していても承認(`confirmUsage`)は拒否せず、充当できた分だけ充当し残りは未充当のまま残す
  *    (docs/changesets/20261009-keep-leave-work-type-on-edit 論点17の改訂)。
  *
  * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>}
- * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int}
+ * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int, confirmOrder?: int}
  */
 class PaidLeaveAccountAggregate extends AggregateRoot
 {
@@ -47,6 +49,8 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     private array $usages = [];
 
     private int $usageSequence = 0;
+
+    private int $confirmSequence = 0;
 
     /**
      * 有給申請ID→最後に指定されたusageId(取消済みを含む)。`PaidLeaveUsageDesignated`の
@@ -81,7 +85,48 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             source: $source,
         ));
 
-        $this->allocateUnallocatedUsages();
+        // 付与時の未充当の充当は、付与の記録を受けるReactorが allocateUnallocatedOnGrant() で行う(論点19 決定10-1)。
+
+        return $this;
+    }
+
+    /**
+     * 付与時の未充当の充当(論点19 決定10-1)。確定済み・未取消で充当が使用日数に足りない消化記録へ、確定の古い順に、
+     * 指定した付与の残りの範囲で充当する。付与の有効期間と消化記録の対象日の関係は問わない。
+     * 既に充当済みの消化記録・取消済みの消化記録は対象外。対象が無ければ何も記録しない(冪等)。
+     */
+    public function allocateUnallocatedOnGrant(string $grantId): self
+    {
+        $grant = $this->grants[$grantId] ?? null;
+
+        if ($grant === null || $grant['revoked']) {
+            return $this;
+        }
+
+        $pending = [];
+        foreach ($this->usages as $usageId => $usage) {
+            if (! $usage['confirmed'] || $usage['cancelled']) {
+                continue;
+            }
+            $pending[] = [
+                'usageId' => (string) $usageId,
+                'remainingDays' => $usage['usedDays'] - array_sum($usage['allocations']),
+                'confirmOrder' => $usage['confirmOrder'] ?? 0,
+            ];
+        }
+
+        $plan = (new GrantTimeAllocationPlanner())->plan(
+            $grant['grantedDays'] - array_sum($grant['allocations']),
+            $pending,
+        );
+
+        foreach ($plan as $entry) {
+            $this->recordThat(new PaidLeaveUsageAllocated(
+                usageId: $entry['usageId'],
+                grantId: $grantId,
+                allocatedDays: $entry['allocatedDays'],
+            ));
+        }
 
         return $this;
     }
@@ -521,6 +566,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     protected function applyPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
         $this->usages[$event->usageId]['confirmed'] = true;
+        $this->usages[$event->usageId]['confirmOrder'] = $this->confirmSequence++;
     }
 
     protected function applyPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void

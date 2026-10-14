@@ -100,14 +100,15 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertEqualsWithDelta(0.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
     }
 
-    public function test_usage_recorded_after_the_cutover_event_with_a_target_date_before_cutover_is_allocated(): void
+    public function test_usage_confirmed_after_the_cutover_grant_is_allocated_at_the_confirmation_by_the_rebuild(): void
     {
         $user = User::factory()->create();
         $approver = User::factory()->create();
         $grantId = (string) Str::uuid();
         $r1 = (string) Str::uuid();
 
-        // cutoverの経路: migrated が先で、承認は後(確定がcutover以降に記録される)。対象日は cutoverDate より前。
+        // cutoverの経路: migrated が先で、承認は後(確定がcutover以降に記録される)。確定時の充当(決定10-1)の規則で、
+        // 確定の時点の付与(対象日より後に付与日がある付与)へ充当される(AllocationPlanner の Step 2)。
         $this->insertLegacyEvent($user->id, 'paid_leave_account.migrated', [
             'cutoverDate' => '2026-09-15',
             'grants' => [
@@ -123,6 +124,34 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
         $this->assertNotNull($balance);
         $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
+        $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
+    }
+
+    public function test_usage_before_a_later_grant_is_allocated_and_a_user_without_grant_stays_unallocated(): void
+    {
+        $user = User::factory()->create();
+        $noGrantUser = User::factory()->create();
+        $approver = User::factory()->create();
+        $laterGrantId = (string) Str::uuid();
+        [$r1, $r2] = [(string) Str::uuid(), (string) Str::uuid()];
+
+        // 先に使って(承認)、後で付与された旧のストア。付与の無い利用者の承認は未充当のまま。
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 2.0));
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($r2, 'paid_leave.requested', $this->oldPaidRequested($noGrantUser->id, $approver->id, '2026-08-11', 1.0));
+        $this->insertLegacyEvent($r2, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($laterGrantId, 'paid_leave.granted', [
+            'userId' => $user->id, 'grantedOn' => '2026-10-01', 'expiresOn' => '2028-09-30', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'auto',
+        ]);
+
+        $this->rebuildAndSwap();
+        $this->replayReadModels();
+
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
+        $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
+        $noGrant = DB::table('paid_leave_balances')->where('user_id', $noGrantUser->id)->first();
+        $this->assertEqualsWithDelta(1.0, (float) $noGrant->unallocated_days, 0.000001);
     }
 
     public function test_cutover_grant_balance_is_cutover_remaining_minus_the_allocation(): void
@@ -158,7 +187,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         [$cutoverGrantId, $laterGrantId] = [(string) Str::uuid(), (string) Str::uuid()];
         $r1 = (string) Str::uuid();
 
-        // 別の利用者の cutover(2026-09-15)。対象の利用者には migrated が無く、全体の最小値が使われる。
+        // 別の利用者の cutover。対象の利用者には migrated が無いが、付与時の充当は利用者ごとに発生順で行う。
         $this->insertLegacyEvent($cutoverUser->id, 'paid_leave_account.migrated', [
             'cutoverDate' => '2026-09-15',
             'grants' => [

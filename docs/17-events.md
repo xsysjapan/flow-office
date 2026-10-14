@@ -367,6 +367,9 @@ AggregateIdは特別休暇の口座と同じく種類ごとの派生IDを使う�
   ワークフローIDから申請への対応は休暇申請文脈の対応表(`leave_request_workflow_links`)で引く。
   まとめ申請の兄弟承認は、休暇申請の`*.approved`を申請・承認文脈の
   `ApproveWorkflowRequestOn*RequestApprovedReactor`が受けて兄弟のワークフローを承認する(逆方向)。
+- 有給の付与 → 残数: `paid_leave_account.grant_created`を`UnallocatedUsageOnPaidLeaveGrantReactor`が受け、
+  `AllocateUnallocatedPaidLeaveUsages`(`viaReactor`)で未充当の消化記録へ確定の古い順にその付与の残りの範囲で
+  `usage_allocated`を記録する(付与時の未充当の充当。変更セット論点19 決定10-1。充当できるものが無ければ何もしない)。
 - 休暇申請 → 申請・承認: 休暇申請の`*.shared`を`SubmitWorkflowRequestOn*RequestSharedReactor`が受けて提出する。
   休暇申請の`*.cancelled`を`CancelWorkflowRequestOn{PaidLeave,SpecialLeave,CompensatoryLeave}RequestCancelledReactor`
   が受けてワークフローを取り消す(`viaReactor`。承認済みは変えない)。

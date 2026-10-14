@@ -280,6 +280,7 @@ use App\Domain\PaidLeave\Handlers\ResubmitPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\ReturnPaidLeaveRequestHandler;
 use App\Domain\PaidLeave\Handlers\WarnExpiringPaidLeaveHandler;
 use App\Domain\PaidLeave\Handlers\WarnFiveDayObligationHandler;
+use App\Domain\PaidLeaveAccount\Commands\AllocateUnallocatedPaidLeaveUsages;
 use App\Domain\PaidLeaveAccount\Commands\CancelPaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantAmount;
 use App\Domain\PaidLeaveAccount\Commands\ChangePaidLeaveGrantDate;
@@ -289,6 +290,7 @@ use App\Domain\PaidLeaveAccount\Commands\DesignatePaidLeaveUsage;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Domain\PaidLeaveAccount\Commands\RaisePaidLeaveGrantWarning;
 use App\Domain\PaidLeaveAccount\Commands\RevokePaidLeaveGrant;
+use App\Domain\PaidLeaveAccount\Handlers\AllocateUnallocatedPaidLeaveUsagesHandler;
 use App\Domain\PaidLeaveAccount\Handlers\CancelPaidLeaveUsageHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantAmountHandler;
 use App\Domain\PaidLeaveAccount\Handlers\ChangePaidLeaveGrantDateHandler;
@@ -660,6 +662,7 @@ return [
         DesignatePaidLeaveUsage::class => DesignatePaidLeaveUsageHandler::class,
         ConfirmPaidLeaveUsage::class => ConfirmPaidLeaveUsageHandler::class,
         CancelPaidLeaveUsage::class => CancelPaidLeaveUsageHandler::class,
+        AllocateUnallocatedPaidLeaveUsages::class => AllocateUnallocatedPaidLeaveUsagesHandler::class,
         RaisePaidLeaveGrantWarning::class => RaisePaidLeaveGrantWarningHandler::class,
 
         // 付与Schedule/Assessment(docs/changesets/20260906-paid-leave-schedule-assessment/
