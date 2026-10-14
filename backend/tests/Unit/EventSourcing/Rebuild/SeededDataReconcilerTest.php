@@ -373,8 +373,8 @@ class SeededDataReconcilerTest extends TestCase
                 $this->event(2, 'import', 'external_hr.import_applied', ['rows' => [['user_id' => self::USER2, 'external_subject_id' => 'E1', 'changes' => []]], 'actorUserId' => self::USER]),
             ],
             new SeededDataCurrent(users: [
-                $this->user(),
-                $this->user(['id' => self::USER2]),
+                $this->user(['usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1]),
+                $this->user(['id' => self::USER2, 'usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1]),
                 $this->user(['id' => '88888888-8888-4888-8888-888888888888', 'email' => 'c@example.test', 'employee_number' => 'E3', 'hire_date' => '2020-04-01 00:00:00', 'password' => 'secret', 'paid_leave_auto_grant_enabled' => 0, 'created_at' => '2026-01-04 00:00:00']),
             ]),
         );
@@ -442,7 +442,7 @@ class SeededDataReconcilerTest extends TestCase
                 $this->event(1, self::USER, 'user.created_from_sso_login', ['entraUserId' => 'e1', 'name' => 'A', 'email' => null], '2026-03-01 09:00:00'),
                 $this->event(2, self::USER, 'user.hire_date_set', ['hireDate' => '2020-04-01', 'changedByUserId' => self::USER], '2026-03-02 09:00:00'),
             ],
-            new SeededDataCurrent(users: [$this->user(['usage_start_date' => '2026-03-01', 'hire_date' => '2020-04-01 00:00:00'])], defaultTimezone: 'Asia/Tokyo'),
+            new SeededDataCurrent(users: [$this->user(['usage_start_date' => '2026-03-01', 'hire_date' => '2020-04-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])], defaultTimezone: 'Asia/Tokyo'),
         );
 
         $this->assertSame([], $result->events);
@@ -460,6 +460,21 @@ class SeededDataReconcilerTest extends TestCase
         );
 
         $this->assertCount(1, $result->issues);
+    }
+
+    public function test_user_without_a_creation_event_is_synthesized_and_its_row_attributes_are_not_reconciled(): void
+    {
+        $result = $this->reconcile(
+            [
+                $this->event(1, self::USER, 'user.logged_in', ['wasFirstLogin' => true, 'loggedInAt' => self::AT]),
+                $this->event(2, self::USER, 'user.hire_date_set', ['hireDate' => '2020-04-01', 'changedByUserId' => null]),
+            ],
+            new SeededDataCurrent(users: [$this->user(['hire_date' => null, 'usage_start_date' => null, 'paid_leave_auto_grant_enabled' => null, 'special_leave_auto_grant_enabled' => null])]),
+        );
+
+        $this->assertSame([], $result->issues);
+        $this->assertSame([], $result->mismatches);
+        $this->assertSame(['user.migrated_from_legacy'], array_map(fn (RebuiltEvent $e) => $e->eventClass, $result->events));
     }
 
     // ---- memberships ----
@@ -489,7 +504,7 @@ class SeededDataReconcilerTest extends TestCase
             $this->event(2, $aggregate, 'membership.added', ['userId' => self::USER, 'groupId' => self::GROUP, 'membershipKind' => 'member', 'isPrimary' => false, 'actorUserId' => self::USER]),
             $this->event(3, $aggregate, 'membership.primary_changed', ['userId' => self::USER, 'groupId' => self::GROUP, 'isPrimary' => true, 'actorUserId' => self::USER], '2026-09-04 10:00:00'),
         ];
-        $base = ['groupTypes' => [$this->groupType()], 'groups' => [$this->group()], 'users' => [$this->user()]];
+        $base = ['groupTypes' => [$this->groupType()], 'groups' => [$this->group()], 'users' => [$this->user(['usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])]];
         $row = ['user_id' => self::USER, 'group_id' => self::GROUP, 'membership_kind' => 'primary', 'is_primary' => 1, 'created_by' => self::USER, 'created_at' => self::ROW_AT];
 
         $same = $this->reconcile($rows, new SeededDataCurrent(...$base, memberships: [$row]));
@@ -535,8 +550,9 @@ class SeededDataReconcilerTest extends TestCase
     {
         $matched = $this->reconcile(
             [$this->event(1, self::USER, 'user.onboarded_as_admin', ['entraUserId' => 'entra-1', 'name' => 'A', 'email' => null, 'authMethod' => 'sso'])],
-            new SeededDataCurrent(users: [$this->user()], externalIdentities: [['user_id' => self::USER, 'provider' => 'MICROSOFT_ENTRA', 'external_tenant_id' => null, 'external_subject_id' => 'entra-1', 'external_code' => null, 'email' => null, 'status' => 'active', 'created_at' => self::ROW_AT]]),
+            new SeededDataCurrent(users: [$this->user(['usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])], externalIdentities: [['user_id' => self::USER, 'provider' => 'MICROSOFT_ENTRA', 'external_tenant_id' => null, 'external_subject_id' => 'entra-1', 'external_code' => null, 'email' => null, 'status' => 'active', 'created_at' => self::ROW_AT]]),
         );
+        $this->assertSame([], $matched->issues);
         $this->assertSame([], $matched->events);
 
         $unlinked = $this->reconcile([], new SeededDataCurrent(users: [$this->user()], externalIdentities: [['user_id' => self::USER, 'provider' => 'EXTERNAL_HR', 'external_tenant_id' => null, 'external_subject_id' => 'E1', 'external_code' => null, 'email' => null, 'status' => 'unlinked', 'created_at' => self::ROW_AT, 'id' => 5]]));
@@ -836,7 +852,7 @@ class SeededDataReconcilerTest extends TestCase
             $this->event(1, self::USER, 'user.logged_in', ['wasFirstLogin' => true, 'loggedInAt' => self::AT]),
             $this->event(2, self::USER, 'user.hire_date_set', ['hireDate' => '2020-04-01']),
         ];
-        $result = $rebuilder->rebuild($rows, [], [], new SeededDataCurrent(users: [$this->user()], groupTypes: [$this->groupType()]));
+        $result = $rebuilder->rebuild($rows, [], [], new SeededDataCurrent(users: [$this->user(['hire_date' => '2020-04-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])], groupTypes: [$this->groupType()]));
 
         $this->assertTrue($result->ok, json_encode($result->unsupported));
         $this->assertSame(['group_type.created', 'user.migrated_from_legacy', 'user.logged_in', 'user.hire_date_set'], array_column($result->rows, 'event_class'));
