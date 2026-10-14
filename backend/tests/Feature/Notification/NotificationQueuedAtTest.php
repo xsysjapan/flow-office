@@ -30,6 +30,9 @@ class NotificationQueuedAtTest extends TestCase
                 return true;
             }
         });
+        // 送信まで通すため、キュー接続を同期(sync)に固定する。.env の QUEUE_CONNECTION=database が
+        // テスト実行時に優先されると、ジョブが jobs テーブルに積まれたまま実行されず sent_at が null になる。
+        config(['queue.default' => 'sync']);
         $recipient = User::factory()->create();
 
         SendNotificationJob::enqueue($recipient, '件名', '概要', null);
