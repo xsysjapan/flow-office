@@ -286,6 +286,20 @@ final class RebuildLeaveEventStoreCommand extends Command
         }
         $this->table(['結果', '件数'], $this->countRows($outcomes));
 
+        if (isset($report['cutover_allocation'])) {
+            $allocation = $report['cutover_allocation'];
+            $this->info('cutoverの付与への充当(cutover前に承認され充当の無い消化記録。決定9-3a)');
+            $this->line("対象の消化記録: {$allocation['eligible_usages']} 件");
+            $this->line("充当した消化記録: {$allocation['allocated_usages']} 件 / {$allocation['allocated_days']} 日");
+            $this->line("充当できなかった(付与の残り不足・有効な付与なし): {$allocation['unallocated_usages']} 件 / {$allocation['unallocated_days']} 日");
+            if ($allocation['unallocated'] !== []) {
+                $this->table(['利用者', '消化記録', '対象日', '未充当の日数', '理由'], array_map(
+                    fn (array $r) => [$r['user_id'], $r['usage_id'], $r['used_on'], $r['days'], $r['reason']],
+                    $allocation['unallocated'],
+                ));
+            }
+        }
+
         if (isset($report['versions_changed_outside_leave'])) {
             $this->line('休暇以外の集約で版が変わった件数: '.$report['versions_changed_outside_leave']);
         }

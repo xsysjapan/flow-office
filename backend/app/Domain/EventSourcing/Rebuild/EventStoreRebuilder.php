@@ -92,6 +92,7 @@ final class EventStoreRebuilder
         private readonly PaidLeaveScheduleRebuilder $schedule = new PaidLeaveScheduleRebuilder,
         private readonly SeededDataReconciler $seededReconciler = new SeededDataReconciler,
         private readonly HolidayCalendarDayRefRebuilder $holidayDayRefs = new HolidayCalendarDayRefRebuilder,
+        private readonly CutoverUsageAllocator $cutoverAllocator = new CutoverUsageAllocator,
     ) {}
 
     /**
@@ -173,6 +174,8 @@ final class EventStoreRebuilder
         $requestResults = [];
         $grantStates = [];
         $cutoverSummary = [];
+        /** @var array<string, array{cutoverDate: string, grants: list<RebuiltEvent>}> $cutoverAllocation 利用者ID => cutoverの付与(carried_over)の入力 */
+        $cutoverAllocation = [];
         $handledRequests = [];
 
         $absorb = function (PaidLeaveRequestRebuild $result) use (&$converted, &$consumed, &$requestResults): void {
@@ -346,12 +349,24 @@ final class EventStoreRebuilder
             try {
                 $outcome = $this->grants->reconcileCutover($cutover, $grantStates);
                 array_push($converted, ...$outcome['events']);
+                if ($outcome['events'] !== []) {
+                    $userId = (string) $cutover->aggregateUuid;
+                    $cutoverDate = (string) $cutover->get('cutoverDate');
+                    $cutoverAllocation[$userId] = [
+                        'cutoverDate' => isset($cutoverAllocation[$userId]) ? min($cutoverAllocation[$userId]['cutoverDate'], $cutoverDate) : $cutoverDate,
+                        'grants' => array_merge($cutoverAllocation[$userId]['grants'] ?? [], $outcome['events']),
+                    ];
+                }
                 $cutoverSummary = array_merge($cutoverSummary, $outcome['outcomes']);
                 $consumed[$cutover->id] = true;
             } catch (UnsupportedEventSequence $e) {
                 $unsupported[] = $this->issue($e->key, $e->getMessage());
             }
         }
+
+        // cutover前に承認され充当の無い有給の消化記録を、cutoverの付与に充当する(論点19 決定9-3a)。
+        $allocation = $this->cutoverAllocator->allocate($converted, $cutoverAllocation);
+        array_push($converted, ...$allocation['events']);
 
         // 勤怠日(論点18 2.4・2.5)。休暇の変換結果から、利用者・対象日ごとの休暇を引けるようにする。
         $leavesByDay = [];
@@ -445,6 +460,7 @@ final class EventStoreRebuilder
             'leave_grants' => $leaveGrantCount,
             'attendance' => $attendanceSummary,
             'cutover' => $cutoverSummary,
+            'cutover_allocation' => $allocation['report'],
         ];
 
         if ($unsupported !== []) {

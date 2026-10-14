@@ -64,6 +64,67 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertEqualsWithDelta(9.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
     }
 
+    public function test_cutover_grant_absorbs_pre_cutover_approved_usages_and_replays_to_the_reduced_balance(): void
+    {
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        $grantId = (string) Str::uuid();
+        [$r1, $r2] = [(string) Str::uuid(), (string) Str::uuid()];
+
+        // cutover前に承認され、旧の充当(paid_leave.used)が無い有給。cutoverの付与は10日(旧付与IDと一致しない=carried_over)。
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 3.0));
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($r2, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-11', 8.0));
+        $this->insertLegacyEvent($r2, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.migrated', [
+            'cutoverDate' => '2026-09-15',
+            'grants' => [
+                ['grantId' => $grantId, 'originalGrantedOn' => '2026-04-01', 'originalGrantedDays' => 10.0, 'remainingDaysAtCutover' => 10.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+            ],
+        ]);
+
+        $this->rebuildAndSwap();
+
+        $allocations = DB::table('stored_events')->where('event_class', 'paid_leave_account.usage_allocated')->get()
+            ->map(fn ($r) => json_decode($r->event_properties, true));
+        $this->assertCount(2, $allocations);
+        $this->assertEqualsWithDelta(10.0, $allocations->sum('allocatedDays'), 0.000001);
+
+        $this->replayReadModels();
+
+        // 付与10日に 3日 + 7日(8日のうち不足の1日は未充当)が充当される。
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertNotNull($balance);
+        $this->assertEqualsWithDelta(0.0, (float) $balance->available_days, 0.000001);
+        $this->assertEqualsWithDelta(1.0, (float) $balance->unallocated_days, 0.000001);
+        $this->assertEqualsWithDelta(0.0, (float) DB::table('paid_leave_grants')->where('id', $grantId)->value('remaining_days'), 0.000001);
+    }
+
+    public function test_cutover_grant_balance_is_cutover_remaining_minus_the_allocation(): void
+    {
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        $grantId = (string) Str::uuid();
+        $r1 = (string) Str::uuid();
+
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 1.5));
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.migrated', [
+            'cutoverDate' => '2026-09-15',
+            'grants' => [
+                ['grantId' => $grantId, 'originalGrantedOn' => null, 'originalGrantedDays' => 10.0, 'remainingDaysAtCutover' => 10.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+            ],
+        ]);
+
+        $this->rebuildAndSwap();
+        $this->replayReadModels();
+
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertNotNull($balance);
+        $this->assertEqualsWithDelta(8.5, (float) $balance->available_days, 0.000001);
+        $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
+    }
+
     public function test_special_leave_is_rebuilt_into_the_account_stream_and_replays_to_the_same_state(): void
     {
         $user = User::factory()->create();
@@ -282,7 +343,7 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
     {
         foreach ([
             'attendance_day_leaves', 'attendance_daily_calculations', 'attendance_weekly_overtime_allocations', 'attendance_breaks', 'attendance_leave_segments',
-            'attendance_days', 'paid_leave_usage_allocations', 'paid_leave_usages', 'paid_leave_requests', 'paid_leave_grants',
+            'attendance_days', 'paid_leave_balances', 'paid_leave_usage_allocations', 'paid_leave_usages', 'paid_leave_requests', 'paid_leave_grants',
             'special_leave_usages', 'special_leave_requests', 'special_leave_grants',
             'compensatory_leave_usages', 'compensatory_leave_requests', 'compensatory_leave_grants',
             'leave_request_workflow_links', 'workflow_request_history_entries', 'workflow_requests',
@@ -332,6 +393,15 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         return [
             'usageId' => $usageId, 'workflowRequestId' => $workflowId, 'attendanceDayId' => null, 'usedOn' => $usedOn, 'usedDays' => 1.0, 'usageType' => 'full',
             'paidLeaveRequestId' => $requestId, 'approverUserId' => $approverId, 'reason' => null, 'requestGroupId' => null, 'hours' => null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function oldPaidRequested(string $userId, string $approverId, string $date, float $days): array
+    {
+        return [
+            'userId' => $userId, 'targetDate' => $date, 'leaveType' => 'full', 'hours' => null, 'requestedDays' => $days,
+            'approverUserId' => $approverId, 'reason' => null, 'requestGroupId' => null,
         ];
     }
 
