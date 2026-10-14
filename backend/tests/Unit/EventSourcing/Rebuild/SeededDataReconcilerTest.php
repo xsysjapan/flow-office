@@ -49,7 +49,8 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertNull($events[0]->payload['actorUserId']);
         $this->assertSame(1, $events[0]->payload['groupTypeId']);
         $this->assertSame('inactive', $events[1]->payload['status']);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
         $this->assertSame(['group_type.created' => 1, 'group_type.updated' => 1], $result->derivedByTable['group_types']);
     }
 
@@ -62,7 +63,8 @@ class SeededDataReconcilerTest extends TestCase
         );
 
         $this->assertSame([], $result->events);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
     }
 
     public function test_group_type_with_events_but_different_final_state_gets_updated_after_the_last_event(): void
@@ -84,8 +86,9 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertGreaterThan(0, $event->subOrder);
         $this->assertSame('2026-09-02 10:00:00', $event->createdAt);
         $this->assertSame('部署(再実行後)', $event->payload['name']);
-        $this->assertCount(1, $result->mismatches['group_types']);
-        $this->assertStringContainsString('group_type department', $result->mismatches['group_types'][0]);
+        $this->assertCount(1, $result->resolved['group_types']);
+        $this->assertSame('group_type department', $result->resolved['group_types'][0]['key']);
+        $this->assertSame(['group_type.updated'], $result->resolved['group_types'][0]['derivedBy']);
     }
 
     public function test_group_type_created_event_with_a_different_is_system_cannot_be_fixed_by_updated(): void
@@ -117,7 +120,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(5, $created->anchorId);
         $this->assertLessThan(0, $created->subOrder);
         $this->assertSame(self::ROW_AT, $created->createdAt);
-        $this->assertCount(1, $result->mismatches['group_types']);
+        $this->assertCount(1, $result->resolved['group_types']);
     }
 
     // ---- groups ----
@@ -155,7 +158,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('group.updated', $result->events[0]->eventClass);
         $this->assertSame(2, $result->events[0]->anchorId);
         $this->assertSame('開発部', $result->events[0]->payload['name']);
-        $this->assertCount(1, $result->mismatches['groups']);
+        $this->assertCount(1, $result->resolved['groups']);
     }
 
     // ---- roles ----
@@ -236,7 +239,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(3, $different->events[0]->anchorId);
         $this->assertSame([1, 2], $different->events[0]->payload['permissionIds']);
         $this->assertSame('2026-09-02 10:00:00', $different->events[0]->createdAt);
-        $this->assertCount(1, $different->mismatches['permission_role']);
+        $this->assertCount(1, $different->resolved['permission_role']);
 
         $same = $this->reconcile($rows, new SeededDataCurrent(roles: [$this->role()], permissionRole: [['role_id' => 7, 'permission_id' => 4], ['role_id' => 7, 'permission_id' => 1], ['role_id' => 7, 'permission_id' => 2]]));
         $this->assertSame([], $same->events);
@@ -286,7 +289,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame('self', $updated[0]->payload['scopeType']);
         $this->assertSame('2027-03-31T00:00:00Z', $updated[0]->payload['endsAt']);
         $this->assertNull($updated[0]->payload['actorUserId']);
-        $this->assertCount(1, $scope->mismatches['role_assignments']);
+        $this->assertCount(1, $scope->resolved['role_assignments']);
 
         $removed = $this->reconcile([], new SeededDataCurrent(...$base, roleAssignments: [['status' => 'removed'] + $row]));
         $this->assertSame([], $removed->issues);
@@ -432,7 +435,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(['enabled' => false, 'changedByUserId' => null], $events[4]->payload);
         $this->assertSame(2, $events[0]->anchorId);
         $this->assertSame(5, $result->derivedByTable['users'] ? array_sum($result->derivedByTable['users']) : 0);
-        $this->assertArrayHasKey('users', $result->mismatches);
+        $this->assertArrayHasKey('users', $result->resolved);
     }
 
     public function test_user_attributes_equal_to_the_event_state_derive_nothing(): void
@@ -446,7 +449,8 @@ class SeededDataReconcilerTest extends TestCase
         );
 
         $this->assertSame([], $result->events);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
     }
 
     public function test_user_attribute_null_in_the_row_but_set_by_events_is_an_unsupported_sequence(): void
@@ -473,7 +477,8 @@ class SeededDataReconcilerTest extends TestCase
         );
 
         $this->assertSame([], $result->issues);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
         $this->assertSame(['user.migrated_from_legacy'], array_map(fn (RebuiltEvent $e) => $e->eventClass, $result->events));
     }
 
@@ -515,7 +520,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertCount(1, $added);
         $this->assertSame(3, $added[0]->anchorId);
         $this->assertFalse($added[0]->payload['isPrimary']);
-        $this->assertCount(1, $different->mismatches['memberships']);
+        $this->assertCount(1, $different->resolved['memberships']);
 
         $missingRow = $this->reconcile($rows, new SeededDataCurrent(...$base));
         $this->assertSame([], $missingRow->issues);
@@ -526,6 +531,47 @@ class SeededDataReconcilerTest extends TestCase
     }
 
     // ---- external_identities ----
+
+    public function test_membership_differing_only_in_created_by_is_neither_derived_nor_reported(): void
+    {
+        $aggregate = UserManagementStreamId::for('user-membership', self::USER);
+        $rows = [
+            $this->event(1, $aggregate, 'membership.added', ['userId' => self::USER, 'groupId' => self::GROUP, 'membershipKind' => 'member', 'isPrimary' => false, 'actorUserId' => self::USER]),
+        ];
+        $base = ['groupTypes' => [$this->groupType()], 'groups' => [$this->group()], 'users' => [$this->user(['usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])]];
+        // 操作者(created_by)だけが違う。旧版の正規化が行を直接書いた意図した差として扱う。
+        $row = ['user_id' => self::USER, 'group_id' => self::GROUP, 'membership_kind' => 'member', 'is_primary' => 0, 'created_by' => self::USER2, 'created_at' => self::ROW_AT];
+
+        $result = $this->reconcile($rows, new SeededDataCurrent(...$base, memberships: [$row]));
+
+        $this->assertSame([], array_values(array_filter($result->events, fn (RebuiltEvent $e) => $e->eventClass === 'membership.added')));
+        $this->assertSame([], $result->resolved['memberships'] ?? []);
+        $this->assertSame([], $result->unresolved['memberships'] ?? []);
+    }
+
+    public function test_membership_with_a_different_kind_is_derived_with_the_row_created_by_as_the_actor(): void
+    {
+        $aggregate = UserManagementStreamId::for('user-membership', self::USER);
+        $rows = [
+            $this->event(1, $aggregate, 'membership.added', ['userId' => self::USER, 'groupId' => self::GROUP, 'membershipKind' => 'member', 'isPrimary' => false, 'actorUserId' => self::USER]),
+        ];
+        $base = ['groupTypes' => [$this->groupType()], 'groups' => [$this->group()], 'users' => [$this->user(['usage_start_date' => '2026-09-01 00:00:00', 'paid_leave_auto_grant_enabled' => 1, 'special_leave_auto_grant_enabled' => 1])]];
+        // kind と isPrimary が違い、操作者も違う。導出の操作者は行の created_by。
+        $row = ['user_id' => self::USER, 'group_id' => self::GROUP, 'membership_kind' => 'primary', 'is_primary' => 1, 'created_by' => self::USER2, 'created_at' => self::ROW_AT];
+
+        $result = $this->reconcile($rows, new SeededDataCurrent(...$base, memberships: [$row]));
+
+        $added = array_values(array_filter($result->events, fn (RebuiltEvent $e) => $e->eventClass === 'membership.added'));
+        $this->assertCount(1, $added);
+        $this->assertSame('primary', $added[0]->payload['membershipKind']);
+        $this->assertTrue($added[0]->payload['isPrimary']);
+        $this->assertSame(self::USER2, $added[0]->payload['actorUserId']);
+
+        $this->assertCount(1, $result->resolved['memberships']);
+        $this->assertSame('最終状態が違う: membership_kind: イベント member → 行 primary, is_primary: イベント false → 行 true', $result->resolved['memberships'][0]['reason']);
+        $this->assertSame(['membership.added'], $result->resolved['memberships'][0]['derivedBy']);
+        $this->assertSame([], $result->unresolved['memberships'] ?? []);
+    }
 
     public function test_external_identity_without_events_is_linked_right_after_the_users_creation(): void
     {
@@ -593,7 +639,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertCount(1, $mismatch->events);
         $this->assertSame(6, $mismatch->events[0]->anchorId);
         $this->assertGreaterThan(0, $mismatch->events[0]->subOrder);
-        $this->assertCount(1, $mismatch->mismatches['field_authorities']);
+        $this->assertCount(1, $mismatch->resolved['field_authorities']);
     }
 
     // ---- company_calendar_years ----
@@ -691,7 +737,86 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(2, $different->events[0]->anchorId);
         $this->assertSame('2026-09-05 10:00:00', $different->events[0]->createdAt);
         $this->assertSame(['2026-04-02'], array_column($different->events[0]->payload['days'], 'date'));
-        $this->assertCount(1, $different->mismatches['company_calendar_days']);
+        $this->assertCount(1, $different->resolved['company_calendar_days']);
+    }
+
+    public function test_fiscal_year_correction_drops_days_outside_the_new_period_so_they_are_not_reported(): void
+    {
+        // 訂正前に期間外の日(2026-03-31)が設定され、訂正後の期間にはその日が含まれない。Projector は訂正で年の日を落とすため、行は無い。
+        $rows = [
+            $this->event(1, self::YEAR, 'company_calendar_year.created', ['companyCalendarId' => self::CALENDAR, 'fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'generatedFrom' => 'manual', 'createdByUserId' => null]),
+            $this->event(2, self::YEAR, 'company_calendar_year.days_updated', ['days' => [$this->calendarDayPayload('2026-03-31')], 'updatedByUserId' => null], '2026-09-02 10:00:00'),
+            $this->event(3, self::YEAR, 'company_calendar_year.fiscal_year_corrected', ['fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'correctedByUserId' => self::USER, 'reason' => '取り違え'], '2026-09-03 10:00:00'),
+        ];
+
+        $result = $this->reconcile($rows, new SeededDataCurrent(calendarYears: [$this->year()], calendarDays: []));
+
+        $this->assertSame([], $result->events);
+        $this->assertSame([], $result->resolved['company_calendar_days'] ?? []);
+        $this->assertSame([], $result->unresolved['company_calendar_days'] ?? []);
+    }
+
+    public function test_days_updated_after_the_fiscal_year_correction_inside_the_period_remain_and_match_the_rows(): void
+    {
+        $rows = [
+            $this->event(1, self::YEAR, 'company_calendar_year.created', ['companyCalendarId' => self::CALENDAR, 'fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'generatedFrom' => 'manual', 'createdByUserId' => null]),
+            $this->event(2, self::YEAR, 'company_calendar_year.days_updated', ['days' => [$this->calendarDayPayload('2026-04-01')], 'updatedByUserId' => null], '2026-09-02 10:00:00'),
+            $this->event(3, self::YEAR, 'company_calendar_year.fiscal_year_corrected', ['fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'correctedByUserId' => self::USER, 'reason' => null], '2026-09-03 10:00:00'),
+            $this->event(4, self::YEAR, 'company_calendar_year.days_updated', ['days' => [$this->calendarDayPayload('2026-04-02'), $this->calendarDayPayload('2026-04-03')], 'updatedByUserId' => null], '2026-09-04 10:00:00'),
+        ];
+
+        $result = $this->reconcile($rows, new SeededDataCurrent(calendarYears: [$this->year()], calendarDays: [
+            $this->calendarDayRow('2026-04-02'), $this->calendarDayRow('2026-04-03'),
+        ]));
+
+        // 訂正後に設定された日は行と一致し、差もイベントの導出も出ない。
+        $this->assertSame([], $result->events);
+        $this->assertSame([], $result->resolved['company_calendar_days'] ?? []);
+        $this->assertSame([], $result->unresolved['company_calendar_days'] ?? []);
+    }
+
+    public function test_days_set_before_the_fiscal_year_correction_are_dropped_even_inside_the_new_period_unless_set_again(): void
+    {
+        // Projector は訂正で年の日を全て落とす(期間の内外を問わない)。訂正の前に設定された 2026-04-01 は、訂正後に設定されなければ行が無い。
+        $rows = [
+            $this->event(1, self::YEAR, 'company_calendar_year.created', ['companyCalendarId' => self::CALENDAR, 'fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'generatedFrom' => 'manual', 'createdByUserId' => null]),
+            $this->event(2, self::YEAR, 'company_calendar_year.days_updated', ['days' => [$this->calendarDayPayload('2026-04-01'), $this->calendarDayPayload('2026-04-02')], 'updatedByUserId' => null], '2026-09-02 10:00:00'),
+            $this->event(3, self::YEAR, 'company_calendar_year.fiscal_year_corrected', ['fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'correctedByUserId' => self::USER, 'reason' => null], '2026-09-03 10:00:00'),
+            $this->event(4, self::YEAR, 'company_calendar_year.days_updated', ['days' => [$this->calendarDayPayload('2026-04-02')], 'updatedByUserId' => null], '2026-09-04 10:00:00'),
+        ];
+
+        $result = $this->reconcile($rows, new SeededDataCurrent(calendarYears: [$this->year()], calendarDays: [$this->calendarDayRow('2026-04-02')]));
+
+        $this->assertSame([], $result->events);
+        $this->assertSame([], $result->resolved['company_calendar_days'] ?? []);
+        $this->assertSame([], $result->unresolved['company_calendar_days'] ?? []);
+    }
+
+    public function test_calendar_day_differences_with_a_derived_event_are_resolved_and_a_missing_row_without_one_is_unresolved(): void
+    {
+        $rows = [
+            $this->event(1, self::YEAR, 'company_calendar_year.created', ['companyCalendarId' => self::CALENDAR, 'fiscalYear' => 2026, 'startsOn' => '2026-04-01', 'endsOn' => '2027-03-31', 'generatedFrom' => 'manual', 'createdByUserId' => null]),
+            $this->event(2, self::YEAR, 'company_calendar_year.days_updated', ['days' => [
+                $this->calendarDayPayload('2026-04-01'),
+                $this->calendarDayPayload('2026-04-02', ['note' => '休']),
+                $this->calendarDayPayload('2026-04-03'),
+            ], 'updatedByUserId' => null], '2026-09-02 10:00:00'),
+        ];
+
+        // 04-01 は一致。04-02 は note だけ違う(導出で解消)。04-03 は行が無い(導出しない=解消していない差)。
+        $result = $this->reconcile($rows, new SeededDataCurrent(calendarYears: [$this->year()], calendarDays: [
+            $this->calendarDayRow('2026-04-01'), $this->calendarDayRow('2026-04-02'),
+        ]));
+
+        $this->assertCount(1, $result->events);
+        $this->assertSame(['2026-04-02'], array_column($result->events[0]->payload['days'], 'date'));
+
+        $this->assertCount(1, $result->resolved['company_calendar_days']);
+        $this->assertSame(self::YEAR.'/2026-04-02', $result->resolved['company_calendar_days'][0]['key']);
+        $this->assertSame('最終状態が違う: note: イベント 休 → 行 null', $result->resolved['company_calendar_days'][0]['reason']);
+        $this->assertSame(['company_calendar_year.days_updated'], $result->resolved['company_calendar_days'][0]['derivedBy']);
+
+        $this->assertSame([self::YEAR.'/2026-04-03: イベントには日があるが行が無い(削除のイベントは無いため導出しない)'], $result->unresolved['company_calendar_days']);
     }
 
     public function test_days_updated_under_a_company_calendar_id_is_moved_to_the_year_that_contains_the_dates(): void
@@ -766,7 +891,7 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertSame(['previousDefaultCompanyCalendarId' => null, 'changedByUserId' => null], $events[0]->payload);
         $this->assertSame(['company_calendars' => ['company_calendar.default_changed' => 1]], $result->derivedByTable);
         $this->assertSame([], $result->issues);
-        $this->assertArrayHasKey('company_calendars', $result->mismatches);
+        $this->assertArrayHasKey('company_calendars', $result->resolved);
     }
 
     public function test_default_changed_moves_the_default_from_the_calendar_the_events_say_is_default(): void
@@ -816,7 +941,8 @@ class SeededDataReconcilerTest extends TestCase
 
         $this->assertSame([], $result->events);
         $this->assertSame([], $result->issues);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
     }
 
     public function test_default_calendar_without_any_events_is_placed_at_the_head_with_the_row_created_at(): void
@@ -826,7 +952,8 @@ class SeededDataReconcilerTest extends TestCase
         $this->assertCount(1, $result->events);
         $this->assertSame(0, $result->events[0]->anchorId);
         $this->assertSame(self::ROW_AT, $result->events[0]->createdAt);
-        $this->assertSame([], $result->mismatches);
+        $this->assertSame([], $result->resolved);
+        $this->assertSame([], $result->unresolved);
     }
 
     public function test_zero_or_multiple_default_calendars_stop_and_no_calendars_is_fine(): void
@@ -949,6 +1076,22 @@ class SeededDataReconcilerTest extends TestCase
     private function event(int $id, ?string $aggregate, string $class, array $payload, string $at = self::AT): StoredEventRow
     {
         return new StoredEventRow($id, $aggregate, 1, $class, $payload, ['aggregate-root-uuid' => $aggregate], $at);
+    }
+
+    /** days_updated の1日ぶんの payload(平日・既定の値)。 */
+    private function calendarDayPayload(string $date, array $over = []): array
+    {
+        return $over + ['date' => $date, 'day_type' => 'weekday', 'is_working_day' => true, 'is_legal_holiday' => false, 'is_company_holiday' => false, 'note' => null];
+    }
+
+    /** company_calendar_days の行(年 YEAR・平日・既定の値)。 */
+    private function calendarDayRow(string $date, array $over = []): array
+    {
+        return $over + [
+            'calendar_id' => self::YEAR, 'date' => $date.' 00:00:00', 'day_type' => 'weekday', 'is_working_day' => 1, 'is_legal_holiday' => 0,
+            'is_company_holiday' => 0, 'is_public_holiday' => 0, 'public_holiday_name' => null, 'schedule_state' => 'WORK', 'note' => null,
+            'created_at' => self::ROW_AT,
+        ];
     }
 
     /** @param  list<StoredEventRow>  $rows */

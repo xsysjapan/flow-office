@@ -133,13 +133,23 @@ final class RoleAssignmentReconciler
         if ($differences === []) {
             return;
         }
-        if ($events !== []) {
-            $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.implode(', ', $differences));
-        }
-
         // created で決まる列(付与先・ロール・割当者)と、removed を取り消す変更は、イベントで直せない。
         $fixable = ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at', 'status'];
-        if (array_diff($differences, $fixable) !== [] || (in_array('status', $differences, true) && $want['status'] === 'active')) {
+        $canDerive = array_diff($differences, $fixable) === [] && ! (in_array('status', $differences, true) && $want['status'] === 'active');
+
+        // 導出するイベント(scope の列の差は updated、status の差は removed)。
+        $derived = [];
+        if (array_intersect($differences, ['scope_type', 'scope_group_id', 'include_descendants', 'starts_at', 'ends_at']) !== []) {
+            $derived[] = 'role_assignment.updated';
+        }
+        if (in_array('status', $differences, true)) {
+            $derived[] = 'role_assignment.removed';
+        }
+        if ($events !== []) {
+            $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.ReconcileContext::describe($state ?? [], $want, $differences), $canDerive ? $derived : []);
+        }
+
+        if (! $canDerive) {
             throw new UnsupportedEventSequence($key, 'イベントの最終状態が行と違い('.implode(', ', $differences).')、updated・removed では差を埋められない');
         }
 

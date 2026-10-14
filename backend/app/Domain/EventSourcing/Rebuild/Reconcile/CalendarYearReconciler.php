@@ -100,27 +100,46 @@ final class CalendarYearReconciler
             $ctx->registerRef('calendar_year:'.$id, $cursor);
         } else {
             $want = ['calendar' => $calendarId, 'fiscal_year' => $fiscalYear, 'starts_on' => $startsOn, 'ends_on' => $endsOn];
+            $differences = [];
             foreach ($want as $column => $value) {
                 if ($state[$column] !== $value) {
-                    $ctx->mismatch(self::TABLE, $key, "{$column} がイベントと違う");
-                    throw new UnsupportedEventSequence($key, "{$column} がイベントの最終状態と違い、差を埋めるイベント(fiscal_year_corrected は操作者が必須)を決められない");
+                    $differences[] = $column;
                 }
+            }
+            if ($differences !== []) {
+                // 年度・期間・暦は行の値へ直す導出イベントが無い(fiscal_year_corrected は操作者が必須)。解消していない差。
+                $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.ReconcileContext::describe($state, $want, $differences));
+                throw new UnsupportedEventSequence($key, '最終状態が行と違い('.implode(', ', $differences).')、差を埋めるイベント(fiscal_year_corrected は操作者が必須)を決められない');
             }
         }
 
         if ($events !== [] && ! $hasCreated) {
-            $ctx->mismatch(self::TABLE, $key, 'company_calendar_year.created が無い');
+            $ctx->mismatch(self::TABLE, $key, 'company_calendar_year.created が無い', ['company_calendar_year.created']);
         }
         if ($state['status'] === $status) {
             return;
         }
-        if ($events !== []) {
-            $ctx->mismatch(self::TABLE, $key, "status がイベントの最終状態({$state['status']})と違い、行は {$status}");
+
+        // 導出するイベント(行の status へ揃える)。draft は unpublished、published・archived は published(と archived)。
+        $derived = [];
+        if ($status === 'draft') {
+            $derived[] = 'company_calendar_year.unpublished';
+        } else {
+            if ($status === 'published' || ($status === 'archived' && $publishedAt !== null && ! $published)) {
+                $derived[] = 'company_calendar_year.published';
+            }
+            if ($status === 'archived') {
+                $derived[] = 'company_calendar_year.archived';
+            }
         }
+
         // 最後のイベントの直後(イベントが無ければ作成の直後)に続けて置く。
         $cursor = $ctx->afterLast($id) ?? $cursor;
         if ($cursor === null) {
             throw new UnsupportedEventSequence($key, 'イベントの置き場所を決められない');
+        }
+        if ($events !== []) {
+            $ctx->mismatch(self::TABLE, $key, "status: イベント {$state['status']} → 行 {$status}", $derived);
         }
         if ($status === 'draft') {
             $ctx->emit(self::TABLE, $cursor, 'company_calendar_year.unpublished', $id, ['unpublishedByUserId' => null]);

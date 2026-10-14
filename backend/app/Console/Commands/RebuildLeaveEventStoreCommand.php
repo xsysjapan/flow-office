@@ -309,15 +309,26 @@ final class RebuildLeaveEventStoreCommand extends Command
                 array_keys($reconcile['derived']),
                 array_values($reconcile['derived']),
             ))));
-            $mismatchRows = [];
-            foreach ($reconcile['mismatches'] as $table => $keys) {
-                foreach ($keys as $key) {
-                    $mismatchRows[] = [$table, $key];
+            $resolvedRows = [];
+            foreach ($reconcile['resolved'] as $table => $entries) {
+                foreach ($entries as $entry) {
+                    $resolvedRows[] = [$table, $entry['key'], $entry['reason'], implode(', ', $entry['derivedBy'])];
                 }
             }
-            $this->line('イベントがあるのに最終状態が違ったキー: '.count($mismatchRows).' 件');
-            if ($mismatchRows !== []) {
-                $this->table(['テーブル', 'キー: 違い'], $mismatchRows);
+            $this->line('導出で解消した差: '.count($resolvedRows).' 件'.$this->tableCountSuffix($reconcile['resolved']));
+            if ($resolvedRows !== []) {
+                $this->table(['テーブル', 'キー', '違い', '導出したevent_class'], $resolvedRows);
+            }
+
+            $unresolvedRows = [];
+            foreach ($reconcile['unresolved'] as $table => $keys) {
+                foreach ($keys as $key) {
+                    $unresolvedRows[] = [$table, $key];
+                }
+            }
+            $this->line('解消していない差: '.count($unresolvedRows).' 件'.$this->tableCountSuffix($reconcile['unresolved']));
+            if ($unresolvedRows !== []) {
+                $this->table(['テーブル', 'キー: 違い'], $unresolvedRows);
             }
             if ($reconcile['remapped'] !== []) {
                 $this->line('集約UUIDを付け替えた company_calendar_year.days_updated: '.count($reconcile['remapped']).' 件');
@@ -380,5 +391,23 @@ final class RebuildLeaveEventStoreCommand extends Command
         }
 
         return $rows;
+    }
+
+    /**
+     * テーブルごとの件数の内訳(「 (表 件数 / 表 件数)」)。空なら空文字。
+     *
+     * @param  array<string, list<mixed>>  $byTable
+     */
+    private function tableCountSuffix(array $byTable): string
+    {
+        if ($byTable === []) {
+            return '';
+        }
+
+        return ' ('.implode(' / ', array_map(
+            fn (string $table, array $entries) => $table.' '.count($entries),
+            array_keys($byTable),
+            array_values($byTable),
+        )).')';
     }
 }

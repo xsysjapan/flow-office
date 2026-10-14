@@ -76,8 +76,14 @@ final class ExternalIdentityReconciler
         $aggregate = UserManagementStreamId::for('user-identity', $userId);
         $createdAt = Norm::str($row['created_at'] ?? null);
         $dep = $ctx->ref('user:'.$userId);
+        $needsLink = $final === null || $final['user_id'] !== $userId || $final['status'] !== 'active';
+        $needsUnlink = $status !== 'active';
         if ($final !== null) {
-            $ctx->mismatch(self::TABLE, $key, $final['user_id'] !== $userId ? '利用者がイベントと違う' : 'イベントでは連携解除済みだが行がある');
+            $derived = array_values(array_filter([
+                $needsLink ? 'external_identity.linked' : null,
+                $needsUnlink ? 'external_identity.unlinked' : null,
+            ]));
+            $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.ReconcileContext::describe($final, ['user_id' => $userId, 'status' => $status], ['user_id', 'status']), $derived);
             $slot = $ctx->afterLast($aggregate) ?? ($dep !== null ? $ctx->afterRef($dep, $createdAt) : $ctx->head($createdAt));
         } else {
             $slot = $ctx->beforeFirst($aggregate, $createdAt);
@@ -86,7 +92,6 @@ final class ExternalIdentityReconciler
                 : ($dep !== null ? $ctx->afterRef($dep, $createdAt) : $ctx->head($createdAt));
         }
 
-        $needsLink = $final === null || $final['user_id'] !== $userId || $final['status'] !== 'active';
         if ($needsLink) {
             $slot = $ctx->emit(self::TABLE, $slot, 'external_identity.linked', $aggregate, [
                 'userId' => $userId,
@@ -98,7 +103,7 @@ final class ExternalIdentityReconciler
                 'actorUserId' => null,
             ], $final === null ? $createdAt : null);
         }
-        if ($status !== 'active') {
+        if ($needsUnlink) {
             $ctx->emit(self::TABLE, $slot, 'external_identity.unlinked', $aggregate, [
                 'userId' => $userId,
                 'identityId' => (int) ($row['id'] ?? 0),

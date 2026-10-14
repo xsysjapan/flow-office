@@ -72,7 +72,8 @@ final class CompanyCalendarDefaultReconciler
         }
 
         if ($ctx->rowsOf($id) !== []) {
-            $ctx->mismatch(self::TABLE, $id, '最終状態が違う: is_default');
+            $ctx->mismatch(self::TABLE, $id, 'is_default: イベント '.ReconcileContext::show($state[$id] ?? false).' → 行 '.ReconcileContext::show(true)
+                .($others === [] ? '' : '(イベントでは既定の暦は他に '.implode(', ', $others).')'), ['company_calendar.default_changed']);
         }
 
         $slot = $ctx->latest($ctx->afterLast($id), $lastDefaultChanged) ?? $ctx->head(Norm::str($row['created_at'] ?? null));

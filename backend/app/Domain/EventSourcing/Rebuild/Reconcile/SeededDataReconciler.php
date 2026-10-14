@@ -54,7 +54,8 @@ final class SeededDataReconciler
             consumedIds: array_map(fn (StoredEventRow $row) => $row->id, $remapped['replaced']),
             issues: $ctx->issues,
             derivedByTable: $ctx->derivedByTable,
-            mismatches: $ctx->mismatches,
+            resolved: $ctx->resolved,
+            unresolved: $ctx->unresolved,
             remapped: $remapped['remapped'],
         );
     }

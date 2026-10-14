@@ -88,7 +88,13 @@ final class RoleReconciler
             }
         }
         if ($keyEvents !== [] && ($differences !== [] || ! $hasCreated)) {
-            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.implode(', ', $differences) : 'role.created が無い'.($differences === [] ? '' : '、最終状態が違う: '.implode(', ', $differences)));
+            $text = ReconcileContext::describe($state ?? [], $want, $differences);
+            // created が無い場合は role.created を導出している(同じ照合で置く)。
+            $derived = $differences === [] ? [] : ['role.updated'];
+            if (! $hasCreated) {
+                array_unshift($derived, 'role.created');
+            }
+            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.$text : 'role.created が無い'.($text === '' ? '' : '、最終状態が違う: '.$text), $derived);
         }
         if ($differences === []) {
             return;

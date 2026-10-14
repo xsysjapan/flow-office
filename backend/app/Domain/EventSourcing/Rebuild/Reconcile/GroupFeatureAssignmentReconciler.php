@@ -76,7 +76,7 @@ final class GroupFeatureAssignmentReconciler
                 if (! $final['assigned']) {
                     continue;
                 }
-                $ctx->mismatch(self::TABLE, $key, 'イベントでは割り当て済みだが行が無い');
+                $ctx->mismatch(self::TABLE, $key, 'assigned_by: イベント '.ReconcileContext::show($final['assigned_by']).' → 行 null', ['feature.removed_from_group']);
                 $ctx->emit(self::TABLE, $ctx->afterLast($aggregate), 'feature.removed_from_group', $aggregate, [
                     'groupId' => $groupId, 'featureId' => $featureId, 'actorUserId' => null,
                 ]);
@@ -92,7 +92,10 @@ final class GroupFeatureAssignmentReconciler
             $createdAt = Norm::str($row['created_at'] ?? null);
             $eventAt = null;
             if (isset($hasEvents[$featureId])) {
-                $ctx->mismatch(self::TABLE, $key, $final['assigned'] ? 'assigned_by がイベントと違う' : 'イベントでは割り当て解除済みだが行がある');
+                $reason = $final['assigned']
+                    ? 'assigned_by: イベント '.ReconcileContext::show($final['assigned_by']).' → 行 '.ReconcileContext::show($assignedBy)
+                    : '割り当て: イベント 解除済み → 行 あり(assigned_by: '.ReconcileContext::show($assignedBy).')';
+                $ctx->mismatch(self::TABLE, $key, $reason, ['feature.assigned_to_group']);
                 $slot = $ctx->afterLast($aggregate);
             } else {
                 $eventAt = $createdAt;

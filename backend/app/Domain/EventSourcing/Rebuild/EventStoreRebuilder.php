@@ -422,7 +422,7 @@ final class EventStoreRebuilder
         }
 
         // 照合による補完(論点19 決定1)。イベントを経ずに作られた行・イベントの最終状態とずれた行の差を埋める導出イベント。
-        $reconcileSummary = ['derived' => [], 'mismatches' => [], 'remapped' => []];
+        $reconcileSummary = ['derived' => [], 'resolved' => [], 'unresolved' => [], 'remapped' => []];
         if ($seeded !== null) {
             $reconciled = $this->seededReconciler->reconcile($rows, $seeded);
             foreach ($reconciled->issues as $issue) {
@@ -434,7 +434,8 @@ final class EventStoreRebuilder
             }
             $reconcileSummary = [
                 'derived' => $reconciled->derivedByTable,
-                'mismatches' => $reconciled->mismatches,
+                'resolved' => $reconciled->resolved,
+                'unresolved' => $reconciled->unresolved,
                 'remapped' => $reconciled->remapped,
             ];
         }

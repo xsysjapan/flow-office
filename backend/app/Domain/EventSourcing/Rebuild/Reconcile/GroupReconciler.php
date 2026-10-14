@@ -125,7 +125,13 @@ final class GroupReconciler
             }
         }
         if ($keyEvents !== [] && ($differences !== [] || ! $hasCreated)) {
-            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.implode(', ', $differences) : 'group.created が無い'.($differences === [] ? '' : '、最終状態が違う: '.implode(', ', $differences)));
+            $text = ReconcileContext::describe($state ?? [], $want, $differences);
+            // created が無い場合は group.created を導出している(同じ照合で置く)。
+            $derived = $differences === [] ? [] : ['group.updated'];
+            if (! $hasCreated) {
+                array_unshift($derived, 'group.created');
+            }
+            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.$text : 'group.created が無い'.($text === '' ? '' : '、最終状態が違う: '.$text), $derived);
         }
         if ($differences === []) {
             return;

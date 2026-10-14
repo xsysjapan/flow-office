@@ -11,7 +11,8 @@ use App\Domain\UserManagement\Support\UserManagementStreamId;
  * (isPrimary と kind=primary/member)、membership.removed(所属なし)を順に畳み込んだもの。
  * - 行があり、(利用者, グループ)のイベントが1件も無い: membership.added を導出する。集約にイベントが無ければ、利用者・グループ・
  *   作成者の作成イベントのうち最も後ろの直後(無ければ列の先頭)。イベントがあれば最初のイベントの直前(ただし依存先の作成より前には置かない)。
- * - 行があり、最終状態が違う(除去済み・kind/isPrimary/操作者が違う): 最後のイベントの直後に membership.added(行の値)を導出する。
+ * - 行があり、最終状態が違う(除去済み・kind/isPrimary が違う): 最後のイベントの直後に membership.added(行の値)を導出する。
+ *   操作者(created_by)だけが違う場合は差にしない(旧版の正規化が行を直接書いた意図した差。導出も報告もしない。論点19 決定10-7)。
  * - 行が無いのに最終状態では所属している: 最後の直後に membership.removed(操作者 null)を導出する。
  * added の操作者は行の created_by。
  */
@@ -80,7 +81,11 @@ final class MembershipReconciler
     {
         if ($row === null) {
             if ($final !== null && $final['present']) {
-                $ctx->mismatch(self::TABLE, $key, 'イベントでは所属しているが行が無い');
+                $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.ReconcileContext::describe(
+                    ['membership_kind' => $final['kind'], 'is_primary' => $final['primary'], 'created_by' => $final['created_by']],
+                    [],
+                    ['membership_kind', 'is_primary', 'created_by'],
+                ), ['membership.removed']);
                 $ctx->emit(self::TABLE, $ctx->afterLast($aggregate), 'membership.removed', $aggregate, [
                     'userId' => $userId, 'groupId' => $groupId, 'actorUserId' => null,
                 ]);
@@ -92,14 +97,20 @@ final class MembershipReconciler
         $kind = (string) $row['membership_kind'];
         $primary = (bool) $row['is_primary'];
         $createdBy = Norm::str($row['created_by'] ?? null);
-        if ($final !== null && $final['present'] && $final['kind'] === $kind && $final['primary'] === $primary && $final['created_by'] === $createdBy) {
+        // 在籍・kind・isPrimary が一致していれば差にしない。操作者(created_by)だけが違う場合は、旧版の正規化が
+        // 行を直接書いた意図した差(論点19 決定10-7)として、導出も報告もしない。
+        if ($final !== null && $final['present'] && $final['kind'] === $kind && $final['primary'] === $primary) {
             return;
         }
 
         $createdAt = Norm::str($row['created_at'] ?? null);
         $eventAt = null;
         if ($final !== null) {
-            $ctx->mismatch(self::TABLE, $key, $final['present'] ? 'kind・isPrimary・操作者がイベントと違う' : 'イベントでは除去済みだが行がある');
+            $ctx->mismatch(self::TABLE, $key, '最終状態が違う: '.ReconcileContext::describe(
+                ['membership_kind' => $final['kind'], 'is_primary' => $final['primary']],
+                ['membership_kind' => $kind, 'is_primary' => $primary],
+                ['membership_kind', 'is_primary'],
+            ), ['membership.added']);
             $slot = $ctx->afterLast($aggregate);
         } else {
             $eventAt = $createdAt;

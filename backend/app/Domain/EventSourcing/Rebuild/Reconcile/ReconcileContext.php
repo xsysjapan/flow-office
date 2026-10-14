@@ -9,7 +9,8 @@ use RuntimeException;
 
 /**
  * 照合の共有状態(論点19 決定1)。元の stored_events の行の索引、導出イベントを置く位置の割り当て、導出イベントの蓄積、
- * 報告(テーブルごとの件数・イベントがあるのに最終状態が違ったキー・扱えない並び)を持つ。
+ * 報告(テーブルごとの件数・イベントがあるのに最終状態が違ったキーを「導出で解消した差」と「解消していない差」に分けたもの・
+ * 扱えない並び)を持つ。
  *
  * 置く位置は Slot で表す。同じ位置(anchorId・前後)に置く導出イベントは、割り当てた順に並ぶ(subOrder を増やす)ため、
  * テーブルの依存順(SeededDataReconciler)で呼べば、依存先の導出イベントが依存元より前になる。
@@ -46,8 +47,19 @@ final class ReconcileContext
     /** @var array<string, array<string, int>> */
     public array $derivedByTable = [];
 
-    /** @var array<string, list<string>> */
-    public array $mismatches = [];
+    /**
+     * 導出で解消した差(同じ照合で導出イベントを置き、行の値へ揃えたキー)。テーブル => 差の一覧。
+     *
+     * @var array<string, list<array{key: string, reason: string, derivedBy: list<string>}>>
+     */
+    public array $resolved = [];
+
+    /**
+     * 解消していない差(導出イベントを置けず、イベントの最終状態と行が違ったままのキー)。テーブル => 「key: reason」の一覧。
+     *
+     * @var array<string, list<string>>
+     */
+    public array $unresolved = [];
 
     /** @var list<array{key: string, reason: string}> */
     public array $issues = [];
@@ -233,10 +245,58 @@ final class ReconcileContext
 
     // ---- 報告 ----
 
-    /** イベントがあるのに最終状態が違ったキーを報告に載せる。 */
-    public function mismatch(string $table, string $key, string $reason): void
+    /**
+     * 比べた値の表示。null は 'null'、真偽値は true/false、それ以外は文字列。
+     */
+    public static function show(mixed $value): string
     {
-        $this->mismatches[$table][] = "{$key}: {$reason}";
+        if ($value === null) {
+            return 'null';
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * 違いのある列だけを「列: イベント 値 → 行 値」の並びにする(列の指定順。違いが無ければ空文字)。
+     *
+     * @param  array<string, mixed>  $event  イベントの最終状態(列 => 値)
+     * @param  array<string, mixed>  $row  行の値(列 => 値)
+     * @param  list<string>  $columns  比べた列(違いのあるものを報告に載せる)
+     */
+    public static function describe(array $event, array $row, array $columns): string
+    {
+        $parts = [];
+        foreach ($columns as $column) {
+            $eventValue = $event[$column] ?? null;
+            $rowValue = $row[$column] ?? null;
+            if ($eventValue !== $rowValue) {
+                $parts[] = $column.': イベント '.self::show($eventValue).' → 行 '.self::show($rowValue);
+            }
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * イベントがあるのに最終状態が違ったキーを報告に載せる。
+     *
+     * $derivedBy は、同じ照合で置いた導出イベントの event_class(置いたものだけ。呼び出し箇所で確かめて渡す)。
+     * 空なら導出を伴わない差(解消していない差)、空でなければ導出で解消した差として resolved に載せる。
+     *
+     * @param  list<string>  $derivedBy
+     */
+    public function mismatch(string $table, string $key, string $reason, array $derivedBy = []): void
+    {
+        if ($derivedBy === []) {
+            $this->unresolved[$table][] = "{$key}: {$reason}";
+
+            return;
+        }
+        $this->resolved[$table][] = ['key' => $key, 'reason' => $reason, 'derivedBy' => array_values(array_unique($derivedBy))];
     }
 
     public function issue(string $key, string $reason): void

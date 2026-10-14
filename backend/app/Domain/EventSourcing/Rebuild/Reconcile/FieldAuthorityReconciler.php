@@ -38,7 +38,11 @@ final class FieldAuthorityReconciler
             $ctx->guard("field_authority {$fieldKey}", function () use ($ctx, $row, $fieldKey, $want, $aggregate, $final): void {
                 $createdAt = null;
                 if (isset($final[$fieldKey])) {
-                    $ctx->mismatch(self::TABLE, $fieldKey, '最終状態(authorityType・provider)が行と違う');
+                    $ctx->mismatch(self::TABLE, $fieldKey, '最終状態が違う: '.ReconcileContext::describe(
+                        ['authority_type' => $final[$fieldKey][0], 'provider' => $final[$fieldKey][1]],
+                        ['authority_type' => $want[0], 'provider' => $want[1]],
+                        ['authority_type', 'provider'],
+                    ), ['user.field_authority_changed']);
                     $slot = $ctx->afterLast($aggregate);
                 } else {
                     $createdAt = Norm::str($row['created_at'] ?? null);

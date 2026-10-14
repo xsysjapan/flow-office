@@ -88,7 +88,7 @@ final class RoleSetReconciler
             return;
         }
 
-        $ctx->mismatch($this->table, $key, '最後の '.$this->eventClass.' の '.$this->payloadKey.' ['.implode(',', $current).'] が行 ['.implode(',', $ids).'] と違う');
+        $ctx->mismatch($this->table, $key, '最後の '.$this->eventClass.' の '.$this->payloadKey.' ['.implode(',', $current).'] が行 ['.implode(',', $ids).'] と違う', [$this->eventClass]);
         $ctx->emit($this->table, $ctx->afterLast($aggregate), $this->eventClass, $aggregate, $payload());
     }
 }

@@ -78,7 +78,13 @@ final class GroupTypeReconciler
 
         $differences = $this->differences($state ?? [], $want);
         if ($keyEvents !== [] && ($differences !== [] || ! $hasCreated)) {
-            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.implode(', ', $differences) : 'group_type.created が無い'.($differences === [] ? '' : '、最終状態が違う: '.implode(', ', $differences)));
+            $text = ReconcileContext::describe($state ?? [], $want, $differences);
+            // created が無い場合は group_type.created を導出している(同じ照合で置く)。
+            $derived = $differences === [] ? [] : ['group_type.updated'];
+            if (! $hasCreated) {
+                array_unshift($derived, 'group_type.created');
+            }
+            $ctx->mismatch(self::TABLE, $key, $hasCreated ? '最終状態が違う: '.$text : 'group_type.created が無い'.($text === '' ? '' : '、最終状態が違う: '.$text), $derived);
         }
         if ($differences === []) {
             return;

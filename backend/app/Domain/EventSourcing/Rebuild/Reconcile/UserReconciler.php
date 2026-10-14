@@ -210,7 +210,15 @@ final class UserReconciler
         if ($last === null) {
             throw new UnsupportedEventSequence($key, '最後のイベントが無く、設定イベントを置く位置を決められない');
         }
-        $ctx->mismatch(self::TABLE, $key, '属性の最終状態が違う: '.implode(', ', $differences));
+        $derived = array_map(fn (string $column) => match ($column) {
+            'usage_start_date' => 'user.usage_start_date_set',
+            'hire_date' => 'user.hire_date_set',
+            'termination_date' => 'user.termination_date_set',
+            'timezone' => 'user.profile_updated',
+            'paid_leave_auto_grant_enabled' => 'user.paid_leave_auto_grant_enabled_set',
+            'special_leave_auto_grant_enabled' => 'user.special_leave_auto_grant_enabled_set',
+        }, $differences);
+        $ctx->mismatch(self::TABLE, $key, '属性の最終状態が違う: '.ReconcileContext::describe($state, $want, $differences), $derived);
 
         foreach ($differences as $column) {
             $last = match ($column) {
