@@ -10,35 +10,43 @@ use App\Domain\EventSourcing\Rebuild\StoredEventRow;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 作り直し後のイベントの発生日時(論点19 決定8-5): meta の created-at を優先し、列と2秒以上ずれていれば列の値。
+ * 作り直し後のイベントの発生日時(論点19 決定10-8。決定8-5・9-4を置き換える):
+ * meta_data の created-at を常に使い、created-at が無い・解釈できないときだけ列 created_at の値を使う。
  */
 class OccurredAtTest extends TestCase
 {
-    public function test_pass_through_uses_meta_created_at_when_it_differs_by_one_second(): void
+    public function test_pass_through_uses_meta_created_at_when_column_is_one_second_later(): void
     {
         $event = RebuiltEvent::passThrough($this->row('2026-09-01 10:00:01', '2026-09-01 10:00:00'));
 
         $this->assertSame('2026-09-01 10:00:00', $event->createdAt);
     }
 
-    public function test_pass_through_uses_column_when_meta_differs_by_three_seconds(): void
+    public function test_pass_through_uses_meta_created_at_when_column_is_several_days_later(): void
     {
-        $event = RebuiltEvent::passThrough($this->row('2026-09-01 10:00:03', '2026-09-01 10:00:00'));
+        // 保守の書き換えで列が後の時刻になった行(決定8-5の改訂の理由)。
+        $event = RebuiltEvent::passThrough($this->row('2026-09-05 10:00:00', '2026-09-01 10:00:00'));
 
-        $this->assertSame('2026-09-01 10:00:03', $event->createdAt);
+        $this->assertSame('2026-09-01 10:00:00', $event->createdAt);
     }
 
-    public function test_timezone_shift_of_whole_hours_uses_meta(): void
+    public function test_pass_through_uses_meta_created_at_when_column_is_earlier(): void
     {
-        // 決定9-4: 差が1時間の整数倍(±2秒)ならタイムゾーンのずれとして meta を使う。
-        $this->assertSame('2026-09-01 19:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:00'))->createdAt);
-        $this->assertSame('2026-09-01 19:00:01', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:01'))->createdAt);
-        $this->assertSame('2026-09-01 01:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 01:00:00'))->createdAt);
+        // 負のずれ(列が meta より前)でも meta を使う。
+        $event = RebuiltEvent::passThrough($this->row('2026-08-30 10:00:00', '2026-09-01 10:00:00'));
+
+        $this->assertSame('2026-09-01 10:00:00', $event->createdAt);
     }
 
-    public function test_shift_of_nine_hours_and_three_seconds_uses_column(): void
+    public function test_pass_through_uses_meta_created_at_when_shift_is_nine_hours(): void
     {
-        $this->assertSame('2026-09-01 10:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:03'))->createdAt);
+        $this->assertSame('2026-09-01 10:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 19:00:00', '2026-09-01 10:00:00'))->createdAt);
+        $this->assertSame('2026-09-01 10:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 01:00:00', '2026-09-01 10:00:00'))->createdAt);
+    }
+
+    public function test_pass_through_uses_meta_created_at_when_shift_is_nine_hours_and_three_seconds(): void
+    {
+        $this->assertSame('2026-09-01 10:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 19:00:03', '2026-09-01 10:00:00'))->createdAt);
     }
 
     public function test_pass_through_uses_column_when_meta_has_no_created_at(): void
@@ -48,13 +56,20 @@ class OccurredAtTest extends TestCase
         $this->assertSame('2026-09-01 10:00:01', $event->createdAt);
     }
 
+    public function test_pass_through_uses_column_when_meta_created_at_is_not_a_date(): void
+    {
+        $event = RebuiltEvent::passThrough($this->row('2026-09-01 10:00:01', 'not-a-date'));
+
+        $this->assertSame('2026-09-01 10:00:01', $event->createdAt);
+    }
+
     public function test_derived_event_follows_the_anchor_rule(): void
     {
         $near = RebuiltEvent::derived($this->row('2026-09-01 10:00:01', '2026-09-01 10:00:00'), 1, 'x.created', 'agg', []);
-        $far = RebuiltEvent::derived($this->row('2026-09-01 10:00:05', '2026-09-01 10:00:00'), 1, 'x.created', 'agg', []);
+        $far = RebuiltEvent::derived($this->row('2026-09-05 10:00:00', '2026-09-01 10:00:00'), 1, 'x.created', 'agg', []);
 
         $this->assertSame('2026-09-01 10:00:00', $near->createdAt);
-        $this->assertSame('2026-09-01 10:00:05', $far->createdAt);
+        $this->assertSame('2026-09-01 10:00:00', $far->createdAt);
     }
 
     public function test_explicitly_specified_derived_event_keeps_the_specified_value(): void
@@ -76,14 +91,14 @@ class OccurredAtTest extends TestCase
     {
         $rows = [
             $this->row('2026-09-01 10:00:01', '2026-09-01 10:00:00', 'shift_pattern.created', [], 1, 'a1'),
-            $this->row('2026-09-01 10:00:03', '2026-09-01 10:00:00', 'shift_pattern.created', [], 2, 'a2'),
+            $this->row('2026-09-05 10:00:03', '2026-09-01 10:00:00', 'shift_pattern.created', [], 2, 'a2'),
             $this->row('2026-09-01 10:00:07', null, 'shift_pattern.created', [], 3, 'a3'),
         ];
 
         $result = (new EventStoreRebuilder)->rebuild($rows);
 
         $this->assertTrue($result->ok, json_encode($result->unsupported));
-        $this->assertSame(['2026-09-01 10:00:00', '2026-09-01 10:00:03', '2026-09-01 10:00:07'], array_column($result->rows, 'created_at'));
+        $this->assertSame(['2026-09-01 10:00:00', '2026-09-01 10:00:00', '2026-09-01 10:00:07'], array_column($result->rows, 'created_at'));
         foreach ($result->rows as $row) {
             $this->assertSame($row['created_at'], $row['meta_data']['created-at']);
         }

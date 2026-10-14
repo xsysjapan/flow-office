@@ -169,11 +169,12 @@
   `stored-event-id`を振り直した新しいidに、`created-at`を発生日時(下記。列`created_at`と同じ値)に更新する(Spatieはイベントのstored event idと作成日時も
   `meta_data`から読み、履歴の投影(`workflow_request_history_entries`の`stored_event_id`・`occurred_at`)が使うため。分割・補完で作った行も同じ)。分割で作るイベントは元のイベントの
   `meta_data`を写し、補った事実であることを示すキー(`rebuilt_from`=元のイベントのid)を付ける。
-- 発生日時(`meta_data`の`created-at`と列`created_at`の両方に同じ値を入れる。論点19 決定8-5。`StoredEventRow::occurredAt()`):
-  - 元の行をそのまま写すイベント・payloadだけを書き換えたイベント: 元の行の`meta_data`の`created-at`(Projectorがliveで読んでいた
-    Spatieの`recordThat`時刻)。ただし元の行の列`created_at`と`created-at`が2秒以上ずれていれば列の値(正規化で意図して直したもの)。
-    `created-at`が無ければ列の値。比較は秒単位、書式は元の`created-at`の文字列を写す。
-    ただし差が1時間の整数倍(1時間以上)±2秒のときは、タイムゾーンのずれとして`created-at`を使う(論点19 決定9-4。例: 9時間ちょうど・9時間+1秒は`created-at`、9時間+3秒は列の値)。
+- 発生日時(`meta_data`の`created-at`と列`created_at`の両方に同じ値を入れる。論点19 決定10-8。`StoredEventRow::occurredAt()`。
+  決定8-5・9-4を置き換える):
+  - 元の行をそのまま写すイベント・payloadだけを書き換えたイベント: 元の行の`meta_data`の`created-at`(Spatieの`ShouldBeStored::createdAt()`。
+    Projectorがliveで読んでいた`recordThat`時刻)を常に使う。書式は`created-at`の文字列をそのまま写す。列`created_at`は保存時刻で、
+    旧版の正規化・保守のコマンドが後から書き換えた行がある(13クラス計308件。列が後の時刻)ため使わない。
+    `created-at`が無い・解釈できない(`strtotime`で読めない)ときだけ列の値を使う。列とのずれ(負のずれ・数日後・9時間等)は問わない。
   - 導出イベント(置き場所のanchorの行から作るもの): anchorの行について上と同じ規則で決めた値。導出側で明示的に指定したもの
     (照合による補完で行の`created_at`を使う作成イベント、付与予定の置き換えで行の時刻を使うもの等)は指定値を優先する。
 

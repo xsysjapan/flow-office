@@ -10,7 +10,7 @@ use App\Models\PaidLeaveScheduleEntry;
  * - 旧版: event_class が paid_leave_schedule.* で、payload に entryId があり scheduleEntryId が無いもの。全て削除する。
  * - 旧版に現れた entryId ごとに、ReadModel(paid_leave_schedule_entries・paid_leave_schedule_assessments)の現在の行から、
  *   現行のProjector(PaidLeaveScheduleProjector)で再生すると現在の行が再現されるイベント列を導出する。
- * - 発生日時: 旧版の同種のイベントがあればその created_at。無ければ entry_manually_edited は行の manual_override_at、
+ * - 発生日時: 旧版の同種のイベントがあればその発生日時(StoredEventRow::occurredAt)。無ければ entry_manually_edited は行の manual_override_at、
  *   entry_cancelled は行の updated_at、それ以外(または null)は entry_created と同じ(行の created_at)。
  * - 集約は利用者(行の user_id)。置く位置は、その利用者の旧版のイベントの最初の位置。
  * - 行が無い・必須の値が決められない entryId は UnsupportedEventSequence 相当の問題として issues に載せる。
