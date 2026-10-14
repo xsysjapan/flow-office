@@ -254,6 +254,21 @@ class CutoverUsageAllocatorTest extends TestCase
         $this->assertEqualsWithDelta(2.0, $result['report']['unallocated_days'], 0.000001);
     }
 
+    public function test_exhausted_nearest_future_grant_is_skipped_and_a_later_new_format_grant_is_used(): void
+    {
+        // cutoverの付与は残り0日(日付は対象日より後で直近)。その先の新形式の付与(source=auto)へ充当する。
+        $cutoverGrant = $this->grant(9, 0, 'C', '2026-09-15', '2027-03-31', 0.0);
+        $later = $this->event('paid_leave_account.grant_created', [
+            'grantId' => 'N', 'grantedOn' => '2026-10-01', 'expiresOn' => '2028-09-30', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'auto',
+        ], 15, 0, '2026-10-01 00:00:00');
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-08-10', 2.0, 12, '2026-09-20 10:00:00'), $cutoverGrant, $later], [self::USER => '2026-09-15']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame(['usageId' => 'U1', 'grantId' => 'N', 'allocatedDays' => 2.0], $result['events'][0]->payload);
+        $this->assertSame(15, $result['events'][0]->anchorId);
+        $this->assertSame(0, $result['report']['unallocated_usages']);
+    }
+
     public function test_released_allocation_returns_to_the_grant_remaining(): void
     {
         $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);

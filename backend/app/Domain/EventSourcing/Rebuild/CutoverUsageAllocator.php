@@ -158,9 +158,12 @@ final class CutoverUsageAllocator
             $report['eligible_usages']++;
 
             $grants = $grantsByUser[$userId] ?? [];
+            // 残りの無い付与(日数0・使い切り)は候補から外す。AllocationPlanner は「直近の将来の付与」を1件だけ見るので、
+            // 残りの無い付与が直近だと、その先の付与へ充当されなくなる。
+            $candidates = array_filter($grants, fn (array $g) => $g['grantedDays'] - $g['allocatedTotal'] > self::EPSILON);
             $plan = $planner->plan($usedOn, $usedDays, array_values(array_map(
                 fn (array $g) => array_diff_key($g, ['event' => true]),
-                $grants,
+                $candidates,
             )));
 
             $allocated = 0.0;
