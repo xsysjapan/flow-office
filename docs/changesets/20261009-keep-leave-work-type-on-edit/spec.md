@@ -410,6 +410,28 @@
    `system_settings`と同じく「イベントではなく直接更新する正データ」として扱う(ReadModelの再生で空にしない。`--list-readmodels`に
    出さない)。秘密情報を`stored_events`へは入れない。ログイン・オンボーディング・パスワード変更の読み書き先を新しい表へ変え、
    マイグレーションで既存の値を移してから`users`の列を削除する。
+8. **リハーサル3回目の差への対処**(2026-10-14 実装中の決定。リハーサル結果 3回目の1〜5):
+   1. 年度の訂正: `CorrectCompanyCalendarYearFiscalYearHandler`がイベントを書かずに暦の日を直接削除していた(設計原則2違反)。
+      直接削除をやめ、`CompanyCalendarYearProjector`の`fiscal_year_corrected`でその年の日(と日の出典`company_calendar_day_sources`)を
+      削除する(訂正後の日は従来どおり後続の`days_updated`で作られる)。
+   2. 祝日の同期: `holiday_calendar_source.synced`の`dayChanges`が日を自動採番の`company_calendar_day_id`で指しており、再生で
+      採番が変わると別の日を指す・見つからない。作り直しで、作り直し前の`company_calendar_days`の`id`→(年の`id`・日付)の対応から
+      各`dayChange`に`companyCalendarYearId`と`date`を補う(対応が無い=既に無い日はそのまま。Projectorが飛ばす)。Projectorは
+      `companyCalendarYearId`・`date`があればそれで日を引く(無ければ従来のid)。今後の同期もこの2項目を記録する。同期を戻す
+      イベント(`sync_reverted`)も同様。
+   3. `company_calendars.is_default`: マイグレーション`2026_08_10_020900`がイベントを経ずに設定していた。照合による補完の対象に
+      `company_calendars`の`is_default`を加え、差があれば`company_calendar.default_changed`を導出する(操作者`changedByUserId`は
+      null可にしnull。決定2と同じ方針)。
+   4. 現在時刻で書くProjector: `HolidayCalendarSourceProjector`(`synced_at`・`applied_at`・`last_synced_at`・`disabled_at`)と
+      `CalendarBulkOperationProjector`(`applied_at`・`reverted_at`)を、イベントの発生日時で書く。
+   5. イベントの発生日時: 作り直しは`meta_data`の`created-at`を`stored_events.created_at`列の値にそろえていたが、Projectorが
+      元々読んでいたのは`meta_data`の値(記録時刻)で、列(保存時刻)とは最大1秒程度ずれる。作り直しでは、そのまま写すイベントは
+      元の`meta_data`の`created-at`を、導出イベントは置き場所(anchor)の`meta_data`の`created-at`を発生日時とし、列も同じ値に
+      そろえる。ただし列と`meta_data`が2秒以上ずれている行は、旧版の正規化(`StoredEventHistoryNormalizer`)が列を意図して
+      直したものとして列の値を使う。
+   6. `paid_leave_balances`の行の増加(1→3行)と`unallocated_days`の差は、意図した差として扱う見込み(旧系統のイベントでは行が
+      作られず、作り直しで全付与保有者の口座イベントが揃うため。未充当は論点17の部分充当)。次のリハーサルで、増えた行が付与の
+      ある利用者であること、`unallocated_days`の差が確認事項(a)の不足量と一致することを確かめる。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
