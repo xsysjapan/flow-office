@@ -502,6 +502,15 @@
    6. `attendance_punches.corrected_at`(リハーサル7回目): baselineでNULLの2行は、訂正済み(`attendance_punch.corrected`が2026-07-22
       04:01:08にある)と削除済み(訂正イベントは無い)。現行のProjectorは訂正・削除の投影で`corrected_at`にイベントの発生日時を入れる。
       2026-07-22時点の旧実装(gitの履歴より前)は入れていなかったとみて、再生後の値(イベントの発生日時)を正とし、意図した差とする。
+   7. 変換診断の「最終状態が違ったキー」66件(リハーサル8回目):
+      - 暦の日61件(年8ff53eaaの2026-04の30日と2027-05の31日): 年度の訂正(`fiscal_year_corrected`)で期間外になった日。Projectorは
+        訂正の投影で期間外の日を消す(決定8-1)が、照合(`CalendarDayReconciler`)の畳み込みは訂正を見ていないため、誤って差として
+        出ていた。照合もProjectorと同じく、イベントの順に訂正の期間で日を落とす。
+      - 残り5件(`users.usage_start_date`1・年の作成イベント1・所属2・暦の既定1)は、同じ実行で導出イベント(`usage_start_date_set`・
+        `company_calendar_year.created`・`membership.added`・`default_changed`)により行の値へ揃えた差。報告を「導出で解消した差」
+        (導出したevent_classつき)と「解消していない差」に分けて出し、後者が0件であることを確かめられるようにする。
+      - 導出で解消した差のうち`usage_start_date`と所属は、行(本番の現在値)とイベントのどちらが正しいかをリハーサルの照合で確かめる
+        (行を正とする規則は決定1・10-3)。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
