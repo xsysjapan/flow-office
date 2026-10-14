@@ -74,6 +74,7 @@
 | `attendance_day.created`が無い勤怠日 | その勤怠日の最初のイベント(多くは`calculated`)の直前に`attendance_day.created`を置く。source=休暇の処理が作った日なら`leave`、それ以外は現在値。calendarEntryId・utcOffsetMinutesは現在値、createdByUserIdは休暇の申請者(無ければ利用者)、reasonは固定文言「既存データの引き継ぎ」 |
 | `created`/`edited`のpayloadの`workType`が休暇値 | その日の作業内容の値に書き換える(休暇値の前の値。無ければnull) |
 | ReadModelの`status=clocked_out`が全休のために書かれたもの(実績・打刻なし) | 置く`created`のstatusを実績から決まる値(`not_started`)にする |
+| 全休(`leaveType=full`)の休暇申請がある日の`edited`で、payloadの`status=clocked_out`かつ`actualStartAt`・`actualEndAt`がともにnull(論点19 決定9-2) | `status`を直前の状態に書き換える。直前の状態は同じ日のイベントをid順に積み上げた値(`created`のstatus、補った`created`のstatus、前の`edited`の書き換え後のstatus、`live_status_synced`のstatus。無ければ`not_started`)。全休の申請が無い日・実績がある`edited`は変えない。書き換えた件数と対象(勤怠日id・勤務日・イベントid)を試し実行のレポートに出す |
 | 休暇の解除で空になった勤怠日 | **後続のイベントが無い場合だけ**、解除の直後に`attendance_day.deleted`を置く(punchLogActionは打刻ログを変えない値、deletedByUserIdは解除の操作者)。後続のイベントがあれば置かない |
 
 日次計算は作り直しの中では変換しない(計算に当時のReadModelが要るため)。作り直しの後に、候補(3)で休暇値を直した日と休暇の
@@ -138,6 +139,7 @@
   - 元の行をそのまま写すイベント・payloadだけを書き換えたイベント: 元の行の`meta_data`の`created-at`(Projectorがliveで読んでいた
     Spatieの`recordThat`時刻)。ただし元の行の列`created_at`と`created-at`が2秒以上ずれていれば列の値(正規化で意図して直したもの)。
     `created-at`が無ければ列の値。比較は秒単位、書式は元の`created-at`の文字列を写す。
+    ただし差が1時間の整数倍(1時間以上)±2秒のときは、タイムゾーンのずれとして`created-at`を使う(論点19 決定9-4。例: 9時間ちょうど・9時間+1秒は`created-at`、9時間+3秒は列の値)。
   - 導出イベント(置き場所のanchorの行から作るもの): anchorの行について上と同じ規則で決めた値。導出側で明示的に指定したもの
     (照合による補完で行の`created_at`を使う作成イベント、付与予定の置き換えで行の時刻を使うもの等)は指定値を優先する。
 

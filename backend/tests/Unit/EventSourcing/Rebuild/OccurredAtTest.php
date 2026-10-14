@@ -28,6 +28,19 @@ class OccurredAtTest extends TestCase
         $this->assertSame('2026-09-01 10:00:03', $event->createdAt);
     }
 
+    public function test_timezone_shift_of_whole_hours_uses_meta(): void
+    {
+        // 決定9-4: 差が1時間の整数倍(±2秒)ならタイムゾーンのずれとして meta を使う。
+        $this->assertSame('2026-09-01 19:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:00'))->createdAt);
+        $this->assertSame('2026-09-01 19:00:01', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:01'))->createdAt);
+        $this->assertSame('2026-09-01 01:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 01:00:00'))->createdAt);
+    }
+
+    public function test_shift_of_nine_hours_and_three_seconds_uses_column(): void
+    {
+        $this->assertSame('2026-09-01 10:00:00', RebuiltEvent::passThrough($this->row('2026-09-01 10:00:00', '2026-09-01 19:00:03'))->createdAt);
+    }
+
     public function test_pass_through_uses_column_when_meta_has_no_created_at(): void
     {
         $event = RebuiltEvent::passThrough($this->row('2026-09-01 10:00:01', null));

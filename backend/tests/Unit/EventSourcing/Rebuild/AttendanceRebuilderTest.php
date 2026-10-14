@@ -146,6 +146,75 @@ class AttendanceRebuilderTest extends TestCase
         $this->assertEqualsCanonicalizing([1, 3, 4, 6], $result->consumedIds);
     }
 
+    public function test_status_of_edited_is_rolled_back_when_full_leave_day_has_clocked_out_without_actuals(): void
+    {
+        $result = $this->rebuilder->rebuild(self::DAY, [
+            $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'leave', 'status' => 'not_started', 'workType' => null]),
+            $this->editedWithStatus(2, 'clocked_out'),
+        ], null, [$this->leave('full')]);
+
+        $this->assertSame(['status' => 'not_started'], ['status' => $result->events[0]->payload['status']]);
+        $this->assertSame([2], $result->consumedIds);
+        $this->assertSame([['dayId' => self::DAY, 'workDate' => '2026-08-10', 'eventId' => 2]], $result->statusRewrittenTargets);
+    }
+
+    public function test_status_is_not_rewritten_without_full_leave_or_with_actuals(): void
+    {
+        $created = $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'status' => 'not_started', 'workType' => null]);
+
+        foreach ([[], [$this->leave('am_half')], [$this->leave(null)]] as $leaves) {
+            $result = $this->rebuilder->rebuild(self::DAY, [$created, $this->editedWithStatus(2, 'clocked_out')], null, $leaves);
+            $this->assertSame([], $result->statusRewrittenTargets);
+            $this->assertSame([], $result->events);
+        }
+
+        $withEnd = $this->rebuilder->rebuild(self::DAY, [$created, $this->editedWithStatus(2, 'clocked_out', '2026-08-10T09:00:00+09:00', '2026-08-10T18:00:00+09:00')], null, [$this->leave('full')]);
+        $this->assertSame([], $withEnd->statusRewrittenTargets);
+        $withStartOnly = $this->rebuilder->rebuild(self::DAY, [$created, $this->editedWithStatus(2, 'clocked_out', '2026-08-10T09:00:00+09:00', null)], null, [$this->leave('full')]);
+        $this->assertSame([], $withStartOnly->statusRewrittenTargets);
+        $notClockedOut = $this->rebuilder->rebuild(self::DAY, [$created, $this->editedWithStatus(2, 'not_started')], null, [$this->leave('full')]);
+        $this->assertSame([], $notClockedOut->statusRewrittenTargets);
+    }
+
+    public function test_status_rolls_back_to_the_created_status_added_from_the_read_model(): void
+    {
+        $result = $this->rebuilder->rebuild(self::DAY, [$this->editedWithStatus(5, 'clocked_out')], $this->current(['source' => 'leave', 'status' => 'clocked_out']), [$this->leave('full')]);
+
+        $edited = array_values(array_filter($result->events, fn (RebuiltEvent $e) => $e->eventClass === 'attendance_day.edited'));
+        $this->assertSame('not_started', $edited[0]->payload['status']);
+        $this->assertCount(1, $result->statusRewrittenTargets);
+    }
+
+    public function test_status_rolls_back_to_the_status_after_a_previous_edited_or_live_status_sync(): void
+    {
+        $result = $this->rebuilder->rebuild(self::DAY, [
+            $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'status' => 'not_started', 'workType' => null]),
+            $this->row(2, 'attendance_day.live_status_synced', ['status' => 'working']),
+            $this->editedWithStatus(3, 'clocked_out'),
+            $this->editedWithStatus(4, 'clocked_out'),
+        ], null, [$this->leave('full')]);
+
+        $byId = [];
+        foreach ($result->events as $event) {
+            $byId[$event->anchorId] = $event->payload['status'];
+        }
+        // 3は直前(live_status_synced)の working、4は書き換え後の3の status(working)。
+        $this->assertSame([3 => 'working', 4 => 'working'], $byId);
+        $this->assertCount(2, $result->statusRewrittenTargets);
+    }
+
+    public function test_status_rolls_back_to_the_previous_edited_status_not_rewritten(): void
+    {
+        $result = $this->rebuilder->rebuild(self::DAY, [
+            $this->row(1, 'attendance_day.created', ['userId' => 'u1', 'workDate' => '2026-08-10', 'source' => 'manual', 'status' => 'not_started', 'workType' => null]),
+            $this->editedWithStatus(2, 'working'),
+            $this->editedWithStatus(3, 'clocked_out'),
+        ], null, [$this->leave('full')]);
+
+        $this->assertSame('working', $result->events[0]->payload['status']);
+        $this->assertSame(3, $result->events[0]->anchorId);
+    }
+
     public function test_calculated_null_items_are_filled_from_the_created_event(): void
     {
         $result = $this->rebuilder->rebuild(self::DAY, [
@@ -281,6 +350,21 @@ class AttendanceRebuilderTest extends TestCase
         $this->assertTrue(AttendanceRebuilder::isLeaveWorkType('compensatory_leave_pm_half'));
         $this->assertFalse(AttendanceRebuilder::isLeaveWorkType('office'));
         $this->assertFalse(AttendanceRebuilder::isLeaveWorkType(null));
+    }
+
+    /** @return array{userId: string, finalState: string, leaveType: ?string, lastRelease: null} */
+    private function leave(?string $leaveType): array
+    {
+        return ['userId' => 'u1', 'finalState' => 'approved', 'leaveType' => $leaveType, 'lastRelease' => null];
+    }
+
+    private function editedWithStatus(int $id, string $status, ?string $start = null, ?string $end = null): StoredEventRow
+    {
+        return $this->row($id, 'attendance_day.edited', [
+            'utcOffsetMinutes' => 540, 'actualStartAt' => $start, 'actualEndAt' => $end, 'status' => $status, 'workType' => null,
+            'workLocationType' => null, 'workLocationTypeProvided' => false, 'note' => null, 'breaks' => [], 'leaveSegments' => [],
+            'reason' => 'r', 'editedByUserId' => 'u1',
+        ]);
     }
 
     private function calculated(int $id): StoredEventRow

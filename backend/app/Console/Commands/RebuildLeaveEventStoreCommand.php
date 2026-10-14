@@ -222,6 +222,10 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->info('勤怠日の変換');
             $this->line("対象の勤怠日: {$attendance['days']} 件 / created を補った日: {$attendance['created_added']} 件 / deleted を補った日: {$attendance['deleted_added']} 件");
             $this->line("休暇値の workType を書き換えた件数: {$attendance['work_type_rewritten']} / 既定値nullの項目を補完した件数: {$attendance['null_items_filled']}");
+            $this->line('全休の日の edited の status(clocked_out・実績null)を直前の状態に書き換えた件数: '.($attendance['status_rewritten'] ?? 0));
+            foreach ($attendance['status_rewritten_targets'] ?? [] as $target) {
+                $this->line("  勤怠日id={$target['dayId']} 勤務日={$target['workDate']} イベントid={$target['eventId']}");
+            }
         }
 
         if (isset($report['holiday_calendar_day_refs'])) {

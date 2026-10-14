@@ -47,6 +47,7 @@ final readonly class StoredEventRow
     /**
      * 作り直し後のイベントの発生日時(論点19 決定8-5)。meta の created-at(Projector が live で読んでいた値)を優先し、
      * 列 created_at と2秒以上ずれていれば列の値(正規化で意図して直したもの)、meta に無ければ列の値。
+     * ただし差が1時間の整数倍(1時間以上)±2秒のときはタイムゾーンのずれとして meta を使う(決定9-4)。
      * 書式は meta の値をそのまま写す。比較は秒単位。
      */
     public function occurredAt(): string
@@ -57,11 +58,20 @@ final readonly class StoredEventRow
         }
         $metaTime = strtotime($meta);
         $columnTime = strtotime($this->createdAt);
-        if ($metaTime === false || $columnTime === false || abs($metaTime - $columnTime) >= 2) {
+        if ($metaTime === false || $columnTime === false) {
             return $this->createdAt;
         }
+        $diff = abs($metaTime - $columnTime);
+        if ($diff < 2) {
+            return $meta;
+        }
+        // 差が1時間の整数倍(±2秒)ならタイムゾーンのずれ(論点19 決定9-4)として meta を使う。
+        $remainder = $diff % 3600;
+        if ($diff >= 3600 && ($remainder <= 2 || $remainder >= 3598)) {
+            return $meta;
+        }
 
-        return $meta;
+        return $this->createdAt;
     }
 
     public function get(string $key, mixed $default = null): mixed

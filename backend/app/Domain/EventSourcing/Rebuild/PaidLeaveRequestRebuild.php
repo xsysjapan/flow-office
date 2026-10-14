@@ -9,6 +9,7 @@ namespace App\Domain\EventSourcing\Rebuild;
  * @property-read list<int> $consumedIds 変換で置き換えた元の stored_events.id(写さない)
  * @property-read ?string $userId 申請者
  * @property-read ?string $targetDate 休暇の対象日(Y-m-d)
+ * @property-read ?string $leaveType 休暇の種類(full・am_half・pm_half・hourly)
  * @property-read ?array{row: StoredEventRow, operatorUserId: string} $lastRelease 有効な消化を解除した最後の操作(差戻し・取消・却下)。無ければnull
  */
 final readonly class PaidLeaveRequestRebuild
@@ -26,6 +27,7 @@ final readonly class PaidLeaveRequestRebuild
         public ?string $userId = null,
         public ?string $targetDate = null,
         public ?array $lastRelease = null,
+        public ?string $leaveType = null,
     ) {}
 
     /** 休暇が有効(申請中・承認済み)か。 */

@@ -163,6 +163,39 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertNull(DB::table('attendance_days')->where('id', $released)->first());
     }
 
+    public function test_edited_status_clocked_out_without_actuals_on_a_full_leave_day_is_rolled_back_and_replays_to_not_started(): void
+    {
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        $type = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
+        [$dayId, $skept] = [(string) Str::uuid(), (string) Str::uuid()];
+
+        $this->insertLegacyEvent($skept, 'special_leave.requested', $this->specialRequested($user->id, $approver->id, $type->id, '2026-09-10'));
+        $this->insertLegacyEvent($skept, 'special_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($dayId, 'attendance_day.created', [
+            'userId' => $user->id, 'workDate' => '2026-09-10', 'calendarEntryId' => null, 'status' => 'not_started', 'source' => 'leave',
+            'utcOffsetMinutes' => 540, 'actualStartAt' => null, 'actualEndAt' => null, 'workType' => null, 'workLocationType' => null,
+            'note' => null, 'breaks' => [], 'leaveSegments' => [], 'reason' => 'leave', 'createdByUserId' => $user->id,
+        ]);
+        $this->insertLegacyEvent($dayId, 'attendance_day.edited', [
+            'utcOffsetMinutes' => 540, 'actualStartAt' => null, 'actualEndAt' => null, 'status' => 'clocked_out', 'workType' => null,
+            'workLocationType' => null, 'workLocationTypeProvided' => false, 'note' => 'メモ', 'breaks' => [], 'leaveSegments' => [],
+            'reason' => 'edit', 'editedByUserId' => $user->id,
+        ]);
+
+        $this->rebuildAndSwap();
+
+        $edited = json_decode((string) DB::table('stored_events')->where('aggregate_uuid', $dayId)->where('event_class', 'attendance_day.edited')->value('event_properties'), true);
+        $this->assertSame('not_started', $edited['status']);
+
+        $this->replayReadModels();
+
+        $day = DB::table('attendance_days')->where('id', $dayId)->first();
+        $this->assertNotNull($day);
+        $this->assertSame('not_started', $day->status);
+        $this->assertSame('メモ', $day->note);
+    }
+
     public function test_legacy_paid_leave_schedule_events_are_replaced_from_the_read_model_and_replay_to_the_same_rows(): void
     {
         $user = User::factory()->create();

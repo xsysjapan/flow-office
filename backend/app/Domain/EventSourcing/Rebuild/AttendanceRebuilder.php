@@ -8,6 +8,7 @@ namespace App\Domain\EventSourcing\Rebuild;
  * - attendance_day.created が無い勤怠日(行を作るイベントが最初に無い日)に、最初のイベントの直前に created を補う。
  *   項目は ReadModel(attendance_days)の現在値から作る(source・status・createdByUserId・reason の規則は補う箇所のコメント参照)。
  * - created / edited の workType が休暇値(paid_leave_ 等で始まる値)なら、同じ勤怠日の休暇値でない直前の値(無ければnull)に書き換える。
+ * - 全休の休暇申請がある日の edited で、status=clocked_out なのに実績(actualStartAt・actualEndAt)がともにnullなら、status を直前の状態に書き換える(決定9-2)。
  * - 休暇の解除で空になった勤怠日の deleted は、後続のイベントが無いときだけ、解除の直後に置く。
  * - calculated・daily_calculation_adjusted の既定値null項目(userId・workDate・dayClassification・workMinutes)を補完する。
  *
@@ -16,6 +17,9 @@ namespace App\Domain\EventSourcing\Rebuild;
 final class AttendanceRebuilder
 {
     public const LEAVE_WORK_TYPE_PREFIXES = ['paid_leave_', 'special_leave_', 'compensatory_leave_'];
+
+    /** 全休の休暇の種類(PaidLeaveType::FULL)。 */
+    public const FULL_LEAVE_TYPE = 'full';
 
     public const CREATED_REASON = '既存データの引き継ぎ';
 
@@ -76,7 +80,7 @@ final class AttendanceRebuilder
 
     /**
      * @param  list<StoredEventRow>  $rows  勤怠日(集約=$dayId)の attendance_day.* 行(id順)
-     * @param  list<array{userId: string, finalState: string, lastRelease: ?array{row: StoredEventRow, operatorUserId: string}}>  $leaves  その日(利用者・勤務日)の休暇申請の変換結果(finalState・lastRelease は PaidLeaveRequestRebuild と同じ)
+     * @param  list<array{userId: string, finalState: string, leaveType?: ?string, lastRelease: ?array{row: StoredEventRow, operatorUserId: string}}>  $leaves  その日(利用者・勤務日)の休暇申請の変換結果(finalState・lastRelease は PaidLeaveRequestRebuild と同じ)
      */
     public function rebuild(string $dayId, array $rows, ?AttendanceDayCurrent $current, array $leaves = []): AttendanceRebuild
     {
@@ -95,6 +99,15 @@ final class AttendanceRebuilder
         $createdSource = null;
         $rewritten = 0;
         $filled = 0;
+        $statusRewritten = [];
+        // 直前の状態(status)。無ければ not_started。
+        $previousStatus = 'not_started';
+        $hasFullLeave = false;
+        foreach ($leaves as $leave) {
+            if (($leave['leaveType'] ?? null) === self::FULL_LEAVE_TYPE) {
+                $hasFullLeave = true;
+            }
+        }
 
         if (! in_array($first->eventClass, self::ROW_CREATING_CLASSES, true)) {
             if ($current === null) {
@@ -106,6 +119,7 @@ final class AttendanceRebuilder
             $workType = self::isLeaveWorkType($current->workType) ? null : $current->workType;
             $createdSource = $hasLeave && $untouched ? 'leave' : $current->source;
             $lastNonLeaveWorkType = $workType;
+            $previousStatus = $untouched ? 'not_started' : (string) $current->status;
 
             $events[] = RebuiltEvent::derived($first, -1, 'attendance_day.created', $dayId, [
                 'userId' => $current->userId,
@@ -151,6 +165,23 @@ final class AttendanceRebuilder
                 }
                 if ($row->eventClass === 'attendance_day.created') {
                     $createdSource = (string) $row->get('source');
+                }
+                // 全休の日の edited が、実績が無いのに status=clocked_out を持つとき、直前の状態に戻す(論点19 決定9-2)。
+                if ($row->eventClass === 'attendance_day.edited' && $hasFullLeave
+                    && $row->get('status') === 'clocked_out'
+                    && $row->get('actualStartAt') === null && $row->get('actualEndAt') === null) {
+                    $payload['status'] = $previousStatus;
+                    $statusRewritten[] = [
+                        'dayId' => $dayId,
+                        'workDate' => $row->get('workDate') !== null ? self::date((string) $row->get('workDate')) : $identity['workDate'],
+                        'eventId' => $row->id,
+                    ];
+                } elseif ($row->get('status') !== null) {
+                    $previousStatus = (string) $row->get('status');
+                }
+            } elseif ($row->eventClass === 'attendance_day.live_status_synced') {
+                if ($row->get('status') !== null) {
+                    $previousStatus = (string) $row->get('status');
                 }
             } elseif ($row->eventClass === 'attendance_day.calculated') {
                 $payload = $this->fillIdentity($payload, $identity, $key, $row, $filled);
@@ -205,6 +236,7 @@ final class AttendanceRebuilder
             deletedAdded: $deletedAdded,
             workTypeRewritten: $rewritten,
             nullItemsFilled: $filled,
+            statusRewrittenTargets: $statusRewritten,
         );
     }
 
@@ -212,7 +244,7 @@ final class AttendanceRebuilder
      * 休暇の解除で空になった勤怠日なら、解除の操作(最後の差戻し・取消・却下)を返す。後続のイベントがあるときはnull。
      *
      * @param  list<StoredEventRow>  $rows
-     * @param  list<array{userId: string, finalState: string, lastRelease: ?array{row: StoredEventRow, operatorUserId: string}}>  $leaves
+     * @param  list<array{userId: string, finalState: string, leaveType?: ?string, lastRelease: ?array{row: StoredEventRow, operatorUserId: string}}>  $leaves
      * @return array{row: StoredEventRow, operatorUserId: string}|null
      */
     private function releaseForEmptyDay(array $rows, ?AttendanceDayCurrent $current, array $leaves, ?string $createdSource, bool $hasDeleted, bool $hasAdjusted): ?array

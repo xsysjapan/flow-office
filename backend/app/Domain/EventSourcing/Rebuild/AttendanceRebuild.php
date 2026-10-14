@@ -13,6 +13,7 @@ final readonly class AttendanceRebuild
     /**
      * @param  list<RebuiltEvent>  $events
      * @param  list<int>  $consumedIds
+     * @param  list<array{dayId: string, workDate: ?string, eventId: int}>  $statusRewrittenTargets
      */
     public function __construct(
         public array $events,
@@ -21,5 +22,7 @@ final readonly class AttendanceRebuild
         public bool $deletedAdded,
         public int $workTypeRewritten,
         public int $nullItemsFilled,
+        /** 全休の日の edited の status(clocked_out・実績null)を直前の状態に書き換えた対象 */
+        public array $statusRewrittenTargets = [],
     ) {}
 }

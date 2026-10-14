@@ -325,6 +325,7 @@ final class PaidLeaveRequestRebuilder
             userId: $applicant,
             targetDate: (string) $requested->get('targetDate'),
             lastRelease: $lastRelease,
+            leaveType: $requested->get('leaveType') !== null ? (string) $requested->get('leaveType') : null,
         );
     }
 
@@ -601,6 +602,7 @@ final class PaidLeaveRequestRebuilder
             userId: $applicant,
             targetDate: $content['targetDate'],
             lastRelease: $lastRelease,
+            leaveType: isset($content['leaveType']) ? (string) $content['leaveType'] : null,
         );
     }
 

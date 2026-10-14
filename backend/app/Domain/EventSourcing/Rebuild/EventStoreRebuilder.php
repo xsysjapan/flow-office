@@ -363,9 +363,10 @@ final class EventStoreRebuilder
                 'userId' => $result->userId,
                 'finalState' => $result->finalState,
                 'lastRelease' => $result->lastRelease,
+                'leaveType' => $result->leaveType,
             ];
         }
-        $attendanceSummary = ['days' => 0, 'created_added' => 0, 'deleted_added' => 0, 'work_type_rewritten' => 0, 'null_items_filled' => 0];
+        $attendanceSummary = ['days' => 0, 'created_added' => 0, 'deleted_added' => 0, 'work_type_rewritten' => 0, 'null_items_filled' => 0, 'status_rewritten' => 0, 'status_rewritten_targets' => []];
         foreach ($attendanceRows as $dayId => $dayRows) {
             $current = $attendanceDays[(string) $dayId] ?? null;
             $identity = AttendanceRebuilder::identity($dayRows, $current);
@@ -383,6 +384,8 @@ final class EventStoreRebuilder
                 $attendanceSummary['deleted_added'] += $result->deletedAdded ? 1 : 0;
                 $attendanceSummary['work_type_rewritten'] += $result->workTypeRewritten;
                 $attendanceSummary['null_items_filled'] += $result->nullItemsFilled;
+                $attendanceSummary['status_rewritten'] += count($result->statusRewrittenTargets);
+                array_push($attendanceSummary['status_rewritten_targets'], ...$result->statusRewrittenTargets);
             } catch (UnsupportedEventSequence $e) {
                 $unsupported[] = $this->issue($e->key, $e->getMessage());
             }

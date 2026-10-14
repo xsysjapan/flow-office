@@ -324,6 +324,7 @@ final class LeaveRequestRebuilder
             userId: $applicant,
             targetDate: (string) $content['targetDate'],
             lastRelease: $lastRelease,
+            leaveType: isset($content['leaveType']) ? (string) $content['leaveType'] : null,
         );
     }
 
