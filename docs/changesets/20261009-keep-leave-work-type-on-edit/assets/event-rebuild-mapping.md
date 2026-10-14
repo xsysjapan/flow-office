@@ -61,15 +61,21 @@
 - 付与IDが一致しない付与(システム外から持ち込んだ残高)は`grant_created`(source=`carried_over`、grantId=cutoverの付与ID、
   grantedDays=`remainingDaysAtCutover`、grantedOn=`originalGrantedOn`(nullならcutover日)、cutoverの`mode`・`notes`は`meta_data`)にする。
 - 付与IDは一致するが残数が合わない付与は、試し実行で一覧にして失敗させる(リハーサルで原因を確認し、変換規則を決めてから進む)。
-- **cutover前の対象日の消化記録の充当(論点19 決定9-3a)**: 消化記録の対象日(`usage_designated`の日付)が`cutoverDate`より前で、充当
-  (旧`paid_leave.used`)が無いまま確定(`usage_confirmed`)した有給(確定の日付では選ばない: cutoverの経路は確定がcutover以降に記録されるため)の消化記録は、cutoverの付与(`carried_over`の`grant_created`)に
-  充当する`paid_leave_account.usage_allocated`を導出する(`CutoverUsageAllocator`)。順序・単位は現行の口座集約の承認時の充当と同じ
-  (確定の順に`AllocationPlanner`で、対象日に有効な付与を`expiresOn`昇順、付与の残りを超えない。有効な付与が無ければ集約の規則の
-  とおり)。付与の`originalGrantedOn`がnullなら付与日はcutover日として扱う。足りない分は未充当のまま(論点17)。置く位置は、その付与の
-  `grant_created`と消化の`usage_confirmed`のうち後ろの直後(subOrderで順序)、発生日時は置き場所の行。集約UUIDは口座(userId)、usageIdは
-  2.1の規則の消化記録のid。取消済みの消化記録・対象日がcutover以降のもの・既に`usage_allocated`があるものは対象外。`reconcileCutover`の
-  突き合わせはcutover時点の残数の照合(旧付与の再現)で、この充当は突き合わせの後・cutover後の位置に置くため影響しない。試し実行のレポート
-  (`cutover_allocation`)に、充当した件数・日数と、充当できなかった(付与の残り不足・有効な付与なし)件数・日数・一覧を出す。
+- **cutoverの日付より前の対象日の消化記録の充当(論点19 決定9-3a)**: 消化記録の対象日(`usage_designated`の日付)が「cutoverの日付」より前で、
+  充当(旧`paid_leave.used`)が無いまま確定(`usage_confirmed`)・未取消の有給(確定の日付では選ばない: cutoverの経路は確定がcutover以降に
+  記録されるため)の消化記録は、その利用者の付与に充当する`paid_leave_account.usage_allocated`を導出する(`CutoverUsageAllocator`)。
+  - **cutoverの日付**: その利用者に`migrated`があればその`cutoverDate`、無ければ全利用者の`cutoverDate`の最小値(利用者に`migrated`が
+    無くても対象になる)。`migrated`が全く無ければ何もしない。
+  - **充当先**: その利用者の**全ての付与**(作り直し後の`grant_created`。`carried_over`に限らず、変換されずにそのまま写る行(cutover以降に新形式で記録されたもの)も含む)。取消(`grant_revoked`)済みは除く。
+    `grant_amount_changed`があれば最終の日数。既存の有効な充当(`usage_allocated`の合計 − `usage_allocation_released`の合計。`PaidLeaveBalanceProjector`と同じ。変換されずに写る行も含む)を付与ごとに差し引いてから
+    `AllocationPlanner`に渡す(付与の残りを超えない)。承認時点より後に付与された付与にも、`AllocationPlanner`の規則(直近の将来の付与1件)で充当される。
+  - 順序・単位は現行の口座集約の承認時の充当と同じ(確定の順に、対象日に有効な付与を`expiresOn`昇順)。足りない分は未充当のまま(論点17)。
+  - 置く位置は、充当先の付与の`grant_created`と消化の`usage_confirmed`のうち後ろの直後(subOrderで順序)、発生日時は置き場所の行。集約UUIDは
+    口座(userId)、usageIdは2.1の規則の消化記録のid。取消済み・対象日がcutoverの日付以降・既に`usage_allocated`があるものは対象外。
+    `reconcileCutover`の突き合わせはcutover時点の残数の照合で、この充当は突き合わせの後に置くため影響しない。
+  - 試し実行のレポート(`cutover_allocation`)に、cutoverの日付の最小値、対象の消化記録ごとの一覧(usageId・利用者・対象日・日数・充当した
+    付与と日数・未充当の日数と理由・cutoverの日付とその決め方(利用者のmigrated/全体の最小値))、充当した件数・日数、未充当の件数・日数を出す
+    (コマンドの表示も同じ)。
 - 結果として論点13の8件は通常の承認済み申請と同じく取消できる(2026-10-10 ユーザー決定)。`PaidLeaveRequestAggregate`の
   「移行前の申請の取消を拒否」は削除する。
 

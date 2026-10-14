@@ -174,7 +174,7 @@ final class EventStoreRebuilder
         $requestResults = [];
         $grantStates = [];
         $cutoverSummary = [];
-        /** @var array<string, array{cutoverDate: string, grants: list<RebuiltEvent>}> $cutoverAllocation 利用者ID => cutoverの付与(carried_over)の入力 */
+        /** @var array<string, string> $cutoverAllocation 利用者ID => cutoverの日付(migrated のある利用者。最小値) */
         $cutoverAllocation = [];
         $handledRequests = [];
 
@@ -349,14 +349,9 @@ final class EventStoreRebuilder
             try {
                 $outcome = $this->grants->reconcileCutover($cutover, $grantStates);
                 array_push($converted, ...$outcome['events']);
-                if ($outcome['events'] !== []) {
-                    $userId = (string) $cutover->aggregateUuid;
-                    $cutoverDate = (string) $cutover->get('cutoverDate');
-                    $cutoverAllocation[$userId] = [
-                        'cutoverDate' => isset($cutoverAllocation[$userId]) ? min($cutoverAllocation[$userId]['cutoverDate'], $cutoverDate) : $cutoverDate,
-                        'grants' => array_merge($cutoverAllocation[$userId]['grants'] ?? [], $outcome['events']),
-                    ];
-                }
+                $userId = (string) $cutover->aggregateUuid;
+                $cutoverDate = (string) $cutover->get('cutoverDate');
+                $cutoverAllocation[$userId] = isset($cutoverAllocation[$userId]) ? min($cutoverAllocation[$userId], $cutoverDate) : $cutoverDate;
                 $cutoverSummary = array_merge($cutoverSummary, $outcome['outcomes']);
                 $consumed[$cutover->id] = true;
             } catch (UnsupportedEventSequence $e) {
@@ -364,8 +359,15 @@ final class EventStoreRebuilder
             }
         }
 
-        // cutover前に承認され充当の無い有給の消化記録を、cutoverの付与に充当する(論点19 決定9-3a)。
-        $allocation = $this->cutoverAllocator->allocate($converted, $cutoverAllocation);
+        // cutoverの日付より前の対象日で承認され充当の無い有給の消化記録を、その利用者の付与に充当する(論点19 決定9-3a)。
+        // 充当先の付与・既存の充当は、変換後のイベントと、変換されずにそのまま写る口座の行(cutover以降に新形式で記録されたもの)の両方から集める。
+        $passedThrough = [];
+        foreach ($rows as $row) {
+            if (! isset($consumed[$row->id]) && str_starts_with($row->eventClass, 'paid_leave_account.')) {
+                $passedThrough[] = RebuiltEvent::passThrough($row);
+            }
+        }
+        $allocation = $this->cutoverAllocator->allocate([...$converted, ...$passedThrough], $cutoverAllocation);
         array_push($converted, ...$allocation['events']);
 
         // 勤怠日(論点18 2.4・2.5)。休暇の変換結果から、利用者・対象日ごとの休暇を引けるようにする。

@@ -197,19 +197,102 @@ class CutoverUsageAllocatorTest extends TestCase
         $this->assertSame(0, $result->report['cutover_allocation']['unallocated_usages']);
     }
 
+    public function test_user_without_migrated_uses_the_minimum_cutover_date_of_all_users(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        $before = $this->usage('U1', '2026-07-10', 1.0, 3);
+        $onOrAfter = $this->usage('U2', '2026-08-10', 1.0, 4);
+        $result = $this->allocator->allocate([...$before, ...$onOrAfter, $grant], ['other' => '2026-08-01', 'other2' => '2026-09-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame('U1', $result['events'][0]->payload['usageId']);
+        $this->assertSame('2026-08-01', $result['report']['min_cutover_date']);
+        $this->assertSame('min', $result['report']['usages'][0]['cutover_basis']);
+        $this->assertSame('2026-08-01', $result['report']['usages'][0]['cutover_date']);
+        $this->assertSame([['grant_id' => 'G', 'days' => 1.0]], $result['report']['usages'][0]['allocations']);
+    }
+
+    public function test_user_with_migrated_uses_own_cutover_date(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-08-10', 1.0, 3), $grant], [self::USER => '2026-09-01', 'other' => '2026-08-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame('migrated', $result['report']['usages'][0]['cutover_basis']);
+    }
+
+    public function test_nothing_is_done_without_any_migrated(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-07-10', 1.0, 3), $grant], []);
+
+        $this->assertSame([], $result['events']);
+        $this->assertNull($result['report']['min_cutover_date']);
+    }
+
+    public function test_usage_is_allocated_to_the_nearest_future_grant_granted_after_the_usage_date(): void
+    {
+        // 承認時点より後に付与された付与(carried_over ではない)へ、直近の将来の付与として充当する。
+        $future = $this->grant(9, 0, 'F', '2026-07-20', '2028-07-19', 10.0, 'auto');
+        $farther = $this->grant(9, 1, 'FF', '2026-09-20', '2028-09-19', 10.0, 'auto');
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-07-10', 3.0, 3), $future, $farther], [self::USER => '2026-08-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame(['usageId' => 'U1', 'grantId' => 'F', 'allocatedDays' => 3.0], $result['events'][0]->payload);
+        $this->assertSame(9, $result['events'][0]->anchorId);
+    }
+
+    public function test_existing_allocations_are_subtracted_from_the_grant_remaining(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        // U2 は既に G に 4日 充当済み(対象外)。U1 の対象は残り1日だけ。
+        $existing = $this->usage('U2', '2026-09-10', 4.0, 20, '2026-09-11 10:00:00', true, false, 'G');
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-07-10', 3.0, 3), ...$existing, $grant], [self::USER => '2026-08-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertEqualsWithDelta(1.0, $result['events'][0]->payload['allocatedDays'], 0.000001);
+        $this->assertEqualsWithDelta(2.0, $result['report']['unallocated_days'], 0.000001);
+    }
+
+    public function test_released_allocation_returns_to_the_grant_remaining(): void
+    {
+        $grant = $this->grant(9, 0, 'G', '2026-04-01', '2027-03-31', 5.0);
+        // U2 は G に 4日 充当後、取消で 4日 解除済み。残りは5日のまま。
+        $other = $this->usage('U2', '2026-09-10', 4.0, 20, '2026-09-11 10:00:00', true, true, 'G');
+        $released = $this->event('paid_leave_account.usage_allocation_released', ['usageId' => 'U2', 'grantId' => 'G', 'releasedDays' => 4.0], 70, 0, '2026-09-12 10:00:00');
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-07-10', 3.0, 3), ...$other, $released, $grant], [self::USER => '2026-08-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertEqualsWithDelta(3.0, $result['events'][0]->payload['allocatedDays'], 0.000001);
+        $this->assertSame(0, $result['report']['unallocated_usages']);
+    }
+
+    public function test_revoked_grant_is_not_allocated_and_amount_change_uses_the_final_days(): void
+    {
+        $revoked = $this->grant(9, 0, 'R', '2026-04-01', '2027-03-31', 5.0);
+        $changed = $this->grant(9, 1, 'C', '2026-04-01', '2027-03-31', 5.0);
+        $revokedEvent = $this->event('paid_leave_account.grant_revoked', ['grantId' => 'R', 'revokedByUserId' => 'a1', 'reason' => null], 10, 0, '2026-08-01 09:00:00');
+        $changedEvent = $this->event('paid_leave_account.grant_amount_changed', ['grantId' => 'C', 'newGrantedDays' => 2.0, 'reason' => null, 'changedByUserId' => 'a1'], 10, 1, '2026-08-01 09:00:00');
+        $result = $this->allocator->allocate([...$this->usage('U1', '2026-07-10', 3.0, 3), $revoked, $changed, $revokedEvent, $changedEvent], [self::USER => '2026-08-01']);
+
+        $this->assertCount(1, $result['events']);
+        $this->assertSame(['usageId' => 'U1', 'grantId' => 'C', 'allocatedDays' => 2.0], $result['events'][0]->payload);
+        $this->assertEqualsWithDelta(1.0, $result['report']['unallocated_days'], 0.000001);
+    }
+
     /**
      * 消化の指定と確定のイベント(確定は anchor $confirmAnchor)。
      *
      * @return list<RebuiltEvent> [designated, confirmed, ...(allocated), ...(cancelled)]
      */
-    private function usage(string $usageId, string $usedOn, float $days, int $confirmAnchor, string $confirmedAt = '2026-07-12 10:00:00', bool $allocated = false, bool $cancelled = false): array
+    private function usage(string $usageId, string $usedOn, float $days, int $confirmAnchor, string $confirmedAt = '2026-07-12 10:00:00', bool $allocated = false, bool $cancelled = false, string $allocatedGrant = 'X'): array
     {
         $events = [
             $this->event('paid_leave_account.usage_designated', ['usageId' => $usageId, 'usedOn' => $usedOn, 'usedDays' => $days], $confirmAnchor - 1, 0, $confirmedAt),
             $this->event('paid_leave_account.usage_confirmed', ['usageId' => $usageId, 'confirmedByUserId' => 'a1'], $confirmAnchor, 1, $confirmedAt),
         ];
         if ($allocated) {
-            $events[] = $this->event('paid_leave_account.usage_allocated', ['usageId' => $usageId, 'grantId' => 'X', 'allocatedDays' => $days], $confirmAnchor, 2, $confirmedAt);
+            $events[] = $this->event('paid_leave_account.usage_allocated', ['usageId' => $usageId, 'grantId' => $allocatedGrant, 'allocatedDays' => $days], $confirmAnchor, 2, $confirmedAt);
         }
         if ($cancelled) {
             $events[] = $this->event('paid_leave_account.usage_cancelled', ['usageId' => $usageId, 'cancelledByUserId' => 'a1', 'reason' => null], $confirmAnchor + 50, 0, $confirmedAt);
@@ -218,17 +301,17 @@ class CutoverUsageAllocatorTest extends TestCase
         return $events;
     }
 
-    private function grant(int $anchor, int $sub, string $grantId, string $grantedOn, string $expiresOn, float $days): RebuiltEvent
+    private function grant(int $anchor, int $sub, string $grantId, string $grantedOn, string $expiresOn, float $days, string $source = 'carried_over'): RebuiltEvent
     {
         return $this->event('paid_leave_account.grant_created', [
-            'grantId' => $grantId, 'grantedOn' => $grantedOn, 'expiresOn' => $expiresOn, 'grantedDays' => $days, 'grantReason' => null, 'source' => 'carried_over',
+            'grantId' => $grantId, 'grantedOn' => $grantedOn, 'expiresOn' => $expiresOn, 'grantedDays' => $days, 'grantReason' => null, 'source' => $source,
         ], $anchor, $sub, '2026-08-01 09:00:00');
     }
 
     /** @param  list<RebuiltEvent>  $grants */
     private function cutovers(array $grants): array
     {
-        return [self::USER => ['cutoverDate' => '2026-08-01', 'grants' => $grants]];
+        return [self::USER => '2026-08-01'];
     }
 
     /** @param  array<string, mixed>  $payload */

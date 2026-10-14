@@ -150,6 +150,66 @@ class LeaveEventStoreRebuildScenarioTest extends TestCase
         $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
     }
 
+    public function test_usage_of_a_user_without_cutover_is_allocated_to_a_grant_granted_after_the_approval(): void
+    {
+        $cutoverUser = User::factory()->create();
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        [$cutoverGrantId, $laterGrantId] = [(string) Str::uuid(), (string) Str::uuid()];
+        $r1 = (string) Str::uuid();
+
+        // 別の利用者の cutover(2026-09-15)。対象の利用者には migrated が無く、全体の最小値が使われる。
+        $this->insertLegacyEvent($cutoverUser->id, 'paid_leave_account.migrated', [
+            'cutoverDate' => '2026-09-15',
+            'grants' => [
+                ['grantId' => $cutoverGrantId, 'originalGrantedOn' => null, 'originalGrantedDays' => 10.0, 'remainingDaysAtCutover' => 10.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+            ],
+        ]);
+        // 承認(2026-08-10 対象)より後に付与された付与(10日)。
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 2.0));
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id]);
+        $this->insertLegacyEvent($laterGrantId, 'paid_leave.granted', [
+            'userId' => $user->id, 'grantedOn' => '2026-09-01', 'expiresOn' => '2028-08-31', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'auto',
+        ]);
+
+        $this->rebuildAndSwap();
+        $this->replayReadModels();
+
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertNotNull($balance);
+        $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
+        $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
+        $this->assertEqualsWithDelta(8.0, (float) DB::table('paid_leave_grants')->where('id', $laterGrantId)->value('remaining_days'), 0.000001);
+    }
+
+    public function test_usage_is_allocated_to_a_new_format_grant_recorded_directly_after_the_cutover(): void
+    {
+        $user = User::factory()->create();
+        $approver = User::factory()->create();
+        [$cutoverGrantId, $newGrantId] = [(string) Str::uuid(), (string) Str::uuid()];
+        $r1 = (string) Str::uuid();
+
+        // cutover(2026-09-15)は残数0の付与。承認(対象2026-08-10)は cutover 以降に記録され、付与(新形式の grant_created)もその後に直接記録されている。
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.migrated', [
+            'cutoverDate' => '2026-09-15',
+            'grants' => [
+                ['grantId' => $cutoverGrantId, 'originalGrantedOn' => null, 'originalGrantedDays' => 0.0, 'remainingDaysAtCutover' => 0.0, 'expiresOn' => '2027-03-31', 'source' => 'migration', 'cutoverMetadata' => ['mode' => 'carry', 'notes' => null]],
+            ],
+        ]);
+        $this->insertLegacyEvent($r1, 'paid_leave.requested', $this->oldPaidRequested($user->id, $approver->id, '2026-08-10', 2.0), '2026-09-20 10:00:00');
+        $this->insertLegacyEvent($r1, 'paid_leave.request_approved', ['approvedByUserId' => $approver->id], '2026-09-20 10:00:00');
+        $this->insertLegacyEvent($user->id, 'paid_leave_account.grant_created', ['grantId' => $newGrantId, 'grantedOn' => '2026-10-01', 'expiresOn' => '2028-09-30', 'grantedDays' => 10.0, 'grantReason' => null, 'source' => 'auto'], '2026-10-01 00:00:00');
+
+        $this->rebuildAndSwap();
+        $this->replayReadModels();
+
+        $balance = DB::table('paid_leave_balances')->where('user_id', $user->id)->first();
+        $this->assertNotNull($balance);
+        $this->assertEqualsWithDelta(8.0, (float) $balance->available_days, 0.000001);
+        $this->assertEqualsWithDelta(0.0, (float) $balance->unallocated_days, 0.000001);
+        $this->assertEqualsWithDelta(8.0, (float) DB::table('paid_leave_grants')->where('id', $newGrantId)->value('remaining_days'), 0.000001);
+    }
+
     public function test_special_leave_is_rebuilt_into_the_account_stream_and_replays_to_the_same_state(): void
     {
         $user = User::factory()->create();

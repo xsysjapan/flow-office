@@ -288,14 +288,20 @@ final class RebuildLeaveEventStoreCommand extends Command
 
         if (isset($report['cutover_allocation'])) {
             $allocation = $report['cutover_allocation'];
-            $this->info('cutoverの付与への充当(cutover前に承認され充当の無い消化記録。決定9-3a)');
+            $this->info('付与への充当(cutoverの日付より前の対象日で承認され充当の無い消化記録。決定9-3a)');
+            $this->line('cutoverの日付の最小値(migrated の無い利用者に使う): '.($allocation['min_cutover_date'] ?? 'なし(migrated が無いので充当しない)'));
             $this->line("対象の消化記録: {$allocation['eligible_usages']} 件");
             $this->line("充当した消化記録: {$allocation['allocated_usages']} 件 / {$allocation['allocated_days']} 日");
             $this->line("充当できなかった(付与の残り不足・有効な付与なし): {$allocation['unallocated_usages']} 件 / {$allocation['unallocated_days']} 日");
-            if ($allocation['unallocated'] !== []) {
-                $this->table(['利用者', '消化記録', '対象日', '未充当の日数', '理由'], array_map(
-                    fn (array $r) => [$r['user_id'], $r['usage_id'], $r['used_on'], $r['days'], $r['reason']],
-                    $allocation['unallocated'],
+            if (($allocation['usages'] ?? []) !== []) {
+                $this->table(['消化記録', '利用者', '対象日', '日数', '充当した付与と日数', '未充当の日数', '理由', 'cutoverの日付(決め方)'], array_map(
+                    fn (array $r) => [
+                        $r['usage_id'], $r['user_id'], $r['used_on'], $r['days'],
+                        implode(', ', array_map(fn (array $a) => "{$a['grant_id']}: {$a['days']}", $r['allocations'])) ?: '-',
+                        $r['unallocated_days'], $r['reason'] ?? '-',
+                        $r['cutover_date'].' ('.($r['cutover_basis'] === 'migrated' ? '利用者のmigrated' : '全体の最小値').')',
+                    ],
+                    $allocation['usages'],
                 ));
             }
         }
