@@ -105,6 +105,20 @@ SELECT @@global.time_zone, @@session.time_zone, @@system_time_zone, NOW(), UTC_T
 - 本番が `SYSTEM`(JST)や `+09:00` なら、リハーサルのMySQLを `--default-time-zone=+09:00` で起動する(Docker なら command に指定)。
 - 投入(`mysql < dump`)・各コマンドの実行は、そろえた後に行う。
 
+### 1-1b. 最初の TIMESTAMP 列の自動更新句(2026-10-14 リハーサル7回目で判明。論点19 決定10-5)
+
+本番のサーバー上で(読み取りのみ)次を実行し、結果を控える。自動更新句(`DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)が
+付いていれば、元の `effective_at`・`queued_at` は更新時刻に上書きされており、再生後の値(payload)との差は意図した差になる。
+新しいマイグレーション(`2026_10_14_000002`)で該当列は `DATETIME` に変わる。
+
+```sql
+SELECT @@version, @@explicit_defaults_for_timestamp;
+SHOW CREATE TABLE membership_change_sets;
+SHOW CREATE TABLE notifications;
+```
+
+- 結果: ____________________
+
 ### 1-2. 配備するブランチ
 
 - ブランチ: `claude/claude-md-delegation-rules`(PR #115 の head。WP10を含むこと)。
@@ -826,7 +840,8 @@ ORDER BY r.id;
 ```
 
 - `grant_id` が全行 NULL(承認時に有効な付与が無い)なら、旧システムは8件を充当していない。8件は cutover の付与に充当される
-  (決定9-3a。作り直しが `usage_allocated` を導出する)。試し実行の「cutoverの付与への充当」の件数・日数(充当した消化記録・
+  (決定10-1。作り直しが `usage_allocated` を導出する。確定が付与より後なら確定時の規則 confirm、前なら付与時の規則 grant)。
+  試し実行の「未充当の充当」の規則ごとの件数・日数(充当した消化記録・
   充当できなかった件数と日数)で確かめる。
 - `grant_id` がある行は、その付与の承認時点の残数(付与日数 − それまでの `paid_leave.used`)を確かめて報告する(残数があれば旧システムの
   不具合として判断を仰ぐ)。

@@ -495,6 +495,13 @@
       値(`effectiveAt`・`queuedAt`)が正しい。ReadModelの同じ形の列(表で最初の`TIMESTAMP`でNOT NULL・既定値の指定が無いもの)を
       `DATETIME`に変えるマイグレーションを足す(ReadModelなので再生で正しい値に戻る)。本番の元の値が上書きされていた分は、意図した差
       (不具合の修正)とする。本番とリハーサルの`@@explicit_defaults_for_timestamp`と該当表の`SHOW CREATE TABLE`を確かめる。
+      (確認結果)リハーサルのDB(MySQL 8.0.46、`@@explicit_defaults_for_timestamp=1`)でも両表に自動更新句が付いていた。設定がONなら
+      作成時に付かないため、句はdumpの`CREATE TABLE`(本番で作成された定義)から来たと判断する。本番でも元の値は適用・送信・確認の
+      時刻に上書きされている見込みで、再生後のpayloadの値との差は意図した差とする。本番の`SHOW CREATE TABLE`は本番の試し実行の前に
+      サーバー上で確かめる(手順書)。
+   6. `attendance_punches.corrected_at`(リハーサル7回目): baselineでNULLの2行は、訂正済み(`attendance_punch.corrected`が2026-07-22
+      04:01:08にある)と削除済み(訂正イベントは無い)。現行のProjectorは訂正・削除の投影で`corrected_at`にイベントの発生日時を入れる。
+      2026-07-22時点の旧実装(gitの履歴より前)は入れていなかったとみて、再生後の値(イベントの発生日時)を正とし、意図した差とする。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
