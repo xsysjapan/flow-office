@@ -467,6 +467,23 @@
       本番とリハーサルのセッションのタイムゾーンが違うと読み書きで9時間ずれる(`meta_data`の文字列はずれない)。決定8-5の規則を
       改め、列と`meta_data`の差が1時間の整数倍(±2秒)ならタイムゾーンのずれとして`meta_data`を使う。リハーサルのMySQLは本番と
       同じタイムゾーンで動かす(手順書1章)。本番とリハーサルの`@@time_zone`をリハーサルで確かめる。
+10. **リハーサル7回目の差への対処**(2026-10-14):
+   1. 未充当の有給の充当(ユーザー決定。9-3aを置き換える): 先に使用(承認・確定)してから後で付与された場合は、**付与されたときに充当する**
+      のが正しい。現行の承認時の充当(論点17。足りない分は未充当)に加え、`paid_leave_account.grant_created`の記録時に、その利用者の
+      確定済み・未取消で未充当の残りがある消化記録へ、確定の古い順に、その付与の残りの範囲で充当する(Reactor。冪等。`usage_allocated`
+      を記録)。作り直しは同じ規則を過去に当てはめ、各`grant_created`の直後に`usage_allocated`を導出する(cutoverの日付による対象の
+      絞り込みはやめ、未充当はすべて対象。ユーザー決定)。付与の無い利用者の未充当はそのまま(付与されたときに充当される)。
+   2. 再生で毎回変わるid: `holiday_calendar_events`・`company_calendar_day_sources`の`id`をProjectorが`Str::uuid()`で採番している。
+      決定的なid(`uuid5`。祝日の行は取込元+`ics_uid`、日の出典は年+日付+出典の種別+`source_ref`+イベントのid)にする。
+   3. `users`: 旧版の正規化(`StoredEventHistoryNormalizer`)が旧来の作成イベントをSSO等のイベントに置き換えた際、`usage_start_date`等の
+      属性が落ちた。照合による補完(決定1)の`users`に、属性を設定するイベントがある項目(`usage_start_date`・`hire_date`・退職日・
+      タイムゾーン・自動付与の有無等)を加え、現在の行と違えば最後のイベントの直後にそのイベントを導出する。`source_type`は設定する
+      イベントが無く、イベントどおり`microsoft_entra`になる(実際にSSOで使っている利用者であり、意図した差とする)。
+   4. 意図した差・リハーサルの準備による差として扱うもの: `attendance_days`(休暇値・source・全休の状態・`locked_at`の廃止)、消化記録の
+      表(確定・`usage_id`・勤怠日との紐付けの廃止)、新設14表、旧版の正規化が直接書いた行の日時(`attendance_months`・
+      `attendance_locks`・`entity_shares`・`workflow_request_history_entries`。再生はイベントの日時に戻す)、リハーサルで空にした認証系の
+      表(`authentication_keys`・`device_admin_sessions`と、その外部キーで`attendance_punches.authentication_key_id`がNULLになった行)、
+      端末のハートビートの値(`devices.app_version`・`last_seen_at`。イベントを経ない運用の値で、次のハートビートで戻る)。
 5. **復元可否の検査**: 作り直し後の全イベントが現行のクラスへ復元できること(実装済み、f6fdf27)。
 6. **ReadModelの照合**: 作り直し前のDBと、作り直し後に全ReadModelを空にして再生したDBとで、Projectorの書き込み先の全テーブルの
    件数と行の内容(`created_at`・`updated_at`・`stored_events.id`を指す列を除く)のハッシュを比べる出力を用意する
