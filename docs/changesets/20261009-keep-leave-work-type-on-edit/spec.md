@@ -1119,3 +1119,18 @@
 - (ユーザー回答)未充当の2人(a25525ea-3b4e…の4件・3.5日、3b62…の2件・2日)は実際に付与を受けていない。未充当のまま正しい
   (付与なしで承認された有給。承認は残数不足で拒否しない)。今後この2人に付与されたとき、決定10-1により付与の記録時にこの5.5日が
   その付与から差し引かれる。未決1は解消。未決2は決定10-7で解消(照合の修正)。
+
+### 9回目(2026-10-14、b7bee2a相当)
+
+- 試し実行: 解消していない差0件、導出で解消した差3件(No.1・2・5)。verifyで2,868件を2回再生し、指紋が一致(`6719b26b…f45e15`。再現性の確認)。
+  所属2件は両方の再生でイベントの値。B01/B02・申請状態・月次の状態は一致。sourceは2,800件のまま(swap・ロールバックの訓練は未実施)。
+- イベント数の説明(全件): 2,800件 → 2,884件(+84)= 照合の導出52(group_type 7・field_authority 10・usage_start_date 1・group 4・
+  role 6・暦の年 1・permissions 3・role_assignment 4・feature 15・暦の既定 1)+勤怠日の`created`補完17+有給+10(`usage_confirmed`8・
+  `usage_allocated`2)+特別休暇+2(`usage_designated`8→10)+代休+3(`usage_confirmed`)。再生2,868件=2,884−`export.created`16(Projectorなし)。
+- 日時の差(`UNIX_TIMESTAMP`で−32,400秒): `attendance_months.submitted_at`・`approved_at`、`entity_shares.shared_at`、`attendance_locks`。
+  旧版の正規化(`StoredEventHistoryNormalizer`の勤怠の提出・承認の整列)が`stored_events.created_at`列の値(セッションのタイムゾーンで
+  読んだJSTの文字列)をReadModelへ直接書いていた。アプリの他の日時はUTCの文字列なので、元の値が9時間進んでおり、再生(metaの
+  UTCの文字列)が正しい。決定10-4の「旧版の正規化が直接書いた行の日時」に当たる意図した差。
+- 未分類(明細待ち): 日の出典の日時差57件、ワークフロー履歴2件、勤怠日18件(source・status・work_type)、代休の消化3件、
+  ReadModel 36表の差の分類。
+- 認証系の行の再出現: 検証DBは機密として扱う(8回目と同じ。イベントは消さない)。
