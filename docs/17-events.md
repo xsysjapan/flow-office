@@ -9,10 +9,14 @@
 ## User
 
 - `user.logged_in`
-- `user.synced_from_ms365`
+- `user.synced_from_ms365` (payloadの`externalTenantId`: 記録時のシステム設定のEntra テナントID。null可。
+  旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
 - `user.onboarded_as_admin` (初回オンボーディング(UC-000)での管理者作成。payloadの
   `auth_method`が`sso`(実際のEntra IDログイン結果で作成、ExternalIdentityリンク済み)か
-  `local`(ローカルパスワードで作成)かを区別する)
+  `local`(ローカルパスワードで作成)かを区別する。`externalTenantId`は`sso`のときの記録時のEntra テナントID。
+  null可。旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
+- `user.created_from_sso_login` (UC-001 Microsoft SSOログインで、既存ユーザーに一致しない初回ログインの社員ユーザー作成。
+  payloadの`externalTenantId`は記録時のEntra テナントID。null可。旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
 - `user.hire_date_set` (UC-P002 有給を自動付与する: 継続勤務期間の基準日を設定する)
 - `user.paid_leave_auto_grant_enabled_set` (有給の自動付与をユーザーごとに有効/無効化する。
   docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
@@ -20,7 +24,8 @@
   同上)
 - `user.termination_date_set` (退社日を設定または解除する)
 - `user.sso_account_linked` (UC-004 ローカルパスワードユーザーが任意のタイミングで
-  Microsoft 365アカウントを紐づける)
+  Microsoft 365アカウントを紐づける。payloadの`externalTenantId`は記録時のEntra テナントID。null可。
+  旧イベントには無く、Projectorは再生時の設定値を読む。論点19 決定9)
 - `external_identity.linked`
 - `external_identity.unlinked`
 - `user.field_authority_changed`

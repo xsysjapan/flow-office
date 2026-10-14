@@ -294,6 +294,14 @@ final class RebuildLeaveEventStoreCommand extends Command
             $this->line("補った要素: {$refs['filled']} 件 / 補えなかった要素(対応する日の行が無い): {$refs['unresolved']} 件 / 既に揃っていた要素: {$refs['already_complete']} 件 / 置き換えたイベント: {$refs['events']} 件");
         }
 
+        if (isset($report['external_tenant_id'])) {
+            $tenant = $report['external_tenant_id'];
+            $this->info('Entra外部IDの旧イベントへの externalTenantId の補完(論点19 決定9)');
+            $this->line("前提の検査: {$tenant['mode']}(checked=設定と一致を検査 / row_only=設定が空のため行の値のみで補完 / no_rows=行が無い / not_checked=照合なし) / 行のテナントID: ".($tenant['tenant'] ?? '-'));
+            $filledLines = array_map(fn (string $class, int $n) => "{$class}: {$n} 件", array_keys($tenant['filled']), array_values($tenant['filled']));
+            $this->line('補った件数: '.$tenant['filled_total'].' 件'.($filledLines === [] ? '' : ' ('.implode(' / ', $filledLines).')')." / 行が無く補わなかった: {$tenant['no_row']} 件 / 行の tenant が null で補わなかった: {$tenant['null_tenant']} 件 / 既に記録済み: {$tenant['already_complete']} 件");
+        }
+
         if (isset($report['reconcile'])) {
             $reconcile = $report['reconcile'];
             $this->info('照合による補完(イベントを経ずに作られた行・最終状態がずれた行の差を埋める導出イベント)');

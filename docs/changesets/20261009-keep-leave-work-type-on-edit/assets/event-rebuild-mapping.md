@@ -225,3 +225,24 @@
 - **所属(`memberships`)**: 在籍・kind・isPrimaryが違うときだけ差にし、`membership.added`を導出する(導出の操作者は行の`created_by`)。
   `created_by`だけが違う所属は差にも導出にもしない(旧版の正規化が行を直接書いた意図した差。論点19 決定10-7)。
 - **その他**: 利用者の属性・権限・グループ・暦の既定・外部ID等は、差の列ごとに理由を書き、導出したイベントを併記する。
+
+## 10. 旧イベントへの externalTenantId の補完(論点19 決定9)
+
+Entra IDの外部ID(`external_identities`)の`external_tenant_id`は、旧イベントでは再生時の`system_settings.m365_tenant_id`を
+Projectorが読んで書いていた。イベントだけで再現できないため、次の規則で作り直しの中で補う(`ExternalTenantIdRebuilder`)。
+
+- **対象**: `user.onboarded_as_admin`・`user.created_from_sso_login`・`user.synced_from_ms365`・`user.sso_account_linked`のうち、
+  payloadに`externalTenantId`のキーが無いもの(旧イベント)。`entraUserId`が無いもの(ローカルの管理者作成)は対象外。
+- **補う値**: 現在の`external_identities`の行(`provider` = `MICROSOFT_ENTRA`、`external_subject_id` = イベントの`entraUserId`)の
+  `external_tenant_id`。行のテナントIDは、リンクの投影(その時点の設定値、またはイベントの値)でしか書かれないため、リンク時点の値である。
+- **前提の検査(満たさなければ止めて報告。推測で埋めない)**:
+  1. 現在のMICROSOFT_ENTRAの行の`external_tenant_id`は、null以外で1種類であること(行がある場合)。
+  2. 設定値(`system_settings.m365_tenant_id`)がnullでないときは、行のテナントIDと一致すること(大文字小文字は区別しない)。
+     設定値がnullのときは一致を検査せず、行の値のみで補完する(試し実行のレポートに「設定が空のため行の値のみで補完」と出す。
+     リハーサルのsourceは設定がNULLだったため)。
+- **補わないもの(payloadをそのまま残す。Projectorは再生時に設定値を読む)**: 行が無いイベント(件数を報告)、行の`external_tenant_id`が
+  nullのイベント(件数を報告)、既にキーのあるイベント(新しい記録。件数を報告)。
+- **置き方**: 元の行の位置(anchor・subOrder 0)に、payloadへ`externalTenantId`を足した行を置き、元の行を消す(発生日時・版は元の行のまま)。
+- **報告**: 試し実行のレポート(`leave:rebuild-event-store`)に「前提の検査(checked / row_only / no_rows)・行のテナントID・
+  イベント種別ごとの補った件数・行が無く補わなかった件数・tenantがnullで補わなかった件数・既に記録済みの件数」を出す。
+- **確認**: 補った後の行を`EventRestorabilityChecker::checkRows`で現行のイベントクラスへ復元できること(`--apply`の検査でも行う)。

@@ -31,21 +31,22 @@ class UserAggregate extends AggregateRoot
         return $this;
     }
 
-    public function onboardAsAdmin(?string $entraUserId, string $name, ?string $email, string $authMethod): self
+    public function onboardAsAdmin(?string $entraUserId, string $name, ?string $email, string $authMethod, ?string $externalTenantId = null): self
     {
         $this->recordThat(new UserOnboardedAsAdmin(
             entraUserId: $entraUserId,
             name: $name,
             email: $email,
             authMethod: $authMethod,
+            externalTenantId: $externalTenantId,
         ));
 
         return $this;
     }
 
-    public function createFromSsoLogin(string $entraUserId, string $name, string $email): self
+    public function createFromSsoLogin(string $entraUserId, string $name, string $email, ?string $externalTenantId = null): self
     {
-        $this->recordThat(new UserCreatedFromSsoLogin(entraUserId: $entraUserId, name: $name, email: $email));
+        $this->recordThat(new UserCreatedFromSsoLogin(entraUserId: $entraUserId, name: $name, email: $email, externalTenantId: $externalTenantId));
 
         return $this;
     }
@@ -57,6 +58,7 @@ class UserAggregate extends AggregateRoot
         ?string $department,
         ?string $jobTitle,
         string $employmentStatus,
+        ?string $externalTenantId = null,
     ): self {
         $this->recordThat(new UserSyncedFromMs365(
             entraUserId: $entraUserId,
@@ -65,14 +67,15 @@ class UserAggregate extends AggregateRoot
             department: $department,
             jobTitle: $jobTitle,
             employmentStatus: $employmentStatus,
+            externalTenantId: $externalTenantId,
         ));
 
         return $this;
     }
 
-    public function linkSsoAccount(string $entraUserId): self
+    public function linkSsoAccount(string $entraUserId, ?string $externalTenantId = null): self
     {
-        $this->recordThat(new UserSsoAccountLinked(entraUserId: $entraUserId));
+        $this->recordThat(new UserSsoAccountLinked(entraUserId: $entraUserId, externalTenantId: $externalTenantId));
 
         return $this;
     }

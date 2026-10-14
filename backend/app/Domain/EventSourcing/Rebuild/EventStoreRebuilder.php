@@ -92,6 +92,7 @@ final class EventStoreRebuilder
         private readonly PaidLeaveScheduleRebuilder $schedule = new PaidLeaveScheduleRebuilder,
         private readonly SeededDataReconciler $seededReconciler = new SeededDataReconciler,
         private readonly HolidayCalendarDayRefRebuilder $holidayDayRefs = new HolidayCalendarDayRefRebuilder,
+        private readonly ExternalTenantIdRebuilder $externalTenants = new ExternalTenantIdRebuilder,
         private readonly UnallocatedUsageAllocator $usageAllocator = new UnallocatedUsageAllocator,
     ) {}
 
@@ -421,6 +422,20 @@ final class EventStoreRebuilder
             ];
         }
 
+        // Entra IDの外部IDを投影する旧イベントへ externalTenantId を補う(論点19 決定9)。現在の external_identities の行を入力にする。
+        $externalTenantSummary = ['filled' => [], 'filled_total' => 0, 'no_row' => 0, 'null_tenant' => 0, 'already_complete' => 0, 'mode' => 'not_checked', 'tenant' => null, 'issues' => 0];
+        if ($seeded !== null) {
+            $tenantRebuild = $this->externalTenants->rebuild($rows, $seeded->externalIdentities, $seeded->m365TenantId);
+            foreach ($tenantRebuild->issues as $issue) {
+                $unsupported[] = $this->issue($issue['key'], $issue['reason']);
+            }
+            array_push($converted, ...$tenantRebuild->events);
+            foreach ($tenantRebuild->consumedIds as $id) {
+                $consumed[$id] = true;
+            }
+            $externalTenantSummary = $tenantRebuild->report();
+        }
+
         // 照合による補完(論点19 決定1)。イベントを経ずに作られた行・イベントの最終状態とずれた行の差を埋める導出イベント。
         $reconcileSummary = ['derived' => [], 'resolved' => [], 'unresolved' => [], 'remapped' => []];
         if ($seeded !== null) {
@@ -449,6 +464,7 @@ final class EventStoreRebuilder
 
         $report = [
             'holiday_calendar_day_refs' => $holidayRefs->report(),
+            'external_tenant_id' => $externalTenantSummary,
             'reconcile' => $reconcileSummary,
             'paid_leave_schedule' => $scheduleSummary,
             'by_class_before' => $byClassBefore,

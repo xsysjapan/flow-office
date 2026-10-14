@@ -210,6 +210,8 @@ final class EventStoreRebuildWriter
             ),
             defaultTimezone: Schema::hasTable('system_settings') && Schema::hasColumn('system_settings', 'default_timezone')
                 ? (($tz = DB::table('system_settings')->value('default_timezone')) !== null ? (string) $tz : null) : null,
+            m365TenantId: Schema::hasTable('system_settings') && Schema::hasColumn('system_settings', 'm365_tenant_id')
+                ? (($tenant = DB::table('system_settings')->value('m365_tenant_id')) !== null && $tenant !== '' ? (string) $tenant : null) : null,
         );
     }
 

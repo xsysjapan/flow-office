@@ -25,6 +25,7 @@ final readonly class SeededDataCurrent
      * @param  list<array<string, mixed>>  $calendarYears
      * @param  list<array<string, mixed>>  $calendarDays
      * @param  ?string  $defaultTimezone  system_settings.default_timezone(作成系イベントが users.timezone に書く既定値。論点19 決定10-3)
+     * @param  ?string  $m365TenantId  system_settings.m365_tenant_id(旧イベントへの externalTenantId の補完の前提の検査に使う。論点19 決定9)
      */
     public function __construct(
         public array $groupTypes = [],
@@ -43,5 +44,6 @@ final readonly class SeededDataCurrent
         public array $calendarDays = [],
         public array $companyCalendars = [],
         public ?string $defaultTimezone = null,
+        public ?string $m365TenantId = null,
     ) {}
 }

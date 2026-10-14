@@ -10,6 +10,7 @@ use App\Domain\UserManagement\Graph\MicrosoftGraphClient;
 use App\Domain\UserManagement\Graph\MicrosoftGraphUser;
 use App\Domain\UserManagement\Services\FieldAuthorityService;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -61,6 +62,7 @@ class SyncUsersFromMs365Handler implements CommandHandler
                 department: $this->fieldAuthorities->isExternalHr('department') && $user ? $user->department : $graphUser->department,
                 jobTitle: $this->fieldAuthorities->isExternalHr('job_title') && $user ? $user->job_title : $graphUser->jobTitle,
                 employmentStatus: $this->fieldAuthorities->isExternalHr('employment_status') && $user ? $user->employment_status : $graphUser->employmentStatus(),
+                externalTenantId: SystemSetting::current()->m365_tenant_id,
             )
             ->persist();
 
