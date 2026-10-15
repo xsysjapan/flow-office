@@ -32,7 +32,7 @@ class HolidayCalendarSynchronizer
     /**
      * @return array{
      *     event_changes: list<array{ics_uid: string, date: string, name: string, action: string}>,
-     *     day_changes: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>,
+     *     day_changes: list<array{company_calendar_day_id: int, companyCalendarYearId: string, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>,
      *     protected_conflicts: list<array{company_calendar_day_id: int, date: string}>,
      * }
      *
@@ -167,7 +167,7 @@ class HolidayCalendarSynchronizer
     /**
      * @param  array<string, array{date: string, name: string}>  $feedEvents
      * @param  list<array{ics_uid: string, date: string, name: string, action: string}>  $eventChanges
-     * @return array{0: list<array{company_calendar_day_id: int, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
+     * @return array{0: list<array{company_calendar_day_id: int, companyCalendarYearId: string, date: string, is_public_holiday: bool, public_holiday_name: ?string, previous_is_public_holiday: bool, previous_public_holiday_name: ?string}>, 1: list<array{company_calendar_day_id: int, date: string}>}
      */
     private function planDayChanges(HolidayCalendarSource $source, array $feedEvents, array $eventChanges, ?string $scopeCompanyCalendarYearId = null): array
     {
@@ -231,6 +231,8 @@ class HolidayCalendarSynchronizer
                 $isPublicHoliday = array_key_exists($date, $activeEventByDate);
                 $dayChanges[] = [
                     'company_calendar_day_id' => $day->id,
+                    // 日の自動採番idは再生で変わるため、年のidと日付でも日を特定できるようにする。
+                    'companyCalendarYearId' => $year->id,
                     'date' => $date,
                     'is_public_holiday' => $isPublicHoliday,
                     'public_holiday_name' => $isPublicHoliday ? $activeEventByDate[$date] : null,

@@ -11,6 +11,6 @@ class SpecialLeaveAutoGrantEnabledSet extends ShouldBeStored
 {
     public function __construct(
         public readonly bool $enabled,
-        public readonly string $changedByUserId,
+        public readonly ?string $changedByUserId,
     ) {}
 }

@@ -18,6 +18,7 @@ import {
 import { cn } from '../../lib/utils'
 import { formatDate } from '../../utils/weekDates'
 import { isoToTimeLiteral } from '../../utils/offsetDateTime'
+import { isFullDayLeave } from '../../utils/attendanceLeaves'
 import { attendanceDayDisplayLabel } from '../../utils/statusLabels'
 import type { AttendanceDay, FlexSettlementSummary } from '../../api/types'
 
@@ -91,7 +92,8 @@ function elapsedWorkedMinutes(day: AttendanceDay, now: Date): number | null {
 function statusDescription(day: AttendanceDay, now: Date): ReactNode {
   switch (day.status) {
     case 'not_started':
-      return 'まだ出勤していません'
+      // 全休の日は出勤しない休暇日のため、未出勤ではなく休暇である旨を表示する。
+      return isFullDayLeave(day.leaves) ? '本日は休暇(全休)です' : 'まだ出勤していません'
     case 'working': {
       const minutes = elapsedWorkedMinutes(day, now)
       return (
@@ -256,7 +258,8 @@ export function TodayAttendancePanel() {
             )}
 
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-              {day.status === 'not_started' && (
+              {/* 全休の日は出勤しない(バックエンドも出勤を422で拒否する)ため出勤ボタンを出さない。 */}
+              {day.status === 'not_started' && !isFullDayLeave(day.leaves) && (
                 <Button onClick={() => clockIn.mutate()} isLoading={clockIn.isPending}>
                   出勤
                 </Button>

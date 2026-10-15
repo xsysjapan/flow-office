@@ -433,7 +433,6 @@ Route::middleware(['auth:sanctum', 'account.active', 'feature.route'])->group(fu
         Route::post('/paid-leave/grants', [PaidLeaveController::class, 'grant']);
         Route::post('/paid-leave/grants/{grant}/revoke', [PaidLeaveController::class, 'revoke']);
         Route::post('/paid-leave/requests/{paidLeaveRequest}/admin-cancel', [PaidLeaveController::class, 'adminCancelRequest']);
-        Route::post('/paid-leave/migrate', [PaidLeaveController::class, 'migrate']);
         Route::put('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'updateRule']);
         Route::delete('/paid-leave/grant-rules/{rule}', [PaidLeaveController::class, 'destroyRule']);
         Route::post('/paid-leave/grant-policies', [PaidLeaveController::class, 'storeGrantPolicy']);

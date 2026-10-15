@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -134,6 +135,39 @@ class WorkflowRequestRejectTest extends TestCase
 
         $this->expectException(DomainRuleException::class);
         $this->bus()->dispatch(new RejectWorkflowRequest($id, $approver->id, '理由'));
+    }
+
+    public function test_a_request_linked_to_a_business_subject_cannot_be_rejected(): void
+    {
+        $applicant = User::factory()->create();
+        $approver = User::factory()->create();
+
+        // 業務側(subject_type)を持つ申請。このテストでは業務側のReactorが連鎖しない種別名を使う。
+        $draft = $this->bus()->dispatch(new DraftWorkflowRequest(
+            requestTypeCode: null,
+            applicantUserId: $applicant->id,
+            title: '業務連携申請',
+            formData: [],
+            approverUserId: $approver->id,
+            subjectType: 'test_business_subject',
+            subjectId: (string) Str::uuid(),
+        ));
+
+        $this->bus()->dispatch(new SubmitWorkflowRequest(
+            workflowRequestId: $draft->id,
+            submittedByUserId: $applicant->id,
+            approverUserId: $approver->id,
+        ));
+
+        try {
+            $this->bus()->dispatch(new RejectWorkflowRequest($draft->id, $approver->id, '理由'));
+            $this->fail('業務側を持つ申請の却下は DomainRuleException になるべき');
+        } catch (DomainRuleException $e) {
+            $this->assertSame('業務と連携した申請は却下できません。差戻しを使ってください。', $e->getMessage());
+        }
+
+        // 失敗時は状態が変わらない(提出済みのまま)。
+        $this->assertSame(WorkflowRequestStatus::SUBMITTED, WorkflowRequest::query()->findOrFail($draft->id)->status);
     }
 
     public function test_history_records_the_rejection_with_reason(): void

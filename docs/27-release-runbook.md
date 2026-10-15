@@ -111,6 +111,41 @@ MICROSOFT_MOCK_ENABLED=false   # 本番では設定しない(Entra ID資格情�
 .env変更後に再実行し忘れると古いキャッシュのまま動き、原因が分かりにくい不具合になる
 (疑わしい挙動が出たら`config:clear && route:clear && view:clear`で一旦切り分ける)。
 
+### 3.1 休暇まわりの連携変更(変更セット `20261009-keep-leave-work-type-on-edit`)のリリース手順
+
+休暇の申請・残数・勤怠を文脈間のイベント連携に切り替えたリリース。既存データは移行コマンドではなく、
+`stored_events`の作り直しで新しいイベント構成に変換して引き継ぐ(変更セット論点18。変換規則と実行手順は
+`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md` 7章)。移行イベント・移行コマンド・
+補正イベントは作らない。作り直しは本番での実行の前に、変更セットのリハーサル手順書(`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/rehearsal-checklist.md`)の手順で複製DBに対して行い、
+試し実行の結果を確認する。以下の順序で行う。
+
+1. 事前条件の確認(試し実行で自動確認): 作り直しの表`stored_events_rebuilt`が存在しないこと、補正ログ`stored_event_corrections`が空であること、
+   本番に新しい種類の休暇申請イベント(`paid_leave_request.*`)が無いこと。違反があれば`--apply`は拒否される。
+2. 休暇の申請・承認・付与取消の操作を止める(メンテナンス窓)。書き込みの停止(メンテナンスモード、スケジューラ・キューワーカーの停止、
+   打刻端末・API・MCPの受付停止)は作り直しの前に行う。
+3. 作り直しの前に、DB全体のバックアップと、全ReadModelのテーブルのバックアップを取る(ロールバックに使う)。
+4. 試し実行: `php artisan leave:rebuild-event-store`。件数・申請の最終状態・cutoverの突き合わせ結果を確認する。
+   扱えない並びが1件でもあれば失敗する(推測で埋めない。変換規則を決めてから再実行する)。
+5. 作り直しを書く: `php artisan leave:rebuild-event-store --apply`(`stored_events_rebuilt`に書き、自己整合性を検査する)。
+   検査だけを再度行う場合は`--verify`。
+6. 複製DBで検証する。本番DBを複製し、複製に対して`--apply`・`--swap`を行い、全ReadModelを空にして全Projectorを
+   `event-sourcing:replay`した結果を、本番の作り直し前のReadModelと比較する。差分が意図した差(差し戻された休暇の消化記録の取消、
+   休暇値の削除等)だけであることを確認する。
+7. 本番で入れ替える: `php artisan leave:rebuild-event-store --swap`。元の表は`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残る。
+8. 旧系統を削除した新しいコードを配備し、`php artisan migrate --force`を実行する(マイグレーション`2026_10_10_000001`〜`000009`・
+   `2026_10_11_000001`)。新しいコードは旧イベントを読めないため、7の後は新しいコードを配備するまで休暇を操作させない。
+9. ReadModelを作り直す: `php artisan leave:rebuild-event-store --list-readmodels`で出るテーブルを空にしてから、
+   `php artisan event-sourcing:replay`で全Projectorを再生成する(Projectorは既存の状態を消さない前提のため、必ず空にしてから実行する)。
+10. 日次計算を再計算する: `php artisan attendance:recalculate-days --from=... --to=...`(既定は試し実行。一覧で値が変わる日を確認し、
+    `--apply`で記録する)。締め・提出済みの月の日も対象に含め、一覧に印を付ける。月次スナップショットは変えない。
+    値が変わる日と締め・提出済みの月のスナップショットとの差は、リハーサルで確認した方針に従う。
+11. 書き込みを再開する(メンテナンス窓の終了)。再開後に、休暇まわりの画面で差戻し・再申請・取消・休暇日の勤怠表示を確認する
+    (7章の疎通確認に加える)。
+
+- ロールバック: 7までに問題があれば、`RENAME TABLE stored_events TO stored_events_rebuilt_失敗時刻, stored_events_before_rebuild_YYYYMMDDHHMMSS TO stored_events`
+  で表を元に戻し、ReadModelを3の方法で取ったバックアップから戻し、旧コードを再配備する。新しいコードは旧イベントを読めないため、
+  表とコードは同時に戻す。8以降の問題は、DB全体のバックアップからの復元を検討する(ユーザーの判断)。
+
 ## 4. frontend/ のデプロイ手順
 
 ```

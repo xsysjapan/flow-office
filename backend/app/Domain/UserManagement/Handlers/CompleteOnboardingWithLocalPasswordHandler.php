@@ -11,6 +11,7 @@ use App\Domain\UserManagement\Services\OnboardingAccessInitializer;
 use App\Domain\UserManagement\Services\StandardGroupMembershipRecorder;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\UserCredential;
 use Illuminate\Support\Str;
 
 /**
@@ -50,10 +51,9 @@ class CompleteOnboardingWithLocalPasswordHandler implements CommandHandler
         $this->standardMemberships->add($userId, ['ALL_USERS', 'SYSTEM_ADMINISTRATORS'], $userId);
 
         // パスワードは平文を永続イベントログに残さないため、イベントには含めず
-        // Projectorが作成した行に対して直接設定する(docs/29-event-sourcing-framework-migration.md参照)。
+        // 専用の表user_credentialsへ直接保存する(Projectorの書き込み先ではない正データ)。
+        UserCredential::query()->updateOrCreate(['user_id' => $userId], ['password' => $command->adminPassword]);
         $user = User::query()->findOrFail($userId);
-        $user->password = $command->adminPassword;
-        $user->save();
 
         return $user;
     }

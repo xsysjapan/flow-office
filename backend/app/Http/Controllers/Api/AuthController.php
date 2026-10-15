@@ -180,7 +180,8 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $data['email'])->first();
 
-        if ($user === null || $user->password === null || ! Hash::check($data['password'], $user->password)) {
+        $hash = $user?->getAuthPassword();
+        if ($user === null || $hash === null || ! Hash::check($data['password'], $hash)) {
             return response()->json(['message' => 'メールアドレスまたはパスワードが正しくありません。'], 422);
         }
         if (! in_array($user->account_status, ['active', 'leave'], true)) {

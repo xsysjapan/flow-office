@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use App\Domain\Attendance\Services\LegalHolidayRequirementChecker;
 use App\Domain\Attendance\Services\WeeklyOvertimeCalculator;
 use App\Models\AttendanceDay;
-use App\Models\CompensatoryLeaveGrant;
+use App\Models\CompensatoryGrantDayView;
 use App\Models\DayClassification;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -51,7 +51,8 @@ class AttendanceMonthResource extends JsonResource
      */
     private function compensatoryLeaveWarnings(): array
     {
-        $usedGrants = CompensatoryLeaveGrant::query()
+        // 代休の付与は勤怠側の付与ビュー(代休口座のイベントから作る)を読む。付与テーブル(口座の派生データ)は読まない。
+        $usedGrants = CompensatoryGrantDayView::query()
             ->where('user_id', $this->user_id)
             ->where('work_date', 'like', "{$this->year_month}%")
             ->where(fn ($q) => $q->where('used_days', '>', 0)->orWhere('used_minutes', '>', 0))
@@ -62,21 +63,23 @@ class AttendanceMonthResource extends JsonResource
         }
 
         $attendanceDays = AttendanceDay::query()
-            ->whereIn('id', $usedGrants->pluck('attendance_day_id'))
+            ->where('user_id', $this->user_id)
+            ->whereIn('work_date', $usedGrants->map(fn ($grant) => $grant->work_date->toDateString())->unique()->values()->all())
             ->get()
-            ->keyBy('id');
+            ->keyBy(fn (AttendanceDay $day) => $day->work_date->toDateString());
 
         $warnings = [];
 
         foreach ($usedGrants as $grant) {
+            $date = $grant->work_date->toDateString();
             /** @var Collection<string, AttendanceDay> $attendanceDays */
-            $day = $attendanceDays->get($grant->attendance_day_id);
+            $day = $attendanceDays->get($date);
 
             $stillHolidayWork = $day !== null
                 && in_array($day->day_classification, [DayClassification::PRESCRIBED_HOLIDAY, DayClassification::LEGAL_HOLIDAY], true);
 
             if (! $stillHolidayWork) {
-                $warnings[] = "{$grant->work_date->toDateString()} の休日出勤の実績が取り消されたため、既に使用した代休との整合性を確認してください。";
+                $warnings[] = "{$date} の休日出勤の実績が取り消されたため、既に使用した代休との整合性を確認してください。";
             }
         }
 

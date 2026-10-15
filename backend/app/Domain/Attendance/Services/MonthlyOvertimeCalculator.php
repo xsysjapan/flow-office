@@ -2,11 +2,14 @@
 
 namespace App\Domain\Attendance\Services;
 
+use App\Domain\Attendance\Support\AttendanceDayLeaves;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
+use App\Models\AttendanceDayLeave;
 use App\Models\DayClassification;
 use App\Models\PaidLeaveType;
-use App\Models\SpecialLeaveUsage;
+use App\Models\SpecialLeaveType;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -34,7 +37,10 @@ class MonthlyOvertimeCalculator
 {
     private const MONTHLY_STATUTORY_LIMIT_MINUTES = 3600; // 労基法37条: 月60時間
 
-    public function __construct(private readonly WeeklyOvertimeCalculator $weeklyOvertimeCalculator) {}
+    public function __construct(
+        private readonly WeeklyOvertimeCalculator $weeklyOvertimeCalculator,
+        private readonly AttendanceDayLeaves $attendanceDayLeaves,
+    ) {}
 
     /**
      * @return array{cumulative_statutory_excess_overtime_minutes: int, statutory_excess_overtime_within_60h_minutes: int, statutory_excess_overtime_over_60h_minutes: int}
@@ -185,48 +191,52 @@ class MonthlyOvertimeCalculator
     }
 
     /**
-     * 対象月の特別休暇消化を`special_leave_type_id`ごとに内訳集計する(月次確認画面向け)。
-     * `calculateCategoryTotals`の`special_leave_days`/`special_leave_minutes`(単一合計)と
-     * 整合するよう、日数は全休・半休相当(`usage_type`がHOURLY以外)の`used_days`の合算、
-     * 時間は時間単位(`usage_type`がHOURLY)の`used_minutes`の合算とする(1件の特別休暇申請が
-     * 失効日の異なる複数`special_leave_grant`にまたがっても、`used_days`/`used_minutes`の
-     * 合計は`AttendanceCalculator`が日次計算する`special_leave_days`/`special_leave_minutes`と
-     * 一致する。SpecialLeaveUsage/SpecialLeaveGrant参照)。
+     * 対象月の特別休暇を`special_leave_type_id`ごとに内訳集計する(月次確認画面向け)。
+     * 入力は勤怠の休暇ビュー(attendance_day_leaves)の特別休暇のうち承認済み(request_status=approved)の行。
+     * 現行と同じく承認済みだけを集計する(申請中は含めない。日次計算のtotalsは申請中も含むため両者は一致しない)。
+     * 日数は全休=1.0・半休=0.5(時間単位以外)、時間は時間単位(hourly)の分数の合計とする
+     * (AttendanceCalculatorの休暇入力(LeaveCalculationInput)と同じ値)。
      *
-     * @return list<array{special_leave_type_id: int|null, special_leave_type_name: string|null, days: float, minutes: int}>
+     * @return list<array{special_leave_type_id: int, special_leave_type_name: string|null, days: float, minutes: int}>
      */
     public function calculateSpecialLeaveBreakdown(string $userId, string $yearMonth): array
     {
-        $usages = SpecialLeaveUsage::query()
-            ->where('user_id', $userId)
-            ->where('used_on', 'like', "{$yearMonth}%")
-            ->with(['grant.specialLeaveType', 'request.specialLeaveType'])
-            ->get();
+        $periodStart = Carbon::parse("{$yearMonth}-01")->startOfMonth();
 
-        return $usages
-            ->filter(fn (SpecialLeaveUsage $usage) => $this->specialLeaveTypeId($usage) !== null)
-            ->groupBy(fn (SpecialLeaveUsage $usage) => $this->specialLeaveTypeId($usage))
-            ->map(function ($usagesForType) {
-                $firstUsage = $usagesForType->first();
+        $leaves = collect($this->attendanceDayLeaves->activeForRange(
+            $userId,
+            $periodStart->toDateString(),
+            $periodStart->copy()->endOfMonth()->toDateString(),
+        ))->filter(fn (array $leave) => $leave['leave_kind'] === AttendanceDayLeave::KIND_SPECIAL
+            && $leave['special_leave_type_id'] !== null
+            && $leave['request_status'] === AttendanceDayLeave::STATUS_APPROVED);
+
+        $names = SpecialLeaveType::query()
+            ->whereIn('id', $leaves->pluck('special_leave_type_id')->unique()->values())
+            ->pluck('name', 'id');
+
+        return $leaves
+            ->groupBy(fn (array $leave) => (int) $leave['special_leave_type_id'])
+            ->map(function (Collection $leavesForType, int $typeId) use ($names): array {
+                $days = 0.0;
+                $minutes = 0;
+                foreach ($leavesForType as $leave) {
+                    if ($leave['unit'] === PaidLeaveType::HOURLY) {
+                        $minutes += (int) ($leave['minutes'] ?? 0);
+
+                        continue;
+                    }
+                    $days += $leave['unit'] === PaidLeaveType::FULL ? 1.0 : 0.5;
+                }
 
                 return [
-                    'special_leave_type_id' => $this->specialLeaveTypeId($firstUsage),
-                    'special_leave_type_name' => $this->specialLeaveTypeName($firstUsage),
-                    'days' => (float) $usagesForType->where('usage_type', '!=', PaidLeaveType::HOURLY)->sum('used_days'),
-                    'minutes' => (int) $usagesForType->where('usage_type', PaidLeaveType::HOURLY)->sum('used_minutes'),
+                    'special_leave_type_id' => $typeId,
+                    'special_leave_type_name' => $names[$typeId] ?? null,
+                    'days' => $days,
+                    'minutes' => $minutes,
                 ];
             })
             ->values()
             ->all();
-    }
-
-    private function specialLeaveTypeId(SpecialLeaveUsage $usage): ?int
-    {
-        return $usage->grant?->special_leave_type_id ?? $usage->request?->special_leave_type_id;
-    }
-
-    private function specialLeaveTypeName(SpecialLeaveUsage $usage): ?string
-    {
-        return $usage->grant?->specialLeaveType?->name ?? $usage->request?->specialLeaveType?->name;
     }
 }

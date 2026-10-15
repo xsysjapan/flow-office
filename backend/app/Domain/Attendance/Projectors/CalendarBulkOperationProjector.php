@@ -6,7 +6,6 @@ use App\Domain\Attendance\Events\CalendarBulkOperationApplied;
 use App\Domain\Attendance\Events\CalendarBulkOperationReverted;
 use App\Models\CalendarBulkOperation;
 use App\Models\CalendarBulkOperationTarget;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
@@ -19,7 +18,7 @@ class CalendarBulkOperationProjector extends Projector
     public function onCalendarBulkOperationApplied(CalendarBulkOperationApplied $event): void
     {
         $id = $event->aggregateRootUuid();
-        $appliedAt = Carbon::now();
+        $appliedAt = $event->createdAt();
 
         CalendarBulkOperation::query()->updateOrCreate(
             ['id' => $id],
@@ -52,7 +51,7 @@ class CalendarBulkOperationProjector extends Projector
     {
         CalendarBulkOperation::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => 'reverted',
-            'reverted_at' => Carbon::now(),
+            'reverted_at' => $event->createdAt(),
         ]);
     }
 }

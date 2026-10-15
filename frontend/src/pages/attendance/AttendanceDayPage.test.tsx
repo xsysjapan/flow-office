@@ -751,6 +751,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     const approvedSpecialLeaveRequest: SpecialLeaveRequest = {
@@ -768,6 +769,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     const approvedCompensatoryLeaveRequest: CompensatoryLeaveRequest = {
@@ -784,6 +786,7 @@ describe('AttendanceDayPage', () => {
       approved_at: '2026-07-02T00:00:00+09:00',
       returned_at: null,
       cancelled_at: null,
+      workflow_request_id: null,
     }
 
     it('does not show a cancel item when there is no approved leave on this day', async () => {
@@ -887,6 +890,7 @@ describe('AttendanceDayPage', () => {
         approved_at: null,
         returned_at: null,
         cancelled_at: null,
+        workflow_request_id: null,
       }
       vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest').mockResolvedValue(createdPaidLeaveRequest)
       vi.spyOn(usersApi, 'searchUsers').mockResolvedValue(approverSearchResult)
@@ -929,13 +933,28 @@ describe('AttendanceDayPage', () => {
         approved_at: '2026-07-02T00:00:00+09:00',
         returned_at: null,
         cancelled_at: null,
+        workflow_request_id: null,
       }
-      const paidLeaveDay: AttendanceDay = { ...recordedDay, work_type: 'paid_leave_full' }
+      const paidLeaveDay: AttendanceDay = {
+        ...recordedDay,
+        leaves: [
+          {
+            leave_kind: 'paid',
+            unit: 'full',
+            hours: null,
+            minutes: null,
+            special_leave_type_id: null,
+            request_id: approvedPaidLeaveRequest.id,
+            workflow_request_id: 'workflow-1',
+            request_status: 'approved',
+          },
+        ],
+      }
       vi.spyOn(attendanceApi, 'fetchPunches').mockResolvedValue([])
       vi.spyOn(paidLeaveApi, 'fetchMyPaidLeaveRequests').mockResolvedValue([approvedPaidLeaveRequest])
       vi.spyOn(specialLeaveApi, 'fetchMySpecialLeaveRequests').mockResolvedValue([])
       vi.spyOn(compensatoryLeaveApi, 'fetchMyCompensatoryLeaveRequests').mockResolvedValue([])
-      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, work_type: null })
+      vi.spyOn(attendanceApi, 'updateAttendanceDay').mockResolvedValue({ ...paidLeaveDay, leaves: [] })
       vi.spyOn(paidLeaveApi, 'cancelPaidLeaveRequest').mockResolvedValue({ ...approvedPaidLeaveRequest, status: 'cancelled' })
       const createPaidLeaveRequestSpy = vi.spyOn(paidLeaveApi, 'createPaidLeaveRequest')
       renderPage([paidLeaveDay])

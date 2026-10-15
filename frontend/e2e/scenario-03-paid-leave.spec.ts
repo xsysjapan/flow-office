@@ -129,8 +129,8 @@ test('終日有給を申請〜承認し、勤怠日に反映される', async ({
     await expect(approverPage.getByRole('status', { name: '承認済み' })).toBeVisible()
 
     // 勤怠週次画面で対象日が有給扱いになり、退勤していないのに「打刻漏れ」警告が
-    // 出ないことを確認する(UC-P004: attendance_days.work_type=paid_leave_full,
-    // status=clocked_out に反映される)。週次画面は当週始まりのため、対象日が含まれる
+    // 出ないことを確認する(UC-P004: 休暇ビュー(leaves)の全休として判定される。
+    // 勤怠日のstatusやwork_typeは休暇を表さない)。週次画面は当週始まりのため、対象日が含まれる
     // 週まで「次週」を押して移動する(週数は当週との差から算出する)。
     const weeksAhead = weeksBetweenMondays(new Date(), new Date(`${targetDate}T00:00:00`))
     await applicantPage.goto('/attendance/week')

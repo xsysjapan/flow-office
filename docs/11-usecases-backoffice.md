@@ -52,16 +52,16 @@
 
 経費精算(UC-B004参照)と同じく、月次勤怠も汎用申請(`workflow_requests`)経由ではなく
 勤怠ドメイン専用の承認フロー([7章 UC-A008〜UC-A010](./07-usecases-attendance.md))を
-持つため、バックオフィスタスクの自動作成は`attendance.month_approved`イベントを起点に行う
+持つため、バックオフィスタスクの自動作成は`attendance_month.approved`イベントを起点に行う
 (UC-B001の`workflow_requests`起点の自動作成とは別経路)。
 
-1. 月次勤怠が承認される(`attendance.month_approved`)
+1. 月次勤怠が承認される(`attendance_month.approved`)
 2. 人事部の未担当タスクとしてバックオフィスタスク(`task_type: attendance_month_confirmation`、
    `source_type: attendance_month`)を自動作成する
 3. 人事部担当者へ通知する
 4. 担当者が対象社員の月次勤怠実績を確認する
 5. タスク詳細画面から、対象社員・対象月を固定した給与計算用CSVまたはExcel勤怠管理表を出力する
-6. 問題がなければ対象月を締める(`attendance.month_closed`)。締め後は日次勤怠・打刻ログの
+6. 問題がなければ対象月を締める(`attendance_month.closed`)。締め後は日次勤怠・打刻ログの
    通常編集が一律ロックされ、修正が必要な場合は修正申請ワークフロー([10章](./10-usecases-workflow.md))
    を使う
 7. タスクを完了にする

@@ -28,6 +28,8 @@ class StoredEventHistoryNormalizerTest extends TestCase
             'created_at' => $registeredAt,
         ]);
         $this->seed([UserManagementSeeder::class, AccessControlSeeder::class]);
+        // シーダーはイベントを記録するが、このテストは「旧履歴(イベントを経ない行)」の状態から始めるため、記録されたイベントを消す。
+        DB::table('stored_events')->delete();
 
         $this->insertEvent($user->id, 1, 'user.migrated_from_legacy', [
             'attributes' => [

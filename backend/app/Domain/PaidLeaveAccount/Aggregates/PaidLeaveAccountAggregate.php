@@ -3,7 +3,6 @@
 namespace App\Domain\PaidLeaveAccount\Aggregates;
 
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
-use App\Domain\PaidLeaveAccount\Events\PaidLeaveAccountMigrated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantAmountChanged;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantCreated;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveGrantDateChanged;
@@ -16,6 +15,7 @@ use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageCancelled;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageConfirmed;
 use App\Domain\PaidLeaveAccount\Events\PaidLeaveUsageDesignated;
 use App\Domain\PaidLeaveAccount\Support\AllocationPlanner;
+use App\Domain\PaidLeaveAccount\Support\GrantTimeAllocationPlanner;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -31,11 +31,14 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
  * 4. Grant有効期限短縮はAllocation件数0のGrantのみ許可。
  * 5. Grant取消時は当該Grantの全Allocationを解除する(Usage自体は取消しない)。
  * 6. Allocationは`usedOn`基準で有効なGrantのみ対象(処理日・承認日は不使用)。
+ * 7'. 付与時の未充当の充当は`allocateUnallocatedOnGrant`(Reactorから呼ぶ。論点19 決定10-1)。
  * 7. 空き発生時は未充当Usageを`usedOn`昇順に自動Allocationする。既存Allocationは
  *    組み替えない(常に「残りの不足分」だけを追加充当する)。
+ *    残数が不足していても承認(`confirmUsage`)は拒否せず、充当できた分だけ充当し残りは未充当のまま残す
+ *    (docs/changesets/20261009-keep-leave-work-type-on-edit 論点17の改訂)。
  *
- * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>, originalGrantedOn?: ?string, originalGrantedDays?: ?float, cutoverMetadata?: ?array}
- * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int}
+ * @phpstan-type GrantState array{grantedOn: string, expiresOn: string, grantedDays: float, grantReason: ?string, source: string, revoked: bool, allocations: array<string, float>}
+ * @phpstan-type UsageState array{workflowRequestId: ?string, attendanceDayId: ?string, paidLeaveRequestId: ?string, usedOn: string, usedDays: float, confirmed: bool, cancelled: bool, allocations: array<string, float>, order: int, confirmOrder?: int}
  */
 class PaidLeaveAccountAggregate extends AggregateRoot
 {
@@ -46,6 +49,16 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     private array $usages = [];
 
     private int $usageSequence = 0;
+
+    private int $confirmSequence = 0;
+
+    /**
+     * 有給申請ID→最後に指定されたusageId(取消済みを含む)。`PaidLeaveUsageDesignated`の
+     * `paidLeaveRequestId`から構築する。
+     *
+     * @var array<string, string>
+     */
+    private array $usageIdByPaidLeaveRequestId = [];
 
     public function grant(
         string $grantId,
@@ -72,7 +85,48 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             source: $source,
         ));
 
-        $this->allocateUnallocatedUsages();
+        // 付与時の未充当の充当は、付与の記録を受けるReactorが allocateUnallocatedOnGrant() で行う(論点19 決定10-1)。
+
+        return $this;
+    }
+
+    /**
+     * 付与時の未充当の充当(論点19 決定10-1)。確定済み・未取消で充当が使用日数に足りない消化記録へ、確定の古い順に、
+     * 指定した付与の残りの範囲で充当する。付与の有効期間と消化記録の対象日の関係は問わない。
+     * 既に充当済みの消化記録・取消済みの消化記録は対象外。対象が無ければ何も記録しない(冪等)。
+     */
+    public function allocateUnallocatedOnGrant(string $grantId): self
+    {
+        $grant = $this->grants[$grantId] ?? null;
+
+        if ($grant === null || $grant['revoked']) {
+            return $this;
+        }
+
+        $pending = [];
+        foreach ($this->usages as $usageId => $usage) {
+            if (! $usage['confirmed'] || $usage['cancelled']) {
+                continue;
+            }
+            $pending[] = [
+                'usageId' => (string) $usageId,
+                'remainingDays' => $usage['usedDays'] - array_sum($usage['allocations']),
+                'confirmOrder' => $usage['confirmOrder'] ?? 0,
+            ];
+        }
+
+        $plan = (new GrantTimeAllocationPlanner())->plan(
+            $grant['grantedDays'] - array_sum($grant['allocations']),
+            $pending,
+        );
+
+        foreach ($plan as $entry) {
+            $this->recordThat(new PaidLeaveUsageAllocated(
+                usageId: $entry['usageId'],
+                grantId: $grantId,
+                allocatedDays: $entry['allocatedDays'],
+            ));
+        }
 
         return $this;
     }
@@ -282,75 +336,61 @@ class PaidLeaveAccountAggregate extends AggregateRoot
     }
 
     /**
-     * cutover専用の一括初期化。旧システム/旧ドメインProjectionから読み取った「事実」を
-     * `PaidLeaveAccountMigrated`イベント1本として記録する。通常の`grant()`が課す
-     * 不変条件(直前Grantより後の日付であること・同日禁止・過去挿入禁止)は経由しない
-     * ―移行は複数の過去日付Grantを一括でbackfillする必要があるため
-     * (spec.md 論点11/§47)。ただし移行は口座ごとに一度きりの操作であるため、
-     * 既にGrantが1件でも存在する口座への再実行は拒否する。
-     *
-     * モデリング上の判断(spec.md「既存データ移行」/依頼書§45「過去の全Usage履歴再現は
-     * 必須としない」に基づく): 個々のGrantの不変条件上の「利用可能な上限
-     * (=通常の$grantedDays)」は、モードA/B/Cいずれの場合も`remainingDaysAtCutover`
-     * (切替時点で実際に残っている日数)そのものとする。モードA/Bで分かっている
-     * `originalGrantedOn`/`originalGrantedDays`は、切替前に何日消化済みだったかを
-     * 個々のUsage行として再現するためではなく、監査・表示専用の付随情報として
-     * Grant状態に保持するに留める(実際のUsage Entityは作らない)。モードC
-     * (originalGrantedDaysが未知)ではこの付随情報がnullのまま残り、
-     * 「より大きい元の付与日数が本当は存在するが忘れている」という幻の上限は
-     * 一切表現しない―`remainingDaysAtCutover`こそが以後の消化・減額判定における
-     * 本物の上限になる。
-     *
-     * 「最新Grant」判定の起算日(`grantedOn`)は、モードA/Bでは`originalGrantedOn`を
-     * そのまま使う(実際に付与された日が分かっているため)。モードCで
-     * `originalGrantedOn`が不明な場合のみ、順序付けの代替キーとして`cutoverDate`を使う
-     * (依頼書は"usage_start_dateはflow-office独自のcutover境界であり法定日ではない"と
-     * 明記しており、順序付けの便宜上の基準日として使うことは差し支えない)。
-     * 移行後の通常`grant()`呼び出しは、この基準日を追い越す日付でなければ拒否される。
-     *
-     * @param  array<int, array{grantId: string, originalGrantedOn: ?string, originalGrantedDays: ?float, remainingDaysAtCutover: float, expiresOn: string, source: string, cutoverMetadata: ?array}>  $grants  未整列でよい(内部で`originalGrantedOn ?? cutoverDate`昇順に並べ替える)
+     * 有給申請IDに対して最後に指定されたusageIdを返す(取消済みのusageも含む)。未指定ならnull。
      */
-    public function migrateGrants(string $cutoverDate, array $grants): self
+    public function usageIdForRequest(string $paidLeaveRequestId): ?string
     {
-        if (count($this->grants) > 0) {
-            throw new DomainRuleException(
-                'このAccountには既にGrantが存在するため、データ移行(migrateGrants)を実行できません(移行は口座ごとに一度きりの操作です)。'
-            );
+        return $this->usageIdByPaidLeaveRequestId[$paidLeaveRequestId] ?? null;
+    }
+
+    /**
+     * usageの状態を返す。存在しなければnull。
+     *
+     * @return null|'designated'|'confirmed'|'cancelled'
+     */
+    public function usageStatus(string $usageId): ?string
+    {
+        $usage = $this->usages[$usageId] ?? null;
+
+        if ($usage === null) {
+            return null;
         }
 
-        $seenGrantIds = [];
-        foreach ($grants as $g) {
-            if (isset($seenGrantIds[$g['grantId']])) {
-                throw new DomainRuleException("移行データ内でGrant ID [{$g['grantId']}] が重複しています。");
-            }
-            $seenGrantIds[$g['grantId']] = true;
+        if ($usage['cancelled']) {
+            return 'cancelled';
+        }
 
-            $orderingDate = $g['originalGrantedOn'] ?? $cutoverDate;
+        return $usage['confirmed'] ? 'confirmed' : 'designated';
+    }
 
-            if ($orderingDate > $g['expiresOn']) {
-                throw new DomainRuleException("Grant [{$g['grantId']}] の付与日(または切替日)が有効期限より後になっています。");
-            }
-
-            if ($g['originalGrantedDays'] !== null && $g['originalGrantedDays'] < $g['remainingDaysAtCutover']) {
-                throw new DomainRuleException(
-                    "Grant [{$g['grantId']}] の元の付与日数(originalGrantedDays)は切替時点の残日数(remainingDaysAtCutover)を下回れません。"
-                );
-            }
-
-            if ($g['remainingDaysAtCutover'] < 0) {
-                throw new DomainRuleException("Grant [{$g['grantId']}] の切替時点残日数は0以上である必要があります。");
+    /**
+     * 同じ有給申請IDに対して、これまでに消化記録を指定した回数(取消済みを含む)を返す。
+     * 再提出の回数に当たり、消化記録のusageIdの採番(LeaveUsageId)に使う(論点18 2.1)。
+     */
+    public function designationCountForRequest(string $paidLeaveRequestId): int
+    {
+        $count = 0;
+        foreach ($this->usages as $usage) {
+            if ($usage['paidLeaveRequestId'] === $paidLeaveRequestId) {
+                $count++;
             }
         }
 
-        // grantedOn基準の時系列スタックとして整合させるため、記録前に並べ替える
-        // (論点4: Migration専用パスも最終的にgrantedOn昇順になるよう構築する)。
-        usort($grants, fn (array $a, array $b) => ($a['originalGrantedOn'] ?? $cutoverDate) <=> ($b['originalGrantedOn'] ?? $cutoverDate));
+        return $count;
+    }
 
-        $this->recordThat(new PaidLeaveAccountMigrated(cutoverDate: $cutoverDate, grants: $grants));
+    /**
+     * 同じ有給申請IDに、取消されていない消化記録が1件でもあるかを返す。
+     */
+    public function hasActiveUsageForRequest(string $paidLeaveRequestId): bool
+    {
+        foreach ($this->usages as $usage) {
+            if ($usage['paidLeaveRequestId'] === $paidLeaveRequestId && ! $usage['cancelled']) {
+                return true;
+            }
+        }
 
-        $this->allocateUnallocatedUsages();
-
-        return $this;
+        return false;
     }
 
     /**
@@ -484,27 +524,6 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         ];
     }
 
-    protected function applyPaidLeaveAccountMigrated(PaidLeaveAccountMigrated $event): void
-    {
-        foreach ($event->grants as $g) {
-            $this->grants[$g['grantId']] = [
-                'grantedOn' => $g['originalGrantedOn'] ?? $event->cutoverDate,
-                'expiresOn' => $g['expiresOn'],
-                // モデリング上の判断(migrateGrantsのdoc参照): 不変条件上の上限は常に
-                // remainingDaysAtCutoverそのもの。originalGrantedDaysは付随情報として
-                // 別途保持するのみで、grantedDays(=以後の消化・減額判定の基準)には使わない。
-                'grantedDays' => $g['remainingDaysAtCutover'],
-                'grantReason' => null,
-                'source' => $g['source'],
-                'revoked' => false,
-                'allocations' => [],
-                'originalGrantedOn' => $g['originalGrantedOn'],
-                'originalGrantedDays' => $g['originalGrantedDays'],
-                'cutoverMetadata' => $g['cutoverMetadata'],
-            ];
-        }
-    }
-
     protected function applyPaidLeaveGrantAmountChanged(PaidLeaveGrantAmountChanged $event): void
     {
         $this->grants[$event->grantId]['grantedDays'] = $event->newGrantedDays;
@@ -530,6 +549,7 @@ class PaidLeaveAccountAggregate extends AggregateRoot
         $this->usages[$event->usageId] = [
             'workflowRequestId' => $event->workflowRequestId,
             'attendanceDayId' => $event->attendanceDayId,
+            'paidLeaveRequestId' => $event->paidLeaveRequestId,
             'usedOn' => $event->usedOn,
             'usedDays' => $event->usedDays,
             'confirmed' => false,
@@ -537,11 +557,16 @@ class PaidLeaveAccountAggregate extends AggregateRoot
             'allocations' => [],
             'order' => $this->usageSequence++,
         ];
+
+        if ($event->paidLeaveRequestId !== null) {
+            $this->usageIdByPaidLeaveRequestId[$event->paidLeaveRequestId] = $event->usageId;
+        }
     }
 
     protected function applyPaidLeaveUsageConfirmed(PaidLeaveUsageConfirmed $event): void
     {
         $this->usages[$event->usageId]['confirmed'] = true;
+        $this->usages[$event->usageId]['confirmOrder'] = $this->confirmSequence++;
     }
 
     protected function applyPaidLeaveUsageCancelled(PaidLeaveUsageCancelled $event): void

@@ -17,5 +17,7 @@ class UserSyncedFromMs365 extends ShouldBeStored
         public readonly ?string $department,
         public readonly ?string $jobTitle,
         public readonly string $employmentStatus,
+        /** Entra IDのテナントID(記録時のsystem_settings.m365_tenant_id)。旧イベントはnull(Projectorは設定値を読む)。 */
+        public readonly ?string $externalTenantId = null,
     ) {}
 }

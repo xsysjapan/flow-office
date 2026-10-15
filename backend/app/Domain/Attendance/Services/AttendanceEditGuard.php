@@ -12,9 +12,10 @@ use App\Models\AttendanceMonthStatus;
  * 指定した勤務日(日次勤怠 `attendance_days` および、その日に属する打刻ログ
  * `attendance_punches`)が通常の編集・削除操作の対象にできるかを判定する。
  *
- * 締め後(`locked_at`設定後)は修正申請ワークフローを使う (docs/07-usecases-attendance.md
- * UC-A005)。加えて、月次が提出済み(`attendance.month_submitted`)以降は、まだ締め
- * (`locked_at`)が設定されていなくても通常の編集・削除を禁止する(UC-A008/UC-A015)。提出後は
+ * 締め後は修正申請ワークフローを使う (docs/07-usecases-attendance.md
+ * UC-A005)。判定は月次の状態(`attendance_months.status`)とロック表(`attendance_locks`)で行い、
+ * 日次の列(旧`attendance_days.locked_at`)は持たない。月次が提出済み(`attendance.month_submitted`)
+ * 以降は通常の編集・削除を禁止する(UC-A008/UC-A015)。提出後は
  * 承認者による確認・バックオフィス確認対象になるため、日次側の記録・その根拠となる打刻ログの
  * いずれも提出時点の内容から変更させない(UC-A013/UC-A014)。個々の`AttendanceDay`単位では
  * なく月次のProjection(`attendance_months.status`)を見て判定するため、休日など
@@ -47,10 +48,6 @@ class AttendanceEditGuard
 
     private function blockedReason(?AttendanceDay $day, string $userId, string $workDate): ?string
     {
-        if ($day !== null && $day->isLocked()) {
-            return '締め後の勤怠は修正申請から変更してください。';
-        }
-
         if (AttendanceLock::hasActiveLockCovering($userId, $workDate)) {
             return '提出済み以降の月次勤怠に含まれる日次勤怠は修正申請から変更してください。';
         }

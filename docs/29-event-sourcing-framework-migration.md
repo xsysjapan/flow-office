@@ -317,6 +317,13 @@ spatieの自動検出に委ねた。
   「イベントを見て新しいCommandを発行する副作用」専用の抽象クラス)で置き換え、
   `WorkflowRequestApproved`を購読して`CreateBackOfficeTaskFromApproval`
   コマンドを発行する。旧Listenerは削除した。
+- **Reactorの規約(休暇まわりの変更で追記)**: Reactorは他の文脈のイベントに反応して自文脈のCommandを
+  発行する副作用専用とし、他の文脈の集約・テーブルを直接読み書きしない(設計原則15、docs/03-architecture.md 3.10)。
+  Reactorから発行するCommandは、コンストラクタ引数`bool $viaReactor = false`と`?string $initiatedByUserId`
+  を持つ。`viaReactor=true`のCommandは利用者向けの認可(本人確認・権限)を行わず、対象が既に目的の状態なら
+  何もせず正常終了する(冪等。双方向の連動の無限連鎖を防ぐ)。利用者の操作として同じCommandが来た場合は
+  従来どおり状態不正を`DomainRuleException`にする。Projectorは行の存在を前提にせず、行が無ければ何もしない
+  (再生順に依存しない)。同じイベントを購読するReactorの実行順に結果が依存しないこと。
 - `config/domain.php`の`projectors`配列から`WorkflowRequestProjector` /
   `BackOfficeTaskProjector`(旧インターフェース実装)を削除。
 - **監査ログ(UC-M003)・申請履歴表示が`legacy_stored_events`のみを見ていた問題を修正**:

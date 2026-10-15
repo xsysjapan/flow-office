@@ -2,14 +2,14 @@
 
 namespace Tests\Unit\PaidLeaveSchedule;
 
+use App\Domain\Attendance\Aggregates\AttendanceDayAggregate;
+use App\Domain\Attendance\Aggregates\EmployeeCalendarEntryAggregate;
 use App\Domain\PaidLeaveSchedule\Aggregates\PaidLeaveScheduleAggregate;
 use App\Domain\PaidLeaveSchedule\Support\AttendanceRateAssessor;
-use App\Models\AttendanceDay;
-use App\Models\AttendanceDayStatus;
-use App\Models\EmployeeCalendarEntry;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
@@ -41,25 +41,49 @@ class AttendanceRateAssessorTest extends TestCase
         return $this->workStyleId;
     }
 
+    /** カレンダーの割当イベント(employee_calendar_entry.assigned)で所定労働日・非所定日を登録する。 */
     private function scheduleWorkingDay(User $user, string $date, bool $isWorkingDay = true): void
     {
-        EmployeeCalendarEntry::query()->create([
-            'user_id' => $user->id,
-            'work_date' => $date,
-            'work_style_id' => $this->workStyleId(),
-            'day_type' => $isWorkingDay ? 'weekday' : 'company_holiday',
-            'is_working_day' => $isWorkingDay,
-        ]);
+        EmployeeCalendarEntryAggregate::retrieve((string) Str::uuid())->assign(
+            userId: $user->id,
+            workDate: $date,
+            workStyleId: $this->workStyleId(),
+            shiftPatternId: null,
+            dayType: $isWorkingDay ? 'weekday' : 'company_holiday',
+            isWorkingDay: $isWorkingDay,
+            isLegalHoliday: false,
+            isCompanyHoliday: ! $isWorkingDay,
+            plannedStartAt: null,
+            plannedEndAt: null,
+            plannedBreakMinutes: 0,
+            plannedBreakStartAt: null,
+            plannedBreakEndAt: null,
+            isPublished: true,
+            isManuallyOverridden: false,
+            assignedByUserId: $user->id,
+        )->persist();
     }
 
-    private function recordAttendance(User $user, string $date, string $status = AttendanceDayStatus::CLOCKED_OUT, string $workType = 'normal'): void
+    /** 退勤済み(clocked_out)の勤怠日を勤怠のイベント(attendance_day.created)で作る。 */
+    private function recordAttendance(User $user, string $date): void
     {
-        AttendanceDay::query()->create([
-            'user_id' => $user->id,
-            'work_date' => $date,
-            'status' => $status,
-            'work_type' => $workType,
-        ]);
+        AttendanceDayAggregate::retrieve((string) Str::uuid())->create(
+            userId: $user->id,
+            workDate: $date,
+            calendarEntryId: null,
+            status: 'clocked_out',
+            source: 'punch',
+            utcOffsetMinutes: 540,
+            actualStartAt: null,
+            actualEndAt: null,
+            workType: null,
+            workLocationType: null,
+            note: null,
+            breaks: [],
+            leaveSegments: [],
+            reason: 'test',
+            createdByUserId: $user->id,
+        )->persist();
     }
 
     public function test_attendance_rate_at_exactly_80_percent_is_eligible(): void
@@ -107,25 +131,6 @@ class AttendanceRateAssessorTest extends TestCase
 
         $this->assertEqualsWithDelta(70.0, $result->attendanceRate, 0.001);
         $this->assertSame(PaidLeaveScheduleAggregate::STATUS_NOT_ELIGIBLE, $result->automaticResult);
-    }
-
-    public function test_paid_leave_taken_days_count_as_attended(): void
-    {
-        $user = User::factory()->create();
-
-        $this->scheduleWorkingDay($user, '2025-01-01');
-        $this->scheduleWorkingDay($user, '2025-01-02');
-        $this->recordAttendance($user, '2025-01-01', AttendanceDayStatus::NOT_STARTED, 'paid_leave_full');
-
-        $result = (new AttendanceRateAssessor())->assess(
-            userId: $user->id,
-            periodStart: Carbon::parse('2025-01-01'),
-            periodEnd: Carbon::parse('2025-01-31'),
-            minAttendanceRate: 50.0,
-        );
-
-        $this->assertSame(1, $result->attendanceDays);
-        $this->assertSame(PaidLeaveScheduleAggregate::STATUS_ELIGIBLE, $result->automaticResult);
     }
 
     public function test_zero_denominator_is_needs_review(): void

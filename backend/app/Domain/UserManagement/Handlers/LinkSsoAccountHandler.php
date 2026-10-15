@@ -8,6 +8,7 @@ use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\UserManagement\Aggregates\UserAggregate;
 use App\Domain\UserManagement\Commands\LinkSsoAccount;
 use App\Models\ExternalIdentity;
+use App\Models\SystemSetting;
 use App\Models\User;
 
 /**
@@ -36,7 +37,7 @@ class LinkSsoAccountHandler implements CommandHandler
             throw new DomainRuleException('このMicrosoft 365アカウントは既に他のユーザーと連携済みのため、連携できません。');
         }
 
-        UserAggregate::retrieve($user->id)->linkSsoAccount($command->entraUserId)->persist();
+        UserAggregate::retrieve($user->id)->linkSsoAccount($command->entraUserId, SystemSetting::current()->m365_tenant_id)->persist();
 
         return $user->refresh();
     }

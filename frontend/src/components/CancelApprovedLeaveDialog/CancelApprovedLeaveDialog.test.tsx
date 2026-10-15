@@ -21,6 +21,7 @@ const cancelledPaidLeaveRequest: PaidLeaveRequest = {
   approved_at: '2026-08-02T00:00:00+09:00',
   returned_at: null,
   cancelled_at: '2026-08-05T00:00:00+09:00',
+  workflow_request_id: null,
 }
 
 const cancelledSpecialLeaveRequest: SpecialLeaveRequest = {
@@ -37,6 +38,7 @@ const cancelledSpecialLeaveRequest: SpecialLeaveRequest = {
   approved_at: '2026-08-02T00:00:00+09:00',
   returned_at: null,
   cancelled_at: '2026-08-05T00:00:00+09:00',
+  workflow_request_id: null,
 }
 
 const cancelledCompensatoryLeaveRequest: CompensatoryLeaveRequest = {
@@ -53,6 +55,7 @@ const cancelledCompensatoryLeaveRequest: CompensatoryLeaveRequest = {
   approved_at: '2026-08-02T00:00:00+09:00',
   returned_at: null,
   cancelled_at: '2026-08-05T00:00:00+09:00',
+  workflow_request_id: null,
 }
 
 function renderDialog(target: ApprovedLeaveTarget | null, overrides: { onOpenChange?: () => void; onCancelled?: () => void } = {}) {

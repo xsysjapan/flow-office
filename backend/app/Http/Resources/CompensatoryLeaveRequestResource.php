@@ -24,6 +24,9 @@ class CompensatoryLeaveRequestResource extends JsonResource
             'requested_days' => (float) $this->requested_days,
             'requested_minutes' => $this->requested_minutes,
             'reason' => $this->reason,
+            // 対応するワークフローID(無ければnull)。一覧・詳細の取得側で
+            // LeaveRequestWorkflowLinks::attachWorkflowRequestIds()により付与する。
+            'workflow_request_id' => $this->workflow_request_id,
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'approved_at' => $this->approved_at?->toIso8601String(),
             'returned_at' => $this->returned_at?->toIso8601String(),

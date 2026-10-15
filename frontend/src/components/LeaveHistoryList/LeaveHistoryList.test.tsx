@@ -9,7 +9,7 @@ const grantedEvent: StoredEvent = {
   aggregate_type: 'paid_leave_grant',
   aggregate_id: '1',
   version: 1,
-  event_type: 'paid_leave.granted',
+  event_type: 'paid_leave_account.grant_created',
   payload: { granted_days: 10, expires_on: '2027-06-30' },
   occurred_at: '2025-07-01T09:00:00+09:00',
 }
@@ -20,7 +20,7 @@ const requestedEvent: StoredEvent = {
   aggregate_type: 'paid_leave_request',
   aggregate_id: '1',
   version: 1,
-  event_type: 'paid_leave.requested',
+  event_type: 'paid_leave_request.requested',
   payload: { target_date: '2026-08-10', leave_type: 'full', requested_days: 1 },
   occurred_at: '2026-08-05T09:00:00+09:00',
 }
@@ -56,7 +56,7 @@ describe('LeaveHistoryList', () => {
 
     const specialLeaveGrantedEvent: StoredEvent = {
       ...grantedEvent,
-      event_type: 'special_leave.granted',
+      event_type: 'special_leave_account.grant_registered',
       payload: { granted_days: 3, expires_on: null },
     }
     rerender(<LeaveHistoryList domain="special_leave" events={[specialLeaveGrantedEvent]} isLoading={false} />)

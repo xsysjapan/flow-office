@@ -66,14 +66,16 @@ class PaidLeaveHistoryTest extends TestCase
         $response = $this->actingAs($employee)->getJson('/api/paid-leave/history/mine');
         $response->assertOk();
 
-        // Phase 5(cutover): 有給付与・申請・承認は`App\Domain\PaidLeaveAccount\Aggregates\
-        // PaidLeaveAccountAggregate`(集約ルート=userId)のイベントとして記録される。
+        // 付与・消化は口座集約(userId)、申請の状態は有給申請集約(申請ID)のイベントとして記録される。
         $eventTypes = collect($response->json())->pluck('event_type')->all();
         $this->assertSame(
             [
                 'paid_leave_account.usage_allocated',
                 'paid_leave_account.usage_confirmed',
+                'paid_leave_request.approved',
                 'paid_leave_account.usage_designated',
+                'paid_leave_request.shared',
+                'paid_leave_request.requested',
                 'paid_leave_account.grant_created',
             ],
             $eventTypes,

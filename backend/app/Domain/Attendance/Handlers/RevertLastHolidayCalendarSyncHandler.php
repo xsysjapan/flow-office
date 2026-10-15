@@ -46,6 +46,8 @@ class RevertLastHolidayCalendarSyncHandler implements CommandHandler
 
         $dayReverts = array_map(fn (array $dayChange) => [
             'company_calendar_day_id' => $dayChange['company_calendar_day_id'],
+            'companyCalendarYearId' => $dayChange['companyCalendarYearId'] ?? null,
+            'date' => $dayChange['date'] ?? null,
             'is_public_holiday' => (bool) ($dayChange['previous_is_public_holiday'] ?? false),
             'public_holiday_name' => $dayChange['previous_public_holiday_name'] ?? null,
         ], $dayChanges);

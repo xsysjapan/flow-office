@@ -59,7 +59,7 @@ class UserProjector extends Projector
         );
 
         if ($event->entraUserId !== null) {
-            $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
+            $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt(), $event->externalTenantId);
         }
     }
 
@@ -81,7 +81,7 @@ class UserProjector extends Projector
             ],
         );
 
-        $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt());
+        $this->linkEntraIdentity($user->id, $event->entraUserId, $event->email, $event->createdAt(), $event->externalTenantId);
     }
 
     public function onUserSyncedFromMs365(UserSyncedFromMs365 $event): void
@@ -107,7 +107,7 @@ class UserProjector extends Projector
                 'usage_start_date' => $existing->usage_start_date ?? $event->createdAt()->toDateString(),
             ],
         );
-        $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $event->email, $event->createdAt());
+        $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $event->email, $event->createdAt(), $event->externalTenantId);
     }
 
     public function onUserSsoAccountLinked(UserSsoAccountLinked $event): void
@@ -116,14 +116,17 @@ class UserProjector extends Projector
             'entra_user_id' => $event->entraUserId,
         ]);
         $user = User::query()->find($event->aggregateRootUuid());
-        $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $user?->email, $event->createdAt());
+        $this->linkEntraIdentity($event->aggregateRootUuid(), $event->entraUserId, $user?->email, $event->createdAt(), $event->externalTenantId);
     }
 
-    private function linkEntraIdentity(string $userId, string $subjectId, ?string $email, mixed $occurredAt): void
+    /**
+     * Entra IDの外部IDを投影する。テナントIDはイベントの値を使い、旧イベント(null)だけ再生時の設定値を読む(後方互換。論点19 決定9)。
+     */
+    private function linkEntraIdentity(string $userId, string $subjectId, ?string $email, mixed $occurredAt, ?string $externalTenantId = null): void
     {
         DB::table('external_identities')->updateOrInsert(
             ['provider' => 'MICROSOFT_ENTRA', 'external_subject_id' => $subjectId],
-            ['user_id' => $userId, 'external_tenant_id' => SystemSetting::current()->m365_tenant_id, 'email' => $email, 'status' => 'active', 'linked_at' => $occurredAt, 'last_synced_at' => $occurredAt, 'created_at' => $occurredAt, 'updated_at' => $occurredAt],
+            ['user_id' => $userId, 'external_tenant_id' => $externalTenantId ?? SystemSetting::current()->m365_tenant_id, 'email' => $email, 'status' => 'active', 'linked_at' => $occurredAt, 'last_synced_at' => $occurredAt, 'created_at' => $occurredAt, 'updated_at' => $occurredAt],
         );
     }
 
@@ -137,10 +140,15 @@ class UserProjector extends Projector
     /** 本番カットオーバー移行時にusers行を初期状態として記録した合成イベントの再生用。 */
     public function onUserMigratedFromLegacy(UserMigratedFromLegacy $event): void
     {
-        User::query()->updateOrCreate(
-            ['id' => $event->aggregateRootUuid()],
-            $event->attributes,
-        );
+        // fillableに無い列(自動付与フラグ等)も attributes にあれば反映する。created_at は新規作成時のみ、
+        // attributes の値(無ければイベントの発生日時)で書く(再生で同じ結果にする)。
+        $attributes = $event->attributes;
+        $createdAt = $attributes['created_at'] ?? null;
+        unset($attributes['created_at']);
+
+        $user = User::query()->find($event->aggregateRootUuid())
+            ?? (new User)->forceFill(['id' => $event->aggregateRootUuid(), 'created_at' => $createdAt ?? $event->createdAt()]);
+        $user->forceFill($attributes)->save();
     }
 
     public function onUserHireDateSet(UserHireDateSet $event): void

@@ -14,6 +14,6 @@ class CompanyCalendarDefaultChanged extends ShouldBeStored
 {
     public function __construct(
         public readonly ?string $previousDefaultCompanyCalendarId,
-        public readonly string $changedByUserId,
+        public readonly ?string $changedByUserId,
     ) {}
 }

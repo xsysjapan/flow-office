@@ -18,5 +18,7 @@ class UserOnboardedAsAdmin extends ShouldBeStored
         public readonly ?string $email,
         /** 'sso' または 'local'。docs/06-usecases-auth.md UC-000参照。 */
         public readonly string $authMethod,
+        /** Entra IDのテナントID(記録時のsystem_settings.m365_tenant_id)。旧イベントはnull(Projectorは設定値を読む)。 */
+        public readonly ?string $externalTenantId = null,
     ) {}
 }

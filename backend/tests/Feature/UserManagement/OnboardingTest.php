@@ -8,6 +8,8 @@ use App\Domain\AccessControl\Services\EffectiveAccessResolver;
 use App\Domain\UserManagement\Commands\CompleteOnboardingSsoLink;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Models\UserCredential;
+use Illuminate\Support\Facades\Hash;
 use Database\Seeders\AccessControlSeeder;
 use Database\Seeders\UserManagementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -189,6 +191,33 @@ class OnboardingTest extends TestCase
         ])->assertOk()->assertJsonStructure(['token', 'user' => ['id', 'email']]);
     }
 
+    public function test_local_onboarding_stores_the_password_hash_in_user_credentials(): void
+    {
+        $this->completeLocalOnboarding()->assertOk();
+
+        $user = User::query()->where('email', 'admin@example.com')->firstOrFail();
+        $credential = UserCredential::query()->findOrFail($user->id);
+        $this->assertTrue(Hash::check('correct-horse-battery-staple', $credential->password));
+        $this->assertFalse(Schema::hasColumn('users', 'password'));
+        $this->assertFalse(Schema::hasColumn('users', 'remember_token'));
+        $this->assertSame($credential->password, $user->getAuthPassword());
+    }
+
+    public function test_password_survives_emptying_users_and_replaying(): void
+    {
+        $this->completeLocalOnboarding()->assertOk();
+
+        DB::table('users')->delete();
+        $this->assertSame(1, DB::table('user_credentials')->count());
+        $this->artisan('event-sourcing:replay', ['--force' => true])->assertSuccessful();
+
+        $this->assertSame(1, DB::table('user_credentials')->count());
+        $this->postJson('/api/auth/local-login', [
+            'email' => 'admin@example.com',
+            'password' => 'correct-horse-battery-staple',
+        ])->assertOk();
+    }
+
     public function test_local_login_rejects_the_wrong_password(): void
     {
         $this->completeLocalOnboarding();
@@ -201,7 +230,7 @@ class OnboardingTest extends TestCase
 
     public function test_local_login_rejects_sso_only_users_without_a_password(): void
     {
-        User::factory()->create(['email' => 'sso-user@example.com', 'password' => null]);
+        User::factory()->create(['email' => 'sso-user@example.com']);
 
         $this->postJson('/api/auth/local-login', [
             'email' => 'sso-user@example.com',

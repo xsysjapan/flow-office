@@ -4,6 +4,9 @@
 実装時のマイグレーションで確定させる。`created_at` / `updated_at` は全テーブル共通。
 
 **日時カラムの扱い**: `_at` で終わるカラムはタイムゾーン情報を持たない壁時計表記で保存する。
+ReadModel(Projection)の`_at`列は`DATETIME`で持ち、表で最初のTIMESTAMP列をNOT NULL・既定値なしにしない。
+MySQL(`explicit_defaults_for_timestamp=OFF`)では、そうした最初のTIMESTAMP列に`ON UPDATE CURRENT_TIMESTAMP`が
+自動で付き、投影のUPDATE(その列を含まない)で更新時刻に上書きされるため(2026_10_14_000002で該当列をDATETIMEに変更)。
 API境界(リクエスト・レスポンスの両方)では常にオフセット付きISO8601形式で日時をやり取りし、
 変換は `App\Support\LocalDateTime` に集約する(詳細は docs/03-architecture.md 3.4)。
 どのオフセットで解釈するかは2系統ある。
@@ -42,9 +45,6 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - id
 - name
 - email
-- password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
-  パスワードログイン用。`hashed`キャストで自動ハッシュ化して保存する。SSOでログインする
-  ユーザーはnullのまま)
 - job_title (所属とは独立した表示用プロフィール項目。管理元は`field_authorities`で決定する)
 - account_status (`PENDING` / `ACTIVE` / `SUSPENDED` / `LEAVE` / `RETIRED` / `DISABLED`)
 - source_type (`LOCAL` / `MICROSOFT_ENTRA` / `EXTERNAL_HR` / `IMPORT`)
@@ -64,6 +64,20 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   docs/changesets/20260904-paid-leave-auto-grant-per-user-toggle/spec.md参照)
 - last_login_at
 - created_at / updated_at
+
+## user_credentials (ローカルログインの資格情報)
+
+- user_id (主キー。`users.id`。外部キーは張らない。usersをイベントから再生成しても残すため)
+- password (nullable。初回オンボーディング(UC-000)でSSOを設定しなかった場合のローカル
+  パスワードログイン用のハッシュ。`hashed`キャストで自動ハッシュ化して保存する。SSOで
+  ログインするユーザーは行が無いかnull)
+- remember_token (nullable)
+- created_at / updated_at
+
+`system_settings`と同じく、イベントではなく直接更新する正データ(Projectorの書き込み先では
+ない)。パスワードの平文・ハッシュは`stored_events`に記録しない。旧`users.password`・
+`users.remember_token`から移行済み(論点19 決定7)。`leave:rebuild-event-store --list-readmodels`の
+対象外。
 
 ## system_settings (システム全体設定。単一行)
 
@@ -229,7 +243,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
 - source_ref(生成元の参照情報。例: `holiday_calendar_events.id`)
 - applied_at
 - applied_by_user_id(nullable。自動処理の場合はnull)
-- created_at
+- created_at(DATETIME・NOT NULL・既定値なし。投影が必ず値を入れる)
 
 1つの会社カレンダー日に複数の生成元履歴が残りうる(標準生成→祝日同期→手動変更、等)。
 最新の1件がその日の生成元として画面に表示される。
@@ -291,7 +305,7 @@ API境界(リクエスト・レスポンスの両方)では常にオフセット
   表示する)
 - error_code(nullable。`result=failed`の場合の理由コード)
 - previous_snapshot(上書き前の従業員予定の内容。JSON。取消時にこの内容へ戻す)
-- created_at
+- created_at(DATETIME・NOT NULL・既定値なし。投影が必ず値を入れる)
 
 ## employment_categories
 
@@ -562,10 +576,12 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
 - utc_offset_minutes (actual_start_at/actual_end_at/breaksに適用されたUTCオフセット(分)。
   例: `+09:00` なら540、`-05:00` なら-300。社員本人の既定タイムゾーン(users.timezone)とは
   別に、勤務日ごとに保持する。海外出張などで現地時刻が変わるため(docs/03-architecture.md 3.4))
-- work_type
+- work_type (作業内容。自由入力の文字列。休暇は表さない。変更セット`20261009-keep-leave-work-type-on-edit`
+  の論点10で休暇値(`paid_leave_full`/`paid_leave_am_half`/`paid_leave_pm_half`/`paid_leave_hourly`)の
+  書き込み・解釈を廃止した。休暇は`attendance_day_leaves`から判定する。過去イベントの休暇値は読まない)
 - work_location_type (勤務形態区分。`office`=出社 / `remote`=在宅 / `client_site`=客先 /
   `business_trip`=出張 / `direct_to_site`=直行 / `direct_from_site`=直帰 / `other`=その他。
-  nullable。既存の`work_type`(有給区分: `paid_leave_full`等)とは別軸のため列を分ける。
+  nullable。`work_type`(作業内容)とは別軸のため列を分ける。
   法令で変動する値ではないためマスタ化せず、`PunchType`と同様の定数クラス
   (`WorkLocationType`)で列挙する。時間計算には一切影響しない分類情報。共有Android打刻
   リーダー(docs/23-usecases-devices.md)経由の打刻が日次勤怠に反映される際、使用した
@@ -576,7 +592,8 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
   保存し直す派生値で、`employee_calendar_entries.schedule_state`+`is_legal_holiday`の3値
   簡略版。時間計算自体には影響しない。docs/07-usecases-attendance.md「日次勤怠の区分」参照)
 - note
-- locked_at
+- (`locked_at`列は廃止した。日次の編集可否は月次の状態`attendance_months.status`とロック表`attendance_locks`で
+  `AttendanceEditGuard`が判定する。変更セット`20261009-keep-leave-work-type-on-edit`論点19)
 - created_at / updated_at
 
 ## attendance_breaks
@@ -593,7 +610,8 @@ A勤・B勤・C勤・休のような繰り返し周期を1つの働き方の中�
 時間帯単位で保持する。実績(`attendance_days.actual_start_at`/`actual_end_at`)の内側・
 外側どちらの時間帯も表現できる。日次編集・作成のたびに全件入れ替える
 (`attendance_breaks`と同じ扱い)。有給休暇(全休・半休・時間単位)はこのテーブルの対象外で、
-既存の`paid_leave_requests`/`paid_leave_usages`/`attendance_days.work_type`で管理する。
+有給・特別休暇・代休は、休暇申請・残数の文脈の正データから作る`attendance_day_leaves`(休暇ビュー)で管理する
+(`attendance_days.work_type`は休暇を表さない)。
 
 - id
 - attendance_day_id
@@ -903,7 +921,7 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
 - late_night_prescribed_holiday_work_minutes (所定休日労働のうち深夜時間帯にかかった分。
   late_night_legal_holiday_work_minutesの所定休日版で、late_night_work_minutesには含まない)
 - is_manually_adjusted (日次登録後、区分ごとの時間を手動で補正したかどうか。実績
-  (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance.day_calculated`)
+  (actual_start_at/actual_end_at/breaks)が再編集され再計算(`attendance_day.calculated`)
   されると、falseに戻る)
 - adjusted_by_user_id / adjusted_at (手動補正した社員・日時。`is_manually_adjusted=false`
   の場合はnull)
@@ -914,18 +932,17 @@ SQLだけで推測変換しないため、日次実績とイベント履歴か�
 - absence_minutes (欠勤時間(分)。`attendance_leave_segments`(category=absence)の区間の
   合計時間。docs/07-usecases-attendance.md「不就労時間の処理区分」参照)
 - special_leave_minutes (その他特別休暇の時間(分)。同(category=special_leave)の合計時間)
-- paid_leave_days (全休・半休の有給日数。`attendance_days.work_type`から算出する
+- paid_leave_days (全休・半休の有給日数。勤怠の休暇ビュー(`attendance_day_leaves`)の有給から算出する
   全休=1.0・半休=0.5。時間単位有給はここに含めずpaid_leave_minutesで表す)
-- paid_leave_minutes (時間単位有給の消化時間(分)。対象日の`paid_leave_usages`
-  (usage_type=hourly)のused_minutes合計。有給消化の正データは引き続き`paid_leave_usages`
-  のままで、ここは日次集計を1テーブルで完結させるための非正規化)
+- paid_leave_minutes (時間単位有給の消化時間(分)。休暇ビューの有給(時間単位)の分数の合計。有給消化の正データは
+  口座の消化記録(`paid_leave_usages`)のままで、ここは日次集計を1テーブルで完結させるための非正規化)
 - created_at / updated_at
 
-`attendance.daily_calculation_adjusted`イベント(手動補正)で更新される列
+`attendance_day.daily_calculation_adjusted`イベント(手動補正)で更新される列
 (`prescribed_work_minutes`/`statutory_within_overtime_minutes`/`statutory_excess_overtime_minutes`/
 `legal_holiday_work_minutes`/深夜内訳)も、
 イベントの再生成で同じ値を再構築できる(=Projectionの原則を破らない)。実績が再編集され
-`attendance.day_calculated`が再発生すると、以降のイベント再生ではその再計算結果で上書き
+`attendance_day.calculated`が再発生すると、以降のイベント再生ではその再計算結果で上書き
 されるため、手動補正はあくまで「直近の実績編集以降に加えられた最新の上書き」として扱われる。
 
 週40時間(労基法32条)の超過量自体は独立したProjectionを持たない。週次勤怠は日次勤怠の編集ビューであり
@@ -1110,10 +1127,8 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - used_days (旧ドメイン互換のため存続。`allocated_days`と同じ意味の値を保持)
 - remaining_days (`granted_days - allocated_days`の非正規化キャッシュ)
 - grant_reason
-- source (`manual` / `migration`。通常のGrantとcutover移行由来のGrantを監査上区別する)
-- original_granted_days (nullable。移行(モードA)由来のGrantのみ設定される、切替前の
-  元の付与日数。監査・表示専用で、不変条件には使わない)
-- cutover_metadata (nullable, json。移行由来のGrantの付随情報(モード種別・備考等))
+- source (`manual`(手動付与) / `scheduled_batch`(定期の自動付与) / `carried_over`(cutoverでシステム外から持ち込んだ残高。
+  `stored_events`の作り直しで作る)。付与の区別に使う。`original_granted_days`・`cutover_metadata`は撤去した(移行の情報はイベントの`meta`に残る))
 - expiry_warned_at (UC-P005: 消滅警告を通知済みの日時。重複通知防止用)
 - five_day_obligation_warned_at (UC-P006: 年5日取得義務警告を通知済みの日時。重複通知防止用)
 - status (`active` / `revoked`。UC-P008: 管理者による付与取消。デフォルト`active`)
@@ -1126,7 +1141,7 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 (UC-P008参照。列構成はこの表と`special_leave_type_id`の有無以外は同じ。特別休暇は今回の
 再設計の対象外で、引き続き旧構造のまま実装されている)。
 
-## paid_leave_requests (有給申請の正)
+## paid_leave_requests (有給申請の申請テーブル。Projection)
 
 - id
 - request_group_id (nullable。期間指定でまとめて申請した複数日分(1日1行)を束ねるID。
@@ -1144,10 +1159,12 @@ Aggregateをreplayして行う(docs/changesets/20260906-paid-leave-domain-redesi
 - created_at / updated_at
 
 汎用申請(workflow_requests)・バックオフィス処理(backoffice_tasks)と同様、独立した
-ステータス系列で管理する (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。cutover後は
-`PaidLeaveUsageDesignated`イベントのペイロード(usageType/paidLeaveRequestId/
-approverUserId/reason/requestGroupId/hours)から`PaidLeaveUsageAllocationProjector`が
-この行を再構築する(単一Projectorへ統合。旧`PaidLeaveRequestProjector`は削除済み)。
+ステータス系列で管理する (docs/09-usecases-paid-leave.md UC-P003/UC-P004)。申請の状態の正は
+`paid_leave_request.*`イベント(休暇申請文脈の`PaidLeaveRequestAggregate`)で、この表は
+休暇申請文脈の`PaidLeaveRequestProjector`だけが更新する(残数側の`PaidLeaveUsageAllocationProjector`は
+この表を更新しない。変更セット論点4・仕様確定事項C)。リリース時は`paid_leave_requests`・
+`leave_request_workflow_links`を空にして一緒にリビルドする。
+
 
 ## paid_leave_usages
 
@@ -1157,14 +1174,12 @@ approverUserId/reason/requestGroupId/hours)から`PaidLeaveUsageAllocationProjec
 
 - id (内部連番。既存互換のため残置)
 - usage_id (uuid、unique。新ドメインのUsage識別子。`PaidLeaveUsageDesignated.usageId`)
-- stored_event_id (nullable, unique。旧ドメイン時代の冪等性列。新ドメインの行は
-  `usage_id`で冪等Upsertする)
 - user_id
-- attendance_day_id (nullable)
+- attendance_day_id (nullable。勤怠日への外部キーは撤去した(変更セット論点6・12)。新規の消化記録には設定しない)
 - paid_leave_grant_id (nullable。旧ドメインが単一Grant参照に使っていた列。新ドメインの
   Allocationは`paid_leave_usage_allocations`側で複数Grantにまたがって持つため、この列は
   cutover後は使われないが、既存Projection互換のため列自体は削除せず残置している)
-- paid_leave_request_id (nullable)
+- paid_leave_request_id (nullable。申請テーブルへの外部キーは撤去した)
 - used_on
 - used_days
 - used_minutes (nullable)
@@ -1174,15 +1189,11 @@ approverUserId/reason/requestGroupId/hours)から`PaidLeaveUsageAllocationProjec
 - created_at / updated_at
 
 行のライフサイクル: 申請時点(承認前)で`PaidLeaveUsageDesignated`イベントにより
-`confirmed=false`の行が1件作られる(勤怠側はこの行の存在だけで「休暇が設定されているか」を
-判定でき、`paid_leave_requests`を参照しに行く必要が無い。ドメインをまたいだ参照を避けるための
-設計)。承認時、`PaidLeaveUsageConfirmed`イベントが`confirmed=true`にする。取消時は
+`confirmed=false`の行が1件作られる(勤怠は休暇ビュー`attendance_day_leaves`から休暇を判定し、この行を読まない)。承認時、`PaidLeaveUsageConfirmed`イベントが`confirmed=true`にする。取消時は
 `PaidLeaveUsageCancelled`イベントが`cancelled=true`にする(行は物理削除しない。監査可能に
 残す)。実際にどのGrantへ何日充当されたかは`paid_leave_usage_allocations`(下記)を参照する。
 
-`special_leave_usages`・`compensatory_leave_usages`は今回の再設計の対象外で、引き続き
-旧構造(`is_confirmed`列によるライフサイクル、`paid_leave_grant_id`相当の単一Grant参照)の
-まま実装されている。
+特別休暇・代休の消化記録は口座集約が持つ(下記「休暇まわりの新設テーブル」)。
 
 ## paid_leave_usage_allocations (Usage↔Grantの充当関係の正)
 
@@ -1297,8 +1308,70 @@ Aggregateをreplayして行う)。
 
 - source (`attendance` / `manual`。デフォルト`attendance`。既存行はすべて`attendance`)
 - grant_reason (nullable。手動付与時の理由)
-- attendance_day_id (手動付与では紐づく実績行が無いためnullable。自動導出分は従来通り
-  ユニーク制約付きで必須)
+- attendance_day_id (nullable。変更セット論点6・仕様確定事項Dにより、ユニーク制約と勤怠日への外部キーを撤去した。
+  付与の同期は勤怠の計算イベントから行い、勤怠日のテーブルを読まない)
+
+## 休暇まわりの新設テーブル(変更セット `20261009-keep-leave-work-type-on-edit`)
+
+休暇の申請・残数・勤怠の連携のために新設・変更したテーブル(マイグレーション
+`2026_10_10_000001`〜`000009`)。Projectionは`stored_events`から再生成できる。口座集約の
+テーブル(`*_usages`・`*_usage_allocations`)の行は口座集約のイベント(`*_account.*`)から作る。
+
+- `leave_request_workflow_links` (Projection。休暇申請文脈): workflow_request_id (PK)、leave_kind
+  (paid/special/compensatory)、leave_request_id (index)。ワークフローIDから休暇申請を引く対応表。
+  `workflow_request.drafted`と各休暇の`*.shared`から作り、`workflow_requests`を読まない。
+- `attendance_day_leaves` (Projection。勤怠の休暇ビュー): id、leave_kind、leave_request_id、user_id、
+  work_date、unit (full/am_half/pm_half/hourly)、hours、minutes、special_leave_type_id、workflow_request_id、
+  request_status (submitted/approved/returned/cancelled)、timestamps。unique(leave_kind, leave_request_id)、index(user_id, work_date)。
+  差戻し・取消では行を削除せずrequest_statusを更新する(画面で履歴を追えるようにするため)。
+  読み手は申請中・承認済みの行だけを扱う。`work_type`・勤怠日の休暇値の代わりに休暇の有無・種類・取得単位を持つ。
+- `attendance_special_leave_shortages` (Projection。勤怠側の特別休暇の残数不足ビュー。マイグレーション`2026_10_11_000003`): usage_id (PK)、
+  user_id、work_date、special_leave_request_id、special_leave_type_id、used_days、used_minutes (nullable)、
+  unallocated_days (承認で確定したときの未充当日数。0より大きい行が残数不足)。index(user_id, work_date)(明示名`att_sl_shortages_user_date_index`)。
+  特別休暇口座のイベント(`special_leave_account.usage_designated`で行を作り、`usage_confirmed`で未充当日数を記録し、`usage_cancelled`で行を削除する)
+  から勤怠のProjectorが作る。月次APIの`special_leave_balance_warnings`はこのビューを読み、`special_leave_usages`は読まない。
+- (撤去) `attendance_day_leave_paid_usages`・`paid_leave_request_usage_links`: 書き込み・読み取りが無くなったため
+  マイグレーション`2026_10_11_000002`で撤去した(downで空のテーブルを復元する)。
+- `paid_leave_usages`: `attendance_day_id`・`paid_leave_request_id`の外部キーと`stored_event_id`列を撤去(リリース時の
+  撤去順は外部キー→索引。docs/32参照)。
+- `special_leave_usages`: `usage_id` (nullable、unique)、`unallocated_days` (default 0) を追加。
+  `attendance_day_id`をnullableにし、`attendance_day_id`・`special_leave_request_id`の外部キーと`stored_event_id`列を撤去。
+- `special_leave_usage_allocations` (新設。口座の充当): id、usage_id (index)、grant_id (special_leave_grantsへの外部キー)、
+  allocated_days、timestamps。unique(usage_id, grant_id)。
+- `compensatory_leave_usages`: `usage_id` (nullable、unique)、`unallocated_days`・`unallocated_minutes` (default 0) を追加。
+  `attendance_day_id`をnullableにし、`attendance_day_id`・`compensatory_leave_request_id`の外部キーと`stored_event_id`列を撤去。
+- `compensatory_leave_usage_allocations` (新設。口座の充当): id、usage_id (index)、grant_id (index。外部キーなし)、
+  allocated_days、allocated_minutes、timestamps。unique(usage_id, grant_id)。
+- `compensatory_holiday_work_days` (新設。代休の口座側の休日出勤ビュー。計算イベントから作る。手動付与の
+  休日出勤の確認に使う): id、user_id (users)、work_date、is_holiday_day、work_minutes、timestamps。
+  unique(user_id, work_date)。
+- `compensatory_leave_grants`: `attendance_day_id`のユニーク制約と外部キーを撤去。
+- `compensatory_grant_day_views` (Projection。勤怠側の代休付与表示): grant_id (PK)、user_id (index)、work_date、
+  granted_days、granted_minutes (nullable)、status (draft/confirmed/cancelled)、used_days、used_minutes (nullable)、
+  index(user_id, work_date)。月次APIの代休付与表示を利用者×日付で持つ。
+- `compensatory_grant_day_view_allocations` (Projection): (usage_id, grant_id) (PK)、allocated_days、
+  allocated_minutes、index(grant_id)。
+- `leave_attendance_rate_days` (Projection。有給の出勤率ビュー、利用者×日付): id、user_id、work_date、
+  is_working_day (分母)、attended (分子の出勤)、full_leave_kinds・partial_leave_kinds (json)。unique(user_id, work_date)。
+- `leave_attendance_rate_leaves` (Projection): id、leave_kind、leave_request_id、user_id、work_date、unit、
+  workflow_request_id (nullable)、request_status。
+  unique(leave_kind, leave_request_id)、index(user_id, work_date)。
+- `leave_attendance_rate_attendance_days` (Projection): id (勤怠日ID、PK)、user_id、work_date、clocked_out。
+  index(user_id, work_date)。
+- `special_leave_attendance_rate_days`・`special_leave_attendance_rate_leaves`・`special_leave_attendance_rate_attendance_days`
+  (特別休暇の出勤率ビュー、有給と同じ列。`special_leave_attendance_rate_days`は`work_style_id` (nullable。自動付与の
+  勤務形態の絞り込み用)を持つ)。索引名は64文字制限内に明示名を付けている。
+
+### 作り直しで撤去した列(マイグレーション `2026_10_11_000001`)
+
+`stored_events`の作り直し(変更セット論点18。`docs/27-release-runbook.md` 3.1)で旧系統が不要になったため、次の列を撤去した。
+撤去の際は索引を先に外す(これらの列に外部キーは付いていない)。
+
+- `paid_leave_grants`: `original_granted_days`・`cutover_metadata`(移行の監査列。cutoverの情報はイベントの`meta`に残る)。`source`は残す。
+- `paid_leave_requests`: `input_source`(申請の入力系統)。
+- `paid_leave_usages`・`special_leave_usages`・`compensatory_leave_usages`: `stored_event_id`(旧系統の冪等性列。口座集約の消化記録は`usage_id`で冪等にする)。
+- `attendance_day_leaves`: `source`(休暇ビューの系統)。
+- `leave_attendance_rate_leaves`・`special_leave_attendance_rate_leaves`: `source`(出勤率ビューの系統)・`usage_id`(cutover後の有給の消化記録→行の対応)。
 
 ## expense_categories (経費区分マスタ。イベントソーシング対象外の通常のEloquent CRUD)
 
@@ -1420,7 +1493,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - asset_id (→ assets)
 - location_text (text)
 - changed_by_user_id (→ users)
-- changed_at
+- changed_at(DATETIME・NOT NULL・既定値なし)
 
 ## asset_placements (設置品の設置/保管場所の履歴。現在有効な1件+履歴)
 
@@ -1430,7 +1503,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - id
 - asset_id (→ assets)
 - location_text (text)
-- started_at
+- started_at(DATETIME・NOT NULL・既定値なし)
 - ended_at (nullable。nullなら現在有効な設置)
 - started_by_user_id (→ users)
 - ended_by_user_id (nullable, → users)
@@ -1445,7 +1518,7 @@ docs/34-usecases-asset-management.md「管理番号の自動採番」参照。�
 - user_id (→ users。借用者)
 - loan_request_id (nullable, UUID。`approval`方式で承認済み申請に基づいて貸与した場合のみ
   `asset_loan_requests.id`を指す。外部キー制約なし)
-- loaned_at
+- loaned_at(DATETIME・NOT NULL・既定値なし)
 - expected_return_at (nullable)
 - loaned_by_user_id (→ users)
 - returned_at (nullable)
@@ -1516,7 +1589,7 @@ docs/20-implementation-notes.md と同様の注記)。
 - title
 - summary
 - detail_url
-- queued_at
+- queued_at(DATETIME・NOT NULL・既定値なし。`notification.queued`の`queuedAt`をそのまま入れる)
 - sent_at (nullable)
 - confirmed_at (nullable。本人が通知一覧またはメールのリンクから確認した日時)
 - resolved_at (nullable。対象の不備・申請そのものが解消された日時。confirmed_atとは独立に更新される)
@@ -1532,9 +1605,9 @@ docs/20-implementation-notes.md と同様の注記)。
 |---|---|---|
 | EventStore (正) | `stored_events` | 全ドメインイベントの唯一の正。削除・改変しない。 |
 | マスタ | `request_types`, `company_calendars`, `company_calendar_years`, `company_calendar_days`, `company_calendar_day_sources`, `holiday_calendar_sources`, `holiday_calendar_events`, `employment_categories`, `work_styles`, `shift_patterns`, `rotation_patterns`, `rotation_pattern_items`, `paid_leave_grant_rules`, `paid_leave_grant_rule_steps`, `system_settings`, `devices`(`owner_type=organization_shared`), `device_roles`, `device_scopes`, `agreement_36_rules`, `expense_categories` | 管理者が設定する参照データ。`system_settings`は直接更新するが監査イベントを記録する。 |
-| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_requests`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances`, `expense_claims`, `expense_items` | Command経由でのみ更新。 |
+| 正データ (書き込み対象) | `users`, `workflow_requests`, `backoffice_tasks`, `employee_calendar_entries`, `employee_rotation_assignments`, `calendar_bulk_operations`, `calendar_bulk_operation_targets`, `attendance_days`, `attendance_breaks`, `attendance_leave_segments`, `legal_holiday_designations`, `paid_leave_grants`, `paid_leave_usages`, `attachments`, `devices`(`owner_type=personal`), `authentication_keys`, `authentication_key_device_rules`, `application_integrations`, `integration_scopes`, `monthly_attendance_drafts`, `attendance_import_sessions`, `attendance_import_items`, `field_provenances`, `expense_claims`, `expense_items` | Command経由でのみ更新。 |
 | 参考ログ (正ではない) | `attendance_punches` | 矛盾があっても記録される生ログ。矛盾なく組み立てられた場合のみ正データ (`attendance_days`) に反映される。 |
-| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications` | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
+| Projection (再生成可能) | `attendance_daily_calculations`, `attendance_months`, `notifications`, `paid_leave_requests`(休暇申請文脈のProjector)、`attendance_day_leaves`・`leave_request_workflow_links`・出勤率ビュー・代休の付与ビュー(下記「休暇まわりの新設テーブル」) | `stored_events` + 正データから再計算できる派生データ。`projections:rebuild`で再生成できる。 |
 
 会社カレンダー・従業員予定関連(`company_calendars`/`company_calendar_years`/`company_calendar_days`/
 `employee_calendar_entries`/`calendar_bulk_operations`等)の状態変更は、既存の

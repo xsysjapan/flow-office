@@ -8,7 +8,7 @@ use App\Models\SystemSetting;
 
 final class PrivilegeAssignmentPolicy
 {
-    public function assertSelfAssignmentAllowed(string $actorUserId, string $subjectType, string $subjectId, int $roleId): void
+    public function assertSelfAssignmentAllowed(?string $actorUserId, string $subjectType, string $subjectId, int $roleId): void
     {
         if (! SystemSetting::current()->prohibit_self_privileged_role_assignment
             || $subjectType !== 'user'

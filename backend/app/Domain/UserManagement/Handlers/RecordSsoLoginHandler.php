@@ -43,6 +43,8 @@ class RecordSsoLoginHandler implements CommandHandler
         // システムのデフォルトタイムゾーンで記録する (docs/03-architecture.md 3.4)。
         $defaultTimezone = SystemSetting::current()->default_timezone;
         $loggedInAt = LocalDateTime::now($defaultTimezone)->format('Y-m-d H:i:s');
+        // Entra IDのテナントIDは記録時の設定値をイベントへ持たせる(再生時の設定変更に影響されないため。論点19 決定9)。
+        $externalTenantId = SystemSetting::current()->m365_tenant_id;
 
         if ($existingByEntraId !== null) {
             $this->assertAccountCanLogin($existingByEntraId);
@@ -58,7 +60,7 @@ class RecordSsoLoginHandler implements CommandHandler
             $this->assertAccountCanLogin($existingByEmail);
             $userId = $existingByEmail->id;
             UserAggregate::retrieve($userId)
-                ->linkSsoAccount($command->entraUserId)
+                ->linkSsoAccount($command->entraUserId, $externalTenantId)
                 ->recordLogin(wasFirstLogin: false, loggedInAt: $loggedInAt)
                 ->persist();
 
@@ -68,7 +70,7 @@ class RecordSsoLoginHandler implements CommandHandler
         $userId = (string) Str::uuid();
 
         UserAggregate::retrieve($userId)
-            ->createFromSsoLogin($command->entraUserId, $command->name ?? $command->email, $command->email)
+            ->createFromSsoLogin($command->entraUserId, $command->name ?? $command->email, $command->email, $externalTenantId)
             ->recordLogin(wasFirstLogin: $wasFirstLogin, loggedInAt: $loggedInAt)
             ->persist();
 

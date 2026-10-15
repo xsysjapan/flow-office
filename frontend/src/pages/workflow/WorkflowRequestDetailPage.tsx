@@ -90,8 +90,10 @@ export function WorkflowRequestDetailPage() {
   const isApprover = user?.id === request.approver?.id
   const actionError = submitRequest.error ?? approveRequest.error ?? returnRequest.error
   /** 却下ボタンはspec論点2-2の通り、備品貸出申請(asset_loan)にのみ表示する
-   *  (却下Command/Event自体は全申請種別で使える汎用実装だが、フロントの露出はここに限定)。 */
-  const canReject = request.request_type?.code === 'asset_loan'
+   *  (却下Command/Event自体は全申請種別で使える汎用実装だが、フロントの露出はここに限定)。
+   *  業務側(subject_type)を持つ申請は却下できない(変更セット論点16。backendのRejectWorkflowRequestHandlerも拒否する)
+   *  ため、差戻しを使う。 */
+  const canReject = request.request_type?.code === 'asset_loan' && request.subject_type == null
   /** 月次勤怠申請(attendance_month)の取消(取り下げ)は専用権限attendance.submission_revoke
    *  で個別に管理する(承認と別系列の権限。docs/07-usecases-attendance.md UC-A010参照)。
    *  他のsubject_type(経費精算・有給等)は申請者本人であれば従来通り取消可能。 */

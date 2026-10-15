@@ -20,7 +20,7 @@ const events: StoredEvent[] = [
     aggregate_type: 'special_leave_grant',
     aggregate_id: '1',
     version: 1,
-    event_type: 'special_leave.granted',
+    event_type: 'special_leave_account.grant_registered',
     payload: { granted_days: 3, expires_on: null },
     occurred_at: '2026-07-01T09:00:00+09:00',
   },

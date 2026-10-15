@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveGrantCancellation;
 use App\Domain\CompensatoryLeave\Commands\ApproveCompensatoryLeaveRequest as ApproveCompensatoryLeaveRequestCommand;
-use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveGrant;
 use App\Domain\CompensatoryLeave\Commands\CancelCompensatoryLeaveRequest;
-use App\Domain\CompensatoryLeave\Commands\GrantCompensatoryLeave;
 use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeave;
-use App\Domain\CompensatoryLeave\Commands\RequestCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeaveAccount\Commands\ApproveCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeaveAccount\Aggregates\CompensatoryLeaveAccountAggregate;
+use App\Domain\CompensatoryLeaveAccount\Commands\GrantCompensatoryLeave;
+use App\Domain\CompensatoryLeaveAccount\Commands\RequestCompensatoryLeaveGrantCancellation;
+use App\Domain\CompensatoryLeaveAccount\Commands\RevokeCompensatoryLeaveAccountGrant;
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\Leave\Support\LeaveHistoryQuery;
+use App\Domain\LeaveRequestLink\LeaveRequestWorkflowLinks;
 use App\Domain\Workflow\Commands\ApproveWorkflowRequest;
 use App\Domain\Workflow\Commands\DraftWorkflowRequest;
 use App\Domain\Workflow\Commands\ReturnWorkflowRequest;
@@ -22,13 +24,13 @@ use App\Http\Resources\CompensatoryLeaveRequestResource;
 use App\Http\Resources\CompensatoryLeaveUsageResource;
 use App\Http\Resources\StoredEventResource;
 use App\Models\CompensatoryLeaveGrant;
+use App\Models\CompensatoryLeaveGrantCancellation;
 use App\Models\CompensatoryLeaveRequest;
 use App\Models\CompensatoryLeaveRequestStatus;
 use App\Models\CompensatoryLeaveUsage;
+use App\Models\LeaveRequestWorkflowLink;
 use App\Models\PaidLeaveType;
 use App\Models\SystemSetting;
-use App\Models\WorkflowRequest;
-use App\Models\WorkflowRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -105,14 +107,17 @@ class CompensatoryLeaveController extends Controller
             'grant_reason' => ['nullable', 'string'],
         ]);
 
-        $grant = $commandBus->dispatch(new GrantCompensatoryLeave(
+        $grantId = (string) Str::uuid();
+
+        $commandBus->dispatch(new GrantCompensatoryLeave(
             userId: $data['user_id'],
             workDate: $data['work_date'],
+            grantId: $grantId,
             expiresOn: $data['expires_on'] ?? null,
             grantReason: $data['grant_reason'] ?? null,
         ));
 
-        return (new CompensatoryLeaveGrantResource($grant))->response()->setStatusCode(201);
+        return (new CompensatoryLeaveGrantResource(CompensatoryLeaveGrant::query()->findOrFail($grantId)))->response()->setStatusCode(201);
     }
 
     /**
@@ -134,13 +139,14 @@ class CompensatoryLeaveController extends Controller
     {
         $data = $request->validate(['reason' => ['nullable', 'string']]);
 
-        $grant = $commandBus->dispatch(new CancelCompensatoryLeaveGrant(
+        $commandBus->dispatch(new RevokeCompensatoryLeaveAccountGrant(
+            userId: $grant->user_id,
             grantId: $grant->id,
             cancelledByUserId: $request->user()->id,
             reason: $data['reason'] ?? null,
         ));
 
-        return new CompensatoryLeaveGrantResource($grant);
+        return new CompensatoryLeaveGrantResource($grant->refresh());
     }
 
     #[OA\Post(
@@ -151,7 +157,7 @@ class CompensatoryLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['target_date', 'leave_type'], properties: [new OA\Property(property: 'target_date', type: 'string', format: 'date'), new OA\Property(property: 'leave_type', type: 'string'), new OA\Property(property: 'hours', type: 'number', nullable: true), new OA\Property(property: 'approver_user_id', type: 'string', format: 'uuid', nullable: true), new OA\Property(property: 'reason', type: 'string', nullable: true)])),
         responses: [new OA\Response(response: 201, description: 'Created'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function storeRequest(Request $request, CommandBus $commandBus): JsonResponse
+    public function storeRequest(Request $request, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): JsonResponse
     {
         // system_settings.compensatory_leave_requires_approval=falseの場合、承認ワークフローを
         // 経由せずその場で申請→承認不要のまま(消化)まで完結させる(SpecialLeaveController::
@@ -193,6 +199,7 @@ class CompensatoryLeaveController extends Controller
             ));
 
             $compensatoryLeaveRequest = CompensatoryLeaveRequest::query()->findOrFail($requestId);
+            $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
 
             return (new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
         }
@@ -203,7 +210,7 @@ class CompensatoryLeaveController extends Controller
         $requestId = (string) Str::uuid();
         $approverUserId = $data['approver_user_id'] ?? $request->user()->id;
 
-        $compensatoryLeaveRequest = DB::transaction(function () use ($commandBus, $data, $requestId, $approverUserId, $request) {
+        DB::transaction(function () use ($commandBus, $data, $requestId, $approverUserId, $request) {
             $commandBus->dispatch(new RequestCompensatoryLeave(
                 userId: $request->user()->id,
                 targetDate: $data['target_date'],
@@ -216,11 +223,14 @@ class CompensatoryLeaveController extends Controller
                 requestGroupId: $data['request_group_id'] ?? null,
             ));
 
-            return $commandBus->dispatch(new ApproveCompensatoryLeaveRequestCommand(
+            $commandBus->dispatch(new ApproveCompensatoryLeaveRequestCommand(
                 compensatoryLeaveRequestId: $requestId,
                 approvedByUserId: null,
             ));
         });
+
+        $compensatoryLeaveRequest = CompensatoryLeaveRequest::query()->findOrFail($requestId);
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
 
         return (new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->load('user', 'approver')))->response()->setStatusCode(201);
     }
@@ -232,13 +242,14 @@ class CompensatoryLeaveController extends Controller
         tags: ['代休'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function myRequests(Request $request): AnonymousResourceCollection
+    public function myRequests(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = CompensatoryLeaveRequest::query()
             ->with('user', 'approver')
             ->where('user_id', $request->user()->id)
             ->orderByDesc('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, $requests);
 
         return CompensatoryLeaveRequestResource::collection($requests);
     }
@@ -250,7 +261,7 @@ class CompensatoryLeaveController extends Controller
         tags: ['代休'],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function requestsToApprove(Request $request): AnonymousResourceCollection
+    public function requestsToApprove(Request $request, LeaveRequestWorkflowLinks $links): AnonymousResourceCollection
     {
         $requests = CompensatoryLeaveRequest::query()
             ->with('user', 'approver')
@@ -258,6 +269,7 @@ class CompensatoryLeaveController extends Controller
             ->where('status', CompensatoryLeaveRequestStatus::SUBMITTED)
             ->orderBy('target_date')
             ->get();
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, $requests);
 
         return CompensatoryLeaveRequestResource::collection($requests);
     }
@@ -270,19 +282,23 @@ class CompensatoryLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'compensatoryLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function approveRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    public function approveRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): CompensatoryLeaveRequestResource
     {
-        // UC-P004相当: 承認はworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // UC-P004相当: 承認はworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
         // ApproveWorkflowRequestを発行する。
         $commandBus->dispatch(new ApproveWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $compensatoryLeaveRequest,
                 '対応する申請が見つからないため承認できません。',
             ),
             approvedByUserId: $request->user()->id,
         ));
 
-        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+        $compensatoryLeaveRequest = $compensatoryLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest);
     }
 
     #[OA\Post(
@@ -294,14 +310,15 @@ class CompensatoryLeaveController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['comment'], properties: [new OA\Property(property: 'comment', type: 'string')])),
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function returnRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    public function returnRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): CompensatoryLeaveRequestResource
     {
         $data = $request->validate(['comment' => ['required', 'string']]);
 
-        // UC-P004相当 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを見つけ、
+        // UC-P004相当 手順2: 差戻しはworkflow_requestを経由する。対応するworkflow_requestを対応表から見つけ、
         // ReturnWorkflowRequestを発行する。
         $commandBus->dispatch(new ReturnWorkflowRequest(
-            workflowRequestId: $this->submittedWorkflowRequestId(
+            workflowRequestId: $this->linkedWorkflowRequestId(
+                $links,
                 $compensatoryLeaveRequest,
                 '対応する申請が見つからないため差し戻せません。',
             ),
@@ -309,7 +326,10 @@ class CompensatoryLeaveController extends Controller
             comment: $data['comment'],
         ));
 
-        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+        $compensatoryLeaveRequest = $compensatoryLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest);
     }
 
     #[OA\Post(
@@ -320,11 +340,14 @@ class CompensatoryLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'compensatoryLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated')],
     )]
-    public function cancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    public function cancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): CompensatoryLeaveRequestResource
     {
         $commandBus->dispatch(new CancelCompensatoryLeaveRequest($compensatoryLeaveRequest->id, $request->user()->id));
 
-        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+        $compensatoryLeaveRequest = $compensatoryLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest);
     }
 
     /**
@@ -340,11 +363,14 @@ class CompensatoryLeaveController extends Controller
         parameters: [new OA\Parameter(name: 'compensatoryLeaveRequest', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 200, description: 'Successful response'), new OA\Response(response: 401, description: 'Unauthenticated'), new OA\Response(response: 403, description: 'Forbidden'), new OA\Response(response: 422, description: 'Validation error')],
     )]
-    public function adminCancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus): CompensatoryLeaveRequestResource
+    public function adminCancelRequest(Request $request, CompensatoryLeaveRequest $compensatoryLeaveRequest, CommandBus $commandBus, LeaveRequestWorkflowLinks $links): CompensatoryLeaveRequestResource
     {
         $commandBus->dispatch(new CancelCompensatoryLeaveRequest($compensatoryLeaveRequest->id, $request->user()->id, isAdminAction: true));
 
-        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest->refresh()->load('user', 'approver'));
+        $compensatoryLeaveRequest = $compensatoryLeaveRequest->refresh()->load('user', 'approver');
+        $links->attachWorkflowRequestIds(LeaveRequestWorkflowLink::KIND_COMPENSATORY, [$compensatoryLeaveRequest]);
+
+        return new CompensatoryLeaveRequestResource($compensatoryLeaveRequest);
     }
 
     /**
@@ -383,17 +409,24 @@ class CompensatoryLeaveController extends Controller
     {
         $data = $request->validate(['reason' => ['nullable', 'string']]);
 
-        $result = $commandBus->dispatch(new RequestCompensatoryLeaveGrantCancellation(
+        $commandBus->dispatch(new RequestCompensatoryLeaveGrantCancellation(
+            userId: $grant->user_id,
             grantId: $grant->id,
             requestedByUserId: $request->user()->id,
             reason: $data['reason'] ?? null,
         ));
 
-        // 承認不要設定時はその場でGrantが取消確定される。承認要の場合は
-        // compensatory_leave_grant_cancellationsの申請行(pending)が返る。
-        if ($result instanceof CompensatoryLeaveGrant) {
-            return (new CompensatoryLeaveGrantResource($result))->response();
+        // 承認不要設定時はその場で付与が取消確定される(口座集約)。承認要の場合は
+        // compensatory_leave_grant_cancellationsの申請行(pending)を返す。
+        if (! SystemSetting::current()->compensatory_leave_requires_approval) {
+            return (new CompensatoryLeaveGrantResource($grant->refresh()))->response();
         }
+
+        $result = CompensatoryLeaveGrantCancellation::query()
+            ->where('grant_id', $grant->id)
+            ->where('requested_by_user_id', $request->user()->id)
+            ->latest('id')
+            ->firstOrFail();
 
         return response()->json([
             'id' => $result->id,
@@ -413,10 +446,16 @@ class CompensatoryLeaveController extends Controller
     )]
     public function approveGrantCancellation(Request $request, int $cancellationId, CommandBus $commandBus): JsonResponse
     {
-        $cancellation = $commandBus->dispatch(new ApproveCompensatoryLeaveGrantCancellation(
+        $pending = CompensatoryLeaveGrantCancellation::query()->findOrFail($cancellationId);
+        $grant = CompensatoryLeaveGrant::query()->findOrFail($pending->grant_id);
+
+        $commandBus->dispatch(new ApproveCompensatoryLeaveGrantCancellation(
+            userId: $grant->user_id,
             cancellationId: $cancellationId,
             approvedByUserId: $request->user()->id,
         ));
+
+        $cancellation = $pending->refresh();
 
         return response()->json([
             'id' => $cancellation->id,
@@ -461,24 +500,20 @@ class CompensatoryLeaveController extends Controller
     }
 
     /**
-     * 承認・差戻し対象のworkflow_request(subject_type=compensatory_leave_request)を特定する。
+     * 承認・差戻し対象のワークフローIDを対応表(leave_request_workflow_links)から特定する。
+     * workflow_requestsは読まない(原則15。休暇申請文脈の対応表だけで申請を特定する)。
      * 見つからない場合に黙って何もしないと、状態が変わらないまま200を返してしまうため
      * DomainRuleExceptionを投げる。
      */
-    private function submittedWorkflowRequestId(CompensatoryLeaveRequest $compensatoryLeaveRequest, string $message): string
+    private function linkedWorkflowRequestId(LeaveRequestWorkflowLinks $links, CompensatoryLeaveRequest $compensatoryLeaveRequest, string $message): string
     {
-        $workflowRequest = WorkflowRequest::query()
-            ->where('subject_type', WorkflowRequestNotificationContent::COMPENSATORY_LEAVE_REQUEST)
-            ->where('subject_id', $compensatoryLeaveRequest->id)
-            ->where('status', WorkflowRequestStatus::SUBMITTED)
-            ->latest()
-            ->first();
+        $workflowRequestId = $links->workflowRequestIdFor(LeaveRequestWorkflowLink::KIND_COMPENSATORY, $compensatoryLeaveRequest->id);
 
-        if ($workflowRequest === null) {
+        if ($workflowRequestId === null) {
             throw new DomainRuleException($message);
         }
 
-        return $workflowRequest->id;
+        return $workflowRequestId;
     }
 
     /**
@@ -491,6 +526,8 @@ class CompensatoryLeaveController extends Controller
             userId: $userId,
             grantModelClass: CompensatoryLeaveGrant::class,
             requestModelClass: CompensatoryLeaveRequest::class,
+            // 付与・消化記録は利用者単位の代休口座の集約のイベント(集約IDは利用者から派生)に記録される。
+            additionalAggregateIds: [CompensatoryLeaveAccountAggregate::streamIdFor($userId)],
         );
 
         return StoredEventResource::collection($events);

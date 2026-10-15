@@ -31,7 +31,7 @@ describe('MyPaidLeaveHistoryPage', () => {
         aggregate_type: 'paid_leave_grant',
         aggregate_id: '1',
         version: 1,
-        event_type: 'paid_leave.granted',
+        event_type: 'paid_leave_account.grant_created',
         payload: { granted_days: 10, expires_on: '2027-06-30' },
         occurred_at: '2025-07-01T09:00:00+09:00',
       },

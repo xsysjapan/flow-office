@@ -67,6 +67,55 @@ describe('dayWarnings', () => {
     expect(dayWarnings('2026-07-06', day, '2026-07-06')).toContain('長時間労働')
   })
 
+  it('does not warn of 打刻漏れ for a past full-day leave (全休)', () => {
+    const day: AttendanceDay = {
+      ...baseDay,
+      status: 'not_started',
+      breaks: [],
+      calculation: null,
+      actual_start_at: null,
+      actual_end_at: null,
+      leaves: [{ leave_kind: 'paid', unit: 'full', hours: null, minutes: null, special_leave_type_id: null, request_id: 'r1', workflow_request_id: 'w1', request_status: 'approved' }],
+    }
+    expect(dayWarnings('2026-07-01', day, '2026-07-06')).toEqual([])
+  })
+
+  it('does not warn of 打刻漏れ when both am_half and pm_half leaves cover the past day (種類を問わず全休扱い)', () => {
+    const leave = (unit: 'am_half' | 'pm_half', leave_kind: 'paid' | 'compensatory') => ({
+      leave_kind,
+      unit,
+      hours: null,
+      minutes: null,
+      special_leave_type_id: null,
+      request_id: `r-${unit}`,
+      workflow_request_id: null,
+      request_status: 'submitted' as const,
+    })
+    const day: AttendanceDay = {
+      ...baseDay,
+      status: 'not_started',
+      breaks: [],
+      calculation: null,
+      actual_start_at: null,
+      actual_end_at: null,
+      leaves: [leave('am_half', 'paid'), leave('pm_half', 'compensatory')],
+    }
+    expect(dayWarnings('2026-07-01', day, '2026-07-06')).toEqual([])
+  })
+
+  it('still warns of 打刻漏れ for a past half-day leave only (半休だけでは全休扱いしない)', () => {
+    const day: AttendanceDay = {
+      ...baseDay,
+      status: 'not_started',
+      breaks: [],
+      calculation: null,
+      actual_start_at: null,
+      actual_end_at: null,
+      leaves: [{ leave_kind: 'paid', unit: 'am_half', hours: null, minutes: null, special_leave_type_id: null, request_id: 'r1', workflow_request_id: null, request_status: 'approved' }],
+    }
+    expect(dayWarnings('2026-07-01', day, '2026-07-06')).toEqual(['打刻漏れ'])
+  })
+
   it('warns of 欠勤 when the daily calculation reports absence minutes, without also warning 打刻漏れ', () => {
     const day: AttendanceDay = {
       ...baseDay,

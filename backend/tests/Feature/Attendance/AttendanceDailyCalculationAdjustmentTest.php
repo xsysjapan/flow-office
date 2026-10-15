@@ -3,6 +3,7 @@
 namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
+use App\Models\AttendanceLock;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -238,7 +239,14 @@ class AttendanceDailyCalculationAdjustmentTest extends TestCase
             'reason' => '登録',
         ])->assertCreated()->json('id');
 
-        AttendanceDay::query()->whereKey($dayId)->update(['locked_at' => now()]);
+        // 締め後・提出後のロックは月次のロック表(attendance_locks)で表す(attendance_days.locked_atは廃止)。
+        AttendanceLock::query()->create([
+            'scope_type' => AttendanceLock::SCOPE_MONTH,
+            'period_start_date' => '2026-07-01',
+            'period_end_date' => '2026-07-31',
+            'user_id' => $employee->id,
+            'locked_at' => now(),
+        ]);
 
         $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}/calculation", [
             'prescribed_work_minutes' => 480,

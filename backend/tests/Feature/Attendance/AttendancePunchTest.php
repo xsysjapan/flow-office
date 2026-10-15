@@ -3,6 +3,7 @@
 namespace Tests\Feature\Attendance;
 
 use App\Models\AttendanceDay;
+use App\Models\AttendanceLock;
 use App\Models\AttendancePunch;
 use App\Models\CompanyCalendar;
 use App\Models\Role;
@@ -314,8 +315,14 @@ class AttendancePunchTest extends TestCase
 
         $day = AttendanceDay::query()->where('user_id', $employee->id)->whereDate('work_date', $workDate)->first();
         $this->assertSame('punch', $day->source);
-        $day->locked_at = Carbon::now();
-        $day->save();
+        // 締め後・提出後のロックは月次のロック表(attendance_locks)で表す(attendance_days.locked_atは廃止)。
+        AttendanceLock::query()->create([
+            'scope_type' => AttendanceLock::SCOPE_MONTH,
+            'period_start_date' => '2026-07-01',
+            'period_end_date' => '2026-07-31',
+            'user_id' => $employee->id,
+            'locked_at' => Carbon::now(),
+        ]);
 
         // 元の打刻を消し、新たに(それ単体では矛盾のない)打刻を記録しても、
         // 締め後にロック済みの日は上書きしない。

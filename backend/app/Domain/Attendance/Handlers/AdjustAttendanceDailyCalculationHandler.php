@@ -49,6 +49,10 @@ class AdjustAttendanceDailyCalculationHandler implements CommandHandler
                 lateNightPrescribedHolidayWorkMinutes: $command->lateNightPrescribedHolidayWorkMinutes,
                 reason: $command->reason,
                 adjustedByUserId: $command->adjustedByUserId,
+                userId: $day->user_id,
+                workDate: $day->work_date->toDateString(),
+                dayClassification: $day->day_classification,
+                workMinutes: (int) ($day->calculation?->work_minutes ?? 0),
             )
             ->persist();
 

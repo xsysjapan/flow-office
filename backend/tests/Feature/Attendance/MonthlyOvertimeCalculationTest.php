@@ -7,11 +7,11 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceDayStatus;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\SpecialLeaveGrant;
 use App\Models\SpecialLeaveType;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Feature\SpecialLeave\SpecialLeaveTestHelpers;
 use Tests\TestCase;
 
 /**
@@ -22,6 +22,7 @@ use Tests\TestCase;
 class MonthlyOvertimeCalculationTest extends TestCase
 {
     use RefreshDatabase;
+    use SpecialLeaveTestHelpers;
 
     private function makeCalendar(): CompanyCalendar
     {
@@ -286,15 +287,13 @@ class MonthlyOvertimeCalculationTest extends TestCase
         $birthdayType = SpecialLeaveType::query()->create(['name' => '誕生日休暇', 'is_active' => true]);
         $refreshType = SpecialLeaveType::query()->create(['name' => 'リフレッシュ休暇', 'is_active' => true]);
 
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $birthdayType->id,
-            'granted_on' => '2026-04-01', 'expires_on' => null,
-            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+            'granted_on' => '2026-04-01', 'expires_on' => null, 'granted_days' => 3,
         ]);
-        SpecialLeaveGrant::query()->create([
+        $this->grantSpecialLeave([
             'user_id' => $employee->id, 'special_leave_type_id' => $refreshType->id,
-            'granted_on' => '2026-04-01', 'expires_on' => null,
-            'granted_days' => 3, 'used_days' => 0, 'remaining_days' => 3,
+            'granted_on' => '2026-04-01', 'expires_on' => null, 'granted_days' => 3,
         ]);
 
         // 全休(誕生日休暇) 2026-06-03。

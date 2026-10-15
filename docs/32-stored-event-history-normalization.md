@@ -101,8 +101,6 @@ php artisan events:backfill-attendance-backoffice-tasks --apply
 
 ```bash
 php artisan migrate --force
-php artisan db:seed --class=UserManagementSeeder --force
-php artisan db:seed --class=AccessControlSeeder --force
 
 # 読み取り専用の事前確認
 php artisan events:normalize-history
@@ -111,6 +109,15 @@ php artisan events:normalize-history
 php artisan events:normalize-history \
   --apply \
   --backup-table=stored_events_backup_20260810
+```
+
+シーダー(`UserManagementSeeder`・`AccessControlSeeder`)は、作り直し(と旧系統を削除したコードの配備)の後に実行する。
+シーダーはCommandを発行してイベントを`stored_events`へ記録し、既にある行は飛ばす(上書きしない)ため、作り直しの前に
+実行すると、作り直しの対象に新規のイベントが混ざる。
+
+```bash
+php artisan db:seed --class=UserManagementSeeder --force
+php artisan db:seed --class=AccessControlSeeder --force
 ```
 
 バックアップテーブルが既に存在する場合は上書きせず停止する。MySQLのDDLは暗黙コミットされるため、
@@ -131,6 +138,71 @@ php artisan events:normalize-history \
 本番複製MySQL 5.7で、788件から補正後792件（出力監査1件、月次勤怠タスク3件）となること、
 全792件をデシリアライズできること、
 全集約のバージョン欠番が0件であることを確認済み。
+
+## 休暇まわりの作り直し(変更セット 20261009-keep-leave-work-type-on-edit、論点18)
+
+休暇の旧イベント(有給・特別休暇・代休の旧系統)と、移行イベント(`*.migrated`)・補正イベント(`attendance_day.corrected`)は、
+`stored_events`の作り直しで新しいイベント構成へ変換する。移行イベント・補正イベントは作らない(`data-correction`スキル)。
+変換規則と実行手順は`docs/changesets/20261009-keep-leave-work-type-on-edit/assets/event-rebuild-mapping.md`(2章・7章)、
+本番の手順は`docs/27-release-runbook.md` 3.1による。
+
+### 作り直しの実行
+
+```bash
+php artisan leave:rebuild-event-store                    # 試し実行(既定。書き込みなし。扱えない並びがあれば失敗)
+php artisan leave:rebuild-event-store --apply            # stored_events_rebuilt に作り直し後の行を書き、自己整合性を検査する
+php artisan leave:rebuild-event-store --verify           # stored_events_rebuilt の自己整合性(id・版の連番、旧イベントの残存)を検査する
+php artisan leave:rebuild-event-store --swap             # 検査が通っている場合に stored_events と入れ替える
+php artisan leave:rebuild-event-store --list-readmodels  # 全Projectorの書き込み先テーブル(リビルド前に空にする対象)を出す
+```
+
+- 旧イベントクラスに依存せず`stored_events`の生のJSONを読み、元の発生順にid・版を振り直す。`created_at`は元の値を引き継ぐ。
+- 扱えない並びは未対応として一覧に出し、失敗させる(推測で埋めない)。例: ReadModelに行が無く`attendance_day.created`も無い勤怠日、
+  cutover後の指定・取消の重複、`daily_calculation_adjusted`の直前に`attendance_day.calculated`が無い日、旧と口座イベントの混在、
+  申請に結び付かない消化。
+- `--swap`は`stored_events`を`stored_events_before_rebuild_YYYYMMDDHHMMSS`として残す(表名を記録する)。
+- 検証は複製DBで行う。複製に作り直し後の表を入れ、全ReadModelを空にして全Projectorをリビルドした結果を本番のReadModelと比較し、
+  差分が意図した差(差し戻された休暇の消化記録の取消、休暇値の削除等)だけであることを確認する。
+
+### 部分的な書き換え(`StoredEventCorrector`・補正コマンドの基底)
+
+少数のイベントのpayloadを直す・誤って記録されたイベントを消す補正は、次の部品で行う。作り直しで置き換えられない個別の補正に使う。
+各補正は、対象のイベント・修正前後の値を示したうえで、ユーザーの明示的な許可を得てから本実行する(`data-correction`ステップ2。一般的な「直してほしい」は許可とみなさない)。
+
+- `App\Domain\EventSourcing\Correction\StoredEventCorrector`: `stored_events`の直接修正(書き換え・削除)の共通処理
+- `App\Console\Commands\Concerns\StoredEventCorrectionCommand`: 補正コマンドの基底クラス。子クラスは`plan()`で補正計画
+  (`StoredEventCorrectionPlan`。補正キーと`StoredEventRewrite`の一覧)を返す。子クラスのsignatureには`{--apply} {--backup-table=}`を含める
+- 補正ログ `stored_event_corrections`: 修正したイベントの修正前後のpayload・バックアップテーブル名を残す。Projectionではない
+
+### 直接修正の実行(試し実行 → 許可 → `--apply`)
+
+補正コマンド(`StoredEventCorrectionCommand`の子クラス)は次の順で実行する。
+
+```bash
+php artisan <補正コマンド>                                  # 試し実行(対象行と修正前後の一覧。書き込みなし)
+php artisan <補正コマンド> --apply                          # 本実行(既定のバックアップ名)
+php artisan <補正コマンド> --apply --backup-table=stored_events_backup_20261010
+```
+
+- 試し実行の一覧は、修正対象(`pending`)と補正ログに既にあり触らない行(修正済み)を区別して出す。
+- `--apply`は、まず修正対象の行だけを`CREATE TABLE ... AS SELECT`でバックアップテーブルへ複写し、行数を検証する。
+  バックアップ名は既定で`stored_events_backup_YYYYMMDDHHMMSS`、`--backup-table`で指定する(英小文字で始まる英小文字・数字・`_`の
+  56文字以内。既存のテーブル名は上書きせず停止する)。対象が無ければバックアップは作らない。
+- バックアップの後、1トランザクションで書き換え・削除し、補正ログへ修正前後のpayloadを記録する。書き換え・削除した集約ごとに
+  版(`aggregate_version`)が欠番なく続いているかを確かめ、崩れていれば全体をロールバックする。
+- 冪等: 同じ補正キー(`correction_key`)で再実行すると、補正ログにある行は再修正しない。
+  MySQLのDDLは暗黙コミットされるため、バックアップ作成後にトランザクションが失敗した場合はバックアップテーブルが残る。
+  再実行する場合は新しいバックアップ名を指定する。
+- 本実行の後、影響するReadModelを`event-sourcing:replay`で再生成し(対象テーブルを空にしてから実行する。手順は`docs/29`参照)、
+  検証SQLで結果を確認する。
+
+### 作り直しの後(休暇まわりの確認)
+
+- 全ReadModelのテーブル(`leave:rebuild-event-store --list-readmodels`で出す一覧)を空にしてから、全Projectorを`event-sourcing:replay`する
+  (Projectorは既存の状態を消さない前提のため空にする。手順は`docs/29`参照)。
+- 日次計算を`attendance:recalculate-days`(`--from`・`--to`必須。既定は試し実行、`--apply`で記録。締め・提出済みの日は一覧に印を付ける)で
+  再計算する。締め・提出済みの月のスナップショットとの差は、リハーサルで確認する。
+- 有給・特別休暇・代休の口座と勤怠の休暇ビューを空から再生成しても、作り直し前の再生成と同じ状態になること。
 
 ## ロールバック
 

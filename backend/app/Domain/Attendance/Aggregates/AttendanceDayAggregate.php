@@ -11,6 +11,7 @@ use App\Domain\Attendance\Events\AttendanceDayEdited;
 use App\Domain\Attendance\Events\AttendanceDayLiveStatusSynced;
 use App\Domain\Attendance\Events\AttendanceDaySyncedFromPunches;
 use App\Domain\Attendance\Events\AttendanceWeeklyOvertimeAllocated;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 /**
@@ -102,9 +103,9 @@ class AttendanceDayAggregate extends AggregateRoot
     /**
      * @param  array<string, int|bool|float|null>  $calculation
      */
-    public function calculate(array $calculation): self
+    public function calculate(array $calculation, string $userId, string $workDate): self
     {
-        $this->recordThat(new AttendanceDayCalculated(calculation: $calculation));
+        $this->recordThat(new AttendanceDayCalculated(calculation: $calculation, userId: $userId, workDate: $workDate));
 
         return $this;
     }
@@ -123,6 +124,10 @@ class AttendanceDayAggregate extends AggregateRoot
         int $lateNightPrescribedHolidayWorkMinutes,
         string $reason,
         string $adjustedByUserId,
+        string $userId,
+        string $workDate,
+        int $workMinutes,
+        ?string $dayClassification = null,
     ): self {
         $this->recordThat(new AttendanceDailyCalculationAdjusted(
             prescribedWorkMinutes: $prescribedWorkMinutes,
@@ -138,6 +143,10 @@ class AttendanceDayAggregate extends AggregateRoot
             lateNightPrescribedHolidayWorkMinutes: $lateNightPrescribedHolidayWorkMinutes,
             reason: $reason,
             adjustedByUserId: $adjustedByUserId,
+            userId: $userId,
+            workDate: $workDate,
+            dayClassification: $dayClassification,
+            workMinutes: $workMinutes,
         ));
 
         return $this;

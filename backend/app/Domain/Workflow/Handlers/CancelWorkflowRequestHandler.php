@@ -29,19 +29,27 @@ class CancelWorkflowRequestHandler implements CommandHandler
 
         $workflowRequest = WorkflowRequest::query()->findOrFail($command->workflowRequestId);
 
-        if ($workflowRequest->applicant_user_id !== $command->cancelledByUserId) {
-            throw new DomainRuleException('自分が作成した申請のみ取り消せます。');
-        }
-
-        if ($workflowRequest->subject_type === 'attendance_month') {
-            $cancelledBy = User::query()->findOrFail($command->cancelledByUserId);
-            if (! $this->effectiveAccessResolver->hasPermission($cancelledBy, 'attendance.submission_revoke', null, $command->cancelledByUserId)) {
-                throw new DomainRuleException('月次勤怠の取消には権限が必要です。');
+        if ($command->viaReactor) {
+            // Reactorからの取消は本人・権限チェックを行わず、既に取消済み・取消不可(承認済み等)なら
+            // 何もせず正常終了する(冪等。承認済みの申請は状態を変えない)。
+            if (! in_array($workflowRequest->status, WorkflowRequestStatus::cancellable(), true)) {
+                return $workflowRequest;
             }
-        }
+        } else {
+            if ($workflowRequest->applicant_user_id !== $command->cancelledByUserId) {
+                throw new DomainRuleException('自分が作成した申請のみ取り消せます。');
+            }
 
-        if (! in_array($workflowRequest->status, WorkflowRequestStatus::cancellable(), true)) {
-            throw new DomainRuleException('この申請は現在のステータスからは取り消せません。');
+            if ($workflowRequest->subject_type === 'attendance_month') {
+                $cancelledBy = User::query()->findOrFail($command->cancelledByUserId);
+                if (! $this->effectiveAccessResolver->hasPermission($cancelledBy, 'attendance.submission_revoke', null, $command->cancelledByUserId)) {
+                    throw new DomainRuleException('月次勤怠の取消には権限が必要です。');
+                }
+            }
+
+            if (! in_array($workflowRequest->status, WorkflowRequestStatus::cancellable(), true)) {
+                throw new DomainRuleException('この申請は現在のステータスからは取り消せません。');
+            }
         }
 
         WorkflowRequestAggregate::retrieve($workflowRequest->id)

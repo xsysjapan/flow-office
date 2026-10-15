@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\UserManagement\Commands\AddMembership;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -41,12 +43,9 @@ class DatabaseSeeder extends Seeder
             DefaultCompanyCalendarSeeder::class,
         ]);
 
-        DB::table('memberships')->updateOrInsert(
-            [
-                'user_id' => $admin->id,
-                'group_id' => DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id'),
-            ],
-            ['membership_kind' => 'member', 'updated_at' => now(), 'created_at' => now()],
-        );
+        $administratorsGroupId = DB::table('groups')->where('code', 'SYSTEM_ADMINISTRATORS')->value('id');
+        if (! DB::table('memberships')->where('user_id', $admin->id)->where('group_id', $administratorsGroupId)->exists()) {
+            app(CommandBus::class)->dispatch(new AddMembership($admin->id, $administratorsGroupId, 'member', false, null));
+        }
     }
 }

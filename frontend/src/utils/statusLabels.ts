@@ -6,6 +6,7 @@ import type {
   AssetLendingStatus,
   AssetLoanRequestStatus,
   AssetManagementType,
+  AttendanceDayLeave,
   AttendanceDayStatus,
   AttendanceMonthStatus,
   BackOfficeTaskStatus,
@@ -151,46 +152,33 @@ export function attendanceDayStatusLabel(status: AttendanceDayStatus): StatusMet
   return attendanceDayStatusMeta[status]
 }
 
-const PAID_LEAVE_WORK_TYPE_PREFIX = 'paid_leave_'
-const SPECIAL_LEAVE_WORK_TYPE_PREFIX = 'special_leave_'
-const COMPENSATORY_LEAVE_WORK_TYPE_PREFIX = 'compensatory_leave_'
-
-/**
- * 全休の有給・特別休暇・代休はバックエンドが意図的に attendance_days.status を 'clocked_out' に
- * しているため(「退勤忘れ」警告の誤検知を避けるため。backend/app/Domain/Attendance/
- * Services/AttendanceCalculator.php 参照)、statusだけを見ると休暇日なのに「退勤済み」と
- * 表示されてしまう。attendance_days.work_type(paid_leave_ / special_leave_ / compensatory_leave_ 接頭辞,
- * PaidLeaveType::toAttendanceWorkType() / SpecialLeaveWorkType::toAttendanceWorkType() /
- * CompensatoryLeaveWorkType::toAttendanceWorkType() 参照)を優先して見る。
- */
-function leaveWorkTypeLabel(workType: string | null | undefined): string | null {
-  if (!workType) return null
-  if (workType.startsWith(PAID_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(PAID_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `有給休暇(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  if (workType.startsWith(SPECIAL_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(SPECIAL_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `特別休暇(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  if (workType.startsWith(COMPENSATORY_LEAVE_WORK_TYPE_PREFIX)) {
-    const unit = workType.slice(COMPENSATORY_LEAVE_WORK_TYPE_PREFIX.length) as PaidLeaveType
-    return `代休(${paidLeaveTypeLabels[unit] ?? unit})`
-  }
-  return null
+const LEAVE_KIND_LABELS: Record<AttendanceDayLeave['leave_kind'], string> = {
+  paid: '有給休暇',
+  special: '特別休暇',
+  compensatory: '代休',
 }
 
 /**
- * 勤怠日1件分の表示ラベル。全休の有給・特別休暇・代休はwork_typeから休暇種別・取得単位を
- * 表示し、それ以外はattendanceDayStatusLabel()と同じstatusベースの表示にフォールバックする。
+ * 勤怠日の休暇(休暇ビュー`leaves`の行)を表示文言にする。種類と取得単位を示す
+ * (例: 有給休暇(全休)・代休(午前半休))。複数あれば複数返す。
+ * 休暇は勤怠日のstatusやwork_type(作業内容)では表さないため、表示は必ずこの一覧から行う。
+ */
+export function attendanceDayLeaveLabels(leaves: AttendanceDayLeave[] | undefined): string[] {
+  return (leaves ?? []).map((leave) => `${LEAVE_KIND_LABELS[leave.leave_kind]}(${paidLeaveTypeLabels[leave.unit]})`)
+}
+
+/**
+ * 勤怠日1件分の表示ラベル。休暇がある日は休暇ラベルを表示し(複数は「・」で連結)、
+ * 休暇が無い日はattendanceDayStatusLabel()と同じstatusベースの表示にフォールバックする。
+ * 休暇の日は status が 'clocked_out' になっていなくても休暇ラベルを優先する。
  */
 export function attendanceDayDisplayLabel(day: {
   status: AttendanceDayStatus
-  work_type: string | null | undefined
+  leaves?: AttendanceDayLeave[]
 }): StatusMeta {
-  const leaveLabel = leaveWorkTypeLabel(day.work_type)
-  if (leaveLabel) {
-    return { label: leaveLabel, tone: 'info' }
+  const labels = attendanceDayLeaveLabels(day.leaves)
+  if (labels.length > 0) {
+    return { label: labels.join('・'), tone: 'info' }
   }
   return attendanceDayStatusLabel(day.status)
 }
@@ -212,14 +200,15 @@ export function attendanceScheduleHolidayLabel(schedule: ScheduleHolidayInfo | n
 
 interface AttendanceDayRecordInfo {
   status: AttendanceDayStatus
-  work_type: string | null | undefined
+  leaves?: AttendanceDayLeave[]
   actual_start_at?: string | null
   actual_end_at?: string | null
 }
 
 function hasActualAttendanceRecord(day: AttendanceDayRecordInfo | null | undefined): boolean {
   if (!day) return false
-  return day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at)
+  // 休暇だけの日(実績なし・休暇あり)も、休暇ラベルを所定休日より優先して見せるため記録ありとする。
+  return day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at) || (day.leaves?.length ?? 0) > 0
 }
 
 /**
@@ -298,35 +287,42 @@ export function punchStatusLabel(status: PunchStatus): StatusMeta {
 }
 
 /**
- * 有給・特別休暇の履歴イベントは「ドメイン.種別」の形で、末尾の種別(granted/requested/
- * request_approved等)はどちらのドメインでも共通のため、末尾だけで引き当てる
- * (Queryのみ共通化し、ビジネスロジックは別ドメインとして実装する方針に合わせた表示側の共通化)。
+ * 有給・特別休暇・代休の履歴イベントは「ドメイン.種別」の形で、末尾の種別(grant_created/request_approved等)で
+ * 表示を引き当てる。文脈をまたいで同じ種別名は同じ意味で使う(口座は grant_*・usage_*、申請は requested 等の
+ * 申請種別。有給の申請集約は requested/approved/returned/cancelled/resubmitted/shared、特別休暇・代休は request_*)。
+ * 本変更前の種別(paid_leave.granted・special_leave.used 等)は作り直しで無くなったため扱わない。
  */
 const leaveEventSuffixMeta: Record<string, StatusMeta> = {
-  granted: { label: '付与', tone: 'success' },
-  requested: { label: '申請', tone: 'info' },
-  request_approved: { label: '承認', tone: 'success' },
-  request_returned: { label: '差戻し', tone: 'warning' },
-  request_cancelled: { label: '取消', tone: 'danger' },
-  used: { label: '消化', tone: 'info' },
-  warning_raised: { label: '警告', tone: 'warning' },
-  /** 有給・特別休暇の付与取消(RevokePaidLeaveGrant/RevokeSpecialLeaveGrant)。 */
+  grant_created: { label: '付与', tone: 'success' },
+  grant_registered: { label: '付与', tone: 'success' },
+  grant_manually_granted: { label: '付与', tone: 'success' },
+  grant_warning_raised: { label: '警告', tone: 'warning' },
+  /** 有給・特別休暇の付与取消(口座の RevokePaidLeaveGrant・RevokeSpecialLeaveAccountGrant)。 */
   grant_revoked: { label: '取消', tone: 'danger' },
-  /** 代休固有: 休日出勤実績からの自動計上(下書き)。付与payloadの形が違うため別suffixにする。 */
+  /** 代休固有: 休日出勤実績からの自動計上(下書き)。 */
   grant_synced: { label: '自動計上', tone: 'success' },
-  /** 代休固有: 管理者による手動付与。 */
-  manually_granted: { label: '付与', tone: 'success' },
   /** 代休固有: 月次確定前の下書き付与の取消。 */
   grant_removed: { label: '計上取消', tone: 'danger' },
   /** 代休固有: 月次確定により付与が使用可能になった。 */
   grant_confirmed: { label: '確定', tone: 'success' },
-  /** 代休固有: 確定後の付与取消(RevokeCompensatoryLeaveGrant相当)。paid/special leaveの
-   *  grant_revokedとはpayloadのフィールド名(cancelled_by_user_id/reason)が異なる別イベント。 */
+  /** 代休固有: 確定後の付与取消。 */
   grant_cancelled: { label: '取消', tone: 'danger' },
-  /** 代休固有: 消化日の指定・取消。 */
-  usage_designated: { label: '消化指定', tone: 'info' },
-  usage_reversed: { label: '消化取消', tone: 'warning' },
+  requested: { label: '申請', tone: 'info' },
+  approved: { label: '承認', tone: 'success' },
+  returned: { label: '差戻し', tone: 'warning' },
+  cancelled: { label: '取消', tone: 'danger' },
+  resubmitted: { label: '再申請', tone: 'info' },
+  shared: { label: '連携', tone: 'neutral' },
+  request_approved: { label: '承認', tone: 'success' },
+  request_returned: { label: '差戻し', tone: 'warning' },
+  request_cancelled: { label: '取消', tone: 'danger' },
+  request_resubmitted: { label: '再申請', tone: 'info' },
   request_shared: { label: '連携', tone: 'neutral' },
+  usage_designated: { label: '消化指定', tone: 'info' },
+  usage_confirmed: { label: '消化', tone: 'info' },
+  usage_cancelled: { label: '消化取消', tone: 'warning' },
+  usage_allocated: { label: '充当', tone: 'info' },
+  usage_allocation_released: { label: '充当取消', tone: 'warning' },
 }
 
 function leaveEventTypeLabel(eventType: string): StatusMeta {
@@ -354,21 +350,30 @@ function leaveEventDetail(event: StoredEvent, domainLabel: string): string {
   const suffix = event.event_type.split('.').slice(1).join('.')
 
   switch (suffix) {
-    case 'granted': {
+    case 'grant_created':
+    case 'grant_registered': {
       const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
       return `${payload.granted_days}日を付与(${expiry})`
     }
     case 'requested':
       return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`
+    case 'approved':
     case 'request_approved':
       return `${domainLabel}申請が承認されました`
+    case 'returned':
     case 'request_returned':
       return `${domainLabel}申請が差し戻されました: ${payload.comment}`
+    case 'cancelled':
     case 'request_cancelled':
       return `${domainLabel}申請を取り消しました`
-    case 'used':
-      return `対象日 ${payload.used_on} に${payload.used_days}日を消化`
-    case 'warning_raised':
+    case 'resubmitted':
+    case 'request_resubmitted':
+      return `${domainLabel}申請が再提出されました`
+    case 'usage_confirmed':
+      return `${domainLabel}の消化が確定しました`
+    case 'usage_cancelled':
+      return `${domainLabel}の消化を取り消しました`
+    case 'grant_warning_raised':
       return String(payload.message)
     default:
       return event.event_type
@@ -399,23 +404,23 @@ export function compensatoryLeaveEventDetail(event: StoredEvent): string {
 
   switch (suffix) {
     case 'grant_synced':
-      return `対象日 ${payload.work_date} の休日出勤分として${payload.granted_days}日を自動計上`
-    case 'manually_granted': {
+      return `対象日 ${payload.source_work_date} の休日出勤分として${payload.granted_days}日を自動計上`
+    case 'grant_manually_granted': {
       const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
-      return `対象日 ${payload.work_date} の休日出勤分として${payload.granted_days}日を手動付与(${expiry})`
+      return `対象日 ${payload.source_work_date} の休日出勤分として${payload.granted_days}日を手動付与(${expiry})`
     }
-    case 'grant_confirmed': {
-      const expiry = payload.expires_on ? `有効期限 ${payload.expires_on}` : '有効期限なし'
-      return `代休の付与が確定しました(${expiry})`
-    }
+    case 'grant_confirmed':
+      return '代休の付与が確定しました'
     case 'grant_removed':
       return `付与前に取り消されました: ${payload.reason}`
     case 'grant_cancelled':
       return `付与が取り消されました${payload.reason ? `(${payload.reason})` : ''}`
     case 'usage_designated':
       return `対象日 ${payload.used_on} に${payload.used_days}日の消化を指定`
-    case 'usage_reversed':
-      return `対象日 ${payload.used_on} の${payload.used_days}日消化を取り消し`
+    case 'usage_confirmed':
+      return '代休の消化が確定しました'
+    case 'usage_cancelled':
+      return '代休の消化を取り消しました'
     case 'requested':
       return `対象日 ${payload.target_date} の${paidLeaveTypeLabel(payload.leave_type as PaidLeaveType)}を申請(${payload.requested_days}日)`
     case 'request_approved':
@@ -424,10 +429,10 @@ export function compensatoryLeaveEventDetail(event: StoredEvent): string {
       return `代休申請が差し戻されました: ${payload.comment}`
     case 'request_cancelled':
       return '代休申請を取り消しました'
+    case 'request_resubmitted':
+      return '代休申請が再提出されました'
     case 'request_shared':
       return '申請がワークフローに連携されました'
-    case 'used':
-      return `対象日 ${payload.used_on} に${payload.used_days}日を消化`
     default:
       return event.event_type
   }

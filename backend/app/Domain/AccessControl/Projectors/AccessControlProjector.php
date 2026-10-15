@@ -49,7 +49,7 @@ class AccessControlProjector extends Projector
     {
         DB::table('roles')->updateOrInsert(
             ['id' => $event->roleId],
-            ['code' => $event->code, 'name' => $event->name, 'description' => $event->description, 'is_system' => false, 'status' => 'active', 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
+            ['code' => $event->code, 'name' => $event->name, 'description' => $event->description, 'is_system' => $event->isSystem, 'status' => 'active', 'created_at' => $event->createdAt(), 'updated_at' => $event->createdAt()],
         );
     }
 

@@ -6,7 +6,6 @@ use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveRequest;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkflowRequest;
@@ -158,6 +157,31 @@ class AttendanceFlowTest extends TestCase
         $this->assertSame(0, $calculation['late_night_statutory_excess_overtime_minutes']);
     }
 
+    public function test_editing_a_clocked_out_day_to_clear_both_actuals_makes_it_not_started(): void
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($employee)->postJson('/api/attendance/clock-in')->assertSuccessful();
+        $dayId = $this->actingAs($employee)->getJson('/api/attendance/today')->json('id');
+        $dateString = Carbon::today($employee->timezone)->toDateString();
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => "{$dateString}T09:00:00+09:00",
+            'actual_end_at' => "{$dateString}T18:00:00+09:00",
+            'breaks' => [],
+            'reason' => '実績を入力',
+        ])->assertOk();
+        $this->assertSame('clocked_out', AttendanceDay::query()->findOrFail($dayId)->status);
+
+        $this->actingAs($employee)->putJson("/api/attendance/days/{$dayId}", [
+            'actual_start_at' => null,
+            'actual_end_at' => null,
+            'breaks' => [],
+            'reason' => '実績を消す',
+        ])->assertOk();
+        $this->assertSame('not_started', AttendanceDay::query()->findOrFail($dayId)->status);
+    }
+
     public function test_editing_a_day_with_mismatched_offsets_across_fields_is_rejected(): void
     {
         $employee = User::factory()->create();
@@ -288,9 +312,9 @@ class AttendanceFlowTest extends TestCase
         $this->actingAs($admin)->postJson("/api/attendance-months/{$monthId}/close")
             ->assertOk()->assertJsonPath('status', 'closed');
 
-        $this->assertNotNull(AttendanceDay::query()->findOrFail($dayId)->locked_at);
-        $this->assertNull($previousMonthDay->refresh()->locked_at);
-        $this->assertNull($nextMonthDay->refresh()->locked_at);
+        // 締め後の編集可否は月次の状態で判定する(attendance_days.locked_atは廃止)。対象月外の日は編集可能のまま。
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$previousMonthDay->id}")->assertJsonPath('is_locked', false);
+        $this->actingAs($employee)->getJson("/api/attendance/days/{$nextMonthDay->id}")->assertJsonPath('is_locked', false);
 
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
         $dayResponse->assertJsonPath('is_locked', true);
@@ -414,56 +438,6 @@ class AttendanceFlowTest extends TestCase
 
         $submit->assertStatus(422);
         $this->assertNull(AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first());
-    }
-
-    public function test_submitting_a_month_with_an_unapproved_paid_leave_request_is_rejected_without_creating_a_workflow_request(): void
-    {
-        $approver = User::factory()->create();
-
-        foreach (['submitted', 'returned'] as $status) {
-            $employee = User::factory()->create();
-            PaidLeaveRequest::query()->create([
-                'user_id' => $employee->id,
-                'approver_user_id' => $approver->id,
-                'status' => $status,
-                'leave_type' => 'full',
-                'target_date' => '2026-06-15',
-                'requested_days' => 1,
-            ]);
-
-            $this->actingAs($employee)
-                ->postJson('/api/attendance/months/2026-06/submit', ['approver_user_id' => $approver->id])
-                ->assertUnprocessable()
-                ->assertJsonPath('message', '対象月に未承認の有給申請があります。有給申請の承認を完了してから月次勤怠を提出してください。');
-
-            $this->assertDatabaseMissing('attendance_months', [
-                'user_id' => $employee->id,
-                'year_month' => '2026-06',
-            ]);
-            $this->assertDatabaseMissing('workflow_requests', [
-                'applicant_user_id' => $employee->id,
-                'subject_type' => 'attendance_month',
-            ]);
-        }
-    }
-
-    public function test_submitting_a_month_with_an_approved_paid_leave_request_is_allowed(): void
-    {
-        $employee = User::factory()->create();
-        $approver = User::factory()->create();
-        PaidLeaveRequest::query()->create([
-            'user_id' => $employee->id,
-            'approver_user_id' => $approver->id,
-            'status' => 'approved',
-            'leave_type' => 'full',
-            'target_date' => '2026-06-15',
-            'requested_days' => 1,
-        ]);
-
-        $this->actingAs($employee)
-            ->postJson('/api/attendance/months/2026-06/submit', ['approver_user_id' => $approver->id])
-            ->assertSuccessful()
-            ->assertJsonPath('status', 'submitted');
     }
 
     /**

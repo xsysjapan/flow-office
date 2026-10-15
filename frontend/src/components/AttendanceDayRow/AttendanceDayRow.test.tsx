@@ -69,20 +69,44 @@ describe('AttendanceDayRow', () => {
     expect(screen.getByText('8時間')).toBeInTheDocument()
   })
 
+  function leaveOf(leave_kind: 'paid' | 'special' | 'compensatory', unit: 'full' | 'am_half' | 'pm_half' | 'hourly') {
+    return {
+      leave_kind,
+      unit,
+      hours: null,
+      minutes: null,
+      special_leave_type_id: null,
+      request_id: `request-${leave_kind}-${unit}`,
+      workflow_request_id: null,
+      request_status: 'approved' as const,
+    }
+  }
+
   it('shows a leave-specific label instead of 退勤済み for a full-day paid leave day', () => {
-    renderRow({ day: { ...day, work_type: 'paid_leave_full' } })
+    renderRow({ day: { ...day, leaves: [leaveOf('paid', 'full')] } })
     expect(screen.getByText('有給休暇(全休)')).toBeInTheDocument()
     expect(screen.queryByText('退勤済み')).not.toBeInTheDocument()
   })
 
   it('shows a leave-specific label for a full-day special leave day', () => {
-    renderRow({ day: { ...day, work_type: 'special_leave_full' } })
+    renderRow({ day: { ...day, leaves: [leaveOf('special', 'full')] } })
     expect(screen.getByText('特別休暇(全休)')).toBeInTheDocument()
   })
 
   it('shows a leave-specific label for a full-day compensatory leave day', () => {
-    renderRow({ day: { ...day, work_type: 'compensatory_leave_full' } })
+    renderRow({ day: { ...day, leaves: [leaveOf('compensatory', 'full')] } })
     expect(screen.getByText('代休(全休)')).toBeInTheDocument()
+  })
+
+  it('shows every leave of the day (複数あれば複数)', () => {
+    renderRow({ day: { ...day, leaves: [leaveOf('paid', 'am_half'), leaveOf('compensatory', 'pm_half')] } })
+    expect(screen.getByText('有給休暇(午前半休)・代休(午後半休)')).toBeInTheDocument()
+  })
+
+  it('does not treat a leave name written into work_type (作業内容) as a leave', () => {
+    renderRow({ day: { ...day, work_type: 'paid_leave_full' } })
+    expect(screen.getByText('退勤済み')).toBeInTheDocument()
+    expect(screen.queryByText('有給休暇(全休)')).not.toBeInTheDocument()
   })
 
   it('shows 未入力 when there is no record for the day', () => {

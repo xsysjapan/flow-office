@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -15,8 +16,8 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * アプリ側のユーザー。認証は原則Microsoft Entra ID SSOだが、初回オンボーディング
  * (docs/06-usecases-auth.md UC-000)でSSOを設定しなかった場合に限り、ローカルパスワード
- * ログイン(`POST /auth/local-login`)を許可する。SSOでログインするユーザーは`password`が
- * null のまま。Microsoft Entra ID等の外部識別子はExternalIdentityで管理する。
+ * ログイン(`POST /auth/local-login`)を許可する。SSOでログインするユーザーはuser_credentialsのpasswordが
+ * null(行なし)のまま。Microsoft Entra ID等の外部識別子はExternalIdentityで管理する。
  * 項目の同期可否はFieldAuthorityに従い、Feature・Role・Permissionやtimezoneは同期で
  * 上書きしない。timezoneは新規作成時のみ
  * システム設定のデフォルトタイムゾーンで設定する (docs/06-usecases-auth.md UC-003)。
@@ -34,7 +35,7 @@ use Laravel\Sanctum\HasApiTokens;
  * この行自体もUserProjectorがstored_eventsから作成・更新する
  * (docs/29-event-sourcing-framework-migration.md参照)。
  */
-#[Fillable(['id', 'entra_user_id', 'name', 'email', 'employee_number', 'account_status', 'source_type', 'password', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'usage_start_date', 'last_login_at'])]
+#[Fillable(['id', 'entra_user_id', 'name', 'email', 'employee_number', 'account_status', 'source_type', 'department', 'job_title', 'employment_status', 'timezone', 'hire_date', 'termination_date', 'usage_start_date', 'last_login_at'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -55,9 +56,6 @@ class User extends Authenticatable
         'special_leave_auto_grant_enabled' => true,
     ];
 
-    /** @var list<string> */
-    protected $hidden = ['password'];
-
     protected function casts(): array
     {
         return [
@@ -67,9 +65,34 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'paid_leave_auto_grant_enabled' => 'boolean',
             'special_leave_auto_grant_enabled' => 'boolean',
-            // ローカルパスワードは平文でDBに保持しない (Laravel標準のhashedキャストで自動ハッシュ化する)。
-            'password' => 'hashed',
         ];
+    }
+
+    /**
+     * ローカルログインの資格情報(パスワードのハッシュ・remember_token)。usersとは別の表で、
+     * usersのProjectorは書き込まない。
+     *
+     * @return HasOne<UserCredential, $this>
+     */
+    public function credential(): HasOne
+    {
+        return $this->hasOne(UserCredential::class, 'user_id');
+    }
+
+    public function getAuthPassword(): ?string
+    {
+        return $this->credential?->password;
+    }
+
+    public function getRememberToken(): ?string
+    {
+        return $this->credential?->remember_token;
+    }
+
+    public function setRememberToken($value): void
+    {
+        UserCredential::query()->updateOrCreate(['user_id' => $this->getKey()], ['remember_token' => $value]);
+        $this->unsetRelation('credential');
     }
 
     /**

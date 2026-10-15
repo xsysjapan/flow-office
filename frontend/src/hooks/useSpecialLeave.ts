@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   adminCancelSpecialLeaveRequest,
@@ -32,6 +33,12 @@ const MY_REQUESTS_KEY = ['special-leave', 'requests', 'mine']
 /** 特別休暇メニューの表示可否(有効な種別が1件以上あるか)の判定にも使う。 */
 export function useSpecialLeaveTypes(enabled = true) {
   return useQuery({ queryKey: TYPES_KEY, queryFn: fetchSpecialLeaveTypes, enabled })
+}
+
+/** 勤怠の休暇ビュー(leaves)は種別名を持たないため、種別ID→種別名の対応を表示用に返す。 */
+export function useSpecialLeaveTypeNames(): Map<number, string> {
+  const { data } = useSpecialLeaveTypes()
+  return useMemo(() => new Map((data ?? []).map((type) => [type.id, type.name])), [data])
 }
 
 export function useCreateSpecialLeaveType() {

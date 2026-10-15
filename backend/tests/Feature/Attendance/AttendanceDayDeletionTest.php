@@ -2,13 +2,14 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\EventSourcing\CommandBus;
+use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
 use App\Models\AttendanceDailyCalculation;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendancePunch;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\PaidLeaveGrant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\WorkStyle;
@@ -147,7 +148,7 @@ class AttendanceDayDeletionTest extends TestCase
     }
 
     /**
-     * 既存実装の抜け穴の修正確認: 締め(locked_at)前でも、月次が承認済みになった時点で
+     * 既存実装の抜け穴の修正確認: 締め前でも、月次が承認済みになった時点で
      * 日次勤怠の削除・編集はできなくなる。
      */
     public function test_a_day_cannot_be_deleted_or_edited_once_the_month_is_approved_even_before_close(): void
@@ -166,7 +167,7 @@ class AttendanceDayDeletionTest extends TestCase
         $monthId = AttendanceMonth::query()->where('user_id', $employee->id)->where('year_month', $yearMonth)->first()->id;
         $this->actingAs($approver)->postJson("/api/attendance-months/{$monthId}/approve")->assertOk();
 
-        // is_locked は締め(locked_at)だけでなく、月次が提出済み以降であることも反映する
+        // is_locked は月次が提出済み以降であることを反映する
         // (AttendanceEditGuardと同じ判定。AttendanceDayResource参照)。
         $dayResponse = $this->actingAs($employee)->getJson("/api/attendance/days/{$dayId}");
         $dayResponse->assertJsonPath('is_locked', true);
@@ -223,10 +224,7 @@ class AttendanceDayDeletionTest extends TestCase
             'planned_start_at' => "{$targetDate} 09:00:00", 'planned_end_at' => "{$targetDate} 18:00:00",
             'planned_break_minutes' => 60,
         ]);
-        PaidLeaveGrant::query()->create([
-            'user_id' => $employee->id, 'granted_on' => '2025-07-01', 'expires_on' => '2027-06-30',
-            'granted_days' => 10, 'used_days' => 0, 'remaining_days' => 10,
-        ]);
+        app(CommandBus::class)->dispatch(new GrantPaidLeave($employee->id, '2025-07-01', '2027-06-30', 10.0, null));
 
         $requestId = $this->actingAs($employee)->postJson('/api/paid-leave/requests', [
             'target_date' => $targetDate,

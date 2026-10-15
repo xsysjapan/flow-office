@@ -52,7 +52,7 @@ export function AttendanceDayRow({
   const { label, tone } = attendanceRowDisplayLabel(day, schedule)
   const holiday = attendanceScheduleHolidayLabel(schedule)
   const showHolidayAlongsideStatus = holiday !== null && day !== undefined
-    && (day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at))
+    && (day.status !== 'not_started' || Boolean(day.actual_start_at) || Boolean(day.actual_end_at) || (day.leaves?.length ?? 0) > 0)
 
   const content = (
     <>

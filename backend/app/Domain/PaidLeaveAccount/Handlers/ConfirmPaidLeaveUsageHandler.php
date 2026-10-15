@@ -4,6 +4,7 @@ namespace App\Domain\PaidLeaveAccount\Handlers;
 
 use App\Domain\EventSourcing\Contracts\Command;
 use App\Domain\EventSourcing\Contracts\CommandHandler;
+use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\PaidLeaveAccount\Aggregates\PaidLeaveAccountAggregate;
 use App\Domain\PaidLeaveAccount\Commands\ConfirmPaidLeaveUsage;
 
@@ -16,9 +17,23 @@ class ConfirmPaidLeaveUsageHandler implements CommandHandler
     {
         assert($command instanceof ConfirmPaidLeaveUsage);
 
-        PaidLeaveAccountAggregate::retrieve($command->userId)
+        $aggregate = PaidLeaveAccountAggregate::retrieve($command->userId);
+
+        $usageId = $command->usageId
+            ?? $aggregate->usageIdForRequest((string) $command->paidLeaveRequestId);
+
+        if ($usageId === null) {
+            throw new DomainRuleException("有給申請 [{$command->paidLeaveRequestId}] に対応する消化記録が存在しません。");
+        }
+
+        // viaReactor=true: 既に確定済みなら何もしない。
+        if ($command->viaReactor && $aggregate->usageStatus($usageId) === 'confirmed') {
+            return null;
+        }
+
+        $aggregate
             ->confirmUsage(
-                usageId: $command->usageId,
+                usageId: $usageId,
                 confirmedByUserId: $command->confirmedByUserId,
             )
             ->persist();

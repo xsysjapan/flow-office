@@ -49,6 +49,7 @@ const requests: PaidLeaveRequest[] = [
     approved_at: null,
     returned_at: null,
     cancelled_at: null,
+    workflow_request_id: null,
   },
   {
     id: 'request-2',
@@ -63,6 +64,7 @@ const requests: PaidLeaveRequest[] = [
     approved_at: '2026-07-02T00:00:00+09:00',
     returned_at: null,
     cancelled_at: null,
+    workflow_request_id: null,
   },
 ]
 

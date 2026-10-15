@@ -59,29 +59,36 @@ function zeroWeeklyTotals(): WeeklyAttendanceTotals {
   }
 }
 
-/** 週次一覧に含まれる日々のspecial_leave_usages(AttendanceDayResource参照)を
- *  special_leave_type_idごとにグルーピングする。バックエンドのMonthlyOvertimeCalculator.
- *  calculateSpecialLeaveBreakdownと同じ考え方(全休・半休はused_daysを、時間単位はminutesを
- *  合算する)を、クライアントサイドで週次分に対して行う。 */
-export function specialLeaveTypeBreakdown(days: AttendanceDay[]): AttendanceSpecialLeaveBreakdownItem[] {
+/** 週次一覧に含まれる日々の休暇(`leaves`の特別休暇の行)を special_leave_type_idごとに
+ *  グルーピングする。バックエンドのMonthlyOvertimeCalculator.calculateSpecialLeaveBreakdownと
+ *  同じ考え方(全休は1日、半休は0.5日を数え、時間休はminutesを合算する)を、クライアントサイドで
+ *  週次分に対して行う。種別名は呼び出し側が渡す(`leaves`は種別名を持たない)。未指定の種別は
+ *  「種別#ID」と表示する。 */
+export function specialLeaveTypeBreakdown(
+  days: AttendanceDay[],
+  specialLeaveTypeNames: ReadonlyMap<number, string> = new Map(),
+): AttendanceSpecialLeaveBreakdownItem[] {
   const byType = new Map<string, AttendanceSpecialLeaveBreakdownItem>()
 
   for (const day of days) {
-    for (const usage of day.special_leave_usages ?? []) {
-      const existing = byType.get(usage.special_leave_type_id) ?? {
-        special_leave_type_id: usage.special_leave_type_id,
-        special_leave_type_name: usage.special_leave_type_name,
+    for (const leave of day.leaves ?? []) {
+      if (leave.leave_kind !== 'special' || leave.special_leave_type_id === null) continue
+
+      const typeId = String(leave.special_leave_type_id)
+      const existing = byType.get(typeId) ?? {
+        special_leave_type_id: typeId,
+        special_leave_type_name: specialLeaveTypeNames.get(leave.special_leave_type_id) ?? `種別#${typeId}`,
         days: 0,
         minutes: 0,
       }
 
-      if (usage.usage_type === 'hourly') {
-        existing.minutes += usage.used_minutes ?? 0
+      if (leave.unit === 'hourly') {
+        existing.minutes += leave.minutes ?? 0
       } else {
-        existing.days += usage.used_days
+        existing.days += leave.unit === 'full' ? 1 : 0.5
       }
 
-      byType.set(usage.special_leave_type_id, existing)
+      byType.set(typeId, existing)
     }
   }
 
@@ -90,9 +97,12 @@ export function specialLeaveTypeBreakdown(days: AttendanceDay[]): AttendanceSpec
 
 /** 週次・日次一覧(7日分など)の合計。終日欠勤は、その日の欠勤時間が所定労働時間以上に
  *  なった日を1日と数える(月次集計と同じ基準、docs/07-usecases-attendance.md参照)。
- *  有給・特別休暇は全休・半休の合計(attendance_days.work_type由来)をそのまま合算する
+ *  有給・特別休暇は全休・半休の合計(休暇ビュー`leaves`由来の日数)をそのまま合算する
  *  (paid_leave_days/special_leave_daysは既に日単位の値のため、しきい値判定は不要)。 */
-export function weeklyAttendanceTotals(days: AttendanceDay[]): {
+export function weeklyAttendanceTotals(
+  days: AttendanceDay[],
+  specialLeaveTypeNames: ReadonlyMap<number, string> = new Map(),
+): {
   totals: WeeklyAttendanceTotals
   absenceDays: number
   workedDays: number
@@ -121,5 +131,11 @@ export function weeklyAttendanceTotals(days: AttendanceDay[]): {
     return sum
   }, zeroWeeklyTotals())
 
-  return { totals, absenceDays, workedDays, specialLeaveDays: totals.special_leave_days, specialLeaveBreakdown: specialLeaveTypeBreakdown(days) }
+  return {
+    totals,
+    absenceDays,
+    workedDays,
+    specialLeaveDays: totals.special_leave_days,
+    specialLeaveBreakdown: specialLeaveTypeBreakdown(days, specialLeaveTypeNames),
+  }
 }

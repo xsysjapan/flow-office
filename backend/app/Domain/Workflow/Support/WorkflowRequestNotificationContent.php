@@ -134,12 +134,12 @@ final class WorkflowRequestNotificationContent
             self::PAID_LEAVE_REQUEST => new self(
                 title: '有給休暇申請が差戻されました',
                 summary: "有給休暇申請が差し戻されました: {$comment}",
-                detailUrl: FrontendUrl::path('/paid-leave/requests'),
+                detailUrl: FrontendUrl::path('/paid-leave/history'),
             ),
             self::SPECIAL_LEAVE_REQUEST => new self(
                 title: '特別休暇申請が差戻されました',
                 summary: "特別休暇申請が差し戻されました: {$comment}",
-                detailUrl: FrontendUrl::path('/special-leave/requests'),
+                detailUrl: FrontendUrl::path('/special-leave/history'),
             ),
             self::SHIFT_SWAP_REQUEST => new self(
                 title: '振替休日申請が差戻されました',
@@ -149,7 +149,7 @@ final class WorkflowRequestNotificationContent
             self::COMPENSATORY_LEAVE_REQUEST => new self(
                 title: '代休申請が差戻されました',
                 summary: "代休申請が差し戻されました: {$comment}",
-                detailUrl: FrontendUrl::path('/compensatory-leave/requests'),
+                detailUrl: FrontendUrl::path('/compensatory-leave'),
             ),
             default => new self(
                 title: '差戻し',

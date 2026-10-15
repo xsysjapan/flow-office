@@ -115,12 +115,12 @@ Controller・Resourceが直接タイムゾーン変換を書かないように�
 `WorkflowRequestProjector` / `BackOfficeTaskProjector` がこのパターンの実装例
 (`.claude/skills/add-projection`参照)。
 
-一方、`attendance_days` / `paid_leave_requests` / `special_leave_requests` のように、1回の
-CommandHandlerが複数集約にまたがる副作用(他の正データの新規作成・別集約への追加イベント
-追記など)を持つ場合は、単純な「イベント1件→行upsert」に収まらないためProjector化しない。
-これらは引き続き正データとしてCommandHandlerが直接読み書きする
-(`App\Domain\PaidLeave\Handlers\ApprovePaidLeaveRequestHandler`が例: 承認1件で
-`paid_leave_request`・`paid_leave_grant`・`attendance_day`の3集約にまたがる更新を行う)。
+一方、1回のCommandHandlerが複数の文脈(集約・テーブル)にまたがる副作用を持つ場合は、
+CommandHandlerが他の文脈の正データを直接読み書きせず、自文脈の集約だけを書き込み、
+他の文脈へはイベントで伝える(3.10節・設計原則15)。以前の「複数集約にまたがる副作用は
+CommandHandlerが直接読み書きする」という方針は、休暇まわりの変更(変更セット
+`20261009-keep-leave-work-type-on-edit`)で廃止した。休暇の申請Handlerは勤怠日・残数・他の
+休暇申請を直接読み書きせず、それぞれの文脈がReactorで反応する。
 
 ## 3.5 操作経路と業務ロジックを分離する(Web/Android打刻リーダー/個人端末/外部端末/API/MCP共通)
 
@@ -216,3 +216,61 @@ AIやMCPサーバー側に重複実装しない。
 `compensatory_leave_requests`テーブルのコメント参照)。統合ワークフローの仕組みは
 「申請が実際に発生したケースのみ」を扱うものとして設計し、申請不要で自動導出・自動確定
 される業務データを無理に`workflow_requests`側に取り込まない。
+
+## 3.10 文脈間はイベントで連携する(コレオグラフィー、設計原則15)
+
+文脈(集約・テーブルの所有単位)は、自分の集約・テーブルだけを書き込む。他の文脈の集約を
+操作したり、他の文脈のテーブル(ReadModelを含む)を直接読み書きしたりしない。他の文脈の
+変化には、そのイベントを購読して次のいずれかで反応する。
+
+- Reactor: 自文脈のCommandを発行する(正データを変える)。
+- Projector: 自文脈の読み取りビューを作る(派生データ)。
+
+休暇まわりの文脈とその連携は次のとおり(変更セット`20261009-keep-leave-work-type-on-edit`の
+文脈と責務)。
+
+```
+[申請・承認]  workflow_request.drafted/submitted/approved/returned/cancelled
+      │ Reactor(休暇申請側)
+      ▼
+[休暇申請]   *_leave_request.requested/approved/returned/cancelled
+      │ Reactor(残数側)                    │ Reactor(申請・承認側): 休暇申請の取消→ワークフロー取消
+      ▼
+[残数・使用] 利用者単位の口座集約(有給・特別・代休): 消化記録の作成・確定・取消、付与の残数
+
+[休暇申請] ──Projector(勤怠側の休暇ビュー)・Reactor(勤怠側: 衝突・締めの検証、日次再計算)──▶ [勤怠]
+             休暇ビュー(attendance_day_leaves)・月次集計は休暇ビューを読む
+```
+
+連携の向きは「申請・承認→休暇申請→残数・使用→勤怠」の一方向を基本とする。逆方向は次の3つだけ
+である。
+
+- 休暇申請の申請(`*.shared`)→ワークフローの提出
+- 休暇申請の承認(まとめ申請の兄弟)→兄弟ワークフローの承認
+- 休暇申請の取消→ワークフローの取消
+
+このほか、勤怠→代休の口座(日次計算からの代休付与の同期、月次提出での付与確定)は、休暇の連鎖とは
+別の向きの連携として維持する。
+
+### 連携の横断ルール
+
+- **同期実行と1トランザクション**: Reactorは同期実行する。1回の利用者操作から始まる連鎖全体を
+  1トランザクションとし、途中のReactor/Handlerで例外が出れば全体を取り消して利用者にエラーを返す。
+  業務ルール違反(締め済み・同じ日の休暇の衝突等)は、そのルールを持つ文脈が自分のCommand内で例外を
+  投げて表す。
+- **実行者と認可**: 利用者・管理者の操作は入口(Controller・入口のCommand)で認可する。Reactorが発行する
+  Commandは`initiatedByUserId`(連鎖の起点となった操作者。起点イベントのpayloadの操作者IDを引き継ぐ。
+  システム処理ではnull)と`viaReactor=true`を持ち、利用者向けの本人確認・権限チェックは行わず、状態の
+  ガードのみを行う。
+- **冪等性**: `viaReactor=true`のCommandは、対象が既に目的の状態なら何もせず正常終了する(例外にしない)。
+  利用者の操作として同じCommandが来た場合は従来どおり状態不正を例外にする。双方向の連動(ワークフローの
+  取消と休暇の取消)はこの冪等性で無限連鎖を防ぐ。同じイベントを2回処理しても各文脈の状態は変わらない。
+- **Reactorの独立性**: 同じイベントを購読するReactorが複数あっても、互いの結果に依存しない(実行順に
+  依存しない)。通知は状態を確定させた文脈が出し、同じ利用者操作の連鎖で同じ通知を二重に出さない。
+- **リビルド**: ReadModel(Projector)は、自文脈のイベントと購読している他文脈のイベントだけから、空の状態から
+  再生成できる。Projectorは再生順に依存しない(行の存在を前提とする更新は、行が無ければ何もしない)。
+  replayではReactorは走らないため、Reactorが発行するCommandの結果は、そのCommandが記録したイベントだけで
+  再現できる必要がある。
+- **テスト**: 業務ルール(計算・状態遷移の可否・判定)は、テストで直接呼べる単位(Aggregate・判定クラス)に
+  置いてPHPUnitで網羅する。文脈間の連鎖は、ユースケースの操作(APIまたはCommand)から関係する全文脈の状態まで
+  を確かめるUI非依存のシナリオテストで確かめる(`.claude/skills/domain-test`、設計原則16)。

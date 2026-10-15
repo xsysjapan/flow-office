@@ -14,8 +14,7 @@ use App\Models\CompanyCalendarDay;
 use App\Models\CompanyCalendarDaySource;
 use App\Models\HolidayCalendarEvent;
 use App\Models\HolidayCalendarSource;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -24,6 +23,9 @@ use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
  */
 class HolidayCalendarSourceProjector extends Projector
 {
+    /** 再生で毎回同じidになるよう、行のidをuuid5で決める名前空間(変更しない)。 */
+    private const ID_NAMESPACE = 'a3c1f1de-5b0e-5c43-9d2a-6e1b7f0c4d82';
+
     public function __construct(
         private readonly CalendarWeekdayPatternDayGenerator $weekdayPatternDayGenerator,
     ) {}
@@ -61,7 +63,7 @@ class HolidayCalendarSourceProjector extends Projector
     public function onHolidayCalendarSourceSynced(HolidayCalendarSourceSynced $event): void
     {
         $sourceId = $event->aggregateRootUuid();
-        $syncedAt = Carbon::now();
+        $syncedAt = $event->createdAt();
 
         foreach ($event->eventChanges as $change) {
             if ($change['action'] === 'removed') {
@@ -78,7 +80,7 @@ class HolidayCalendarSourceProjector extends Projector
                 ->where('ics_uid', $change['ics_uid'])
                 ->first()
                 ?? new HolidayCalendarEvent([
-                    'id' => (string) Str::uuid(),
+                    'id' => Uuid::uuid5(self::ID_NAMESPACE, $sourceId.'|'.$change['ics_uid'])->toString(),
                     'holiday_calendar_source_id' => $sourceId,
                     'ics_uid' => $change['ics_uid'],
                 ]);
@@ -86,8 +88,10 @@ class HolidayCalendarSourceProjector extends Projector
             $holidayEvent->fill(['date' => $change['date'], 'name' => $change['name'], 'synced_at' => $syncedAt])->save();
         }
 
+        $eventKey = $event->storedEventId() ?? ($sourceId.'#'.$event->aggregateRootVersion());
+        $occurrences = [];
         foreach ($event->dayChanges as $dayChange) {
-            $day = CompanyCalendarDay::query()->find($dayChange['company_calendar_day_id']);
+            $day = $this->findDay($dayChange);
             if ($day === null) {
                 continue;
             }
@@ -113,8 +117,12 @@ class HolidayCalendarSourceProjector extends Projector
                 ...$holidaySchedule,
             ]);
 
+            // 同じイベントで同じ年・日付・出典が複数回出ても別のidになるよう、出現順(0始まり)を含める。
+            $dayKey = $day->calendar_id.'|'.$day->date->toDateString().'|holiday_sync|'.$sourceId.'|'.$eventKey;
+            $occurrence = $occurrences[$dayKey] = ($occurrences[$dayKey] ?? -1) + 1;
+
             CompanyCalendarDaySource::query()->create([
-                'id' => (string) Str::uuid(),
+                'id' => Uuid::uuid5(self::ID_NAMESPACE, $dayKey.'|'.$occurrence)->toString(),
                 'company_calendar_day_id' => $day->id,
                 'source_type' => 'holiday_sync',
                 'source_ref' => (string) $sourceId,
@@ -155,18 +163,42 @@ class HolidayCalendarSourceProjector extends Projector
     public function onHolidayCalendarSourceDisabled(HolidayCalendarSourceDisabled $event): void
     {
         HolidayCalendarSource::query()->whereKey($event->aggregateRootUuid())->update([
-            'disabled_at' => Carbon::now(),
+            'disabled_at' => $event->createdAt(),
         ]);
     }
 
     public function onHolidayCalendarSourceSyncReverted(HolidayCalendarSourceSyncReverted $event): void
     {
         foreach ($event->dayReverts as $dayRevert) {
-            CompanyCalendarDay::query()->whereKey($dayRevert['company_calendar_day_id'])->update([
+            $day = $this->findDay($dayRevert);
+            if ($day === null) {
+                continue;
+            }
+
+            CompanyCalendarDay::query()->whereKey($day->id)->update([
                 'is_public_holiday' => $dayRevert['is_public_holiday'],
                 'public_holiday_name' => $dayRevert['public_holiday_name'],
             ]);
         }
+    }
+
+    /**
+     * 日を特定する。年のidと日付があればその年の日付で引き(日の自動採番idは再生で変わるため)、
+     * 無い旧形式のイベントは従来どおり日のidで引く。
+     *
+     * @param  array<string, mixed>  $change
+     */
+    private function findDay(array $change): ?CompanyCalendarDay
+    {
+        if (! empty($change['companyCalendarYearId']) && ! empty($change['date'])) {
+            // dateはdateキャストでdatetime文字列として保存されるため、whereDateで引く。
+            return CompanyCalendarDay::query()
+                ->where('calendar_id', $change['companyCalendarYearId'])
+                ->whereDate('date', $change['date'])
+                ->first();
+        }
+
+        return CompanyCalendarDay::query()->find($change['company_calendar_day_id']);
     }
 
     /**

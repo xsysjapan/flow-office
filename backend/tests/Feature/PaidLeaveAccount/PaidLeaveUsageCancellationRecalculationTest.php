@@ -4,9 +4,9 @@ namespace Tests\Feature\PaidLeaveAccount;
 
 use App\Domain\EventSourcing\CommandBus;
 use App\Domain\PaidLeaveAccount\Commands\GrantPaidLeave;
-use App\Models\AttendanceDailyCalculation;
 use App\Models\CompanyCalendar;
 use App\Models\EmployeeCalendarEntry;
+use App\Models\PaidLeaveUsage;
 use App\Models\User;
 use App\Models\WorkStyle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,19 +45,19 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
         ]);
     }
 
-    private function paidLeaveMinutes(User $employee, string $date): int
+    /**
+     * 取消されていない消化記録(有給の消化)の件数。勤怠日の分数(paid_leave_minutes)は勤怠側の
+     * 休暇ビューへの置き換え(別作業)まで確認しない。
+     */
+    private function activeUsageCount(User $employee): int
     {
-        $day = \App\Models\AttendanceDay::query()
+        return PaidLeaveUsage::query()
             ->where('user_id', $employee->id)
-            ->whereDate('work_date', $date)
-            ->firstOrFail();
-
-        return (int) AttendanceDailyCalculation::query()
-            ->where('attendance_day_id', $day->id)
-            ->value('paid_leave_minutes');
+            ->where('cancelled', false)
+            ->count();
     }
 
-    public function test_cancelling_hourly_usage_removes_it_from_paid_leave_minutes_and_a_new_request_is_not_inflated_by_the_stale_row(): void
+    public function test_cancelling_hourly_usage_removes_it_from_active_usages_and_a_new_request_is_not_inflated_by_the_stale_row(): void
     {
         $employee = User::factory()->create();
         $approver = User::factory()->create();
@@ -76,14 +76,14 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
 
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$firstRequestId}/approve")->assertOk();
 
-        $this->assertSame(120, $this->paidLeaveMinutes($employee, $date));
+        $this->assertSame(1, $this->activeUsageCount($employee));
 
-        // 取消 -> paid_leave_minutesは0に戻る(取消済み行が残っていても合算されない)
+        // 取消 -> 有効な消化記録は0件になる(取消済み行は残るが有効扱いにならない)
         $this->actingAs($employee)->postJson("/api/paid-leave/requests/{$firstRequestId}/cancel")
             ->assertOk()
             ->assertJsonPath('status', 'cancelled');
 
-        $this->assertSame(0, $this->paidLeaveMinutes($employee, $date));
+        $this->assertSame(0, $this->activeUsageCount($employee));
 
         // 同日に再度時間単位有給1時間を申請・承認 -> 取消済みの旧行(120分)が
         // 二重計上されず、新規申請分(60分)のみが反映される
@@ -96,6 +96,11 @@ class PaidLeaveUsageCancellationRecalculationTest extends TestCase
 
         $this->actingAs($approver)->postJson("/api/paid-leave/requests/{$secondRequestId}/approve")->assertOk();
 
-        $this->assertSame(60, $this->paidLeaveMinutes($employee, $date));
+        // 有効な消化記録は新規申請の1件だけ(取消済みの旧行は数えられない)
+        $this->assertSame(1, $this->activeUsageCount($employee));
+        $this->assertSame(
+            $secondRequestId,
+            PaidLeaveUsage::query()->where('user_id', $employee->id)->where('cancelled', false)->value('paid_leave_request_id'),
+        );
     }
 }

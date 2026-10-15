@@ -39,9 +39,9 @@ use App\Http\Resources\EmployeeCalendarEntryResource;
 use App\Models\AttendanceDay;
 use App\Models\AttendanceMonth;
 use App\Models\AttendanceMonthStatus;
+use App\Models\AttendanceSpecialLeaveShortage;
 use App\Models\EmployeeCalendarEntry;
-use App\Models\SpecialLeaveRequestStatus;
-use App\Models\SpecialLeaveUsage;
+use App\Models\SpecialLeaveType;
 use App\Models\SystemSetting;
 use App\Models\WorkflowRequest;
 use App\Models\WorkflowRequestStatus;
@@ -196,7 +196,7 @@ class AttendanceController extends Controller
         );
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $targetUserId)
             ->whereDate('work_date', '>=', $start->toDateString())
             ->whereDate('work_date', '<=', $end->toDateString())
@@ -681,7 +681,7 @@ class AttendanceController extends Controller
         $userId = $this->resolveViewableUserId($request, $data['user_id'] ?? null, [$yearMonth], '他の社員の月次勤怠を閲覧する権限がありません。');
 
         $days = AttendanceDay::query()
-            ->with(['breaks', 'leaveSegments', 'calculation', 'specialLeaveUsages.grant.specialLeaveType', 'specialLeaveUsages.request.specialLeaveType'])
+            ->with(['breaks', 'leaveSegments', 'calculation'])
             ->where('user_id', $userId)
             ->where('work_date', 'like', "{$yearMonth}%")
             ->orderBy('work_date')
@@ -737,27 +737,33 @@ class AttendanceController extends Controller
      */
     private function specialLeaveBalanceWarnings(string $userId, string $yearMonth): array
     {
-        return SpecialLeaveUsage::query()
+        // 勤怠側のビュー(特別休暇口座のイベントから作る)を読む。承認(確定)で充当できなかった日数が残っている行が対象。
+        // 種別名・残数を要する種別かは表示のための読み取りとして特別休暇の種別マスタから引く。
+        $shortages = AttendanceSpecialLeaveShortage::query()
             ->where('user_id', $userId)
-            ->where('used_on', 'like', "{$yearMonth}%")
-            ->where('is_confirmed', false)
-            ->whereHas('request', fn ($query) => $query
-                ->where('status', SpecialLeaveRequestStatus::APPROVED)
-                ->whereHas('specialLeaveType', fn ($query) => $query->where('requires_grant', true)))
-            ->with('request.specialLeaveType')
-            ->orderBy('used_on')
+            ->whereBetween('work_date', ["{$yearMonth}-01", "{$yearMonth}-31"])
+            ->where('unallocated_days', '>', 0)
+            ->orderBy('work_date')
+            ->get();
+
+        $types = SpecialLeaveType::query()
+            ->whereIn('id', $shortages->pluck('special_leave_type_id')->unique()->all())
             ->get()
-            ->map(fn (SpecialLeaveUsage $usage) => [
-                'special_leave_request_id' => $usage->special_leave_request_id,
-                'special_leave_type_id' => $usage->request?->special_leave_type_id,
-                'special_leave_type_name' => $usage->request?->specialLeaveType?->name,
-                'used_on' => $usage->used_on?->toDateString(),
-                'requested_days' => (float) $usage->used_days,
-                'used_minutes' => $usage->used_minutes,
+            ->keyBy('id');
+
+        return $shortages
+            ->filter(fn (AttendanceSpecialLeaveShortage $shortage): bool => (bool) $types->get($shortage->special_leave_type_id)?->requires_grant)
+            ->map(fn (AttendanceSpecialLeaveShortage $shortage) => [
+                'special_leave_request_id' => $shortage->special_leave_request_id,
+                'special_leave_type_id' => $shortage->special_leave_type_id,
+                'special_leave_type_name' => $types->get($shortage->special_leave_type_id)?->name,
+                'used_on' => $shortage->work_date,
+                'requested_days' => (float) $shortage->used_days,
+                'used_minutes' => $shortage->used_minutes,
                 'message' => sprintf(
                     '%s の%sは付与残数不足のため、承認済みですが特別休暇残数へ消化反映されていません。',
-                    $usage->used_on?->toDateString(),
-                    $usage->request?->specialLeaveType?->name ?? '特別休暇',
+                    $shortage->work_date,
+                    $types->get($shortage->special_leave_type_id)?->name ?? '特別休暇',
                 ),
             ])
             ->values()

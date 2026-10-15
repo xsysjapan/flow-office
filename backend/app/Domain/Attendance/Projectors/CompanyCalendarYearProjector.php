@@ -10,8 +10,8 @@ use App\Domain\Attendance\Events\CompanyCalendarYearFiscalYearCorrected;
 use App\Domain\Attendance\Events\CompanyCalendarYearPublished;
 use App\Domain\Attendance\Events\CompanyCalendarYearUnpublished;
 use App\Models\CompanyCalendarDay;
+use App\Models\CompanyCalendarDaySource;
 use App\Models\CompanyCalendarYear;
-use Illuminate\Support\Carbon;
 use Spatie\EventSourcing\EventHandlers\Projectors\Projector;
 
 /**
@@ -28,17 +28,19 @@ class CompanyCalendarYearProjector extends Projector
 {
     public function onCompanyCalendarYearCreated(CompanyCalendarYearCreated $event): void
     {
-        CompanyCalendarYear::query()->updateOrCreate(
-            ['id' => $event->aggregateRootUuid()],
-            [
-                'company_calendar_id' => $event->companyCalendarId,
-                'fiscal_year' => $event->fiscalYear,
-                'starts_on' => $event->startsOn,
-                'ends_on' => $event->endsOn,
-                'status' => 'draft',
-                'generated_from' => $event->generatedFrom,
-            ],
-        );
+        // created_at・updated_atは自動timestampsではなくイベントの発生日時で書く(再生で同じ結果にする)。
+        $year = CompanyCalendarYear::query()->find($event->aggregateRootUuid())
+            ?? (new CompanyCalendarYear)->forceFill(['id' => $event->aggregateRootUuid(), 'created_at' => $event->createdAt()]);
+        $year->timestamps = false;
+        $year->forceFill([
+            'company_calendar_id' => $event->companyCalendarId,
+            'fiscal_year' => $event->fiscalYear,
+            'starts_on' => $event->startsOn,
+            'ends_on' => $event->endsOn,
+            'status' => 'draft',
+            'generated_from' => $event->generatedFrom,
+            'updated_at' => $event->createdAt(),
+        ])->save();
     }
 
     public function onCompanyCalendarDaysUpdated(CompanyCalendarDaysUpdated $event): void
@@ -62,6 +64,10 @@ class CompanyCalendarYearProjector extends Projector
                 $scheduleState = $isWorkingDay ? CompanyCalendarDay::SCHEDULE_WORK : CompanyCalendarDay::SCHEDULE_OFF;
             }
 
+            $calendarDay->timestamps = false;
+            if (! $calendarDay->exists) {
+                $calendarDay->setAttribute('created_at', $event->createdAt());
+            }
             $calendarDay->fill([
                 'day_type' => $day['day_type'],
                 'is_working_day' => $isWorkingDay,
@@ -71,7 +77,7 @@ class CompanyCalendarYearProjector extends Projector
                 'public_holiday_name' => $day['public_holiday_name'] ?? null,
                 'schedule_state' => $scheduleState,
                 'note' => $day['note'] ?? null,
-            ])->save();
+            ])->setAttribute('updated_at', $event->createdAt())->save();
         }
     }
 
@@ -79,7 +85,8 @@ class CompanyCalendarYearProjector extends Projector
     {
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => 'published',
-            'published_at' => Carbon::now(),
+            'published_at' => $event->createdAt(),
+            'updated_at' => $event->createdAt(),
             'published_by_user_id' => $event->publishedByUserId,
         ]);
     }
@@ -88,6 +95,7 @@ class CompanyCalendarYearProjector extends Projector
     {
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => 'draft',
+            'updated_at' => $event->createdAt(),
         ]);
     }
 
@@ -95,6 +103,7 @@ class CompanyCalendarYearProjector extends Projector
     {
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'status' => 'archived',
+            'updated_at' => $event->createdAt(),
         ]);
     }
 
@@ -110,10 +119,22 @@ class CompanyCalendarYearProjector extends Projector
 
     public function onCompanyCalendarYearFiscalYearCorrected(CompanyCalendarYearFiscalYearCorrected $event): void
     {
+        // 訂正前の期間分の日別データと出典は新しい期間と対応しないため削除する。
+        // 訂正後の日は後続のcompany_calendar_year.days_updatedで作られる。
+        // 外部キーのcascadeに頼らず、出典(子)→日(親)の順に明示的に削除する。
+        $dayIds = CompanyCalendarDay::query()
+            ->where('calendar_id', $event->aggregateRootUuid())
+            ->pluck('id');
+        foreach ($dayIds->chunk(500) as $chunk) {
+            CompanyCalendarDaySource::query()->whereIn('company_calendar_day_id', $chunk->all())->delete();
+        }
+        CompanyCalendarDay::query()->where('calendar_id', $event->aggregateRootUuid())->delete();
+
         CompanyCalendarYear::query()->whereKey($event->aggregateRootUuid())->update([
             'fiscal_year' => $event->fiscalYear,
             'starts_on' => $event->startsOn,
             'ends_on' => $event->endsOn,
+            'updated_at' => $event->createdAt(),
         ]);
     }
 }

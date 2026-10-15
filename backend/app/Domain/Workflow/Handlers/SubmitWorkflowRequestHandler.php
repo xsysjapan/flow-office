@@ -25,7 +25,18 @@ class SubmitWorkflowRequestHandler implements CommandHandler
 
         $workflowRequest = WorkflowRequest::query()->with('requestType')->findOrFail($command->workflowRequestId);
 
-        if ($workflowRequest->applicant_user_id !== $command->submittedByUserId) {
+        // Reactorからの提出は、既に提出済み(下書き以外)なら何もせず正常終了する(冪等)。
+        if ($command->viaReactor && $workflowRequest->status !== WorkflowRequestStatus::DRAFT) {
+            return $workflowRequest;
+        }
+
+        // viaReactorの提出は申請者本人によるリクエストではないため本人チェックをスキップし、
+        // 記録する提出者IDに連鎖の起点の操作者(initiatedByUserId)を使う。
+        $submittedByUserId = $command->viaReactor
+            ? ($command->initiatedByUserId ?? $command->submittedByUserId)
+            : $command->submittedByUserId;
+
+        if (! $command->viaReactor && $workflowRequest->applicant_user_id !== $command->submittedByUserId) {
             throw new DomainRuleException('自分が作成した申請のみ申請できます。');
         }
 
@@ -50,13 +61,13 @@ class SubmitWorkflowRequestHandler implements CommandHandler
         // IDをそのまま使う(nullは経費精算・月次勤怠等のapproval_skip_threshold/
         // requires_approval=falseによる自動承認の専用センチネルとして各Reactorが「対向ドメイン側で
         // 既に承認済み」の判定に使っているため、ここで転用すると二重承認の抑止が誤作動する)。
-        $isSelfApproval = $approverUserId === $command->submittedByUserId;
+        $isSelfApproval = $approverUserId === $submittedByUserId;
 
         $aggregate = WorkflowRequestAggregate::retrieve($workflowRequest->id)
-            ->submit(approverUserId: $approverUserId, submittedByUserId: $command->submittedByUserId);
+            ->submit(approverUserId: $approverUserId, submittedByUserId: $submittedByUserId);
 
         if ($isSelfApproval) {
-            $aggregate->approve(approvedByUserId: $command->submittedByUserId);
+            $aggregate->approve(approvedByUserId: $submittedByUserId);
         }
 
         $aggregate->persist();

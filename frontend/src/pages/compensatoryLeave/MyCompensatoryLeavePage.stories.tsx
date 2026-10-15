@@ -56,6 +56,7 @@ const requests: CompensatoryLeaveRequest[] = [
     approved_at: null,
     returned_at: null,
     cancelled_at: null,
+    workflow_request_id: null,
   },
   {
     id: 'request-2',
@@ -71,6 +72,7 @@ const requests: CompensatoryLeaveRequest[] = [
     approved_at: '2026-07-21T00:00:00+09:00',
     returned_at: null,
     cancelled_at: null,
+    workflow_request_id: null,
   },
 ]
 

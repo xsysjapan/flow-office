@@ -7,13 +7,15 @@ use App\Domain\EventSourcing\Contracts\CommandHandler;
 use App\Domain\EventSourcing\Exceptions\DomainRuleException;
 use App\Domain\SpecialLeave\Aggregates\SpecialLeaveRequestAggregate;
 use App\Domain\SpecialLeave\Commands\ReturnSpecialLeaveRequest;
-use App\Jobs\SendNotificationJob;
 use App\Models\SpecialLeaveRequest;
-use App\Models\SpecialLeaveRequestStatus;
-use App\Models\User;
-use App\Support\FrontendUrl;
 
 /**
+ * 特別休暇申請を差し戻す。申請の集約へ差戻しを記録するだけで、消化記録の取消(残数)と勤怠の解除は
+ * `special_leave.request_returned`を受ける各文脈のReactorが行う(原則15)。
+ *
+ * 差戻しの通知はワークフロー側(ReturnWorkflowRequestHandler)が1回だけ送る(二重通知の解消。有給と同じ)。
+ * viaReactor=true で既に差戻し中なら何もしない(冪等)。
+ *
  * @implements CommandHandler<ReturnSpecialLeaveRequest>
  */
 class ReturnSpecialLeaveRequestHandler implements CommandHandler
@@ -22,32 +24,18 @@ class ReturnSpecialLeaveRequestHandler implements CommandHandler
     {
         assert($command instanceof ReturnSpecialLeaveRequest);
 
-        $request = SpecialLeaveRequest::query()->findOrFail($command->specialLeaveRequestId);
+        $aggregate = SpecialLeaveRequestAggregate::retrieve($command->specialLeaveRequestId);
 
-        if ($request->status !== SpecialLeaveRequestStatus::SUBMITTED) {
-            throw new DomainRuleException('提出済みの特別休暇申請のみ差戻しできます。');
+        if ($command->viaReactor && $aggregate->isReturned()) {
+            return SpecialLeaveRequest::query()->findOrFail($command->specialLeaveRequestId);
         }
 
-        if ($request->approver_user_id !== $command->returnedByUserId) {
+        if (! $command->viaReactor && $aggregate->approverUserId() !== $command->returnedByUserId) {
             throw new DomainRuleException('指定された承認者のみ差戻しできます。');
         }
 
-        SpecialLeaveRequestAggregate::retrieve($request->id)
-            ->returnRequest($command->returnedByUserId, $command->comment)
-            ->persist();
+        $aggregate->returnRequest($command->returnedByUserId, $command->comment)->persist();
 
-        $request = $request->refresh();
-
-        $applicant = User::find($request->user_id);
-        if ($applicant !== null) {
-            SendNotificationJob::enqueue(
-                recipient: $applicant,
-                title: '特別休暇申請の差戻し',
-                summary: "{$request->target_date->toDateString()} の特別休暇申請が差し戻されました: {$command->comment}",
-                detailUrl: FrontendUrl::path('/special-leave/history'),
-            );
-        }
-
-        return $request;
+        return SpecialLeaveRequest::query()->findOrFail($command->specialLeaveRequestId);
     }
 }

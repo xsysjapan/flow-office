@@ -8,14 +8,14 @@ use Spatie\EventSourcing\AggregateRoots\AggregateRoot;
 
 class GroupAccessAggregate extends AggregateRoot
 {
-    public function assignFeature(string $groupId, int $featureId, string $actor): self
+    public function assignFeature(string $groupId, int $featureId, ?string $actor): self
     {
         $this->recordThat(new FeatureAssignedToGroup($groupId, $featureId, $actor));
 
         return $this;
     }
 
-    public function removeFeature(string $groupId, int $featureId, string $actor): self
+    public function removeFeature(string $groupId, int $featureId, ?string $actor): self
     {
         $this->recordThat(new FeatureRemovedFromGroup($groupId, $featureId, $actor));
 

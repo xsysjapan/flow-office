@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * 代休Grant(未使用分のみ)の取消申請の進捗管理。日次勤怠の消化申請とは別軸のため
  * workflow_requestsへは連携せず、この専用テーブルで最小限に管理する
- * (Grant自体の状態変更はCompensatoryLeaveGrantAggregate経由でイベントソーシングする)。
+ * (Grant自体の状態変更は代休口座の集約(CompensatoryLeaveAccountAggregate)経由でイベントソーシングする)。
  */
 #[Fillable(['grant_id', 'requested_by_user_id', 'approver_user_id', 'status', 'reason', 'approved_at'])]
 class CompensatoryLeaveGrantCancellation extends Model
