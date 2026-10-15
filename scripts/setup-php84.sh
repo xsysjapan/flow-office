@@ -17,6 +17,7 @@ PACKAGES=(
   php8.4-zip
   php8.4-intl
   php8.4-bcmath
+  php8.4-gd
 )
 
 # PHP 8.4(CI・本番と同じ)をインストールして既定にする

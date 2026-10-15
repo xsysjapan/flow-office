@@ -1,6 +1,6 @@
 # php84-cloud-setup
 
-- ステータス: 実装中
+- ステータス: 完了
 
 ## 変更要望(原文)
 
@@ -85,6 +85,7 @@ CI(`.github/workflows/tests.yml`)・本番デプロイ(`deploy.yml`)は PHP 8.4 
 ## 実装結果
 
 - 3ファイルを実装。フックは CLAUDE_CODE_REMOTE=true でのみ起動し、鍵取得・PPA登録までは動作確認済み。
-- **未達(環境側の制約)**: クラウド環境のネットワークポリシーが `ppa.launchpadcontent.net` を拒否(プロキシ 403)するため、
-  `apt-get install php8.4-*` が `Unable to locate package` で失敗する(exit 100)。環境設定の Allowed domains に
-  `ppa.launchpadcontent.net` を追加後、受け入れ条件(php 8.4・2回目スキップ・Pint/PHPUnit)を再検証する。
+- 当初はネットワークポリシーが `ppa.launchpadcontent.net` を拒否していたが、ユーザーがネットワーク設定をFullに変更して解消。
+- `backend` の `composer install` が `ext-gd` を要求したため `php8.4-gd` をパッケージに追加(本番 deploy.yml でも gd を有効化している)。
+- 検証: フック実行 exit 0(PHP 8.4.26)、2回目はapt処理をスキップ、Pint(`app/Http/Controllers/Controller.php`)passed、
+  PHPUnit(`tests/Unit/PaidLeaveRequest/PaidLeaveRequestAggregateTest.php`)28件passed。
